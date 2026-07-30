@@ -1,0 +1,10 @@
+.env
+/vendor/
+/storage/logs/*.log
+/storage/backups/*.sql
+/ml/*.joblib
+/ml/model_metrics.json
+/ml/.training.lock
+/ml/.api-retrain.lock
+__pycache__/
+*.pyc
