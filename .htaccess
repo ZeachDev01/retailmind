@@ -1,0 +1,11 @@
+Options -Indexes
+
+<FilesMatch "^(\.env|composer\.(json|lock)|.*\.(joblib|pyc|log|sql))$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\.(?:git|svn|hg)(?:/|$) - [F,L]
+    RewriteRule ^(?:app|bootstrap|config|includes|demandForcasting|scripts|sql|storage|tests|vendor)(?:/|$) - [F,L]
+</IfModule>

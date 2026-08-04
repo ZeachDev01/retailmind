@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#4c1d95">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Barcode Scanner</title>
+<style>
+  :root {
+    --accent-a: #7c3aed;
+    --accent-b: #2563eb;
+    --bg: #0b0b14;
+    --panel: #16161f;
+    --panel-2: #1e1e2b;
+    --line: #2a2a3a;
+    --text: #f4f4f8;
+    --muted: #9797ab;
+    --success: #22c55e;
+    --success-bg: #0f2f1c;
+    --warn: #f59e0b;
+    --warn-bg: #362509;
+    --danger: #ef4444;
+    --danger-bg: #3a1116;
+    --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(124,58,237,0.35), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 12px);
+    overflow-x: hidden;
+  }
+
+  .app { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 14px; padding-top: 10px; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; }
+  .brand .logo { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--accent-a), var(--accent-b)); display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font-size: 1.05rem;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .icon-btn:active { transform: scale(0.94); }
+
+  /* Connection status pill */
+  .conn-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    font-size: 0.85rem;
+  }
+  .conn-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
+  .conn-pill.connected { border-color: rgba(34,197,94,0.35); background: var(--success-bg); }
+  .conn-pill.connected .dot { background: var(--success); }
+  .conn-pill.pending .dot { animation: blink 1.3s infinite; }
+  @keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0.2 } }
+  .conn-pill .txt { flex: 1; }
+  .conn-pill .txt strong { display: block; }
+  .conn-pill .txt span { color: var(--muted); font-size: 0.78rem; }
+  .conn-pill button { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 0.78rem; }
+
+  /* Camera card */
+  .cam-card {
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #000;
+    border: 1px solid var(--line);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  }
+  #reader { width: 100%; }
+  #reader video { object-fit: cover; }
+
+  .scan-frame {
+    position: absolute; inset: 0; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .scan-frame .box {
+    width: 68%; aspect-ratio: 1; max-width: 260px;
+    border-radius: 18px; position: relative;
+  }
+  .scan-frame .box::before, .scan-frame .box::after,
+  .scan-frame .box .c1, .scan-frame .box .c2 { content: ''; }
+  .corner { position: absolute; width: 28px; height: 28px; border: 3px solid var(--accent-a); }
+  .corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
+  .corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 8px 0 0; }
+  .corner.bl { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 8px; }
+  .corner.br { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 8px 0; }
+  .scan-line {
+    position: absolute; left: 6%; right: 6%; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-a), transparent);
+    animation: sweep 2.1s ease-in-out infinite;
+  }
+  @keyframes sweep { 0% { top: 8%; } 50% { top: 88%; } 100% { top: 8%; } }
+
+  .cam-placeholder {
+    aspect-ratio: 3/4; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; color: var(--muted); text-align: center; padding: 20px;
+  }
+  .cam-placeholder .big { font-size: 2.6rem; }
+
+  /* Result card */
+  .result-card {
+    border-radius: var(--radius);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    transition: all 0.25s ease;
+    min-height: 34px;
+  }
+  .result-card .r-icon { font-size: 1.4rem; }
+  .result-card .r-body { flex: 1; }
+  .result-card .r-body strong { display: block; font-size: 0.98rem; }
+  .result-card .r-body span { color: var(--muted); font-size: 0.8rem; }
+  .result-card.success { border-color: rgba(34,197,94,0.4); background: var(--success-bg); }
+  .result-card.error { border-color: rgba(239,68,68,0.4); background: var(--danger-bg); }
+  .result-card.warn { border-color: rgba(245,158,11,0.4); background: var(--warn-bg); }
+
+  /* Controls */
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .controls .wide { grid-column: 1 / -1; }
+  button.action {
+    padding: 14px; font-size: 0.95rem; font-weight: 600; border: none; border-radius: 12px;
+    color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  }
+  button.action:active { transform: scale(0.97); }
+  button.action:disabled { opacity: 0.4; }
+  button.action.stop { background: var(--danger); }
+  button.action.torch { background: var(--panel-2); border: 1px solid var(--line); }
+  button.action.torch.active { background: linear-gradient(135deg, #f59e0b, #f97316); }
+  button.action.ghost { background: var(--panel-2); border: 1px solid var(--line); }
+
+  .status-line { text-align: center; font-size: 0.78rem; color: var(--muted); padding: 2px 0 6px; }
+
+  /* History */
+  .history { border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
+  .history h4 { padding: 12px 16px; font-size: 0.82rem; color: var(--muted); border-bottom: 1px solid var(--line); font-weight: 600; letter-spacing: 0.02em; }
+  .history-list { max-height: 220px; overflow-y: auto; }
+  .h-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 0.85rem; animation: fadeIn 0.2s ease; }
+  .h-item:last-child { border-bottom: none; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .h-item .h-icon { width: 26px; text-align: center; }
+  .h-item .h-body { flex: 1; overflow: hidden; }
+  .h-item .h-body strong { display: block; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .h-item .h-body span { color: var(--muted); font-size: 0.72rem; }
+  .h-empty { padding: 22px 16px; text-align: center; color: var(--muted); font-size: 0.82rem; }
+
+  /* Modal */
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1000; align-items: flex-end; justify-content: center; }
+  .modal.show { display: flex; }
+  .modal-content {
+    background: var(--panel); border-radius: 18px 18px 0 0; width: 100%; max-width: 480px;
+    max-height: 85vh; display: flex; flex-direction: column;
+    animation: slideUp 0.22s ease;
+  }
+  @media (min-width: 520px) { .modal { align-items: center; } .modal-content { border-radius: 18px; } }
+  @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .modal-header h3 { font-size: 1.05rem; }
+  .modal-body { padding: 18px; overflow-y: auto; }
+  .modal-footer { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); }
+  .close-btn { background: none; border: none; color: var(--muted); font-size: 1.4rem; cursor: pointer; line-height: 1; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; margin-bottom: 6px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+  .form-group input[type="text"], .form-group select {
+    width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel-2); color: var(--text); font-size: 0.95rem;
+  }
+  .form-group small { display: block; margin-top: 5px; color: var(--muted); font-size: 0.75rem; }
+  .form-row { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+  .form-row input[type="checkbox"] { width: 18px; height: 18px; }
+
+  .code-input-row { display: flex; gap: 8px; }
+  .code-input-row input { text-align: center; letter-spacing: 0.3em; font-weight: 700; text-transform: uppercase; }
+
+  .badge-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="logo">📷</span> Scanner</div>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙️</button>
+  </div>
+
+  <div class="conn-pill pending" id="connPill">
+    <span class="dot"></span>
+    <div class="txt">
+      <strong id="connTitle">Not connected</strong>
+      <span id="connSub">Scan the QR code on your laptop, or enter a code manually</span>
+    </div>
+    <button id="connActionBtn">Enter code</button>
+  </div>
+
+  <div class="cam-card">
+    <div id="reader"></div>
+    <div class="cam-placeholder" id="camPlaceholder">
+      <div class="big">📱</div>
+      <div>Tap <strong>Start Camera</strong> below to begin scanning</div>
+    </div>
+    <div class="scan-frame" id="scanFrame" style="display:none;">
+      <div class="box">
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <div class="scan-line"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="result-card" id="resultCard">
+    <div class="r-icon" id="resultIcon">📸</div>
+    <div class="r-body">
+      <strong id="resultTitle">Point camera at a barcode</strong>
+      <span id="resultSub">Results will appear here</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="action" id="startBtn">▶️ Start Camera</button>
+    <button class="action stop" id="stopBtn" disabled>⏹️ Stop</button>
+    <button class="action torch" id="torchBtn" disabled>💡 Flashlight</button>
+    <button class="action ghost" id="settingsBtn2">⚙️ Settings</button>
+  </div>
+
+  <div class="status-line" id="status">Ready — tap Start Camera to begin</div>
+
+  <div class="history">
+    <h4>RECENT SCANS</h4>
+    <div class="history-list" id="historyList">
+      <div class="h-empty" id="historyEmpty">Your scanned barcodes will show up here</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Settings</h3>
+      <button class="close-btn" id="closeSettingsX">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Laptop pairing code</label>
+        <div class="code-input-row">
+          <input type="text" id="pairingCodeInput" maxlength="6" placeholder="ABC123">
+          <button class="action" id="connectCodeBtn" style="flex:0 0 auto;padding:0 16px;">Connect</button>
+        </div>
+        <small>Found on the laptop's "Connect Device" screen. Scanning its QR code fills this in for you automatically.</small>
+      </div>
+      <div class="form-group">
+        <label for="serverUrl">Server URL (advanced / manual setup)</label>
+        <input type="text" id="serverUrl" placeholder="http://192.168.1.100/inventory_system/barcodeScanner/api/barcode.php">
+        <small>Only needed if you're not using a pairing code.</small>
+      </div>
+      <div class="form-group">
+        <label for="scanAction">Action on scan</label>
+        <select id="scanAction">
+          <option value="search">Search Product</option>
+          <option value="update_stock">Update Stock (Inventory Manager)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <input type="checkbox" id="autoSubmit" checked>
+        <label for="autoSubmit" style="margin:0;">Auto-send scans to server</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="action" id="saveSettings" style="flex:1;">Save</button>
+      <button class="action ghost" id="closeSettings" style="flex:1;">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Camera Permission Modal -->
+<div id="permissionModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header"><h3>📷 Camera Permission Needed</h3></div>
+    <div class="modal-body" style="text-align:center;">
+      <div style="font-size:2.6rem;margin-bottom:10px;">📱</div>
+      <p style="font-weight:600;margin-bottom:10px;">Allow camera access to scan barcodes</p>
+      <p style="color:var(--muted);font-size:0.88rem;line-height:1.6;">
+        iPhone: tap "Allow" when prompted.<br>Android: tap "Allow" or "While using the app".
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="action" id="allowPermission" style="flex:1;">Allow Camera</button>
+      <button class="action ghost" id="denyPermission" style="flex:1;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+  // ---------- Elements ----------
+  const resultCard = document.getElementById('resultCard');
+  const resultIcon = document.getElementById('resultIcon');
+  const resultTitle = document.getElementById('resultTitle');
+  const resultSub = document.getElementById('resultSub');
+  const statusEl = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const torchBtn = document.getElementById('torchBtn');
+  const camPlaceholder = document.getElementById('camPlaceholder');
+  const scanFrame = document.getElementById('scanFrame');
+  const historyList = document.getElementById('historyList');
+  const historyEmpty = document.getElementById('historyEmpty');
+
+  const connPill = document.getElementById('connPill');
+  const connTitle = document.getElementById('connTitle');
+  const connSub = document.getElementById('connSub');
+  const connActionBtn = document.getElementById('connActionBtn');
+
+  const settingsModal = document.getElementById('settingsModal');
+  const serverUrlInput = document.getElementById('serverUrl');
+  const scanActionSelect = document.getElementById('scanAction');
+  const autoSubmitCheckbox = document.getElementById('autoSubmit');
+  const pairingCodeInput = document.getElementById('pairingCodeInput');
+
+  let html5QrCode = new Html5Qrcode("reader");
+  let torchEnabled = false;
+  let isScanning = false;
+
+  // ---------- Settings / pairing state ----------
+  const params = new URLSearchParams(location.search);
+  let settings = {
+    serverUrl: params.get('api') || localStorage.getItem('scannerServerUrl') || '',
+    pairingCode: (params.get('code') || localStorage.getItem('scannerPairingCode') || '').toUpperCase(),
+    accessToken: localStorage.getItem('scannerAccessToken') || '',
+    scanAction: localStorage.getItem('scannerAction') || 'search',
+    autoSubmit: localStorage.getItem('scannerAutoSubmit') !== 'false',
+  };
+  let connected = false;
+
+  function persistSettings() {
+    localStorage.setItem('scannerServerUrl', settings.serverUrl);
+    localStorage.setItem('scannerPairingCode', settings.pairingCode);
+    localStorage.setItem('scannerAccessToken', settings.accessToken || '');
+    localStorage.setItem('scannerAction', settings.scanAction);
+    localStorage.setItem('scannerAutoSubmit', settings.autoSubmit);
+  }
+
+  function apiOrigin() {
+    // Derive the pairing.php URL from the configured barcode.php URL.
+    if (!settings.serverUrl) return null;
+    return settings.serverUrl.replace(/api\/barcode\.php.*/, 'api/pairing.php');
+  }
+
+  function setConnectionUI(state, label) {
+    connPill.classList.remove('pending', 'connected');
+    if (state === 'connected') {
+      connPill.classList.add('connected');
+      connTitle.textContent = 'Connected' + (label ? ' — ' + label : '');
+      connSub.textContent = settings.pairingCode ? `Code ${settings.pairingCode}` : 'Linked to laptop';
+      connActionBtn.textContent = 'Change';
+      connected = true;
+    } else {
+      connPill.classList.add('pending');
+      connTitle.textContent = 'Not connected';
+      connSub.textContent = 'Scan the QR code on your laptop, or enter a code manually';
+      connActionBtn.textContent = 'Enter code';
+      connected = false;
+    }
+  }
+
+  async function joinPairing(silent) {
+    const origin = apiOrigin();
+    if (!origin || !settings.pairingCode) return;
+    try {
+      const res = await fetch(`${origin}?action=join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: settings.pairingCode, device_label: guessDeviceLabel() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        settings.accessToken = data.access_token || '';
+        setConnectionUI('connected', data.device_label);
+        persistSettings();
+      } else if (!silent) {
+        setConnectionUI('idle');
+        statusEl.textContent = data.message || 'Could not connect with that code.';
+      }
+    } catch (e) {
+      if (!silent) statusEl.textContent = 'Could not reach the laptop. Check you\'re on the same WiFi.';
+    }
+  }
+
+  function guessDeviceLabel() {
+    const ua = navigator.userAgent;
+    if (/iPad/.test(ua)) return 'iPad';
+    if (/iPhone/.test(ua)) return 'iPhone';
+    if (/Android(?!.*Mobile)/.test(ua)) return 'Android Tablet';
+    if (/Android/.test(ua)) return 'Android Phone';
+    return 'Device';
+  }
+
+  // ---------- History (last 8 scans, local only) ----------
+  let history = [];
+  function pushHistory(entry) {
+    history.unshift(entry);
+    history = history.slice(0, 8);
+    renderHistory();
+  }
+  function renderHistory() {
+    if (!history.length) { historyList.innerHTML = ''; historyList.appendChild(historyEmpty); return; }
+    historyList.innerHTML = history.map(h => `
+      <div class="h-item">
+        <div class="h-icon">${h.ok ? '✅' : '⚠️'}</div>
+        <div class="h-body">
+          <strong>${escapeHtml(h.title)}</strong>
+          <span>${escapeHtml(h.code)} · ${h.time}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+  function escapeHtml(s) {
+    const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML;
+  }
+
+  // ---------- Result card helper ----------
+  function showResult(state, icon, title, sub) {
+    resultCard.className = 'result-card' + (state ? ' ' + state : '');
+    resultIcon.textContent = icon;
+    resultTitle.textContent = title;
+    resultSub.textContent = sub || '';
+  }
+
+  // ---------- Send scan to server ----------
+  async function sendBarcodeToServer(barcodeData) {
+    if (!settings.serverUrl) {
+      showResult('warn', '⚠️', 'Server not configured', 'Open Settings to connect a laptop.');
+      return;
+    }
+    try {
+      const payload = {
+        barcode: barcodeData,
+        action: settings.scanAction,
+        pairing_code: settings.pairingCode || undefined,
+        access_token: settings.accessToken || undefined,
+        timestamp: new Date().toISOString(),
+      };
+      const response = await fetch(settings.serverUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      const time = new Date().toLocaleTimeString();
+
+      if (data.success) {
+        const name = data.product ? data.product.product_name : barcodeData;
+        showResult('success', '✅', name, data.product ? `₱${Number(data.product.unit_price).toFixed(2)} · Stock ${data.product.quantity_on_hand}` : data.message);
+        pushHistory({ ok: true, title: name, code: barcodeData, time });
+      } else {
+        showResult('warn', '⚠️', 'Not found', data.message || barcodeData);
+        pushHistory({ ok: false, title: 'Not found', code: barcodeData, time });
+      }
+    } catch (err) {
+      showResult('error', '❌', 'Server error', err.message);
+    }
+  }
+
+  // ---------- Scanner ----------
+  const getConfig = () => {
+    const isTablet = /iPad|Android(?!.*Mobile)/.test(navigator.userAgent);
+    return {
+      fps: 10,
+      qrbox: isTablet ? { width: 300, height: 300 } : { width: 250, height: 250 },
+      aspectRatio: 1.0,
+      disableFlip: false,
+    };
+  };
+
+  const onScanSuccess = (decodedText) => {
+    showResult('', '📸', 'Scanned', decodedText);
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+    if (settings.autoSubmit) {
+      sendBarcodeToServer(decodedText);
+    } else {
+      showResult('', '📋', decodedText, 'Auto-send is off — showing locally only');
+    }
+
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'barcode', data: decodedText }, '*');
+    }
+  };
+  const onScanError = () => {};
+
+  async function startScanner() {
+    showPermissionModal();
+  }
+
+  async function requestCameraPermission() {
+    closePermissionModal();
+    statusEl.textContent = '📸 Requesting camera access…';
+    const config = getConfig();
+    try {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (!devices.some(d => d.kind === 'videoinput')) throw new Error('No camera devices found on this device');
+      } catch (e) { console.warn('device enumeration issue', e); }
+
+      try {
+        await html5QrCode.start({ facingMode: 'environment' }, config, onScanSuccess, onScanError);
+      } catch (startErr) {
+        await html5QrCode.start({}, config, onScanSuccess, onScanError);
+      }
+
+      isScanning = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      torchBtn.disabled = false;
+      camPlaceholder.style.display = 'none';
+      scanFrame.style.display = 'flex';
+      statusEl.textContent = '✅ Scanning — point camera at a barcode';
+      showResult('', '📸', 'Point camera at a barcode', 'Hold steady, 6–12 inches away');
+    } catch (err) {
+      isScanning = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      torchBtn.disabled = true;
+      let msg = 'Unable to access camera. Check permissions.';
+      const m = err?.message || '';
+      if (m.includes('NotAllowedError')) msg = 'Camera permission denied. Enable it in browser settings.';
+      else if (m.includes('NotFoundError') || m.includes('No camera')) msg = 'No camera found on this device.';
+      else if (m.includes('NotReadableError')) msg = 'Camera is being used by another app.';
+      showResult('error', '❌', 'Camera error', msg);
+      statusEl.textContent = 'Try a different browser or refresh the page';
+    }
+  }
+
+  async function stopScanner() {
+    try {
+      if (torchEnabled) await toggleTorch();
+      await html5QrCode.stop();
+      isScanning = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      torchBtn.disabled = true;
+      torchBtn.classList.remove('active');
+      camPlaceholder.style.display = 'flex';
+      scanFrame.style.display = 'none';
+      statusEl.textContent = 'Camera stopped';
+      showResult('', '📸', 'Camera stopped', '');
+    } catch (err) { console.error(err); }
+  }
+
+  async function toggleTorch() {
+    if (!isScanning) { statusEl.textContent = 'Start camera first'; return; }
+    torchEnabled = !torchEnabled;
+    try {
+      await html5QrCode.applyVideoConstraints({ torch: torchEnabled });
+      torchBtn.classList.toggle('active', torchEnabled);
+      statusEl.textContent = torchEnabled ? '💡 Flashlight on' : '💡 Flashlight off';
+    } catch (err) {
+      torchEnabled = !torchEnabled;
+      statusEl.textContent = 'Flashlight not supported on this device';
+    }
+  }
+
+  // ---------- Settings modal ----------
+  function loadSettingsIntoForm() {
+    serverUrlInput.value = settings.serverUrl;
+    pairingCodeInput.value = settings.pairingCode;
+    scanActionSelect.value = settings.scanAction;
+    autoSubmitCheckbox.checked = settings.autoSubmit;
+  }
+  function openSettings() { loadSettingsIntoForm(); settingsModal.classList.add('show'); }
+  function closeSettings() { settingsModal.classList.remove('show'); }
+
+  document.getElementById('saveSettings').addEventListener('click', () => {
+    settings.serverUrl = serverUrlInput.value.trim();
+    settings.scanAction = scanActionSelect.value;
+    settings.autoSubmit = autoSubmitCheckbox.checked;
+    persistSettings();
+    statusEl.textContent = '✅ Settings saved';
+    closeSettings();
+  });
+  document.getElementById('connectCodeBtn').addEventListener('click', async () => {
+    const code = pairingCodeInput.value.trim().toUpperCase();
+    if (!code) return;
+    settings.pairingCode = code;
+    settings.accessToken = '';
+    if (!settings.serverUrl && apiOrigin() === null) {
+      statusEl.textContent = 'Enter the laptop server URL first (Advanced), or scan the QR code instead.';
+    }
+    await joinPairing(false);
+  });
+  document.getElementById('closeSettings').addEventListener('click', closeSettings);
+  document.getElementById('closeSettingsX').addEventListener('click', closeSettings);
+  document.getElementById('settingsBtn').addEventListener('click', openSettings);
+  document.getElementById('settingsBtn2').addEventListener('click', openSettings);
+  connActionBtn.addEventListener('click', openSettings);
+  settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeSettings(); });
+
+  startBtn.addEventListener('click', startScanner);
+  stopBtn.addEventListener('click', stopScanner);
+  torchBtn.addEventListener('click', toggleTorch);
+
+  // ---------- Permission modal ----------
+  const permissionModal = document.getElementById('permissionModal');
+  function showPermissionModal() { permissionModal.classList.add('show'); }
+  function closePermissionModal() { permissionModal.classList.remove('show'); }
+  document.getElementById('allowPermission').addEventListener('click', requestCameraPermission);
+  document.getElementById('denyPermission').addEventListener('click', closePermissionModal);
+  permissionModal.addEventListener('click', (e) => { if (e.target === permissionModal) closePermissionModal(); });
+
+  // ---------- Init ----------
+  stopBtn.disabled = true;
+  torchBtn.disabled = true;
+
+  if (settings.serverUrl && settings.pairingCode) {
+    persistSettings();
+    joinPairing(true);
+  } else if (settings.serverUrl) {
+    setConnectionUI('idle');
+  }
+
+  window.addEventListener('load', () => {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (isAndroid && settings.serverUrl) {
+      setTimeout(startScanner, 500);
+    }
+  });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>

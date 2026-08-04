@@ -1,0 +1,3 @@
+-- Executed by database/migrations/202608040001_auth_security.php.
+-- Adds login attempt tracking, password reset tokens, authentication lockout fields,
+-- session versioning, and users.must_change_password.

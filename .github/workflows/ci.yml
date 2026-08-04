@@ -1,0 +1,49 @@
+name: RetailMind CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: inventory_system
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: development
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: inventory_system
+      DB_USER: root
+      DB_PASSWORD: root
+      RUN_DB_TESTS: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, curl
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Install Python dependencies
+        run: python -m pip install -r demandForcasting/requirements.lock
+      - name: Import fresh schema
+        run: mysql -h127.0.0.1 -uroot -proot inventory_system < sql/schema.sql
+      - name: Run migrations
+        run: php scripts/migrate.php
+      - name: Run checks
+        run: bash tests/run_all.sh
