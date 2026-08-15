@@ -47,6 +47,7 @@ final class Request
 
         return stripos($accept, 'application/json') !== false
             || stripos($contentType, 'application/json') !== false
+            || strpos($_SERVER['REQUEST_URI'] ?? '', '/barcodeScanner/apiScanner/') !== false
             || strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false;
     }
 }

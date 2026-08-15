@@ -22,7 +22,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
 </head>
 <body class="cashier-page">
 <div class="app-shell">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
+    <?php include __DIR__ . '/../modules/sidebar.php'; ?>
     <main class="main-content">
         <header class="topbar cashier-topbar">
             <div class="cashier-heading">
@@ -50,11 +50,11 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 <span class="action-icon"><i class="bi bi-upc-scan" aria-hidden="true"></i></span>
                 <span><strong>New sale</strong><span>Scan items and collect payment</span></span>
             </a>
-            <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('invoice/sales_history.php')) ?>">
+            <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('modules/invoice/sales_history.php')) ?>">
                 <span class="action-icon"><i class="bi bi-receipt" aria-hidden="true"></i></span>
                 <span><strong>Sales history</strong><span>Find receipts and transactions</span></span>
             </a>
-            <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('invoice/reversals.php')) ?>">
+            <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('modules/invoice/reversals.php')) ?>">
                 <span class="action-icon"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></span>
                 <span><strong>Returns and reversals</strong><span>Review cancellation requests</span></span>
             </a>
@@ -94,7 +94,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                         <h3 id="recent-transactions-title">Recent transactions</h3>
                         <p class="section-description">Your latest completed checkouts.</p>
                     </div>
-                    <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('invoice/sales_history.php')) ?>">View all</a>
+                    <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('modules/invoice/sales_history.php')) ?>">View all</a>
                 </div>
                 <div class="table-wrap" style="border:0;border-radius:0;">
                     <table class="cashier-recent-table">
@@ -110,7 +110,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                                 <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', $sale['payment_method']))) ?></td>
                                 <td><?= htmlspecialchars(date('g:i A', strtotime($sale['sale_date']))) ?></td>
                                 <td>
-                                    <a class="receipt-link" href="<?= htmlspecialchars(app_url('invoice/receipt.php?sale_id=' . (int)$sale['sale_id'])) ?>">
+                                    <a class="receipt-link" href="<?= htmlspecialchars(app_url('modules/invoice/receipt.php?sale_id=' . (int)$sale['sale_id'])) ?>">
                                         View receipt <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                     </a>
                                 </td>

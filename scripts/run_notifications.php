@@ -1,6 +1,6 @@
 <?php
 // Run daily from Task Scheduler/cron to create and email operational alerts.
-require_once dirname(__DIR__) . '/bootstrap/app.php';
+require_once dirname(__DIR__) . '/assets/bootstrap/app.php';
 require_once dirname(__DIR__) . '/config/db.php';
 require_once dirname(__DIR__) . '/includes/functions.php';
 

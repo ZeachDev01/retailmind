@@ -55,22 +55,30 @@ class NotificationService
             return;
         }
 
-        foreach ($this->getExpiringBatches($days, false) as $batch) {
+        $thresholds = $this->getExpiryAlertThresholds($days);
+        $maxDays = max($thresholds);
+        foreach ($this->getExpiringBatches($maxDays, false) as $batch) {
+            $daysRemaining = (int)$batch['days_remaining'];
+            $eligible = array_values(array_filter($thresholds, static fn(int $threshold): bool => $daysRemaining <= $threshold));
+            if (!$eligible) {
+                continue;
+            }
+            $threshold = min($eligible);
             foreach ($users as $user) {
-                if (!$this->hasBatchNotificationToday((int)$user['user_id'], 'expiring_stock', (int)$batch['batch_id'])) {
+                if (!$this->hasBatchThresholdNotification((int)$user['user_id'], (int)$batch['batch_id'], $threshold)) {
                     $this->createNotification(
                         (int)$user['user_id'],
                         'expiring_stock',
-                        'Expiring Soon: ' . $batch['product_name'],
-                        "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expires on {$batch['expiration_date']}. Remaining: {$batch['remaining_quantity']}.",
+                        "Expiry {$threshold}-Day Alert: " . $batch['product_name'],
+                        "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expires on {$batch['expiration_date']} ({$daysRemaining} day(s) remaining). Stock: {$batch['remaining_quantity']}.",
                         (int)$batch['batch_id'],
-                        'product_batch'
+                        'product_batch_expiry_' . $threshold
                     );
                 }
             }
         }
 
-        foreach ($this->getExpiringBatches($days, true) as $batch) {
+        foreach ($this->getExpiringBatches($maxDays, true) as $batch) {
             foreach ($users as $user) {
                 if (!$this->hasBatchNotificationToday((int)$user['user_id'], 'expired_stock', (int)$batch['batch_id'])) {
                     $this->createNotification(
@@ -84,6 +92,27 @@ class NotificationService
                 }
             }
         }
+    }
+
+    private function getExpiryAlertThresholds(int $fallbackDays): array
+    {
+        $value = '';
+        try {
+            $stmt = $this->pdo->prepare("SELECT setting_value FROM store_settings WHERE setting_key='expiry_alert_days'");
+            $stmt->execute();
+            $value = (string)($stmt->fetchColumn() ?: '');
+        } catch (Throwable $e) {
+            $value = '';
+        }
+        $thresholds = array_values(array_unique(array_filter(array_map(
+            static fn(string $part): int => max(0, min(365, (int)trim($part))),
+            explode(',', $value !== '' ? $value : '90,60,30,14,7')
+        ), static fn(int $day): bool => $day > 0)));
+        if (!$thresholds) {
+            $thresholds = [max(1, $fallbackDays)];
+        }
+        rsort($thresholds, SORT_NUMERIC);
+        return $thresholds;
     }
 
     public function createNotification(int $userId, string $type, string $title, string $message, ?int $referenceId = null, ?string $referenceType = null): void
@@ -129,7 +158,7 @@ class NotificationService
 
         $stmt = $this->pdo->prepare(
             "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                    p.sku, p.product_name
+                    DATEDIFF(pb.expiration_date, CURDATE()) AS days_remaining, p.sku, p.product_name
              FROM product_batches pb
              JOIN products p ON p.product_id = pb.product_id
              WHERE pb.remaining_quantity > 0
@@ -138,6 +167,17 @@ class NotificationService
         );
         $expired ? $stmt->execute() : $stmt->execute([$days]);
         return $stmt->fetchAll();
+    }
+
+
+    private function hasBatchThresholdNotification(int $userId, int $batchId, int $threshold): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT notification_id FROM notifications
+             WHERE user_id=? AND type='expiring_stock' AND reference_id=? AND reference_type=? LIMIT 1"
+        );
+        $stmt->execute([$userId, $batchId, 'product_batch_expiry_' . $threshold]);
+        return (bool)$stmt->fetch();
     }
 
     private function hasBatchNotificationToday(int $userId, string $type, int $batchId): bool

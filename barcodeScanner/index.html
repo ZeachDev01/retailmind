@@ -266,7 +266,7 @@
       </div>
       <div class="form-group">
         <label for="serverUrl">Server URL (advanced / manual setup)</label>
-        <input type="text" id="serverUrl" placeholder="http://192.168.1.100/inventory_system/api/barcode.php">
+        <input type="text" id="serverUrl" placeholder="http://192.168.1.100/inventory_system/barcodeScanner/apiScanner/barcode.php">
         <small>Only needed if you're not using a pairing code.</small>
       </div>
       <div class="form-group">
@@ -359,7 +359,7 @@
   function apiOrigin() {
     // Derive the pairing.php URL from the configured barcode.php URL.
     if (!settings.serverUrl) return null;
-    return settings.serverUrl.replace(/api\/barcode\.php.*/, 'api/pairing.php');
+    return settings.serverUrl.replace(/(?:barcodeScanner\/apiScanner|api)\/barcode\.php.*/, 'barcodeScanner/apiScanner/pairing.php');
   }
 
   function setConnectionUI(state, label) {

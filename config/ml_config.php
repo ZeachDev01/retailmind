@@ -1,6 +1,6 @@
 <?php
 // config/ml_config.php
-// Endpoint of the Python ML microservice (see /ml/predict_api.py)
+// Endpoint of the Python ML microservice (see /legacy/demandForcasting/predict_api.py)
 
 $mlConfig = require __DIR__ . '/machine_learning.php';
 

@@ -2,7 +2,7 @@
 // config/db.php
 // Backward-compatible PDO connection for legacy page scripts.
 
-require_once __DIR__ . '/../bootstrap/app.php';
+require_once __DIR__ . '/../assets/bootstrap/app.php';
 
 try {
     $pdo = App\Core\Database::connection();

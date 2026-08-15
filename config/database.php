@@ -1,6 +1,6 @@
 <?php
 
-require_once dirname(__DIR__) . '/bootstrap/app.php';
+require_once dirname(__DIR__) . '/assets/bootstrap/app.php';
 
 $envValue = static function (array $keys, $default = null) {
     foreach ($keys as $key) {

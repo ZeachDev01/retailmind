@@ -29,10 +29,10 @@ class ProductService
             "SELECT p.*, i.quantity_on_hand
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
-             WHERE p.barcode = ? OR p.sku = ? OR p.product_name = ?
+             WHERE p.barcode = ? OR p.case_barcode = ? OR p.sku = ? OR p.product_name = ?
              LIMIT 1"
         );
-        $stmt->execute([$term, $term, $term]);
+        $stmt->execute([$term, $term, $term, $term]);
         $product = $stmt->fetch();
         if ($product) {
             return $product;
@@ -42,12 +42,12 @@ class ProductService
             "SELECT p.*, i.quantity_on_hand
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
-             WHERE p.barcode LIKE ? OR p.product_name LIKE ?
+             WHERE p.barcode LIKE ? OR p.case_barcode LIKE ? OR p.product_name LIKE ?
              ORDER BY p.product_name
              LIMIT 1"
         );
         $likeTerm = '%' . $term . '%';
-        $stmt->execute([$likeTerm, $likeTerm]);
+        $stmt->execute([$likeTerm, $likeTerm, $likeTerm]);
         return $stmt->fetch() ?: null;
     }
 
@@ -65,6 +65,11 @@ class ProductService
         $safetyStock = max(0, (int)($data['safety_stock'] ?? 0));
         $minimumOrderQuantity = max(1, (int)($data['minimum_order_quantity'] ?? 1));
         $unitsPerPackage = max(1, (int)($data['units_per_package'] ?? 1));
+        $baseUnit = trim((string)($data['base_unit'] ?? 'piece')) ?: 'piece';
+        $receivingUnit = trim((string)($data['receiving_unit'] ?? 'package')) ?: 'package';
+        $caseBarcode = trim((string)($data['case_barcode'] ?? ''));
+        $parentProductId = (int)($data['parent_product_id'] ?? 0);
+        $variantLabel = trim((string)($data['variant_label'] ?? ''));
         $expirationDate = (($data['expiration_date'] ?? '') !== '') ? $data['expiration_date'] : null;
         $batchNumber = trim((string)($data['batch_number'] ?? ''));
         $productImage = trim((string)($data['product_image'] ?? ''));
@@ -82,6 +87,25 @@ class ProductService
             throw new RuntimeException('Barcode must not exceed 50 characters.');
         }
         $this->assertBarcodeAvailable($barcode);
+        if ($caseBarcode !== '') {
+            if (strlen($caseBarcode) > 80) throw new RuntimeException('Case barcode must not exceed 80 characters.');
+            $caseStmt = $this->pdo->prepare('SELECT product_id FROM products WHERE barcode=? OR sku=? OR case_barcode=? LIMIT 1');
+            $caseStmt->execute([$caseBarcode,$caseBarcode,$caseBarcode]);
+            if ($caseStmt->fetch()) throw new RuntimeException('That case barcode is already assigned.');
+        }
+        if ($parentProductId > 0) {
+            $parentStmt = $this->pdo->prepare("SELECT product_id FROM products WHERE product_id=? AND status='active'");
+            $parentStmt->execute([$parentProductId]);
+            if (!$parentStmt->fetchColumn()) {
+                throw new RuntimeException('Selected parent product was not found.');
+            }
+            if ($variantLabel === '') {
+                throw new RuntimeException('Variant label is required when a parent product is selected.');
+            }
+        } else {
+            $parentProductId = 0;
+            $variantLabel = '';
+        }
 
         if ($initialStock > 0) {
             $this->fiscalPeriodGuard->assertOpenNow('purchase_history', 'purchase history');
@@ -95,15 +119,18 @@ class ProductService
         try {
             $stmt = $this->pdo->prepare(
                 "INSERT INTO products (
-                    sku, barcode, product_name, brand, category_id, unit_price, cost_price,
+                    sku, barcode, case_barcode, parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
                     quantity_purchased, quantity_sold, reorder_level, supplier, preferred_supplier,
-                    supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, expiration_date,
+                    supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, base_unit, receiving_unit, expiration_date,
                     product_image, status, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $barcode,
                 $barcode,
+                $caseBarcode !== '' ? $caseBarcode : null,
+                $parentProductId > 0 ? $parentProductId : null,
+                $variantLabel !== '' ? $variantLabel : null,
                 $productName,
                 $brand !== '' ? $brand : null,
                 $categoryId,
@@ -118,6 +145,8 @@ class ProductService
                 $safetyStock,
                 $minimumOrderQuantity,
                 $unitsPerPackage,
+                $baseUnit,
+                $receivingUnit,
                 $expirationDate,
                 $productImage !== '' ? $productImage : null,
                 $status,
@@ -180,6 +209,9 @@ class ProductService
         $safetyStock = max(0, (int)($data['safety_stock'] ?? 0));
         $minimumOrderQuantity = max(1, (int)($data['minimum_order_quantity'] ?? 1));
         $unitsPerPackage = max(1, (int)($data['units_per_package'] ?? 1));
+        $baseUnit = trim((string)($data['base_unit'] ?? 'piece')) ?: 'piece';
+        $receivingUnit = trim((string)($data['receiving_unit'] ?? 'package')) ?: 'package';
+        $caseBarcode = trim((string)($data['case_barcode'] ?? ''));
         $expirationDate = (($data['expiration_date'] ?? '') !== '') ? $data['expiration_date'] : null;
         $batchNumber = trim((string)($data['batch_number'] ?? ''));
         $productImage = trim((string)($data['product_image'] ?? ''));
@@ -345,6 +377,18 @@ class ProductService
         if ($productId <= 0) {
             throw new RuntimeException('Invalid product selected.');
         }
+        if ($qtyChange === 0) {
+            throw new RuntimeException('Quantity change cannot be zero.');
+        }
+        $roleStmt = $this->pdo->prepare("SELECT r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=?");
+        $roleStmt->execute([$userId]);
+        $role = (string)$roleStmt->fetchColumn();
+        if (!in_array($role, ['admin','super_admin'], true)) {
+            throw new RuntimeException('Direct stock adjustments require administrator approval. Use inventory counts or damage reporting instead.');
+        }
+        if (mb_strlen($adjustmentReason) < 8) {
+            throw new RuntimeException('Enter a specific adjustment reason of at least 8 characters.');
+        }
 
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
         $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
@@ -475,9 +519,9 @@ class ProductService
     private function assertBarcodeAvailable(string $barcode): void
     {
         $stmt = $this->pdo->prepare(
-            'SELECT product_id FROM products WHERE barcode = ? OR sku = ? LIMIT 1'
+            'SELECT product_id FROM products WHERE barcode = ? OR sku = ? OR case_barcode = ? LIMIT 1'
         );
-        $stmt->execute([$barcode, $barcode]);
+        $stmt->execute([$barcode, $barcode, $barcode]);
         if ($stmt->fetch()) {
             throw new RuntimeException('That barcode is already assigned to another product.');
         }
@@ -488,9 +532,9 @@ class ProductService
         for ($attempt = 0; $attempt < 30; $attempt++) {
             $barcode = 'RM' . date('ymd') . str_pad((string)random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
             $stmt = $this->pdo->prepare(
-                'SELECT product_id FROM products WHERE barcode = ? OR sku = ? LIMIT 1'
+                'SELECT product_id FROM products WHERE barcode = ? OR sku = ? OR case_barcode = ? LIMIT 1'
             );
-            $stmt->execute([$barcode, $barcode]);
+            $stmt->execute([$barcode, $barcode, $barcode]);
             if (!$stmt->fetch()) {
                 return $barcode;
             }

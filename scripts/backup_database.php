@@ -1,5 +1,5 @@
 <?php
-require_once dirname(__DIR__) . '/bootstrap/app.php';
+require_once dirname(__DIR__) . '/assets/bootstrap/app.php';
 require_once dirname(__DIR__) . '/config/db.php';
 require_once dirname(__DIR__) . '/includes/backup.php';
 

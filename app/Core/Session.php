@@ -11,6 +11,8 @@ final class Session
             return;
         }
 
+        self::configureSavePath();
+
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
 
@@ -94,6 +96,27 @@ final class Session
         }
 
         $_SESSION['_last_activity'] = $now;
+    }
+
+    private static function configureSavePath(): void
+    {
+        $configuredPath = trim((string)Environment::get('SESSION_SAVE_PATH', ''));
+        $rootPath = dirname(__DIR__, 2);
+        $savePath = $configuredPath !== ''
+            ? $configuredPath
+            : (($GLOBALS['app']['storage_path'] ?? ($rootPath . '/storage')) . '/sessions');
+
+        if (!preg_match('/^[A-Za-z]:[\\\\\\/]/', $savePath) && strpos($savePath, '/') !== 0) {
+            $savePath = $rootPath . '/' . $savePath;
+        }
+
+        if (!is_dir($savePath)) {
+            mkdir($savePath, 0775, true);
+        }
+
+        if (is_dir($savePath) && is_writable($savePath)) {
+            session_save_path($savePath);
+        }
     }
 
     private static function shouldUseSecureCookie(): bool

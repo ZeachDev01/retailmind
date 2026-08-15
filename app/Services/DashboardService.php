@@ -10,8 +10,9 @@ class DashboardService
         $this->pdo = $pdo;
     }
 
-    public function getAdminMetrics(): array
+    public function getAdminMetrics(int $days = 30): array
     {
+        $days = max(1, min(365, $days));
         return [
             'total_users' => (int)$this->pdo->query("SELECT COUNT(*) FROM users")->fetchColumn(),
             'active_cashiers_today' => (int)$this->pdo->query(
@@ -22,6 +23,7 @@ class DashboardService
                  WHERE r.role_name = 'cashier' AND DATE(s.sale_date) = CURDATE()"
             )->fetchColumn(),
             'total_sales' => (float)$this->pdo->query("SELECT COALESCE(SUM(total_amount), 0) FROM sales")->fetchColumn(),
+            'period_sales' => (float)$this->pdo->query("SELECT COALESCE(SUM(total_amount), 0) FROM sales WHERE sale_date >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)")->fetchColumn(),
             'audit_events' => (int)$this->pdo->query("SELECT COUNT(*) FROM activity_log")->fetchColumn(),
             'open_periods' => (int)$this->pdo->query("SELECT COUNT(*) FROM fiscal_periods WHERE status = 'open'")->fetchColumn(),
             'closed_periods' => (int)$this->pdo->query("SELECT COUNT(*) FROM fiscal_periods WHERE status IN ('closed', 'locked')")->fetchColumn(),
@@ -94,14 +96,15 @@ class DashboardService
         ];
     }
 
-    public function getFastMovingProducts(int $limit = 5): array
+    public function getFastMovingProducts(int $limit = 5, int $days = 30): array
     {
+        $days = max(1, min(365, $days));
         $stmt = $this->pdo->prepare(
             "SELECT p.sku, p.product_name, SUM(si.quantity) AS units_sold
              FROM sale_items si
              JOIN sales s ON s.sale_id = si.sale_id
              JOIN products p ON p.product_id = si.product_id
-             WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+             WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)
              GROUP BY p.product_id, p.sku, p.product_name
              ORDER BY units_sold DESC, p.product_name ASC
              LIMIT ?"
@@ -111,8 +114,9 @@ class DashboardService
         return $stmt->fetchAll();
     }
 
-    public function getSlowMovingProducts(int $limit = 5): array
+    public function getSlowMovingProducts(int $limit = 5, int $days = 30): array
     {
+        $days = max(1, min(365, $days));
         $stmt = $this->pdo->prepare(
             "SELECT p.sku, p.product_name,
                     COALESCE(SUM(CASE WHEN s.sale_id IS NULL THEN 0 ELSE si.quantity END), 0) AS units_sold,
@@ -121,7 +125,7 @@ class DashboardService
              JOIN inventory i ON i.product_id = p.product_id
              LEFT JOIN sale_items si ON si.product_id = p.product_id
              LEFT JOIN sales s ON s.sale_id = si.sale_id
-                AND s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                AND s.sale_date >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)
              WHERE p.status = 'active' AND i.quantity_on_hand > 0
              GROUP BY p.product_id, p.sku, p.product_name, i.quantity_on_hand
              ORDER BY units_sold ASC, i.quantity_on_hand DESC, p.product_name ASC
@@ -165,6 +169,64 @@ class DashboardService
              LIMIT ?"
         );
         $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getSalesTrend(int $days = 30): array
+    {
+        $days = max(7, min(365, $days));
+        return $this->pdo->query(
+            "SELECT DATE(sale_date) AS sale_day, COALESCE(SUM(total_amount), 0) AS total_sales, COUNT(*) AS transactions
+             FROM sales
+             WHERE sale_date >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)
+             GROUP BY DATE(sale_date)
+             ORDER BY sale_day ASC"
+        )->fetchAll();
+    }
+
+    public function getInventoryValueByCategory(int $limit = 8): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COALESCE(c.category_name, 'Uncategorized') AS category_name,
+                    COALESCE(SUM(i.quantity_on_hand * p.cost_price), 0) AS inventory_value,
+                    COALESCE(SUM(i.quantity_on_hand), 0) AS units_on_hand
+             FROM products p
+             JOIN inventory i ON i.product_id = p.product_id
+             LEFT JOIN categories c ON c.category_id = p.category_id
+             WHERE p.status = 'active'
+             GROUP BY c.category_id, c.category_name
+             ORDER BY inventory_value DESC
+             LIMIT ?"
+        );
+        $stmt->bindValue(1, max(1, min(20, $limit)), PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getForecastVsActual(int $limit = 8): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT p.sku, p.product_name,
+                    COALESCE(sp.predicted_demand_next_30_days, 0) AS forecast_demand,
+                    COALESCE(actual.units_sold, 0) AS actual_units
+             FROM products p
+             LEFT JOIN stock_predictions sp ON sp.prediction_id = (
+                SELECT sp2.prediction_id FROM stock_predictions sp2
+                WHERE sp2.product_id = p.product_id
+                ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC LIMIT 1
+             )
+             LEFT JOIN (
+                SELECT si.product_id, SUM(si.quantity) AS units_sold
+                FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+                WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                GROUP BY si.product_id
+             ) actual ON actual.product_id = p.product_id
+             WHERE sp.prediction_id IS NOT NULL
+             ORDER BY GREATEST(COALESCE(sp.predicted_demand_next_30_days, 0), COALESCE(actual.units_sold, 0)) DESC
+             LIMIT ?"
+        );
+        $stmt->bindValue(1, max(1, min(20, $limit)), PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
     }

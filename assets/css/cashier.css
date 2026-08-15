@@ -623,7 +623,7 @@
     color: #0f172a;
     font-size: 1.7rem;
     font-weight: 900;
-    letter-spacing: -0.03em;
+    letter-spacing: 0;
 }
 
 .payment-section {
@@ -1086,9 +1086,22 @@
     .scanner-area {
         grid-template-columns: 1fr;
     }
+
+    .checkout-dialog-actions {
+        flex-wrap: wrap;
+    }
 }
 
 @media (max-width: 640px) {
+    .cashier-chip {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
+
+    .cashier-hero .btn {
+        width: 100%;
+    }
+
     .pos-panel {
         padding: 0.85rem;
         border-radius: 14px;
@@ -1106,6 +1119,15 @@
 
     .scan-row .btn {
         width: 100%;
+    }
+
+    .recent-scan {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .recent-scan-price {
+        grid-column: 2;
+        justify-self: start;
     }
 
     .cash-quick {
@@ -1130,6 +1152,47 @@
     }
 }
 
+@media (max-width: 480px) {
+    .cashier-topbar {
+        gap: 0.75rem;
+    }
+
+    .cashier-hero {
+        padding: 1rem;
+        border-radius: 14px;
+    }
+
+    .cashier-hero h2 {
+        font-size: 1.08rem;
+    }
+
+    .search-result {
+        grid-template-columns: 1fr;
+    }
+
+    .search-result-price {
+        justify-self: start;
+    }
+
+    .scanner-reader {
+        min-height: 220px;
+    }
+
+    .checkout-total {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .checkout-dialog-actions {
+        flex-direction: column;
+    }
+
+    .checkout-dialog-actions .btn {
+        width: 100%;
+    }
+}
+
 .sr-only {
     position: absolute;
     width: 1px;
@@ -1148,3 +1211,26 @@
     justify-content: center;
     gap: 0.42rem;
 }
+
+/* RetailMind POS usability refresh */
+.cashier-fullscreen-toggle { border: 1px solid var(--cashier-border); cursor: pointer; font: inherit; }
+.pos-category-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--cashier-border); }
+.pos-category-heading { display: flex; justify-content: space-between; gap: .75rem; align-items: center; margin-bottom: .65rem; }
+.pos-category-heading strong { font-size: .86rem; }
+.pos-category-heading span { color: var(--cashier-muted); font-size: .75rem; }
+.pos-category-buttons { display: flex; gap: .45rem; overflow-x: auto; padding-bottom: .35rem; scrollbar-width: thin; }
+.pos-category-button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: .4rem; min-height: 42px; padding: .55rem .75rem; border: 1px solid var(--cashier-border); border-radius: 10px; background: #fff; color: var(--cashier-text); cursor: pointer; font-weight: 650; font-size: .8rem; }
+.pos-category-button:hover,.pos-category-button.active { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.recent-scan.scan-pulse { animation: pos-scan-pulse .35s ease-out; }
+@keyframes pos-scan-pulse { 0% { transform: scale(.985); box-shadow: 0 0 0 0 rgba(37,99,235,.35); } 100% { transform: scale(1); box-shadow: 0 0 0 8px rgba(37,99,235,0); } }
+body.pos-fullscreen .sidebar,
+body.pos-fullscreen .menu-toggle,
+body.pos-fullscreen .sidebar-overlay,
+body.pos-fullscreen .global-top-tools { display: none !important; }
+body.pos-fullscreen .app-shell { display: block; }
+body.pos-fullscreen .main-content { width: 100%; max-width: none; padding: .8rem 1rem 1rem; }
+body.pos-fullscreen .cashier-topbar { margin-bottom: .65rem; }
+body.pos-fullscreen .cashier-shortcuts { margin-bottom: .65rem; }
+body.pos-fullscreen .pos-grid { grid-template-columns: minmax(0, 1.25fr) minmax(380px, .75fr); gap: .8rem; }
+body.pos-fullscreen .pos-panel { border-radius: 12px; }
+@media(max-width:900px){body.pos-fullscreen .pos-grid{grid-template-columns:1fr}.pos-category-heading{align-items:flex-start;flex-direction:column}}

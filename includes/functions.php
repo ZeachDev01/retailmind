@@ -152,7 +152,7 @@ function get_stored_predictions(PDO $pdo): array {
 }
 
 function get_ml_model_metrics(): array {
-    $metricsPath = __DIR__ . '/../ml/model_metrics.json';
+    $metricsPath = __DIR__ . '/../legacy/demandForcasting/model_metrics.json';
     if (!is_readable($metricsPath)) {
         return [];
     }
@@ -233,6 +233,7 @@ function get_store_settings(PDO $pdo): array {
         'receipt_footer' => 'Thank you for shopping with us.',
         'currency_symbol' => '₱',
         'timezone' => 'Asia/Manila',
+        'expiry_alert_days' => '90,60,30,14,7',
     ]);
 }
 
@@ -285,7 +286,7 @@ function get_forecasting_readiness(PDO $pdo): array {
                        SUM(GREATEST(rr.request_qty - COALESCE(received.received_to_date, 0), 0)) AS incoming_stock
                 FROM replenishment_requests rr
                 LEFT JOIN (
-                    SELECT replenishment_request_id, SUM(received_qty) AS received_to_date
+                    SELECT replenishment_request_id, SUM(accepted_qty) AS received_to_date
                     FROM stock_receiving WHERE replenishment_request_id IS NOT NULL
                     GROUP BY replenishment_request_id
                 ) received ON received.replenishment_request_id = rr.request_id

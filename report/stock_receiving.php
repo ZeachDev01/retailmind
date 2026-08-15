@@ -4,7 +4,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../app/Services/ReceivingService.php';
-require_role(['admin', 'cashier']);
+require_role(['admin', 'super_admin', 'cashier']);
 
 $receivingService = new ReceivingService($pdo);
 
@@ -18,7 +18,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $result = $receivingService->receiveStock([
             'product_id' => $_POST['product_id'] ?? 0,
+            'quantity_mode' => $_POST['quantity_mode'] ?? 'units',
             'received_qty' => $_POST['received_qty'] ?? 0,
+            'received_packages' => $_POST['received_packages'] ?? 0,
             'damaged_qty' => $_POST['damaged_qty'] ?? 0,
             'cost_price' => $_POST['cost_price'] ?? 0,
             'supplier' => $_POST['supplier'] ?? '',
@@ -31,6 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'discrepancy_notes' => $_POST['discrepancy_notes'] ?? '',
             'notes' => $_POST['notes'] ?? '',
             'replenishment_request_id' => $_POST['replenishment_request_id'] ?? 0,
+            'purchase_order_item_id' => $_POST['purchase_order_item_id'] ?? 0,
+            'emergency_reason' => $_POST['emergency_reason'] ?? '',
         ], $_SESSION['user_id']);
 
         $message = "Stock received successfully (ID: {$result['receiving_id']}). Inventory updated with {$result['accepted_qty']} accepted units.";
@@ -48,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$po_items = $receivingService->getReceivablePurchaseOrderItems();
 $pending_requests = $receivingService->getPendingReplenishmentRequests();
 $products = $receivingService->getActiveProducts();
 $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
@@ -215,7 +220,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 </head>
 <body>
 <div class="app-shell">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
+    <?php include __DIR__ . '/../modules/sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
             <h1>Stock Receiving</h1>
@@ -227,6 +232,26 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 
         <?php if ($error): ?>
             <div class="message error"><?= htmlspecialchars($error) ?></div>
+        <?php endif; ?>
+
+        <?php if (!empty($po_items)): ?>
+            <div class="pending-requests">
+                <h4>Approved Purchase Orders</h4>
+                <p>Receive against a purchase-order line to keep ordered and received quantities synchronized.</p>
+                <?php foreach ($po_items as $item): ?>
+                    <div class="request-item">
+                        <div class="info"><strong><?= htmlspecialchars($item['po_number']) ?> — <?= htmlspecialchars($item['product_name']) ?></strong><br>
+                            <span class="sku"><?= htmlspecialchars($item['sku']) ?> · <?= htmlspecialchars($item['supplier_name'] ?? 'Supplier not assigned') ?></span>
+                            <div class="progress">Received <?= (int)$item['received_qty'] ?> · Remaining <?= (int)$item['remaining_qty'] ?> <?= htmlspecialchars($item['base_unit'] ?? 'piece') ?>(s)</div>
+                        </div>
+                        <button type="button" class="request-item btn-link" onclick='populatePO(<?= json_encode([
+                            "item_id"=>(int)$item["purchase_order_item_id"],"request_id"=>(int)($item["replenishment_request_id"]??0),
+                            "product_id"=>(int)$item["product_id"],"remaining"=>(int)$item["remaining_qty"],"cost"=>(float)$item["unit_cost"],
+                            "po_number"=>$item["po_number"],"supplier"=>$item["supplier_name"]??"","units_per_package"=>(int)$item["units_per_package"]
+                        ], JSON_HEX_APOS|JSON_HEX_QUOT) ?>)'>Receive PO</button>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         <?php endif; ?>
 
         <?php if (!empty($pending_requests)): ?>
@@ -256,6 +281,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                 <input type="hidden" id="replenishment_request_id" name="replenishment_request_id" value="">
+                <input type="hidden" id="purchase_order_item_id" name="purchase_order_item_id" value="">
 
                 <div class="form-section">
                     <h4>Product Information</h4>
@@ -265,15 +291,24 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                             <select name="product_id" id="product_id" required>
                                 <option value="">-- Select Product --</option>
                                 <?php foreach ($products as $p): ?>
-                                    <option value="<?= $p['product_id'] ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>">
+                                    <option value="<?= $p['product_id'] ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>" data-units-per-package="<?= (int)($p['units_per_package'] ?? 1) ?>" data-base-unit="<?= htmlspecialchars($p['base_unit'] ?? 'piece') ?>" data-receiving-unit="<?= htmlspecialchars($p['receiving_unit'] ?? 'package') ?>">
                                         <?= htmlspecialchars($p['product_name']) ?> (<?= htmlspecialchars($p['sku']) ?>)
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="received_qty" class="required">Quantity Received</label>
-                            <input type="number" name="received_qty" id="received_qty" min="1" required>
+                            <label for="quantity_mode">Receiving quantity type</label>
+                            <select name="quantity_mode" id="quantity_mode"><option value="units">Base units</option><option value="packages">Packages / cases</option></select>
+                        </div>
+                        <div class="form-group" id="units_qty_group">
+                            <label for="received_qty">Base units received</label>
+                            <input type="number" name="received_qty" id="received_qty" min="0" value="0">
+                        </div>
+                        <div class="form-group" id="packages_qty_group" style="display:none">
+                            <label for="received_packages">Packages received</label>
+                            <input type="number" name="received_packages" id="received_packages" min="0" value="0">
+                            <small id="package_conversion">Select a product to view conversion.</small>
                         </div>
                         <div class="form-group">
                             <label for="damaged_qty">Damaged on Delivery</label>
@@ -343,6 +378,10 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                     </div>
                 </div>
 
+                <?php if (in_array(current_role(), ['admin','super_admin'], true)): ?>
+                <div class="form-section"><h4>Emergency receiving</h4><div class="form-group"><label for="emergency_reason">Reason when no approved request or PO is selected</label><input type="text" name="emergency_reason" id="emergency_reason" placeholder="Required only for administrator emergency receiving"></div></div>
+                <?php endif; ?>
+
                 <div class="form-section">
                     <div class="form-group">
                         <label for="notes">Notes / Comments</label>
@@ -379,7 +418,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                                 <td>#<?= $h['receiving_id'] ?></td>
                                 <td><?= htmlspecialchars($h['product_name']) ?></td>
                                 <td><code><?= htmlspecialchars($h['sku']) ?></code></td>
-                                <td><?= $h['received_qty'] ?></td>
+                                <td><?= $h['received_qty'] ?><?php if((int)($h['received_packages']??0)>0): ?><br><small><?= (int)$h['received_packages'] ?> package(s) × <?= (int)$h['units_per_package_used'] ?></small><?php endif; ?></td>
                                 <td><?= $h['accepted_qty'] ?></td>
                                 <td><?= $h['damaged_qty'] ?></td>
                                 <td>
@@ -400,31 +439,59 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 </div>
 
 <script>
+function resetReferences() {
+    document.getElementById('replenishment_request_id').value = '';
+    document.getElementById('purchase_order_item_id').value = '';
+}
 function populateForm(productId, qty, requestId) {
+    resetReferences();
     document.getElementById('product_id').value = productId;
+    document.getElementById('quantity_mode').value = 'units';
     document.getElementById('received_qty').value = qty;
     document.getElementById('replenishment_request_id').value = requestId;
-    fillProductCost();
+    updateQuantityMode(); fillProductCost();
     document.getElementById('received_qty').focus();
     window.scrollTo(0, document.querySelector('.receiving-form').offsetTop - 100);
 }
-
-function fillProductCost() {
-    const select = document.getElementById('product_id');
-    const option = select.options[select.selectedIndex];
-    if (option && option.dataset.cost && !document.getElementById('cost_price').value) {
-        document.getElementById('cost_price').value = Number(option.dataset.cost).toFixed(2);
-    }
+function populatePO(item) {
+    resetReferences();
+    document.getElementById('purchase_order_item_id').value = item.item_id;
+    document.getElementById('replenishment_request_id').value = item.request_id || '';
+    document.getElementById('product_id').value = item.product_id;
+    document.getElementById('quantity_mode').value = 'units';
+    document.getElementById('received_qty').value = item.remaining;
+    document.getElementById('cost_price').value = Number(item.cost || 0).toFixed(2);
+    document.getElementById('po_number').value = item.po_number || '';
+    document.getElementById('supplier').value = item.supplier || '';
+    updateQuantityMode(); updatePackageConversion();
+    window.scrollTo(0, document.querySelector('.receiving-form').offsetTop - 100);
 }
-
-document.getElementById('product_id').addEventListener('change', fillProductCost);
+function selectedProductOption() {
+    const select=document.getElementById('product_id'); return select.options[select.selectedIndex];
+}
+function fillProductCost() {
+    const option=selectedProductOption();
+    if (option && option.dataset.cost && !document.getElementById('cost_price').value) document.getElementById('cost_price').value=Number(option.dataset.cost).toFixed(2);
+    updatePackageConversion();
+}
+function updatePackageConversion() {
+    const option=selectedProductOption(); const units=Number(option?.dataset.unitsPerPackage||1); const receiving=option?.dataset.receivingUnit||'package'; const base=option?.dataset.baseUnit||'piece';
+    document.getElementById('package_conversion').textContent=`1 ${receiving} = ${units} ${base}(s)`;
+}
+function updateQuantityMode() {
+    const packages=document.getElementById('quantity_mode').value==='packages';
+    document.getElementById('units_qty_group').style.display=packages?'none':'flex';
+    document.getElementById('packages_qty_group').style.display=packages?'flex':'none';
+    document.getElementById('received_qty').required=!packages;
+    document.getElementById('received_packages').required=packages;
+    updatePackageConversion();
+}
+document.getElementById('product_id').addEventListener('change', ()=>{resetReferences();fillProductCost();});
+document.getElementById('quantity_mode').addEventListener('change', updateQuantityMode);
 document.getElementById('damaged_qty').addEventListener('input', function () {
-    const damagedQty = Number(this.value || 0);
-    if (damagedQty > 0 && document.getElementById('discrepancy_type').value === 'none') {
-        document.getElementById('discrepancy_type').value = 'damaged';
-        document.getElementById('discrepancy_qty').value = damagedQty;
-    }
+    const damagedQty=Number(this.value||0); if(damagedQty>0&&document.getElementById('discrepancy_type').value==='none'){document.getElementById('discrepancy_type').value='damaged';document.getElementById('discrepancy_qty').value=damagedQty;}
 });
+updateQuantityMode();
 </script>
 </body>
 </html>

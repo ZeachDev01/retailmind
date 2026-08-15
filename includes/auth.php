@@ -1,7 +1,7 @@
 <?php
 // Session bootstrap, login throttling, account validation, and role access.
 
-require_once __DIR__ . '/../bootstrap/app.php';
+require_once __DIR__ . '/../assets/bootstrap/app.php';
 
 App\Core\Session::start();
 
@@ -30,53 +30,6 @@ function app_url(string $path = ''): string {
     }
     return ($baseUrl === '' ? '' : $baseUrl) . '/' . $normalizedPath;
 }
-
-function ensure_auth_security_schema(PDO $pdo): void {
-    static $ensured = false;
-    if ($ensured) {
-        return;
-    }
-
-    $pdo->exec("CREATE TABLE IF NOT EXISTS login_attempts (
-        attempt_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(100) NOT NULL,
-        ip_address VARCHAR(45) NOT NULL,
-        was_successful BOOLEAN NOT NULL DEFAULT FALSE,
-        attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_login_attempts_identity (username, ip_address, attempted_at),
-        INDEX idx_login_attempts_time (attempted_at)
-    )");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS password_reset_tokens (
-        reset_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        token_hash VARCHAR(255) NOT NULL UNIQUE,
-        expires_at DATETIME NOT NULL,
-        used_at DATETIME NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_password_reset_tokens_expiry (expires_at),
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-    )");
-
-    $existing = [];
-    foreach ($pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_ASSOC) as $column) {
-        $existing[$column['Field']] = true;
-    }
-    $columns = [
-        'failed_login_attempts' => 'INT NOT NULL DEFAULT 0',
-        'locked_until' => 'DATETIME NULL',
-        'last_login_at' => 'DATETIME NULL',
-        'session_version' => 'INT NOT NULL DEFAULT 1',
-        'password_changed_at' => 'DATETIME NULL',
-    ];
-    foreach ($columns as $name => $definition) {
-        if (!isset($existing[$name])) {
-            $pdo->exec("ALTER TABLE users ADD COLUMN {$name} {$definition}");
-        }
-    }
-    $ensured = true;
-}
-
-ensure_auth_security_schema($pdo);
 
 function is_logged_in(): bool {
     return isset($_SESSION['user_id']);
@@ -143,7 +96,7 @@ function login_user(PDO $pdo, string $username, string $password): bool {
 
     $stmt = $pdo->prepare(
         "SELECT u.user_id, u.full_name, u.username, u.email, u.password_hash, u.status,
-                u.failed_login_attempts, u.locked_until, u.session_version, r.role_name
+                u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password, r.role_name
          FROM users u JOIN roles r ON u.role_id = r.role_id
          WHERE u.username = ? LIMIT 1"
     );
@@ -170,6 +123,7 @@ function login_user(PDO $pdo, string $username, string $password): bool {
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['role'] = $user['role_name'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
+        $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
         $_SESSION['_authenticated_at'] = time();
         unset($_SESSION['_login_error']);
         log_activity(
@@ -228,7 +182,7 @@ function validate_current_session(PDO $pdo): void {
     }
     $validated = true;
     $stmt = $pdo->prepare(
-        "SELECT u.status, u.session_version, u.full_name, r.role_name
+        "SELECT u.status, u.session_version, u.full_name, u.must_change_password, r.role_name
          FROM users u JOIN roles r ON r.role_id = u.role_id WHERE u.user_id = ?"
     );
     $stmt->execute([(int)$_SESSION['user_id']]);
@@ -237,18 +191,27 @@ function validate_current_session(PDO $pdo): void {
     if (!$user || $user['status'] !== 'active' || (int)$user['session_version'] !== $sessionVersion) {
         App\Core\Session::destroy();
         if (!headers_sent()) {
-            header('Location: ' . app_url('login.php?session=invalid'));
+            header('Location: ' . app_url('index.php?login=1&session=invalid'));
         }
         exit;
     }
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['role'] = $user['role_name'];
+    $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
+
+    $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    if ($_SESSION['must_change_password'] && !in_array($currentScript, ['change_password.php', 'logout.php'], true)) {
+        if (!headers_sent()) {
+            header('Location: ' . app_url('change_password.php'));
+        }
+        exit;
+    }
 }
 
 function require_role(array $allowed_roles): void {
     global $pdo;
     if (!is_logged_in()) {
-        header('Location: ' . app_url('login.php'));
+        header('Location: ' . app_url('index.php?login=1'));
         exit;
     }
     validate_current_session($pdo);
@@ -269,16 +232,16 @@ function redirect_by_role(): void {
     switch (current_role()) {
         case 'super_admin':
         case 'admin':
-            header('Location: ' . app_url('admin/dashboard.php'));
+            header('Location: ' . app_url('modules/system_administrator/dashboard.php'));
             break;
         case 'inventory_manager':
-            header('Location: ' . app_url('manager/dashboard.php'));
+            header('Location: ' . app_url('modules/inventory_management/dashboard.php'));
             break;
         case 'cashier':
             header('Location: ' . app_url('cashier/pos.php'));
             break;
         default:
-            header('Location: ' . app_url('login.php'));
+            header('Location: ' . app_url('index.php?login=1'));
     }
     exit;
 }

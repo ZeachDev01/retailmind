@@ -3,9 +3,13 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Services/SalesWorkflowService.php';
+require_once __DIR__ . '/../app/Services/CashierShiftService.php';
 require_role(['admin', 'cashier']);
 
 $salesWorkflowService = new SalesWorkflowService($pdo);
+$shiftService = new CashierShiftService($pdo);
+$openShift = current_role() === 'cashier' ? $shiftService->getOpenShift((int)$_SESSION['user_id']) : null;
+$posShiftOpen = current_role() !== 'cashier' || $openShift !== null;
 
 $checkout_error = '';
 $checkout_notice = '';
@@ -31,11 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
     $paymentDetails = [
         'cash_received' => $_POST['cash_received'] ?? 0,
         'payment_reference' => $_POST['payment_reference'] ?? '',
+        'discount_type' => $_POST['discount_type'] ?? 'none',
+        'discount_value' => $_POST['discount_value'] ?? 0,
+        'discount_reason' => $_POST['discount_reason'] ?? '',
+        'discount_approver_username' => $_POST['discount_approver_username'] ?? '',
+        'discount_approver_password' => $_POST['discount_approver_password'] ?? '',
     ];
 
     try {
         $result = $salesWorkflowService->checkout($cart, (int)$_SESSION['user_id'], $payment_method, $paymentDetails);
-        header('Location: ' . app_url('invoice/receipt.php?sale_id=' . $result['sale_id']));
+        header('Location: ' . app_url('modules/invoice/receipt.php?sale_id=' . $result['sale_id']));
         exit;
     } catch (RuntimeException $e) {
         $checkout_error = $e->getMessage();
@@ -44,27 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
     }
 }
 
-$products = $salesWorkflowService->getActiveProducts();
-
+$products = [];
 $productLookup = [];
 $productSearch = [];
-foreach ($products as $product) {
-    $lookupEntry = [
-        'product_id' => (int)$product['product_id'],
-        'sku' => $product['sku'],
-        'barcode' => $product['barcode'],
-        'name' => $product['product_name'],
-        'price' => (float)$product['unit_price'],
-        'quantity_on_hand' => (int)$product['quantity_on_hand'],
-        'reorder_level' => (int)($product['reorder_level'] ?? 0),
-        'safety_stock' => (int)($product['safety_stock'] ?? 0),
-    ];
-    $productLookup[$product['sku']] = $lookupEntry;
-    if (!empty($product['barcode'])) {
-        $productLookup[$product['barcode']] = $lookupEntry;
-    }
-    $productSearch[] = $lookupEntry;
-}
+$posCategories = $pdo->query("SELECT category_id, category_name FROM categories ORDER BY category_name LIMIT 12")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -77,7 +69,7 @@ foreach ($products as $product) {
 </head>
 <body class="cashier-page">
 <div class="app-shell">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
+    <?php include __DIR__ . '/../modules/sidebar.php'; ?>
     <main class="main-content">
         <header class="topbar cashier-topbar">
             <div class="cashier-heading">
@@ -85,9 +77,10 @@ foreach ($products as $product) {
                 <p>Scan items, review the cart, and collect payment.</p>
             </div>
             <div class="cashier-meta" aria-label="Cashier session information">
-                <span class="cashier-chip online">Register ready</span>
+                <span class="cashier-chip <?= $posShiftOpen ? 'online' : '' ?>"><?= $posShiftOpen ? ($openShift ? 'Shift #' . (int)$openShift['shift_id'] . ' open' : 'Register ready') : 'Shift required' ?></span>
                 <span class="cashier-chip"><i class="bi bi-person" aria-hidden="true"></i><?= htmlspecialchars($_SESSION['full_name']) ?></span>
                 <span class="cashier-chip" id="cashier-clock"><i class="bi bi-clock" aria-hidden="true"></i>--:--</span>
+                <button type="button" class="cashier-chip cashier-fullscreen-toggle" id="pos-fullscreen-toggle" title="Toggle distraction-free POS mode"><i class="bi bi-arrows-fullscreen" aria-hidden="true"></i><span>Full screen</span></button>
             </div>
         </header>
 
@@ -104,6 +97,9 @@ foreach ($products as $product) {
         <?php endif; ?>
         <?php if ($checkout_notice): ?>
             <div class="pos-alert success" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_notice) ?></div>
+        <?php endif; ?>
+        <?php if (!$posShiftOpen): ?>
+            <div class="pos-alert error" role="alert"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a cashier shift before checkout. <a href="<?= htmlspecialchars(app_url('cashier/shifts.php')) ?>">Open shift</a></div>
         <?php endif; ?>
 
         <div class="pos-grid">
@@ -169,6 +165,16 @@ foreach ($products as $product) {
                         <i class="bi bi-search" aria-hidden="true"></i>
                         <input id="product-search" class="pos-input" type="search" placeholder="Start typing a product name or code" autocomplete="off" title="Product search (F3)">
                     </div>
+                    <?php if ($posCategories): ?>
+                    <div class="pos-category-section">
+                        <div class="pos-category-heading"><strong>Quick categories</strong><span>Tap a category to show available products.</span></div>
+                        <div class="pos-category-buttons" id="pos-category-buttons">
+                            <?php foreach ($posCategories as $category): ?>
+                                <button type="button" class="pos-category-button" data-category-id="<?= (int)$category['category_id'] ?>"><i class="bi bi-grid"></i><?= htmlspecialchars($category['category_name']) ?></button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     <div id="search-results" class="search-results" aria-live="polite"></div>
                 </div>
             </section>
@@ -240,6 +246,20 @@ foreach ($products as $product) {
                         <label class="pos-field-label" for="payment-reference">Payment reference</label>
                         <input type="text" name="payment_reference" id="payment-reference" placeholder="Card approval or wallet reference">
                     </div>
+
+                    <details class="payment-field" id="discount-panel">
+                        <summary class="pos-field-label">Discount or promotion</summary><p class="muted" style="margin:.5rem 0 0">Eligible scheduled promotions are checked automatically at checkout. The larger eligible discount is applied.</p>
+                        <div class="payment-grid" style="margin-top:.75rem">
+                            <div><label class="pos-field-label" for="discount-type">Discount type</label><select name="discount_type" id="discount-type" class="pos-select"><option value="none">No discount</option><option value="percentage">Percentage</option><option value="fixed">Fixed amount</option></select></div>
+                            <div><label class="pos-field-label" for="discount-value">Value</label><input type="number" min="0" step="0.01" name="discount_value" id="discount-value" value="0"></div>
+                        </div>
+                        <div class="payment-field"><label class="pos-field-label" for="discount-reason">Reason</label><input type="text" name="discount_reason" id="discount-reason" placeholder="Promotion, customer eligibility, or approved adjustment"></div>
+                        <div class="payment-grid hidden" id="supervisor-fields">
+                            <div><label class="pos-field-label" for="discount-approver-username">Supervisor username</label><input type="text" name="discount_approver_username" id="discount-approver-username" autocomplete="off"></div>
+                            <div><label class="pos-field-label" for="discount-approver-password">Supervisor password</label><input type="password" name="discount_approver_password" id="discount-approver-password" autocomplete="new-password"></div>
+                        </div>
+                        <small id="discount-summary" class="muted">No discount applied.</small>
+                    </details>
 
                     <button class="btn btn-block checkout-primary" id="checkout-button" type="button" onclick="checkoutNow()" title="Checkout (Ctrl+Enter)" disabled>
                         <i class="bi bi-check2-circle" aria-hidden="true"></i>Complete checkout
@@ -321,9 +341,12 @@ let scanCooldown = false;
 let scannerActive = false;
 let checkoutConfirmed = false;
 let messageTimer = null;
+let lastScannedCode = '';
+let lastScannedAt = 0;
+let posAudioContext = null;
 
 const productLookup = <?= json_encode($productLookup, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-const productSearch = <?= json_encode($productSearch, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+let productSearch = <?= json_encode($productSearch, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const skuInput = document.getElementById('sku-input');
 const productSearchInput = document.getElementById('product-search');
 const searchResults = document.getElementById('search-results');
@@ -353,7 +376,18 @@ const holdSaleButton = document.getElementById('hold-sale-btn');
 const voidSaleButton = document.getElementById('void-sale-btn');
 const clearCartButton = document.getElementById('clear-cart-btn');
 const cashQuick = document.getElementById('cash-quick');
-const barcodeApiUrl = <?= json_encode(app_url('api/barcode.php')) ?>;
+const discountType = document.getElementById('discount-type');
+const discountValue = document.getElementById('discount-value');
+const discountReason = document.getElementById('discount-reason');
+const discountSummary = document.getElementById('discount-summary');
+const supervisorFields = document.getElementById('supervisor-fields');
+const fullscreenToggle = document.getElementById('pos-fullscreen-toggle');
+const categoryButtons = document.getElementById('pos-category-buttons');
+const barcodeApiUrl = <?= json_encode(app_url('barcodeScanner/apiScanner/barcode.php')) ?>;
+const productsApiUrl = <?= json_encode(app_url('barcodeScanner/apiScanner/products.php')) ?>;
+const heldSalesApiUrl = <?= json_encode(app_url('barcodeScanner/apiScanner/held_sales.php')) ?>;
+const csrfToken = <?= json_encode(generate_csrf_token()) ?>;
+const posShiftOpen = <?= $posShiftOpen ? 'true' : 'false' ?>;
 const lowStockFallback = 5;
 const scannerConfig = { fps: 10, qrbox: { width: 250, height: 180 }, aspectRatio: 1.4 };
 const html5QrCode = window.Html5Qrcode ? new Html5Qrcode('scanner-reader') : null;
@@ -376,6 +410,22 @@ function getCartTotal() {
     return Object.values(cart).reduce((total, item) => total + (Number(item.price) * Number(item.qty)), 0);
 }
 
+function getDiscountAmount() {
+    const gross = getCartTotal();
+    const value = Math.max(0, Number(discountValue?.value || 0));
+    if (discountType?.value === 'percentage') {
+        return Math.min(gross, gross * Math.min(value, 100) / 100);
+    }
+    if (discountType?.value === 'fixed') {
+        return Math.min(gross, value);
+    }
+    return 0;
+}
+
+function getNetTotal() {
+    return Math.max(0, getCartTotal() - getDiscountAmount());
+}
+
 function getCartItemCount() {
     return Object.values(cart).reduce((total, item) => total + Number(item.qty || 0), 0);
 }
@@ -394,8 +444,31 @@ function showCartMessage(message, type = 'info') {
     }, 5000);
 }
 
+function playScanTone(success = true) {
+    try {
+        posAudioContext = posAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = posAudioContext.createOscillator();
+        const gain = posAudioContext.createGain();
+        oscillator.type = success ? 'sine' : 'square';
+        oscillator.frequency.value = success ? 880 : 220;
+        gain.gain.setValueAtTime(0.0001, posAudioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.08, posAudioContext.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, posAudioContext.currentTime + (success ? 0.12 : 0.28));
+        oscillator.connect(gain); gain.connect(posAudioContext.destination);
+        oscillator.start(); oscillator.stop(posAudioContext.currentTime + (success ? 0.13 : 0.3));
+    } catch (error) {}
+}
+
+function pulseRecentScan() {
+    recentScan.classList.remove('scan-pulse');
+    void recentScan.offsetWidth;
+    recentScan.classList.add('scan-pulse');
+}
+
 function showRecentScan(product, code, status = 'success') {
     recentScan.classList.toggle('warning', status !== 'success');
+    playScanTone(status === 'success');
+    pulseRecentScan();
     recentScan.innerHTML = product
         ? `<div class="recent-scan-icon"><i class="bi bi-check2" aria-hidden="true"></i></div>
            <div class="recent-scan-copy"><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(code)} &middot; Stock ${Number(product.quantity_on_hand)}</span></div>
@@ -534,13 +607,11 @@ function removeFromCart(id) {
     showCartMessage(`${itemName} removed from the cart.`, 'info');
 }
 
-function clearCart() {
+async function clearCart() {
     if (Object.keys(cart).length === 0) {
         return;
     }
-    if (!confirm('Clear all items from the current sale?')) {
-        return;
-    }
+    if (!await RetailMindUI.confirm({title:'Clear current sale',message:'Remove every item from the cart?',confirmText:'Clear cart',danger:true})) return;
     cart = {};
     cashReceived.value = '';
     paymentReference.value = '';
@@ -579,10 +650,10 @@ function renderCart() {
     const itemCount = getCartItemCount();
     const hasItems = lineCount > 0;
     cartBody.innerHTML = rows;
-    document.getElementById('cart-total').textContent = money(getCartTotal());
+    document.getElementById('cart-total').textContent = money(getNetTotal());
     document.getElementById('cart-item-count').textContent = itemCount;
     document.getElementById('cart-line-count').textContent = lineCount;
-    checkoutButton.disabled = !hasItems;
+    checkoutButton.disabled = !hasItems || !posShiftOpen;
     holdSaleButton.disabled = !hasItems;
     voidSaleButton.disabled = !hasItems;
     clearCartButton.disabled = !hasItems;
@@ -591,7 +662,9 @@ function renderCart() {
 }
 
 function updatePaymentFields() {
-    const total = getCartTotal();
+    const total = getNetTotal();
+    const gross = getCartTotal();
+    const discount = getDiscountAmount();
     const isCash = paymentMethod.value === 'cash';
 
     document.getElementById('cash-field').classList.toggle('hidden', !isCash);
@@ -603,10 +676,15 @@ function updatePaymentFields() {
 
     const received = Number(cashReceived.value || 0);
     changeDue.value = money(Math.max(0, received - total));
+    if (discountSummary) {
+        discountSummary.textContent = discount > 0 ? `Gross ₱${money(gross)} · Discount ₱${money(discount)} · Net ₱${money(total)}` : 'No discount applied.';
+        supervisorFields.classList.toggle('hidden', !(discount > gross * 0.10));
+    }
 }
 
+
 function setQuickTender(value) {
-    const total = getCartTotal();
+    const total = getNetTotal();
     if (total <= 0) {
         showCartMessage('Add items before entering payment.', 'error');
         return;
@@ -623,7 +701,7 @@ function validateCheckout() {
         return false;
     }
 
-    const total = getCartTotal();
+    const total = getNetTotal();
     if (paymentMethod.value === 'cash' && Number(cashReceived.value || 0) < total) {
         showCartMessage('Cash received is less than the total due.', 'error');
         cashReceived.focus();
@@ -635,6 +713,8 @@ function validateCheckout() {
         return false;
     }
 
+    if (!posShiftOpen) { showCartMessage('Open a cashier shift before checkout.', 'error'); return false; }
+    if (getDiscountAmount() > 0 && discountReason.value.trim() === '') { showCartMessage('Enter a discount reason.', 'error'); discountReason.focus(); return false; }
     cartInput.value = JSON.stringify(payload);
     return true;
 }
@@ -651,7 +731,7 @@ function checkoutNow() {
         : `<p><strong>Reference:</strong> ${escapeHtml(paymentReference.value.trim())}</p>`;
 
     checkoutSummary.innerHTML = `
-        <p><strong>${itemCount}</strong> item(s) totaling <strong>&#8369;${money(getCartTotal())}</strong></p>
+        <p><strong>${itemCount}</strong> item(s) totaling <strong>&#8369;${money(getNetTotal())}</strong></p><p><strong>Gross:</strong> &#8369;${money(getCartTotal())} &nbsp; <strong>Discount:</strong> &#8369;${money(getDiscountAmount())}</p>
         <p><strong>Payment method:</strong> ${escapeHtml(methodLabel)}</p>
         ${paymentLine}
     `;
@@ -674,71 +754,51 @@ function submitConfirmedCheckout() {
     checkoutForm.submit();
 }
 
-function holdCurrentSale() {
-    if (Object.keys(cart).length === 0) {
-        showCartMessage('Cart is empty. Add items before holding a sale.', 'error');
-        return;
-    }
-
-    const held = {
-        id: Date.now(),
-        created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        cart: JSON.parse(JSON.stringify(cart))
-    };
-    heldSales.unshift(held);
-    cart = {};
-    cashReceived.value = '';
-    paymentReference.value = '';
-    persistHeldSales();
-    renderCart();
-    renderHeldSales();
-    showCartMessage('Sale held. Resume it from the Held Sales section.', 'success');
-    skuInput.focus();
+async function apiHeldSale(action, payload = {}) {
+    const response = await fetch(heldSalesApiUrl, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({action,...payload})});
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.message || 'Held sale request failed.');
+    return data;
 }
 
-function resumeHeldSale(id) {
-    if (Object.keys(cart).length > 0 && !confirm('Replace the current cart with this held sale?')) {
-        return;
-    }
-
-    const held = heldSales.find(item => Number(item.id) === Number(id));
-    if (!held) {
-        return;
-    }
-    cart = held.cart || {};
-    heldSales = heldSales.filter(item => Number(item.id) !== Number(id));
-    persistHeldSales();
-    renderCart();
+async function loadHeldSales() {
+    try {
+        const response = await fetch(heldSalesApiUrl, {headers:{'Accept':'application/json'}});
+        const data = await response.json();
+        heldSales = data.success ? (data.held_sales || []) : [];
+    } catch (error) { heldSales = []; }
     renderHeldSales();
-    showCartMessage('Held sale resumed.', 'success');
-    skuInput.focus();
 }
 
-function removeHeldSale(id) {
-    if (!confirm('Remove this held sale?')) {
-        return;
-    }
-    heldSales = heldSales.filter(item => Number(item.id) !== Number(id));
-    persistHeldSales();
-    renderHeldSales();
+async function holdCurrentSale() {
+    if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
+    try {
+        const data = await apiHeldSale('hold', {cart});
+        heldSales = data.held_sales || [];
+        cart = {}; cashReceived.value = ''; paymentReference.value = '';
+        renderCart(); renderHeldSales(); showCartMessage(`Sale ${data.reference_no} held on the server.`, 'success'); skuInput.focus();
+    } catch (error) { showCartMessage(error.message, 'error'); }
+}
+
+async function resumeHeldSale(id) {
+    if (Object.keys(cart).length > 0 && !await RetailMindUI.confirm({title:'Resume held sale',message:'Replace the current cart with this held sale?',confirmText:'Resume sale'})) return;
+    try {
+        const data = await apiHeldSale('resume', {id});
+        cart = data.cart || {}; heldSales = data.held_sales || [];
+        renderCart(); renderHeldSales(); showCartMessage('Held sale resumed.', 'success'); skuInput.focus();
+    } catch (error) { showCartMessage(error.message, 'error'); }
+}
+
+async function removeHeldSale(id) {
+    if (!await RetailMindUI.confirm({title:'Cancel held sale',message:'Remove this held sale from the server?',confirmText:'Cancel held sale',danger:true})) return;
+    try { const data = await apiHeldSale('cancel', {id}); heldSales = data.held_sales || []; renderHeldSales(); }
+    catch (error) { showCartMessage(error.message, 'error'); }
 }
 
 function renderHeldSales() {
     document.getElementById('held-count').textContent = heldSales.length;
-    if (heldSales.length === 0) {
-        holdList.innerHTML = '<div class="search-empty" style="min-height:72px;">No held sales.</div>';
-        return;
-    }
-
-    holdList.innerHTML = heldSales.map(held => {
-        const items = Object.values(held.cart || {});
-        const qty = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
-        const total = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0);
-        return `<div class="hold-item">
-            <div><strong>${escapeHtml(held.created_at)}</strong><br><small>${qty} item(s) &middot; &#8369;${money(total)}</small></div>
-            <div class="pos-toolbar"><button type="button" class="btn btn-small" onclick="resumeHeldSale(${Number(held.id)})">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="removeHeldSale(${Number(held.id)})">Remove</button></div>
-        </div>`;
-    }).join('');
+    if (heldSales.length === 0) { holdList.innerHTML = '<div class="search-empty" style="min-height:72px;">No held sales.</div>'; return; }
+    holdList.innerHTML = heldSales.map(held => `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" onclick="resumeHeldSale(${Number(held.id)})">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="removeHeldSale(${Number(held.id)})">Cancel</button></div></div>`).join('');
 }
 
 function voidCurrentSale() {
@@ -773,34 +833,29 @@ function confirmVoidSale() {
     document.getElementById('void-form').submit();
 }
 
-function renderSearchResults() {
-    const term = productSearchInput.value.trim().toLowerCase();
-    if (term === '') {
-        searchCount.textContent = '0 results';
-        searchResults.innerHTML = '<div class="search-empty"><div><i class="bi bi-keyboard" aria-hidden="true" style="display:block;font-size:1.4rem;margin-bottom:0.35rem;"></i>Enter at least one letter or number to search.</div></div>';
+function renderProductButtons(products, emptyMessage = 'No matching active product was found.') {
+    productSearch = products || [];
+    searchCount.textContent = `${productSearch.length} result${productSearch.length === 1 ? '' : 's'}`;
+    if (!productSearch.length) {
+        searchResults.innerHTML = `<div class="search-empty">${escapeHtml(emptyMessage)}</div>`;
         return;
     }
-
-    const results = productSearch
-        .filter(product => String(product.name || '').toLowerCase().includes(term)
-            || String(product.sku || '').toLowerCase().includes(term)
-            || String(product.barcode || '').toLowerCase().includes(term))
-        .slice(0, 12);
-
-    searchCount.textContent = `${results.length} result${results.length === 1 ? '' : 's'}`;
-    if (results.length === 0) {
-        searchResults.innerHTML = '<div class="search-empty">No matching active product was found.</div>';
-        return;
-    }
-
-    searchResults.innerHTML = results.map(product => {
+    searchResults.innerHTML = productSearch.map(product => {
         const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0), lowStockFallback);
         const low = Number(product.quantity_on_hand) <= threshold;
-        return `<button type="button" class="search-result" data-product-id="${Number(product.product_id)}">
-            <span><strong class="search-result-name">${escapeHtml(product.name)}</strong><span class="search-result-meta"><span>${escapeHtml(product.sku || product.barcode || 'No code')}</span><span class="search-result-stock ${low ? 'low' : ''}">Stock ${Number(product.quantity_on_hand)}</span></span></span>
-            <strong class="search-result-price">&#8369;${money(product.price)}</strong>
-        </button>`;
+        return `<button type="button" class="search-result" data-product-id="${Number(product.product_id)}"><span><strong class="search-result-name">${escapeHtml(product.name)}</strong><span class="search-result-meta"><span>${escapeHtml(product.sku || product.barcode || 'No code')}</span><span class="search-result-stock ${low ? 'low' : ''}">Stock ${Number(product.quantity_on_hand)}</span></span></span><strong class="search-result-price">&#8369;${money(product.price)}</strong></button>`;
     }).join('');
+}
+
+let searchTimer = null;
+async function renderSearchResults() {
+    const term = productSearchInput.value.trim();
+    if (term === '') { productSearch=[]; searchCount.textContent='0 results'; searchResults.innerHTML='<div class="search-empty"><div><i class="bi bi-keyboard" aria-hidden="true" style="display:block;font-size:1.4rem;margin-bottom:0.35rem;"></i>Enter at least one letter or number to search.</div></div>'; return; }
+    try {
+        const response=await fetch(`${productsApiUrl}?q=${encodeURIComponent(term)}&limit=12`); const data=await response.json();
+        productSearch=data.success?(data.products||[]):[];
+    } catch(error){ productSearch=[]; }
+    renderProductButtons(productSearch);
 }
 
 function persistCart() {
@@ -809,34 +864,15 @@ function persistCart() {
     } catch (error) {}
 }
 
-function persistHeldSales() {
-    try {
-        sessionStorage.setItem('pos_held_sales', JSON.stringify(heldSales));
-    } catch (error) {}
-}
+function persistHeldSales() {}
 
 function restoreState() {
     try {
         const storedCart = sessionStorage.getItem('pos_cart');
-        const storedHeld = sessionStorage.getItem('pos_held_sales');
-        if (storedCart) {
-            const parsedCart = JSON.parse(storedCart);
-            if (parsedCart && typeof parsedCart === 'object' && !Array.isArray(parsedCart)) {
-                cart = parsedCart;
-            }
-        }
-        if (storedHeld) {
-            const parsedHeld = JSON.parse(storedHeld);
-            if (Array.isArray(parsedHeld)) {
-                heldSales = parsedHeld;
-            }
-        }
-    } catch (error) {
-        cart = {};
-        heldSales = [];
-    }
+        if (storedCart) { const parsedCart=JSON.parse(storedCart); if(parsedCart&&typeof parsedCart==='object'&&!Array.isArray(parsedCart)) cart=parsedCart; }
+    } catch (error) { cart = {}; }
     renderCart();
-    renderHeldSales();
+    loadHeldSales();
 }
 
 function onScanSuccess(decodedText) {
@@ -847,6 +883,12 @@ function onScanSuccess(decodedText) {
     setTimeout(() => { scanCooldown = false; }, 700);
 
     const code = String(decodedText).trim();
+    const now = Date.now();
+    if (code === lastScannedCode && now - lastScannedAt < 1200) {
+        return;
+    }
+    lastScannedCode = code;
+    lastScannedAt = now;
     skuInput.value = code;
     scannerResult.innerHTML = `<strong>Barcode detected</strong><span>${escapeHtml(code)}</span>`;
     if (navigator.vibrate) {
@@ -909,7 +951,9 @@ stopBtn.addEventListener('click', stopScanner);
 addCodeBtn.addEventListener('click', addCodeFromInput);
 paymentMethod.addEventListener('change', updatePaymentFields);
 cashReceived.addEventListener('input', updatePaymentFields);
-productSearchInput.addEventListener('input', renderSearchResults);
+discountType.addEventListener('change', updatePaymentFields);
+discountValue.addEventListener('input', updatePaymentFields);
+productSearchInput.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer=setTimeout(renderSearchResults,250); });
 cashQuick.addEventListener('click', event => {
     const button = event.target.closest('[data-tender]');
     if (button) {
@@ -931,6 +975,35 @@ searchResults.addEventListener('click', event => {
     renderSearchResults();
     skuInput.focus();
 });
+
+if (categoryButtons) {
+    categoryButtons.addEventListener('click', async event => {
+        const button = event.target.closest('[data-category-id]');
+        if (!button) return;
+        categoryButtons.querySelectorAll('.pos-category-button').forEach(item => item.classList.toggle('active', item === button));
+        productSearchInput.value = '';
+        searchResults.innerHTML = '<div class="search-empty"><span class="skeleton" style="display:inline-block;width:180px;height:16px">Loading</span></div>';
+        try {
+            const response = await fetch(`${productsApiUrl}?category=${encodeURIComponent(button.dataset.categoryId)}&limit=12`);
+            const data = await response.json();
+            renderProductButtons(data.success ? (data.products || []) : [], 'No available products in this category.');
+        } catch (error) {
+            renderProductButtons([], 'Unable to load category products.');
+        }
+    });
+}
+
+function setFullscreenMode(enabled) {
+    document.body.classList.toggle('pos-fullscreen', enabled);
+    localStorage.setItem('retailmind_pos_fullscreen', enabled ? '1' : '0');
+    if (fullscreenToggle) {
+        fullscreenToggle.querySelector('i').className = `bi ${enabled ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'}`;
+        fullscreenToggle.querySelector('span').textContent = enabled ? 'Exit full screen' : 'Full screen';
+    }
+    setTimeout(() => skuInput.focus(), 50);
+}
+if (fullscreenToggle) fullscreenToggle.addEventListener('click', () => setFullscreenMode(!document.body.classList.contains('pos-fullscreen')));
+setFullscreenMode(localStorage.getItem('retailmind_pos_fullscreen') === '1');
 
 skuInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') {
@@ -986,6 +1059,8 @@ document.addEventListener('keydown', event => {
 });
 
 restoreState();
+const initialPosQuery = new URLSearchParams(window.location.search).get('q');
+if (initialPosQuery) productSearchInput.value = initialPosQuery;
 renderSearchResults();
 updateClock();
 setInterval(updateClock, 30000);
