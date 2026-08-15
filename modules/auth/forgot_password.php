@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 $message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare('DELETE FROM password_reset_tokens WHERE user_id = ? OR expires_at < NOW()')->execute([(int)$user['user_id']]);
             $pdo->prepare('INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))')
                 ->execute([(int)$user['user_id'], $tokenHash]);
-            $resetUrl = rtrim((string)env('APP_URL', ''), '/') . '/reset_password.php?token=' . urlencode($token);
+            $resetUrl = rtrim((string)env('APP_URL', ''), '/') . '/modules/auth/reset_password.php?token=' . urlencode($token);
             send_email_notification(
                 (string)$user['email'],
                 'RetailMind password reset',
@@ -30,4 +30,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body><div class="login-wrapper"><div class="login-card"><h1>Reset password</h1><p class="subtitle">Enter your username or email address.</p>
 <?php if ($message): ?><div class="alert tag-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
 <form method="post"><?= csrf_field() ?><div class="form-group"><label>Username or email</label><input name="identity" required></div><button class="btn btn-block">Send reset link</button></form>
-<p style="margin-top:1rem;text-align:center"><a href="<?= htmlspecialchars(app_url('index.php?login=1')) ?>">Back to login</a></p></div></div></body></html>
+<p style="margin-top:1rem;text-align:center"><a href="<?= htmlspecialchars(app_url('modules/auth/login.php')) ?>">Back to login</a></p></div></div></body></html>

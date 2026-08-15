@@ -201,7 +201,7 @@ $page_url = function (int $targetPage) use ($pagination_filters): string {
 </head>
 <body>
 <div class="app-shell">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
+    <?php include __DIR__ . '/../../../modules/sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
             <h1>Audit Log Viewer</h1>

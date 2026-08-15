@@ -305,7 +305,7 @@ $sections = $roleSections[$role] ?? [];
         </button>
         <div class="sidebar-profile-menu" id="sidebarProfileMenu">
             <a href="<?= sidebar_e(app_url('modules/notification/notification_preferences.php')) ?>"><i class="bi bi-sliders" aria-hidden="true"></i><span>Preferences</span></a>
-            <a href="<?= sidebar_e(app_url('logout.php')) ?>" class="sidebar-logout"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>Logout</span></a>
+            <a href="<?= sidebar_e(app_url('modules/auth/logout.php')) ?>" class="sidebar-logout"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>Logout</span></a>
         </div>
     </div>
 </div>

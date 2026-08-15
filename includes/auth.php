@@ -191,7 +191,7 @@ function validate_current_session(PDO $pdo): void {
     if (!$user || $user['status'] !== 'active' || (int)$user['session_version'] !== $sessionVersion) {
         App\Core\Session::destroy();
         if (!headers_sent()) {
-            header('Location: ' . app_url('index.php?login=1&session=invalid'));
+            header('Location: ' . app_url('modules/auth/login.php?session=invalid'));
         }
         exit;
     }
@@ -202,7 +202,7 @@ function validate_current_session(PDO $pdo): void {
     $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
     if ($_SESSION['must_change_password'] && !in_array($currentScript, ['change_password.php', 'logout.php'], true)) {
         if (!headers_sent()) {
-            header('Location: ' . app_url('change_password.php'));
+            header('Location: ' . app_url('modules/auth/change_password.php'));
         }
         exit;
     }
@@ -211,7 +211,7 @@ function validate_current_session(PDO $pdo): void {
 function require_role(array $allowed_roles): void {
     global $pdo;
     if (!is_logged_in()) {
-        header('Location: ' . app_url('index.php?login=1'));
+        header('Location: ' . app_url('modules/auth/login.php'));
         exit;
     }
     validate_current_session($pdo);
@@ -241,7 +241,7 @@ function redirect_by_role(): void {
             header('Location: ' . app_url('cashier/pos.php'));
             break;
         default:
-            header('Location: ' . app_url('index.php?login=1'));
+            header('Location: ' . app_url('modules/auth/login.php'));
     }
     exit;
 }

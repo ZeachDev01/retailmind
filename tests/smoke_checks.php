@@ -40,11 +40,11 @@ $checks = [
     ],
     'Runtime authentication does not migrate schema' => [
         'file' => 'includes/auth.php',
-        'needles' => ['must_change_password', 'change_password.php'],
+        'needles' => ['must_change_password', 'modules/auth/change_password.php'],
         'forbidden' => ['ALTER TABLE', 'CREATE TABLE', 'ensure_operational_updates_schema'],
     ],
     'Mandatory password change page present' => [
-        'file' => 'change_password.php',
+        'file' => 'modules/auth/change_password.php',
         'needles' => ['current_password', 'must_change_password = 0', 'password_policy_error'],
     ],
     'System health dashboard present' => [

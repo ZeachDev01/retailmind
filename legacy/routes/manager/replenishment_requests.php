@@ -382,7 +382,7 @@ $predictions = get_stored_predictions($pdo);
 </head>
 <body>
 <div class="app-shell">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
+    <?php include __DIR__ . '/../../../modules/sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
             <h1>Replenishment Requests</h1>

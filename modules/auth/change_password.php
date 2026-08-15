@@ -1,8 +1,8 @@
 <?php
-require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 if (!is_logged_in()) {
-    header('Location: ' . app_url('index.php?login=1'));
+    header('Location: ' . app_url('modules/auth/login.php'));
     exit;
 }
 
@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="form-group" style="grid-column:1/-1"><label for="current_password">Current password</label><input type="password" id="current_password" name="current_password" required autocomplete="current-password"></div>
             <div class="form-group" style="grid-column:1/-1"><label for="new_password">New password</label><input type="password" id="new_password" name="new_password" required autocomplete="new-password"><small>Use at least <?= max(8, (int)env('PASSWORD_MIN_LENGTH', 10)) ?> characters with uppercase, lowercase, and a number.</small></div>
             <div class="form-group" style="grid-column:1/-1"><label for="confirm_password">Confirm new password</label><input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password"></div>
-            <div style="grid-column:1/-1;display:flex;gap:.75rem;justify-content:flex-end"><a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('logout.php')) ?>">Log out</a><button class="btn" type="submit">Save new password</button></div>
+            <div style="grid-column:1/-1;display:flex;gap:.75rem;justify-content:flex-end"><a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('modules/auth/logout.php')) ?>">Log out</a><button class="btn" type="submit">Save new password</button></div>
         </form>
     </section>
 </main>

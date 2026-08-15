@@ -258,7 +258,7 @@ $periods = $periods_stmt->fetchAll();
 </head>
 <body>
 <div class="app-shell">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
+    <?php include __DIR__ . '/../../../modules/sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
             <h1>Fiscal Period Management</h1>

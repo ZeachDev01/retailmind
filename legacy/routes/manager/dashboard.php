@@ -40,7 +40,7 @@ $maxFastMoving = max(1, ...array_map(fn($row) => (int)$row['units_sold'], $fastM
 </head>
 <body>
 <div class="app-shell">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
+    <?php include __DIR__ . '/../../../modules/sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
             <h1>Inventory Manager Dashboard</h1>

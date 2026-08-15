@@ -171,7 +171,7 @@ $active_products = $productService->getActiveProducts();
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
 <body>
 <div class="app-shell">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
+    <?php include __DIR__ . '/../../../modules/sidebar.php'; ?>
     <div class="main-content">
         <h1>Products & Stock</h1>
         <?php if (!empty($_GET['error'])): ?>

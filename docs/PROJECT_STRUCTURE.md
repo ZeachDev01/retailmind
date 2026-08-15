@@ -6,7 +6,7 @@ This repository is organized so reviewers can quickly separate production code, 
 
 ```text
 index.php                        Landing page and role redirect
-login.php                        Login screen
+modules/auth/login.php           Login screen
 cashier/                         Cashier-facing screens
 modules/                         Authenticated back-office modules
 barcodeScanner/apiScanner/       JSON endpoints for browser and scanner workflows

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 $token = trim((string)($_GET['token'] ?? $_POST['token'] ?? ''));
 $error = '';
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset Password</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
 <body><div class="login-wrapper"><div class="login-card"><h1>Choose a new password</h1>
 <?php if ($error): ?><div class="error-msg"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-<?php if ($success): ?><div class="alert tag-success"><?= htmlspecialchars($success) ?></div><p><a href="<?= htmlspecialchars(app_url('index.php?login=1')) ?>">Continue to login</a></p>
+<?php if ($success): ?><div class="alert tag-success"><?= htmlspecialchars($success) ?></div><p><a href="<?= htmlspecialchars(app_url('modules/auth/login.php')) ?>">Continue to login</a></p>
 <?php elseif ($reset): ?><form method="post"><?= csrf_field() ?><input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>"><div class="form-group"><label>New password</label><input type="password" name="password" required></div><div class="form-group"><label>Confirm password</label><input type="password" name="password_confirm" required></div><button class="btn btn-block">Reset password</button></form>
 <?php else: ?><div class="error-msg">This reset link is invalid or expired.</div><?php endif; ?>
 </div></div></body></html>

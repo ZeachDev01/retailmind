@@ -62,7 +62,7 @@ try {
 }
 ?>
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ML Settings</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
-<body><div class="app-shell"><?php include __DIR__ . '/../includes/sidebar.php'; ?><main class="main-content">
+<body><div class="app-shell"><?php include __DIR__ . '/../../../modules/sidebar.php'; ?><main class="main-content">
 <div class="topbar"><div><h1>Random Forest Settings</h1><p class="page-subtitle">Control data readiness, tree parameters, prediction ranges, and automatic retraining.</p></div><a class="btn" href="<?= htmlspecialchars(app_url('report/predictions.php')) ?>">Open forecasts</a></div>
 <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
 <div class="dashboard-section"><form method="post"><?= csrf_field() ?><div class="form-grid">

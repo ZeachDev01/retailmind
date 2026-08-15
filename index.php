@@ -40,7 +40,7 @@ function landing_redirect_by_role(): void {
             header('Location: ' . landing_app_url('cashier/pos.php'));
             break;
         default:
-            header('Location: ' . landing_app_url('index.php?login=1'));
+            header('Location: ' . landing_app_url('modules/auth/login.php'));
     }
     exit;
 }
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $_SESSION['_login_error'] = last_login_error();
-    header('Location: ' . landing_app_url('index.php?login=1'));
+    header('Location: ' . landing_app_url('modules/auth/login.php'));
     exit;
 }
 
@@ -65,9 +65,9 @@ if (isset($_SESSION['user_id'])) {
     landing_redirect_by_role();
 }
 
-$loginUrl = htmlspecialchars(landing_app_url('index.php?login=1'), ENT_QUOTES, 'UTF-8');
-$loginActionUrl = htmlspecialchars(landing_app_url('index.php'), ENT_QUOTES, 'UTF-8');
-$forgotPasswordUrl = htmlspecialchars(landing_app_url('forgot_password.php'), ENT_QUOTES, 'UTF-8');
+$loginUrl = htmlspecialchars(landing_app_url('modules/auth/login.php'), ENT_QUOTES, 'UTF-8');
+$loginActionUrl = htmlspecialchars(landing_app_url('modules/auth/login.php'), ENT_QUOTES, 'UTF-8');
+$forgotPasswordUrl = htmlspecialchars(landing_app_url('modules/auth/forgot_password.php'), ENT_QUOTES, 'UTF-8');
 $styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
 $loginError = '';
 $shouldOpenLogin = ($_GET['login'] ?? '') === '1';

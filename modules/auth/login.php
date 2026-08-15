@@ -1,6 +1,6 @@
 <?php
 // login.php
-require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 if (is_logged_in()) {
     redirect_by_role();
@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <button type="submit" class="btn btn-block">Log In</button>
         </form>
-        <p style="margin-top:1rem;text-align:center;"><a href="<?= htmlspecialchars(app_url('forgot_password.php')) ?>">Forgot password?</a></p>
+        <p style="margin-top:1rem;text-align:center;"><a href="<?= htmlspecialchars(app_url('modules/auth/forgot_password.php')) ?>">Forgot password?</a></p>
     </div>
 </div>
 </body>
