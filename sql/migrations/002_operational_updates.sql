@@ -1,2 +1,0 @@
--- Executed by database/migrations/202608040002_operational_updates.php.
--- Creates operational workflow tables and adds operational columns idempotently.

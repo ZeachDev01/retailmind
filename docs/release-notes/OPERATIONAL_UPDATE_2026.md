@@ -18,9 +18,9 @@
 ## Upgrade
 
 ```bash
-php scripts/migrate.php
-python legacy/demandForcasting/train_model.py
-bash tests/run_all.sh
+php backend/scripts/migrate.php
+python backend/legacy/demandForcasting/train_model.py
+bash backend/tests/run_all.sh
 ```
 
 ## Verification completed in this release

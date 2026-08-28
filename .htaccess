@@ -7,13 +7,15 @@ Options -Indexes
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule (^|/)\.(?:git|svn|hg)(?:/|$) - [F,L]
-    RewriteRule ^Sidebar/(.*)$ modules/$1 [L,QSA]
-    RewriteRule ^admin/(.*)$ modules/system_administrator/$1 [L,QSA]
-    RewriteRule ^manager/(.*)$ modules/inventory_management/$1 [L,QSA]
-    RewriteRule ^invoice/(.*)$ modules/invoice/$1 [L,QSA]
-    RewriteRule ^notification/(.*)$ modules/notification/$1 [L,QSA]
-    RewriteRule ^api/(.*)$ barcodeScanner/apiScanner/$1 [L,QSA]
-    RewriteRule ^barcodeScanner/api/(.*)$ barcodeScanner/apiScanner/$1 [L,QSA]
+    RewriteRule ^backend(?:/|$) - [F,L]
     RewriteRule ^assets/bootstrap(?:/|$) - [F,L]
-    RewriteRule ^(?:app|config|includes|demandForcasting|legacy|scripts|sql|storage|tests|vendor)(?:/|$) - [F,L]
+    RewriteRule ^(?:app|config|database|includes|demandForcasting|legacy|scripts|sql|storage|tests|vendor)(?:/|$) - [F,L]
+    RewriteRule ^Sidebar/(.*)$ frontend/modules/$1 [L,QSA]
+    RewriteRule ^admin/(.*)$ frontend/modules/system_administrator/$1 [L,QSA]
+    RewriteRule ^manager/(.*)$ frontend/modules/inventory_management/$1 [L,QSA]
+    RewriteRule ^invoice/(.*)$ frontend/modules/invoice/$1 [L,QSA]
+    RewriteRule ^notification/(.*)$ frontend/modules/notification/$1 [L,QSA]
+    RewriteRule ^api/(.*)$ frontend/barcodeScanner/apiScanner/$1 [L,QSA]
+    RewriteRule ^barcodeScanner/api/(.*)$ frontend/barcodeScanner/apiScanner/$1 [L,QSA]
+    RewriteRule ^(assets|barcodeScanner|cashier|modules|report)(/.*)?$ frontend/$1$2 [L,QSA]
 </IfModule>

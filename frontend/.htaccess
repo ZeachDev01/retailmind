@@ -1,0 +1,16 @@
+Options -Indexes
+
+<FilesMatch "^.*\.(joblib|pyc|log|sql)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^Sidebar/(.*)$ modules/$1 [L,QSA]
+    RewriteRule ^admin/(.*)$ modules/system_administrator/$1 [L,QSA]
+    RewriteRule ^manager/(.*)$ modules/inventory_management/$1 [L,QSA]
+    RewriteRule ^invoice/(.*)$ modules/invoice/$1 [L,QSA]
+    RewriteRule ^notification/(.*)$ modules/notification/$1 [L,QSA]
+    RewriteRule ^api/(.*)$ barcodeScanner/apiScanner/$1 [L,QSA]
+    RewriteRule ^barcodeScanner/api/(.*)$ barcodeScanner/apiScanner/$1 [L,QSA]
+</IfModule>

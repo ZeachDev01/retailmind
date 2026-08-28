@@ -1,2 +1,0 @@
--- Executed by database/migrations/202608040003_integrity_constraints.php.
--- Adds named foreign keys after checking for existing orphaned records.
