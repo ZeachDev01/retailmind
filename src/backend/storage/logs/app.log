@@ -1,0 +1,35 @@
+[04-Aug-2026 14:36:13 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'u.must_change_password' in 'field list' in C:\xampp\htdocs\inventory_system\includes\auth.php:97
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\includes\auth.php(97): PDO->prepare('SELECT u.user_i...')
+#1 C:\xampp\htdocs\inventory_system\index.php(55): login_user(Object(PDO), 'superadmin', 'SuperAdmin@123')
+#2 {main}
+[04-Aug-2026 14:37:17 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'u.must_change_password' in 'field list' in C:\xampp\htdocs\inventory_system\includes\auth.php:97
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\includes\auth.php(97): PDO->prepare('SELECT u.user_i...')
+#1 C:\xampp\htdocs\inventory_system\index.php(55): login_user(Object(PDO), 'superadmin', 'SupeAdmin@123')
+#2 {main}
+[17-Aug-2026 14:37:51 Asia/Manila] PHP Warning:  Undefined array key "REQUEST_METHOD" in C:\xampp\htdocs\inventory_system\frontend\index.php on line 48
+[20-Aug-2026 13:27:56 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:27:56 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:27:57 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:27:57 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:27:58 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:27:58 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:28:02 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:28:02 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:28:09 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:28:09 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:28:11 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:28:11 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:28:19 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:28:19 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:28:27 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:28:27 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:28:28 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:28:28 Asia/Manila] Unable to connect to the database.
+[20-Aug-2026 13:28:28 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql305.infinityfree.com failed: No such host is known. 
+[20-Aug-2026 13:28:28 Asia/Manila] Unable to connect to the database.
+[02-Sep-2026 22:16:49 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it
+[02-Sep-2026 22:16:49 Asia/Manila] Unable to connect to the database.
+[02-Sep-2026 22:17:46 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it
+[02-Sep-2026 22:17:46 Asia/Manila] Unable to connect to the database.
