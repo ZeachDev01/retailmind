@@ -607,21 +607,7 @@ $totalRows = count($reportData['rows']);
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Report Generation</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<style>
-    .report-filter-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; align-items:end; }
-    .report-actions { display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:1rem; }
-    .report-meta { display:flex; gap:0.75rem; flex-wrap:wrap; color:var(--muted); font-size:0.9rem; margin-top:0.35rem; }
-    .report-print-title { display:none; }
-    @media print {
-        .sidebar, .topbar, .report-filters, .report-actions, .no-print { display:none !important; }
-        .app-shell { display:block; }
-        .main-content { padding:0; }
-        .dashboard-section { box-shadow:none; border:none; padding:0; }
-        .report-print-title { display:block; margin-bottom:1rem; }
-        body { background:#fff; }
-        table { display:table; white-space:normal; }
-    }
-</style>
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
 </head>
 <body>
 <div class="app-shell">

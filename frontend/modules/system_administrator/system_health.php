@@ -21,9 +21,7 @@ $icons = ['healthy' => 'bi-check-circle-fill', 'warning' => 'bi-exclamation-tria
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>System Health</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<style>
-.health-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-bottom:1.5rem}.health-check{display:grid;grid-template-columns:auto 1fr;gap:.9rem;align-items:start;padding:1rem 0;border-bottom:1px solid var(--border)}.health-check:last-child{border-bottom:0}.health-icon{font-size:1.25rem;line-height:1}.health-icon.healthy{color:#15803d}.health-icon.warning{color:#b45309}.health-icon.critical{color:#b91c1c}.health-detail{margin:.25rem 0 0;color:var(--muted);overflow-wrap:anywhere}.health-category{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}@media(max-width:700px){.health-summary{grid-template-columns:1fr}}
-</style>
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/admin.css')) ?>">
 </head>
 <body>
 <div class="app-shell">

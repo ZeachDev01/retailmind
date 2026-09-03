@@ -147,9 +147,7 @@ unset($row);
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reorder Planning</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<style>
-.supplier-plan{margin-bottom:1.25rem}.supplier-plan__head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;margin-bottom:1rem}.planning-meta{display:flex;gap:.5rem;flex-wrap:wrap}.planning-note{font-size:.85rem;color:var(--muted)}@media(max-width:700px){.supplier-plan__head{display:block}}
-</style>
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
 </head>
 <body>
 <div class="app-shell">

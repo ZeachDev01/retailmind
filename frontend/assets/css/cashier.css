@@ -1310,3 +1310,221 @@ body.pos-fullscreen .cashier-shortcuts { margin-bottom: .65rem; }
 body.pos-fullscreen .pos-grid { grid-template-columns: minmax(0, 1.25fr) minmax(380px, .75fr); gap: .8rem; }
 body.pos-fullscreen .pos-panel { border-radius: 12px; }
 @media(max-width:900px){body.pos-fullscreen .pos-grid{grid-template-columns:1fr}.pos-category-heading{align-items:flex-start;flex-direction:column}}
+
+/* Cashier-wide responsive overrides */
+@media (max-width: 1180px) {
+    .cashier-page .main-content {
+        padding-inline: 1rem;
+    }
+
+    .checkout-panel {
+        position: static;
+    }
+
+    .cart-table-wrap {
+        max-height: none;
+    }
+}
+
+@media (max-width: 900px) {
+    .cashier-topbar,
+    .pos-panel-header,
+    .dashboard-panel-header,
+    .held-sales-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .cashier-meta,
+    .pos-toolbar,
+    .pos-header-actions {
+        justify-content: flex-start;
+    }
+
+    .cashier-dashboard-grid,
+    .pos-grid,
+    body.pos-fullscreen .pos-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .product-finder-panel {
+        max-width: none;
+    }
+
+    .cart-item-name {
+        max-width: 260px;
+    }
+}
+
+@media (max-width: 760px) {
+    .cashier-page .main-content {
+        padding-top: 4.35rem;
+    }
+
+    .pos-header-actions {
+        top: 4.45rem;
+        right: .85rem;
+    }
+
+    .cashier-hero,
+    .hold-item,
+    .stock-alert-item {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .cashier-hero .btn,
+    .product-result-actions,
+    .product-result-actions .btn,
+    .checkout-dialog-actions .btn,
+    .pos-toolbar .btn {
+        width: 100%;
+    }
+
+    .product-result-actions {
+        display: flex;
+    }
+
+    .scanner-reader {
+        min-height: 240px;
+    }
+
+    .checkout-dialog {
+        max-height: calc(100svh - 1.5rem);
+        overflow-y: auto;
+    }
+}
+
+@media (max-width: 640px) {
+    .cashier-page .main-content {
+        padding-inline: .85rem;
+    }
+
+    .cashier-meta {
+        width: 100%;
+    }
+
+    .cashier-chip {
+        min-width: 0;
+    }
+
+    .cashier-quick-actions,
+    .scan-row,
+    .scanner-area,
+    .payment-grid,
+    .secondary-sale-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .pos-panel-title {
+        min-width: 0;
+    }
+
+    .pos-panel-title p,
+    .cashier-heading p,
+    .cashier-hero p {
+        overflow-wrap: anywhere;
+    }
+
+    .recent-scan-copy strong,
+    .recent-scan-copy span,
+    .search-result-name,
+    .cashier-action-card strong,
+    .cashier-action-card span {
+        white-space: normal;
+    }
+
+    .cart-table {
+        min-width: 560px;
+    }
+
+    .checkout-dialog-actions {
+        flex-direction: column-reverse;
+    }
+}
+
+@media (max-width: 520px) {
+    .cashier-page .main-content {
+        padding: .7rem;
+        padding-top: 4rem;
+        padding-bottom: 5.5rem;
+    }
+
+    .pos-header-actions {
+        top: auto;
+        right: .7rem;
+        bottom: .7rem;
+        left: .7rem;
+        justify-content: center;
+        padding: .45rem;
+        border: 1px solid var(--cashier-border);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, .94);
+        box-shadow: 0 16px 34px rgba(15, 23, 42, .18);
+    }
+
+    .pos-find-product-link,
+    .pos-sales-history-link,
+    .pos-shift-link {
+        flex: 1 1 0;
+        width: auto;
+        box-shadow: none;
+    }
+
+    .checkout-total-value {
+        font-size: 1.32rem;
+    }
+
+    .cash-quick {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .checkout-modal {
+        align-items: flex-end;
+        padding: .7rem;
+    }
+
+    .checkout-dialog {
+        width: 100%;
+        border-radius: 14px;
+    }
+}
+
+@media (max-width: 420px) {
+    .pos-panel,
+    .dashboard-panel,
+    .cashier-hero,
+    .cashier-action-card {
+        border-radius: 12px;
+    }
+
+    .pos-panel,
+    .dashboard-panel-body {
+        padding: .8rem;
+    }
+
+    .pos-panel-icon,
+    .cashier-action-card .action-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        font-size: 1rem;
+    }
+
+    .recent-scan {
+        grid-template-columns: 1fr;
+    }
+
+    .recent-scan-icon,
+    .recent-scan-price {
+        grid-column: auto;
+    }
+
+    .search-result-meta {
+        gap: .3rem;
+    }
+
+    .cart-table {
+        min-width: 520px;
+    }
+}

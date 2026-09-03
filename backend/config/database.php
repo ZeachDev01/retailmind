@@ -81,7 +81,7 @@ if ($isHosted) {
 return [
     'driver' => $envValue(['DB_CONNECTION'], 'mysql'),
     'host' => $envValue(['DB_HOST'], 'localhost'),
-    'port' => $envValue(['DB_PORT'], '3307'),
+    'port' => $envValue(['DB_PORT'], '3306'),
     'database' => $envValue(['DB_NAME'], 'inventory_system'),
     'username' => $envValue(['DB_USER'], 'root'),
     'password' => $envValue(['DB_PASSWORD'], ''),

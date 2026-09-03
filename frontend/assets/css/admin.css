@@ -1,0 +1,285 @@
+/* admin.css - extracted view-specific styles. */
+
+/* Source: frontend\modules\system_administrator\dashboard.php */
+.receipt-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 1100;
+}
+.receipt-modal.show { display: flex; }
+.receipt-modal-content {
+    width: min(860px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.24);
+}
+.receipt-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+.receipt-modal-close {
+    border: none;
+    background: transparent;
+    font-size: 1.45rem;
+    cursor: pointer;
+    line-height: 1;
+    color: var(--muted);
+}
+.receipt-modal-body { padding: 1rem 1.25rem 1.25rem; }
+.receipt-modal-loading { color: var(--muted); padding: 1rem 0; }
+
+/* Source: frontend\modules\system_administrator\audit_log.php */
+.filter-section {
+            background: #f5f5f5;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 1rem;
+            align-items: flex-end;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .filter-group label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .filter-group input,
+        .filter-group select {
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .filter-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .filter-btn:hover {
+            background: #0056b3;
+        }
+        .clear-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .clear-btn:hover {
+            background: #545b62;
+        }
+        .action-cell {
+            max-width: 400px;
+            word-break: break-word;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            align-items: center;
+        }
+        .pagination a,
+        .pagination span {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #007bff;
+        }
+        .pagination a:hover {
+            background: #f5f5f5;
+        }
+        .pagination .current {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-box {
+            background: white;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-box .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stat-box .label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+/* Source: frontend\modules\system_administrator\fiscal_periods.php */
+.create-form {
+            background: #f5f5f5;
+            padding: 1.5rem;
+            border-radius: 4px;
+            margin-bottom: 2rem;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .form-group input {
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .btn-submit {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .btn-submit:hover {
+            background: #218838;
+        }
+        .message {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .period-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .period-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .period-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .status-badge.open {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-badge.closed {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-badge.locked {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .period-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 0.25rem;
+        }
+        .period-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .btn-close {
+            background: #ffc107;
+            color: black;
+        }
+        .btn-close:hover {
+            background: #e0a800;
+        }
+        .btn-lock {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-lock:hover {
+            background: #c82333;
+        }
+        .btn-close:disabled,
+        .btn-lock:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+/* Source: frontend\modules\system_administrator\system_health.php */
+.health-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-bottom:1.5rem}.health-check{display:grid;grid-template-columns:auto 1fr;gap:.9rem;align-items:start;padding:1rem 0;border-bottom:1px solid var(--border)}.health-check:last-child{border-bottom:0}.health-icon{font-size:1.25rem;line-height:1}.health-icon.healthy{color:#15803d}.health-icon.warning{color:#b45309}.health-icon.critical{color:#b91c1c}.health-detail{margin:.25rem 0 0;color:var(--muted);overflow-wrap:anywhere}.health-category{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}@media(max-width:700px){.health-summary{grid-template-columns:1fr}}

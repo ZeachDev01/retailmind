@@ -227,44 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-<style>
-.receipt-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.65);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    z-index: 1100;
-}
-.receipt-modal.show { display: flex; }
-.receipt-modal-content {
-    width: min(860px, 100%);
-    max-height: 90vh;
-    overflow-y: auto;
-    background: #fff;
-    border-radius: 14px;
-    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.24);
-}
-.receipt-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--border);
-}
-.receipt-modal-close {
-    border: none;
-    background: transparent;
-    font-size: 1.45rem;
-    cursor: pointer;
-    line-height: 1;
-    color: var(--muted);
-}
-.receipt-modal-body { padding: 1rem 1.25rem 1.25rem; }
-.receipt-modal-loading { color: var(--muted); padding: 1rem 0; }
-</style>
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/admin.css')) ?>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 if(window.Chart){Chart.defaults.color='#64748b';Chart.defaults.font.family=getComputedStyle(document.body).fontFamily;

@@ -67,18 +67,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sales Reversals</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<style>
-    .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem; margin-bottom: 1rem; }
-    .grid-two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr); gap: 1rem; align-items: start; }
-    .status-pill { display: inline-flex; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; }
-    .status-pending { background: #fef3c7; color: #92400e; }
-    .status-approved { background: #dcfce7; color: #166534; }
-    .status-rejected { background: #fee2e2; color: #991b1b; }
-    textarea { width: 100%; min-height: 88px; padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: 10px; font: inherit; }
-    .actions-row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
-    .muted { color: var(--muted); font-size: 0.9rem; }
-    @media (max-width: 980px) { .grid-two { grid-template-columns: 1fr; } }
-</style>
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css')) ?>">
 </head>
 <body>
 <div class="app-shell">

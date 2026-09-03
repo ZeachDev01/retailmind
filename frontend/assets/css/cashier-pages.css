@@ -1,0 +1,4 @@
+/* cashier-pages.css - extracted view-specific styles. */
+
+/* Source: frontend\cashier\shifts.php */
+.shift-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.metric{font-size:1.35rem;font-weight:700}.positive{color:#15803d}.negative{color:#b91c1c}

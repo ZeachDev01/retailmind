@@ -1,0 +1,67 @@
+.table-wrap { max-width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; background: var(--card-bg); }
+.table-wrap table { min-width: 640px; }
+[style*="overflow-x:auto"],
+[style*="overflow-x: auto"] {
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+th { background: #f8fafc; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+.page-subtitle { color: var(--muted); margin-top: 0.35rem; font-size: 0.95rem; }
+.alert { display: inline-flex; align-items: center; padding: 0.75rem 0.95rem; border-radius: 10px; margin-bottom: 1rem; font-size: 0.95rem; }
+.alert.tag-success { background: #dcfce7; color: #166534; }
+.alert.tag-warning { background: #fef3c7; color: #92400e; }
+.section-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+.section-header > * { min-width: 0; }
+.section-description { color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem; }
+.users-table .action-cell { display: flex; gap: 0.55rem; flex-wrap: wrap; align-items: center; }
+.inline-form { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; }
+.btn-small { padding: 0.4rem 0.7rem; font-size: 0.82rem; }
+.btn-secondary { background: #e5e7eb; color: var(--text); }
+.btn-secondary:hover { background: #d1d5db; color: var(--text); }
+.btn-danger:hover { background: #b91c1c; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+.table-toolbar {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    flex-wrap: wrap;
+    padding: .9rem;
+    margin-bottom: .85rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card-bg);
+    box-shadow: 0 4px 14px rgba(15,23,42,.035);
+}
+.table-toolbar .toolbar-search { position: relative; flex: 1 1 260px; min-width: 220px; }
+.table-toolbar .toolbar-search i { position: absolute; left: .85rem; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.table-toolbar input[type="search"] { width: 100%; padding: .7rem .85rem .7rem 2.35rem; border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; }
+.table-toolbar select,
+.table-toolbar input[type="date"] { min-height: 42px; padding: .55rem .75rem; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--text); }
+.toolbar-divider { width: 1px; height: 28px; background: var(--border); }
+.toolbar-count { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+
+.data-table-shell { border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg); overflow: hidden; }
+.data-table-scroll { overflow: auto; max-height: min(66vh, 760px); }
+.data-table { min-width: 900px; }
+.data-table thead th { position: sticky; top: 0; z-index: 3; background: #f8fafc; box-shadow: inset 0 -1px var(--border); }
+.data-table tbody tr { transition: background .12s ease; }
+.data-table tbody tr:hover { background: #f8fafc; }
+.data-table td { vertical-align: middle; }
+
+.table-pagination { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding: .75rem .9rem; border-top: 1px solid var(--border); background: #f8fafc; }
+.pagination-buttons { display: flex; gap: .35rem; }
+.pagination-buttons button { min-width: 36px; height: 36px; border: 1px solid var(--border); background: #fff; border-radius: 8px; cursor: pointer; }
+.pagination-buttons button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.pagination-buttons button:disabled { opacity: .45; cursor: not-allowed; }
+.empty-state { min-height: 230px; display: grid; place-items: center; padding: 2rem; text-align: center; color: var(--muted); }
+.empty-state i { display: block; font-size: 2.1rem; margin-bottom: .65rem; color: #94a3b8; }
+.empty-state strong { display: block; color: var(--text); margin-bottom: .3rem; }
+
+
+.table-wrap table thead th { position: sticky; top: 0; z-index: 2; }
+.auto-table-pagination { margin-bottom: 1rem; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 12px 12px; }
+.auto-table-toolbar + .table-wrap { border-radius: 12px 12px 0 0; }

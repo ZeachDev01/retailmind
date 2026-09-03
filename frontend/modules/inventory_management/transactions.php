@@ -25,23 +25,7 @@ $back_url = $role === 'inventory_manager' ? app_url('modules/inventory_managemen
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Transaction History</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<style>
-    .transactions-container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
-    .transaction-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; }
-    .trans-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-    .trans-header h1 { margin: 0; }
-    .trans-table { width: 100%; border-collapse: collapse; }
-    .trans-table th, .trans-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-    .trans-table th { background: var(--table-header-bg, rgba(51, 65, 85, 0.5)); font-weight: 600; }
-    .trans-table tr:hover { background: rgba(59, 130, 246, 0.05); }
-    .badge-reason { display: inline-block; padding: 0.3rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
-    .badge-purchase { background: #d1fae5; color: #047857; }
-    .badge-adjustment { background: #fef3c7; color: #b45309; }
-    .badge-return { background: #fecaca; color: #991b1b; }
-    .qty-positive { color: #10b981; font-weight: 600; }
-    .qty-negative { color: #f87171; font-weight: 600; }
-    .overflow-x-auto { overflow-x: auto; }
-</style>
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
 </head>
 <body>
 <div class="app-shell">

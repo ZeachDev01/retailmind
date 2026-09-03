@@ -72,31 +72,7 @@ $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Printable Barcode Labels</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <style>
-        :root { --label-width: <?= (int)$labelSize['width'] ?>mm; --label-height: <?= (int)$labelSize['height'] ?>mm; }
-        body { margin:0;background:#e5e7eb;color:#111827; }
-        .barcode-page { min-height:100vh;padding:1.25rem; }
-        .toolbar { max-width:1100px;margin:0 auto 1rem;padding:1rem;background:#0f172a;color:#e2e8f0;border-radius:14px;box-shadow:0 10px 28px rgba(15,23,42,.16); }
-        .toolbar h1 { margin:0 0 .3rem;color:#f8fafc; }
-        .toolbar p { color:#94a3b8;margin-bottom:.9rem; }
-        .toolbar-form { display:grid;grid-template-columns:minmax(240px,1fr) 110px 150px auto;gap:.75rem;align-items:end; }
-        .toolbar label { display:block;margin-bottom:.3rem;font-size:.88rem;color:#cbd5e1; }
-        .toolbar select,.toolbar input { width:100%;box-sizing:border-box; }
-        .toolbar-actions { display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.9rem; }
-        .toolbar .btn { text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:.4rem; }
-        .message { margin-top:.8rem;padding:.75rem .9rem;border-radius:9px;background:#422006;color:#fde68a; }
-        .selection-summary { margin-top:.75rem;padding:.65rem .8rem;border:1px solid rgba(255,255,255,.1);border-radius:9px;color:#cbd5e1;font-size:.85rem; }
-        .sheet { max-width:210mm;min-height:260mm;margin:0 auto;padding:5mm;display:grid;grid-template-columns:repeat(auto-fill,var(--label-width));grid-auto-rows:var(--label-height);gap:2mm;justify-content:center;align-content:start;background:#fff;box-shadow:0 8px 28px rgba(15,23,42,.15); }
-        .empty-sheet { display:grid;place-items:center;min-height:260mm;color:#64748b;text-align:center; }
-        .barcode-label { width:var(--label-width);height:var(--label-height);box-sizing:border-box;padding:1.5mm 2mm;border:.25mm dashed #cbd5e1;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:space-between;break-inside:avoid;page-break-inside:avoid;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif; }
-        .label-product { width:100%;text-align:center;font-weight:700;font-size:2.6mm;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-        .barcode-svg { display:block;width:95%;height:11mm; }
-        .label-code { font-size:2.3mm;letter-spacing:.15mm;line-height:1; }
-        .label-footer { width:100%;display:flex;justify-content:space-between;gap:1mm;font-size:2.1mm;line-height:1; }
-        .label-price { font-weight:700; }
-        @media(max-width:780px){.toolbar-form{grid-template-columns:1fr 1fr}.toolbar-form .product-field{grid-column:1/-1}.sheet{max-width:none}}
-        @media print{@page{margin:4mm}body{background:#fff}.no-print{display:none!important}.barcode-page{padding:0}.sheet{max-width:none;min-height:0;margin:0;padding:0;box-shadow:none;gap:0;justify-content:start}.barcode-label{border:none}}
-    </style>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
 </head>
 <body>
 <div class="barcode-page">

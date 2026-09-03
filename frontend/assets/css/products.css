@@ -1,0 +1,21 @@
+.data-table .product-cell { min-width: 250px; }
+.product-name-line { display: flex; align-items: center; gap: .7rem; }
+.product-thumb { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; border-radius: 10px; overflow: hidden; background: #e2e8f0; color: #64748b; }
+.product-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.product-copy { min-width: 0; }
+.product-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.product-copy span { display: block; color: var(--muted); font-size: .78rem; margin-top: .1rem; }
+.stock-value { font-size: 1rem; font-weight: 800; }
+.status-badge { display: inline-flex; align-items: center; gap: .32rem; padding: .28rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.status-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status-badge.good { background: #dcfce7; color: #166534; }
+.status-badge.low { background: #fef3c7; color: #92400e; }
+.status-badge.out { background: #fee2e2; color: #991b1b; }
+.status-badge.inactive { background: #e5e7eb; color: #4b5563; }
+.status-badge.expiring { background: #ffedd5; color: #9a3412; }
+.row-actions { display: flex; justify-content: flex-end; gap: .35rem; }
+.icon-button { width: 36px; height: 36px; display: inline-grid; place-items: center; border: 1px solid var(--border); border-radius: 9px; background: #fff; color: var(--text); cursor: pointer; text-decoration: none; }
+.icon-button:hover { background: #eff6ff; border-color: #bfdbfe; color: var(--primary); }
+.bulk-bar { display: none; align-items: center; gap: .7rem; padding: .7rem .9rem; margin-bottom: .75rem; border-radius: 12px; background: #dbeafe; color: #1e3a8a; }
+.bulk-bar.show { display: flex; }
+.bulk-bar strong { margin-right: auto; }
