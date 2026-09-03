@@ -57,7 +57,7 @@ $sales_history = $historyStmt->fetchAll();
     <div class="main-content">
         <div class="topbar">
             <h1>Sales History</h1>
-            <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+            <div class="u-flex-center-wrap">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
                 <span class="badge-role"><?= htmlspecialchars(ucfirst((string)current_role())) ?></span>
             </div>
@@ -69,12 +69,12 @@ $sales_history = $historyStmt->fetchAll();
             <div class="stat-card"><div class="value">&#8369;<?= number_format((float)$summary['total_amount'], 2) ?></div><div class="label">Total Amount</div></div>
         </div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
-            <h3 style="margin:0;">Latest Sales</h3>
+        <div class="u-flex-between-wrap">
+            <h3 class="u-m-0">Latest Sales</h3>
             <a class="btn" href="<?= htmlspecialchars(app_url('modules/invoice/receipt.php')) ?>">Latest Receipt</a>
         </div>
 
-        <div style="overflow-x:auto;">
+        <div class="u-table-scroll">
             <table>
                 <tr>
                     <th>Sale ID</th>
@@ -95,7 +95,7 @@ $sales_history = $historyStmt->fetchAll();
                 </tr>
                 <?php endforeach; ?>
                 <?php if (!$sales_history): ?>
-                <tr><td colspan="6" style="text-align:center;color:var(--muted);">No sales history recorded yet.</td></tr>
+                <tr><td class="u-empty-cell" colspan="6">No sales history recorded yet.</td></tr>
                 <?php endif; ?>
             </table>
         </div>

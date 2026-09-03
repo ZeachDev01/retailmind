@@ -139,7 +139,7 @@ $prefs = get_notification_prefs($pdo, $_SESSION['user_id']);
                     <label for="low_stock_threshold">Low Stock Threshold (units):</label>
                     <input type="number" name="low_stock_threshold" id="low_stock_threshold"
                            value="<?= htmlspecialchars($prefs['low_stock_threshold']) ?>" min="1">
-                    <span style="color: #666; font-size: 0.85rem;">Override default reorder levels for all products</span>
+                    <span class="u-text-muted-help">Override default reorder levels for all products</span>
                 </div>
             </div>
 

@@ -70,5 +70,5 @@ try {
 </div><button class="btn">Save ML settings</button></form></div>
 <div class="dashboard-section"><div class="section-header"><div><h3>Recent training runs</h3><p class="section-description">Every manual, scheduled, automatic, or command-line attempt is recorded.</p></div></div><div class="table-wrap"><table><tr><th>Started</th><th>Trigger</th><th>Status</th><th>Duration</th><th>Products</th><th>Records</th><th>Error</th></tr>
 <?php foreach ($runs as $run): ?><tr><td><?= htmlspecialchars($run['started_at']) ?></td><td><?= htmlspecialchars($run['trigger_type']) ?></td><td><?= htmlspecialchars($run['status']) ?></td><td><?= $run['duration_seconds'] !== null ? number_format((float)$run['duration_seconds'], 2) . ' s' : '-' ?></td><td><?= (int)$run['eligible_products'] ?></td><td><?= (int)$run['sales_records_used'] ?></td><td><?= htmlspecialchars(mb_strimwidth((string)($run['error_message'] ?? ''), 0, 100, '...')) ?></td></tr><?php endforeach; ?>
-<?php if (!$runs): ?><tr><td colspan="7" class="muted" style="text-align:center">No training history yet. Run the database migration and train the model.</td></tr><?php endif; ?></table></div></div>
+<?php if (!$runs): ?><tr><td colspan="7" class="muted u-text-center">No training history yet. Run the database migration and train the model.</td></tr><?php endif; ?></table></div></div>
 </main></div></body></html>

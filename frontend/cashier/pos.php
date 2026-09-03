@@ -161,7 +161,7 @@ $productLookup = [];
                             <h2>Current sale</h2>
                             <span class="count-badge" id="cart-line-count">0</span>
                         </div>
-                        <p class="muted" style="margin-top:0.2rem;font-size:0.82rem;">Review quantities before accepting payment.</p>
+                        <p class="muted u-pos-hint">Review quantities before accepting payment.</p>
                     </div>
                     <button type="button" class="btn btn-small btn-secondary" id="clear-cart-btn" onclick="clearCart()" disabled>
                         <i class="bi bi-trash3" aria-hidden="true"></i>Clear
@@ -223,8 +223,8 @@ $productLookup = [];
                     </div>
 
                     <details class="payment-field" id="discount-panel">
-                        <summary class="pos-field-label">Discount or promotion</summary><p class="muted" style="margin:.5rem 0 0">Eligible scheduled promotions are checked automatically at checkout. The larger eligible discount is applied.</p>
-                        <div class="payment-grid" style="margin-top:.75rem">
+                        <summary class="pos-field-label">Discount or promotion</summary><p class="muted u-mt-05">Eligible scheduled promotions are checked automatically at checkout. The larger eligible discount is applied.</p>
+                        <div class="payment-grid u-mt-075">
                             <div><label class="pos-field-label" for="discount-type">Discount type</label><select name="discount_type" id="discount-type" class="pos-select"><option value="none">No discount</option><option value="percentage">Percentage</option><option value="fixed">Fixed amount</option></select></div>
                             <div><label class="pos-field-label" for="discount-value">Value</label><input type="number" min="0" step="0.01" name="discount_value" id="discount-value" value="0"></div>
                         </div>
@@ -796,7 +796,7 @@ async function removeHeldSale(id) {
 
 function renderHeldSales() {
     document.getElementById('held-count').textContent = heldSales.length;
-    if (heldSales.length === 0) { holdList.innerHTML = '<div class="search-empty" style="min-height:72px;">No held sales.</div>'; return; }
+    if (heldSales.length === 0) { holdList.innerHTML = '<div class="search-empty u-empty-min-72">No held sales.</div>'; return; }
     holdList.innerHTML = heldSales.map(held => `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" onclick="resumeHeldSale(${Number(held.id)})">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="removeHeldSale(${Number(held.id)})">Cancel</button></div></div>`).join('');
 }
 

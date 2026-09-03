@@ -261,14 +261,14 @@ foreach ($products as $product) {
                     <table class="data-table" id="products-table">
                         <thead>
                             <tr>
-                                <th style="width:44px"><input type="checkbox" id="select-all" aria-label="Select all visible products"></th>
+                                <th class="u-col-select"><input type="checkbox" id="select-all" aria-label="Select all visible products"></th>
                                 <th class="sortable" data-sort="name">Product <i class="bi bi-arrow-down-up"></i></th>
                                 <th class="column-barcode sortable" data-sort="barcode">SKU / Barcode <i class="bi bi-arrow-down-up"></i></th>
                                 <th class="column-category sortable" data-sort="category">Category <i class="bi bi-arrow-down-up"></i></th>
                                 <th class="column-price sortable" data-sort="price">Selling Price <i class="bi bi-arrow-down-up"></i></th>
                                 <th class="sortable" data-sort="stock">Current Stock <i class="bi bi-arrow-down-up"></i></th>
                                 <th>Status</th>
-                                <th style="text-align:right">Actions</th>
+                                <th class="u-text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="product-table-body">
@@ -319,7 +319,7 @@ foreach ($products as $product) {
                         <?php endforeach; ?>
                         </tbody>
                     </table>
-                    <div class="empty-state" id="product-empty" hidden><div><i class="bi bi-search"></i><strong>No products match these filters</strong><span>Clear the filters or add a new product.</span><br><button type="button" class="btn btn-small btn-quiet" id="empty-clear" style="margin-top:.8rem">Clear filters</button></div></div>
+                    <div class="empty-state" id="product-empty" hidden><div><i class="bi bi-search"></i><strong>No products match these filters</strong><span>Clear the filters or add a new product.</span><br><button type="button" class="btn btn-small btn-quiet u-mt-08" id="empty-clear">Clear filters</button></div></div>
                 </div>
                 <footer class="table-pagination">
                     <div><span id="page-summary">Showing 1–<?= min(25, $totalProducts) ?> of <?= $totalProducts ?></span></div>
@@ -340,7 +340,7 @@ foreach ($products as $product) {
 </div>
 
 <div class="rm-modal-overlay" id="add-product-modal" aria-hidden="true">
-    <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="add-product-title" style="width:min(760px,100%)">
+    <section class="rm-modal u-modal-lg" role="dialog" aria-modal="true" aria-labelledby="add-product-title">
         <header class="rm-modal-header"><div><h2 id="add-product-title">Add Product</h2><p>Complete the guided steps. Stock begins at zero and must be received through the approved workflow.</p></div><button type="button" class="rm-close" data-close-modal aria-label="Close add product"><i class="bi bi-x-lg"></i></button></header>
         <form method="POST" id="add-product-form" novalidate>
             <?= csrf_field() ?>
@@ -362,9 +362,9 @@ foreach ($products as $product) {
                 </section>
 
                 <section class="wizard-panel" data-panel="2">
-                    <div id="add-product-scanner-section" hidden style="margin-bottom:1rem"><div id="add-product-scanner-reader" style="max-width:420px;margin:auto"></div><p class="section-description" id="add-product-scanner-result">Point the camera at a barcode.</p></div>
+                    <div class="u-mb-1" id="add-product-scanner-section" hidden><div id="add-product-scanner-reader" style="max-width:420px;margin:auto"></div><p class="section-description" id="add-product-scanner-result">Point the camera at a barcode.</p></div>
                     <div class="form-grid">
-                        <div class="form-group full"><label>Barcode</label><div style="display:flex;gap:.5rem;flex-wrap:wrap"><input name="barcode" id="create-barcode-input" maxlength="50" placeholder="Scan, enter, generate, or leave blank" style="flex:1;min-width:220px"><button type="button" class="btn btn-quiet" id="add-product-scan-btn"><i class="bi bi-camera"></i> Scan</button><button type="button" class="btn btn-warning" id="generate-barcode-btn"><i class="bi bi-upc"></i> Generate</button></div><small class="field-help">RetailMind automatically creates a unique internal barcode when this is blank.</small><small class="field-error">This barcode is already used by another product.</small></div>
+                        <div class="form-group full"><label>Barcode</label><div class="u-flex-wrap"><input class="u-input-grow" name="barcode" id="create-barcode-input" maxlength="50" placeholder="Scan, enter, generate, or leave blank"><button type="button" class="btn btn-quiet" id="add-product-scan-btn"><i class="bi bi-camera"></i> Scan</button><button type="button" class="btn btn-warning" id="generate-barcode-btn"><i class="bi bi-upc"></i> Generate</button></div><small class="field-help">RetailMind automatically creates a unique internal barcode when this is blank.</small><small class="field-error">This barcode is already used by another product.</small></div>
                         <div class="form-group"><label>Case / Package Barcode</label><input name="case_barcode" maxlength="80" placeholder="Optional outer-case barcode"></div>
                         <div class="form-group"><label>Status</label><select name="status"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
                     </div>
@@ -393,9 +393,9 @@ foreach ($products as $product) {
 
                 <section class="wizard-panel" data-panel="5">
                     <div class="detail-grid" id="product-review"></div>
-                    <div style="margin-top:1rem;padding:.85rem;border-radius:11px;background:#eff6ff;color:#1e3a8a"><i class="bi bi-info-circle"></i> The product will start at zero stock. Use Stock Receiving after creation.</div>
-                    <div class="form-grid" style="margin-top:1rem">
-                        <label class="form-group full" style="display:flex;align-items:center;gap:.55rem"><input type="checkbox" name="print_after_create" value="1" checked style="width:auto">Open printable barcode labels after saving</label>
+                    <div class="u-info-note"><i class="bi bi-info-circle"></i> The product will start at zero stock. Use Stock Receiving after creation.</div>
+                    <div class="form-grid u-mt-1">
+                        <label class="form-group full u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" checked>Open printable barcode labels after saving</label>
                         <div class="form-group"><label>Number of labels</label><input type="number" name="label_quantity" value="1" min="1" max="200"></div>
                     </div>
                 </section>
@@ -406,7 +406,7 @@ foreach ($products as $product) {
 </div>
 
 <div class="rm-modal-overlay" id="add-category-modal" aria-hidden="true">
-    <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="category-title" style="width:min(440px,100%)">
+    <section class="rm-modal u-modal-md" role="dialog" aria-modal="true" aria-labelledby="category-title">
         <header class="rm-modal-header"><div><h2 id="category-title">Add Category</h2><p>Create a clear category for organizing and filtering products.</p></div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button></header>
         <form method="POST"><div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="create_category"><div class="form-group"><label>Category Name</label><input type="text" name="category_name" required maxlength="100" placeholder="Example: Beverages"></div></div><footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-success" type="submit">Save Category</button></footer></form>
     </section>
@@ -414,7 +414,7 @@ foreach ($products as $product) {
 
 <?php if ($canDirectAdjust): ?>
 <div class="rm-modal-overlay" id="stock-adjust-modal" aria-hidden="true">
-    <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="adjust-title" style="width:min(520px,100%)">
+    <section class="rm-modal u-modal-form" role="dialog" aria-modal="true" aria-labelledby="adjust-title">
         <header class="rm-modal-header"><div><h2 id="adjust-title">Emergency Stock Adjustment</h2><p>Use only after a verified count. The reason is recorded in the audit log.</p></div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button></header>
         <form method="POST" data-confirm="This will directly change the current stock quantity and create an audit record." data-confirm-title="Confirm emergency adjustment" data-confirm-button="Apply adjustment" data-confirm-danger="1"><div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="adjust"><div class="form-group"><label>Product</label><select name="product_id" id="adjust-product-select" required><option value="">Select product</option><?php foreach ($activeProducts as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= htmlspecialchars($product['sku'] . ' — ' . $product['product_name']) ?> (<?= (int)$product['quantity_on_hand'] ?> on hand)</option><?php endforeach; ?></select></div><div class="form-group"><label>Quantity Change</label><input type="number" name="qty_change" required placeholder="Use 5 to add or -3 to remove"></div><div class="form-group"><label>Specific Approved Reason</label><input name="adjustment_reason" minlength="8" required placeholder="Example: Verified physical-count correction"></div></div><footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-danger" type="submit">Apply Adjustment</button></footer></form>
     </section>
@@ -422,14 +422,14 @@ foreach ($products as $product) {
 <?php endif; ?>
 
 <div class="rm-modal-overlay" id="bulk-category-modal" aria-hidden="true">
-    <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-category-title" style="width:min(440px,100%)"><header class="rm-modal-header"><div><h2 id="bulk-category-title">Change Category</h2><p>Apply one category to every selected product.</p></div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button></header><form method="POST" id="bulk-category-form"><div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="bulk_category"><div id="bulk-category-ids"></div><div class="form-group"><label>New Category</label><select name="category_id" required><option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?></select></div></div><footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn" type="submit">Update Category</button></footer></form></section>
+    <section class="rm-modal u-modal-md" role="dialog" aria-modal="true" aria-labelledby="bulk-category-title"><header class="rm-modal-header"><div><h2 id="bulk-category-title">Change Category</h2><p>Apply one category to every selected product.</p></div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button></header><form method="POST" id="bulk-category-form"><div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="bulk_category"><div id="bulk-category-ids"></div><div class="form-group"><label>New Category</label><select name="category_id" required><option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?></select></div></div><footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn" type="submit">Update Category</button></footer></form></section>
 </div>
 
 <form method="POST" id="bulk-status-form" hidden><?= csrf_field() ?><input type="hidden" name="action" value="bulk_status"><input type="hidden" name="status" id="bulk-status-value"><div id="bulk-status-ids"></div></form>
 <form method="POST" id="generate-barcode-form" target="_blank" hidden><?= csrf_field() ?><input type="hidden" name="action" value="generate_barcode"><input type="hidden" name="product_id" id="generate-product-id"><input type="hidden" name="label_quantity" value="1"></form>
 
 <div class="rm-modal-overlay" id="column-modal" aria-hidden="true">
-    <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="column-title" style="width:min(420px,100%)"><header class="rm-modal-header"><div><h2 id="column-title">Visible Columns</h2><p>Choose which optional columns appear in the table.</p></div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button></header><div class="rm-modal-body"><label style="display:flex;gap:.6rem;margin-bottom:.7rem"><input type="checkbox" data-column="barcode" checked> SKU / Barcode</label><label style="display:flex;gap:.6rem;margin-bottom:.7rem"><input type="checkbox" data-column="category" checked> Category</label><label style="display:flex;gap:.6rem"><input type="checkbox" data-column="price" checked> Selling Price</label></div><footer class="rm-modal-actions"><button type="button" class="btn" data-close-modal>Done</button></footer></section>
+    <section class="rm-modal u-modal-sm" role="dialog" aria-modal="true" aria-labelledby="column-title"><header class="rm-modal-header"><div><h2 id="column-title">Visible Columns</h2><p>Choose which optional columns appear in the table.</p></div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button></header><div class="rm-modal-body"><label class="u-checkbox-row"><input type="checkbox" data-column="barcode" checked> SKU / Barcode</label><label class="u-checkbox-row"><input type="checkbox" data-column="category" checked> Category</label><label class="u-checkbox-row"><input type="checkbox" data-column="price" checked> Selling Price</label></div><footer class="rm-modal-actions"><button type="button" class="btn" data-close-modal>Done</button></footer></section>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
@@ -554,7 +554,7 @@ function openProductDrawer(id) {
         <div class="detail-item"><span>Lead Time</span><strong>${Number(product.supplier_lead_time_days || 0)} day(s)</strong></div><div class="detail-item"><span>Preferred Supplier</span><strong>${escapeHtml(safe(product.preferred_supplier || product.supplier))}</strong></div>
         <div class="detail-item"><span>Expiration</span><strong>${escapeHtml(safe(product.expiration_date))}</strong></div><div class="detail-item"><span>Units</span><strong>${escapeHtml(safe(product.base_unit))} / ${escapeHtml(safe(product.receiving_unit))}</strong></div>
         <div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
-    </div><div class="drawer-section"><h3>Recommended actions</h3><div class="attention-list">${quantity <= threshold ? '<div class="attention-item"><span class="attention-icon"><i class="bi bi-box-arrow-in-down"></i></span><span class="attention-copy"><strong>Replenishment needed</strong><span>Stock is at or below the planning threshold.</span></span><a class="btn btn-small" href="../report/stock_receiving.php">Receive</a></div>' : '<div class="attention-item"><span class="attention-icon" style="background:#dcfce7;color:#166534"><i class="bi bi-check2"></i></span><span class="attention-copy"><strong>Stock level is healthy</strong><span>No immediate replenishment action is required.</span></span></div>'}</div></div>`;
+    </div><div class="drawer-section"><h3>Recommended actions</h3><div class="attention-list">${quantity <= threshold ? '<div class="attention-item"><span class="attention-icon"><i class="bi bi-box-arrow-in-down"></i></span><span class="attention-copy"><strong>Replenishment needed</strong><span>Stock is at or below the planning threshold.</span></span><a class="btn btn-small" href="../report/stock_receiving.php">Receive</a></div>' : '<div class="attention-item"><span class="attention-icon u-stock-ok-icon"><i class="bi bi-check2"></i></span><span class="attention-copy"><strong>Stock level is healthy</strong><span>No immediate replenishment action is required.</span></span></div>'}</div></div>`;
     const footer = document.getElementById('product-drawer-footer');
     footer.innerHTML = product.barcode ? `<a class="btn btn-warning" target="_blank" href="print_barcodes.php?product_id=${Number(product.product_id)}&quantity=1"><i class="bi bi-printer"></i> Print Barcode</a>` : `<button type="button" class="btn btn-success drawer-generate" data-product-id="${Number(product.product_id)}"><i class="bi bi-upc"></i> Generate Barcode</button>`;
     footer.innerHTML += `<a class="btn btn-quiet" href="../report/stock_receiving.php"><i class="bi bi-box-arrow-in-down"></i> Stock Receiving</a>`;

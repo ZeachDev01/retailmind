@@ -196,7 +196,7 @@ $periods = $periods_stmt->fetchAll();
 
                     <div class="period-actions">
                         <?php if ($period['status'] === 'open'): ?>
-                            <form method="POST" style="display: inline;" data-confirm="Closing prevents new entries but keeps records viewable." data-confirm-title="Close fiscal period" data-confirm-button="Close period">
+                            <form class="u-flex-inline" method="POST" data-confirm="Closing prevents new entries but keeps records viewable." data-confirm-title="Close fiscal period" data-confirm-button="Close period">
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                 <input type="hidden" name="action" value="close">
                                 <input type="hidden" name="period_id" value="<?= $period['period_id'] ?>">
@@ -205,7 +205,7 @@ $periods = $periods_stmt->fetchAll();
                         <?php endif; ?>
 
                         <?php if ($period['status'] === 'closed'): ?>
-                            <form method="POST" style="display: inline;" data-confirm="Locking makes all period records read-only for compliance." data-confirm-title="Lock fiscal period" data-confirm-button="Lock period" data-confirm-danger="1">
+                            <form class="u-flex-inline" method="POST" data-confirm="Locking makes all period records read-only for compliance." data-confirm-title="Lock fiscal period" data-confirm-button="Lock period" data-confirm-danger="1">
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                 <input type="hidden" name="action" value="lock">
                                 <input type="hidden" name="period_id" value="<?= $period['period_id'] ?>">

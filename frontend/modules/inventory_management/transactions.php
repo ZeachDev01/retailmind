@@ -57,7 +57,7 @@ $back_url = $role === 'inventory_manager' ? app_url('modules/inventory_managemen
                                         <td><?= htmlspecialchars(date('M d, Y H:i', strtotime($t['moved_at']))) ?></td>
                                         <td>
                                             <strong><?= htmlspecialchars($t['sku'] ?? $t['barcode']) ?></strong>
-                                            <br><small style="color:var(--muted);"><?= htmlspecialchars($t['product_name']) ?></small>
+                                            <br><small class="u-text-muted"><?= htmlspecialchars($t['product_name']) ?></small>
                                         </td>
                                         <td>
                                             <span class="<?= $t['change_qty'] >= 0 ? 'qty-positive' : 'qty-negative' ?>">
@@ -75,7 +75,7 @@ $back_url = $role === 'inventory_manager' ? app_url('modules/inventory_managemen
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="6" style="text-align:center;padding:2rem;color:var(--muted);">No transactions recorded yet.</td>
+                                    <td class="u-empty-cell-padded" colspan="6">No transactions recorded yet.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>

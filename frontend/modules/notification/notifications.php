@@ -65,11 +65,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <?php if ($unread_count > 0): ?>
                     <span class="unread-badge"><?= $unread_count ?> Unread</span>
                 <?php else: ?>
-                    <span style="color: #666;">All caught up!</span>
+                    <span class="u-text-muted-legacy">All caught up!</span>
                 <?php endif; ?>
             </div>
             <?php if ($unread_count > 0): ?>
-                <form method="POST" style="display: inline;">
+                <form class="u-flex-inline" method="POST">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                     <input type="hidden" name="action" value="mark_all_read">
                     <button type="submit" class="mark-all-btn">Mark All as Read</button>
@@ -103,10 +103,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <h4><?= htmlspecialchars($notif['title']) ?></h4>
                         <p><?= htmlspecialchars($notif['message']) ?></p>
                     </div>
-                    <div style="text-align: right; min-width: 120px;">
+                    <div class="u-action-summary">
                         <div class="notification-time"><?= htmlspecialchars(date('M d, H:i', strtotime($notif['created_at']))) ?></div>
                         <?php if (!$notif['is_read']): ?>
-                            <form method="POST" style="display: inline; margin-top: 0.5rem;">
+                            <form class="u-flex-inline u-mt-05" method="POST">
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                 <input type="hidden" name="action" value="mark_read">
                                 <input type="hidden" name="notification_id" value="<?= $notif['notification_id'] ?>">

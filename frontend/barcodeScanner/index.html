@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Barcode Scanner</title>
+<link rel="stylesheet" href="../assets/css/utilities.css">
 <link rel="stylesheet" href="../assets/css/barcode-scanner.css">
 </head>
 <body>
@@ -79,7 +80,7 @@
         <label>Laptop pairing code</label>
         <div class="code-input-row">
           <input type="text" id="pairingCodeInput" maxlength="6" placeholder="ABC123">
-          <button class="action" id="connectCodeBtn" style="flex:0 0 auto;padding:0 16px;">Connect</button>
+          <button class="action u-scanner-code-button" id="connectCodeBtn">Connect</button>
         </div>
         <small>Found on the laptop's "Connect Device" screen. Scanning its QR code fills this in for you automatically.</small>
       </div>
@@ -97,12 +98,12 @@
       </div>
       <div class="form-row">
         <input type="checkbox" id="autoSubmit" checked>
-        <label for="autoSubmit" style="margin:0;">Auto-send scans to server</label>
+        <label class="u-m-0" for="autoSubmit">Auto-send scans to server</label>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="action" id="saveSettings" style="flex:1;">Save</button>
-      <button class="action ghost" id="closeSettings" style="flex:1;">Close</button>
+      <button class="action u-scanner-action" id="saveSettings">Save</button>
+      <button class="action ghost u-scanner-action" id="closeSettings">Close</button>
     </div>
   </div>
 </div>
@@ -111,16 +112,16 @@
 <div id="permissionModal" class="modal">
   <div class="modal-content">
     <div class="modal-header"><h3>📷 Camera Permission Needed</h3></div>
-    <div class="modal-body" style="text-align:center;">
-      <div style="font-size:2.6rem;margin-bottom:10px;">📱</div>
-      <p style="font-weight:600;margin-bottom:10px;">Allow camera access to scan barcodes</p>
-      <p style="color:var(--muted);font-size:0.88rem;line-height:1.6;">
+    <div class="modal-body u-text-center">
+      <div class="u-scanner-phone-icon">📱</div>
+      <p class="u-scanner-permission-title">Allow camera access to scan barcodes</p>
+      <p class="u-scanner-permission-copy">
         iPhone: tap "Allow" when prompted.<br>Android: tap "Allow" or "While using the app".
       </p>
     </div>
     <div class="modal-footer">
-      <button class="action" id="allowPermission" style="flex:1;">Allow Camera</button>
-      <button class="action ghost" id="denyPermission" style="flex:1;">Cancel</button>
+      <button class="action u-scanner-action" id="allowPermission">Allow Camera</button>
+      <button class="action ghost u-scanner-action" id="denyPermission">Cancel</button>
     </div>
   </div>
 </div>

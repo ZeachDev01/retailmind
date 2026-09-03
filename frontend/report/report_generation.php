@@ -673,7 +673,7 @@ $totalRows = count($reportData['rows']);
             </form>
         </div>
 
-        <div class="dashboard-section" style="margin-top:1.5rem;">
+        <div class="dashboard-section u-mt-15">
             <div class="section-header">
                 <div>
                     <h2><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
@@ -686,7 +686,7 @@ $totalRows = count($reportData['rows']);
             <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
 
             <?php if (!empty($reportData['metrics'])): ?>
-                <div class="card-grid" style="margin:1rem 0;">
+                <div class="card-grid u-my-1">
                     <?php foreach ($reportData['metrics'] as $label => $value): ?>
                         <div class="stat-card">
                             <div class="value"><?= htmlspecialchars((string)$value) ?></div>

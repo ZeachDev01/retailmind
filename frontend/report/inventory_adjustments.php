@@ -175,7 +175,7 @@ $all_adjustments = $all_stmt->fetchAll();
                                     <?= htmlspecialchars(ucfirst($adj['adjustment_type'])) ?>
                                 </span>
                             </div>
-                            <div style="text-align: right;">
+                            <div class="u-text-right">
                                 <div class="adjustment-qty">-<?= abs($adj['adjustment_qty']) ?></div>
                                 <span class="adjustment-status pending">Pending</span>
                             </div>
@@ -195,7 +195,7 @@ $all_adjustments = $all_stmt->fetchAll();
         <?php endif; ?>
 
         <?php if (!empty($all_adjustments)): ?>
-            <div class="history-section" style="margin-top: 2rem;">
+            <div class="history-section u-mt-2">
                 <h3>Damage Report History (My Reports)</h3>
 
                 <div class="tabs">
@@ -216,7 +216,7 @@ $all_adjustments = $all_stmt->fetchAll();
                                         <?= htmlspecialchars(ucfirst($adj['adjustment_type'])) ?>
                                     </span>
                                 </div>
-                                <div style="text-align: right;">
+                                <div class="u-text-right">
                                     <div class="adjustment-qty">-<?= abs($adj['adjustment_qty']) ?></div>
                                     <span class="adjustment-status <?= $adj['status'] ?>">
                                         <?= htmlspecialchars(ucfirst($adj['status'])) ?>

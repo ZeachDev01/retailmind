@@ -79,7 +79,7 @@ $recent_movements = $pdo->query(
             </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.5rem;">
+        <div class="u-grid-two-spaced">
             <div>
                 <h3>Low Stock Items</h3>
                 <table>
@@ -93,7 +93,7 @@ $recent_movements = $pdo->query(
                     </tr>
                     <?php endforeach; ?>
                     <?php if (!$low_stock): ?>
-                    <tr><td colspan="4" style="text-align:center;color:var(--muted);">No low stock items right now.</td></tr>
+                    <tr><td class="u-empty-cell" colspan="4">No low stock items right now.</td></tr>
                     <?php endif; ?>
                 </table>
             </div>
@@ -111,13 +111,13 @@ $recent_movements = $pdo->query(
                     </tr>
                     <?php endforeach; ?>
                     <?php if (!$recent_movements): ?>
-                    <tr><td colspan="4" style="text-align:center;color:var(--muted);">No stock movements recorded yet.</td></tr>
+                    <tr><td class="u-empty-cell" colspan="4">No stock movements recorded yet.</td></tr>
                     <?php endif; ?>
                 </table>
             </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.5rem;">
+        <div class="u-grid-two-spaced">
             <div>
                 <h3>Expiring Soon</h3>
                 <table>
@@ -131,7 +131,7 @@ $recent_movements = $pdo->query(
                     </tr>
                     <?php endforeach; ?>
                     <?php if (!$expiring_batches): ?>
-                    <tr><td colspan="4" style="text-align:center;color:var(--muted);">No batches expiring in the next 30 days.</td></tr>
+                    <tr><td class="u-empty-cell" colspan="4">No batches expiring in the next 30 days.</td></tr>
                     <?php endif; ?>
                 </table>
             </div>
@@ -149,13 +149,13 @@ $recent_movements = $pdo->query(
                     </tr>
                     <?php endforeach; ?>
                     <?php if (!$expired_batches): ?>
-                    <tr><td colspan="4" style="text-align:center;color:var(--muted);">No expired batches with remaining quantity.</td></tr>
+                    <tr><td class="u-empty-cell" colspan="4">No expired batches with remaining quantity.</td></tr>
                     <?php endif; ?>
                 </table>
             </div>
         </div>
 
-        <div style="margin-top:1.5rem;">
+        <div class="u-mt-15">
             <h3>FEFO Pick Recommendations</h3>
             <table>
                 <tr><th>Product</th><th>Batch</th><th>Remaining</th><th>Expiration</th><th>Supplier</th></tr>
@@ -169,7 +169,7 @@ $recent_movements = $pdo->query(
                 </tr>
                 <?php endforeach; ?>
                 <?php if (!$fefo_recommendations): ?>
-                <tr><td colspan="5" style="text-align:center;color:var(--muted);">No batch stock available for FEFO recommendations.</td></tr>
+                <tr><td class="u-empty-cell" colspan="5">No batch stock available for FEFO recommendations.</td></tr>
                 <?php endif; ?>
             </table>
         </div>

@@ -86,7 +86,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
 
         <div class="panel">
             <form method="GET" class="actions-row">
-                <div class="form-group" style="margin:0;min-width:240px;">
+                <div class="form-group u-m-0">
                     <label for="sale_id">Receipt / Sale ID</label>
                     <input type="number" min="1" name="sale_id" id="sale_id" value="<?= $sale_id ?: '' ?>" placeholder="Enter receipt number">
                 </div>
@@ -128,7 +128,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                                 </select>
                             </div>
 
-                            <div style="overflow-x:auto;margin-bottom:1rem;">
+                            <div class="u-table-scroll-spaced">
                                 <table>
                                     <tr>
                                         <th>Product</th>
@@ -198,22 +198,22 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                         <h3>Pending Supervisor Approval</h3>
                         <p class="section-description">Approving restores returned stock and records the audit entry.</p>
                         <?php foreach ($pendingReversals as $row): ?>
-                            <div style="border-top:1px solid var(--border);padding-top:0.9rem;margin-top:0.9rem;">
+                            <div class="u-section-divider">
                                 <strong>#<?= (int)$row['reversal_id'] ?> <?= htmlspecialchars(strtoupper($row['reversal_type'])) ?></strong>
                                 <p class="muted">Sale #<?= (int)$row['sale_id'] ?> requested by <?= htmlspecialchars($row['requested_by_name'] ?? 'Unknown') ?></p>
                                 <p><?= htmlspecialchars($row['reason']) ?></p>
-                                <div class="actions-row" style="margin-top:0.75rem;">
+                                <div class="actions-row u-mt-075">
                                     <form method="POST" class="inline-form">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="approve">
                                         <input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>">
                                         <button class="btn btn-small" type="submit">Approve</button>
                                     </form>
-                                    <form method="POST" class="actions-row" style="margin:0;">
+                                    <form method="POST" class="actions-row u-m-0">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="reject">
                                         <input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>">
-                                        <input type="text" name="rejection_reason" placeholder="Rejection reason" required style="padding:0.45rem;border:1px solid var(--border);border-radius:8px;">
+                                        <input class="u-field-basic" type="text" name="rejection_reason" placeholder="Rejection reason" required>
                                         <button class="btn btn-small btn-danger" type="submit">Reject</button>
                                     </form>
                                 </div>
@@ -224,7 +224,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
 
                 <div class="panel">
                     <h3><?= $sale_id > 0 ? 'Sale Reversal History' : 'Recent Reversals' ?></h3>
-                    <div style="overflow-x:auto;margin-top:0.75rem;">
+                    <div class="u-table-scroll u-mt-075">
                         <table>
                             <tr>
                                 <th>ID</th>
@@ -243,7 +243,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (!$reversals): ?>
-                                <tr><td colspan="5" style="text-align:center;color:var(--muted);">No reversal records yet.</td></tr>
+                                <tr><td class="u-empty-cell" colspan="5">No reversal records yet.</td></tr>
                             <?php endif; ?>
                         </table>
                     </div>

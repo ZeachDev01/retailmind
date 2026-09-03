@@ -1,6 +1,7 @@
 /* assets/css/style.css - compatibility bundle */
 @import url("global.css");
 @import url("forms.css");
+@import url("utilities.css");
 @import url("landing.css");
 @import url("sidebar.css");
 @import url("dashboard.css");

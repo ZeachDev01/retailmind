@@ -96,7 +96,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     </div>
                     <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('modules/invoice/sales_history.php')) ?>">View all</a>
                 </div>
-                <div class="table-wrap" style="border:0;border-radius:0;">
+                <div class="table-wrap u-table-flat">
                     <table class="cashier-recent-table">
                         <thead>
                             <tr><th>Receipt</th><th>Total</th><th>Items</th><th>Payment</th><th>Time</th><th>Action</th></tr>
@@ -117,7 +117,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$recentTransactions): ?>
-                            <tr><td colspan="6" style="padding:2rem;text-align:center;color:var(--muted);">No transactions recorded today.</td></tr>
+                            <tr><td class="u-empty-cell-padded" colspan="6">No transactions recorded today.</td></tr>
                         <?php endif; ?>
                         </tbody>
                     </table>

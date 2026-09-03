@@ -21,6 +21,15 @@ $salesTrend = $dashboardService->getSalesTrend($rangeDays);
 $inventoryByCategory = $dashboardService->getInventoryValueByCategory(8);
 $adminAttentionCount = ($adminMetrics['open_periods'] > 1 ? 1 : 0) + count($recentCriticalActions);
 $lastUpdated = date('M d, Y g:i A');
+$adminRoleLabel = ucwords(str_replace('_', ' ', (string)current_role()));
+$adminName = trim((string)($_SESSION['full_name'] ?? 'System Admin'));
+$adminInitials = '';
+foreach (preg_split('/\s+/', $adminName) ?: [] as $namePart) {
+    if ($namePart !== '') {
+        $adminInitials .= strtoupper(substr($namePart, 0, 1));
+    }
+}
+$adminInitials = substr($adminInitials ?: 'SA', 0, 2);
 ?>
 <!DOCTYPE html>
 <html>
@@ -30,38 +39,61 @@ $lastUpdated = date('M d, Y g:i A');
     <title>Admin Dashboard</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 </head>
-<body>
+<body class="admin-dashboard-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <div class="main-content">
+        <header class="admin-mobile-topbar" aria-label="Mobile dashboard header">
+            <div class="admin-mobile-brand">
+                <button type="button" class="admin-mobile-menu" data-admin-mobile-menu aria-label="Open menu">
+                    <i class="bi bi-list" aria-hidden="true"></i>
+                </button>
+                <a class="admin-mobile-logo" href="<?= htmlspecialchars(app_url('modules/system_administrator/dashboard.php')) ?>" aria-label="RetailMind dashboard">
+                    <span class="admin-mobile-logo-mark"><i class="bi bi-archive" aria-hidden="true"></i></span>
+                    <span class="admin-mobile-logo-text">RetailMind</span>
+                </a>
+            </div>
+            <div class="admin-mobile-tools">
+                <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
+                    <i class="bi bi-search" aria-hidden="true"></i>
+                </button>
+                <a class="admin-mobile-avatar" href="<?= htmlspecialchars(app_url('modules/auth/user_info.php')) ?>" aria-label="Open user information">
+                    <?= htmlspecialchars($adminInitials) ?>
+                </a>
+            </div>
+        </header>
         <header class="page-heading">
             <div>
                 <h1>Admin Dashboard</h1>
-                <p class="page-subtitle">Review access, compliance, sales activity, system health, and inventory value.</p>
+                <p class="page-subtitle"><span class="desktop-subtitle">Review access, compliance, sales activity, system health, and inventory value.</span><span class="mobile-subtitle">Review access, compliance, and health.</span></p>
                 <p class="section-description">Last updated <?= htmlspecialchars($lastUpdated) ?></p>
             </div>
             <div class="page-heading-actions">
-                <form method="GET"><select name="range" onchange="this.form.submit()" aria-label="Dashboard range" style="min-height:42px;border:1px solid var(--border);border-radius:10px;padding:.55rem .75rem;background:#fff"><option value="7" <?= $rangeDays === 7 ? 'selected' : '' ?>>Last 7 days</option><option value="30" <?= $rangeDays === 30 ? 'selected' : '' ?>>Last 30 days</option><option value="90" <?= $rangeDays === 90 ? 'selected' : '' ?>>Last 90 days</option></select></form>
+                <form method="GET"><select class="u-select-filter" name="range" onchange="this.form.submit()" aria-label="Dashboard range"><option value="7" <?= $rangeDays === 7 ? 'selected' : '' ?>>Last 7 days</option><option value="30" <?= $rangeDays === 30 ? 'selected' : '' ?>>Last 30 days</option><option value="90" <?= $rangeDays === 90 ? 'selected' : '' ?>>Last 90 days</option></select></form>
                 <a class="btn btn-quiet btn-icon" href="?range=<?= $rangeDays ?>"><i class="bi bi-arrow-clockwise"></i>Refresh</a>
-                <span class="badge-role">Admin: <?= htmlspecialchars($_SESSION['full_name']) ?></span>
+                <span class="badge-role"><span class="desktop-role-label">Admin: <?= htmlspecialchars($_SESSION['full_name']) ?></span><span class="mobile-role-label"><?= htmlspecialchars($adminRoleLabel) ?></span></span>
             </div>
         </header>
 
         <div class="quick-actions">
             <a class="quick-action" href="<?= htmlspecialchars(app_url('modules/system_administrator/manage_users.php')) ?>">
-                <strong>Manage Users</strong>
+                <i class="bi bi-person" aria-hidden="true"></i>
+                <strong>Users</strong>
                 <span>Control access and team roles</span>
             </a>
             <a class="quick-action" href="<?= htmlspecialchars(app_url('modules/system_administrator/audit_log.php')) ?>">
-                <strong>Review Audit Log</strong>
+                <i class="bi bi-clipboard2-check" aria-hidden="true"></i>
+                <strong>Audit</strong>
                 <span>Investigate critical activity</span>
             </a>
             <a class="quick-action" href="<?= htmlspecialchars(app_url('modules/system_administrator/fiscal_periods.php')) ?>">
-                <strong>Fiscal Periods</strong>
+                <i class="bi bi-calendar3" aria-hidden="true"></i>
+                <strong>Fiscal</strong>
                 <span>Close or lock accounting windows</span>
             </a>
             <a class="quick-action" href="<?= htmlspecialchars(app_url('modules/system_administrator/system_health.php')) ?>">
-                <strong>System Health</strong>
+                <i class="bi bi-shield-check" aria-hidden="true"></i>
+                <strong>Health</strong>
                 <span>Check migrations, backups, storage, and forecasting</span>
             </a>
         </div>
@@ -74,12 +106,12 @@ $lastUpdated = date('M d, Y g:i A');
             <a class="stat-card-link" href="<?= htmlspecialchars(app_url('modules/system_administrator/fiscal_periods.php')) ?>"><article class="stat-card with-icon <?= $adminMetrics['open_periods'] > 1 ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-calendar-check"></i></span><div class="value"><?= (int)$adminMetrics['open_periods'] ?> / <?= (int)$adminMetrics['closed_periods'] ?></div><div class="label">Open / Closed Periods</div><div class="hint">Close old periods promptly</div><div class="stat-meta"><span>Manage periods</span><i class="bi bi-arrow-right"></i></div></article></a>
         </div>
 
-        <section class="dashboard-section" style="margin-bottom:1.5rem">
+        <section class="dashboard-section admin-attention-section u-mb-15">
             <div class="section-header"><div><h3>Administrative Attention</h3><p class="section-description">Items that may require review or compliance action.</p></div><span class="decision-pill <?= $adminAttentionCount ? 'action' : 'ok' ?>"><?= $adminAttentionCount ? $adminAttentionCount . ' item(s)' : 'All clear' ?></span></div>
             <div class="attention-list">
                 <?php if ($adminMetrics['open_periods'] > 1): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-calendar-x"></i></span><span class="attention-copy"><strong>Multiple fiscal periods are open</strong><span>Review completed periods and close them to prevent late entries.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('modules/system_administrator/fiscal_periods.php')) ?>">Review</a></div><?php endif; ?>
                 <?php if ($recentCriticalActions): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-shield-exclamation"></i></span><span class="attention-copy"><strong><?= count($recentCriticalActions) ?> recent critical audit action(s)</strong><span>Review reversals, adjustments, locking, deletion, or void activity.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('modules/system_administrator/audit_log.php')) ?>">Review</a></div><?php endif; ?>
-                <?php if (!$adminAttentionCount): ?><div class="empty-state" style="min-height:120px"><div><i class="bi bi-shield-check"></i><strong>No urgent administrative issues</strong><span>Fiscal-period and critical-audit indicators are currently clear.</span></div></div><?php endif; ?>
+                <?php if (!$adminAttentionCount): ?><div class="empty-state u-empty-min-120"><div><i class="bi bi-shield-check"></i><strong>No urgent administrative issues</strong><span>Fiscal-period and critical-audit indicators are currently clear.</span></div></div><?php endif; ?>
             </div>
         </section>
 
@@ -103,7 +135,7 @@ $lastUpdated = date('M d, Y g:i A');
                         <div class="chart-value"><?= (int)$adminMetrics['closed_periods'] ?></div>
                     </div>
                 </div>
-                <p class="section-description" style="margin-top:1rem;">
+                <p class="section-description u-mt-1">
                     <?= $adminMetrics['open_periods'] > 1 ? 'Review open periods and close completed accounting windows.' : 'Fiscal period status is under control.' ?>
                 </p>
             </div>
@@ -133,14 +165,14 @@ $lastUpdated = date('M d, Y g:i A');
             </div>
         </div>
 
-        <div class="dashboard-section" style="margin-top:1.5rem;">
+        <div class="dashboard-section u-mt-15">
             <div class="section-header">
                 <div>
                     <h3>Recent Sales</h3>
                     <p class="section-description">Today's total: &#8369;<?= number_format((float)$salesSummary['total_sales_today'], 2) ?></p>
                 </div>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap admin-sales-table">
                 <table>
                     <tr><th>Receipt #</th><th>Total Amount</th><th>Items</th><th>Payment</th><th>Cashier</th><th>Date</th><th>Action</th></tr>
                     <?php foreach ($recentTransactions as $tx): ?>
@@ -157,7 +189,7 @@ $lastUpdated = date('M d, Y g:i A');
                     </tr>
                     <?php endforeach; ?>
                     <?php if (!$recentTransactions): ?>
-                    <tr><td colspan="7" style="text-align:center;color:var(--muted);">No recent sales recorded yet.</td></tr>
+                    <tr><td class="u-empty-cell" colspan="7">No recent sales recorded yet.</td></tr>
                     <?php endif; ?>
                 </table>
             </div>
@@ -223,6 +255,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (event.key === 'Escape' && modal.classList.contains('show')) {
             closeModal();
         }
+    });
+
+    document.querySelectorAll('[data-admin-mobile-menu]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const menuToggle = document.getElementById('menuToggle');
+            if (menuToggle) {
+                menuToggle.click();
+            }
+        });
     });
 });
 </script>

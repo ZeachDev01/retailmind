@@ -122,7 +122,7 @@ async function renderSearchResults() {
     if (term === '') {
         productSearch = [];
         searchCount.textContent = '0 results';
-        searchResults.innerHTML = '<div class="search-empty"><div><i class="bi bi-keyboard" aria-hidden="true" style="display:block;font-size:1.4rem;margin-bottom:0.35rem;"></i>Enter at least one letter or number to search.</div></div>';
+        searchResults.innerHTML = '<div class="search-empty"><div><i class="bi bi-keyboard u-search-icon" aria-hidden="true"></i>Enter at least one letter or number to search.</div></div>';
         return;
     }
 
@@ -146,7 +146,7 @@ if (categoryButtons) {
         if (!button) return;
         categoryButtons.querySelectorAll('.pos-category-button').forEach(item => item.classList.toggle('active', item === button));
         productSearchInput.value = '';
-        searchResults.innerHTML = '<div class="search-empty"><span class="skeleton" style="display:inline-block;width:180px;height:16px">Loading</span></div>';
+        searchResults.innerHTML = '<div class="search-empty"><span class="skeleton u-skeleton-inline">Loading</span></div>';
         try {
             const response = await fetch(`${productsApiUrl}?category=${encodeURIComponent(button.dataset.categoryId)}&limit=20`);
             const data = await response.json();

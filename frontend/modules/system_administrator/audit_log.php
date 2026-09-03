@@ -179,7 +179,7 @@ $page_url = function (int $targetPage) use ($pagination_filters): string {
             </thead>
             <tbody>
                 <?php if (empty($logs)): ?>
-                    <tr><td colspan="9" style="text-align: center; padding: 2rem;">No activity logs found</td></tr>
+                    <tr><td class="u-text-center" colspan="9">No activity logs found</td></tr>
                 <?php else: ?>
                     <?php foreach ($logs as $log): ?>
                         <tr>

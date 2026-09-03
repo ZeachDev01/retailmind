@@ -52,7 +52,7 @@ $icons = ['healthy' => 'bi-check-circle-fill', 'warning' => 'bi-exclamation-tria
     <?php endforeach; ?>
 </section>
 
-<section class="dashboard-section" style="margin-top:1.5rem">
+<section class="dashboard-section u-mt-15">
     <div class="section-header"><div><h3>Recommended maintenance commands</h3><p class="section-description">Run these commands from the project directory when deploying or maintaining RetailMind.</p></div></div>
     <div class="attention-list">
         <div class="attention-item"><span class="attention-icon"><i class="bi bi-database-gear"></i></span><span class="attention-copy"><strong>Apply pending migrations</strong><span><code>php backend/scripts/migrate.php</code></span></span></div>

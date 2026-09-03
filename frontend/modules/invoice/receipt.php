@@ -283,7 +283,7 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
             <div class="receipt-header">
                 <div class="receipt-brand">
                     <h1>Inventory System Receipt</h1>
-                    <div style="color:var(--muted);">Official sales invoice</div>
+                    <div class="u-text-muted">Official sales invoice</div>
                 </div>
                 <div class="receipt-meta">
                     <div><strong>Receipt #<?= $sale_id ?></strong></div>
@@ -418,7 +418,7 @@ if ($sale_id > 0) {
                                     <span class="tag-success"><?= (int)$receipt['approved_reversals'] ?> approved</span>
                                 <?php endif; ?>
                                 <?php if ((int)$receipt['pending_reversals'] === 0 && (int)$receipt['approved_reversals'] === 0): ?>
-                                    <span style="color:var(--muted);">None</span>
+                                    <span class="u-text-muted">None</span>
                                 <?php endif; ?>
                             </td>
                             <td>
@@ -470,24 +470,24 @@ if ($sale_id > 0) {
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
 
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Receipt #</label>
+                    <div class="u-mb-1">
+                        <label class="u-block-label">Receipt #</label>
                         <input type="text" value="<?= $sale['sale_id'] ?>" disabled style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb;">
                     </div>
 
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Date</label>
+                    <div class="u-mb-1">
+                        <label class="u-block-label">Date</label>
                         <input type="text" value="<?= htmlspecialchars($sale['sale_date']) ?>" disabled style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb;">
                     </div>
 
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Cashier</label>
+                    <div class="u-mb-1">
+                        <label class="u-block-label">Cashier</label>
                         <input type="text" value="<?= htmlspecialchars($sale['cashier_name']) ?>" disabled style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb;">
                     </div>
 
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Payment Method</label>
-                        <select name="payment_method" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
+                    <div class="u-mb-1">
+                        <label class="u-block-label">Payment Method</label>
+                        <select class="u-field-select" name="payment_method">
                             <option value="CASH" <?= $sale['payment_method'] === 'CASH' ? 'selected' : '' ?>>Cash</option>
                             <option value="CARD" <?= $sale['payment_method'] === 'CARD' ? 'selected' : '' ?>>Card</option>
                             <option value="CHECK" <?= $sale['payment_method'] === 'CHECK' ? 'selected' : '' ?>>Check</option>
@@ -495,12 +495,12 @@ if ($sale_id > 0) {
                         </select>
                     </div>
 
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Total Amount</label>
+                    <div class="u-mb-1">
+                        <label class="u-block-label">Total Amount</label>
                         <input type="text" value="₱<?= number_format($sale['total_amount'], 2) ?>" disabled style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb;">
                     </div>
 
-                    <div style="display: flex; gap: 1rem;">
+                    <div class="u-flex-wrap">
                         <button type="submit" class="btn btn-primary">💾 Save Changes</button>
                         <a href="<?= htmlspecialchars(app_url('modules/invoice/receipt.php')) ?>" class="btn">Cancel</a>
                     </div>

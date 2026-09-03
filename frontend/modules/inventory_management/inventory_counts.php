@@ -224,7 +224,7 @@ $pendingTotal = $countService->getPendingCountTotal();
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="10" style="text-align:center;color:var(--muted);padding:2rem;">No inventory counts recorded yet.</td>
+                                    <td class="u-empty-cell-padded" colspan="10">No inventory counts recorded yet.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>

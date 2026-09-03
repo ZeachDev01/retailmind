@@ -196,7 +196,7 @@ unset($row);
     </table></div>
 </section>
 <?php endforeach; ?>
-<?php if (!$rows): ?><section class="dashboard-section"><div class="empty-state"><div><i class="bi bi-check-circle"></i><strong>No replenishment recommendations</strong><span>Current stock and forecast suggestions do not require new requests.</span></div></div></section><?php else: ?><div style="display:flex;justify-content:flex-end;gap:.75rem;position:sticky;bottom:1rem"><button class="btn" type="submit">Create selected replenishment requests</button></div><?php endif; ?>
+<?php if (!$rows): ?><section class="dashboard-section"><div class="empty-state"><div><i class="bi bi-check-circle"></i><strong>No replenishment recommendations</strong><span>Current stock and forecast suggestions do not require new requests.</span></div></div></section><?php else: ?><div class="u-flex-end-sticky"><button class="btn" type="submit">Create selected replenishment requests</button></div><?php endif; ?>
 </form>
 </main>
 </div>

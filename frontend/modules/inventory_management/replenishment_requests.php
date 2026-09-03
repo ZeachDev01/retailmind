@@ -195,7 +195,7 @@ $predictions = get_stored_predictions($pdo);
                     </div>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1rem;">
+                <div class="form-group u-mb-1">
                     <label for="notes">Notes / Comments</label>
                     <textarea name="notes" id="notes" placeholder="e.g., Preferred supplier, delivery date..."></textarea>
                 </div>
@@ -227,7 +227,7 @@ $predictions = get_stored_predictions($pdo);
                                 <div class="confidence">
                                     Confidence: <?= round(($pred['confidence_score'] ?? 0) * 100, 1) ?>%
                                 </div>
-                                <form method="POST" style="display: inline-block; width: 100%;">
+                                <form class="u-width-full" method="POST">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                     <input type="hidden" name="action" value="create">
                                     <input type="hidden" name="source" value="ml_forecast">
@@ -238,17 +238,17 @@ $predictions = get_stored_predictions($pdo);
                                     <label style="display:block;margin-top:.5rem;font-weight:600">Final request quantity</label>
                                     <input type="number" name="request_qty" min="1" value="<?= (int)($pred['suggested_reorder_qty'] ?? 0) ?>" required style="width:100%;padding:.55rem">
                                     <label style="display:block;margin-top:.5rem;font-weight:600">Override reason (required when changed)</label>
-                                    <input type="text" name="override_reason" placeholder="Why should the suggested quantity change?" style="width:100%;padding:.55rem">
+                                    <input class="u-field-compact" type="text" name="override_reason" placeholder="Why should the suggested quantity change?">
                                     <button type="submit" class="btn-add-request">Create Request from Forecast</button>
                                 </form>
-                                <form method="POST" style="display:inline-block;width:100%;margin-top:.5rem" data-required-field="override_reason" data-required-message="Enter a rejection reason." data-confirm="Reject this forecast suggestion?" data-confirm-title="Reject forecast suggestion" data-confirm-button="Reject suggestion" data-confirm-danger="1">
+                                <form class="u-width-full u-mt-05" method="POST" data-required-field="override_reason" data-required-message="Enter a rejection reason." data-confirm="Reject this forecast suggestion?" data-confirm-title="Reject forecast suggestion" data-confirm-button="Reject suggestion" data-confirm-danger="1">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                     <input type="hidden" name="action" value="reject_forecast">
                                     <input type="hidden" name="forecast_prediction_id" value="<?= (int)($pred['prediction_id'] ?? 0) ?>">
                                     <input type="hidden" name="product_id" value="<?= (int)$pred['product_id'] ?>">
                                     <input type="hidden" name="original_suggested_qty" value="<?= (int)($pred['suggested_reorder_qty'] ?? 0) ?>">
-                                    <input type="text" name="override_reason" placeholder="Reason for rejecting suggestion" style="width:100%;padding:.55rem;margin-bottom:.4rem">
-                                    <button type="submit" class="btn-action btn-reject" style="width:100%">Reject Forecast Suggestion</button>
+                                    <input class="u-field-compact-spaced" type="text" name="override_reason" placeholder="Reason for rejecting suggestion">
+                                    <button type="submit" class="btn-action btn-reject u-width-full">Reject Forecast Suggestion</button>
                                 </form>
                             </div>
                         <?php endif; ?>
@@ -295,8 +295,8 @@ $predictions = get_stored_predictions($pdo);
                         <?php endif; ?>
                     </div>
 
-                    <div style="text-align: right;">
-                        <div style="margin-bottom: 0.5rem;">
+                    <div class="u-text-right">
+                        <div class="u-mb-05">
                             <span class="status-badge <?= $req['status'] ?>">
                                 <?= htmlspecialchars(ucwords(str_replace('_', ' ', $req['status']))) ?>
                             </span>
@@ -304,13 +304,13 @@ $predictions = get_stored_predictions($pdo);
 
                         <?php if ($req['status'] === 'pending' && $isAdmin && (int)$req['requested_by'] !== (int)$_SESSION['user_id']): ?>
                             <div class="request-actions">
-                                <form method="POST" style="display: inline;">
+                                <form class="u-flex-inline" method="POST">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                     <input type="hidden" name="action" value="approve">
                                     <input type="hidden" name="request_id" value="<?= $req['request_id'] ?>">
                                     <button type="submit" class="btn-action btn-approve">Approve</button>
                                 </form>
-                                <form method="POST" style="display: inline;" data-confirm="Reject this replenishment request?" data-confirm-title="Reject request" data-confirm-button="Reject" data-confirm-danger="1">
+                                <form class="u-flex-inline" method="POST" data-confirm="Reject this replenishment request?" data-confirm-title="Reject request" data-confirm-button="Reject" data-confirm-danger="1">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                     <input type="hidden" name="action" value="reject">
                                     <input type="hidden" name="request_id" value="<?= $req['request_id'] ?>">

@@ -153,7 +153,7 @@ $passwordStatusClass = (int)$account['must_change_password'] === 1 ? 'tag-warnin
                         <label>Role</label>
                         <input value="<?= htmlspecialchars($roleLabel) ?>" disabled>
                     </div>
-                    <div class="full" style="display:flex;justify-content:flex-end">
+                    <div class="full u-flex-end">
                         <button class="btn" type="submit">Save Profile</button>
                     </div>
                 </form>

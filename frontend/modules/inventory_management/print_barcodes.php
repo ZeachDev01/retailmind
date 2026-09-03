@@ -85,12 +85,12 @@ $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
             <div><label for="size">Label size</label><select name="size" id="size"><?php foreach ($allowedSizes as $key => $size): ?><option value="<?= htmlspecialchars($key) ?>" <?= $key === $sizeKey ? 'selected' : '' ?>><?= htmlspecialchars($size['label']) ?></option><?php endforeach; ?></select></div>
             <button class="btn" type="submit"><i class="bi bi-upc-scan"></i>Create Labels</button>
         </form>
-        <div class="toolbar-actions"><a class="btn" href="products.php" style="background:#475569"><i class="bi bi-arrow-left"></i>Back to Products</a><?php if ($printableProducts): ?><button class="btn" type="button" onclick="window.print()" style="background:#f59e0b"><i class="bi bi-printer"></i>Print <?= count($printableProducts) * $quantity ?> Label(s)</button><?php endif; ?></div>
+        <div class="toolbar-actions"><a class="btn u-button-slate" href="products.php"><i class="bi bi-arrow-left"></i>Back to Products</a><?php if ($printableProducts): ?><button class="btn u-button-orange" type="button" onclick="window.print()"><i class="bi bi-printer"></i>Print <?= count($printableProducts) * $quantity ?> Label(s)</button><?php endif; ?></div>
         <?php if (count($selectedProducts) > 1): ?><div class="selection-summary"><strong><?= count($selectedProducts) ?> products selected.</strong> Each printable product will receive <?= $quantity ?> label(s).</div><?php endif; ?>
         <?php if (!empty($_GET['error'])): ?><div class="message"><?= htmlspecialchars($_GET['error']) ?></div><?php endif; ?>
         <?php if ($missingBarcodeProducts): ?><div class="message"><strong><?= count($missingBarcodeProducts) ?> product(s) were skipped because they have no barcode:</strong> <?= htmlspecialchars(implode(', ', array_column($missingBarcodeProducts, 'product_name'))) ?>. Generate their internal barcodes from Products &amp; Stock.</div><?php endif; ?>
         <?php if ($barcodeErrors): ?><div class="message"><?= htmlspecialchars(implode(' | ', $barcodeErrors)) ?></div><?php endif; ?>
-        <?php if (count($selectedProducts) === 1 && !$printableProducts && $missingBarcodeProducts): $missing = $missingBarcodeProducts[0]; ?><form method="POST" style="margin-top:.65rem"><?= csrf_field() ?><input type="hidden" name="action" value="generate_barcode"><input type="hidden" name="product_id" value="<?= (int)$missing['product_id'] ?>"><input type="hidden" name="quantity" value="<?= $quantity ?>"><input type="hidden" name="size" value="<?= htmlspecialchars($sizeKey) ?>"><button class="btn" type="submit" style="background:#10b981">Generate Barcode and Print</button></form><?php endif; ?>
+        <?php if (count($selectedProducts) === 1 && !$printableProducts && $missingBarcodeProducts): $missing = $missingBarcodeProducts[0]; ?><form class="u-mt-065" method="POST"><?= csrf_field() ?><input type="hidden" name="action" value="generate_barcode"><input type="hidden" name="product_id" value="<?= (int)$missing['product_id'] ?>"><input type="hidden" name="quantity" value="<?= $quantity ?>"><input type="hidden" name="size" value="<?= htmlspecialchars($sizeKey) ?>"><button class="btn u-button-green" type="submit">Generate Barcode and Print</button></form><?php endif; ?>
     </section>
 
     <?php if ($printableProducts): ?>
@@ -107,7 +107,7 @@ $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
             <?php endforeach; ?>
         </main>
     <?php else: ?>
-        <main class="sheet empty-sheet"><div><i class="bi bi-upc-scan" style="font-size:2rem"></i><br>Select a product with a barcode to create printable labels.</div></main>
+        <main class="sheet empty-sheet"><div><i class="bi bi-upc-scan u-icon-large"></i><br>Select a product with a barcode to create printable labels.</div></main>
     <?php endif; ?>
 </div>
 <?php if ($autoPrint): ?><script>window.addEventListener('load',()=>window.print());</script><?php endif; ?>
