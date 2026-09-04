@@ -49,8 +49,8 @@ This release also adds:
 For an existing installation:
 
 1. Back up the current database.
-2. Import `backend/sql/upgrade_random_forest_v2.sql` in phpMyAdmin if upgrading from the older forecasting release.
-3. Run `php backend/scripts/migrate.php` to add operational workflow tables and columns.
+2. Import `src/backend/sql/upgrade_random_forest_v2.sql` in phpMyAdmin if upgrading from the older forecasting release.
+3. Run `php src/backend/scripts/migrate.php` to add operational workflow tables and columns.
 4. Copy `.env.example` to `.env` and enter database, ML API, and email settings.
 5. Use the same long `ML_API_KEY` value for the PHP application and Python service.
 6. Install PHP dependencies:
@@ -62,7 +62,7 @@ composer install --no-dev
 7. Install Python dependencies. Use locked versions for repeatable production and CI builds:
 
 ```bash
-cd backend/legacy/demandForcasting
+cd src/backend/legacy/demandForcasting
 python -m pip install -r requirements.lock
 ```
 
@@ -84,7 +84,7 @@ The health endpoint is public at `http://127.0.0.1:5000/health`. Prediction, met
 
 ## Fresh database installation
 
-Import `backend/sql/schema.sql` into an empty selected MySQL or MariaDB database. The schema contains the security, settings, forecast, training-history, email-log, backup-history, and operational workflow tables.
+Import `src/backend/sql/schema.sql` into an empty selected MySQL or MariaDB database. The schema contains the security, settings, forecast, training-history, email-log, backup-history, and operational workflow tables.
 
 The initial account in the schema is:
 
@@ -100,10 +100,10 @@ The first login is automatically restricted to the mandatory password-change pag
 Database changes are never executed during normal web requests. After updating the application files, run:
 
 ```bash
-php backend/scripts/migrate.php
+php src/backend/scripts/migrate.php
 ```
 
-Migrations are versioned under `backend/database/migrations`. The command reports pending work, applies each migration once, and records it in `schema_migrations`. The Administration > System Health page provides a read-only migration and environment status check.
+Migrations are versioned under `src/backend/database/migrations`. The command reports pending work, applies each migration once, and records it in `schema_migrations`. The Administration > System Health page provides a read-only migration and environment status check.
 
 ## Forecast data requirements
 
@@ -154,7 +154,7 @@ No database migration is required for this feature.
 Run the local static and packaging checks with:
 
 ```bash
-bash backend/tests/run_all.sh
+bash src/backend/tests/run_all.sh
 ```
 
 The included GitHub Actions workflow starts MySQL, imports the fresh schema, runs migrations, executes database integration checks, compiles Python forecasting code, lints PHP files, and verifies that release ZIPs contain no runtime or sensitive artifacts.
@@ -180,11 +180,11 @@ php C:\xampp\htdocs\inventory_system\backend\scripts\backup_database.php
 Example daily maintenance and weekly backup:
 
 ```cron
-15 1 * * * /path/to/inventory_system/backend/scripts/run_maintenance.sh
-30 2 * * 0 php /path/to/inventory_system/backend/scripts/backup_database.php
+15 1 * * * /path/to/inventory_system/src/backend/scripts/run_maintenance.sh
+30 2 * * 0 php /path/to/inventory_system/src/backend/scripts/backup_database.php
 ```
 
-`backend/legacy/demandForcasting/auto_retrain.py` retrains only when one or more configured conditions are met: missing model, model age, enough new sales records, or WAPE above the threshold.
+`src/backend/legacy/demandForcasting/auto_retrain.py` retrains only when one or more configured conditions are met: missing model, model age, enough new sales records, or WAPE above the threshold.
 
 ## Email setup
 
@@ -214,7 +214,7 @@ Administrators can open Administration > Backup & Restore to:
 - Validate and restore RetailMind-generated SQL files.
 - Automatically create a safety backup before a restore.
 
-Scheduled backups are created by `backend/scripts/backup_database.php` under `backend/storage/backups`.
+Scheduled backups are created by `src/backend/scripts/backup_database.php` under `src/backend/storage/backups`.
 
 ## Security notes
 
@@ -228,24 +228,24 @@ Scheduled backups are created by `backend/scripts/backup_database.php` under `ba
 ## Main folders
 
 ```text
-backend/app/                     Core PHP classes and application services
-backend/bootstrap/               Application bootstrapping
-backend/config/                  Environment-driven configuration
-backend/database/migrations/     PHP migration runner files
-backend/includes/                Shared helper functions and legacy compatibility
-backend/legacy/demandForcasting/ Random Forest training, API, and automatic retraining
-backend/scripts/                 Notifications, maintenance, backups, migrations, releases
-backend/sql/                     Fresh schema and migrations
-backend/storage/                 Logs, generated backups, imports, exports, and sessions
-backend/tests/                   Smoke, integration, and release-package checks
-frontend/assets/                 Shared CSS, JavaScript, and images
-frontend/barcodeScanner/         Scanner UI and PHP JSON API endpoints
-frontend/cashier/                Point of sale and cashier dashboard
-frontend/modules/                Authenticated application modules
-frontend/modules/system_administrator/ Administration, users, settings, backups, and system health
-frontend/modules/inventory_management/ Products, inventory, CSV import, counts, replenishment
-frontend/modules/invoice/        Receipts, sales history, and reversals
-frontend/modules/notification/   Notification inbox and preferences
+src/backend/app/                     Core PHP classes and application services
+src/backend/bootstrap/               Application bootstrapping
+src/backend/config/                  Environment-driven configuration
+src/backend/database/migrations/     PHP migration runner files
+src/backend/includes/                Shared helper functions and legacy compatibility
+src/backend/legacy/demandForcasting/ Random Forest training, API, and automatic retraining
+src/backend/scripts/                 Notifications, maintenance, backups, migrations, releases
+src/backend/sql/                     Fresh schema and migrations
+src/backend/storage/                 Logs, generated backups, imports, exports, and sessions
+src/backend/tests/                   Smoke, integration, and release-package checks
+src/frontend/assets/                 Shared CSS, JavaScript, and images
+src/frontend/barcodeScanner/         Scanner UI and PHP JSON API endpoints
+src/frontend/cashier/                Point of sale and cashier dashboard
+src/frontend/components/                Authenticated application modules
+src/frontend/components/system_administrator/ Administration, users, settings, backups, and system health
+src/frontend/components/inventory_management/ Products, inventory, CSV import, counts, replenishment
+src/frontend/components/invoice/        Receipts, sales history, and reversals
+src/frontend/components/notification/   Notification inbox and preferences
 docs/                            Deployment notes and release documentation
-frontend/report/                 Forecasts, analytics, readiness, operational reports
+src/frontend/report/                 Forecasts, analytics, readiness, operational reports
 ```
