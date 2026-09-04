@@ -208,7 +208,7 @@ function redirect_by_role(): void {
     switch (current_role()) {
         case 'super_admin':
         case 'admin':
-            header('Location: ' . app_url('components/system_administrator/dashboard.php'));
+            header('Location: ' . app_url('components/dashboard.php'));
             break;
         case 'inventory_manager':
             header('Location: ' . app_url('components/inventory_management/dashboard.php'));

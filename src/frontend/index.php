@@ -31,7 +31,7 @@ function landing_redirect_by_role(): void {
     switch ($_SESSION['role'] ?? null) {
         case 'super_admin':
         case 'admin':
-            header('Location: ' . landing_app_url('components/system_administrator/dashboard.php'));
+            header('Location: ' . landing_app_url('components/dashboard.php'));
             break;
         case 'inventory_manager':
             header('Location: ' . landing_app_url('components/inventory_management/dashboard.php'));

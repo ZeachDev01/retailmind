@@ -72,8 +72,9 @@ function sidebar_item_paths(array $items): array
 
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
+    $isUserManagement = ($item['path'] ?? '') === 'components/modals/manage_users.php';
     ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>"<?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>"<?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isUserManagement ? ' data-user-management-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
     <?php
 }
 
@@ -124,13 +125,13 @@ if ($role !== 'cashier') {
 }
 
 $adminSystemItems = [
-    ['path' => 'components/system_administrator/manage_users.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
+    ['path' => 'components/modals/manage_users.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
     ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'System Settings'],
     ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-sliders', 'label' => 'ML Settings'],
     ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
-    ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
-    ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
-    ['path' => 'components/system_administrator/audit_log.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Log'],
+    ['path' => 'components/modals/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
+    ['path' => 'components/modals/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
+    ['path' => 'components/modals/audit_log.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Log'],
 ];
 
 $adminStockItems = [
@@ -196,7 +197,7 @@ $adminSections = [
     [
         'title' => 'Administration',
         'items' => [
-            ['path' => 'components/system_administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard'],
+            ['path' => 'components/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard'],
             ['icon' => 'bi-gear', 'label' => 'System Administration', 'items' => $adminSystemItems],
         ],
     ],
@@ -332,6 +333,41 @@ $sections = $roleSections[$role] ?? [];
         <div class="command-footer"><span>↑↓ Navigate</span><span>Enter Open</span><span>Esc Close</span></div>
     </section>
 </div>
+
+<?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
+<div class="user-management-overlay" id="userManagementOverlay" aria-hidden="true">
+    <div class="user-management-frame" role="dialog" aria-modal="true" aria-label="Users and access management">
+        <button type="button" class="user-management-frame-close" data-user-management-close aria-label="Close user management"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        <iframe title="Users &amp; Access Management" id="userManagementFrame" loading="lazy"></iframe>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var userOverlay = document.getElementById('userManagementOverlay');
+    var userFrame = document.getElementById('userManagementFrame');
+    if (!userOverlay || !userFrame) return;
+    var userSource = <?= json_encode(app_url('components/modals/manage_users.php?embed=1')) ?>;
+    function closeUserManagement() {
+        userOverlay.classList.remove('open');
+        userOverlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('user-management-open');
+    }
+    document.querySelectorAll('[data-user-management-open]').forEach(function (link) {
+        link.addEventListener('click', function (event) {
+            event.preventDefault();
+            userFrame.src = userSource;
+            userOverlay.classList.add('open');
+            userOverlay.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('user-management-open');
+        });
+    });
+    userOverlay.querySelectorAll('[data-user-management-close]').forEach(function (button) { button.addEventListener('click', closeUserManagement); });
+    userOverlay.addEventListener('click', function (event) { if (event.target === userOverlay) closeUserManagement(); });
+    window.addEventListener('message', function (event) { if (event.data && event.data.type === 'close-user-management') closeUserManagement(); });
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && userOverlay.classList.contains('open')) closeUserManagement(); });
+});
+</script>
+<?php endif; ?>
 
 <script src="<?= sidebar_e(app_url('assets/js/ui.js')) ?>"></script>
 <script>

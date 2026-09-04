@@ -1,5 +1,5 @@
 <?php
-// components/system_administrator/audit_log.php
+// components/modals/audit_log.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_role(['admin']);
@@ -159,7 +159,7 @@ $page_url = function (int $targetPage) use ($pagination_filters): string {
 
             <div class="filter-group">
                 <button type="submit" class="filter-btn">Filter</button>
-                <a href="<?= htmlspecialchars(app_url('components/system_administrator/audit_log.php')) ?>" class="clear-btn" style="text-align: center; text-decoration: none;">Clear</a>
+                <a href="<?= htmlspecialchars(app_url('components/modals/audit_log.php')) ?>" class="clear-btn" style="text-align: center; text-decoration: none;">Clear</a>
             </div>
         </form>
 

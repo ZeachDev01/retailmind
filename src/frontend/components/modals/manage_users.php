@@ -1,5 +1,5 @@
 <?php
-// components/system_administrator/manage_users.php
+// components/modals/manage_users.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_role(['admin']);
@@ -20,6 +20,44 @@ function role_exists(PDO $pdo, int $roleId): bool {
     $stmt->execute([$roleId]);
 
     return (int)$stmt->fetchColumn() > 0;
+}
+
+function user_initials(string $name, string $fallback): string {
+    $initials = '';
+    foreach (preg_split('/\s+/', trim($name)) ?: [] as $part) {
+        if ($part !== '') {
+            $initials .= strtoupper(substr($part, 0, 1));
+        }
+    }
+
+    return substr($initials ?: strtoupper(substr($fallback, 0, 2)) ?: 'RM', 0, 2);
+}
+
+function user_last_active_label(?string $lastLogin): string {
+    if (!$lastLogin) {
+        return 'Active: Never';
+    }
+
+    $timestamp = strtotime($lastLogin);
+    if (!$timestamp) {
+        return 'Active: Unknown';
+    }
+
+    $diff = max(0, time() - $timestamp);
+    if ($diff < 60) {
+        return 'Active: Just now';
+    }
+    if ($diff < 3600) {
+        return 'Active: ' . floor($diff / 60) . 'm ago';
+    }
+    if ($diff < 86400) {
+        return 'Active: ' . floor($diff / 3600) . 'h ago';
+    }
+    if ($diff < 172800) {
+        return 'Active: Yesterday';
+    }
+
+    return 'Active: ' . date('M d, Y', $timestamp);
 }
 
 // Handle create user
@@ -202,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $action = ($after['status'] ?? '') === 'disabled' ? 'User deactivation' : 'User activation';
         log_activity($pdo, (int)$_SESSION['user_id'], $action, 'Users', $toggleId, $before, $after);
     }
-    header('Location: manage_users.php');
+    header('Location: manage_users.php' . (isset($_GET['embed']) ? '?embed=1' : ''));
     exit;
 }
 
@@ -212,6 +250,7 @@ $users = $pdo->query(
 )->fetchAll();
 $activeCount = count(array_filter($users, fn($user) => $user['status'] === 'active'));
 $disabledCount = count($users) - $activeCount;
+$isEmbedded = ($_GET['embed'] ?? '') === '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -221,20 +260,34 @@ $disabledCount = count($users) - $activeCount;
 <title>Manage Users</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 </head>
-<body>
+<body class="manage-users-page<?= $isEmbedded ? ' manage-users-embedded' : '' ?>">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
-            <div>
-                <h1>Manage Users</h1>
-                <p class="page-subtitle">Create accounts, manage access, and keep team permissions organized.</p>
+            <div class="<?= $isEmbedded ? 'manage-users-heading-copy' : '' ?>">
+                <?php if ($isEmbedded): ?>
+                    <span class="manage-users-title-icon" aria-hidden="true"><i class="bi bi-person"></i></span>
+                <?php endif; ?>
+                <h1><?= $isEmbedded ? 'Users &amp; Access Management' : 'Manage Users' ?></h1>
+                <p class="page-subtitle"><?= $isEmbedded ? 'Manage retail staff credentials, access levels, and active sessions.' : 'Create accounts, manage access, and keep team permissions organized.' ?></p>
             </div>
-            <button type="button" class="btn" id="openUserModal">+ Add User</button>
+            <?php if ($isEmbedded): ?>
+                <button type="button" class="manage-users-close" data-embedded-close aria-label="Close user management"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            <?php else: ?>
+                <button type="button" class="btn" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
+            <?php endif; ?>
         </div>
 
         <?php if ($message): ?>
             <div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div>
+        <?php endif; ?>
+
+        <?php if ($isEmbedded): ?>
+            <div class="manage-users-toolbar">
+                <label class="manage-users-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="userSearch" placeholder="Search user by name, email, or role..." aria-label="Search users"></label>
+                <button type="button" class="btn manage-users-add" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
+            </div>
         <?php endif; ?>
 
         <div class="card-grid">
@@ -262,13 +315,20 @@ $disabledCount = count($users) - $activeCount;
 
             <div class="table-wrap">
                 <table class="users-table">
-                    <tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Action</th></tr>
+                    <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Active</th><th>Action</th></tr>
                     <?php foreach ($users as $u): ?>
+                    <?php
+                        $displayEmail = (string)($u['email'] ?: $u['username']);
+                        $statusKey = $u['status'] === 'active' ? (!empty($u['must_change_password']) ? 'pending' : 'active') : 'inactive';
+                        $statusLabel = ['active' => 'Active', 'pending' => 'Pending', 'inactive' => 'Inactive'][$statusKey];
+                        $statusIcon = ['active' => 'bi-check-circle', 'pending' => 'bi-clock', 'inactive' => 'bi-dash-circle'][$statusKey];
+                    ?>
                     <tr>
-                        <td><?= htmlspecialchars($u['full_name']) ?></td>
-                        <td><?= htmlspecialchars($u['username']) ?></td>
-                        <td><?= htmlspecialchars($u['role_name']) ?></td>
-                        <td><?= $u['status'] === 'active' ? '<span class="tag-success">active</span>' : '<span class="tag-warning">disabled</span>' ?></td>
+                        <td><span class="user-avatar" aria-hidden="true"><?= htmlspecialchars(user_initials((string)$u['full_name'], (string)$u['username'])) ?></span><span class="user-identity"><strong><?= htmlspecialchars($u['full_name']) ?></strong><span class="user-email mobile-user-email"><?= htmlspecialchars($displayEmail) ?> &bull; <?= htmlspecialchars($u['role_name']) ?></span></span></td>
+                        <td class="user-email-cell"><?= htmlspecialchars($displayEmail) ?></td>
+                        <td class="user-role-cell"><?= htmlspecialchars($u['role_name']) ?></td>
+                        <td class="user-status-cell"><span class="user-status-badge <?= htmlspecialchars($statusKey) ?>"><i class="bi <?= htmlspecialchars($statusIcon) ?>" aria-hidden="true"></i><?= htmlspecialchars($statusLabel) ?></span></td>
+                        <td class="last-active"><?= htmlspecialchars(user_last_active_label((string)($u['last_login_at'] ?? ''))) ?></td>
                         <td class="action-cell">
                             <button
                                 type="button"
@@ -288,6 +348,10 @@ $disabledCount = count($users) - $activeCount;
         </div>
     </div>
 </div>
+
+<?php if ($isEmbedded): ?>
+<footer class="manage-users-footer"><span><?= $activeCount ?> Active System Users</span><button type="button" class="btn btn-secondary" data-embedded-close>Done</button></footer>
+<?php endif; ?>
 
 <div class="user-drawer-overlay" id="userDrawerOverlay" aria-hidden="true">
     <aside class="user-drawer" role="dialog" aria-modal="true" aria-labelledby="userDrawerTitle">
@@ -455,6 +519,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (openButton) {
         openButton.addEventListener('click', openModal);
+    }
+
+    document.querySelectorAll('[data-embedded-close]').forEach(function (button) {
+        button.addEventListener('click', function () { window.parent.postMessage({ type: 'close-user-management' }, '*'); });
+    });
+
+    const userSearch = document.getElementById('userSearch');
+    if (userSearch) {
+        userSearch.addEventListener('input', function () {
+            const query = userSearch.value.toLowerCase().trim();
+            document.querySelectorAll('.users-table tbody tr, .users-table > tr').forEach(function (row) {
+                row.hidden = !!query && !row.textContent.toLowerCase().includes(query);
+            });
+        });
     }
 
     if (closeButton) {

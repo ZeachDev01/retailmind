@@ -1,9 +1,9 @@
 <?php
 // app.php
-require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_once __DIR__ . '/../../../backend/includes/functions.php';
-require_once __DIR__ . '/../../../backend/app/Services/SalesService.php';
-require_once __DIR__ . '/../../../backend/app/Services/DashboardService.php';
+require_once __DIR__ . '/../../backend/includes/auth.php';
+require_once __DIR__ . '/../../backend/includes/functions.php';
+require_once __DIR__ . '/../../backend/app/Services/SalesService.php';
+require_once __DIR__ . '/../../backend/app/Services/DashboardService.php';
 require_role(['admin']);
 
 $salesService = new SalesService($pdo);
@@ -41,14 +41,14 @@ $adminInitials = substr($adminInitials ?: 'SA', 0, 2);
 </head>
 <body class="admin-dashboard-page">
 <div class="app-shell">
-    <?php include __DIR__ . '/../sidebar.php'; ?>
+    <?php include __DIR__ . '/sidebar.php'; ?>
     <div class="main-content">
         <header class="admin-mobile-topbar" aria-label="Mobile dashboard header">
             <div class="admin-mobile-brand">
                 <button type="button" class="admin-mobile-menu" data-admin-mobile-menu aria-label="Open menu">
                     <i class="bi bi-list" aria-hidden="true"></i>
                 </button>
-                <a class="admin-mobile-logo" href="<?= htmlspecialchars(app_url('components/system_administrator/dashboard.php')) ?>" aria-label="RetailMind dashboard">
+                <a class="admin-mobile-logo" href="<?= htmlspecialchars(app_url('components/dashboard.php')) ?>" aria-label="RetailMind dashboard">
                     <span class="admin-mobile-logo-mark"><i class="bi bi-archive" aria-hidden="true"></i></span>
                     <span class="admin-mobile-logo-text">RetailMind</span>
                 </a>
@@ -76,22 +76,22 @@ $adminInitials = substr($adminInitials ?: 'SA', 0, 2);
         </header>
 
         <div class="quick-actions">
-            <a class="quick-action" href="<?= htmlspecialchars(app_url('components/system_administrator/manage_users.php')) ?>">
+            <a class="quick-action" href="<?= htmlspecialchars(app_url('components/modals/manage_users.php')) ?>" data-user-management-open>
                 <i class="bi bi-person" aria-hidden="true"></i>
                 <strong>Users</strong>
                 <span>Control access and team roles</span>
             </a>
-            <a class="quick-action" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_log.php')) ?>">
+            <a class="quick-action" href="<?= htmlspecialchars(app_url('components/modals/audit_log.php')) ?>">
                 <i class="bi bi-clipboard2-check" aria-hidden="true"></i>
                 <strong>Audit</strong>
                 <span>Investigate critical activity</span>
             </a>
-            <a class="quick-action" href="<?= htmlspecialchars(app_url('components/system_administrator/fiscal_periods.php')) ?>">
+            <a class="quick-action" href="<?= htmlspecialchars(app_url('components/modals/fiscal_periods.php')) ?>">
                 <i class="bi bi-calendar3" aria-hidden="true"></i>
                 <strong>Fiscal</strong>
                 <span>Close or lock accounting windows</span>
             </a>
-            <a class="quick-action" href="<?= htmlspecialchars(app_url('components/system_administrator/system_health.php')) ?>">
+            <a class="quick-action" href="<?= htmlspecialchars(app_url('components/modals/system_health.php')) ?>">
                 <i class="bi bi-shield-check" aria-hidden="true"></i>
                 <strong>Health</strong>
                 <span>Check migrations, backups, storage, and forecasting</span>
@@ -99,18 +99,18 @@ $adminInitials = substr($adminInitials ?: 'SA', 0, 2);
         </div>
 
         <div class="card-grid">
-            <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/system_administrator/manage_users.php')) ?>"><article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill"></i></span><div class="value"><?= (int)$adminMetrics['total_users'] ?></div><div class="label">Total Users</div><div class="hint">All configured accounts</div><div class="stat-meta"><span>Manage access</span><i class="bi bi-arrow-right"></i></div></article></a>
+            <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/modals/manage_users.php')) ?>" data-user-management-open><article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill"></i></span><div class="value"><?= (int)$adminMetrics['total_users'] ?></div><div class="label">Total Users</div><div class="hint">All configured accounts</div><div class="stat-meta"><span>Manage access</span><i class="bi bi-arrow-right"></i></div></article></a>
             <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>"><article class="stat-card with-icon <?= $adminMetrics['active_cashiers_today'] > 0 ? 'success' : 'warning' ?>"><span class="stat-icon"><i class="bi bi-person-check-fill"></i></span><div class="value"><?= (int)$adminMetrics['active_cashiers_today'] ?></div><div class="label">Active Cashier Sessions</div><div class="hint">Cashiers with sales today</div><div class="stat-meta"><span>Review shifts</span><i class="bi bi-arrow-right"></i></div></article></a>
             <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/invoice/receipt.php')) ?>"><article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-cash-stack"></i></span><div class="value">₱<?= number_format((float)$adminMetrics['period_sales'], 2) ?></div><div class="label">Sales — <?= $rangeDays ?> Days</div><div class="hint">Lifetime: ₱<?= number_format((float)$adminMetrics['total_sales'], 2) ?></div><div class="stat-meta"><span>View receipts</span><i class="bi bi-arrow-right"></i></div></article></a>
-            <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_log.php')) ?>"><article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-clock-history"></i></span><div class="value"><?= (int)$adminMetrics['audit_events'] ?></div><div class="label">Audit Events</div><div class="hint">Actions in the activity log</div><div class="stat-meta"><span>Review activity</span><i class="bi bi-arrow-right"></i></div></article></a>
-            <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/system_administrator/fiscal_periods.php')) ?>"><article class="stat-card with-icon <?= $adminMetrics['open_periods'] > 1 ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-calendar-check"></i></span><div class="value"><?= (int)$adminMetrics['open_periods'] ?> / <?= (int)$adminMetrics['closed_periods'] ?></div><div class="label">Open / Closed Periods</div><div class="hint">Close old periods promptly</div><div class="stat-meta"><span>Manage periods</span><i class="bi bi-arrow-right"></i></div></article></a>
+            <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/modals/audit_log.php')) ?>"><article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-clock-history"></i></span><div class="value"><?= (int)$adminMetrics['audit_events'] ?></div><div class="label">Audit Events</div><div class="hint">Actions in the activity log</div><div class="stat-meta"><span>Review activity</span><i class="bi bi-arrow-right"></i></div></article></a>
+            <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/modals/fiscal_periods.php')) ?>"><article class="stat-card with-icon <?= $adminMetrics['open_periods'] > 1 ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-calendar-check"></i></span><div class="value"><?= (int)$adminMetrics['open_periods'] ?> / <?= (int)$adminMetrics['closed_periods'] ?></div><div class="label">Open / Closed Periods</div><div class="hint">Close old periods promptly</div><div class="stat-meta"><span>Manage periods</span><i class="bi bi-arrow-right"></i></div></article></a>
         </div>
 
         <section class="dashboard-section admin-attention-section u-mb-15">
             <div class="section-header"><div><h3>Administrative Attention</h3><p class="section-description">Items that may require review or compliance action.</p></div><span class="decision-pill <?= $adminAttentionCount ? 'action' : 'ok' ?>"><?= $adminAttentionCount ? $adminAttentionCount . ' item(s)' : 'All clear' ?></span></div>
             <div class="attention-list">
-                <?php if ($adminMetrics['open_periods'] > 1): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-calendar-x"></i></span><span class="attention-copy"><strong>Multiple fiscal periods are open</strong><span>Review completed periods and close them to prevent late entries.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/system_administrator/fiscal_periods.php')) ?>">Review</a></div><?php endif; ?>
-                <?php if ($recentCriticalActions): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-shield-exclamation"></i></span><span class="attention-copy"><strong><?= count($recentCriticalActions) ?> recent critical audit action(s)</strong><span>Review reversals, adjustments, locking, deletion, or void activity.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_log.php')) ?>">Review</a></div><?php endif; ?>
+                <?php if ($adminMetrics['open_periods'] > 1): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-calendar-x"></i></span><span class="attention-copy"><strong>Multiple fiscal periods are open</strong><span>Review completed periods and close them to prevent late entries.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/modals/fiscal_periods.php')) ?>">Review</a></div><?php endif; ?>
+                <?php if ($recentCriticalActions): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-shield-exclamation"></i></span><span class="attention-copy"><strong><?= count($recentCriticalActions) ?> recent critical audit action(s)</strong><span>Review reversals, adjustments, locking, deletion, or void activity.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/modals/audit_log.php')) ?>">Review</a></div><?php endif; ?>
                 <?php if (!$adminAttentionCount): ?><div class="empty-state u-empty-min-120"><div><i class="bi bi-shield-check"></i><strong>No urgent administrative issues</strong><span>Fiscal-period and critical-audit indicators are currently clear.</span></div></div><?php endif; ?>
             </div>
         </section>

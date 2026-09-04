@@ -48,7 +48,7 @@ $checks = [
         'needles' => ['current_password', 'must_change_password = 0', 'password_policy_error'],
     ],
     'System health dashboard present' => [
-        'file' => 'src/frontend/components/system_administrator/system_health.php',
+        'file' => 'src/frontend/components/modals/system_health.php',
         'needles' => ['SystemHealthService', 'Environment checks', 'Recommended maintenance commands'],
     ],
     'Supplier-based reorder planning present' => [

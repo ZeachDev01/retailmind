@@ -1,5 +1,5 @@
 <?php
-// components/system_administrator/fiscal_periods.php
+// components/modals/fiscal_periods.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
