@@ -106,22 +106,35 @@ $periods_stmt = $pdo->query("SELECT fp.*, u.full_name as created_by_name, cu.ful
                              LEFT JOIN users cu ON fp.closed_by = cu.user_id
                              ORDER BY fp.start_date DESC");
 $periods = $periods_stmt->fetchAll();
+$isEmbedded = ($_GET['embed'] ?? '') === '1';
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fiscal Period Management</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/admin.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/modals.css')) ?>">
 </head>
-<body>
+<body class="fiscal-periods-page<?= $isEmbedded ? ' fiscal-periods-embedded' : '' ?>">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
-            <h1>Fiscal Period Management</h1>
+            <div class="<?= $isEmbedded ? 'fiscal-periods-heading-copy' : '' ?>">
+                <?php if ($isEmbedded): ?>
+                    <span class="fiscal-periods-title-icon" aria-hidden="true"><i class="bi bi-calendar-check"></i></span>
+                <?php endif; ?>
+                <h1>Fiscal Period Management</h1>
+                <?php if ($isEmbedded): ?>
+                    <p class="page-subtitle">Open, close, and lock accounting windows for controlled retail operations.</p>
+                <?php endif; ?>
+            </div>
+            <?php if ($isEmbedded): ?>
+                <button type="button" class="fiscal-periods-close" data-embedded-close aria-label="Close fiscal period management"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            <?php endif; ?>
         </div>
 
         <?php if ($message): ?>
@@ -132,7 +145,7 @@ $periods = $periods_stmt->fetchAll();
             <div class="message error"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
 
-        <div class="create-form">
+        <div class="create-form fiscal-periods-create-form">
             <h3>Create New Fiscal Period</h3>
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
@@ -156,6 +169,7 @@ $periods = $periods_stmt->fetchAll();
             </form>
         </div>
 
+        <div class="fiscal-periods-list">
         <h3>Fiscal Periods</h3>
         <?php if (empty($periods)): ?>
             <p>No fiscal periods created yet.</p>
@@ -220,7 +234,20 @@ $periods = $periods_stmt->fetchAll();
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
+        </div>
     </div>
 </div>
+<?php if ($isEmbedded): ?>
+<footer class="fiscal-periods-footer"><span><?= count($periods) ?> Fiscal Periods</span><button type="button" class="btn btn-secondary" data-embedded-close>Done</button></footer>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-embedded-close]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            window.parent.postMessage({ type: 'close-fiscal-periods' }, '*');
+        });
+    });
+});
+</script>
+<?php endif; ?>
 </body>
 </html>

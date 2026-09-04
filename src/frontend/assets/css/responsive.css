@@ -639,11 +639,14 @@ body.admin-dashboard-page .mobile-role-label {
     body.admin-dashboard-page .page-heading-actions .u-select-filter,
     body.admin-dashboard-page .page-heading-actions .btn,
     body.admin-dashboard-page .page-heading-actions .badge-role {
-        min-height: 40px;
+        min-height: 54px;
         border-radius: 8px;
         font-size: .82rem;
         white-space: nowrap;
     }
+
+    body.admin-dashboard-page .page-heading-actions .u-select-filter { width: 152px; }
+    body.admin-dashboard-page .page-heading-actions .btn { width: 134px; }
 
     body.admin-dashboard-page .page-heading-actions .badge-role {
         background: #2563eb;

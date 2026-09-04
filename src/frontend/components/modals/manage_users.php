@@ -315,20 +315,15 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
 
             <div class="table-wrap">
                 <table class="users-table">
-                    <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Active</th><th>Action</th></tr>
+                    <tr><th>Name</th><th>Email</th><th>Role</th><th>Action</th></tr>
                     <?php foreach ($users as $u): ?>
                     <?php
                         $displayEmail = (string)($u['email'] ?: $u['username']);
-                        $statusKey = $u['status'] === 'active' ? (!empty($u['must_change_password']) ? 'pending' : 'active') : 'inactive';
-                        $statusLabel = ['active' => 'Active', 'pending' => 'Pending', 'inactive' => 'Inactive'][$statusKey];
-                        $statusIcon = ['active' => 'bi-check-circle', 'pending' => 'bi-clock', 'inactive' => 'bi-dash-circle'][$statusKey];
                     ?>
                     <tr>
                         <td><span class="user-avatar" aria-hidden="true"><?= htmlspecialchars(user_initials((string)$u['full_name'], (string)$u['username'])) ?></span><span class="user-identity"><strong><?= htmlspecialchars($u['full_name']) ?></strong><span class="user-email mobile-user-email"><?= htmlspecialchars($displayEmail) ?> &bull; <?= htmlspecialchars($u['role_name']) ?></span></span></td>
                         <td class="user-email-cell"><?= htmlspecialchars($displayEmail) ?></td>
                         <td class="user-role-cell"><?= htmlspecialchars($u['role_name']) ?></td>
-                        <td class="user-status-cell"><span class="user-status-badge <?= htmlspecialchars($statusKey) ?>"><i class="bi <?= htmlspecialchars($statusIcon) ?>" aria-hidden="true"></i><?= htmlspecialchars($statusLabel) ?></span></td>
-                        <td class="last-active"><?= htmlspecialchars(user_last_active_label((string)($u['last_login_at'] ?? ''))) ?></td>
                         <td class="action-cell">
                             <button
                                 type="button"
@@ -400,13 +395,12 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                 </div>
             </form>
 
-            <div class="drawer-danger">
-                <h4>Delete Account</h4>
+            <div class="modal-actions drawer-modal-actions">
                 <form method="POST" id="drawerDeleteForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="user_id" id="deleteUserId">
-                    <button type="submit" class="btn btn-danger" id="deleteUserButton">Delete Account</button>
+                    <button type="submit" class="btn btn-danger" id="deleteUserButton">Delete User</button>
                 </form>
             </div>
         </div>

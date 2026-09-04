@@ -13,6 +13,7 @@ $date_to = $_GET['date_to'] ?? '';
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $per_page = 50;
 $offset = ($page - 1) * $per_page;
+$isEmbedded = ($_GET['embed'] ?? '') === '1';
 
 // Build SQL query
 $where_clauses = [];
@@ -79,6 +80,7 @@ if (isset($log_columns['module'])) {
     $modules = $pdo->query("SELECT DISTINCT module FROM activity_log WHERE module IS NOT NULL AND module <> '' ORDER BY module")->fetchAll(PDO::FETCH_COLUMN);
 }
 $pagination_filters = array_filter([
+    'embed' => $isEmbedded ? '1' : '',
     'user_id' => $user_filter,
     'action' => $action_filter,
     'module' => $module_filter,
@@ -98,12 +100,23 @@ $page_url = function (int $targetPage) use ($pagination_filters): string {
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/admin.css')) ?>">
 </head>
-<body>
+<body class="audit-log-page<?= $isEmbedded ? ' audit-log-embedded' : '' ?>">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
-            <h1>Audit Log Viewer</h1>
+            <div class="<?= $isEmbedded ? 'audit-log-heading-copy' : '' ?>">
+                <?php if ($isEmbedded): ?>
+                    <span class="audit-log-title-icon" aria-hidden="true"><i class="bi bi-clipboard2-check"></i></span>
+                <?php endif; ?>
+                <h1><?= $isEmbedded ? 'Audit Activity Log' : 'Audit Log Viewer' ?></h1>
+                <?php if ($isEmbedded): ?>
+                    <p class="page-subtitle">Review critical system activity, account actions, and operational changes.</p>
+                <?php endif; ?>
+            </div>
+            <?php if ($isEmbedded): ?>
+                <button type="button" class="audit-log-close" data-embedded-close aria-label="Close audit log"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            <?php endif; ?>
         </div>
 
         <div class="stats">
@@ -159,11 +172,12 @@ $page_url = function (int $targetPage) use ($pagination_filters): string {
 
             <div class="filter-group">
                 <button type="submit" class="filter-btn">Filter</button>
-                <a href="<?= htmlspecialchars(app_url('components/modals/audit_log.php')) ?>" class="clear-btn" style="text-align: center; text-decoration: none;">Clear</a>
+                <a href="<?= htmlspecialchars(app_url('components/modals/audit_log.php' . ($isEmbedded ? '?embed=1' : ''))) ?>" class="clear-btn" style="text-align: center; text-decoration: none;">Clear</a>
             </div>
         </form>
 
-        <table>
+        <div class="audit-log-table-wrap">
+        <table class="audit-log-table">
             <thead>
                 <tr>
                     <th>ID</th>
@@ -204,6 +218,7 @@ $page_url = function (int $targetPage) use ($pagination_filters): string {
                 <?php endif; ?>
             </tbody>
         </table>
+        </div>
 
         <?php if ($total_pages > 1): ?>
             <div class="pagination">
@@ -228,5 +243,17 @@ $page_url = function (int $targetPage) use ($pagination_filters): string {
         <?php endif; ?>
     </div>
 </div>
+<?php if ($isEmbedded): ?>
+<footer class="audit-log-footer"><span><?= (int)$total_records ?> Activity Records</span><button type="button" class="btn btn-secondary" data-embedded-close>Done</button></footer>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-embedded-close]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            window.parent.postMessage({ type: 'close-audit-log' }, '*');
+        });
+    });
+});
+</script>
+<?php endif; ?>
 </body>
 </html>

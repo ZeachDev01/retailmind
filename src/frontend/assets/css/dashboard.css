@@ -45,6 +45,10 @@
 .page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
 .page-heading h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); }
 .page-heading-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+.page-heading-actions .u-select-filter,
+.page-heading-actions .btn { box-sizing: border-box; height: 54px; }
+.page-heading-actions .u-select-filter { width: 152px; }
+.page-heading-actions .btn { width: 134px; }
 .btn-icon { display: inline-flex; align-items: center; gap: .45rem; }
 .btn-quiet { background: #fff; color: var(--text); border: 1px solid var(--border); }
 .btn-quiet:hover { background: #f8fafc; color: var(--text); }

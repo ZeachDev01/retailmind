@@ -13,6 +13,7 @@ foreach ($checks as $check) {
 $overall = $counts['critical'] > 0 ? 'critical' : ($counts['warning'] > 0 ? 'warning' : 'healthy');
 $labels = ['healthy' => 'Healthy', 'warning' => 'Needs attention', 'critical' => 'Critical'];
 $icons = ['healthy' => 'bi-check-circle-fill', 'warning' => 'bi-exclamation-triangle-fill', 'critical' => 'bi-x-octagon-fill'];
+$isEmbedded = ($_GET['embed'] ?? '') === '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -22,18 +23,20 @@ $icons = ['healthy' => 'bi-check-circle-fill', 'warning' => 'bi-exclamation-tria
 <title>System Health</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/admin.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/modals.css')) ?>">
 </head>
-<body>
+<body class="system-health-page<?= $isEmbedded ? ' system-health-embedded' : '' ?>">
 <div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <div class="main-content">
 <header class="page-heading">
-    <div>
+    <div class="<?= $isEmbedded ? 'system-health-heading-copy' : '' ?>">
+        <?php if ($isEmbedded): ?><span class="system-health-title-icon" aria-hidden="true"><i class="bi bi-heart-pulse"></i></span><?php endif; ?>
         <h1>System Health</h1>
         <p class="page-subtitle">Check database readiness, storage permissions, forecasting, backups, email, and application logs.</p>
         <p class="section-description">Checked <?= htmlspecialchars(date('M d, Y g:i A')) ?></p>
     </div>
-    <div class="page-heading-actions"><a class="btn btn-quiet btn-icon" href="system_health.php"><i class="bi bi-arrow-clockwise"></i>Refresh</a><span class="decision-pill <?= $overall === 'healthy' ? 'ok' : 'action' ?>"><?= htmlspecialchars($labels[$overall]) ?></span></div>
+    <div class="page-heading-actions"><a class="btn btn-quiet btn-icon" href="system_health.php<?= $isEmbedded ? '?embed=1' : '' ?>"><i class="bi bi-arrow-clockwise"></i>Refresh</a><span class="decision-pill <?= $overall === 'healthy' ? 'ok' : 'action' ?>"><?= htmlspecialchars($labels[$overall]) ?></span><?php if ($isEmbedded): ?><button type="button" class="system-health-close" data-embedded-close aria-label="Close system health"><i class="bi bi-x-lg" aria-hidden="true"></i></button><?php endif; ?></div>
 </header>
 
 <div class="health-summary">
@@ -62,5 +65,17 @@ $icons = ['healthy' => 'bi-check-circle-fill', 'warning' => 'bi-exclamation-tria
 </section>
 </div>
 </div>
+<?php if ($isEmbedded): ?>
+<footer class="system-health-footer"><span><?= $counts['critical'] ? 'Critical checks require attention' : ($counts['warning'] ? 'Review recommended checks' : 'All checks operating normally') ?></span><button type="button" class="btn btn-secondary" data-embedded-close>Done</button></footer>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-embedded-close]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            window.parent.postMessage({ type: 'close-system-health' }, '*');
+        });
+    });
+});
+</script>
+<?php endif; ?>
 </body>
 </html>
