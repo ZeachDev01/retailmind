@@ -1,0 +1,9 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^frontend/ - [L]
+    RewriteRule ^components/(.*)$ frontend/components/$1 [L,QSA]
+    RewriteRule ^assets/(.*)$ frontend/assets/$1 [L,QSA]
+    RewriteRule ^(.*)$ frontend/$1 [L,QSA]
+</IfModule>
