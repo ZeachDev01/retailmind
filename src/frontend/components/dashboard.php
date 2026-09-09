@@ -20,13 +20,6 @@ $adminAttentionCount = ($adminMetrics['open_periods'] > 1 ? 1 : 0) + count($rece
 $lastUpdated = date('M d, Y g:i A');
 $adminRoleLabel = ucwords(str_replace('_', ' ', (string)current_role()));
 $adminName = trim((string)($_SESSION['full_name'] ?? 'System Admin'));
-$adminInitials = '';
-foreach (preg_split('/\s+/', $adminName) ?: [] as $namePart) {
-    if ($namePart !== '') {
-        $adminInitials .= strtoupper(substr($namePart, 0, 1));
-    }
-}
-$adminInitials = substr($adminInitials ?: 'SA', 0, 2);
 ?>
 <!DOCTYPE html>
 <html>
@@ -40,25 +33,6 @@ $adminInitials = substr($adminInitials ?: 'SA', 0, 2);
 <div class="app-shell">
     <?php include __DIR__ . '/sidebar.php'; ?>
     <div class="main-content">
-        <header class="admin-mobile-topbar" aria-label="Mobile dashboard header">
-            <div class="admin-mobile-brand">
-                <button type="button" class="admin-mobile-menu" data-admin-mobile-menu aria-label="Open menu">
-                    <i class="bi bi-list" aria-hidden="true"></i>
-                </button>
-                <a class="admin-mobile-logo" href="<?= htmlspecialchars(app_url('components/dashboard.php')) ?>" aria-label="RetailMind dashboard">
-                    <span class="admin-mobile-logo-mark"><i class="bi bi-archive" aria-hidden="true"></i></span>
-                    <span class="admin-mobile-logo-text">RetailMind</span>
-                </a>
-            </div>
-            <div class="admin-mobile-tools">
-                <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
-                    <i class="bi bi-search" aria-hidden="true"></i>
-                </button>
-                <a class="admin-mobile-avatar" href="<?= htmlspecialchars(app_url('components/auth/user_info.php')) ?>" aria-label="Open user information">
-                    <?= htmlspecialchars($adminInitials) ?>
-                </a>
-            </div>
-        </header>
         <header class="page-heading">
             <div>
                 <h1>Admin Dashboard</h1>
@@ -206,14 +180,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    document.querySelectorAll('[data-admin-mobile-menu]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            const menuToggle = document.getElementById('menuToggle');
-            if (menuToggle) {
-                menuToggle.click();
-            }
-        });
-    });
 });
 </script>
 

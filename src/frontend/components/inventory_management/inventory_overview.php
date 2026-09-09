@@ -32,7 +32,7 @@ $recent_movements = $pdo->query(
 <title>Inventory Overview</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 </head>
-<body>
+<body class="inventory-overview-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <div class="main-content">

@@ -1,5 +1,5 @@
 <?php
-// components/inventory_management/transactions.php - Inventory Transaction History
+// components/invoice/transactions.php - Inventory Transaction History
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_role(['admin', 'inventory_manager']);

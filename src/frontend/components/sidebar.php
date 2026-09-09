@@ -20,6 +20,7 @@ foreach (preg_split('/\s+/', $sidebarUserName) ?: [] as $namePart) {
 $sidebarInitials = substr($sidebarInitials ?: 'RM', 0, 2);
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
 $commandProductTarget = in_array($role, ['admin', 'super_admin', 'inventory_manager'], true) ? app_url('components/inventory_management/products.php') : app_url('components/cashier/pos.php');
+$mobileHomeTarget = $role === 'cashier' ? 'components/cashier/pos.php' : ($role === 'inventory_manager' ? 'components/inventory_management/dashboard.php' : 'components/dashboard.php');
 
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 $currentPath = '/' . trim(str_replace('\\', '/', $currentPath), '/');
@@ -141,20 +142,20 @@ $adminStockItems = [
     ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Inventory Insights'],
     ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products & Stock'],
-    ['path' => 'components/inventory_management/transactions.php', 'icon' => 'bi-receipt', 'label' => 'Inventory Transactions'],
+    ['path' => 'components/invoice/transactions.php', 'icon' => 'bi-receipt', 'label' => 'Inventory Transactions'],
     ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Counts'],
     ['path' => 'components/inventory_management/csv_import.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'CSV Import'],
     ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
     ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Replenishment Requests'],
     ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
-    ['path' => 'components/inventory_management/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
+    ['path' => 'components/invoice/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
 ];
 
 $managerInventoryItems = [
     ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Overview'],
     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
     ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products & Stock'],
-    ['path' => 'components/inventory_management/transactions.php', 'icon' => 'bi-receipt', 'label' => 'Transactions'],
+    ['path' => 'components/invoice/transactions.php', 'icon' => 'bi-receipt', 'label' => 'Transactions'],
     ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Counts'],
     ['path' => 'components/inventory_management/csv_import.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'CSV Import'],
     ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
@@ -232,7 +233,7 @@ $roleSections = [
                         ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
                         ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Exceptions'],
                         ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
-                        ['path' => 'components/inventory_management/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
+                        ['path' => 'components/invoice/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
                         ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
                     ],
                 ],
@@ -277,9 +278,27 @@ $sections = $roleSections[$role] ?? [];
     }
 })();
 </script>
-<button type="button" class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
-    <span></span><span></span><span></span>
-</button>
+<?php if (!isset($isEmbedded) || !$isEmbedded): ?>
+    <div class="admin-mobile-topbar" aria-label="Mobile navigation">
+        <div class="admin-mobile-brand">
+            <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
+                <i class="bi bi-list" aria-hidden="true"></i>
+            </button>
+            <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
+                <span class="admin-mobile-logo-mark"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+                <span class="admin-mobile-logo-text">RetailMind</span>
+            </a>
+        </div>
+        <div class="admin-mobile-tools">
+            <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
+                <i class="bi bi-search" aria-hidden="true"></i>
+            </button>
+            <a class="admin-mobile-avatar" href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>" aria-label="Open user information">
+                <?= sidebar_e($sidebarInitials) ?>
+            </a>
+        </div>
+    </div>
+<?php endif; ?>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="appSidebar">
     <div class="sidebar-brand">
@@ -288,9 +307,6 @@ $sections = $roleSections[$role] ?? [];
             <h2>RetailMind</h2>
             <span>Inventory &amp; Forecasting</span>
         </div>
-        <button type="button" class="sidebar-collapse" id="sidebarCollapse" aria-label="Collapse sidebar" title="Collapse sidebar">
-            <i class="bi bi-layout-sidebar-inset-reverse" aria-hidden="true"></i>
-        </button>
     </div>
 
     <nav class="sidebar-nav" aria-label="Main navigation">
@@ -340,7 +356,6 @@ $sections = $roleSections[$role] ?? [];
 <?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
 <div class="user-management-overlay" id="userManagementOverlay" aria-hidden="true">
     <div class="user-management-frame" role="dialog" aria-modal="true" aria-label="Users and access management">
-        <button type="button" class="user-management-frame-close" data-user-management-close aria-label="Close user management"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
         <iframe title="Users &amp; Access Management" id="userManagementFrame" loading="lazy"></iframe>
     </div>
 </div>
@@ -489,6 +504,11 @@ document.addEventListener('DOMContentLoaded', function() {
         overlay.classList.toggle('open', isOpen);
         menuToggle.classList.toggle('active', isOpen);
         menuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        menuToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+        var menuIcon = menuToggle.querySelector('i');
+        if (menuIcon) {
+            menuIcon.className = 'bi ' + (isOpen ? 'bi-x-lg' : 'bi-list');
+        }
         document.body.classList.toggle('no-scroll', isOpen);
     }
 

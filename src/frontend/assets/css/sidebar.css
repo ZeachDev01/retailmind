@@ -108,13 +108,12 @@
 .sidebar .dropbtn:focus { outline: none; }
 .sidebar .dropbtn { user-select: none; -webkit-user-select: none; -ms-user-select: none; -webkit-tap-highlight-color: transparent; }
 
-/* Mobile hamburger toggle (hidden on desktop) */
+/* Mobile navigation bar (hidden on desktop) */
+.admin-mobile-topbar {
+    display: none;
+}
 .menu-toggle {
     display: none;
-    position: fixed;
-    top: 0.85rem;
-    right: 1rem;
-    z-index: 1100;
     width: 42px;
     height: 42px;
     background: #111827;

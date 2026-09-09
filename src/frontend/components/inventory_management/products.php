@@ -180,7 +180,7 @@ foreach ($products as $product) {
     <title>Products &amp; Stock</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 </head>
-<body>
+<body class="products-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
@@ -189,10 +189,11 @@ foreach ($products as $product) {
                 <h1>Products &amp; Stock</h1>
                 <p class="page-subtitle">Search, filter, organize, and maintain the store's complete product catalog.</p>
             </div>
-            <div class="page-heading-actions">
-                <button type="button" class="btn btn-success btn-icon" id="add-product-btn"><i class="bi bi-plus-lg"></i>Add Product</button>
-                <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/report/stock_receiving.php')) ?>"><i class="bi bi-box-arrow-in-down"></i>Receive Stock</a>
-                <a class="btn btn-warning btn-icon" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan"></i>Barcode Labels</a>
+            <div class="page-heading-actions products-quick-actions">
+                <button type="button" class="quick-action products-quick-action" id="add-product-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i><strong>Add Product</strong></button>
+                <button type="button" class="quick-action products-quick-action" id="add-category-btn"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button>
+                <a class="quick-action products-quick-action" href="<?= htmlspecialchars(app_url('components/report/stock_receiving.php')) ?>"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i><strong>Receive Stock</strong></a>
+                <a class="quick-action products-quick-action" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>
             </div>
         </header>
 
@@ -211,7 +212,6 @@ foreach ($products as $product) {
                 </div>
                 <div class="page-heading-actions">
                     <?php if ($canDirectAdjust): ?><button type="button" class="btn btn-quiet btn-icon" id="stock-adjust-btn"><i class="bi bi-sliders"></i>Emergency Adjustment</button><?php endif; ?>
-                    <button type="button" class="btn btn-quiet btn-icon" id="add-category-btn"><i class="bi bi-folder-plus"></i>Add Category</button>
                 </div>
             </div>
 

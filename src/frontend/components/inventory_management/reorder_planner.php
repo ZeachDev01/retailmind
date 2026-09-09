@@ -155,7 +155,7 @@ unset($row);
 <main class="main-content">
 <header class="page-heading">
     <div><h1>Supplier-Based Reorder Planning</h1><p class="page-subtitle">Group forecast and low-stock recommendations by preferred supplier, MOQ, and package size.</p></div>
-    <div class="page-heading-actions"><a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/inventory_management/suppliers.php')) ?>">Supplier terms</a><a class="btn" href="<?= htmlspecialchars(app_url('components/inventory_management/purchase_orders.php')) ?>">Purchase orders</a></div>
+    <div class="page-heading-actions"><a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/inventory_management/suppliers.php')) ?>">Supplier terms</a><a class="btn" href="<?= htmlspecialchars(app_url('components/invoice/purchase_orders.php')) ?>">Purchase orders</a></div>
 </header>
 <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
 <?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>

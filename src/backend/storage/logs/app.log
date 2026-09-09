@@ -58,3 +58,6 @@ Stack trace:
 [05-Sep-2026 00:09:32 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
 [05-Sep-2026 00:09:43 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
 [05-Sep-2026 00:11:53 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
+[05-Sep-2026 16:38:40 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
+[05-Sep-2026 16:39:56 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
+[05-Sep-2026 17:34:07 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
