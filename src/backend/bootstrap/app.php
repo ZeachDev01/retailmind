@@ -24,7 +24,10 @@ spl_autoload_register(static function (string $class) use ($backendPath): void {
     }
 });
 
-$envPath = is_file($rootPath . '/.env') ? $rootPath . '/.env' : $backendPath . '/.env';
+$workspacePath = dirname($rootPath);
+$envPath = is_file($workspacePath . '/.env')
+    ? $workspacePath . '/.env'
+    : (is_file($rootPath . '/.env') ? $rootPath . '/.env' : $backendPath . '/.env');
 Environment::load($envPath);
 
 if (!function_exists('env')) {

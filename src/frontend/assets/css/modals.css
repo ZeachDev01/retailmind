@@ -361,6 +361,11 @@ body.system-health-open { overflow: hidden; }
     transition: transform .18s ease;
 }
 .rm-modal-overlay.open .rm-modal { transform: none; }
+.product-overview-modal {
+    width: min(900px, calc(100vw - 2rem));
+    height: min(80vh, 720px);
+    max-height: calc(100vh - 2rem);
+}
 .rm-modal-header,
 .rm-drawer-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1rem 1.15rem; border-bottom: 1px solid var(--border); }
 .rm-modal-header h2,
