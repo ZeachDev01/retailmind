@@ -21,6 +21,14 @@ $sidebarInitials = substr($sidebarInitials ?: 'RM', 0, 2);
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
 $commandProductTarget = in_array($role, ['admin', 'super_admin', 'inventory_manager'], true) ? app_url('components/inventory_management/products.php') : app_url('components/cashier/pos.php');
 $mobileHomeTarget = $role === 'cashier' ? 'components/cashier/pos.php' : ($role === 'inventory_manager' ? 'components/inventory_management/dashboard.php' : 'components/dashboard.php');
+$flashMessages = [];
+foreach (['success', 'error', 'warning', 'info'] as $flashType) {
+    $flashKey = '_flash_' . $flashType;
+    if (!empty($_SESSION[$flashKey])) {
+        $flashMessages[$flashType] = (string)$_SESSION[$flashKey];
+        unset($_SESSION[$flashKey]);
+    }
+}
 
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 $currentPath = '/' . trim(str_replace('\\', '/', $currentPath), '/');
@@ -77,16 +85,16 @@ function sidebar_render_link(array $item, string $extraClass = ''): void
     $isAuditLog = ($item['path'] ?? '') === 'components/modals/audit_log.php';
     $isFiscalPeriods = ($item['path'] ?? '') === 'components/modals/fiscal_periods.php';
     $isSystemHealth = ($item['path'] ?? '') === 'components/modals/system_health.php';
-    ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>"<?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isUserManagement ? ' data-user-management-open' : '' ?><?= $isAuditLog ? ' data-audit-log-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
-    <?php
+?>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isUserManagement ? ' data-user-management-open' : '' ?><?= $isAuditLog ? ' data-audit-log-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+<?php
 }
 
 function sidebar_render_dropdown(array $item): void
 {
     $paths = sidebar_item_paths($item['items']);
     $openClass = sidebar_dropdown_class($paths);
-    ?>
+?>
     <div class="dropdown<?= $openClass ?>">
         <button class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" type="button" title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><i class="bi bi-chevron-right dropdown-chevron" aria-hidden="true"></i></button>
         <div class="dropdown-content">
@@ -95,7 +103,7 @@ function sidebar_render_dropdown(array $item): void
             <?php endforeach; ?>
         </div>
     </div>
-    <?php
+<?php
 }
 
 function sidebar_render_item(array $item): void
@@ -110,14 +118,14 @@ function sidebar_render_item(array $item): void
 
 function sidebar_render_section(array $section): void
 {
-    ?>
+?>
     <div class="sidebar-section">
         <div class="sidebar-section-title"><?= sidebar_e($section['title']) ?></div>
         <?php foreach ($section['items'] as $item): ?>
             <?php sidebar_render_item($item); ?>
         <?php endforeach; ?>
     </div>
-    <?php
+<?php
 }
 
 $notificationItems = [
@@ -268,15 +276,15 @@ $roleSections = [
 $sections = $roleSections[$role] ?? [];
 ?>
 <script>
-(function() {
-    var href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';
-    if (document.head && !document.querySelector('link[href="' + href + '"]')) {
-        var link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = href;
-        document.head.appendChild(link);
-    }
-})();
+    (function() {
+        var href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';
+        if (document.head && !document.querySelector('link[href="' + href + '"]')) {
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            document.head.appendChild(link);
+        }
+    })();
 </script>
 <?php if (!isset($isEmbedded) || !$isEmbedded): ?>
     <div class="admin-mobile-topbar" aria-label="Mobile navigation">
@@ -354,208 +362,247 @@ $sections = $roleSections[$role] ?? [];
 </div>
 
 <?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-<div class="user-management-overlay" id="userManagementOverlay" aria-hidden="true">
-    <div class="user-management-frame" role="dialog" aria-modal="true" aria-label="Users and access management">
-        <iframe title="Users &amp; Access Management" id="userManagementFrame" loading="lazy"></iframe>
+    <div class="user-management-overlay" id="userManagementOverlay" aria-hidden="true">
+        <div class="user-management-frame" role="dialog" aria-modal="true" aria-label="Users and access management">
+            <iframe title="Users &amp; Access Management" id="userManagementFrame" loading="lazy"></iframe>
+        </div>
     </div>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var userOverlay = document.getElementById('userManagementOverlay');
-    var userFrame = document.getElementById('userManagementFrame');
-    if (!userOverlay || !userFrame) return;
-    var userSource = <?= json_encode(app_url('components/modals/manage_users.php?embed=1')) ?>;
-    function closeUserManagement() {
-        userOverlay.classList.remove('open');
-        userOverlay.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('user-management-open');
-    }
-    document.querySelectorAll('[data-user-management-open]').forEach(function (link) {
-        link.addEventListener('click', function (event) {
-            event.preventDefault();
-            userFrame.src = userSource;
-            userOverlay.classList.add('open');
-            userOverlay.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('user-management-open');
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var userOverlay = document.getElementById('userManagementOverlay');
+            var userFrame = document.getElementById('userManagementFrame');
+            if (!userOverlay || !userFrame) return;
+            var userSource = <?= json_encode(app_url('components/modals/manage_users.php?embed=1')) ?>;
+
+            function closeUserManagement() {
+                userOverlay.classList.remove('open');
+                userOverlay.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('user-management-open');
+            }
+            document.querySelectorAll('[data-user-management-open]').forEach(function(link) {
+                link.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    userFrame.src = userSource;
+                    userOverlay.classList.add('open');
+                    userOverlay.setAttribute('aria-hidden', 'false');
+                    document.body.classList.add('user-management-open');
+                });
+            });
+            userOverlay.querySelectorAll('[data-user-management-close]').forEach(function(button) {
+                button.addEventListener('click', closeUserManagement);
+            });
+            userOverlay.addEventListener('click', function(event) {
+                if (event.target === userOverlay) closeUserManagement();
+            });
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'close-user-management') closeUserManagement();
+            });
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && userOverlay.classList.contains('open')) closeUserManagement();
+            });
         });
-    });
-    userOverlay.querySelectorAll('[data-user-management-close]').forEach(function (button) { button.addEventListener('click', closeUserManagement); });
-    userOverlay.addEventListener('click', function (event) { if (event.target === userOverlay) closeUserManagement(); });
-    window.addEventListener('message', function (event) { if (event.data && event.data.type === 'close-user-management') closeUserManagement(); });
-    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && userOverlay.classList.contains('open')) closeUserManagement(); });
-});
-</script>
+    </script>
 <?php endif; ?>
 
 <?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-<div class="system-health-overlay" id="systemHealthOverlay" aria-hidden="true">
-    <div class="system-health-frame" role="dialog" aria-modal="true" aria-label="System health">
-        <button type="button" class="system-health-frame-close" data-system-health-close aria-label="Close system health"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-        <iframe title="System Health" id="systemHealthFrame" loading="lazy"></iframe>
+    <div class="system-health-overlay" id="systemHealthOverlay" aria-hidden="true">
+        <div class="system-health-frame" role="dialog" aria-modal="true" aria-label="System health">
+            <button type="button" class="system-health-frame-close" data-system-health-close aria-label="Close system health"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            <iframe title="System Health" id="systemHealthFrame" loading="lazy"></iframe>
+        </div>
     </div>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var healthOverlay = document.getElementById('systemHealthOverlay');
-    var healthFrame = document.getElementById('systemHealthFrame');
-    if (!healthOverlay || !healthFrame) return;
-    var healthSource = <?= json_encode(app_url('components/modals/system_health.php?embed=1')) ?>;
-    function closeSystemHealth() {
-        healthOverlay.classList.remove('open');
-        healthOverlay.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('system-health-open');
-    }
-    document.querySelectorAll('[data-system-health-open]').forEach(function (link) {
-        link.addEventListener('click', function (event) {
-            event.preventDefault();
-            healthFrame.src = healthSource;
-            healthOverlay.classList.add('open');
-            healthOverlay.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('system-health-open');
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var healthOverlay = document.getElementById('systemHealthOverlay');
+            var healthFrame = document.getElementById('systemHealthFrame');
+            if (!healthOverlay || !healthFrame) return;
+            var healthSource = <?= json_encode(app_url('components/modals/system_health.php?embed=1')) ?>;
+
+            function closeSystemHealth() {
+                healthOverlay.classList.remove('open');
+                healthOverlay.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('system-health-open');
+            }
+            document.querySelectorAll('[data-system-health-open]').forEach(function(link) {
+                link.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    healthFrame.src = healthSource;
+                    healthOverlay.classList.add('open');
+                    healthOverlay.setAttribute('aria-hidden', 'false');
+                    document.body.classList.add('system-health-open');
+                });
+            });
+            healthOverlay.querySelectorAll('[data-system-health-close]').forEach(function(button) {
+                button.addEventListener('click', closeSystemHealth);
+            });
+            healthOverlay.addEventListener('click', function(event) {
+                if (event.target === healthOverlay) closeSystemHealth();
+            });
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'close-system-health') closeSystemHealth();
+            });
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && healthOverlay.classList.contains('open')) closeSystemHealth();
+            });
         });
-    });
-    healthOverlay.querySelectorAll('[data-system-health-close]').forEach(function (button) { button.addEventListener('click', closeSystemHealth); });
-    healthOverlay.addEventListener('click', function (event) { if (event.target === healthOverlay) closeSystemHealth(); });
-    window.addEventListener('message', function (event) { if (event.data && event.data.type === 'close-system-health') closeSystemHealth(); });
-    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && healthOverlay.classList.contains('open')) closeSystemHealth(); });
-});
-</script>
+    </script>
 <?php endif; ?>
 
 <?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-<div class="fiscal-periods-overlay" id="fiscalPeriodsOverlay" aria-hidden="true">
-    <div class="fiscal-periods-frame" role="dialog" aria-modal="true" aria-label="Fiscal period management">
-        <button type="button" class="fiscal-periods-frame-close" data-fiscal-periods-close aria-label="Close fiscal period management"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-        <iframe title="Fiscal Period Management" id="fiscalPeriodsFrame" loading="lazy"></iframe>
+    <div class="fiscal-periods-overlay" id="fiscalPeriodsOverlay" aria-hidden="true">
+        <div class="fiscal-periods-frame" role="dialog" aria-modal="true" aria-label="Fiscal period management">
+            <button type="button" class="fiscal-periods-frame-close" data-fiscal-periods-close aria-label="Close fiscal period management"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            <iframe title="Fiscal Period Management" id="fiscalPeriodsFrame" loading="lazy"></iframe>
+        </div>
     </div>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var fiscalOverlay = document.getElementById('fiscalPeriodsOverlay');
-    var fiscalFrame = document.getElementById('fiscalPeriodsFrame');
-    if (!fiscalOverlay || !fiscalFrame) return;
-    var fiscalSource = <?= json_encode(app_url('components/modals/fiscal_periods.php?embed=1')) ?>;
-    function closeFiscalPeriods() {
-        fiscalOverlay.classList.remove('open');
-        fiscalOverlay.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('fiscal-periods-open');
-    }
-    document.querySelectorAll('[data-fiscal-periods-open]').forEach(function (link) {
-        link.addEventListener('click', function (event) {
-            event.preventDefault();
-            fiscalFrame.src = fiscalSource;
-            fiscalOverlay.classList.add('open');
-            fiscalOverlay.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('fiscal-periods-open');
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var fiscalOverlay = document.getElementById('fiscalPeriodsOverlay');
+            var fiscalFrame = document.getElementById('fiscalPeriodsFrame');
+            if (!fiscalOverlay || !fiscalFrame) return;
+            var fiscalSource = <?= json_encode(app_url('components/modals/fiscal_periods.php?embed=1')) ?>;
+
+            function closeFiscalPeriods() {
+                fiscalOverlay.classList.remove('open');
+                fiscalOverlay.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('fiscal-periods-open');
+            }
+            document.querySelectorAll('[data-fiscal-periods-open]').forEach(function(link) {
+                link.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    fiscalFrame.src = fiscalSource;
+                    fiscalOverlay.classList.add('open');
+                    fiscalOverlay.setAttribute('aria-hidden', 'false');
+                    document.body.classList.add('fiscal-periods-open');
+                });
+            });
+            fiscalOverlay.querySelectorAll('[data-fiscal-periods-close]').forEach(function(button) {
+                button.addEventListener('click', closeFiscalPeriods);
+            });
+            fiscalOverlay.addEventListener('click', function(event) {
+                if (event.target === fiscalOverlay) closeFiscalPeriods();
+            });
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'close-fiscal-periods') closeFiscalPeriods();
+            });
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && fiscalOverlay.classList.contains('open')) closeFiscalPeriods();
+            });
         });
-    });
-    fiscalOverlay.querySelectorAll('[data-fiscal-periods-close]').forEach(function (button) { button.addEventListener('click', closeFiscalPeriods); });
-    fiscalOverlay.addEventListener('click', function (event) { if (event.target === fiscalOverlay) closeFiscalPeriods(); });
-    window.addEventListener('message', function (event) { if (event.data && event.data.type === 'close-fiscal-periods') closeFiscalPeriods(); });
-    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && fiscalOverlay.classList.contains('open')) closeFiscalPeriods(); });
-});
-</script>
+    </script>
 <?php endif; ?>
 
 <?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-<div class="audit-log-overlay" id="auditLogOverlay" aria-hidden="true">
-    <div class="audit-log-frame" role="dialog" aria-modal="true" aria-label="Audit activity log">
-        <button type="button" class="audit-log-frame-close" data-audit-log-close aria-label="Close audit log"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-        <iframe title="Audit Activity Log" id="auditLogFrame" loading="lazy"></iframe>
+    <div class="audit-log-overlay" id="auditLogOverlay" aria-hidden="true">
+        <div class="audit-log-frame" role="dialog" aria-modal="true" aria-label="Audit activity log">
+            <button type="button" class="audit-log-frame-close" data-audit-log-close aria-label="Close audit log"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            <iframe title="Audit Activity Log" id="auditLogFrame" loading="lazy"></iframe>
+        </div>
     </div>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var auditOverlay = document.getElementById('auditLogOverlay');
-    var auditFrame = document.getElementById('auditLogFrame');
-    if (!auditOverlay || !auditFrame) return;
-    var auditSource = <?= json_encode(app_url('components/modals/audit_log.php?embed=1')) ?>;
-    function closeAuditLog() {
-        auditOverlay.classList.remove('open');
-        auditOverlay.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('audit-log-open');
-    }
-    document.querySelectorAll('[data-audit-log-open]').forEach(function (link) {
-        link.addEventListener('click', function (event) {
-            event.preventDefault();
-            auditFrame.src = auditSource;
-            auditOverlay.classList.add('open');
-            auditOverlay.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('audit-log-open');
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var auditOverlay = document.getElementById('auditLogOverlay');
+            var auditFrame = document.getElementById('auditLogFrame');
+            if (!auditOverlay || !auditFrame) return;
+            var auditSource = <?= json_encode(app_url('components/modals/audit_log.php?embed=1')) ?>;
+
+            function closeAuditLog() {
+                auditOverlay.classList.remove('open');
+                auditOverlay.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('audit-log-open');
+            }
+            document.querySelectorAll('[data-audit-log-open]').forEach(function(link) {
+                link.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    auditFrame.src = auditSource;
+                    auditOverlay.classList.add('open');
+                    auditOverlay.setAttribute('aria-hidden', 'false');
+                    document.body.classList.add('audit-log-open');
+                });
+            });
+            auditOverlay.querySelectorAll('[data-audit-log-close]').forEach(function(button) {
+                button.addEventListener('click', closeAuditLog);
+            });
+            auditOverlay.addEventListener('click', function(event) {
+                if (event.target === auditOverlay) closeAuditLog();
+            });
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'close-audit-log') closeAuditLog();
+            });
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && auditOverlay.classList.contains('open')) closeAuditLog();
+            });
         });
-    });
-    auditOverlay.querySelectorAll('[data-audit-log-close]').forEach(function (button) { button.addEventListener('click', closeAuditLog); });
-    auditOverlay.addEventListener('click', function (event) { if (event.target === auditOverlay) closeAuditLog(); });
-    window.addEventListener('message', function (event) { if (event.data && event.data.type === 'close-audit-log') closeAuditLog(); });
-    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && auditOverlay.classList.contains('open')) closeAuditLog(); });
-});
-</script>
+    </script>
 <?php endif; ?>
 
+<div id="rm-flash-messages" hidden<?php foreach ($flashMessages as $flashType => $flashMessage): ?> data-<?= sidebar_e($flashType) ?>="<?= sidebar_e($flashMessage) ?>" <?php endforeach; ?>></div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="<?= sidebar_e(app_url('assets/js/ui.js')) ?>"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    var menuToggle = document.getElementById('menuToggle');
-    var sidebar = document.getElementById('appSidebar');
-    var overlay = document.getElementById('sidebarOverlay');
+    document.addEventListener('DOMContentLoaded', function() {
+        var menuToggle = document.getElementById('menuToggle');
+        var sidebar = document.getElementById('appSidebar');
+        var overlay = document.getElementById('sidebarOverlay');
 
-    function setSidebarOpen(isOpen) {
-        sidebar.classList.toggle('open', isOpen);
-        overlay.classList.toggle('open', isOpen);
-        menuToggle.classList.toggle('active', isOpen);
-        menuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        menuToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
-        var menuIcon = menuToggle.querySelector('i');
-        if (menuIcon) {
-            menuIcon.className = 'bi ' + (isOpen ? 'bi-x-lg' : 'bi-list');
-        }
-        document.body.classList.toggle('no-scroll', isOpen);
-    }
-
-    if (menuToggle && sidebar && overlay) {
-        menuToggle.addEventListener('click', function() {
-            setSidebarOpen(!sidebar.classList.contains('open'));
-        });
-        overlay.addEventListener('click', function() {
-            setSidebarOpen(false);
-        });
-        sidebar.querySelectorAll('a').forEach(function(link) {
-            link.addEventListener('click', function() {
-                setSidebarOpen(false);
-            });
-        });
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 900) {
-                setSidebarOpen(false);
+        function setSidebarOpen(isOpen) {
+            sidebar.classList.toggle('open', isOpen);
+            overlay.classList.toggle('open', isOpen);
+            menuToggle.classList.toggle('active', isOpen);
+            menuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            menuToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+            var menuIcon = menuToggle.querySelector('i');
+            if (menuIcon) {
+                menuIcon.className = 'bi ' + (isOpen ? 'bi-x-lg' : 'bi-list');
             }
-        });
-    }
-
-    document.querySelectorAll('.sidebar .dropdown').forEach(function(dropdown) {
-        var button = dropdown.querySelector('.dropbtn');
-        if (!button) {
-            return;
+            document.body.classList.toggle('no-scroll', isOpen);
         }
 
-        button.addEventListener('click', function() {
-            document.querySelectorAll('.sidebar .dropdown.open').forEach(function(openDropdown) {
-                if (openDropdown === dropdown) {
-                    return;
-                }
-
-                openDropdown.classList.remove('open');
-                var openButton = openDropdown.querySelector('.dropbtn');
-                if (openButton) {
-                    openButton.setAttribute('aria-expanded', 'false');
+        if (menuToggle && sidebar && overlay) {
+            menuToggle.addEventListener('click', function() {
+                setSidebarOpen(!sidebar.classList.contains('open'));
+            });
+            overlay.addEventListener('click', function() {
+                setSidebarOpen(false);
+            });
+            sidebar.querySelectorAll('a').forEach(function(link) {
+                link.addEventListener('click', function() {
+                    setSidebarOpen(false);
+                });
+            });
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 900) {
+                    setSidebarOpen(false);
                 }
             });
+        }
 
-            dropdown.classList.toggle('open');
-            button.setAttribute('aria-expanded', dropdown.classList.contains('open') ? 'true' : 'false');
-        });
-        button.addEventListener('mousedown', function(event) {
-            event.preventDefault();
+        document.querySelectorAll('.sidebar .dropdown').forEach(function(dropdown) {
+            var button = dropdown.querySelector('.dropbtn');
+            if (!button) {
+                return;
+            }
+
+            button.addEventListener('click', function() {
+                document.querySelectorAll('.sidebar .dropdown.open').forEach(function(openDropdown) {
+                    if (openDropdown === dropdown) {
+                        return;
+                    }
+
+                    openDropdown.classList.remove('open');
+                    var openButton = openDropdown.querySelector('.dropbtn');
+                    if (openButton) {
+                        openButton.setAttribute('aria-expanded', 'false');
+                    }
+                });
+
+                dropdown.classList.toggle('open');
+                button.setAttribute('aria-expanded', dropdown.classList.contains('open') ? 'true' : 'false');
+            });
+            button.addEventListener('mousedown', function(event) {
+                event.preventDefault();
+            });
         });
     });
-});
 </script>

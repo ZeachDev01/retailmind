@@ -29,22 +29,24 @@ function landing_app_url(string $path = ''): string
     return ($baseUrl === '' ? '' : $baseUrl) . '/' . $normalizedPath;
 }
 
-function landing_redirect_by_role(): void
+function landing_role_destination(): string
 {
     switch ($_SESSION['role'] ?? null) {
         case 'super_admin':
         case 'admin':
-            header('Location: ' . landing_app_url('components/dashboard.php'));
-            break;
+            return landing_app_url('components/dashboard.php');
         case 'inventory_manager':
-            header('Location: ' . landing_app_url('components/inventory_management/dashboard.php'));
-            break;
+            return landing_app_url('components/inventory_management/dashboard.php');
         case 'cashier':
-            header('Location: ' . landing_app_url('components/cashier/pos.php'));
-            break;
+            return landing_app_url('components/cashier/pos.php');
         default:
-            header('Location: ' . landing_app_url('?login=1'));
+            return landing_app_url('?login=1');
     }
+}
+
+function landing_redirect_by_role(): void
+{
+    header('Location: ' . landing_role_destination());
     exit;
 }
 
@@ -57,7 +59,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $_SESSION['_login_username'] = $username;
 
     if ($username && $password && login_user($pdo, $username, $password)) {
-        landing_redirect_by_role();
+        header('Location: ' . landing_app_url('?login_success=1'));
+        exit;
     }
 
     $_SESSION['_login_error'] = last_login_error();
@@ -65,7 +68,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     exit;
 }
 
-if (isset($_SESSION['user_id'])) {
+if (isset($_SESSION['user_id']) && ($_GET['login_success'] ?? '') !== '1') {
     landing_redirect_by_role();
 }
 
@@ -75,11 +78,22 @@ $forgotPasswordUrl = htmlspecialchars(landing_app_url('components/auth/forgot_pa
 $registerUrl = htmlspecialchars(landing_app_url('components/auth/register.php'), ENT_QUOTES, 'UTF-8');
 $styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
 $loginError = '';
+$loginSuccess = '';
+$loginSuccessRedirect = '';
+$flashError = (string)($_SESSION['_flash_error'] ?? '');
+unset($_SESSION['_flash_error']);
 $loginUsername = (string)($_SESSION['_login_username'] ?? '');
 $shouldOpenLogin = ($_GET['login'] ?? '') === '1';
 if ($shouldOpenLogin && isset($_SESSION['_login_error'])) {
     $loginError = (string)$_SESSION['_login_error'];
     unset($_SESSION['_login_error']);
+}
+$loginError = $loginError !== '' ? $loginError : $flashError;
+$loginSuccess = (string)($_SESSION['_flash_success'] ?? '');
+unset($_SESSION['_flash_success']);
+if (($_GET['login_success'] ?? '') === '1' && isset($_SESSION['user_id'])) {
+    $loginSuccess = 'Login successful.';
+    $loginSuccessRedirect = landing_role_destination();
 }
 unset($_SESSION['_login_username']);
 ?>
@@ -257,6 +271,7 @@ unset($_SESSION['_login_username']);
                     <?php if ($loginError !== ''): ?>
                         <div class="error-msg"><?= htmlspecialchars($loginError, ENT_QUOTES, 'UTF-8') ?></div>
                     <?php endif; ?>
+                    <?php if ($loginSuccess !== ''): ?><div id="rm-flash-messages" class="alert tag-success" data-success="<?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?>" <?php if ($loginSuccessRedirect !== ''): ?> data-redirect="<?= htmlspecialchars($loginSuccessRedirect, ENT_QUOTES, 'UTF-8') ?>" <?php endif; ?>><?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
 
                     <form method="POST" action="<?= $loginActionUrl ?>" class="landing-login-form">
                         <?= csrf_field() ?>
@@ -281,6 +296,9 @@ unset($_SESSION['_login_username']);
         </section>
     </div>
 
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="<?= htmlspecialchars(landing_app_url('assets/js/ui.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
     <script>
         (function() {
             var modal = document.getElementById('loginModal');

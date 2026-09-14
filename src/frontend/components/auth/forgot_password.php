@@ -46,6 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p class="u-back-link"><a href="<?= htmlspecialchars(app_url('?login=1')) ?>">Back to login</a></p>
         </div>
     </div>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="<?= htmlspecialchars(app_url('assets/js/ui.js')) ?>"></script>
 </body>
 
 </html>

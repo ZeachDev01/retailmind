@@ -54,3 +54,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
     outline: none;
     box-shadow: var(--focus-ring);
 }
+
+.swal2-container {
+    z-index: 10000 !important;
+}
