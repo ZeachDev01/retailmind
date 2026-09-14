@@ -11,7 +11,7 @@ $module_filter = $_GET['module'] ?? '';
 $date_from = $_GET['date_from'] ?? '';
 $date_to = $_GET['date_to'] ?? '';
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-$per_page = 50;
+$per_page = 10;
 $offset = ($page - 1) * $per_page;
 $isEmbedded = ($_GET['embed'] ?? '') === '1';
 
@@ -154,6 +154,9 @@ function audit_display_value($value): string
             </div>
 
             <form method="GET" class="filter-section">
+                <?php if ($isEmbedded): ?>
+                    <input type="hidden" name="embed" value="1">
+                <?php endif; ?>
                 <div class="filter-group">
                     <label for="user_id">User</label>
                     <select name="user_id" id="user_id">
