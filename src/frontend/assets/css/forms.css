@@ -19,6 +19,13 @@ textarea {
         linear-gradient(135deg, #eef4ff 0%, #f8fafc 100%);
 }
 
+.auth-page .login-wrapper {
+    background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.2), transparent 34%),
+        linear-gradient(135deg, #e5f7f3 0%, #f7faf9 100%);
+    color: #10201f;
+}
+
 .login-card {
     background: rgba(255, 255, 255, 0.96);
     padding: 2rem;
@@ -27,6 +34,39 @@ textarea {
     border: 1px solid rgba(255, 255, 255, 0.8);
     width: min(420px, 100%);
     backdrop-filter: blur(10px);
+}
+
+.auth-page .login-card {
+    border-color: rgba(15, 118, 110, 0.16);
+    box-shadow: 0 22px 55px rgba(7, 45, 43, 0.14);
+}
+
+.auth-page .login-card h1 {
+    color: #10201f;
+}
+
+.auth-page .login-card .subtitle,
+.auth-page .form-group label {
+    color: #49615f;
+}
+
+.auth-page .form-group input:focus,
+.auth-page .form-group select:focus {
+    border-color: #0f766e;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
+}
+
+.auth-page .btn {
+    background: #0f766e;
+}
+
+.auth-page .btn:hover,
+.auth-page .btn:focus-visible {
+    background: #115e59;
+}
+
+.auth-page .u-back-link a {
+    color: #0f766e;
 }
 
 .login-card__brand {
