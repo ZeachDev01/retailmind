@@ -4,9 +4,7 @@ use App\Database\Schema;
 
 final class SystemHealthService
 {
-    public function __construct(private PDO $pdo, private string $backendPath)
-    {
-    }
+    public function __construct(private PDO $pdo, private string $backendPath) {}
 
     public function checks(): array
     {
@@ -135,8 +133,14 @@ final class SystemHealthService
 
     private function mailCheck(): array
     {
-        $configured = (string)env('MAIL_HOST', '') !== '' && (string)env('MAIL_FROM_ADDRESS', '') !== '';
-        return $this->result('Email configuration', $configured ? 'healthy' : 'warning', $configured ? 'SMTP host and sender address are configured.' : 'SMTP host or sender address is missing.', 'Integrations');
+        $mailer = strtolower((string)env('MAIL_MAILER', 'smtp'));
+        $configured = $mailer === 'brevo'
+            ? (string)env('BREVO_API_KEY', '') !== '' && (string)env('MAIL_FROM_ADDRESS', '') !== ''
+            : (string)env('MAIL_HOST', '') !== '' && (string)env('MAIL_FROM_ADDRESS', '') !== '';
+        $message = $mailer === 'brevo'
+            ? 'Brevo API key and sender address are configured.'
+            : 'SMTP host and sender address are configured.';
+        return $this->result('Email configuration', $configured ? 'healthy' : 'warning', $configured ? $message : 'Email provider or sender configuration is missing.', 'Integrations');
     }
 
     private function applicationLogCheck(): array

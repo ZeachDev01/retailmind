@@ -86,7 +86,8 @@ function log_activity(
     $stmt->execute(array_values($insert));
 }
 
-function get_low_stock_products(PDO $pdo, ?int $threshold = null): array {
+function get_low_stock_products(PDO $pdo, ?int $threshold = null): array
+{
     $scopeSql = '';
     $scopeParams = [];
     if (function_exists('branch_scope')) {
@@ -114,7 +115,8 @@ function get_low_stock_products(PDO $pdo, ?int $threshold = null): array {
 /**
  * Call the authenticated Python ML microservice.
  */
-function call_ml_api(string $endpoint, string $method = 'GET', ?array $payload = null, ?int $timeout = null): array {
+function call_ml_api(string $endpoint, string $method = 'GET', ?array $payload = null, ?int $timeout = null): array
+{
     $headers = ['Accept: application/json'];
     if (defined('ML_API_KEY') && ML_API_KEY !== '') {
         $headers[] = 'X-API-Key: ' . ML_API_KEY;
@@ -149,17 +151,20 @@ function call_ml_api(string $endpoint, string $method = 'GET', ?array $payload =
     return $data;
 }
 
-function get_ml_prediction(int $product_id): array {
+function get_ml_prediction(int $product_id): array
+{
     return call_ml_api(ML_API_PREDICT_ENDPOINT, 'POST', ['product_id' => $product_id], 15);
 }
 
-function get_stored_predictions(PDO $pdo): array {
+function get_stored_predictions(PDO $pdo): array
+{
     return array_values(array_filter(get_forecasting_readiness($pdo), static function (array $row): bool {
         return !empty($row['can_show_forecast']);
     }));
 }
 
-function get_ml_model_metrics(): array {
+function get_ml_model_metrics(): array
+{
     $metricsPath = __DIR__ . '/../legacy/demandForcasting/model_metrics.json';
     if (!is_readable($metricsPath)) {
         return [];
@@ -168,7 +173,8 @@ function get_ml_model_metrics(): array {
     return is_array($metrics) ? $metrics : [];
 }
 
-function format_ml_metric(array $metrics, string $key, int $decimals = 2): string {
+function format_ml_metric(array $metrics, string $key, int $decimals = 2): string
+{
     if (!array_key_exists($key, $metrics) || $metrics[$key] === null || $metrics[$key] === '') {
         return '-';
     }
@@ -177,7 +183,8 @@ function format_ml_metric(array $metrics, string $key, int $decimals = 2): strin
         : (string)$metrics[$key];
 }
 
-function ensure_key_value_table(PDO $pdo, string $table): void {
+function ensure_key_value_table(PDO $pdo, string $table): void
+{
     $allowed = ['ml_settings', 'store_settings'];
     if (!in_array($table, $allowed, true)) {
         throw new InvalidArgumentException('Unsupported settings table.');
@@ -191,7 +198,8 @@ function ensure_key_value_table(PDO $pdo, string $table): void {
     )");
 }
 
-function get_key_value_settings(PDO $pdo, string $table, array $defaults): array {
+function get_key_value_settings(PDO $pdo, string $table, array $defaults): array
+{
     ensure_key_value_table($pdo, $table);
     $settings = $defaults;
     foreach ($pdo->query("SELECT setting_key, setting_value FROM {$table}")->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -200,7 +208,8 @@ function get_key_value_settings(PDO $pdo, string $table, array $defaults): array
     return $settings;
 }
 
-function save_key_value_settings(PDO $pdo, string $table, array $settings, ?int $userId = null): void {
+function save_key_value_settings(PDO $pdo, string $table, array $settings, ?int $userId = null): void
+{
     ensure_key_value_table($pdo, $table);
     $stmt = $pdo->prepare(
         "INSERT INTO {$table} (setting_key, setting_value, updated_by) VALUES (?, ?, ?)
@@ -211,7 +220,8 @@ function save_key_value_settings(PDO $pdo, string $table, array $settings, ?int 
     }
 }
 
-function get_ml_settings(PDO $pdo): array {
+function get_ml_settings(PDO $pdo): array
+{
     return get_key_value_settings($pdo, 'ml_settings', [
         'minimum_history_days' => '30',
         'preferred_history_days' => '90',
@@ -231,7 +241,8 @@ function get_ml_settings(PDO $pdo): array {
     ]);
 }
 
-function get_store_settings(PDO $pdo): array {
+function get_store_settings(PDO $pdo): array
+{
     return get_key_value_settings($pdo, 'store_settings', [
         'store_name' => 'Shalom Store',
         'store_address' => 'Tangub City',
@@ -245,7 +256,8 @@ function get_store_settings(PDO $pdo): array {
     ]);
 }
 
-function get_forecasting_readiness(PDO $pdo): array {
+function get_forecasting_readiness(PDO $pdo): array
+{
     $settings = get_ml_settings($pdo);
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
     $preferredHistoryDays = max($minimumHistoryDays, (int)$settings['preferred_history_days']);
@@ -391,8 +403,15 @@ function get_forecasting_readiness(PDO $pdo): array {
 /**
  * Create a notification for a user
  */
-function create_notification(PDO $pdo, int $user_id, string $type, string $title, string $message, 
-                            int $reference_id = null, string $reference_type = null): void {
+function create_notification(
+    PDO $pdo,
+    int $user_id,
+    string $type,
+    string $title,
+    string $message,
+    int $reference_id = null,
+    string $reference_type = null
+): void {
     $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, title, message, reference_id, reference_type) 
                            VALUES (?, ?, ?, ?, ?, ?)");
     $stmt->execute([$user_id, $type, $title, $message, $reference_id, $reference_type]);
@@ -401,7 +420,8 @@ function create_notification(PDO $pdo, int $user_id, string $type, string $title
 /**
  * Get unread notifications for a user
  */
-function get_unread_notifications(PDO $pdo, int $user_id): array {
+function get_unread_notifications(PDO $pdo, int $user_id): array
+{
     $stmt = $pdo->prepare("SELECT notification_id, type, title, message, reference_id, reference_type, created_at
                            FROM notifications WHERE user_id = ? AND is_read = FALSE
                            ORDER BY created_at DESC");
@@ -412,7 +432,8 @@ function get_unread_notifications(PDO $pdo, int $user_id): array {
 /**
  * Get notification count for user
  */
-function get_notification_count(PDO $pdo, int $user_id): int {
+function get_notification_count(PDO $pdo, int $user_id): int
+{
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = FALSE");
     $stmt->execute([$user_id]);
     return (int)$stmt->fetchColumn();
@@ -421,7 +442,8 @@ function get_notification_count(PDO $pdo, int $user_id): int {
 /**
  * Mark notification as read
  */
-function mark_notification_read(PDO $pdo, int $notification_id): void {
+function mark_notification_read(PDO $pdo, int $notification_id): void
+{
     $stmt = $pdo->prepare("UPDATE notifications SET is_read = TRUE WHERE notification_id = ?");
     $stmt->execute([$notification_id]);
 }
@@ -429,11 +451,12 @@ function mark_notification_read(PDO $pdo, int $notification_id): void {
 /**
  * Get user notification preferences
  */
-function get_notification_prefs(PDO $pdo, int $user_id): array {
+function get_notification_prefs(PDO $pdo, int $user_id): array
+{
     $stmt = $pdo->prepare("SELECT * FROM notification_preferences WHERE user_id = ?");
     $stmt->execute([$user_id]);
     $prefs = $stmt->fetch();
-    
+
     // Return defaults if not set
     if (!$prefs) {
         return [
@@ -451,7 +474,8 @@ function get_notification_prefs(PDO $pdo, int $user_id): array {
 /**
  * Check low-stock products and create notifications for users with relevant preferences
  */
-function check_and_notify_low_stock(PDO $pdo): void {
+function check_and_notify_low_stock(PDO $pdo): void
+{
     $users_stmt = $pdo->query(
         "SELECT u.user_id, u.email, COALESCE(np.low_stock_threshold, 10) AS low_stock_threshold,
                 COALESCE(np.notify_email, 0) AS notify_email, COALESCE(np.notify_inapp, 1) AS notify_inapp
@@ -500,7 +524,8 @@ function check_and_notify_low_stock(PDO $pdo): void {
 /**
  * Load PHPMailer from Composer, or from the bundled backend/phpmailer copy.
  */
-function ensure_phpmailer_loaded(): bool {
+function ensure_phpmailer_loaded(): bool
+{
     if (class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
         return true;
     }
@@ -531,10 +556,56 @@ function ensure_phpmailer_loaded(): bool {
     return class_exists('PHPMailer\\PHPMailer\\PHPMailer');
 }
 
+function send_brevo_email(string $email, string $subject, string $message): bool
+{
+    $apiKey = trim((string)env('BREVO_API_KEY', ''));
+    $from = trim((string)env('MAIL_FROM_ADDRESS', ''));
+    if ($apiKey === '' || !filter_var($from, FILTER_VALIDATE_EMAIL) || !function_exists('curl_init')) {
+        throw new RuntimeException('Brevo email configuration is incomplete. Set BREVO_API_KEY, MAIL_FROM_ADDRESS, and enable cURL.');
+    }
+
+    $payload = json_encode([
+        'sender' => [
+            'email' => $from,
+            'name' => (string)env('MAIL_FROM_NAME', 'RetailMind'),
+        ],
+        'to' => [['email' => $email]],
+        'subject' => $subject,
+        'textContent' => $message,
+    ], JSON_UNESCAPED_SLASHES);
+    if ($payload === false) {
+        return false;
+    }
+
+    $curl = curl_init('https://api.brevo.com/v3/smtp/email');
+    curl_setopt_array($curl, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'Content-Type: application/json',
+            'api-key: ' . $apiKey,
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => max(5, (int)env('MAIL_TIMEOUT', 30)),
+    ]);
+    $response = curl_exec($curl);
+    $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($curl);
+    curl_close($curl);
+
+    if ($response === false || $curlError !== '' || $httpCode < 200 || $httpCode >= 300) {
+        throw new RuntimeException($curlError !== '' ? $curlError : "Brevo API returned HTTP {$httpCode}.");
+    }
+
+    return true;
+}
+
 /**
  * Send an email through PHPMailer SMTP when configured. Falls back to PHP mail.
  */
-function send_email_notification(string $email, string $subject, string $message): bool {
+function send_email_notification(string $email, string $subject, string $message): bool
+{
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return false;
     }
@@ -544,7 +615,10 @@ function send_email_notification(string $email, string $subject, string $message
     $errorMessage = null;
     try {
         $mailer = strtolower((string)env('MAIL_MAILER', 'smtp'));
-        if ($mailer === 'smtp' && ensure_phpmailer_loaded()) {
+        if ($mailer === 'brevo') {
+            $provider = 'brevo-api';
+            $success = send_brevo_email($email, $subject, $message);
+        } elseif ($mailer === 'smtp' && ensure_phpmailer_loaded()) {
             $provider = 'smtp';
             $mail = new PHPMailer\PHPMailer\PHPMailer(true);
             $mail->isSMTP();
@@ -597,4 +671,3 @@ function send_email_notification(string $email, string $subject, string $message
     }
     return $success;
 }
-
