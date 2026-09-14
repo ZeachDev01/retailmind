@@ -65,6 +65,13 @@
       info: "Update",
     };
     if (window.Swal && typeof window.Swal.fire === "function") {
+      if (!document.getElementById("rm-swal-layer-style")) {
+        const layerStyle = document.createElement("style");
+        layerStyle.id = "rm-swal-layer-style";
+        layerStyle.textContent =
+          ".swal2-container { z-index: 10000 !important; }";
+        document.head.appendChild(layerStyle);
+      }
       return window.Swal.fire({
         icon: kind,
         title: title || labels[kind] || labels.info,
@@ -167,6 +174,7 @@
     const hasSwal = window.Swal && typeof window.Swal.fire === "function";
     const notices = [];
     if (flash && hasSwal) {
+      flash.hidden = true;
       ["success", "error", "warning", "info"].forEach((kind) => {
         const message = flash.dataset[kind];
         if (message) notices.push({ message, kind });
@@ -202,7 +210,10 @@
       if (hasSwal && lastAlert) {
         lastAlert.then(() => window.location.assign(flash.dataset.redirect));
       } else if (!hasSwal) {
-        window.setTimeout(() => window.location.assign(flash.dataset.redirect), 3500);
+        window.setTimeout(
+          () => window.location.assign(flash.dataset.redirect),
+          3500,
+        );
       }
     }
   }
