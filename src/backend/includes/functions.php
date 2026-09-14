@@ -578,7 +578,7 @@ function send_brevo_email(string $email, string $subject, string $message): bool
     }
 
     $curl = curl_init('https://api.brevo.com/v3/smtp/email');
-    curl_setopt_array($curl, [
+    $curlOptions = [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => $payload,
         CURLOPT_HTTPHEADER => [
@@ -588,7 +588,12 @@ function send_brevo_email(string $email, string $subject, string $message): bool
         ],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => max(5, (int)env('MAIL_TIMEOUT', 30)),
-    ]);
+    ];
+    $caInfo = trim((string)env('MAIL_CAINFO', ''));
+    if ($caInfo !== '' && is_file($caInfo)) {
+        $curlOptions[CURLOPT_CAINFO] = $caInfo;
+    }
+    curl_setopt_array($curl, $curlOptions);
     $response = curl_exec($curl);
     $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
     $curlError = curl_error($curl);
