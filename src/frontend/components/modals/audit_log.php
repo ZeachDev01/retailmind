@@ -90,9 +90,34 @@ $pagination_filters = array_filter([
 $page_url = function (int $targetPage) use ($pagination_filters): string {
     return '?' . http_build_query(array_merge(['page' => $targetPage], $pagination_filters));
 };
+
+function audit_display_value($value): string
+{
+    if ($value === null || $value === '') {
+        return '-';
+    }
+
+    $decoded = json_decode((string)$value, true);
+    if (!is_array($decoded) || json_last_error() !== JSON_ERROR_NONE) {
+        return (string)$value;
+    }
+
+    $parts = [];
+    foreach ($decoded as $key => $item) {
+        $label = ucwords(str_replace('_', ' ', (string)$key));
+        if ($key === 'status' && isset($decoded['username'], $decoded['role'])) {
+            $label = 'Action';
+        }
+        $displayItem = is_scalar($item) ? (string)$item : json_encode($item, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $parts[] = $label . ': ' . $displayItem;
+    }
+
+    return implode(' | ', $parts);
+}
 ?>
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -100,160 +125,163 @@ $page_url = function (int $targetPage) use ($pagination_filters): string {
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/admin.css')) ?>">
 </head>
+
 <body class="audit-log-page<?= $isEmbedded ? ' audit-log-embedded' : '' ?>">
-<div class="app-shell">
-    <?php include __DIR__ . '/../sidebar.php'; ?>
-    <div class="main-content">
-        <div class="topbar">
-            <div class="<?= $isEmbedded ? 'audit-log-heading-copy' : '' ?>">
-                <?php if ($isEmbedded): ?>
-                    <span class="audit-log-title-icon" aria-hidden="true"><i class="bi bi-clipboard2-check"></i></span>
-                <?php endif; ?>
-                <h1><?= $isEmbedded ? 'Audit Activity Log' : 'Audit Log Viewer' ?></h1>
-                <?php if ($isEmbedded): ?>
-                    <p class="page-subtitle">Review critical system activity, account actions, and operational changes.</p>
-                <?php endif; ?>
+    <div class="app-shell">
+        <?php include __DIR__ . '/../sidebar.php'; ?>
+        <div class="main-content">
+            <div class="topbar">
+                <div class="<?= $isEmbedded ? 'audit-log-heading-copy' : '' ?>">
+                    <?php if ($isEmbedded): ?>
+                        <span class="audit-log-title-icon" aria-hidden="true"><i class="bi bi-clipboard2-check"></i></span>
+                    <?php endif; ?>
+                    <h1><?= $isEmbedded ? 'Audit Activity Log' : 'Audit Log Viewer' ?></h1>
+                    <?php if ($isEmbedded): ?>
+                        <p class="page-subtitle">Review critical system activity, account actions, and operational changes.</p>
+                    <?php endif; ?>
+                </div>
             </div>
-            <?php if ($isEmbedded): ?>
-                <button type="button" class="audit-log-close" data-embedded-close aria-label="Close audit log"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="value"><?= $total_records ?></div>
+                    <div class="label">Total Activity Records</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value"><?= count($all_users) ?></div>
+                    <div class="label">Active Users</div>
+                </div>
+            </div>
+
+            <form method="GET" class="filter-section">
+                <div class="filter-group">
+                    <label for="user_id">User</label>
+                    <select name="user_id" id="user_id">
+                        <option value="">All Users</option>
+                        <?php foreach ($all_users as $u): ?>
+                            <option value="<?= $u['user_id'] ?>" <?= $user_filter == $u['user_id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($u['full_name']) ?> (<?= htmlspecialchars($u['username']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="action">Action (contains)</label>
+                    <input type="text" name="action" id="action" placeholder="Search action..." value="<?= htmlspecialchars($action_filter) ?>">
+                </div>
+
+                <div class="filter-group">
+                    <label for="module">Module</label>
+                    <select name="module" id="module">
+                        <option value="">All Modules</option>
+                        <?php foreach ($modules as $module): ?>
+                            <option value="<?= htmlspecialchars($module) ?>" <?= $module_filter === $module ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($module) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="date_from">From Date</label>
+                    <input type="date" name="date_from" id="date_from" value="<?= htmlspecialchars($date_from) ?>">
+                </div>
+
+                <div class="filter-group">
+                    <label for="date_to">To Date</label>
+                    <input type="date" name="date_to" id="date_to" value="<?= htmlspecialchars($date_to) ?>">
+                </div>
+
+                <div class="filter-group">
+                    <button type="submit" class="filter-btn">Filter</button>
+                    <a href="<?= htmlspecialchars(app_url('components/modals/audit_log.php' . ($isEmbedded ? '?embed=1' : ''))) ?>" class="clear-btn" style="text-align: center; text-decoration: none;">Clear</a>
+                </div>
+            </form>
+
+            <div class="audit-log-table-wrap">
+                <table class="audit-log-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Module</th>
+                            <th>Record ID</th>
+                            <th>Previous Value</th>
+                            <th>New Value</th>
+                            <th>IP Address</th>
+                            <th>Date & Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($logs)): ?>
+                            <tr>
+                                <td class="u-text-center" colspan="9">No activity logs found</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($logs as $log): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($log['log_id']) ?></td>
+                                    <td>
+                                        <?php if ($log['user_id']): ?>
+                                            <strong><?= htmlspecialchars($log['full_name']) ?></strong><br>
+                                            <small><?= htmlspecialchars($log['username']) ?></small>
+                                        <?php else: ?>
+                                            <em>System / Unknown</em>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="action-cell"><?= htmlspecialchars($log['action']) ?></td>
+                                    <td><?= htmlspecialchars($log['module'] ?? '-') ?></td>
+                                    <td><?= htmlspecialchars($log['record_id'] ?? '-') ?></td>
+                                    <td class="action-cell"><?= htmlspecialchars(audit_display_value($log['previous_value'] ?? null)) ?></td>
+                                    <td class="action-cell"><?= htmlspecialchars(audit_display_value($log['new_value'] ?? null)) ?></td>
+                                    <td><?= htmlspecialchars($log['ip_address'] ?? '-') ?></td>
+                                    <td><?= htmlspecialchars($log['created_at']) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <?php if ($total_pages > 1): ?>
+                <div class="pagination">
+                    <?php if ($page > 1): ?>
+                        <a href="<?= htmlspecialchars($page_url(1)) ?>">« First</a>
+                        <a href="<?= htmlspecialchars($page_url($page - 1)) ?>">‹ Prev</a>
+                    <?php endif; ?>
+
+                    <?php for ($i = max(1, $page - 2); $i <= min($total_pages, $page + 2); $i++): ?>
+                        <?php if ($i == $page): ?>
+                            <span class="current"><?= $i ?></span>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars($page_url($i)) ?>"><?= $i ?></a>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+
+                    <?php if ($page < $total_pages): ?>
+                        <a href="<?= htmlspecialchars($page_url($page + 1)) ?>">Next ›</a>
+                        <a href="<?= htmlspecialchars($page_url($total_pages)) ?>">Last »</a>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
         </div>
-
-        <div class="stats">
-            <div class="stat-box">
-                <div class="value"><?= $total_records ?></div>
-                <div class="label">Total Activity Records</div>
-            </div>
-            <div class="stat-box">
-                <div class="value"><?= count($all_users) ?></div>
-                <div class="label">Active Users</div>
-            </div>
-        </div>
-
-        <form method="GET" class="filter-section">
-            <div class="filter-group">
-                <label for="user_id">User</label>
-                <select name="user_id" id="user_id">
-                    <option value="">All Users</option>
-                    <?php foreach ($all_users as $u): ?>
-                        <option value="<?= $u['user_id'] ?>" <?= $user_filter == $u['user_id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($u['full_name']) ?> (<?= htmlspecialchars($u['username']) ?>)
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="filter-group">
-                <label for="action">Action (contains)</label>
-                <input type="text" name="action" id="action" placeholder="Search action..." value="<?= htmlspecialchars($action_filter) ?>">
-            </div>
-
-            <div class="filter-group">
-                <label for="module">Module</label>
-                <select name="module" id="module">
-                    <option value="">All Modules</option>
-                    <?php foreach ($modules as $module): ?>
-                        <option value="<?= htmlspecialchars($module) ?>" <?= $module_filter === $module ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($module) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="filter-group">
-                <label for="date_from">From Date</label>
-                <input type="date" name="date_from" id="date_from" value="<?= htmlspecialchars($date_from) ?>">
-            </div>
-
-            <div class="filter-group">
-                <label for="date_to">To Date</label>
-                <input type="date" name="date_to" id="date_to" value="<?= htmlspecialchars($date_to) ?>">
-            </div>
-
-            <div class="filter-group">
-                <button type="submit" class="filter-btn">Filter</button>
-                <a href="<?= htmlspecialchars(app_url('components/modals/audit_log.php' . ($isEmbedded ? '?embed=1' : ''))) ?>" class="clear-btn" style="text-align: center; text-decoration: none;">Clear</a>
-            </div>
-        </form>
-
-        <div class="audit-log-table-wrap">
-        <table class="audit-log-table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th>Module</th>
-                    <th>Record ID</th>
-                    <th>Previous Value</th>
-                    <th>New Value</th>
-                    <th>IP Address</th>
-                    <th>Date & Time</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($logs)): ?>
-                    <tr><td class="u-text-center" colspan="9">No activity logs found</td></tr>
-                <?php else: ?>
-                    <?php foreach ($logs as $log): ?>
-                        <tr>
-                            <td><?= htmlspecialchars($log['log_id']) ?></td>
-                            <td>
-                                <?php if ($log['user_id']): ?>
-                                    <strong><?= htmlspecialchars($log['full_name']) ?></strong><br>
-                                    <small><?= htmlspecialchars($log['username']) ?></small>
-                                <?php else: ?>
-                                    <em>System / Unknown</em>
-                                <?php endif; ?>
-                            </td>
-                            <td class="action-cell"><?= htmlspecialchars($log['action']) ?></td>
-                            <td><?= htmlspecialchars($log['module'] ?? '-') ?></td>
-                            <td><?= htmlspecialchars($log['record_id'] ?? '-') ?></td>
-                            <td class="action-cell"><?= htmlspecialchars($log['previous_value'] ?? '-') ?></td>
-                            <td class="action-cell"><?= htmlspecialchars($log['new_value'] ?? '-') ?></td>
-                            <td><?= htmlspecialchars($log['ip_address'] ?? '-') ?></td>
-                            <td><?= htmlspecialchars($log['created_at']) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-        </div>
-
-        <?php if ($total_pages > 1): ?>
-            <div class="pagination">
-                <?php if ($page > 1): ?>
-                    <a href="<?= htmlspecialchars($page_url(1)) ?>">« First</a>
-                    <a href="<?= htmlspecialchars($page_url($page - 1)) ?>">‹ Prev</a>
-                <?php endif; ?>
-
-                <?php for ($i = max(1, $page - 2); $i <= min($total_pages, $page + 2); $i++): ?>
-                    <?php if ($i == $page): ?>
-                        <span class="current"><?= $i ?></span>
-                    <?php else: ?>
-                        <a href="<?= htmlspecialchars($page_url($i)) ?>"><?= $i ?></a>
-                    <?php endif; ?>
-                <?php endfor; ?>
-
-                <?php if ($page < $total_pages): ?>
-                    <a href="<?= htmlspecialchars($page_url($page + 1)) ?>">Next ›</a>
-                    <a href="<?= htmlspecialchars($page_url($total_pages)) ?>">Last »</a>
-                <?php endif; ?>
-            </div>
-        <?php endif; ?>
     </div>
-</div>
-<?php if ($isEmbedded): ?>
-<footer class="audit-log-footer"><span><?= (int)$total_records ?> Activity Records</span><button type="button" class="btn btn-secondary" data-embedded-close>Done</button></footer>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('[data-embedded-close]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            window.parent.postMessage({ type: 'close-audit-log' }, '*');
-        });
-    });
-});
-</script>
-<?php endif; ?>
+    <?php if ($isEmbedded): ?>
+        <footer class="audit-log-footer"><span><?= (int)$total_records ?> Activity Records</span><button type="button" class="btn btn-secondary" data-embedded-close>Done</button></footer>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                document.querySelectorAll('[data-embedded-close]').forEach(function(button) {
+                    button.addEventListener('click', function() {
+                        window.parent.postMessage({
+                            type: 'close-audit-log'
+                        }, '*');
+                    });
+                });
+            });
+        </script>
+    <?php endif; ?>
 </body>
+
 </html>

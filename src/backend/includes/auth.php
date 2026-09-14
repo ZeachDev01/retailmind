@@ -9,7 +9,8 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/functions.php';
 
-function app_base_url(): string {
+function app_base_url(): string
+{
     $documentRoot = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
     $projectRoot = rtrim(str_replace('\\', '/', dirname(__DIR__, 2) . '/frontend'), '/');
     if ($documentRoot === '' || $projectRoot === '') {
@@ -22,7 +23,8 @@ function app_base_url(): string {
     return '';
 }
 
-function app_url(string $path = ''): string {
+function app_url(string $path = ''): string
+{
     $baseUrl = app_base_url();
     $normalizedPath = ltrim($path, '/');
     if ($normalizedPath === '') {
@@ -31,15 +33,18 @@ function app_url(string $path = ''): string {
     return ($baseUrl === '' ? '' : $baseUrl) . '/' . $normalizedPath;
 }
 
-function is_logged_in(): bool {
+function is_logged_in(): bool
+{
     return isset($_SESSION['user_id']);
 }
 
-function current_role(): ?string {
+function current_role(): ?string
+{
     return $_SESSION['role'] ?? null;
 }
 
-function password_policy_error(string $password): ?string {
+function password_policy_error(string $password): ?string
+{
     $minimum = max(8, (int)env('PASSWORD_MIN_LENGTH', 10));
     if (strlen($password) < $minimum) {
         return "Password must contain at least {$minimum} characters.";
@@ -50,7 +55,8 @@ function password_policy_error(string $password): ?string {
     return null;
 }
 
-function login_security_limits(): array {
+function login_security_limits(): array
+{
     return [
         'max_attempts' => max(3, (int)env('LOGIN_MAX_ATTEMPTS', 5)),
         'window_minutes' => max(5, (int)env('LOGIN_WINDOW_MINUTES', 15)),
@@ -58,7 +64,8 @@ function login_security_limits(): array {
     ];
 }
 
-function login_attempt_count(PDO $pdo, string $username, string $ipAddress, int $windowMinutes): int {
+function login_attempt_count(PDO $pdo, string $username, string $ipAddress, int $windowMinutes): int
+{
     $stmt = $pdo->prepare(
         "SELECT COUNT(*) FROM login_attempts
          WHERE username = ? AND ip_address = ? AND was_successful = 0
@@ -68,7 +75,8 @@ function login_attempt_count(PDO $pdo, string $username, string $ipAddress, int 
     return (int)$stmt->fetchColumn();
 }
 
-function record_login_attempt(PDO $pdo, string $username, string $ipAddress, bool $success): void {
+function record_login_attempt(PDO $pdo, string $username, string $ipAddress, bool $success): void
+{
     $stmt = $pdo->prepare(
         'INSERT INTO login_attempts (username, ip_address, was_successful) VALUES (?, ?, ?)'
     );
@@ -79,11 +87,13 @@ function record_login_attempt(PDO $pdo, string $username, string $ipAddress, boo
     }
 }
 
-function last_login_error(): string {
+function last_login_error(): string
+{
     return (string)($_SESSION['_login_error'] ?? 'Invalid username or password.');
 }
 
-function login_user(PDO $pdo, string $username, string $password): bool {
+function login_user(PDO $pdo, string $username, string $password): bool
+{
     $username = trim($username);
 
     $stmt = $pdo->prepare(
@@ -123,7 +133,7 @@ function login_user(PDO $pdo, string $username, string $password): bool {
             'Authentication',
             (int)$user['user_id'],
             null,
-            ['username' => $user['username'], 'role' => $user['role_name'], 'status' => 'success']
+            ['username' => $user['username'], 'role' => $user['role_name'], 'action' => 'success']
         );
         return true;
     }
@@ -153,7 +163,8 @@ function login_user(PDO $pdo, string $username, string $password): bool {
     return false;
 }
 
-function validate_current_session(PDO $pdo): void {
+function validate_current_session(PDO $pdo): void
+{
     if (!is_logged_in()) {
         return;
     }
@@ -194,7 +205,8 @@ function validate_current_session(PDO $pdo): void {
     }
 }
 
-function require_role(array $allowed_roles): void {
+function require_role(array $allowed_roles): void
+{
     global $pdo;
     if (!is_logged_in()) {
         header('Location: ' . app_url('?login=1'));
@@ -210,17 +222,20 @@ function require_role(array $allowed_roles): void {
     }
 }
 
-function current_branch_id(): ?int {
+function current_branch_id(): ?int
+{
     return isset($_SESSION['branch_id']) && $_SESSION['branch_id'] !== null
         ? (int)$_SESSION['branch_id']
         : null;
 }
 
-function is_system_admin(): bool {
+function is_system_admin(): bool
+{
     return in_array(current_role(), ['super_admin', 'admin'], true);
 }
 
-function has_privilege(string $privilegeKey): bool {
+function has_privilege(string $privilegeKey): bool
+{
     global $pdo;
     if (!is_logged_in()) {
         return false;
@@ -247,7 +262,8 @@ function has_privilege(string $privilegeKey): bool {
     return (bool)$stmt->fetchColumn();
 }
 
-function require_privilege(string $privilegeKey): void {
+function require_privilege(string $privilegeKey): void
+{
     global $pdo;
     if (!is_logged_in()) {
         header('Location: ' . app_url('?login=1'));
@@ -260,11 +276,13 @@ function require_privilege(string $privilegeKey): void {
     }
 }
 
-function require_inventory_management(): void {
+function require_inventory_management(): void
+{
     require_privilege('manage_inventory');
 }
 
-function require_assigned_branch(): int {
+function require_assigned_branch(): int
+{
     if (is_system_admin() && current_branch_id() === null) {
         return 0;
     }
@@ -276,7 +294,8 @@ function require_assigned_branch(): int {
     return $branchId;
 }
 
-function selected_inventory_branch_id(PDO $pdo): ?int {
+function selected_inventory_branch_id(PDO $pdo): ?int
+{
     if (!is_system_admin()) {
         return require_assigned_branch();
     }
@@ -296,7 +315,8 @@ function selected_inventory_branch_id(PDO $pdo): ?int {
     return (int)$branchId;
 }
 
-function branch_scope(string $alias = 'p', ?int $selectedBranchId = null): array {
+function branch_scope(string $alias = 'p', ?int $selectedBranchId = null): array
+{
     if (is_system_admin()) {
         return $selectedBranchId !== null ? [" AND {$alias}.branch_id = ?", [$selectedBranchId]] : ['', []];
     }
@@ -304,11 +324,13 @@ function branch_scope(string $alias = 'p', ?int $selectedBranchId = null): array
     return [" AND {$alias}.branch_id = ?", [$branchId]];
 }
 
-function logout_user(): void {
+function logout_user(): void
+{
     App\Core\Session::destroy();
 }
 
-function redirect_by_role(): void {
+function redirect_by_role(): void
+{
     switch (current_role()) {
         case 'super_admin':
         case 'admin':
