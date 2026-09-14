@@ -10,11 +10,36 @@
 -- ---------- Users & Roles ----------
 CREATE TABLE roles (
     role_id INT AUTO_INCREMENT PRIMARY KEY,
-    role_name VARCHAR(50) NOT NULL UNIQUE   -- super_admin | admin | inventory_manager | cashier
+    role_name VARCHAR(50) NOT NULL UNIQUE   -- super_admin | admin | inventory_manager | cashier | seller
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO roles (role_name) VALUES
-('super_admin'), ('admin'), ('inventory_manager'), ('cashier');
+('super_admin'), ('admin'), ('inventory_manager'), ('cashier'), ('seller');
+
+CREATE TABLE branches (
+    branch_id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_name VARCHAR(100) NOT NULL UNIQUE,
+    branch_code VARCHAR(30) NOT NULL UNIQUE,
+    status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_branches_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE privileges (
+    privilege_id INT AUTO_INCREMENT PRIMARY KEY,
+    privilege_key VARCHAR(80) NOT NULL UNIQUE,
+    privilege_name VARCHAR(120) NOT NULL UNIQUE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE role_privileges (
+    role_id INT NOT NULL,
+    privilege_id INT NOT NULL,
+    PRIMARY KEY (role_id, privilege_id),
+    FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE CASCADE,
+    FOREIGN KEY (privilege_id) REFERENCES privileges(privilege_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -30,8 +55,11 @@ CREATE TABLE users (
     session_version INT NOT NULL DEFAULT 1,
     password_changed_at DATETIME NULL,
     must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+    branch_id INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (role_id) REFERENCES roles(role_id)
+    INDEX idx_users_branch_id (branch_id),
+    FOREIGN KEY (role_id) REFERENCES roles(role_id),
+    FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO users (full_name, username, email, password_hash, role_id, status, must_change_password)
@@ -45,6 +73,40 @@ VALUES (
     TRUE
 );
 
+CREATE TABLE user_privileges (
+        user_id INT NOT NULL,
+        privilege_id INT NOT NULL,
+        allowed BOOLEAN NOT NULL DEFAULT TRUE,
+        PRIMARY KEY (user_id, privilege_id),
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+        FOREIGN KEY (privilege_id) REFERENCES privileges(privilege_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO privileges (privilege_key, privilege_name) VALUES
+('manage_users', 'Manage user accounts'),
+('manage_roles', 'Assign user roles'),
+('manage_privileges', 'Manage user privileges'),
+('manage_branches', 'Create and manage branches'),
+('manage_inventory', 'Manage branch inventory'),
+('view_inventory', 'View branch inventory');
+
+INSERT INTO role_privileges (role_id, privilege_id)
+SELECT r.role_id, p.privilege_id
+FROM roles r CROSS JOIN privileges p
+WHERE r.role_name IN ('super_admin', 'admin');
+
+INSERT INTO role_privileges (role_id, privilege_id)
+SELECT r.role_id, p.privilege_id
+FROM roles r CROSS JOIN privileges p
+WHERE r.role_name = 'inventory_manager'
+    AND p.privilege_key IN ('manage_inventory', 'view_inventory');
+
+INSERT INTO role_privileges (role_id, privilege_id)
+SELECT r.role_id, p.privilege_id
+FROM roles r CROSS JOIN privileges p
+WHERE r.role_name IN ('seller', 'cashier')
+    AND p.privilege_key = 'view_inventory';
+
 -- ---------- Products & Inventory ----------
 CREATE TABLE categories (
     category_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -53,9 +115,9 @@ CREATE TABLE categories (
 
 CREATE TABLE products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
-    sku VARCHAR(50) NOT NULL UNIQUE,
-    barcode VARCHAR(50) NOT NULL UNIQUE,
-    case_barcode VARCHAR(80) NULL UNIQUE,
+    sku VARCHAR(50) NOT NULL,
+    barcode VARCHAR(50) NOT NULL,
+    case_barcode VARCHAR(80) NULL,
     parent_product_id INT NULL,
     variant_label VARCHAR(100) NULL,
     product_name VARCHAR(150) NOT NULL,
@@ -78,13 +140,19 @@ CREATE TABLE products (
     product_image VARCHAR(255),
     status ENUM('active','inactive') DEFAULT 'active',
     created_by INT,
+    branch_id INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (unit_price >= 0),
     CHECK (cost_price >= 0),
     INDEX idx_products_product_name (product_name),
     INDEX idx_products_status (status),
+    INDEX idx_products_branch_id (branch_id),
+    UNIQUE KEY uq_products_branch_sku (branch_id, sku),
+    UNIQUE KEY uq_products_branch_barcode (branch_id, barcode),
+    UNIQUE KEY uq_products_branch_case_barcode (branch_id, case_barcode),
     FOREIGN KEY (category_id) REFERENCES categories(category_id),
-    FOREIGN KEY (created_by) REFERENCES users(user_id)
+    FOREIGN KEY (created_by) REFERENCES users(user_id),
+    FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE inventory (

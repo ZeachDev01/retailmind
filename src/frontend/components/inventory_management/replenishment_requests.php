@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     try {
         if ($action === 'create') {
+            require_inventory_management();
             $productId = (int)($_POST['product_id'] ?? 0);
             $requestQty = (int)($_POST['request_qty'] ?? 0);
             $notes = trim((string)($_POST['notes'] ?? ''));
@@ -45,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $message = "Replenishment request #{$requestId} created successfully";
         } elseif ($action === 'reject_forecast') {
+            require_inventory_management();
             $predictionId = (int)($_POST['forecast_prediction_id'] ?? 0);
             $productId = (int)($_POST['product_id'] ?? 0);
             $originalQty = max(0, (int)($_POST['original_suggested_qty'] ?? 0));

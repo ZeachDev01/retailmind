@@ -73,7 +73,8 @@ foreach ($rows as &$row) {
 unset($row);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verify_csrf();
+    require_inventory_management();
+    csrf_verify();
     try {
         if (($_POST['action'] ?? '') === 'schedule_all') {
             $find = $pdo->prepare("SELECT schedule_id FROM cycle_count_schedules WHERE product_id=? AND status='scheduled' ORDER BY schedule_id DESC LIMIT 1");

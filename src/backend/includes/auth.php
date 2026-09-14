@@ -88,8 +88,10 @@ function login_user(PDO $pdo, string $username, string $password): bool {
 
     $stmt = $pdo->prepare(
         "SELECT u.user_id, u.full_name, u.username, u.email, u.password_hash, u.status,
-                u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password, r.role_name
+            u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password,
+            u.branch_id, b.branch_name, r.role_name
          FROM users u JOIN roles r ON u.role_id = r.role_id
+         LEFT JOIN branches b ON b.branch_id = u.branch_id
          WHERE u.username = ? LIMIT 1"
     );
     $stmt->execute([$username]);
@@ -107,10 +109,13 @@ function login_user(PDO $pdo, string $username, string $password): bool {
         $_SESSION['user_id'] = (int)$user['user_id'];
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['role'] = $user['role_name'];
+        $_SESSION['branch_id'] = $user['branch_id'] !== null ? (int)$user['branch_id'] : null;
+        $_SESSION['branch_name'] = $user['branch_name'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
         $_SESSION['_authenticated_at'] = time();
         unset($_SESSION['_login_error']);
+        unset($_SESSION['_login_username']);
         log_activity(
             $pdo,
             (int)$user['user_id'],
@@ -158,8 +163,11 @@ function validate_current_session(PDO $pdo): void {
     }
     $validated = true;
     $stmt = $pdo->prepare(
-        "SELECT u.status, u.session_version, u.full_name, u.must_change_password, r.role_name
-         FROM users u JOIN roles r ON r.role_id = u.role_id WHERE u.user_id = ?"
+        "SELECT u.status, u.session_version, u.full_name, u.must_change_password,
+            u.branch_id, b.branch_name, r.role_name
+         FROM users u JOIN roles r ON r.role_id = u.role_id
+         LEFT JOIN branches b ON b.branch_id = u.branch_id
+         WHERE u.user_id = ?"
     );
     $stmt->execute([(int)$_SESSION['user_id']]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -173,6 +181,8 @@ function validate_current_session(PDO $pdo): void {
     }
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['role'] = $user['role_name'];
+    $_SESSION['branch_id'] = $user['branch_id'] !== null ? (int)$user['branch_id'] : null;
+    $_SESSION['branch_name'] = $user['branch_name'];
     $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
 
     $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
@@ -198,6 +208,100 @@ function require_role(array $allowed_roles): void {
         http_response_code(403);
         die('Access denied: your role does not have permission to view this page.');
     }
+}
+
+function current_branch_id(): ?int {
+    return isset($_SESSION['branch_id']) && $_SESSION['branch_id'] !== null
+        ? (int)$_SESSION['branch_id']
+        : null;
+}
+
+function is_system_admin(): bool {
+    return in_array(current_role(), ['super_admin', 'admin'], true);
+}
+
+function has_privilege(string $privilegeKey): bool {
+    global $pdo;
+    if (!is_logged_in()) {
+        return false;
+    }
+    if (current_role() === 'super_admin' && $privilegeKey !== 'manage_inventory') {
+        return true;
+    }
+    if (in_array(current_role(), ['admin', 'super_admin'], true) && $privilegeKey === 'manage_inventory') {
+        return false;
+    }
+    $stmt = $pdo->prepare(
+        "SELECT EXISTS(
+            SELECT 1
+            FROM privileges p
+            LEFT JOIN user_privileges up ON up.privilege_id = p.privilege_id AND up.user_id = ?
+            LEFT JOIN role_privileges rp ON rp.privilege_id = p.privilege_id
+            JOIN users u ON u.user_id = ?
+            WHERE p.privilege_key = ?
+              AND ((up.user_id IS NOT NULL AND up.allowed = 1) OR (up.user_id IS NULL AND rp.role_id = u.role_id))
+        )"
+    );
+    $userId = (int)$_SESSION['user_id'];
+    $stmt->execute([$userId, $userId, $privilegeKey]);
+    return (bool)$stmt->fetchColumn();
+}
+
+function require_privilege(string $privilegeKey): void {
+    global $pdo;
+    if (!is_logged_in()) {
+        header('Location: ' . app_url('?login=1'));
+        exit;
+    }
+    validate_current_session($pdo);
+    if (!has_privilege($privilegeKey)) {
+        http_response_code(403);
+        die('Access denied: your account does not have this privilege.');
+    }
+}
+
+function require_inventory_management(): void {
+    require_privilege('manage_inventory');
+}
+
+function require_assigned_branch(): int {
+    if (is_system_admin() && current_branch_id() === null) {
+        return 0;
+    }
+    $branchId = current_branch_id();
+    if ($branchId === null) {
+        http_response_code(403);
+        die('Access denied: your account is not assigned to a branch.');
+    }
+    return $branchId;
+}
+
+function selected_inventory_branch_id(PDO $pdo): ?int {
+    if (!is_system_admin()) {
+        return require_assigned_branch();
+    }
+
+    $branchId = filter_input(INPUT_GET, 'branch_id', FILTER_VALIDATE_INT);
+    if ($branchId === false || $branchId === null || $branchId <= 0) {
+        return null;
+    }
+
+    $stmt = $pdo->prepare("SELECT branch_id FROM branches WHERE branch_id = ? AND status = 'active'");
+    $stmt->execute([$branchId]);
+    if (!$stmt->fetchColumn()) {
+        http_response_code(400);
+        die('The selected branch is not active.');
+    }
+
+    return (int)$branchId;
+}
+
+function branch_scope(string $alias = 'p', ?int $selectedBranchId = null): array {
+    if (is_system_admin()) {
+        return $selectedBranchId !== null ? [" AND {$alias}.branch_id = ?", [$selectedBranchId]] : ['', []];
+    }
+    $branchId = require_assigned_branch();
+    return [" AND {$alias}.branch_id = ?", [$branchId]];
 }
 
 function logout_user(): void {

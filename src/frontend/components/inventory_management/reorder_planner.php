@@ -17,6 +17,7 @@ function planner_round_quantity(int $quantity, int $minimumOrder, int $packageSi
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_inventory_management();
     csrf_verify();
     $productIds = array_values(array_unique(array_filter(array_map('intval', $_POST['product_ids'] ?? []))));
     if (!$productIds) {

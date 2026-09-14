@@ -112,7 +112,7 @@ body.system-health-open { overflow: hidden; }
 .audit-log-frame-close { position: absolute; z-index: 2; top: 1.35rem; right: 1.3rem; width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: #94a3b8; cursor: pointer; }
 .audit-log-frame-close:hover { background: rgba(148, 163, 184, .14); color: #f8fafc; }
 
-.manage-users-embedded { min-width: 0; min-height: 100vh; display: flex; flex-direction: column; background: #111827; color: #e5edf8; overflow: hidden; }
+.manage-users-embedded { min-width: 0; min-height: 100vh; display: flex; flex-direction: column; background: #111827; color: #e5edf8; overflow-x: hidden; overflow-y: auto; }
 .manage-users-embedded .app-shell { flex: 1; display: block; min-height: 0; }
 .manage-users-embedded .sidebar,
 .manage-users-embedded .global-top-tools,
@@ -374,6 +374,9 @@ body.system-health-open { overflow: hidden; }
 .rm-drawer-header p { color: var(--muted); font-size: .84rem; margin-top: .2rem; }
 .rm-close { width: 36px; height: 36px; flex: 0 0 36px; border: 0; border-radius: 9px; background: #f1f5f9; color: var(--muted); cursor: pointer; }
 .rm-modal-body { padding: 1.15rem; overflow-y: auto; }
+.overview-pagination { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-top: 1rem; }
+.overview-pagination .btn { min-width: 88px; }
+.overview-pagination-status { min-width: 90px; color: var(--muted); font-size: .86rem; text-align: center; }
 .rm-modal-actions { display: flex; justify-content: flex-end; gap: .65rem; padding: .9rem 1.15rem; border-top: 1px solid var(--border); background: #f8fafc; }
 .rm-drawer-overlay { justify-content: flex-end; padding: 0; }
 .rm-drawer {

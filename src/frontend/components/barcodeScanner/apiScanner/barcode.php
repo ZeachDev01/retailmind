@@ -90,7 +90,7 @@ try {
     }
 
     if ($action === 'update_stock') {
-        require_role(['admin', 'inventory_manager']);
+        require_inventory_management();
         csrf_verify($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($input['csrf_token'] ?? null));
         if (!$product) {
             http_response_code(404);

@@ -5,8 +5,10 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
 require_role(['admin', 'super_admin', 'inventory_manager']);
 
-$canDirectAdjust = in_array(current_role(), ['admin', 'super_admin'], true);
+$canManageInventory = has_privilege('manage_inventory');
+$canDirectAdjust = $canManageInventory;
 $productService = new ProductService($pdo);
+$selectedBranchId = selected_inventory_branch_id($pdo);
 
 function product_ids_from_request($value): array
 {
@@ -23,6 +25,8 @@ function redirect_products(string $type, string $message): void
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
 
+    require_inventory_management();
+
     if ($action === 'create_category') {
         csrf_verify();
         try {
@@ -38,6 +42,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
         csrf_verify();
         try {
+            // Handle image upload
+            $productImage = '';
+            if (!empty($_FILES['product_image']['name'])) {
+                $file = $_FILES['product_image'];
+                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                $maxSize = 5 * 1024 * 1024; // 5MB
+
+                // Validate file
+                if (!in_array($file['type'], $allowedTypes, true)) {
+                    throw new RuntimeException('Only image files (JPEG, PNG, GIF, WebP) are allowed.');
+                }
+                if ($file['size'] > $maxSize) {
+                    throw new RuntimeException('Image file must not exceed 5MB.');
+                }
+                if ($file['error'] !== UPLOAD_ERR_OK) {
+                    throw new RuntimeException('Image upload failed: ' . $file['error']);
+                }
+
+                // Generate unique filename
+                $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+                $filename = bin2hex(random_bytes(16)) . '.' . $ext;
+                $uploadDir = __DIR__ . '/../../../backend/storage/images';
+                $uploadPath = $uploadDir . '/' . $filename;
+
+                // Create directory if it doesn't exist
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+
+                // Move uploaded file
+                if (!move_uploaded_file($file['tmp_name'], $uploadPath)) {
+                    throw new RuntimeException('Failed to save the uploaded image.');
+                }
+
+                $productImage = 'storage/images/' . $filename;
+            }
+
             $productId = $productService->createProduct([
                 'barcode' => $_POST['barcode'] ?? '',
                 'product_name' => $_POST['product_name'] ?? '',
@@ -57,7 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'parent_product_id' => $_POST['parent_product_id'] ?? 0,
                 'variant_label' => $_POST['variant_label'] ?? '',
                 'expiration_date' => $_POST['expiration_date'] ?? null,
-                'product_image' => $_POST['product_image'] ?? '',
+                'product_image' => $productImage,
+                'branch_id' => $_POST['branch_id'] ?? '',
                 'status' => $_POST['status'] ?? 'active',
                 'initial_stock_quantity' => 0,
             ], (int)$_SESSION['user_id']);
@@ -103,9 +145,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'adjust') {
         csrf_verify();
         try {
-            if (!$canDirectAdjust) {
-                throw new RuntimeException('Only administrators can perform emergency stock adjustments.');
-            }
             $productService->adjustStock([
                 'qty_change' => (int)($_POST['qty_change'] ?? 0),
                 'product_id' => (int)($_POST['product_id'] ?? 0),
@@ -125,14 +164,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Select at least one product.');
             }
             $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+            [$bulkScopeSql, $bulkScopeParams] = branch_scope('products');
 
             if ($action === 'bulk_status') {
                 $status = in_array($_POST['status'] ?? '', ['active', 'inactive'], true) ? $_POST['status'] : '';
                 if ($status === '') {
                     throw new RuntimeException('Choose a valid product status.');
                 }
-                $stmt = $pdo->prepare("UPDATE products SET status = ? WHERE product_id IN ($placeholders)");
-                $stmt->execute(array_merge([$status], $productIds));
+                $stmt = $pdo->prepare("UPDATE products SET status = ? WHERE product_id IN ($placeholders){$bulkScopeSql}");
+                $stmt->execute(array_merge([$status], $productIds, $bulkScopeParams));
                 log_activity($pdo, (int)$_SESSION['user_id'], 'Bulk product status updated to ' . $status . ' for ' . count($productIds) . ' products');
                 redirect_products('success', count($productIds) . ' product(s) updated to ' . $status . '.');
             }
@@ -141,8 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($categoryId <= 0) {
                 throw new RuntimeException('Choose a category.');
             }
-            $stmt = $pdo->prepare("UPDATE products SET category_id = ? WHERE product_id IN ($placeholders)");
-            $stmt->execute(array_merge([$categoryId], $productIds));
+            $stmt = $pdo->prepare("UPDATE products SET category_id = ? WHERE product_id IN ($placeholders){$bulkScopeSql}");
+            $stmt->execute(array_merge([$categoryId], $productIds, $bulkScopeParams));
             log_activity($pdo, (int)$_SESSION['user_id'], 'Bulk product category updated for ' . count($productIds) . ' products');
             redirect_products('success', 'Category updated for ' . count($productIds) . ' product(s).');
         } catch (Throwable $e) {
@@ -152,8 +192,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $categories = $productService->getCategories();
-$products = $productService->getProductsForManagement();
-$activeProducts = $productService->getActiveProducts();
+$branches = $pdo->query("SELECT branch_id, branch_name, branch_code FROM branches WHERE status = 'active' ORDER BY branch_name")->fetchAll();
+$products = $productService->getProductsForManagement($selectedBranchId);
+$activeProducts = $productService->getActiveProducts($selectedBranchId);
 $variantParents = $products;
 $totalProducts = count($products);
 $lowCount = 0;
@@ -179,6 +220,17 @@ foreach ($products as $product) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Products &amp; Stock</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <style>
+        /* Fix scrolling in wizard modal */
+        #add-product-modal .rm-modal-body {
+            max-height: 65vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        #add-product-modal .wizard-panel {
+            min-height: auto;
+        }
+    </style>
 </head>
 <body class="products-page">
 <div class="app-shell">
@@ -189,10 +241,23 @@ foreach ($products as $product) {
                 <h1>Products &amp; Stock</h1>
                 <p class="page-subtitle">Search, filter, organize, and maintain the store's complete product catalog.</p>
             </div>
+            <?php if (is_system_admin()): ?>
+                <form method="get" class="page-heading-actions" aria-label="Inventory branch filter">
+                    <label for="inventory-branch" class="u-sr-only">View inventory branch</label>
+                    <select id="inventory-branch" name="branch_id" onchange="this.form.submit()">
+                        <option value="">All branches</option>
+                        <?php foreach ($branches as $branch): ?>
+                            <option value="<?= (int)$branch['branch_id'] ?>" <?= $selectedBranchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+            <?php endif; ?>
             <div class="page-heading-actions products-quick-actions">
-                <button type="button" class="quick-action products-quick-action" id="add-product-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i><strong>Add Product</strong></button>
-                <button type="button" class="quick-action products-quick-action" id="add-category-btn"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button>
-                <a class="quick-action products-quick-action" href="<?= htmlspecialchars(app_url('components/report/stock_receiving.php')) ?>"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i><strong>Receive Stock</strong></a>
+                <?php if ($canManageInventory): ?>
+                    <button type="button" class="quick-action products-quick-action" id="add-product-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i><strong>Add Product</strong></button>
+                    <button type="button" class="quick-action products-quick-action" id="add-category-btn"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button>
+                    <a class="quick-action products-quick-action" href="<?= htmlspecialchars(app_url('components/report/stock_receiving.php')) ?>"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i><strong>Receive Stock</strong></a>
+                <?php endif; ?>
                 <a class="quick-action products-quick-action" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>
             </div>
         </header>
@@ -249,10 +314,12 @@ foreach ($products as $product) {
 
             <div class="bulk-bar" id="bulk-bar">
                 <strong><span id="selected-count">0</span> selected</strong>
-                <button class="btn btn-small btn-warning" type="button" id="bulk-print"><i class="bi bi-printer"></i> Print barcodes</button>
-                <button class="btn btn-small btn-quiet" type="button" id="bulk-category"><i class="bi bi-folder"></i> Change category</button>
-                <button class="btn btn-small btn-quiet" type="button" id="bulk-activate">Activate</button>
-                <button class="btn btn-small btn-danger" type="button" id="bulk-deactivate">Deactivate</button>
+                <?php if ($canManageInventory): ?>
+                    <button class="btn btn-small btn-warning" type="button" id="bulk-print"><i class="bi bi-printer"></i> Print barcodes</button>
+                    <button class="btn btn-small btn-quiet" type="button" id="bulk-category"><i class="bi bi-folder"></i> Change category</button>
+                    <button class="btn btn-small btn-quiet" type="button" id="bulk-activate">Activate</button>
+                    <button class="btn btn-small btn-danger" type="button" id="bulk-deactivate">Deactivate</button>
+                <?php endif; ?>
                 <button class="btn btn-small btn-quiet" type="button" id="clear-selection">Clear</button>
             </div>
 
@@ -342,7 +409,7 @@ foreach ($products as $product) {
 <div class="rm-modal-overlay" id="add-product-modal" aria-hidden="true">
     <section class="rm-modal u-modal-lg" role="dialog" aria-modal="true" aria-labelledby="add-product-title">
         <header class="rm-modal-header"><div><h2 id="add-product-title">Add Product</h2><p>Complete the guided steps. Stock begins at zero and must be received through the approved workflow.</p></div><button type="button" class="rm-close" data-close-modal aria-label="Close add product"><i class="bi bi-x-lg"></i></button></header>
-        <form method="POST" id="add-product-form" novalidate>
+        <form method="POST" id="add-product-form" novalidate enctype="multipart/form-data">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="create">
             <div class="rm-modal-body">
@@ -355,9 +422,10 @@ foreach ($products as $product) {
                         <div class="form-group full"><label>Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
                         <div class="form-group"><label>Brand</label><input name="brand" maxlength="120"></div>
                         <div class="form-group"><label>Category *</label><select name="category_id" id="product-category" required><option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?></select><small class="field-error">Select a category.</small></div>
+                        <?php if (is_system_admin()): ?><div class="form-group"><label>Branch *</label><select name="branch_id" required><option value="">Select branch</option><?php foreach ($branches as $branch): ?><option value="<?= (int)$branch['branch_id'] ?>" <?= $selectedBranchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option><?php endforeach; ?></select></div><?php endif; ?>
                         <div class="form-group"><label>Parent Product Family</label><select name="parent_product_id"><option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?></select></div>
                         <div class="form-group"><label>Variant Label</label><input name="variant_label" maxlength="100" placeholder="Example: 200 mL, Red, Large"></div>
-                        <div class="form-group full"><label>Product Image</label><input name="product_image" placeholder="Optional image URL or path"></div>
+                        <div class="form-group full"><label>Product Image</label><div class="u-mb-05"><input type="file" name="product_image" id="product-image-input" accept="image/jpeg,image/png,image/gif,image/webp"><small class="field-help">Supported formats: JPEG, PNG, GIF, WebP. Max size: 5MB.</small></div><div id="image-preview-container" hidden><div style="display:flex;flex-direction:column;gap:0.5rem"><img id="image-preview" src="" alt="Product preview" style="max-width:200px;border-radius:4px;border:1px solid #ddd;"><button type="button" class="btn btn-small btn-quiet" id="clear-image-btn">Clear image</button></div></div></div>
                     </div>
                 </section>
 
@@ -400,7 +468,7 @@ foreach ($products as $product) {
                     </div>
                 </section>
             </div>
-            <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button type="button" class="btn btn-quiet" id="wizard-back" hidden>Back</button><button type="button" class="btn" id="wizard-next">Next</button><button type="submit" class="btn btn-success" id="wizard-save" hidden><i class="bi bi-check2"></i> Save Product</button></footer>
+            <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button type="button" class="btn btn-quiet" id="wizard-reset">Reset</button><button type="button" class="btn btn-quiet" id="wizard-back" hidden>Back</button><button type="button" class="btn" id="wizard-next">Next</button><button type="submit" class="btn btn-success" id="wizard-save" hidden><i class="bi bi-check2"></i> Save Product</button></footer>
         </form>
     </section>
 </div>
@@ -460,7 +528,10 @@ function closeModal(node) { RetailMindUI.closeOverlay(node.closest('.rm-modal-ov
 document.querySelectorAll('[data-close-modal], [data-close-drawer]').forEach(button => button.addEventListener('click', () => closeModal(button)));
 document.querySelectorAll('.rm-modal-overlay, .rm-drawer-overlay').forEach(overlay => overlay.addEventListener('click', event => { if (event.target === overlay) RetailMindUI.closeOverlay(overlay); }));
 
-document.getElementById('add-product-btn').addEventListener('click', () => openModal('add-product-modal'));
+document.getElementById('add-product-btn').addEventListener('click', () => {
+    openModal('add-product-modal');
+    restoreFormState();
+});
 document.getElementById('add-category-btn').addEventListener('click', () => openModal('add-category-modal'));
 const stockAdjustButton = document.getElementById('stock-adjust-btn');
 if (stockAdjustButton) stockAdjustButton.addEventListener('click', () => openModal('stock-adjust-modal'));
@@ -593,6 +664,128 @@ backButton.addEventListener('click', () => setWizardStep(wizardStep - 1));
 addProductForm.addEventListener('submit', event => { for (let step = 1; step <= 3; step++) { if (!validateStep(step)) { event.preventDefault(); setWizardStep(step); RetailMindUI.toast('Review the highlighted fields before saving.', 'error'); return; } } saveButton.disabled = true; saveButton.innerHTML = '<i class="bi bi-arrow-repeat"></i> Saving...'; });
 function renderReview() { const data = new FormData(addProductForm); const categoryText = document.getElementById('product-category').selectedOptions[0]?.text || '—'; const items = [['Product', data.get('product_name')], ['Brand', data.get('brand') || '—'], ['Category', categoryText], ['Barcode', data.get('barcode') || 'Generate automatically'], ['Cost Price', formatMoney(data.get('cost_price'))], ['Selling Price', formatMoney(data.get('selling_price'))], ['Reorder / Safety', `${data.get('reorder_level')} / ${data.get('safety_stock')}`], ['Supplier', data.get('preferred_supplier') || '—']]; document.getElementById('product-review').innerHTML = items.map(([label,value]) => `<div class="detail-item"><span>${label}</span><strong>${String(value).replace(/[<>]/g,'')}</strong></div>`).join(''); }
 
+// Form state preservation for Add Product modal
+const FORM_STATE_KEY = 'retail_mind_add_product_state';
+const FORM_STEP_KEY = 'retail_mind_add_product_step';
+const productModalOverlay = document.getElementById('add-product-modal');
+
+function saveFormState() {
+    const formData = new FormData(addProductForm);
+    const state = {};
+    formData.forEach((value, key) => {
+        if (key !== 'action') {
+            state[key] = value;
+        }
+    });
+    localStorage.setItem(FORM_STATE_KEY, JSON.stringify(state));
+    localStorage.setItem(FORM_STEP_KEY, String(wizardStep));
+}
+
+function restoreFormState() {
+    const savedState = localStorage.getItem(FORM_STATE_KEY);
+    const savedStep = localStorage.getItem(FORM_STEP_KEY);
+    
+    if (savedState) {
+        try {
+            const state = JSON.parse(savedState);
+            Object.entries(state).forEach(([name, value]) => {
+                const field = addProductForm.elements[name];
+                if (field) {
+                    if (field.type === 'checkbox') {
+                        field.checked = value === '1' || value === true;
+                    } else if (field.type === 'file') {
+                        // File inputs cannot be set programmatically for security reasons
+                        // Skip file input restoration
+                    } else {
+                        field.value = value;
+                    }
+                }
+            });
+            
+            // Restore the image preview if it was previously selected
+            const imageInput = document.getElementById('product-image-input');
+            if (imageInput && imageInput.value) {
+                const event = new Event('change', { bubbles: true });
+                imageInput.dispatchEvent(event);
+            }
+        } catch (e) {
+            console.error('Failed to restore form state:', e);
+        }
+    }
+    
+    if (savedStep) {
+        const step = Math.max(1, Math.min(5, Number(savedStep)));
+        setWizardStep(step);
+    } else {
+        setWizardStep(1);
+    }
+}
+
+function clearFormState() {
+    addProductForm.reset();
+    localStorage.removeItem(FORM_STATE_KEY);
+    localStorage.removeItem(FORM_STEP_KEY);
+    wizardStep = 1;
+    setWizardStep(1);
+    saveButton.disabled = false;
+    saveButton.innerHTML = '<i class="bi bi-check2"></i> Save Product';
+    
+    // Clear image preview
+    const imageInput = document.getElementById('product-image-input');
+    const imagePreviewContainer = document.getElementById('image-preview-container');
+    if (imageInput) imageInput.value = '';
+    if (imagePreviewContainer) imagePreviewContainer.hidden = true;
+}
+
+// Listen for modal open event
+const originalOpenOverlay = RetailMindUI?.openOverlay;
+if (originalOpenOverlay) {
+    RetailMindUI.openOverlay = function(overlay) {
+        originalOpenOverlay.call(this, overlay);
+        if (overlay && overlay.id === 'add-product-modal') {
+            restoreFormState();
+        }
+    };
+}
+
+// Save form state when modal is about to close
+productModalOverlay.addEventListener('click', event => {
+    if (event.target === productModalOverlay) {
+        saveFormState();
+    }
+});
+
+// Save state when close button is clicked
+document.querySelectorAll('#add-product-modal .rm-close').forEach(button => {
+    button.addEventListener('click', saveFormState);
+});
+
+// Save state when Cancel button is clicked
+document.querySelectorAll('#add-product-modal [data-close-modal]').forEach(button => {
+    button.addEventListener('click', saveFormState);
+});
+
+// Clear state on successful form submission
+const originalFormAction = addProductForm.action;
+addProductForm.addEventListener('submit', event => {
+    // Only clear state if form will actually submit (no validation errors)
+    if (!event.defaultPrevented) {
+        setTimeout(() => {
+            clearFormState();
+        }, 100);
+    }
+});
+
+// Reset button functionality
+document.getElementById('wizard-reset').addEventListener('click', event => {
+    event.preventDefault();
+    const confirmed = confirm('Are you sure you want to clear all entered data? This action cannot be undone.');
+    if (confirmed) {
+        clearFormState();
+        RetailMindUI.toast('Form reset. All data has been cleared.', 'info', 'Form cleared');
+    }
+});
+
 // Camera scan and internal barcode generation
 const barcodeInput = document.getElementById('create-barcode-input');
 let productScanner = null;
@@ -606,6 +799,42 @@ if (initialParams.get('stock')) stockFilter.value = initialParams.get('stock');
 if (initialParams.get('status')) statusFilter.value = initialParams.get('status');
 applyFilters(false);
 updateBulkBar();
+
+// Product image preview
+const imageInput = document.getElementById('product-image-input');
+const imagePreviewContainer = document.getElementById('image-preview-container');
+const imagePreview = document.getElementById('image-preview');
+const clearImageBtn = document.getElementById('clear-image-btn');
+
+imageInput.addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        if (!file.type.startsWith('image/')) {
+            RetailMindUI.toast('Please select a valid image file.', 'warning');
+            this.value = '';
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            RetailMindUI.toast('Image file must not exceed 5MB.', 'warning');
+            this.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            imagePreview.src = e.target.result;
+            imagePreviewContainer.hidden = false;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        imagePreviewContainer.hidden = true;
+    }
+});
+
+clearImageBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    imageInput.value = '';
+    imagePreviewContainer.hidden = true;
+});
 </script>
 </body>
 </html>

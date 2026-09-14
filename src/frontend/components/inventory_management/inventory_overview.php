@@ -8,31 +8,45 @@ require_role(['admin', 'inventory_manager']);
 
 $inventoryService = new InventoryService($pdo);
 $productService = new ProductService($pdo);
-$products = $productService->getProductsForManagement();
-$low_stock = get_low_stock_products($pdo);
-$expiring_batches = $inventoryService->getExpiringSoonBatches();
-$expired_batches = $inventoryService->getExpiredBatches();
-$fefo_recommendations = array_slice($inventoryService->getFefoRecommendations(), 0, 10);
-$total_products = $pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
-$total_units = $pdo->query("SELECT COALESCE(SUM(quantity_on_hand),0) FROM inventory")->fetchColumn();
-$out_of_stock = $pdo->query("SELECT COUNT(*) FROM inventory WHERE quantity_on_hand = 0")->fetchColumn();
-$out_of_stock_products = $pdo->query(
+$branchId = selected_inventory_branch_id($pdo);
+$branches = $pdo->query("SELECT branch_id, branch_name, branch_code FROM branches WHERE status = 'active' ORDER BY branch_name")->fetchAll();
+$products = $productService->getProductsForManagement($branchId);
+$low_stock = $inventoryService->getLowStockProducts($branchId);
+$expiring_batches = $inventoryService->getExpiringSoonBatches(30, $branchId);
+$expired_batches = $inventoryService->getExpiredBatches($branchId);
+$fefo_recommendations = array_slice($inventoryService->getFefoRecommendations($branchId), 0, 10);
+$summary = $inventoryService->getInventorySummary($branchId);
+$total_products = $summary['total_products'];
+$total_units = $summary['current_stock'];
+$scopeSql = $branchId !== null ? ' AND p.branch_id = ?' : '';
+$scopeParams = $branchId !== null ? [$branchId] : [];
+$outOfStockStmt = $pdo->prepare("SELECT COUNT(*) FROM inventory i JOIN products p ON p.product_id = i.product_id WHERE i.quantity_on_hand = 0{$scopeSql}");
+$outOfStockStmt->execute($scopeParams);
+$out_of_stock = $outOfStockStmt->fetchColumn();
+$out_of_stock_products = $pdo->prepare(
     "SELECT p.sku, p.product_name, i.quantity_on_hand, p.reorder_level
      FROM products p
      JOIN inventory i ON i.product_id = p.product_id
-     WHERE i.quantity_on_hand = 0
+    WHERE i.quantity_on_hand = 0{$scopeSql}
      ORDER BY p.product_name"
-)->fetchAll();
-$pending_counts = $pdo->query("SELECT COUNT(*) FROM inventory_counts WHERE status = 'pending'")->fetchColumn();
+);
+$out_of_stock_products->execute($scopeParams);
+$out_of_stock_products = $out_of_stock_products->fetchAll();
+$pendingStmt = $pdo->prepare("SELECT COUNT(*) FROM inventory_counts ic JOIN products p ON p.product_id = ic.product_id WHERE ic.status = 'pending'{$scopeSql}");
+$pendingStmt->execute($scopeParams);
+$pending_counts = $pendingStmt->fetchColumn();
 
-$recent_movements = $pdo->query(
+$recentStmt = $pdo->prepare(
     "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.product_name, u.full_name AS moved_by_name
      FROM stock_movements sm
      JOIN products p ON sm.product_id = p.product_id
      LEFT JOIN users u ON sm.moved_by = u.user_id
+    WHERE 1 = 1{$scopeSql}
      ORDER BY sm.moved_at DESC
      LIMIT 10"
-)->fetchAll();
+);
+$recentStmt->execute($scopeParams);
+$recent_movements = $recentStmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -49,6 +63,17 @@ $recent_movements = $pdo->query(
         <div class="topbar">
             <h1>Inventory Overview</h1>
             <span class="badge-role">Inventory Manager: <?= htmlspecialchars($_SESSION['full_name']) ?></span>
+            <?php if (is_system_admin()): ?>
+                <form method="get" aria-label="Inventory branch filter">
+                    <label for="overview-inventory-branch" class="u-sr-only">View inventory branch</label>
+                    <select id="overview-inventory-branch" name="branch_id" onchange="this.form.submit()">
+                        <option value="">All branches</option>
+                        <?php foreach ($branches as $branch): ?>
+                            <option value="<?= (int)$branch['branch_id'] ?>" <?= $branchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+            <?php endif; ?>
         </div>
 
         <div class="card-grid">
@@ -143,6 +168,62 @@ $recent_movements = $pdo->query(
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     if (!window.RetailMindUI) return;
+
+    const pageSize = 10;
+
+    document.querySelectorAll('.product-overview-modal .table-wrap').forEach(function (tableWrap) {
+        const rows = Array.from(tableWrap.querySelectorAll('tbody tr')).filter(function (row) {
+            return !row.querySelector('.u-empty-cell');
+        });
+        if (rows.length <= pageSize) return;
+
+        const pageCount = Math.ceil(rows.length / pageSize);
+        let currentPage = 1;
+        const pagination = document.createElement('nav');
+        pagination.className = 'overview-pagination';
+        pagination.setAttribute('aria-label', 'Product list pagination');
+
+        const previousButton = document.createElement('button');
+        previousButton.type = 'button';
+        previousButton.className = 'btn btn-quiet';
+        previousButton.textContent = 'Previous';
+        previousButton.addEventListener('click', function () {
+            if (currentPage > 1) {
+                currentPage -= 1;
+                renderPage();
+            }
+        });
+
+        const pageStatus = document.createElement('span');
+        pageStatus.className = 'overview-pagination-status';
+        pageStatus.setAttribute('aria-live', 'polite');
+
+        const nextButton = document.createElement('button');
+        nextButton.type = 'button';
+        nextButton.className = 'btn btn-quiet';
+        nextButton.textContent = 'Next';
+        nextButton.addEventListener('click', function () {
+            if (currentPage < pageCount) {
+                currentPage += 1;
+                renderPage();
+            }
+        });
+
+        pagination.append(previousButton, pageStatus, nextButton);
+        tableWrap.appendChild(pagination);
+
+        function renderPage() {
+            const firstRow = (currentPage - 1) * pageSize;
+            rows.forEach(function (row, index) {
+                row.hidden = index < firstRow || index >= firstRow + pageSize;
+            });
+            pageStatus.textContent = 'Page ' + currentPage + ' of ' + pageCount;
+            previousButton.disabled = currentPage === 1;
+            nextButton.disabled = currentPage === pageCount;
+        }
+
+        renderPage();
+    });
 
     document.querySelectorAll('[data-modal-target]').forEach(function (trigger) {
         const modal = document.getElementById(trigger.dataset.modalTarget);

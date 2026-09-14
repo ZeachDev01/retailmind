@@ -51,6 +51,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     csrf_verify();
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
+    $_SESSION['_login_username'] = $username;
 
     if ($username && $password && login_user($pdo, $username, $password)) {
         landing_redirect_by_role();
@@ -71,11 +72,13 @@ $forgotPasswordUrl = htmlspecialchars(landing_app_url('components/auth/forgot_pa
 $registerUrl = htmlspecialchars(landing_app_url('components/auth/register.php'), ENT_QUOTES, 'UTF-8');
 $styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
 $loginError = '';
+$loginUsername = (string)($_SESSION['_login_username'] ?? '');
 $shouldOpenLogin = ($_GET['login'] ?? '') === '1';
 if ($shouldOpenLogin && isset($_SESSION['_login_error'])) {
     $loginError = (string)$_SESSION['_login_error'];
     unset($_SESSION['_login_error']);
 }
+unset($_SESSION['_login_username']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -254,7 +257,7 @@ if ($shouldOpenLogin && isset($_SESSION['_login_error'])) {
                     <?= csrf_field() ?>
                     <div class="form-group">
                         <label for="landing-login-username">Username</label>
-                        <input type="text" id="landing-login-username" name="username" placeholder="Enter your username" required autocomplete="username">
+                        <input type="text" id="landing-login-username" name="username" value="<?= htmlspecialchars($loginUsername, ENT_QUOTES, 'UTF-8') ?>" placeholder="Enter your username" required autocomplete="username">
                     </div>
                     <div class="form-group">
                         <label for="landing-login-password">Password</label>
@@ -285,13 +288,47 @@ if ($shouldOpenLogin && isset($_SESSION['_login_error'])) {
     var username = document.getElementById('landing-login-username');
     var password = document.getElementById('landing-login-password');
     var passwordToggle = document.getElementById('landing-login-password-toggle');
+    var loginForm = modal.querySelector('.landing-login-form');
     var openers = document.querySelectorAll('[data-login-modal-open]');
     var closers = modal.querySelectorAll('[data-login-modal-close]');
+    var passwordStateKey = 'retailmind.login.password';
+    var hasLoginError = Boolean(modal.querySelector('.error-msg'));
+    var loginFormState = {
+        username: username ? username.value : '',
+        password: password ? password.value : ''
+    };
+
+    if (hasLoginError && password && window.sessionStorage) {
+        try {
+            password.value = window.sessionStorage.getItem(passwordStateKey) || '';
+            window.sessionStorage.removeItem(passwordStateKey);
+        } catch (error) {}
+        loginFormState.password = password.value;
+    } else if (window.sessionStorage) {
+        try {
+            window.sessionStorage.removeItem(passwordStateKey);
+        } catch (error) {}
+    }
+
+    function saveFormState() {
+        loginFormState.username = username ? username.value : '';
+        loginFormState.password = password ? password.value : '';
+    }
+
+    function restoreFormState() {
+        if (username) {
+            username.value = loginFormState.username;
+        }
+        if (password) {
+            password.value = loginFormState.password;
+        }
+    }
 
     function openModal(event) {
         if (event) {
             event.preventDefault();
         }
+        restoreFormState();
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
         document.body.classList.add('landing-modal-open');
@@ -301,6 +338,7 @@ if ($shouldOpenLogin && isset($_SESSION['_login_error'])) {
     }
 
     function closeModal() {
+        saveFormState();
         modal.classList.remove('is-open');
         modal.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('landing-modal-open');
@@ -312,6 +350,13 @@ if ($shouldOpenLogin && isset($_SESSION['_login_error'])) {
     closers.forEach(function (closer) {
         closer.addEventListener('click', closeModal);
     });
+    if (loginForm && window.sessionStorage) {
+        loginForm.addEventListener('submit', function () {
+            try {
+                window.sessionStorage.setItem(passwordStateKey, password ? password.value : '');
+            } catch (error) {}
+        });
+    }
     if (password && passwordToggle) {
         passwordToggle.addEventListener('click', function () {
             var isVisible = password.type === 'text';

@@ -87,10 +87,18 @@ function log_activity(
 }
 
 function get_low_stock_products(PDO $pdo, ?int $threshold = null): array {
+    $scopeSql = '';
+    $scopeParams = [];
+    if (function_exists('branch_scope')) {
+        [$scopeSql, $scopeParams] = branch_scope('p');
+    }
     $sql = "SELECT p.product_id, p.product_name, p.sku, i.quantity_on_hand, p.reorder_level
             FROM products p
-            JOIN inventory i ON p.product_id = i.product_id";
-    $products = $pdo->query($sql)->fetchAll();
+            JOIN inventory i ON p.product_id = i.product_id
+            WHERE 1 = 1{$scopeSql}";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($scopeParams);
+    $products = $stmt->fetchAll();
 
     if ($threshold !== null && $threshold >= 0) {
         return array_values(array_filter($products, function ($product) use ($threshold): bool {

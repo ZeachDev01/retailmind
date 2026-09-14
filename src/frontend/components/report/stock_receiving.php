@@ -13,6 +13,7 @@ $error = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_inventory_management();
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     try {

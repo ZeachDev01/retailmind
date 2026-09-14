@@ -11,6 +11,9 @@ $error = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (current_role() === 'admin') {
+        require_inventory_management();
+    }
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     $product_id = (int)($_POST['product_id'] ?? 0);

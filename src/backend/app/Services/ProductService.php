@@ -25,14 +25,15 @@ class ProductService
             return null;
         }
 
-        $stmt = $this->pdo->prepare(
+           [$scopeSql, $scopeParams] = $this->branchScope();
+           $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
-             WHERE p.barcode = ? OR p.case_barcode = ? OR p.sku = ? OR p.product_name = ?
+               WHERE (p.barcode = ? OR p.case_barcode = ? OR p.sku = ? OR p.product_name = ?){$scopeSql}
              LIMIT 1"
         );
-        $stmt->execute([$term, $term, $term, $term]);
+           $stmt->execute(array_merge([$term, $term, $term, $term], $scopeParams));
         $product = $stmt->fetch();
         if ($product) {
             return $product;
@@ -42,17 +43,20 @@ class ProductService
             "SELECT p.*, i.quantity_on_hand
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
-             WHERE p.barcode LIKE ? OR p.case_barcode LIKE ? OR p.product_name LIKE ?
+             WHERE (p.barcode LIKE ? OR p.case_barcode LIKE ? OR p.product_name LIKE ?){$scopeSql}
              ORDER BY p.product_name
              LIMIT 1"
         );
         $likeTerm = '%' . $term . '%';
-        $stmt->execute([$likeTerm, $likeTerm, $likeTerm]);
+        $stmt->execute(array_merge([$likeTerm, $likeTerm, $likeTerm], $scopeParams));
         return $stmt->fetch() ?: null;
     }
 
     public function createProduct(array $data, int $userId): int
     {
+        if (function_exists('require_inventory_management')) {
+            require_inventory_management();
+        }
         $barcode = trim((string)($data['barcode'] ?? ''));
         $productName = trim((string)($data['product_name'] ?? ''));
         $brand = trim((string)($data['brand'] ?? ''));
@@ -75,6 +79,20 @@ class ProductService
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
         $initialStock = max(0, (int)($data['initial_stock_quantity'] ?? 0));
+        $branchId = null;
+        if (function_exists('is_system_admin') && !is_system_admin()) {
+            $branchId = require_assigned_branch();
+        } elseif (function_exists('is_system_admin') && is_system_admin()) {
+            $branchId = (int)($data['branch_id'] ?? 0);
+            if ($branchId <= 0) {
+                throw new RuntimeException('Select a branch for this product.');
+            }
+            $branchCheck = $this->pdo->prepare("SELECT COUNT(*) FROM branches WHERE branch_id = ? AND status = 'active'");
+            $branchCheck->execute([$branchId]);
+            if ((int)$branchCheck->fetchColumn() === 0) {
+                throw new RuntimeException('Selected branch is not active.');
+            }
+        }
 
         if ($productName === '') {
             throw new RuntimeException('Product name is required.');
@@ -94,8 +112,9 @@ class ProductService
             if ($caseStmt->fetch()) throw new RuntimeException('That case barcode is already assigned.');
         }
         if ($parentProductId > 0) {
-            $parentStmt = $this->pdo->prepare("SELECT product_id FROM products WHERE product_id=? AND status='active'");
-            $parentStmt->execute([$parentProductId]);
+            [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+            $parentStmt = $this->pdo->prepare("SELECT product_id FROM products WHERE product_id=? AND status='active'{$scopeSql}");
+            $parentStmt->execute(array_merge([$parentProductId], $scopeParams));
             if (!$parentStmt->fetchColumn()) {
                 throw new RuntimeException('Selected parent product was not found.');
             }
@@ -122,8 +141,8 @@ class ProductService
                     sku, barcode, case_barcode, parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
                     quantity_purchased, quantity_sold, reorder_level, supplier, preferred_supplier,
                     supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, base_unit, receiving_unit, expiration_date,
-                    product_image, status, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    product_image, status, created_by, branch_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $barcode,
@@ -151,6 +170,7 @@ class ProductService
                 $productImage !== '' ? $productImage : null,
                 $status,
                 $userId,
+                $branchId,
             ]);
             $productId = (int)$this->pdo->lastInsertId();
             $this->pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)")
@@ -191,6 +211,9 @@ class ProductService
 
     public function purchaseStock(array $data, int $userId): int
     {
+        if (function_exists('require_inventory_management')) {
+            require_inventory_management();
+        }
         $searchTerm = trim((string)($data['search_term'] ?? ''));
         $purchaseQuantity = max(0, (int)($data['purchase_quantity'] ?? 0));
         $costPrice = (float)($data['purchase_cost_price'] ?? 0);
@@ -370,6 +393,9 @@ class ProductService
 
     public function adjustStock(array $data, int $userId): void
     {
+        if (function_exists('require_inventory_management')) {
+            require_inventory_management();
+        }
         $qtyChange = (int)($data['qty_change'] ?? 0);
         $productId = (int)($data['product_id'] ?? 0);
         $adjustmentReason = trim((string)($data['adjustment_reason'] ?? 'adjustment'));
@@ -383,8 +409,8 @@ class ProductService
         $roleStmt = $this->pdo->prepare("SELECT r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=?");
         $roleStmt->execute([$userId]);
         $role = (string)$roleStmt->fetchColumn();
-        if (!in_array($role, ['admin','super_admin'], true)) {
-            throw new RuntimeException('Direct stock adjustments require administrator approval. Use inventory counts or damage reporting instead.');
+        if ($role !== 'inventory_manager') {
+            throw new RuntimeException('Direct stock adjustments require Inventory Manager access.');
         }
         if (mb_strlen($adjustmentReason) < 8) {
             throw new RuntimeException('Enter a specific adjustment reason of at least 8 characters.');
@@ -395,14 +421,15 @@ class ProductService
 
         $this->pdo->beginTransaction();
         try {
+            [$scopeSql, $scopeParams] = $this->branchScope();
             $beforeStmt = $this->pdo->prepare(
                 "SELECT p.product_id, p.sku, p.product_name, i.quantity_on_hand
                  FROM products p
                  JOIN inventory i ON i.product_id = p.product_id
-                 WHERE p.product_id = ?
+                  WHERE p.product_id = ?{$scopeSql}
                  FOR UPDATE"
             );
-            $beforeStmt->execute([$productId]);
+              $beforeStmt->execute(array_merge([$productId], $scopeParams));
             $before = $beforeStmt->fetch();
             if (!$before) {
                 throw new RuntimeException('Inventory record not found for selected product.');
@@ -448,16 +475,20 @@ class ProductService
 
     public function assignGeneratedBarcode(int $productId, int $userId): string
     {
+        if (function_exists('require_inventory_management')) {
+            require_inventory_management();
+        }
         if ($productId <= 0) {
             throw new RuntimeException('Invalid product selected.');
         }
 
         $this->pdo->beginTransaction();
         try {
+            [$scopeSql, $scopeParams] = $this->branchScope();
             $stmt = $this->pdo->prepare(
-                "SELECT product_id, sku, barcode, product_name FROM products WHERE product_id = ? FOR UPDATE"
+                "SELECT product_id, sku, barcode, product_name FROM products WHERE product_id = ?{$scopeSql} FOR UPDATE"
             );
-            $stmt->execute([$productId]);
+            $stmt->execute(array_merge([$productId], $scopeParams));
             $product = $stmt->fetch();
             if (!$product) {
                 throw new RuntimeException('Product not found.');
@@ -504,15 +535,16 @@ class ProductService
             return null;
         }
 
+        [$scopeSql, $scopeParams] = $this->branchScope();
         $stmt = $this->pdo->prepare(
             "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.brand, p.unit_price,
                     p.status, c.category_name
              FROM products p
              LEFT JOIN categories c ON c.category_id = p.category_id
-             WHERE p.product_id = ?
+               WHERE p.product_id = ?{$scopeSql}
              LIMIT 1"
         );
-        $stmt->execute([$productId]);
+           $stmt->execute(array_merge([$productId], $scopeParams));
         return $stmt->fetch() ?: null;
     }
 
@@ -543,15 +575,19 @@ class ProductService
         throw new RuntimeException('Unable to generate a unique barcode. Please try again.');
     }
 
-    public function getProductsForManagement(): array
+    public function getProductsForManagement(?int $branchId = null): array
     {
-        return $this->pdo->query(
+        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand, c.category_name
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
              LEFT JOIN categories c ON p.category_id = c.category_id
+             WHERE 1 = 1{$scopeSql}
              ORDER BY p.product_name"
-        )->fetchAll();
+        );
+        $stmt->execute($scopeParams);
+        return $stmt->fetchAll();
     }
 
     public function createCategory(array $data, int $userId): int
@@ -580,15 +616,26 @@ class ProductService
         return $this->pdo->query("SELECT * FROM categories")->fetchAll();
     }
 
-    public function getActiveProducts(): array
+    public function getActiveProducts(?int $branchId = null): array
     {
-        return $this->pdo->query(
+        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        $stmt = $this->pdo->prepare(
             "SELECT p.product_id, p.sku, p.barcode, p.product_name, i.quantity_on_hand
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
-             WHERE p.status = 'active'
+             WHERE p.status = 'active'{$scopeSql}
              ORDER BY p.product_name"
-        )->fetchAll();
+        );
+        $stmt->execute($scopeParams);
+        return $stmt->fetchAll();
+    }
+
+    private function branchScope(?int $branchId = null): array
+    {
+        if (!function_exists('branch_scope')) {
+            return ['', []];
+        }
+        return branch_scope('p', $branchId);
     }
 
     private function createProductBatch(

@@ -13,13 +13,36 @@ $import_results = null;
 $fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
 $productService = new ProductService($pdo);
 
+function csv_import_branch_id(PDO $pdo): ?int
+{
+    $stmt = $pdo->prepare(
+        "SELECT u.branch_id, b.status
+         FROM users u
+         LEFT JOIN branches b ON b.branch_id = u.branch_id
+         WHERE u.user_id = ?
+         LIMIT 1"
+    );
+    $stmt->execute([(int)$_SESSION['user_id']]);
+    $branch = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$branch || (int)($branch['branch_id'] ?? 0) <= 0 || ($branch['status'] ?? '') !== 'active') {
+        return null;
+    }
+
+    return (int)$branch['branch_id'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
+    require_inventory_management();
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     $import_type = $_POST['import_type'] ?? '';
     $file = $_FILES['csv_file'];
+    $import_branch_id = csv_import_branch_id($pdo);
 
-    if (!in_array($import_type, ['products', 'inventory'])) {
+    if ($import_branch_id === null) {
+        $error = 'Import stopped: your account must be assigned to an active branch before importing.';
+    } elseif (!in_array($import_type, ['products', 'inventory'])) {
         $error = 'Invalid import type';
     } elseif ($file['error'] !== UPLOAD_ERR_OK) {
         $error = 'File upload error';
@@ -84,20 +107,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     }
 
                     // Insert or update product
-                    $prod_stmt = $pdo->prepare("SELECT product_id FROM products WHERE sku = ?");
-                    $prod_stmt->execute([$sku]);
+                    $prod_stmt = $pdo->prepare("SELECT product_id FROM products WHERE sku = ? AND branch_id = ?");
+                    $prod_stmt->execute([$sku, $import_branch_id]);
                     $prod = $prod_stmt->fetch();
 
                     if ($prod) {
-                        $beforeStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ?");
-                        $beforeStmt->execute([(int)$prod['product_id']]);
+                        $beforeStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
+                        $beforeStmt->execute([(int)$prod['product_id'], $import_branch_id]);
                         $beforeProduct = $beforeStmt->fetch();
 
                         // Update existing
                         $upd = $pdo->prepare("UPDATE products SET barcode = ?, product_name = ?, brand = ?, category_id = ?,
                                             unit_price = ?, cost_price = ?, reorder_level = ?, supplier = ?, preferred_supplier = ?,
                                             supplier_lead_time_days = ?, safety_stock = ?, minimum_order_quantity = ?,
-                                            units_per_package = ? WHERE sku = ?");
+                                            units_per_package = ? WHERE sku = ? AND branch_id = ?");
                         $upd->execute([
                             $barcode,
                             $product_name,
@@ -113,9 +136,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $minimum_order_quantity,
                             $units_per_package,
                             $sku,
+                            $import_branch_id,
                         ]);
-                        $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ?");
-                        $afterStmt->execute([(int)$prod['product_id']]);
+                        $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
+                        $afterStmt->execute([(int)$prod['product_id'], $import_branch_id]);
                         log_activity(
                             $pdo,
                             (int)$_SESSION['user_id'],
@@ -130,8 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $ins = $pdo->prepare("INSERT INTO products (sku, barcode, product_name, brand, category_id,
                                             unit_price, cost_price, reorder_level, supplier, preferred_supplier,
                                             supplier_lead_time_days, safety_stock, minimum_order_quantity,
-                                            units_per_package, created_by)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                            units_per_package, created_by, branch_id)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                         $ins->execute([
                             $sku,
                             $barcode,
@@ -148,6 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $minimum_order_quantity,
                             $units_per_package,
                             $_SESSION['user_id'],
+                            $import_branch_id,
                         ]);
                         $product_id = $pdo->lastInsertId();
 
@@ -155,8 +180,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $inv_ins = $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, 0)");
                         $inv_ins->execute([$product_id]);
 
-                        $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ?");
-                        $afterStmt->execute([(int)$product_id]);
+                        $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
+                        $afterStmt->execute([(int)$product_id, $import_branch_id]);
                         log_activity(
                             $pdo,
                             (int)$_SESSION['user_id'],
@@ -192,8 +217,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     }
 
                     // Find product by SKU
-                    $prod_stmt = $pdo->prepare("SELECT product_id FROM products WHERE sku = ?");
-                    $prod_stmt->execute([$sku]);
+                    $prod_stmt = $pdo->prepare("SELECT product_id FROM products WHERE sku = ? AND branch_id = ?");
+                    $prod_stmt->execute([$sku, $import_branch_id]);
                     $prod = $prod_stmt->fetch();
 
                     if (!$prod) {
@@ -208,11 +233,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
                     // Update inventory
                     $product_id = $prod['product_id'];
-                    $beforeInvStmt = $pdo->prepare("SELECT product_id, quantity_on_hand FROM inventory WHERE product_id = ?");
-                    $beforeInvStmt->execute([(int)$product_id]);
+                    $beforeInvStmt = $pdo->prepare(
+                        "SELECT i.product_id, i.quantity_on_hand
+                         FROM inventory i
+                         JOIN products p ON p.product_id = i.product_id
+                         WHERE i.product_id = ? AND p.branch_id = ?"
+                    );
+                    $beforeInvStmt->execute([(int)$product_id, $import_branch_id]);
                     $beforeInventory = $beforeInvStmt->fetch();
-                    $inv_upd = $pdo->prepare("UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?");
-                    $inv_upd->execute([$qty, $product_id]);
+                    if (!$beforeInventory) {
+                        throw new RuntimeException("Inventory record for SKU '$sku' was not found in your branch.");
+                    }
+                    $inv_upd = $pdo->prepare(
+                        "UPDATE inventory i
+                         JOIN products p ON p.product_id = i.product_id
+                         SET i.quantity_on_hand = i.quantity_on_hand + ?
+                         WHERE i.product_id = ? AND p.branch_id = ?"
+                    );
+                    $inv_upd->execute([$qty, $product_id, $import_branch_id]);
 
                     // Log stock movement
                     $mov_ins = $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)

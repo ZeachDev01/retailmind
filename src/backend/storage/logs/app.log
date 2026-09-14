@@ -61,3 +61,82 @@ Stack trace:
 [05-Sep-2026 16:38:40 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
 [05-Sep-2026 16:39:56 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
 [05-Sep-2026 17:34:07 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
+[12-Sep-2026 12:05:20 Asia/Manila] Database connection failed: SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for sql312.infinityfree.com failed: No such host is known. 
+[12-Sep-2026 12:05:20 Asia/Manila] Unable to connect to the database.
+[12-Sep-2026 12:06:32 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
+[12-Sep-2026 12:07:11 Asia/Manila] Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.forecast_evaluations' doesn't exist
+[13-Sep-2026 16:07:49 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\inventory_management\products.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:07:58 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:08:11 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:08:35 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:08:44 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:08:54 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:09:21 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:09:22 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:09:34 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:09:54 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:164
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(164): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(328): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\dashboard.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[13-Sep-2026 16:10:44 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:89
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(89): PDO->prepare('SELECT u.user_i...')
+#1 C:\xampp\htdocs\inventory_system\src\frontend\index.php(55): login_user(Object(PDO), 'superadmin', 'RetalMind@2026')
+#2 {main}
+[13-Sep-2026 16:14:02 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:89
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(89): PDO->prepare('SELECT u.user_i...')
+#1 C:\xampp\htdocs\inventory_system\src\frontend\index.php(55): login_user(Object(PDO), 'superadmin', 'RetalMind@2026')
+#2 {main}
+[13-Sep-2026 16:34:14 Asia/Manila] PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'inventory_system.branches' doesn't exist in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:89
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(89): PDO->prepare('SELECT u.user_i...')
+#1 C:\xampp\htdocs\inventory_system\src\frontend\index.php(55): login_user(Object(PDO), 'superadmin', 'RetalMind@2026')
+#2 {main}

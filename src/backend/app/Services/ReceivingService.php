@@ -19,6 +19,9 @@ class ReceivingService
 
     public function receiveStock(array $data, int $userId): array
     {
+        if (function_exists('require_inventory_management')) {
+            require_inventory_management();
+        }
         $productId = (int)($data['product_id'] ?? 0);
         $quantityMode = ($data['quantity_mode'] ?? 'units') === 'packages' ? 'packages' : 'units';
         $receivedPackages = max(0, (int)($data['received_packages'] ?? 0));

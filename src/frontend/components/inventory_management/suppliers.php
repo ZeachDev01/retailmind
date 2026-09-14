@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_role(['admin','super_admin','inventory_manager']);
 $message='';$error='';
 if($_SERVER['REQUEST_METHOD']==='POST'){
+    require_inventory_management();
     csrf_verify();$action=$_POST['action']??'';
     try{
         if($action==='save'){

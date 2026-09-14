@@ -11,6 +11,7 @@ $message = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_inventory_management();
     csrf_verify();
     $action = $_POST['action'] ?? 'record';
 
