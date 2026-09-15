@@ -4,8 +4,8 @@
 !/backend/storage/logs/.gitkeep
 /backend/storage/backups/*
 !/backend/storage/backups/.gitkeep
-/backend/storage/sessions/*
-!/backend/storage/sessions/.gitkeep
+/src/backend/storage/sessions/*
+!/src/backend/storage/sessions/.gitkeep
 /backend/storage/imports/*
 !/backend/storage/imports/.gitkeep
 /backend/storage/exports/*

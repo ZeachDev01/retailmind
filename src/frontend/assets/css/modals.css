@@ -721,29 +721,41 @@ body.system-health-open {
 }
 .manage-users-tabs {
   display: flex;
-  gap: 0.35rem;
+  gap: 1.5rem;
+  margin-bottom: 0;
   padding: 0.75rem 1.25rem 0;
   border-bottom: 1px solid rgba(71, 85, 105, 0.58);
   background: #111827;
 }
 .manage-users-tab {
   border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 0.7rem 0.85rem 0.8rem;
+  position: relative;
+  padding: 0.5rem 0.25rem 0.75rem;
   background: transparent;
   color: #8ea0ba;
   cursor: pointer;
   font: inherit;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
 }
 .manage-users-tab:hover,
 .manage-users-tab:focus-visible {
   color: #e5edf8;
 }
 .manage-users-tab.is-active {
-  border-bottom-color: #22d3ee;
   color: #f8fafc;
+  font-weight: 600;
+}
+.manage-users-tab.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #3b82f6;
+  content: "";
 }
 .manage-users-tab-panel[hidden] {
   display: none;
@@ -792,10 +804,9 @@ body.system-health-open {
 }
 .manage-users-branch-form {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr) minmax(
-      100px,
-      0.8fr
-    ) auto;
+  grid-template-columns:
+    minmax(0, 2fr) minmax(120px, 1fr) minmax(100px, 0.8fr)
+    auto;
   align-items: end;
   gap: 1rem;
   padding: 0;
@@ -1035,7 +1046,8 @@ body.system-health-open {
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  padding: 1.25rem 1.25rem 1.15rem;
+  margin: -1rem -1.25rem 1rem;
+  padding: 1rem 1.25rem 1rem;
   border-bottom: 1px solid rgba(71, 85, 105, 0.58);
   background: #111827;
 }
@@ -1389,6 +1401,8 @@ body.system-health-open {
   }
   .manage-users-embedded .manage-users-toolbar {
     flex-direction: column;
+    margin: -0.7rem -1rem 0.7rem;
+    padding: 0.7rem 1rem;
   }
   .manage-users-embedded .manage-users-add {
     width: 100%;

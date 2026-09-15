@@ -429,13 +429,6 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                 <div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
 
-            <?php if ($isEmbedded): ?>
-                <div class="manage-users-toolbar">
-                    <label class="manage-users-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="userSearch" placeholder="Search user by name, email, or role..." aria-label="Search users"></label>
-                    <button type="button" class="btn manage-users-add" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
-                </div>
-            <?php endif; ?>
-
             <div class="card-grid">
                 <div class="stat-card">
                     <div class="value"><?= count($users) ?></div>
@@ -452,11 +445,17 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
             </div>
 
             <div class="manage-users-tabs" role="tablist" aria-label="User management sections">
-                <button type="button" class="manage-users-tab is-active" id="usersTab" role="tab" aria-selected="true" aria-controls="usersPanel" data-management-tab="users">Users</button>
-                <button type="button" class="manage-users-tab" id="branchesTab" role="tab" aria-selected="false" aria-controls="branchesPanel" data-management-tab="branches">Branches</button>
+                <button type="button" class="manage-users-tab is-active" id="usersTab" role="tab" aria-selected="true" aria-controls="usersPanel" data-management-tab="users" tabindex="0">Users</button>
+                <button type="button" class="manage-users-tab" id="branchesTab" role="tab" aria-selected="false" aria-controls="branchesPanel" data-management-tab="branches" tabindex="-1">Branches</button>
             </div>
 
             <div class="dashboard-section manage-users-list manage-users-tab-panel is-active" id="usersPanel" role="tabpanel" aria-labelledby="usersTab" data-management-panel="users">
+                <?php if ($isEmbedded): ?>
+                    <div class="manage-users-toolbar" role="search">
+                        <label class="manage-users-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="userSearch" placeholder="Search user by name, email, or role..." aria-label="Search users"></label>
+                        <button type="button" class="btn manage-users-add" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
+                    </div>
+                <?php endif; ?>
                 <div class="section-header">
                     <div>
                         <h3>All Users</h3>
@@ -743,6 +742,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                     const isSelected = otherTab === selectedTabElement;
                     otherTab.classList.toggle('is-active', isSelected);
                     otherTab.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                    otherTab.setAttribute('tabindex', isSelected ? '0' : '-1');
                 });
                 managementPanels.forEach(function(panel) {
                     panel.hidden = panel.dataset.managementPanel !== selectedTab;
