@@ -421,7 +421,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                     <p class="page-subtitle"><?= $isEmbedded ? 'Manage retail staff credentials, access levels, and active sessions.' : 'Create accounts, manage access, and keep team permissions organized.' ?></p>
                 </div>
                 <?php if (!$isEmbedded): ?>
-                    <button type="button" class="btn" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
+                    <button type="button" class="btn manage-users-primary" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
                 <?php endif; ?>
             </div>
 
@@ -453,7 +453,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                 <?php if ($isEmbedded): ?>
                     <div class="manage-users-toolbar" role="search">
                         <label class="manage-users-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="userSearch" placeholder="Search user by name, email, or role..." aria-label="Search users"></label>
-                        <button type="button" class="btn manage-users-add" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
+                        <button type="button" class="btn manage-users-primary manage-users-add" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
                     </div>
                 <?php endif; ?>
                 <div class="section-header">
@@ -472,13 +472,15 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                             <col class="users-col-branch">
                             <col class="users-col-action">
                         </colgroup>
-                        <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Branch</th>
-                            <th>Action</th>
-                        </tr>
+                        <thead>
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Email</th>
+                                <th scope="col">Role</th>
+                                <th scope="col">Branch</th>
+                                <th scope="col">Action</th>
+                            </tr>
+                        </thead>
                         <?php foreach ($users as $u): ?>
                             <?php
                             $displayEmail = (string)($u['email'] ?: $u['username']);
@@ -518,7 +520,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                     <?= csrf_field() ?><input type="hidden" name="action" value="create_branch">
                     <div class="form-group"><label>Branch Name</label><input name="branch_name" required></div>
                     <div class="form-group"><label>Branch Code</label><input name="branch_code" maxlength="30" required></div>
-                    <button class="btn" type="submit">Create Branch</button>
+                    <button class="btn manage-users-primary" type="submit"><i class="bi bi-building-add" aria-hidden="true"></i> Create Branch</button>
                 </form>
                 <div class="table-wrap">
                     <table class="users-table">
@@ -528,12 +530,14 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                             <col class="branches-col-status">
                             <col class="branches-col-action">
                         </colgroup>
-                        <tr>
-                            <th>Branch</th>
-                            <th>Code</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
+                        <thead>
+                            <tr>
+                                <th scope="col">Branch</th>
+                                <th scope="col">Code</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Action</th>
+                            </tr>
+                        </thead>
                         <?php foreach ($branches as $branch): ?><tr>
                                 <td><?= htmlspecialchars(display_person_name((string)$branch['branch_name'])) ?></td>
                                 <td><?= htmlspecialchars($branch['branch_code']) ?></td>
@@ -677,7 +681,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" id="cancelUserModal">Cancel</button>
-                    <button class="btn" type="submit">Create User</button>
+                    <button class="btn manage-users-primary" type="submit"><i class="bi bi-person-plus" aria-hidden="true"></i> Create User</button>
                 </div>
             </form>
         </div>
