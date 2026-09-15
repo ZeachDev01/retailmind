@@ -75,7 +75,6 @@ if (isset($_SESSION['user_id']) && ($_GET['login_success'] ?? '') !== '1') {
 $loginUrl = htmlspecialchars(landing_app_url('?login=1'), ENT_QUOTES, 'UTF-8');
 $loginActionUrl = htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8');
 $forgotPasswordUrl = htmlspecialchars(landing_app_url('components/auth/forgot_password.php'), ENT_QUOTES, 'UTF-8');
-$registerUrl = htmlspecialchars(landing_app_url('components/auth/register.php'), ENT_QUOTES, 'UTF-8');
 $styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
 $loginError = '';
 $loginSuccess = '';
@@ -241,7 +240,6 @@ unset($_SESSION['_login_username']);
             </div>
             <div class="landing-access__actions">
                 <a class="btn landing-btn landing-btn--primary" href="<?= $loginUrl ?>" data-login-modal-open>Log in</a>
-                <a class="landing-link" href="<?= $registerUrl ?>">Register</a>
                 <a class="landing-link" href="<?= $forgotPasswordUrl ?>">Reset password</a>
             </div>
         </section>
