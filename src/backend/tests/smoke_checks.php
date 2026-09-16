@@ -47,9 +47,15 @@ $checks = [
         'file' => 'src/frontend/components/auth/change_password.php',
         'needles' => ['current_password', 'must_change_password = 0', 'password_policy_error'],
     ],
-    'System health dashboard present' => [
-        'file' => 'src/frontend/components/modals/system_health.php',
-        'needles' => ['SystemHealthService', 'Environment checks', 'Recommended maintenance commands'],
+    'Dedicated system health page present' => [
+        'file' => 'src/frontend/components/system_administrator/system_health.php',
+        'needles' => ['SystemHealthService', 'Environment checks', 'Recommended maintenance commands', 'system-health-groups', 'Refresh checks'],
+        'forbidden' => ['embed=1', 'data-embedded-close', 'system-health-embedded'],
+    ],
+    'System health uses direct navigation' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['components/system_administrator/system_health.php'],
+        'forbidden' => ['data-system-health-open', 'systemHealthOverlay', 'systemHealthFrame'],
     ],
     'Dedicated audit logs DataTable present' => [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',

@@ -81,9 +81,8 @@ function sidebar_item_paths(array $items): array
 
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
-    $isSystemHealth = ($item['path'] ?? '') === 'components/modals/system_health.php';
 ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
 <?php
 }
 
@@ -137,7 +136,7 @@ $adminSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Logs'],
     ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
-    ['path' => 'components/modals/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
+    ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
     ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-sliders', 'label' => 'ML Settings'],
     ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
     ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'System Settings'],
@@ -396,50 +395,6 @@ $sections = $roleSections[$role] ?? [];
             });
             document.addEventListener('keydown', function(event) {
                 if (event.key === 'Escape' && userOverlay.classList.contains('open')) closeUserManagement();
-            });
-        });
-    </script>
-<?php endif; ?>
-
-<?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-    <div class="system-health-overlay" id="systemHealthOverlay" aria-hidden="true">
-        <div class="system-health-frame" role="dialog" aria-modal="true" aria-label="System health">
-            <button type="button" class="system-health-frame-close" data-system-health-close aria-label="Close system health"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-            <iframe title="System Health" id="systemHealthFrame" loading="lazy"></iframe>
-        </div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var healthOverlay = document.getElementById('systemHealthOverlay');
-            var healthFrame = document.getElementById('systemHealthFrame');
-            if (!healthOverlay || !healthFrame) return;
-            var healthSource = <?= json_encode(app_url('components/modals/system_health.php?embed=1')) ?>;
-
-            function closeSystemHealth() {
-                healthOverlay.classList.remove('open');
-                healthOverlay.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('system-health-open');
-            }
-            document.querySelectorAll('[data-system-health-open]').forEach(function(link) {
-                link.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    healthFrame.src = healthSource;
-                    healthOverlay.classList.add('open');
-                    healthOverlay.setAttribute('aria-hidden', 'false');
-                    document.body.classList.add('system-health-open');
-                });
-            });
-            healthOverlay.querySelectorAll('[data-system-health-close]').forEach(function(button) {
-                button.addEventListener('click', closeSystemHealth);
-            });
-            healthOverlay.addEventListener('click', function(event) {
-                if (event.target === healthOverlay) closeSystemHealth();
-            });
-            window.addEventListener('message', function(event) {
-                if (event.data && event.data.type === 'close-system-health') closeSystemHealth();
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && healthOverlay.classList.contains('open')) closeSystemHealth();
             });
         });
     </script>

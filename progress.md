@@ -26,3 +26,12 @@
 - Focused PHP lint passed for all touched PHP files, all 19 smoke checks passed, and `git diff --check` reported no whitespace errors.
 - Attempted to start the browser-control workflow for visual QA, but its required runtime is not exposed in this session.
 - Final verification passed: 195 PHP files linted, 19 smoke checks passed, fiscal and modal stylesheets have balanced braces, and `git diff --check` reported no whitespace errors. Database integration remained intentionally skipped because `RUN_DB_TESTS` was not enabled.
+- Started follow-up work to replace the System Health modal with a dedicated page.
+- Located the System Health service-driven page, sidebar trigger/overlay, embedded presentation branches, and modal-specific CSS.
+- Completed the System Health implementation survey and chose a canonical System Administrator page with a compatibility redirect from the former modal URL.
+- Added the dedicated System Health page with summary cards, category-grouped diagnostic checks, refresh controls, and maintenance guidance.
+- Updated the sidebar for direct navigation, replaced the former modal page with a compatibility redirect, and removed the System Health iframe/embedded JavaScript and CSS.
+- Updated the System Health smoke coverage for the canonical page and added a direct-navigation regression check.
+- Focused PHP lint passed, all 20 smoke checks passed, the new and modified stylesheets have balanced braces, and `git diff --check` reported no whitespace errors.
+- Attempted the browser-control workflow for visual QA, but its required runtime remains unavailable in this session.
+- Final verification passed: 196 PHP files linted, 20 smoke checks passed, System Health and modal stylesheets have balanced braces, and `git diff --check` reported no whitespace errors. Database integration remained intentionally skipped because `RUN_DB_TESTS` was not enabled.

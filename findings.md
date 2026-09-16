@@ -24,6 +24,13 @@
 - The smoke suite lives at `src/backend/tests/smoke_checks.php` and already includes dedicated audit-page navigation regressions that can be mirrored for fiscal periods.
 - The global style bundle already supplies the app-shell topbar, stat cards, dashboard sections, form basics, buttons, and design tokens; the new fiscal stylesheet only needs page-specific layout and state treatment.
 - After implementation, repository-wide frontend search finds no fiscal modal trigger, overlay, iframe, embedded-mode, footer, or modal-route references; only direct links to the canonical page and the intentional compatibility redirect remain.
+- System Health currently lives at `components/modals/system_health.php`; it builds a read-only check list through `SystemHealthService`, counts healthy/warning/critical results, provides a refresh link, and shows maintenance commands.
+- Its sidebar link is intercepted with `data-system-health-open`, and the sidebar owns the overlay, lazy iframe, close/backdrop/Escape, and postMessage behavior.
+- System-health modal and embedded presentation selectors occupy a self-contained block in `assets/css/modals.css`, plus two responsive blocks, so they can be removed cleanly.
+- Unlike Fiscal Periods, System Health has no admin-dashboard navigation link to migrate; the only direct UI entry is the System Administration sidebar item.
+- The existing `admin.css` supplies compact generic health-check styles, but a dedicated page-scoped stylesheet will avoid relying on that legacy aggregate stylesheet.
+- The existing System Health smoke check points at the modal path and must be moved to the canonical page, with a separate direct-navigation regression check for the sidebar.
+- After implementation, frontend search finds no System Health trigger, overlay, iframe, embedded-mode, footer, or modal-route reference; only the canonical page and intentional compatibility redirect remain.
 
 ## Design Notes
 
