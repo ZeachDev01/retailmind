@@ -1,0 +1,170 @@
+.audit-log-page .audit-log-export-form {
+  flex: 0 0 auto;
+}
+
+.audit-log-page .audit-log-export-form .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.audit-log-page .audit-log-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.audit-log-page .audit-table-card {
+  margin-bottom: 1.5rem;
+}
+
+.audit-log-page .audit-log-table-wrap {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.audit-log-page .audit-log-table {
+  width: 100% !important;
+  min-width: 940px;
+}
+
+.audit-log-page .audit-log-table th,
+.audit-log-page .audit-log-table td {
+  vertical-align: top;
+}
+
+.audit-log-page .audit-log-table th:first-child,
+.audit-log-page .audit-log-table td:first-child {
+  min-width: 150px;
+  white-space: nowrap;
+}
+
+.audit-log-page .audit-log-table td:nth-child(2) {
+  min-width: 145px;
+}
+
+.audit-log-page .audit-log-table td:nth-child(2) strong,
+.audit-log-page .audit-log-table td:nth-child(2) small {
+  display: block;
+}
+
+.audit-log-page .audit-log-table td:nth-child(2) small {
+  margin-top: 0.2rem;
+  color: var(--muted);
+}
+
+.audit-log-page .audit-action-badge {
+  display: inline-block;
+  max-width: 240px;
+  overflow: hidden;
+  padding: 0.28rem 0.58rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-log-page .audit-action-badge.is-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.audit-log-page .audit-action-badge.is-danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.audit-log-page .audit-action-badge.is-neutral {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.audit-log-page .audit-details summary {
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.audit-log-page .audit-details-content {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr);
+  gap: 0.35rem 0.55rem;
+  min-width: 300px;
+  max-width: 520px;
+  margin-top: 0.65rem;
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.audit-log-page .audit-details-content .is-empty {
+  color: var(--muted);
+}
+
+.audit-log-page .dt-container .dt-layout-row {
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 1rem;
+}
+
+.audit-log-page .dt-container .dt-layout-row:last-child {
+  margin: 1rem 0 0;
+}
+
+.audit-log-page .dt-container .dt-search input,
+.audit-log-page .dt-container .dt-length select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.audit-log-page .dt-container .dt-search input {
+  min-width: 250px;
+  padding: 0.55rem 0.7rem;
+}
+
+.audit-log-page .dt-container .dt-length select {
+  margin: 0 0.3rem;
+  padding: 0.35rem 1.6rem 0.35rem 0.5rem;
+}
+
+.audit-log-page .dt-container .dt-info {
+  color: var(--muted);
+}
+
+.audit-log-page .dt-container .dt-paging .dt-paging-button {
+  border-radius: 8px;
+}
+
+.audit-log-page .dtcc-dropdown,
+.audit-log-page .dtcc-list {
+  z-index: 1800;
+}
+
+.audit-log-page .dt-datetime {
+  z-index: 1900;
+}
+
+@media (max-width: 760px) {
+  .audit-log-page .audit-log-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-log-page .dt-container .dt-layout-row {
+    align-items: stretch;
+  }
+
+  .audit-log-page .dt-container .dt-search,
+  .audit-log-page .dt-container .dt-search input {
+    width: 100%;
+    min-width: 0;
+  }
+}
