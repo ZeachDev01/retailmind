@@ -140,3 +140,4 @@ Stack trace:
 #0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(89): PDO->prepare('SELECT u.user_i...')
 #1 C:\xampp\htdocs\inventory_system\src\frontend\index.php(55): login_user(Object(PDO), 'superadmin', 'RetalMind@2026')
 #2 {main}
+[16-Sep-2026 15:24:45 Asia/Manila] Email delivery failed: Brevo API returned HTTP 401.

@@ -23,6 +23,12 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - [x] Phase 17: Reproduce and diagnose the Add Staff modal scrolling failure.
 - [x] Phase 18: Make the modal form the viewport-constrained scroll region.
 - [x] Phase 19: Run the regression and repository verification checks.
+- [x] Phase 20: Inspect Notification Preferences and Profile Preferences markup, state, routes, styles, and tests.
+- [x] Phase 21: Move Notification Preferences into Profile Preferences and remove it from Notifications.
+- [x] Phase 22: Run focused regressions and repository verification checks.
+- [x] Phase 23: Inspect User Management and Audit Logs summary markup and styling.
+- [x] Phase 24: Add meaningful icons to the requested summary cards without changing behavior.
+- [x] Phase 25: Run focused regressions and repository verification checks.
 
 ## Decisions
 - Prefer the project's existing layout, components, and dependency versions over introducing a second table stack.
@@ -38,6 +44,9 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - Move Add Staff User from the page topbar into the Users panel header; keep the existing add-user modal and form-state behavior unchanged.
 - Move Create Branch into the Branches panel header and open a compact branch modal using the existing overlay, form, and keyboard-dismiss patterns.
 - Keep modal headers visible and make each modal's form/body the internal scroll region, sized with dynamic viewport units for mobile keyboards.
+- Preserve notification preference persistence and validation while changing only where the controls are presented.
+- Make `components/auth/preferences.php` the canonical account-level Preferences page, keep the old notification URL as a compatibility redirect, and scope its styles independently from the notification inbox.
+- Reuse Bootstrap Icons already loaded by the application and style icons through page-specific classes rather than inline presentation.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -53,3 +62,4 @@ Replace modal-only administration workflows with dedicated pages while preservin
 | Browser-control runtime remains unavailable for contextual-action QA | 1 | Complete full lint, smoke, CSS structure, modal-reference, and diff checks instead. |
 | Add Staff modal could not reach lower fields | 1 | Removed the contradictory dialog overflow rules and added a viewport-constrained scroll region to the modal form. |
 | Browser-control runtime remains unavailable for modal-scroll QA | 1 | Added a deterministic stylesheet regression and completed static/runtime verification instead. |
+| `git diff --check` found a blank line at the end of `notifications.css` after removing the legacy preference block | 1 | Removed the extra trailing blank line and reran verification. |

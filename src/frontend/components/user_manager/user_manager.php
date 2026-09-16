@@ -404,9 +404,21 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
             <?php endif; ?>
 
             <div class="card-grid">
-                <div class="stat-card"><div class="value"><?= count($users) ?></div><div class="label">Total Users</div></div>
-                <div class="stat-card"><div class="value"><?= $activeCount ?></div><div class="label">Active Users</div></div>
-                <div class="stat-card"><div class="value"><?= $disabledCount ?></div><div class="label">Disabled Users</div></div>
+                <div class="stat-card with-icon">
+                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-people-fill"></i></span>
+                    <div class="value"><?= count($users) ?></div>
+                    <div class="label">Total Users</div>
+                </div>
+                <div class="stat-card with-icon success">
+                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-person-check-fill"></i></span>
+                    <div class="value"><?= $activeCount ?></div>
+                    <div class="label">Active Users</div>
+                </div>
+                <div class="stat-card with-icon <?= $disabledCount > 0 ? 'warning' : 'success' ?>">
+                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-person-x-fill"></i></span>
+                    <div class="value"><?= $disabledCount ?></div>
+                    <div class="label">Disabled Users</div>
+                </div>
             </div>
 
             <div class="manage-users-tabs" role="tablist" aria-label="User management sections">

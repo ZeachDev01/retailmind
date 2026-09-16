@@ -190,9 +190,21 @@ $modules = isset($logColumns['module'])
             </div>
 
             <div class="card-grid audit-log-stats">
-                <div class="stat-card"><div class="value" id="matchingRecordsCount"><?= count($logs) ?></div><div class="label">Matching Records</div></div>
-                <div class="stat-card"><div class="value"><?= $activeUserCount ?></div><div class="label">Active Users</div></div>
-                <div class="stat-card"><div class="value"><?= count($modules) ?></div><div class="label">Logged Modules</div></div>
+                <div class="stat-card with-icon">
+                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-card-checklist"></i></span>
+                    <div class="value" id="matchingRecordsCount"><?= count($logs) ?></div>
+                    <div class="label">Matching Records</div>
+                </div>
+                <div class="stat-card with-icon success">
+                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-person-check-fill"></i></span>
+                    <div class="value"><?= $activeUserCount ?></div>
+                    <div class="label">Active Users</div>
+                </div>
+                <div class="stat-card with-icon">
+                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-boxes"></i></span>
+                    <div class="value"><?= count($modules) ?></div>
+                    <div class="label">Logged Modules</div>
+                </div>
             </div>
 
             <section class="dashboard-section audit-table-card" aria-labelledby="audit-table-title">
@@ -295,22 +307,27 @@ $modules = isset($logColumns['module'])
                     }
                 ],
                 layout: {
-                    topStart: {
-                        pageLength: {
-                            menu: [10, 25, 50, 100]
-                        }
-                    },
+                    topStart: null,
                     topEnd: {
                         search: {
                             placeholder: 'Search all audit activity...'
                         }
                     },
-                    bottomStart: 'info',
-                    bottomEnd: {
-                        paging: {
-                            numbers: 5
+                    bottom: [
+                        'info',
+                        {
+                            pageLength: {
+                                menu: [10, 25, 50, 100]
+                            }
+                        },
+                        {
+                            paging: {
+                                numbers: 5
+                            }
                         }
-                    }
+                    ],
+                    bottomStart: null,
+                    bottomEnd: null
                 },
                 language: {
                     emptyTable: 'No audit activity matches the selected filters.',

@@ -54,3 +54,13 @@
 - Added a regression check and confirmed it failed before the fix on the missing dynamic-height and form-scroll rules.
 - Updated the shared user modal layout to keep its header fixed and let the form scroll within a `100dvh`-constrained dialog, including touch momentum and overscroll containment.
 - Final modal-scroll verification passed: 197 PHP files linted successfully, all 23 smoke checks passed, modal CSS braces were balanced (288/288), and `git diff --check` found no whitespace errors.
+- Started follow-up work to relocate Notification Preferences from the Notifications area into Profile Preferences.
+- Confirmed that both navigation entries currently target the same notification-owned page; selected a canonical account Preferences route with a compatibility redirect from the former URL.
+- Added the account-level Preferences page, redirected the former notification URL, removed the Notifications-section entry, and moved the form styles into a scoped stylesheet.
+- Focused PHP lint and all 25 smoke checks passed; the first whitespace check found one trailing blank line in the trimmed notification stylesheet.
+- Removed the trailing blank line, added a compatibility-route regression, and completed final verification: all 197 PHP files linted successfully, all 26 smoke checks passed, both affected stylesheets had balanced braces, navigation invariants passed, and `git diff --check` found no whitespace errors.
+- Started follow-up work to add icons to User Management and Audit Logs summary cards.
+- Confirmed both pages use the shared three-card summary pattern and can reuse the existing `with-icon`/`stat-icon` styles.
+- Added icons to all three User Management summaries and all three Audit Logs summaries using the shared dashboard card pattern, plus focused smoke regressions.
+- Focused PHP lint, 28 smoke checks, and the whitespace check pass; adjusted Disabled Users to show warning styling only when disabled accounts exist.
+- Final icon-card verification passed: all 197 PHP files linted successfully, all 28 smoke checks passed, and `git diff --check` found no whitespace errors.

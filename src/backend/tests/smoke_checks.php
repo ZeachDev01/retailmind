@@ -61,6 +61,10 @@ $checks = [
         'file' => 'src/frontend/components/user_manager/user_manager.php',
         'needles' => ['role="tablist"', 'manage-users-tab-icon', 'manage-users-tab-description', 'manage-users-tab-count', 'data-management-tab="users"', 'data-management-tab="branches"'],
     ],
+    'Manage Users summary icons present' => [
+        'file' => 'src/frontend/components/user_manager/user_manager.php',
+        'needles' => ['stat-card with-icon', 'bi-people-fill', 'bi-person-check-fill', 'bi-person-x-fill'],
+    ],
     'Manage Users contextual actions present' => [
         'file' => 'src/frontend/components/user_manager/user_manager.php',
         'needles' => ['manage-users-section-action', 'id="openUserModal"', 'id="openBranchModal"', "include __DIR__ . '/modals/add_branch_modal.php'", "selectManagementTab('branches')"],
@@ -70,10 +74,32 @@ $checks = [
         'file' => 'src/frontend/assets/css/modals.css',
         'needles' => ['max-height: calc(100dvh - 2rem);', '.user-modal > .user-form {', 'overflow-y: auto;', '-webkit-overflow-scrolling: touch;'],
     ],
+    'Preferences live under the profile menu' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['components/auth/preferences.php'],
+        'forbidden' => ["\$notificationItems[] = ['path' => 'components/notification/notification_preferences.php'"],
+    ],
+    'Account preferences preserve notification controls' => [
+        'file' => 'src/frontend/components/auth/preferences.php',
+        'needles' => ['Preferences', 'preferences.css', 'notify_low_stock', 'notify_replenishment', 'notify_adjustment', 'notify_email', 'notify_inapp', 'low_stock_threshold', 'csrf_field()'],
+    ],
+    'Former notification preferences route redirects' => [
+        'file' => 'src/frontend/components/notification/notification_preferences.php',
+        'needles' => ["app_url('components/auth/preferences.php')", '302', '307'],
+        'forbidden' => ['preferences-form', 'notify_low_stock'],
+    ],
     'Dedicated audit logs DataTable present' => [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',
-        'needles' => ['id="auditLogsTable"', 'data-no-smart-table', "new DataTable('#auditLogsTable'", 'dataTables.columnControl.min.js', 'dataTables.dateTime.min.js', "columnControl: ['order'", 'Export CSV'],
+        'needles' => ['id="auditLogsTable"', 'data-no-smart-table', "new DataTable('#auditLogsTable'", 'dataTables.columnControl.min.js', 'dataTables.dateTime.min.js', "columnControl: ['order'", 'topStart: null', "bottom: [", "'info'", 'pageLength:', 'paging:', 'Export CSV'],
         'forbidden' => ['embed=1', 'data-embedded-close', 'Filter activity', 'Apply filters', 'audit-datatable-filters'],
+    ],
+    'Audit Logs summary icons present' => [
+        'file' => 'src/frontend/components/system_administrator/audit_logs.php',
+        'needles' => ['audit-log-stats', 'bi-card-checklist', 'bi-person-check-fill', 'bi-boxes'],
+    ],
+    'Audit Logs search control is inset' => [
+        'file' => 'src/frontend/assets/css/audit-logs.css',
+        'needles' => ['.dt-container > .dt-layout-row:first-child', 'padding: 0.65rem 1rem 0.15rem;'],
     ],
     'Audit logs use direct navigation' => [
         'file' => 'src/frontend/components/sidebar.php',

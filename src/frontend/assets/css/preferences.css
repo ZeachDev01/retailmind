@@ -1,0 +1,186 @@
+.account-preferences {
+    --preference-accent: #2563eb;
+    --preference-accent-soft: #eff6ff;
+}
+
+.preferences-panel {
+    overflow: hidden;
+    max-width: 920px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--card-bg);
+    box-shadow: var(--shadow-sm);
+}
+
+.preference-section {
+    padding: 1.35rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.preference-section-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: .85rem;
+    margin-bottom: 1rem;
+}
+
+.preference-section-icon {
+    display: grid;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--preference-accent-soft);
+    color: var(--preference-accent);
+    font-size: 1.05rem;
+}
+
+.preference-section-heading h2 {
+    margin: 0 0 .2rem;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.preference-section-heading p {
+    margin: 0;
+    color: var(--muted);
+    font-size: .84rem;
+}
+
+.preference-options {
+    display: grid;
+    gap: .65rem;
+    margin-left: 3.55rem;
+}
+
+.preference-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .85rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.preference-option:hover {
+    border-color: #bfdbfe;
+    background: #f8fbff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, .06);
+}
+
+.preference-option span {
+    min-width: 0;
+}
+
+.preference-option strong,
+.preference-option small {
+    display: block;
+}
+
+.preference-option strong {
+    color: var(--text);
+    font-size: .9rem;
+}
+
+.preference-option small,
+.threshold-field small {
+    margin-top: .2rem;
+    color: var(--muted);
+    font-size: .78rem;
+    line-height: 1.45;
+}
+
+.preference-option input[type="checkbox"] {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 1.15rem;
+    accent-color: var(--preference-accent);
+    cursor: pointer;
+}
+
+.threshold-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-left: 3.55rem;
+    padding: .9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.threshold-field label,
+.threshold-field small {
+    display: block;
+}
+
+.threshold-field label {
+    color: var(--text);
+    font-size: .9rem;
+    font-weight: 700;
+}
+
+.threshold-input {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    color: var(--muted);
+    font-size: .8rem;
+}
+
+.threshold-input input {
+    width: 88px;
+    padding: .65rem .7rem;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--text);
+    font: inherit;
+}
+
+.threshold-input input:focus {
+    outline: none;
+    border-color: var(--preference-accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
+}
+
+.preferences-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 1rem 1.35rem;
+    background: #f8fafc;
+}
+
+.preferences-actions .btn {
+    min-width: 174px;
+    justify-content: center;
+}
+
+@media (max-width: 640px) {
+    .preference-section {
+        padding: 1rem;
+    }
+
+    .preference-options,
+    .threshold-field {
+        margin-left: 0;
+    }
+
+    .threshold-field {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .preferences-actions {
+        padding: 1rem;
+    }
+
+    .preferences-actions .btn {
+        width: 100%;
+    }
+}

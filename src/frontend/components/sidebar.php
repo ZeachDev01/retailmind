@@ -128,10 +128,6 @@ $notificationItems = [
     ['path' => 'components/notification/notifications.php', 'icon' => 'bi-bell', 'label' => 'View Notifications'],
 ];
 
-if ($role !== 'cashier') {
-    $notificationItems[] = ['path' => 'components/notification/notification_preferences.php', 'icon' => 'bi-gear', 'label' => 'Preferences'];
-}
-
 $adminSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Logs'],
@@ -333,7 +329,7 @@ $sections = $roleSections[$role] ?? [];
         <div class="sidebar-profile-menu" id="sidebarProfileMenu">
             <a href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>"><i class="bi bi-person-circle" aria-hidden="true"></i><span>User Info</span></a>
             <?php if ($role !== 'cashier'): ?>
-                <a href="<?= sidebar_e(app_url('components/notification/notification_preferences.php')) ?>"><i class="bi bi-sliders" aria-hidden="true"></i><span>Preferences</span></a>
+                <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>"><i class="bi bi-sliders" aria-hidden="true"></i><span>Preferences</span></a>
             <?php endif; ?>
             <a href="<?= sidebar_e(app_url('components/auth/logout.php')) ?>" class="sidebar-logout"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>Logout</span></a>
         </div>

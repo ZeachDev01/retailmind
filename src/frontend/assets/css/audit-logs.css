@@ -115,8 +115,33 @@
   margin: 0 0 1rem;
 }
 
+.audit-log-page .dt-container > .dt-layout-row:first-child {
+  padding: 0.65rem 1rem 0.15rem;
+}
+
 .audit-log-page .dt-container .dt-layout-row:last-child {
   margin: 1rem 0 0;
+}
+
+.audit-log-page .dt-container .dt-layout-row:last-child .dt-layout-cell {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+}
+
+.audit-log-page .dt-container .dt-layout-row:last-child .dt-info {
+  justify-self: start;
+}
+
+.audit-log-page .dt-container .dt-layout-row:last-child .dt-length {
+  justify-self: center;
+  white-space: nowrap;
+}
+
+.audit-log-page .dt-container .dt-layout-row:last-child .dt-paging {
+  justify-self: end;
 }
 
 .audit-log-page .dt-container .dt-search input,
@@ -160,6 +185,21 @@
 
   .audit-log-page .dt-container .dt-layout-row {
     align-items: stretch;
+  }
+
+  .audit-log-page .dt-container > .dt-layout-row:first-child {
+    padding: 0.65rem 0.75rem 0.15rem;
+  }
+
+  .audit-log-page .dt-container .dt-layout-row:last-child .dt-layout-cell {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .audit-log-page .dt-container .dt-layout-row:last-child .dt-info,
+  .audit-log-page .dt-container .dt-layout-row:last-child .dt-length,
+  .audit-log-page .dt-container .dt-layout-row:last-child .dt-paging {
+    justify-self: center;
   }
 
   .audit-log-page .dt-container .dt-search,

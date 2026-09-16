@@ -42,6 +42,16 @@
 - Branch submission state now keeps the Branches tab selected after either success or failure; validation failures additionally reopen the modal with the entered values preserved.
 - The Add Staff scrolling bug was caused by contradictory declarations in `.user-modal`: `overflow-y: auto` was immediately overridden by `overflow: hidden`, leaving the long form without a scrollable ancestor inside the capped-height dialog.
 - The reliable layout is a column-flex dialog with a non-shrinking header and `.user-modal > .user-form` as the vertical scroll container; `100dvh` keeps the cap responsive to mobile browser chrome and on-screen keyboards.
+- Notification Preferences is currently a standalone page under `components/notification`, and the same route is exposed twice: once inside the Notifications sidebar section and once as Preferences in the profile menu.
+- The profile menu already provides the intended account-level Preferences entry point, while User Info is a separate account page under `components/auth`.
+- The preference form owns six persisted values (three event types, two delivery channels, and a low-stock threshold) and uses the shared notification preference table/helper.
+- Moving the page to `components/auth/preferences.php`, removing the Notifications-section item, and retaining the former URL as a compatibility redirect preserves saved behavior while making Preferences account-scoped.
+- Notification preference styles currently share `notifications.css` with the inbox and include broad `.form-group` selectors; a dedicated, page-scoped preferences stylesheet avoids altering the User Info form or notification list.
+- The new account Preferences page can use the existing `csrf_verify()`/`csrf_field()` pair and the existing `get_notification_prefs()` defaults without introducing another persistence path.
+- Focused verification confirms the canonical frontend no longer references the former notification-owned preference URL; that file now serves only as an authenticated 302/307 compatibility redirect.
+- User Management has three plain summary cards: Total Users, Active Users, and Disabled Users. Audit Logs likewise has Matching Records, Active Users, and Logged Modules.
+- The shared dashboard stylesheet already defines the intended icon-card pattern through `.stat-card.with-icon` and `.stat-icon`, including success and warning variants, so both pages can gain icons without new CSS.
+- Existing dashboard pages already use the same Bootstrap Icon names and status-colored card variants, confirming the new summaries can follow the established pattern and existing responsive rules.
 
 ## Design Notes
 
