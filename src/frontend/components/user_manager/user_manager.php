@@ -8,6 +8,8 @@ $message = '';
 $messageClass = '';
 $createFormSubmitted = false;
 $createFormValues = ['first_name' => '', 'last_name' => '', 'full_name' => '', 'username' => '', 'email' => '', 'role_id' => '', 'branch_id' => ''];
+$branchFormSubmitted = false;
+$branchFormValues = ['branch_name' => '', 'branch_code' => ''];
 
 function get_user_snapshot(PDO $pdo, int $userId): ?array
 {
@@ -298,8 +300,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_branch') {
     csrf_verify();
+    $branchFormSubmitted = true;
     $branchName = trim((string)($_POST['branch_name'] ?? ''));
     $branchCode = strtoupper(trim((string)($_POST['branch_code'] ?? '')));
+    $branchFormValues = ['branch_name' => $branchName, 'branch_code' => $branchCode];
     if ($branchName === '' || $branchCode === '') {
         $message = 'Branch name and branch code are required.';
         $messageClass = 'tag-warning';
@@ -393,9 +397,6 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                     <h1><?= $isEmbedded ? 'Users &amp; Access Management' : 'User Manager' ?></h1>
                     <p class="page-subtitle"><?= $isEmbedded ? 'Manage retail staff credentials, access levels, and active sessions.' : 'Create accounts, manage access, and keep team permissions organized.' ?></p>
                 </div>
-                <?php if (!$isEmbedded): ?>
-                    <button type="button" class="btn manage-users-primary" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
-                <?php endif; ?>
             </div>
 
             <?php if ($message): ?>
@@ -433,6 +434,9 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                         <h3>All Users</h3>
                         <p class="section-description">Review account status and manage permissions quickly.</p>
                     </div>
+                    <?php if (!$isEmbedded): ?>
+                        <button type="button" class="btn manage-users-primary manage-users-section-action" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
+                    <?php endif; ?>
                 </div>
 
                 <div class="table-wrap">
@@ -467,13 +471,10 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
             </div>
 
             <div class="dashboard-section manage-users-branches manage-users-tab-panel" id="branchesPanel" role="tabpanel" aria-labelledby="branchesTab" data-management-panel="branches" hidden>
-                <div class="section-header"><div><h3>Branches</h3><p class="section-description">Create branches and deactivate them when they are no longer operational.</p></div></div>
-                <form method="POST" class="user-form manage-users-branch-form">
-                    <?= csrf_field() ?><input type="hidden" name="action" value="create_branch">
-                    <div class="form-group"><label>Branch Name</label><input name="branch_name" required></div>
-                    <div class="form-group"><label>Branch Code</label><input name="branch_code" maxlength="30" required></div>
-                    <button class="btn manage-users-primary" type="submit"><i class="bi bi-building-add" aria-hidden="true"></i> Create Branch</button>
-                </form>
+                <div class="section-header">
+                    <div><h3>Branches</h3><p class="section-description">Create branches and deactivate them when they are no longer operational.</p></div>
+                    <button type="button" class="btn manage-users-primary manage-users-section-action" id="openBranchModal"><i class="bi bi-building-add" aria-hidden="true"></i> Create Branch</button>
+                </div>
                 <div class="table-wrap">
                     <table class="users-table">
                         <thead><tr><th>Branch</th><th>Code</th><th>Status</th><th>Action</th></tr></thead>
@@ -502,6 +503,7 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
     include __DIR__ . '/modals/edit_user_modal.php';
     include __DIR__ . '/modals/manage_user_modal.php';
     include __DIR__ . '/modals/add_user_modal.php';
+    include __DIR__ . '/modals/add_branch_modal.php';
     ?>
 
     <script>
@@ -510,6 +512,7 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
             const editOverlay = document.getElementById('editUserModalOverlay');
             const viewOverlay = document.getElementById('viewUserModalOverlay');
             const drawerOverlay = document.getElementById('userDrawerOverlay');
+            const branchOverlay = document.getElementById('branchModalOverlay');
             const createForm = document.getElementById('createUserForm');
             const createPassword = document.getElementById('createUserPassword');
             const toggleCreatePassword = document.getElementById('toggleCreatePassword');
@@ -517,6 +520,8 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
             const toggleDrawerPassword = document.getElementById('toggleDrawerPassword');
             const createPasswordStateKey = 'retailmind.user-manager.create-password';
             const restoreCreateForm = <?= $createFormSubmitted && $messageClass === 'tag-warning' ? 'true' : 'false' ?>;
+            const branchFormSubmitted = <?= $branchFormSubmitted ? 'true' : 'false' ?>;
+            const restoreBranchForm = <?= $branchFormSubmitted && $messageClass === 'tag-warning' ? 'true' : 'false' ?>;
             const autoOpenDrawerUserId = <?= (int)$autoOpenDrawerUserId ?>;
             const managementTabs = document.querySelectorAll('[data-management-tab]');
             const managementPanels = document.querySelectorAll('[data-management-panel]');
@@ -683,6 +688,21 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                 });
             });
 
+            const openBranchModal = document.getElementById('openBranchModal');
+            if (openBranchModal) {
+                openBranchModal.addEventListener('click', function() {
+                    setModalOpen(branchOverlay, true);
+                    const branchName = document.getElementById('branchName');
+                    if (branchName) branchName.focus();
+                });
+            }
+
+            document.querySelectorAll('#closeBranchModal, #cancelBranchModal').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    setModalOpen(branchOverlay, false);
+                });
+            });
+
             document.querySelectorAll('.open-user-view').forEach(function(button) {
                 button.addEventListener('click', function() {
                     document.getElementById('viewUserTitle').textContent = button.dataset.fullName || 'User Details';
@@ -814,7 +834,7 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                 });
             }
 
-            [addOverlay, editOverlay, viewOverlay, drawerOverlay].forEach(function(overlay) {
+            [addOverlay, editOverlay, viewOverlay, drawerOverlay, branchOverlay].forEach(function(overlay) {
                 if (!overlay) return;
                 overlay.addEventListener('click', function(event) {
                     if (event.target === overlay) {
@@ -846,7 +866,7 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
 
             document.addEventListener('keydown', function(event) {
                 if (event.key !== 'Escape') return;
-                [addOverlay, editOverlay, viewOverlay, drawerOverlay].forEach(function(overlay) {
+                [addOverlay, editOverlay, viewOverlay, drawerOverlay, branchOverlay].forEach(function(overlay) {
                     if (overlay && overlay.classList.contains('open')) {
                         if (overlay === addOverlay) saveCreateFormState();
                         setModalOpen(overlay, false);
@@ -857,6 +877,13 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
             if (restoreCreateForm) {
                 restoreCreateFormState();
                 setModalOpen(addOverlay, true);
+            } else if (branchFormSubmitted) {
+                selectManagementTab('branches');
+                if (restoreBranchForm) {
+                    setModalOpen(branchOverlay, true);
+                    const branchName = document.getElementById('branchName');
+                    if (branchName) branchName.focus();
+                }
             } else if (autoOpenDrawerUserId > 0) {
                 const manageButton = document.querySelector('.open-user-drawer[data-user-id="' + autoOpenDrawerUserId + '"]');
                 if (manageButton) {

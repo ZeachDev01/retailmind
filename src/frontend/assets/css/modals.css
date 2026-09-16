@@ -18,14 +18,17 @@
 .user-modal {
   width: min(560px, 100%);
   max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
   background: #111827;
   color: #e5edf8;
-  overflow-y: auto;
   border-radius: 16px;
   box-shadow: 0 20px 45px rgba(15, 23, 42, 0.24);
   overflow: hidden;
 }
 .user-modal-header {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -48,6 +51,13 @@
 }
 .user-form {
   padding: 1.2rem;
+}
+.user-modal > .user-form {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 .manage-users-page .user-modal .form-group > label,
 .manage-users-page .user-modal .field-help {
@@ -571,23 +581,20 @@ body.audit-log-open {
   background: linear-gradient(135deg, #0891b2, #1d4ed8);
   color: #fff;
 }
-.manage-users-branch-form {
-  display: flex;
-  align-items: end;
-  gap: 1rem;
-  padding: 0;
+.manage-users-section-action {
+  min-height: 40px;
+  padding: 0.58rem 0.85rem;
+  border-radius: 11px;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
 }
-.manage-users-branch-form .form-group {
-  flex: 1 1 0;
-  min-width: 0;
-  margin-bottom: 0;
+.branch-modal {
+  width: min(480px, 100%);
 }
-.manage-users-branch-form .btn {
-  flex: 0 0 auto;
-  min-height: 48px;
-  white-space: nowrap;
+@media (max-width: 700px) {
+  .manage-users-section-action {
+    width: 100%;
+  }
 }
-.manage-users-embedded .manage-users-branch-form input,
 .manage-users-embedded .user-form input,
 .manage-users-embedded .user-form select,
 .manage-users-page .user-modal .user-form input,
@@ -596,7 +603,6 @@ body.audit-log-open {
   background: #1b2435;
   color: #e5edf8;
 }
-.manage-users-embedded .manage-users-branch-form input:focus,
 .manage-users-embedded .user-form input:focus,
 .manage-users-embedded .user-form select:focus,
 .manage-users-page .user-modal .user-form input:focus,
@@ -1291,14 +1297,6 @@ body.audit-log-open {
   }
   .manage-users-embedded .manage-users-branches {
     padding: 0.9rem 1rem 1rem;
-  }
-  .manage-users-branch-form {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
-  }
-  .manage-users-branch-form .btn {
-    width: 100%;
   }
   .manage-users-embedded .manage-users-heading-copy {
     padding-left: 3.25rem;

@@ -17,6 +17,12 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - [x] Phase 11: Inspect the Manage Users tab markup, state handling, counts, and responsive styles.
 - [x] Phase 12: Redesign the Users/Branches tab control without changing its behavior.
 - [x] Phase 13: Run focused checks and review the Manage Users tab diff.
+- [x] Phase 14: Inspect existing user and branch action markup plus modal lifecycle behavior.
+- [x] Phase 15: Move actions into their panel headers and convert branch creation to a compact modal.
+- [x] Phase 16: Run focused checks and review the contextual-action diff.
+- [x] Phase 17: Reproduce and diagnose the Add Staff modal scrolling failure.
+- [x] Phase 18: Make the modal form the viewport-constrained scroll region.
+- [x] Phase 19: Run the regression and repository verification checks.
 
 ## Decisions
 - Prefer the project's existing layout, components, and dependency versions over introducing a second table stack.
@@ -29,6 +35,9 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - Use a page-scoped system-health stylesheet and remove the iframe overlay, embedded presentation branches, and trigger attributes.
 - Replace the full-width dark Manage Users tab bar with a compact light segmented control on the full page, while providing a coordinated dark variant for embedded mode.
 - Preserve the existing ARIA roles, roving keyboard focus, and panel-switching JavaScript; add only presentational icon, description, and count elements.
+- Move Add Staff User from the page topbar into the Users panel header; keep the existing add-user modal and form-state behavior unchanged.
+- Move Create Branch into the Branches panel header and open a compact branch modal using the existing overlay, form, and keyboard-dismiss patterns.
+- Keep modal headers visible and make each modal's form/body the internal scroll region, sized with dynamic viewport units for mobile keyboards.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -40,3 +49,7 @@ Replace modal-only administration workflows with dedicated pages while preservin
 | Browser-control JavaScript runtime was not available for local visual QA | 1 | Continue with full PHP lint, smoke checks, source invariants, and diff review. |
 | Browser-control runtime remains unavailable for System Health visual QA | 1 | Complete repository-wide lint, smoke, CSS structure, route-reference, and diff checks instead. |
 | Browser-control runtime remains unavailable for Manage Users visual QA | 1 | Complete source-level responsive-state review plus full lint, smoke, CSS structure, and diff checks. |
+| Contextual-action patch missed a responsive CSS anchor | 1 | Split PHP markup, modal file, JavaScript, CSS, and smoke updates into independent patches. |
+| Browser-control runtime remains unavailable for contextual-action QA | 1 | Complete full lint, smoke, CSS structure, modal-reference, and diff checks instead. |
+| Add Staff modal could not reach lower fields | 1 | Removed the contradictory dialog overflow rules and added a viewport-constrained scroll region to the modal form. |
+| Browser-control runtime remains unavailable for modal-scroll QA | 1 | Added a deterministic stylesheet regression and completed static/runtime verification instead. |

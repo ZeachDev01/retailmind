@@ -36,6 +36,12 @@
 - Tab styling is centralized in `assets/css/modals.css`; the same control serves full-page and embedded modes, so the redesign needs light-page defaults plus dark embedded overrides.
 - User and branch counts are already loaded on the page and can be surfaced as compact tab badges without additional queries.
 - The new tab control can remain entirely server-rendered and CSS-driven; the existing click and keyboard handlers continue to operate through unchanged `data-management-tab` attributes.
+- Add Staff User already opens a reusable modal and only needs its trigger relocated from the page topbar to the Users panel header.
+- Branch creation is currently an always-visible inline form; its existing CSRF-protected `create_branch` POST can be moved unchanged into a compact modal.
+- Existing modal lifecycle code centralizes overlay state, backdrop dismissal, close/cancel buttons, and Escape handling, so the branch modal can join the same arrays and helper without a new interaction system.
+- Branch submission state now keeps the Branches tab selected after either success or failure; validation failures additionally reopen the modal with the entered values preserved.
+- The Add Staff scrolling bug was caused by contradictory declarations in `.user-modal`: `overflow-y: auto` was immediately overridden by `overflow: hidden`, leaving the long form without a scrollable ancestor inside the capped-height dialog.
+- The reliable layout is a column-flex dialog with a non-shrinking header and `.user-modal > .user-form` as the vertical scroll container; `100dvh` keeps the cap responsive to mobile browser chrome and on-screen keyboards.
 
 ## Design Notes
 

@@ -61,6 +61,15 @@ $checks = [
         'file' => 'src/frontend/components/user_manager/user_manager.php',
         'needles' => ['role="tablist"', 'manage-users-tab-icon', 'manage-users-tab-description', 'manage-users-tab-count', 'data-management-tab="users"', 'data-management-tab="branches"'],
     ],
+    'Manage Users contextual actions present' => [
+        'file' => 'src/frontend/components/user_manager/user_manager.php',
+        'needles' => ['manage-users-section-action', 'id="openUserModal"', 'id="openBranchModal"', "include __DIR__ . '/modals/add_branch_modal.php'", "selectManagementTab('branches')"],
+        'forbidden' => ['class="user-form manage-users-branch-form"'],
+    ],
+    'Manage Users modal form remains scrollable' => [
+        'file' => 'src/frontend/assets/css/modals.css',
+        'needles' => ['max-height: calc(100dvh - 2rem);', '.user-modal > .user-form {', 'overflow-y: auto;', '-webkit-overflow-scrolling: touch;'],
+    ],
     'Dedicated audit logs DataTable present' => [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',
         'needles' => ['id="auditLogsTable"', 'data-no-smart-table', "new DataTable('#auditLogsTable'", 'dataTables.columnControl.min.js', 'dataTables.dateTime.min.js', "columnControl: ['order'", 'Export CSV'],

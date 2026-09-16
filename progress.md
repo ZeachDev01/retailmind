@@ -42,3 +42,15 @@
 - Focused PHP lint passed, all 21 smoke checks passed, the stylesheet has balanced braces, and `git diff --check` reported no whitespace errors.
 - Attempted browser-based comparison against the supplied screenshot, but the required browser runtime remains unavailable; continued with source-level responsive-state review.
 - Final Manage Users tab verification passed: 196 PHP files linted, 21 smoke checks passed, CSS braces are balanced, and `git diff --check` reported no whitespace errors. Database integration remained intentionally skipped because `RUN_DB_TESTS` was not enabled.
+- Started a follow-up to move Add Staff User and Create Branch into their respective panel headers and modalize branch creation.
+- Inspected the existing add-user modal, branch form, section-header layout, and shared modal lifecycle behavior.
+- The first combined contextual-action patch made no changes because a responsive CSS context no longer matched; split the retry into smaller verified edits.
+- Moved Add Staff User into the Users panel header, moved Create Branch into the Branches panel header, and replaced the always-visible branch form with a compact modal.
+- Integrated the branch modal with backdrop, cancel, Escape, validation-state restoration, and post-submit tab selection behavior.
+- Focused PHP lint passed, all 22 smoke checks passed, CSS braces are balanced, and `git diff --check` reported no whitespace errors.
+- Attempted browser-based interaction and layout QA for the contextual actions, but the required runtime remains unavailable.
+- Final contextual-action verification passed: PHP lint succeeded for 197 files, all 22 smoke checks passed, CSS braces were balanced (287/287), and `git diff --check` reported no whitespace errors. Database integration checks were skipped because `RUN_DB_TESTS` is not enabled.
+- Diagnosed the Add Staff modal scrolling failure: a later `overflow: hidden` overrode the dialog's vertical scrolling while its long form had no internal scroll region.
+- Added a regression check and confirmed it failed before the fix on the missing dynamic-height and form-scroll rules.
+- Updated the shared user modal layout to keep its header fixed and let the form scroll within a `100dvh`-constrained dialog, including touch momentum and overscroll containment.
+- Final modal-scroll verification passed: 197 PHP files linted successfully, all 23 smoke checks passed, modal CSS braces were balanced (288/288), and `git diff --check` found no whitespace errors.
