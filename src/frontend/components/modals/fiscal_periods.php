@@ -193,7 +193,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                                 </div>
                                 <div class="detail-item">
                                     <span class="detail-label">Created At</span>
-                                    <span><?= htmlspecialchars($period['created_at']) ?></span>
+                                    <span><?= htmlspecialchars(format_display_datetime($period['created_at'])) ?></span>
                                 </div>
                                 <?php if ($period['status'] === 'closed' || $period['status'] === 'locked'): ?>
                                     <div class="detail-item">

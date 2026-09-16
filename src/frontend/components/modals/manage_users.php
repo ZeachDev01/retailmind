@@ -121,7 +121,7 @@ function user_last_active_label(?string $lastLogin): string
         return 'Active: Yesterday';
     }
 
-    return 'Active: ' . date('M d, Y', $timestamp);
+    return 'Active: ' . format_display_date(date('Y-m-d', $timestamp));
 }
 
 // Handle create user

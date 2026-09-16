@@ -661,7 +661,7 @@ body.system-health-open {
   height: min(720px, calc(100vh - 3rem));
   border: 1px solid rgba(96, 117, 151, 0.46);
   border-radius: 28px;
-  overflow: hidden;
+  overflow: visible;
   background: #111827;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
   transform: translateY(12px) scale(0.97);
@@ -678,19 +678,22 @@ body.system-health-open {
 }
 .audit-log-frame-close {
   position: absolute;
-  z-index: 2;
-  top: 1.35rem;
-  right: 1.3rem;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
+  z-index: 3;
+  top: -16px;
+  right: -16px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.52);
+  border-radius: 50%;
+  background: #1b2435;
   color: #94a3b8;
   cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.32);
 }
 .audit-log-frame-close:hover {
-  background: rgba(148, 163, 184, 0.14);
+  background: #303948;
   color: #f8fafc;
 }
 
@@ -1174,7 +1177,8 @@ body.system-health-open {
 }
 .audit-log-embedded .app-shell {
   flex: 1;
-  display: block;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 }
 .audit-log-embedded .sidebar,
@@ -1183,10 +1187,12 @@ body.system-health-open {
   display: none;
 }
 .audit-log-embedded .main-content {
+  flex: 1;
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   padding: 0;
   background: #111827;
 }
@@ -1264,6 +1270,17 @@ body.system-health-open {
 .audit-log-embedded .filter-group {
   min-width: 0;
 }
+.audit-log-embedded .filter-group:last-child {
+  display: flex;
+  flex-direction: row;
+  align-items: end;
+  gap: 0.5rem;
+}
+.audit-log-embedded .filter-group:last-child .filter-btn,
+.audit-log-embedded .filter-group:last-child .clear-btn {
+  flex: 1 1 0;
+  margin-top: 0;
+}
 .audit-log-embedded .filter-group label {
   color: #94a3b8;
   font-size: 0.72rem;
@@ -1314,8 +1331,28 @@ body.system-health-open {
   padding: 1rem 1.25rem;
 }
 .audit-log-embedded .audit-log-table {
-  min-width: 980px;
+  width: max-content;
+  min-width: 900px;
+  table-layout: fixed;
   background: transparent;
+}
+.audit-log-embedded .audit-col-date {
+  width: 176px;
+}
+.audit-log-embedded .audit-col-user {
+  width: 126px;
+}
+.audit-log-embedded .audit-col-action {
+  width: 132px;
+}
+.audit-log-embedded .audit-col-module {
+  width: 104px;
+}
+.audit-log-embedded .audit-col-record-id {
+  width: 72px;
+}
+.audit-log-embedded .audit-col-details {
+  width: 270px;
 }
 .audit-log-embedded .audit-log-table th {
   position: sticky;
@@ -1339,19 +1376,111 @@ body.system-health-open {
 .audit-log-embedded .audit-log-table small {
   color: #94a3b8;
 }
+.audit-log-embedded .audit-log-table td {
+  overflow: hidden;
+}
+.audit-log-embedded .audit-action-badge {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.audit-log-embedded .audit-action-badge.is-success {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(74, 222, 128, 0.32);
+  color: #86efac;
+}
+.audit-log-embedded .audit-action-badge.is-danger {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(248, 113, 113, 0.32);
+  color: #fca5a5;
+}
+.audit-log-embedded .audit-action-badge.is-neutral {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+.audit-log-embedded .audit-previous-value,
+.audit-log-embedded .audit-new-value {
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.audit-log-embedded .audit-details summary {
+  color: #7dd3fc;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.audit-log-embedded .audit-details-content {
+  max-width: 250px;
+  margin-top: 0.5rem;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.audit-log-embedded .audit-details-content strong {
+  color: #94a3b8;
+}
+.audit-log-embedded .audit-details-content .is-empty {
+  color: #64748b;
+}
+.audit-log-embedded .audit-previous-value.is-empty {
+  color: #64748b;
+}
+.audit-log-embedded .audit-new-value span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+}
+.audit-log-embedded .audit-log-table td:last-child {
+  white-space: nowrap;
+}
+.audit-log-export-form {
+  flex: 0 0 auto;
+}
+.audit-log-export-form .btn {
+  white-space: nowrap;
+}
+.audit-log-embedded .audit-log-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex: 0 0 auto;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid rgba(71, 85, 105, 0.58);
+  background: #111827;
+}
+.audit-log-embedded .audit-log-result-count {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.audit-log-embedded .audit-log-pagination .pagination {
+  padding: 0;
+  border: 0;
+}
+.audit-log-embedded .audit-log-pagination .pagination:empty {
+  display: none;
+}
 .audit-log-embedded .audit-log-table .action-cell {
   max-width: 320px;
   color: #cbd5e1;
-  font-family:
-    ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-  font-size: 0.78rem;
 }
 .audit-log-embedded .pagination {
   flex: 0 0 auto;
   margin: 0;
-  padding: 0.75rem 1.25rem;
-  border-top: 1px solid rgba(71, 85, 105, 0.58);
-  background: #111827;
 }
 .audit-log-embedded .pagination a,
 .audit-log-embedded .pagination span {
@@ -1405,6 +1534,17 @@ body.system-health-open {
   .audit-log-frame {
     height: 100%;
     border-radius: 20px;
+  }
+  .audit-log-embedded .audit-log-pagination {
+    flex-wrap: wrap;
+  }
+  .audit-log-embedded .audit-log-result-count {
+    width: 100%;
+  }
+  .audit-log-embedded .audit-log-pagination .pagination {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    width: 100%;
   }
   .fiscal-periods-overlay {
     padding: 0.65rem;
