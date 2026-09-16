@@ -51,6 +51,16 @@ $checks = [
         'file' => 'src/frontend/components/modals/system_health.php',
         'needles' => ['SystemHealthService', 'Environment checks', 'Recommended maintenance commands'],
     ],
+    'Dedicated audit logs DataTable present' => [
+        'file' => 'src/frontend/components/system_administrator/audit_logs.php',
+        'needles' => ['id="auditLogsTable"', 'data-no-smart-table', "new DataTable('#auditLogsTable'", 'dataTables.columnControl.min.js', 'dataTables.dateTime.min.js', "columnControl: ['order'", 'Export CSV'],
+        'forbidden' => ['embed=1', 'data-embedded-close', 'Filter activity', 'Apply filters', 'audit-datatable-filters'],
+    ],
+    'Audit logs use direct navigation' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['components/system_administrator/audit_logs.php'],
+        'forbidden' => ['data-audit-log-open', 'auditLogOverlay', 'auditLogFrame'],
+    ],
     'Supplier-based reorder planning present' => [
         'file' => 'src/frontend/components/inventory_management/reorder_planner.php',
         'needles' => ['Supplier-Based Reorder Planning', 'minimum_order_quantity', 'Create selected replenishment requests'],

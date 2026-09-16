@@ -81,11 +81,19 @@ function sidebar_item_paths(array $items): array
 
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
+<<<<<<< HEAD
     $isAuditLog = ($item['path'] ?? '') === 'components/modals/audit_log.php';
     $isFiscalPeriods = ($item['path'] ?? '') === 'components/modals/fiscal_periods.php';
     $isSystemHealth = ($item['path'] ?? '') === 'components/modals/system_health.php';
 ?>
     <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isAuditLog ? ' data-audit-log-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+=======
+    $isUserManagement = ($item['path'] ?? '') === 'components/modals/manage_users.php';
+    $isFiscalPeriods = ($item['path'] ?? '') === 'components/modals/fiscal_periods.php';
+    $isSystemHealth = ($item['path'] ?? '') === 'components/modals/system_health.php';
+?>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isUserManagement ? ' data-user-management-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+>>>>>>> admin-fixes
 <?php
 }
 
@@ -136,8 +144,13 @@ if ($role !== 'cashier') {
 }
 
 $adminSystemItems = [
+<<<<<<< HEAD
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
     ['path' => 'components/modals/audit_log.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Log'],
+=======
+    ['path' => 'components/modals/manage_users.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
+    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Logs'],
+>>>>>>> admin-fixes
     ['path' => 'components/modals/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
     ['path' => 'components/modals/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
     ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-sliders', 'label' => 'ML Settings'],
@@ -486,50 +499,6 @@ $sections = $roleSections[$role] ?? [];
             });
             document.addEventListener('keydown', function(event) {
                 if (event.key === 'Escape' && fiscalOverlay.classList.contains('open')) closeFiscalPeriods();
-            });
-        });
-    </script>
-<?php endif; ?>
-
-<?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-    <div class="audit-log-overlay" id="auditLogOverlay" aria-hidden="true">
-        <div class="audit-log-frame" role="dialog" aria-modal="true" aria-label="Audit activity log">
-            <button type="button" class="audit-log-frame-close" data-audit-log-close aria-label="Close audit log"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-            <iframe title="Audit Activity Log" id="auditLogFrame" loading="lazy"></iframe>
-        </div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var auditOverlay = document.getElementById('auditLogOverlay');
-            var auditFrame = document.getElementById('auditLogFrame');
-            if (!auditOverlay || !auditFrame) return;
-            var auditSource = <?= json_encode(app_url('components/modals/audit_log.php?embed=1')) ?>;
-
-            function closeAuditLog() {
-                auditOverlay.classList.remove('open');
-                auditOverlay.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('audit-log-open');
-            }
-            document.querySelectorAll('[data-audit-log-open]').forEach(function(link) {
-                link.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    auditFrame.src = auditSource;
-                    auditOverlay.classList.add('open');
-                    auditOverlay.setAttribute('aria-hidden', 'false');
-                    document.body.classList.add('audit-log-open');
-                });
-            });
-            auditOverlay.querySelectorAll('[data-audit-log-close]').forEach(function(button) {
-                button.addEventListener('click', closeAuditLog);
-            });
-            auditOverlay.addEventListener('click', function(event) {
-                if (event.target === auditOverlay) closeAuditLog();
-            });
-            window.addEventListener('message', function(event) {
-                if (event.data && event.data.type === 'close-audit-log') closeAuditLog();
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && auditOverlay.classList.contains('open')) closeAuditLog();
             });
         });
     </script>
