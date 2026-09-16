@@ -57,11 +57,12 @@
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(4px);
   z-index: 1150;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 1rem;
+  justify-content: flex-end;
+  padding: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -71,23 +72,22 @@
   pointer-events: auto;
 }
 .user-drawer {
-  width: min(620px, 100%);
-  max-height: calc(100vh - 2rem);
+  width: min(520px, 100%);
+  height: 100vh;
+  max-height: 100vh;
   background: var(--card-bg);
-  border-radius: 16px;
-  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.28);
-  transform: translateY(12px) scale(0.98);
-  opacity: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 18px 0 0 18px;
+  box-shadow: -28px 0 60px rgba(15, 23, 42, 0.26);
+  transform: translateX(100%);
   transition:
-    transform 0.22s ease,
-    opacity 0.22s ease;
+    transform 0.28s cubic-bezier(.22, 1, .36, 1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 .user-drawer-overlay.open .user-drawer {
-  transform: translateY(0) scale(1);
-  opacity: 1;
+  transform: translateX(0);
 }
 .user-drawer-header {
   display: flex;
@@ -105,11 +105,72 @@
 .user-drawer-body {
   flex: 1;
   overflow-y: auto;
-  max-height: calc(100vh - 8rem);
   padding: 1.2rem;
+}
+.user-drawer-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: -1.2rem -1.2rem 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card-bg);
+}
+.user-drawer-tab {
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+}
+.user-drawer-tab:hover {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--text);
+}
+.user-drawer-tab.is-active {
+  border-color: rgba(37, 99, 235, 0.25);
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--primary);
+}
+.user-drawer-panel[hidden],
+.drawer-modal-actions[hidden] {
+  display: none;
 }
 .user-drawer-form {
   padding: 0;
+}
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 3rem;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.8rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.password-toggle:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text);
 }
 .drawer-modal-actions {
   margin-top: 0.75rem;

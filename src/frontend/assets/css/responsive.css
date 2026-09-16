@@ -492,6 +492,22 @@ body.products-page .products-quick-action strong {
         max-height: calc(100svh - 1.5rem);
         border-radius: 14px;
     }
+
+    .user-drawer-overlay {
+        align-items: stretch;
+        justify-content: flex-end;
+        padding: 0;
+    }
+
+    .user-drawer {
+        height: 100svh;
+        max-height: 100svh;
+        border-radius: 0;
+    }
+
+    .user-drawer-tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 640px) {

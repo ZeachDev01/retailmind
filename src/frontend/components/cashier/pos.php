@@ -68,10 +68,18 @@ $productLookup = [];
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <header class="topbar cashier-topbar">
+        <header class="topbar cashier-topbar pos-command-bar">
             <div class="cashier-heading">
+                <span class="pos-kicker">Point of Sale</span>
                 <h1>Checkout</h1>
-                <p>Scan items, review the cart, and collect payment.</p>
+                <p>Scan items, review the cart, and collect payment without leaving the counter.</p>
+            </div>
+            <div class="cashier-meta pos-session-meta" aria-label="Register status">
+                <span class="cashier-chip online">Register ready</span>
+                <span class="cashier-chip" id="cashier-clock"><i class="bi bi-clock" aria-hidden="true"></i>--:--</span>
+                <button type="button" class="cashier-chip cashier-fullscreen-toggle" id="pos-fullscreen-toggle" title="Toggle focused POS mode">
+                    <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i><span>Full screen</span>
+                </button>
             </div>
             <div class="pos-header-actions">
                 <a class="btn btn-secondary pos-find-product-link" href="<?= htmlspecialchars(app_url('components/cashier/findProduct.php')) ?>" title="Find product (F3)">
@@ -93,6 +101,25 @@ $productLookup = [];
             <kbd>F4</kbd><span>Hold</span>
             <kbd>Ctrl + Enter</kbd><span>Checkout</span>
         </div>
+
+        <section class="pos-snapshot" aria-label="Current checkout snapshot">
+            <div>
+                <span>Cart lines</span>
+                <strong id="snapshot-lines">0</strong>
+            </div>
+            <div>
+                <span>Items</span>
+                <strong id="snapshot-items">0</strong>
+            </div>
+            <div>
+                <span>Discount</span>
+                <strong>&#8369;<span id="snapshot-discount">0.00</span></strong>
+            </div>
+            <div class="pos-snapshot-total">
+                <span>Total due</span>
+                <strong>&#8369;<span id="snapshot-total">0.00</span></strong>
+            </div>
+        </section>
 
         <?php if ($checkout_error): ?>
             <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_error) ?></div>
@@ -143,6 +170,20 @@ $productLookup = [];
                         <div class="recent-scan-price">—</div>
                     </div>
 
+                    <div class="pos-category-section" aria-label="Fast checkout actions">
+                        <div class="pos-category-heading">
+                            <strong>Fast actions</strong>
+                            <span>Use when the line is moving quickly.</span>
+                        </div>
+                        <div class="pos-category-buttons">
+                            <button type="button" class="pos-category-button active" data-pos-focus="scan"><i class="bi bi-upc-scan" aria-hidden="true"></i> Scan next</button>
+                            <button type="button" class="pos-category-button" data-pos-focus="find"><i class="bi bi-search" aria-hidden="true"></i> Product lookup</button>
+                            <button type="button" class="pos-category-button" data-pos-focus="cash"><i class="bi bi-cash" aria-hidden="true"></i> Cash payment</button>
+                            <button type="button" class="pos-category-button" data-pos-focus="discount"><i class="bi bi-percent" aria-hidden="true"></i> Discount</button>
+                            <button type="button" class="pos-category-button" data-pos-focus="hold"><i class="bi bi-pause-circle" aria-hidden="true"></i> Hold sale</button>
+                        </div>
+                    </div>
+
                     <div class="scanner-area" id="scanner-area">
                         <div id="scanner-reader" class="scanner-reader"></div>
                         <div id="scanner-result" class="scanner-status" aria-live="polite">
@@ -183,6 +224,12 @@ $productLookup = [];
                         <span><span id="cart-item-count">0</span> item(s)</span>
                     </div>
                     <div class="checkout-total-value">&#8369;<span id="cart-total">0.00</span></div>
+                </div>
+
+                <div class="payment-breakdown" aria-label="Payment summary">
+                    <div><span>Subtotal</span><strong>&#8369;<span id="summary-subtotal">0.00</span></strong></div>
+                    <div><span>Discount</span><strong>-&#8369;<span id="summary-discount">0.00</span></strong></div>
+                    <div><span>Change</span><strong>&#8369;<span id="summary-change">0.00</span></strong></div>
                 </div>
 
                 <form method="POST" id="checkout-form" class="payment-section">
@@ -647,11 +694,20 @@ function renderCart() {
 
     const lineCount = Object.keys(cart).length;
     const itemCount = getCartItemCount();
+    const gross = getCartTotal();
+    const discount = getDiscountAmount();
+    const net = getNetTotal();
     const hasItems = lineCount > 0;
     cartBody.innerHTML = rows;
-    document.getElementById('cart-total').textContent = money(getNetTotal());
+    document.getElementById('cart-total').textContent = money(net);
     document.getElementById('cart-item-count').textContent = itemCount;
     document.getElementById('cart-line-count').textContent = lineCount;
+    document.getElementById('snapshot-lines').textContent = lineCount;
+    document.getElementById('snapshot-items').textContent = itemCount;
+    document.getElementById('snapshot-discount').textContent = money(discount);
+    document.getElementById('snapshot-total').textContent = money(net);
+    document.getElementById('summary-subtotal').textContent = money(gross);
+    document.getElementById('summary-discount').textContent = money(discount);
     checkoutButton.disabled = !hasItems || !posShiftOpen;
     holdSaleButton.disabled = !hasItems;
     voidSaleButton.disabled = !hasItems;
@@ -675,6 +731,11 @@ function updatePaymentFields() {
 
     const received = Number(cashReceived.value || 0);
     changeDue.value = money(Math.max(0, received - total));
+    document.getElementById('summary-subtotal').textContent = money(gross);
+    document.getElementById('summary-discount').textContent = money(discount);
+    document.getElementById('summary-change').textContent = money(Math.max(0, received - total));
+    document.getElementById('snapshot-discount').textContent = money(discount);
+    document.getElementById('snapshot-total').textContent = money(total);
     if (discountSummary) {
         discountSummary.textContent = discount > 0 ? `Gross ₱${money(gross)} · Discount ₱${money(discount)} · Net ₱${money(total)}` : 'No discount applied.';
         supervisorFields.classList.toggle('hidden', !(discount > gross * 0.10));
@@ -944,6 +1005,27 @@ cashQuick.addEventListener('click', event => {
     if (button) {
         setQuickTender(button.dataset.tender);
     }
+});
+document.querySelectorAll('[data-pos-focus]').forEach(button => {
+    button.addEventListener('click', () => {
+        document.querySelectorAll('[data-pos-focus]').forEach(item => item.classList.toggle('active', item === button));
+        const target = button.dataset.posFocus;
+        if (target === 'scan') {
+            skuInput.focus();
+            skuInput.select();
+        } else if (target === 'find') {
+            window.location.href = findProductUrl;
+        } else if (target === 'cash') {
+            paymentMethod.value = 'cash';
+            updatePaymentFields();
+            cashReceived.focus();
+        } else if (target === 'discount') {
+            document.getElementById('discount-panel').open = true;
+            discountType.focus();
+        } else if (target === 'hold') {
+            holdCurrentSale();
+        }
+    });
 });
 function setFullscreenMode(enabled) {
     document.body.classList.toggle('pos-fullscreen', enabled);

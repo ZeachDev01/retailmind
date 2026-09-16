@@ -6,6 +6,8 @@
     --cashier-orange: #c2410c;
     --cashier-surface: #ffffff;
     --cashier-border: #dbe3ee;
+    --cashier-text: #0f172a;
+    --cashier-muted: #64748b;
     --cashier-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
     background:
         radial-gradient(circle at 80% 0%, rgba(37, 99, 235, 0.08), transparent 24rem),
@@ -19,6 +21,28 @@
 .cashier-topbar {
     align-items: flex-start;
     margin-bottom: 1rem;
+}
+
+.pos-command-bar {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto auto;
+    gap: 0.8rem;
+    align-items: center;
+}
+
+.pos-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    margin-bottom: 0.2rem;
+    padding: 0.14rem 0.55rem;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: var(--cashier-blue);
+    font-size: 0.72rem;
+    font-weight: 850;
+    text-transform: uppercase;
 }
 
 .cashier-heading h1 {
@@ -38,6 +62,10 @@
     flex-wrap: wrap;
 }
 
+.pos-session-meta {
+    flex-wrap: nowrap;
+}
+
 .cashier-chip {
     display: inline-flex;
     align-items: center;
@@ -50,6 +78,10 @@
     color: #334155;
     font-size: 0.82rem;
     font-weight: 700;
+}
+
+.cashier-chip i {
+    font-size: 0.95rem;
 }
 
 .cashier-chip.online::before {
@@ -87,6 +119,50 @@
     font-size: 0.72rem;
     font-weight: 800;
     text-align: center;
+}
+
+.pos-snapshot {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.pos-snapshot > div {
+    min-width: 0;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--cashier-border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+}
+
+.pos-snapshot span,
+.payment-breakdown span {
+    display: block;
+    color: var(--cashier-muted);
+    font-size: 0.72rem;
+    font-weight: 750;
+}
+
+.pos-snapshot strong {
+    display: block;
+    margin-top: 0.18rem;
+    overflow: hidden;
+    color: var(--cashier-text);
+    font-size: 1.18rem;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pos-snapshot-total {
+    border-color: #bfdbfe !important;
+    background: #eff6ff !important;
+}
+
+.pos-snapshot-total strong {
+    color: var(--cashier-blue);
 }
 
 .pos-alert {
@@ -664,6 +740,32 @@
     letter-spacing: 0;
 }
 
+.payment-breakdown {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.payment-breakdown > div {
+    min-width: 0;
+    padding: 0.62rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.payment-breakdown strong {
+    display: block;
+    margin-top: 0.2rem;
+    overflow: hidden;
+    color: var(--cashier-text);
+    font-size: 0.88rem;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .payment-section {
     margin-top: 0.9rem;
 }
@@ -1098,6 +1200,10 @@
         grid-template-columns: 1fr;
     }
 
+    .pos-command-bar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .checkout-panel {
         position: static;
     }
@@ -1311,6 +1417,74 @@ body.pos-fullscreen .pos-grid { grid-template-columns: minmax(0, 1.25fr) minmax(
 body.pos-fullscreen .pos-panel { border-radius: 12px; }
 @media(max-width:900px){body.pos-fullscreen .pos-grid{grid-template-columns:1fr}.pos-category-heading{align-items:flex-start;flex-direction:column}}
 
+.cashier-fullscreen-toggle {
+    appearance: none;
+}
+
+.pos-category-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--cashier-border);
+}
+
+.pos-category-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 0.65rem;
+}
+
+.pos-category-heading strong {
+    color: var(--cashier-text);
+    font-size: 0.86rem;
+}
+
+.pos-category-heading span {
+    color: var(--cashier-muted);
+    font-size: 0.75rem;
+}
+
+.pos-category-buttons {
+    display: flex;
+    gap: 0.45rem;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    scrollbar-width: thin;
+}
+
+.pos-category-button {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    min-height: 42px;
+    padding: 0.56rem 0.76rem;
+    border: 1px solid var(--cashier-border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--cashier-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 750;
+    white-space: nowrap;
+    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.pos-category-button:hover,
+.pos-category-button:focus-visible,
+.pos-category-button.active {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: var(--cashier-blue);
+    outline: none;
+}
+
+.pos-category-button:active {
+    transform: translateY(1px);
+}
+
 /* Cashier-wide responsive overrides */
 @media (max-width: 1180px) {
     .cashier-page .main-content {
@@ -1339,6 +1513,14 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     .pos-toolbar,
     .pos-header-actions {
         justify-content: flex-start;
+    }
+
+    .pos-session-meta {
+        flex-wrap: wrap;
+    }
+
+    .pos-snapshot {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .cashier-dashboard-grid,
@@ -1412,8 +1594,21 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     .scan-row,
     .scanner-area,
     .payment-grid,
+    .payment-breakdown,
     .secondary-sale-actions {
         grid-template-columns: 1fr;
+    }
+
+    .pos-snapshot {
+        gap: 0.5rem;
+    }
+
+    .pos-snapshot > div {
+        padding: 0.68rem 0.72rem;
+    }
+
+    .pos-snapshot strong {
+        font-size: 1rem;
     }
 
     .pos-panel-title {

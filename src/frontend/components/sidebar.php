@@ -81,12 +81,11 @@ function sidebar_item_paths(array $items): array
 
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
-    $isUserManagement = ($item['path'] ?? '') === 'components/modals/manage_users.php';
     $isAuditLog = ($item['path'] ?? '') === 'components/modals/audit_log.php';
     $isFiscalPeriods = ($item['path'] ?? '') === 'components/modals/fiscal_periods.php';
     $isSystemHealth = ($item['path'] ?? '') === 'components/modals/system_health.php';
 ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isUserManagement ? ' data-user-management-open' : '' ?><?= $isAuditLog ? ' data-audit-log-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isAuditLog ? ' data-audit-log-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
 <?php
 }
 
@@ -137,7 +136,7 @@ if ($role !== 'cashier') {
 }
 
 $adminSystemItems = [
-    ['path' => 'components/modals/manage_users.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
+    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
     ['path' => 'components/modals/audit_log.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Log'],
     ['path' => 'components/modals/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
     ['path' => 'components/modals/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
@@ -372,7 +371,7 @@ $sections = $roleSections[$role] ?? [];
             var userOverlay = document.getElementById('userManagementOverlay');
             var userFrame = document.getElementById('userManagementFrame');
             if (!userOverlay || !userFrame) return;
-            var userSource = <?= json_encode(app_url('components/modals/manage_users.php?embed=1')) ?>;
+            var userSource = <?= json_encode(app_url('components/user_manager/user_manager.php?embed=1')) ?>;
 
             function closeUserManagement() {
                 userOverlay.classList.remove('open');

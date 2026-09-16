@@ -51,7 +51,7 @@ $adminName = trim((string)($_SESSION['full_name'] ?? 'System Admin'));
             </header>
 
             <div class="quick-actions">
-                <a class="quick-action" href="<?= htmlspecialchars(app_url('components/modals/manage_users.php')) ?>" data-user-management-open>
+                <a class="quick-action" href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php')) ?>" data-user-management-open>
                     <i class="bi bi-person" aria-hidden="true"></i>
                     <strong>Users</strong>
                     <span>Control access and team roles</span>
