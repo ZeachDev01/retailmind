@@ -81,19 +81,10 @@ function sidebar_item_paths(array $items): array
 
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
-<<<<<<< HEAD
-    $isAuditLog = ($item['path'] ?? '') === 'components/modals/audit_log.php';
     $isFiscalPeriods = ($item['path'] ?? '') === 'components/modals/fiscal_periods.php';
     $isSystemHealth = ($item['path'] ?? '') === 'components/modals/system_health.php';
 ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isAuditLog ? ' data-audit-log-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
-=======
-    $isUserManagement = ($item['path'] ?? '') === 'components/modals/manage_users.php';
-    $isFiscalPeriods = ($item['path'] ?? '') === 'components/modals/fiscal_periods.php';
-    $isSystemHealth = ($item['path'] ?? '') === 'components/modals/system_health.php';
-?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isUserManagement ? ' data-user-management-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
->>>>>>> admin-fixes
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
 <?php
 }
 
@@ -144,13 +135,8 @@ if ($role !== 'cashier') {
 }
 
 $adminSystemItems = [
-<<<<<<< HEAD
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
-    ['path' => 'components/modals/audit_log.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Log'],
-=======
-    ['path' => 'components/modals/manage_users.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Logs'],
->>>>>>> admin-fixes
     ['path' => 'components/modals/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
     ['path' => 'components/modals/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
     ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-sliders', 'label' => 'ML Settings'],
