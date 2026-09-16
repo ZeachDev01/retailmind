@@ -14,6 +14,16 @@
 - Audit links also appear on the admin dashboard, so both sidebar and dashboard entry points must be updated and their `data-audit-log-open` hooks removed.
 - A natural canonical location is `components/system_administrator/audit_logs.php`, alongside ML settings, backups, and system settings.
 - The compatibility CSS bundle imports `modals.css`; removing the iframe markup makes its audit-overlay selectors dead code, while a dedicated audit stylesheet can avoid coupling the new page to modal presentation rules.
+- Fiscal Periods currently links to `components/modals/fiscal_periods.php` and the sidebar intercepts that link with `data-fiscal-periods-open` to launch a lazy iframe overlay.
+- The fiscal-period file is already a full HTML document with admin authorization, CSRF-protected create/close/lock actions, activity logging, and an optional `embed=1` presentation/footer.
+- Fiscal-period modal behavior is centralized in the sidebar: overlay markup, iframe loading, backdrop/close/Escape handling, and a `close-fiscal-periods` postMessage listener.
+- The existing page styling is mixed into `assets/css/modals.css`; its embedded-mode branches and overlay/frame selectors should be removed when the dedicated page is introduced.
+- The admin dashboard has two fiscal-period entry points (the overview stat card and the multiple-open-periods attention item); both currently carry the modal trigger attribute.
+- The dedicated Audit Logs implementation establishes the preferred route location (`components/system_administrator`) and normal app-shell layout for administration pages.
+- Existing fiscal-period form/card styles originate from the broad `admin.css`/`modals.css` bundles. A dedicated stylesheet can keep the new page scoped and allow all fiscal modal selectors to be deleted from `modals.css`.
+- The smoke suite lives at `src/backend/tests/smoke_checks.php` and already includes dedicated audit-page navigation regressions that can be mirrored for fiscal periods.
+- The global style bundle already supplies the app-shell topbar, stat cards, dashboard sections, form basics, buttons, and design tokens; the new fiscal stylesheet only needs page-specific layout and state treatment.
+- After implementation, repository-wide frontend search finds no fiscal modal trigger, overlay, iframe, embedded-mode, footer, or modal-route references; only direct links to the canonical page and the intentional compatibility redirect remain.
 
 ## Design Notes
 

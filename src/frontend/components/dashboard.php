@@ -98,7 +98,7 @@ $adminName = trim((string)($_SESSION['full_name'] ?? 'System Admin'));
                         <div class="stat-meta"><span>Review activity</span><i class="bi bi-arrow-right"></i></div>
                     </article>
                 </a>
-                <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/modals/fiscal_periods.php')) ?>" data-fiscal-periods-open>
+                <a class="stat-card-link" href="<?= htmlspecialchars(app_url('components/system_administrator/fiscal_periods.php')) ?>">
                     <article class="stat-card with-icon <?= $adminMetrics['open_periods'] > 1 ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-calendar-check"></i></span>
                         <div class="value"><?= (int)$adminMetrics['open_periods'] ?> / <?= (int)$adminMetrics['closed_periods'] ?></div>
                         <div class="label">Open / Closed Periods</div>
@@ -116,7 +116,7 @@ $adminName = trim((string)($_SESSION['full_name'] ?? 'System Admin'));
                     </div><span class="decision-pill <?= $adminAttentionCount ? 'action' : 'ok' ?>"><?= $adminAttentionCount ? $adminAttentionCount . ' item(s)' : 'All clear' ?></span>
                 </div>
                 <div class="attention-list">
-                    <?php if ($adminMetrics['open_periods'] > 1): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-calendar-x"></i></span><span class="attention-copy"><strong>Multiple fiscal periods are open</strong><span>Review completed periods and close them to prevent late entries.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/modals/fiscal_periods.php')) ?>" data-fiscal-periods-open>Review</a></div><?php endif; ?>
+                    <?php if ($adminMetrics['open_periods'] > 1): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-calendar-x"></i></span><span class="attention-copy"><strong>Multiple fiscal periods are open</strong><span>Review completed periods and close them to prevent late entries.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/system_administrator/fiscal_periods.php')) ?>">Review</a></div><?php endif; ?>
                     <?php if ($recentCriticalActions): ?><div class="attention-item"><span class="attention-icon"><i class="bi bi-shield-exclamation"></i></span><span class="attention-copy"><strong><?= count($recentCriticalActions) ?> recent critical audit action(s)</strong><span>Review reversals, adjustments, locking, deletion, or void activity.</span></span><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>">Review</a></div><?php endif; ?>
                     <?php if (!$adminAttentionCount): ?><div class="empty-state u-empty-min-120">
                             <div><i class="bi bi-shield-check"></i><strong>No urgent administrative issues</strong><span>Fiscal-period and critical-audit indicators are currently clear.</span></div>

@@ -61,6 +61,21 @@ $checks = [
         'needles' => ['components/system_administrator/audit_logs.php'],
         'forbidden' => ['data-audit-log-open', 'auditLogOverlay', 'auditLogFrame'],
     ],
+    'Dedicated fiscal periods page present' => [
+        'file' => 'src/frontend/components/system_administrator/fiscal_periods.php',
+        'needles' => ['Fiscal Periods', 'fiscal-period-form-grid', 'fiscal-period-card-grid', "\$action === 'create'", "\$action === 'close'", "\$action === 'lock'"],
+        'forbidden' => ['embed=1', 'data-embedded-close', 'fiscal-periods-embedded'],
+    ],
+    'Fiscal periods use direct sidebar navigation' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['components/system_administrator/fiscal_periods.php'],
+        'forbidden' => ['data-fiscal-periods-open', 'fiscalPeriodsOverlay', 'fiscalPeriodsFrame'],
+    ],
+    'Fiscal periods use direct dashboard navigation' => [
+        'file' => 'src/frontend/components/dashboard.php',
+        'needles' => ['components/system_administrator/fiscal_periods.php'],
+        'forbidden' => ['components/modals/fiscal_periods.php', 'data-fiscal-periods-open'],
+    ],
     'Supplier-based reorder planning present' => [
         'file' => 'src/frontend/components/inventory_management/reorder_planner.php',
         'needles' => ['Supplier-Based Reorder Planning', 'minimum_order_quantity', 'Create selected replenishment requests'],
