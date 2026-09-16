@@ -16,8 +16,7 @@ function account_format_datetime(?string $value): string
         return 'Not recorded';
     }
 
-    $timestamp = strtotime($value);
-    return $timestamp ? date('M d, Y g:i A', $timestamp) : $value;
+    return format_display_datetime($value);
 }
 
 function account_role_label(string $role): string
@@ -90,107 +89,110 @@ $passwordStatusClass = (int)$account['must_change_password'] === 1 ? 'tag-warnin
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>User Info</title>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Info</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 </head>
+
 <body>
-<div class="app-shell">
-    <?php include __DIR__ . '/../sidebar.php'; ?>
-    <main class="main-content">
-        <header class="page-heading">
-            <div>
-                <h1>User Info</h1>
-                <p class="page-subtitle">Review your account details, contact information, and sign-in status.</p>
-            </div>
-            <div class="page-heading-actions">
-                <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>"><i class="bi bi-shield-lock"></i>Change Password</a>
-            </div>
-        </header>
-
-        <?php if ($message): ?>
-            <div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div>
-        <?php endif; ?>
-
-        <section class="account-hero">
-            <div class="account-avatar"><?= htmlspecialchars($initials) ?></div>
-            <div class="account-hero-copy">
-                <h2><?= htmlspecialchars($account['full_name']) ?></h2>
-                <p>@<?= htmlspecialchars($account['username']) ?></p>
-                <div class="account-badges">
-                    <span class="badge-role"><?= htmlspecialchars($roleLabel) ?></span>
-                    <span class="<?= htmlspecialchars($statusClass) ?>"><?= htmlspecialchars((string)$account['status']) ?></span>
-                    <span class="<?= htmlspecialchars($passwordStatusClass) ?>"><?= htmlspecialchars($passwordStatus) ?></span>
+    <div class="app-shell">
+        <?php include __DIR__ . '/../sidebar.php'; ?>
+        <main class="main-content">
+            <header class="page-heading">
+                <div>
+                    <h1>User Info</h1>
+                    <p class="page-subtitle">Review your account details, contact information, and sign-in status.</p>
                 </div>
-            </div>
-        </section>
-
-        <div class="dashboard-layout equal">
-            <section class="dashboard-section">
-                <div class="section-header">
-                    <div>
-                        <h3>Profile</h3>
-                        <p class="section-description">Keep your name and email current for account records.</p>
-                    </div>
+                <div class="page-heading-actions">
+                    <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>"><i class="bi bi-shield-lock"></i>Change Password</a>
                 </div>
-                <form method="POST" class="form-grid" autocomplete="off">
-                    <?= csrf_field() ?>
-                    <div class="form-group full">
-                        <label for="full_name">Full Name</label>
-                        <input id="full_name" name="full_name" value="<?= htmlspecialchars($account['full_name']) ?>" required>
-                    </div>
-                    <div class="form-group full">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" value="<?= htmlspecialchars((string)($account['email'] ?? '')) ?>">
-                    </div>
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input value="<?= htmlspecialchars($account['username']) ?>" disabled>
-                    </div>
-                    <div class="form-group">
-                        <label>Role</label>
-                        <input value="<?= htmlspecialchars($roleLabel) ?>" disabled>
-                    </div>
-                    <div class="full u-flex-end">
-                        <button class="btn" type="submit">Save Profile</button>
-                    </div>
-                </form>
-            </section>
+            </header>
 
-            <section class="dashboard-section">
-                <div class="section-header">
-                    <div>
-                        <h3>Account Details</h3>
-                        <p class="section-description">Your access and security metadata.</p>
-                    </div>
-                </div>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <span>User ID</span>
-                        <strong>#<?= (int)$account['user_id'] ?></strong>
-                    </div>
-                    <div class="detail-item">
-                        <span>Status</span>
-                        <strong><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></strong>
-                    </div>
-                    <div class="detail-item">
-                        <span>Last Login</span>
-                        <strong><?= htmlspecialchars(account_format_datetime($account['last_login_at'] ?? null)) ?></strong>
-                    </div>
-                    <div class="detail-item">
-                        <span>Password Changed</span>
-                        <strong><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></strong>
-                    </div>
-                    <div class="detail-item full">
-                        <span>Account Created</span>
-                        <strong><?= htmlspecialchars(account_format_datetime($account['created_at'] ?? null)) ?></strong>
+            <?php if ($message): ?>
+                <div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div>
+            <?php endif; ?>
+
+            <section class="account-hero">
+                <div class="account-avatar"><?= htmlspecialchars($initials) ?></div>
+                <div class="account-hero-copy">
+                    <h2><?= htmlspecialchars($account['full_name']) ?></h2>
+                    <p>@<?= htmlspecialchars($account['username']) ?></p>
+                    <div class="account-badges">
+                        <span class="badge-role"><?= htmlspecialchars($roleLabel) ?></span>
+                        <span class="<?= htmlspecialchars($statusClass) ?>"><?= htmlspecialchars((string)$account['status']) ?></span>
+                        <span class="<?= htmlspecialchars($passwordStatusClass) ?>"><?= htmlspecialchars($passwordStatus) ?></span>
                     </div>
                 </div>
             </section>
-        </div>
-    </main>
-</div>
+
+            <div class="dashboard-layout equal">
+                <section class="dashboard-section">
+                    <div class="section-header">
+                        <div>
+                            <h3>Profile</h3>
+                            <p class="section-description">Keep your name and email current for account records.</p>
+                        </div>
+                    </div>
+                    <form method="POST" class="form-grid" autocomplete="off">
+                        <?= csrf_field() ?>
+                        <div class="form-group full">
+                            <label for="full_name">Full Name</label>
+                            <input id="full_name" name="full_name" value="<?= htmlspecialchars($account['full_name']) ?>" required>
+                        </div>
+                        <div class="form-group full">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" value="<?= htmlspecialchars((string)($account['email'] ?? '')) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input value="<?= htmlspecialchars($account['username']) ?>" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Role</label>
+                            <input value="<?= htmlspecialchars($roleLabel) ?>" disabled>
+                        </div>
+                        <div class="full u-flex-end">
+                            <button class="btn" type="submit">Save Profile</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="dashboard-section">
+                    <div class="section-header">
+                        <div>
+                            <h3>Account Details</h3>
+                            <p class="section-description">Your access and security metadata.</p>
+                        </div>
+                    </div>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span>User ID</span>
+                            <strong>#<?= (int)$account['user_id'] ?></strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>Status</span>
+                            <strong><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>Last Login</span>
+                            <strong><?= htmlspecialchars(account_format_datetime($account['last_login_at'] ?? null)) ?></strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>Password Changed</span>
+                            <strong><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></strong>
+                        </div>
+                        <div class="detail-item full">
+                            <span>Account Created</span>
+                            <strong><?= htmlspecialchars(account_format_datetime($account['created_at'] ?? null)) ?></strong>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
 </body>
+
 </html>

@@ -143,63 +143,101 @@ unset($row);
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reorder Planning</title>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reorder Planning</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
 </head>
+
 <body>
-<div class="app-shell">
-<?php include __DIR__ . '/../sidebar.php'; ?>
-<main class="main-content">
-<header class="page-heading">
-    <div><h1>Supplier-Based Reorder Planning</h1><p class="page-subtitle">Group forecast and low-stock recommendations by preferred supplier, MOQ, and package size.</p></div>
-    <div class="page-heading-actions"><a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/inventory_management/suppliers.php')) ?>">Supplier terms</a><a class="btn" href="<?= htmlspecialchars(app_url('components/invoice/purchase_orders.php')) ?>">Purchase orders</a></div>
-</header>
-<?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-<?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+    <div class="app-shell">
+        <?php include __DIR__ . '/../sidebar.php'; ?>
+        <main class="main-content">
+            <header class="page-heading">
+                <div>
+                    <h1>Supplier-Based Reorder Planning</h1>
+                    <p class="page-subtitle">Group forecast and low-stock recommendations by preferred supplier, MOQ, and package size.</p>
+                </div>
+                <div class="page-heading-actions"><a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/inventory_management/suppliers.php')) ?>">Supplier terms</a><a class="btn" href="<?= htmlspecialchars(app_url('components/invoice/purchase_orders.php')) ?>">Purchase orders</a></div>
+            </header>
+            <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+            <?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 
-<div class="card-grid">
-    <article class="stat-card"><div class="value"><?= count($rows) ?></div><div class="label">Products to review</div><div class="hint">Forecasted or below reorder level</div></article>
-    <article class="stat-card"><div class="value"><?= number_format($totalUnits) ?></div><div class="label">Planned units</div><div class="hint">Excludes products with open requests</div></article>
-    <article class="stat-card"><div class="value">₱<?= number_format($totalValue, 2) ?></div><div class="label">Estimated value</div><div class="hint">Based on supplier or product cost</div></article>
-</div>
+            <div class="card-grid">
+                <article class="stat-card">
+                    <div class="value"><?= count($rows) ?></div>
+                    <div class="label">Products to review</div>
+                    <div class="hint">Forecasted or below reorder level</div>
+                </article>
+                <article class="stat-card">
+                    <div class="value"><?= number_format($totalUnits) ?></div>
+                    <div class="label">Planned units</div>
+                    <div class="hint">Excludes products with open requests</div>
+                </article>
+                <article class="stat-card">
+                    <div class="value">₱<?= number_format($totalValue, 2) ?></div>
+                    <div class="label">Estimated value</div>
+                    <div class="hint">Based on supplier or product cost</div>
+                </article>
+            </div>
 
-<form method="POST">
-<?= csrf_field() ?>
-<?php foreach ($groups as $supplierName => $items):
-    $supplierValue = array_sum(array_column($items, 'planned_value'));
-    $minimumValue = max(array_map(static fn(array $item): float => (float)$item['supplier_minimum_value'], $items));
-?>
-<section class="dashboard-section supplier-plan">
-    <div class="supplier-plan__head">
-        <div><h3><?= htmlspecialchars($supplierName) ?></h3><p class="section-description"><?= count($items) ?> product(s) · Estimated ₱<?= number_format($supplierValue, 2) ?><?php if ($minimumValue > 0): ?> · Supplier minimum ₱<?= number_format($minimumValue, 2) ?><?php endif; ?></p></div>
-        <div class="planning-meta"><span class="decision-pill <?= $minimumValue > 0 && $supplierValue < $minimumValue ? 'action' : 'ok' ?>"><?= $minimumValue > 0 && $supplierValue < $minimumValue ? 'Below supplier minimum' : 'Order value ready' ?></span></div>
+            <form method="POST">
+                <?= csrf_field() ?>
+                <?php foreach ($groups as $supplierName => $items):
+                    $supplierValue = array_sum(array_column($items, 'planned_value'));
+                    $minimumValue = max(array_map(static fn(array $item): float => (float)$item['supplier_minimum_value'], $items));
+                ?>
+                    <section class="dashboard-section supplier-plan">
+                        <div class="supplier-plan__head">
+                            <div>
+                                <h3><?= htmlspecialchars($supplierName) ?></h3>
+                                <p class="section-description"><?= count($items) ?> product(s) · Estimated ₱<?= number_format($supplierValue, 2) ?><?php if ($minimumValue > 0): ?> · Supplier minimum ₱<?= number_format($minimumValue, 2) ?><?php endif; ?></p>
+                            </div>
+                            <div class="planning-meta"><span class="decision-pill <?= $minimumValue > 0 && $supplierValue < $minimumValue ? 'action' : 'ok' ?>"><?= $minimumValue > 0 && $supplierValue < $minimumValue ? 'Below supplier minimum' : 'Order value ready' ?></span></div>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Select</th>
+                                        <th>Product</th>
+                                        <th>Stock</th>
+                                        <th>Forecast / Reorder</th>
+                                        <th>MOQ / Pack</th>
+                                        <th>Planned Qty</th>
+                                        <th>Estimated Cost</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($items as $item): ?>
+                                        <tr>
+                                            <td><input type="checkbox" name="product_ids[]" value="<?= (int)$item['product_id'] ?>" <?= $item['has_open_request'] || $item['planned_qty'] <= 0 ? 'disabled' : 'checked' ?>></td>
+                                            <td><strong><?= htmlspecialchars($item['product_name']) ?></strong><br><small><?= htmlspecialchars($item['sku']) ?> · Lead <?= (int)$item['lead_time_days'] ?> day(s)</small></td>
+                                            <td><?= (int)$item['quantity_on_hand'] ?><br><small>Reorder <?= (int)$item['reorder_level'] ?> · Safety <?= (int)$item['safety_stock'] ?></small></td>
+                                            <td><?= $item['suggested_reorder_qty'] !== null ? (int)$item['suggested_reorder_qty'] : 'Low-stock rule' ?><br><small><?= $item['generated_at'] ? 'Forecast ' . htmlspecialchars(format_display_date($item['generated_at'])) : 'No recent forecast' ?></small></td>
+                                            <td><?= (int)$item['minimum_order_quantity'] ?> / <?= (int)$item['units_per_package'] ?></td>
+                                            <td><strong><?= (int)$item['planned_qty'] ?></strong></td>
+                                            <td>₱<?= number_format((float)$item['planned_value'], 2) ?></td>
+                                            <td><?= $item['has_open_request'] ? '<span class="tag-warning">Open request</span>' : '<span class="tag-success">Ready</span>' ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                <?php endforeach; ?>
+                <?php if (!$rows): ?><section class="dashboard-section">
+                        <div class="empty-state">
+                            <div><i class="bi bi-check-circle"></i><strong>No replenishment recommendations</strong><span>Current stock and forecast suggestions do not require new requests.</span></div>
+                        </div>
+                    </section><?php else: ?><div class="u-flex-end-sticky"><button class="btn" type="submit">Create selected replenishment requests</button></div><?php endif; ?>
+            </form>
+        </main>
     </div>
-    <div class="table-wrap"><table>
-        <thead><tr><th>Select</th><th>Product</th><th>Stock</th><th>Forecast / Reorder</th><th>MOQ / Pack</th><th>Planned Qty</th><th>Estimated Cost</th><th>Status</th></tr></thead>
-        <tbody>
-        <?php foreach ($items as $item): ?>
-            <tr>
-                <td><input type="checkbox" name="product_ids[]" value="<?= (int)$item['product_id'] ?>" <?= $item['has_open_request'] || $item['planned_qty'] <= 0 ? 'disabled' : 'checked' ?>></td>
-                <td><strong><?= htmlspecialchars($item['product_name']) ?></strong><br><small><?= htmlspecialchars($item['sku']) ?> · Lead <?= (int)$item['lead_time_days'] ?> day(s)</small></td>
-                <td><?= (int)$item['quantity_on_hand'] ?><br><small>Reorder <?= (int)$item['reorder_level'] ?> · Safety <?= (int)$item['safety_stock'] ?></small></td>
-                <td><?= $item['suggested_reorder_qty'] !== null ? (int)$item['suggested_reorder_qty'] : 'Low-stock rule' ?><br><small><?= $item['generated_at'] ? 'Forecast ' . htmlspecialchars(date('M d', strtotime($item['generated_at']))) : 'No recent forecast' ?></small></td>
-                <td><?= (int)$item['minimum_order_quantity'] ?> / <?= (int)$item['units_per_package'] ?></td>
-                <td><strong><?= (int)$item['planned_qty'] ?></strong></td>
-                <td>₱<?= number_format((float)$item['planned_value'], 2) ?></td>
-                <td><?= $item['has_open_request'] ? '<span class="tag-warning">Open request</span>' : '<span class="tag-success">Ready</span>' ?></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table></div>
-</section>
-<?php endforeach; ?>
-<?php if (!$rows): ?><section class="dashboard-section"><div class="empty-state"><div><i class="bi bi-check-circle"></i><strong>No replenishment recommendations</strong><span>Current stock and forecast suggestions do not require new requests.</span></div></div></section><?php else: ?><div class="u-flex-end-sticky"><button class="btn" type="submit">Create selected replenishment requests</button></div><?php endif; ?>
-</form>
-</main>
-</div>
 </body>
+
 </html>

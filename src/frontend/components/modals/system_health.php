@@ -36,7 +36,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                     <?php if ($isEmbedded): ?><span class="system-health-title-icon" aria-hidden="true"><i class="bi bi-heart-pulse"></i></span><?php endif; ?>
                     <h1>System Health</h1>
                     <p class="page-subtitle">Check database readiness, storage permissions, forecasting, backups, email, and application logs.</p>
-                    <p class="section-description">Checked <?= htmlspecialchars(date('M d, Y g:i A')) ?></p>
+                    <p class="section-description">Checked <?= htmlspecialchars(format_display_datetime('now')) ?></p>
                 </div>
                 <div class="page-heading-actions"><a class="btn btn-quiet btn-icon" href="system_health.php<?= $isEmbedded ? '?embed=1' : '' ?>"><i class="bi bi-arrow-clockwise"></i>Refresh</a><span class="decision-pill <?= $overall === 'healthy' ? 'ok' : 'action' ?>"><?= htmlspecialchars($labels[$overall]) ?></span></div>
             </header>

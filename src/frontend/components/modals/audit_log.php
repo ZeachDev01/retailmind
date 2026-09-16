@@ -14,6 +14,16 @@ $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $per_page = 10;
 $offset = ($page - 1) * $per_page;
 $isEmbedded = ($_GET['embed'] ?? '') === '1';
+$isExport = $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv';
+
+if ($isExport) {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
+    $user_filter = $_POST['user_id'] ?? '';
+    $action_filter = $_POST['action_filter'] ?? '';
+    $module_filter = $_POST['module'] ?? '';
+    $date_from = $_POST['date_from'] ?? '';
+    $date_to = $_POST['date_to'] ?? '';
+}
 
 // Build SQL query
 $where_clauses = [];
@@ -59,14 +69,33 @@ $moduleSelect = isset($log_columns['module']) ? 'al.module' : 'NULL AS module';
 $recordSelect = isset($log_columns['record_id']) ? 'al.record_id' : 'NULL AS record_id';
 $previousSelect = isset($log_columns['previous_value']) ? 'al.previous_value' : 'NULL AS previous_value';
 $newSelect = isset($log_columns['new_value']) ? 'al.new_value' : 'NULL AS new_value';
-$ipSelect = isset($log_columns['ip_address']) ? 'al.ip_address' : 'NULL AS ip_address';
 
-$sql = "SELECT al.log_id, al.user_id, al.action, $moduleSelect, $recordSelect, $previousSelect, $newSelect, $ipSelect, al.created_at, u.full_name, u.username
+$selectSql = "SELECT al.user_id, al.action, $moduleSelect, $recordSelect, $previousSelect, $newSelect, al.created_at, u.full_name, u.username
     FROM activity_log al
     LEFT JOIN users u ON al.user_id = u.user_id
     $where_sql
-    ORDER BY al.created_at DESC
-    LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
+    ORDER BY al.created_at DESC";
+
+if ($isExport) {
+    $export_stmt = $pdo->prepare($selectSql);
+    $export_stmt->execute($params);
+    $export_logs = $export_stmt->fetchAll();
+    $export_headers = ['Date & Time', 'User', 'Action', 'Module', 'Record ID', 'Previous Value', 'New Value'];
+    $export_rows = array_map(static function (array $log): array {
+        return [
+            format_display_datetime($log['created_at']),
+            $log['full_name'] ?: ($log['username'] ?: 'System / Unknown'),
+            $log['action'],
+            $log['module'] ?? '-',
+            $log['record_id'] ?? '-',
+            audit_display_value($log['previous_value'] ?? null),
+            audit_display_value($log['new_value'] ?? null),
+        ];
+    }, $export_logs);
+    audit_send_csv('audit_log_' . date('Ymd_His') . '.csv', $export_rows, $export_headers);
+}
+
+$sql = $selectSql . " LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
@@ -114,6 +143,40 @@ function audit_display_value($value): string
 
     return implode(' | ', $parts);
 }
+
+function audit_action_class(string $action): string
+{
+    $normalized = strtolower($action);
+    if (preg_match('/fail|error|denied|reject/', $normalized)) {
+        return 'is-danger';
+    }
+    if (preg_match('/success|complete|created|updated|approved/', $normalized)) {
+        return 'is-success';
+    }
+    return 'is-neutral';
+}
+
+function audit_send_csv(string $filename, array $rows, array $headers): void
+{
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
+    $output = fopen('php://output', 'w');
+    fputcsv($output, $headers);
+    foreach ($rows as $row) {
+        fputcsv($output, array_map('audit_csv_value', $row));
+    }
+    fclose($output);
+    exit;
+}
+
+function audit_csv_value($value): string
+{
+    $value = (string)$value;
+    if (preg_match('/^[=+\-@]/', $value)) {
+        return "'" . $value;
+    }
+    return $value;
+}
 ?>
 <!DOCTYPE html>
 <html>
@@ -140,6 +203,16 @@ function audit_display_value($value): string
                         <p class="page-subtitle">Review critical system activity, account actions, and operational changes.</p>
                     <?php endif; ?>
                 </div>
+                <form method="POST" class="audit-log-export-form" target="_blank">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="export_csv">
+                    <input type="hidden" name="user_id" value="<?= htmlspecialchars($user_filter) ?>">
+                    <input type="hidden" name="action_filter" value="<?= htmlspecialchars($action_filter) ?>">
+                    <input type="hidden" name="module" value="<?= htmlspecialchars($module_filter) ?>">
+                    <input type="hidden" name="date_from" value="<?= htmlspecialchars($date_from) ?>">
+                    <input type="hidden" name="date_to" value="<?= htmlspecialchars($date_to) ?>">
+                    <button type="submit" class="btn btn-quiet btn-icon" aria-label="Export audit log to CSV" title="Export audit log to CSV"><i class="bi bi-download" aria-hidden="true"></i><span>Export CSV</span></button>
+                </form>
             </div>
 
             <div class="stats">
@@ -204,28 +277,33 @@ function audit_display_value($value): string
 
             <div class="audit-log-table-wrap">
                 <table class="audit-log-table">
+                    <colgroup>
+                        <col class="audit-col-date">
+                        <col class="audit-col-user">
+                        <col class="audit-col-action">
+                        <col class="audit-col-module">
+                        <col class="audit-col-record-id">
+                        <col class="audit-col-details">
+                    </colgroup>
                     <thead>
                         <tr>
-                            <th>ID</th>
+                            <th>Date &amp; Time</th>
                             <th>User</th>
                             <th>Action</th>
                             <th>Module</th>
                             <th>Record ID</th>
-                            <th>Previous Value</th>
-                            <th>New Value</th>
-                            <th>IP Address</th>
-                            <th>Date & Time</th>
+                            <th>Details</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($logs)): ?>
                             <tr>
-                                <td class="u-text-center" colspan="9">No activity logs found</td>
+                                <td class="u-text-center" colspan="6">No activity logs found</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($logs as $log): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($log['log_id']) ?></td>
+                                    <td><?= htmlspecialchars(format_display_datetime($log['created_at'])) ?></td>
                                     <td>
                                         <?php if ($log['user_id']): ?>
                                             <strong><?= htmlspecialchars($log['full_name']) ?></strong><br>
@@ -234,13 +312,20 @@ function audit_display_value($value): string
                                             <em>System / Unknown</em>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="action-cell"><?= htmlspecialchars($log['action']) ?></td>
+                                    <td><span class="audit-action-badge <?= audit_action_class($log['action']) ?>"><?= htmlspecialchars($log['action']) ?></span></td>
                                     <td><?= htmlspecialchars($log['module'] ?? '-') ?></td>
                                     <td><?= htmlspecialchars($log['record_id'] ?? '-') ?></td>
-                                    <td class="action-cell"><?= htmlspecialchars(audit_display_value($log['previous_value'] ?? null)) ?></td>
-                                    <td class="action-cell"><?= htmlspecialchars(audit_display_value($log['new_value'] ?? null)) ?></td>
-                                    <td><?= htmlspecialchars($log['ip_address'] ?? '-') ?></td>
-                                    <td><?= htmlspecialchars($log['created_at']) ?></td>
+                                    <?php $previous_value_display = audit_display_value($log['previous_value'] ?? null); ?>
+                                    <?php $new_value_display = audit_display_value($log['new_value'] ?? null); ?>
+                                    <td>
+                                        <details class="audit-details">
+                                            <summary>View details</summary>
+                                            <div class="audit-details-content">
+                                                <strong>Previous:</strong> <span class="<?= $previous_value_display === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($previous_value_display) ?></span><br>
+                                                <strong>New:</strong> <?= htmlspecialchars($new_value_display) ?>
+                                            </div>
+                                        </details>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -248,27 +333,34 @@ function audit_display_value($value): string
                 </table>
             </div>
 
-            <?php if ($total_pages > 1): ?>
-                <div class="pagination">
-                    <?php if ($page > 1): ?>
-                        <a href="<?= htmlspecialchars($page_url(1)) ?>">« First</a>
-                        <a href="<?= htmlspecialchars($page_url($page - 1)) ?>">‹ Prev</a>
-                    <?php endif; ?>
-
-                    <?php for ($i = max(1, $page - 2); $i <= min($total_pages, $page + 2); $i++): ?>
-                        <?php if ($i == $page): ?>
-                            <span class="current"><?= $i ?></span>
-                        <?php else: ?>
-                            <a href="<?= htmlspecialchars($page_url($i)) ?>"><?= $i ?></a>
+            <?php
+            $first_result = $total_records > 0 ? $offset + 1 : 0;
+            $last_result = min($offset + $per_page, $total_records);
+            ?>
+            <div class="audit-log-pagination">
+                <span class="audit-log-result-count">Showing <?= $first_result ?>-<?= $last_result ?> of <?= (int)$total_records ?> results</span>
+                <?php if ($total_pages > 1): ?>
+                    <div class="pagination">
+                        <?php if ($page > 1): ?>
+                            <a href="<?= htmlspecialchars($page_url(1)) ?>">« First</a>
+                            <a href="<?= htmlspecialchars($page_url($page - 1)) ?>">‹ Prev</a>
                         <?php endif; ?>
-                    <?php endfor; ?>
 
-                    <?php if ($page < $total_pages): ?>
-                        <a href="<?= htmlspecialchars($page_url($page + 1)) ?>">Next ›</a>
-                        <a href="<?= htmlspecialchars($page_url($total_pages)) ?>">Last »</a>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
+                        <?php for ($i = max(1, $page - 2); $i <= min($total_pages, $page + 2); $i++): ?>
+                            <?php if ($i == $page): ?>
+                                <span class="current"><?= $i ?></span>
+                            <?php else: ?>
+                                <a href="<?= htmlspecialchars($page_url($i)) ?>"><?= $i ?></a>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+
+                        <?php if ($page < $total_pages): ?>
+                            <a href="<?= htmlspecialchars($page_url($page + 1)) ?>">Next ›</a>
+                            <a href="<?= htmlspecialchars($page_url($total_pages)) ?>">Last »</a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
     <?php if ($isEmbedded): ?>

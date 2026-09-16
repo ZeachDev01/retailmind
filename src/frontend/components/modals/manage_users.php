@@ -82,6 +82,20 @@ function user_initials(string $name, string $fallback): string
     return substr($initials ?: strtoupper(substr($fallback, 0, 2)) ?: 'RM', 0, 2);
 }
 
+function display_label(string $value): string
+{
+    return ucwords(str_replace(['_', '-'], ' ', strtolower(trim($value))));
+}
+
+function display_person_name(string $value): string
+{
+    $trimmedValue = trim($value);
+
+    return $trimmedValue === strtoupper($trimmedValue)
+        ? ucwords(strtolower($trimmedValue))
+        : $trimmedValue;
+}
+
 function user_last_active_label(?string $lastLogin): string
 {
     if (!$lastLogin) {
@@ -107,7 +121,7 @@ function user_last_active_label(?string $lastLogin): string
         return 'Active: Yesterday';
     }
 
-    return 'Active: ' . date('M d, Y', $timestamp);
+    return 'Active: ' . format_display_date(date('Y-m-d', $timestamp));
 }
 
 // Handle create user
@@ -407,19 +421,12 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                     <p class="page-subtitle"><?= $isEmbedded ? 'Manage retail staff credentials, access levels, and active sessions.' : 'Create accounts, manage access, and keep team permissions organized.' ?></p>
                 </div>
                 <?php if (!$isEmbedded): ?>
-                    <button type="button" class="btn" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
+                    <button type="button" class="btn manage-users-primary" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
                 <?php endif; ?>
             </div>
 
             <?php if ($message): ?>
                 <div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div>
-            <?php endif; ?>
-
-            <?php if ($isEmbedded): ?>
-                <div class="manage-users-toolbar">
-                    <label class="manage-users-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="userSearch" placeholder="Search user by name, email, or role..." aria-label="Search users"></label>
-                    <button type="button" class="btn manage-users-add" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
-                </div>
             <?php endif; ?>
 
             <div class="card-grid">
@@ -437,7 +444,18 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                 </div>
             </div>
 
-            <div class="dashboard-section manage-users-list">
+            <div class="manage-users-tabs" role="tablist" aria-label="User management sections">
+                <button type="button" class="manage-users-tab is-active" id="usersTab" role="tab" aria-selected="true" aria-controls="usersPanel" data-management-tab="users" tabindex="0">Users</button>
+                <button type="button" class="manage-users-tab" id="branchesTab" role="tab" aria-selected="false" aria-controls="branchesPanel" data-management-tab="branches" tabindex="-1">Branches</button>
+            </div>
+
+            <div class="dashboard-section manage-users-list manage-users-tab-panel is-active" id="usersPanel" role="tabpanel" aria-labelledby="usersTab" data-management-panel="users">
+                <?php if ($isEmbedded): ?>
+                    <div class="manage-users-toolbar" role="search">
+                        <label class="manage-users-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="userSearch" placeholder="Search user by name, email, or role..." aria-label="Search users"></label>
+                        <button type="button" class="btn manage-users-primary manage-users-add" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
+                    </div>
+                <?php endif; ?>
                 <div class="section-header">
                     <div>
                         <h3>All Users</h3>
@@ -447,22 +465,31 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
 
                 <div class="table-wrap">
                     <table class="users-table">
-                        <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Branch</th>
-                            <th>Action</th>
-                        </tr>
+                        <colgroup>
+                            <col class="users-col-name">
+                            <col class="users-col-email">
+                            <col class="users-col-role">
+                            <col class="users-col-branch">
+                            <col class="users-col-action">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Email</th>
+                                <th scope="col">Role</th>
+                                <th scope="col">Branch</th>
+                                <th scope="col">Action</th>
+                            </tr>
+                        </thead>
                         <?php foreach ($users as $u): ?>
                             <?php
                             $displayEmail = (string)($u['email'] ?: $u['username']);
                             ?>
                             <tr>
-                                <td><span class="user-avatar" aria-hidden="true"><?= htmlspecialchars(user_initials((string)$u['full_name'], (string)$u['username'])) ?></span><span class="user-identity"><strong><?= htmlspecialchars($u['full_name']) ?></strong><span class="user-email mobile-user-email"><?= htmlspecialchars($displayEmail) ?> &bull; <?= htmlspecialchars($u['role_name']) ?></span></span></td>
+                                <td><span class="user-avatar" aria-hidden="true"><?= htmlspecialchars(user_initials((string)$u['full_name'], (string)$u['username'])) ?></span><span class="user-identity"><strong><?= htmlspecialchars(display_person_name((string)$u['full_name'])) ?></strong><span class="user-email mobile-user-email"><?= htmlspecialchars($displayEmail) ?> &bull; <?= htmlspecialchars(display_label((string)$u['role_name'])) ?></span></span></td>
                                 <td class="user-email-cell"><?= htmlspecialchars($displayEmail) ?></td>
-                                <td class="user-role-cell"><?= htmlspecialchars($u['role_name']) ?></td>
-                                <td><?= htmlspecialchars($u['branch_name'] ?? 'All branches') ?></td>
+                                <td class="user-role-cell"><?= htmlspecialchars(display_label((string)$u['role_name'])) ?></td>
+                                <td><?= htmlspecialchars($u['branch_name'] ? display_person_name((string)$u['branch_name']) : 'All branches') ?></td>
                                 <td class="action-cell">
                                     <button
                                         type="button"
@@ -482,7 +509,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                 </div>
             </div>
 
-            <div class="dashboard-section manage-users-branches">
+            <div class="dashboard-section manage-users-branches manage-users-tab-panel" id="branchesPanel" role="tabpanel" aria-labelledby="branchesTab" data-management-panel="branches" hidden>
                 <div class="section-header">
                     <div>
                         <h3>Branches</h3>
@@ -493,20 +520,28 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                     <?= csrf_field() ?><input type="hidden" name="action" value="create_branch">
                     <div class="form-group"><label>Branch Name</label><input name="branch_name" required></div>
                     <div class="form-group"><label>Branch Code</label><input name="branch_code" maxlength="30" required></div>
-                    <button class="btn" type="submit">Create Branch</button>
+                    <button class="btn manage-users-primary" type="submit"><i class="bi bi-building-add" aria-hidden="true"></i> Create Branch</button>
                 </form>
                 <div class="table-wrap">
                     <table class="users-table">
-                        <tr>
-                            <th>Branch</th>
-                            <th>Code</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
+                        <colgroup>
+                            <col class="branches-col-name">
+                            <col class="branches-col-code">
+                            <col class="branches-col-status">
+                            <col class="branches-col-action">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th scope="col">Branch</th>
+                                <th scope="col">Code</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Action</th>
+                            </tr>
+                        </thead>
                         <?php foreach ($branches as $branch): ?><tr>
-                                <td><?= htmlspecialchars($branch['branch_name']) ?></td>
+                                <td><?= htmlspecialchars(display_person_name((string)$branch['branch_name'])) ?></td>
                                 <td><?= htmlspecialchars($branch['branch_code']) ?></td>
-                                <td><?= htmlspecialchars($branch['status']) ?></td>
+                                <td><?= htmlspecialchars(display_label((string)$branch['status'])) ?></td>
                                 <td>
                                     <form method="POST"><input type="hidden" name="action" value="toggle_branch"><?= csrf_field() ?><input type="hidden" name="branch_id" value="<?= (int)$branch['branch_id'] ?>"><button class="btn btn-small" type="submit"><?= $branch['status'] === 'active' ? 'Deactivate' : 'Activate' ?></button></form>
                                 </td>
@@ -552,7 +587,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                         <select id="drawerRole" name="role_id" required>
                             <?php foreach ($roles as $r): ?>
                                 <?php if (!in_array($r['role_name'], ['super_admin', 'seller'], true)): ?>
-                                    <option value="<?= (int)$r['role_id'] ?>"><?= htmlspecialchars($r['role_name']) ?></option>
+                                    <option value="<?= (int)$r['role_id'] ?>"><?= htmlspecialchars(display_label((string)$r['role_name'])) ?></option>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </select>
@@ -562,14 +597,14 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                         <select id="drawerBranch" name="branch_id">
                             <option value="">No branch (administrators only)</option>
                             <?php foreach ($branches as $branch): ?>
-                                <?php if ($branch['status'] === 'active'): ?><option value="<?= (int)$branch['branch_id'] ?>"><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option><?php endif; ?>
+                                <?php if ($branch['status'] === 'active'): ?><option value="<?= (int)$branch['branch_id'] ?>"><?= htmlspecialchars(display_person_name((string)$branch['branch_name']) . ' (' . $branch['branch_code'] . ')') ?></option><?php endif; ?>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Additional Privileges</label>
                         <div class="privilege-list">
-                            <?php foreach ($privileges as $privilege): ?><label><input type="checkbox" name="privilege_ids[]" value="<?= (int)$privilege['privilege_id'] ?>" data-privilege-id="<?= (int)$privilege['privilege_id'] ?>"> <?= htmlspecialchars($privilege['privilege_name']) ?></label><?php endforeach; ?>
+                            <?php foreach ($privileges as $privilege): ?><label><input type="checkbox" name="privilege_ids[]" value="<?= (int)$privilege['privilege_id'] ?>" data-privilege-id="<?= (int)$privilege['privilege_id'] ?>"> <?= htmlspecialchars(display_label((string)$privilege['privilege_name'])) ?></label><?php endforeach; ?>
                         </div>
                     </div>
                     <div class="form-group">
@@ -630,7 +665,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                     <select name="role_id" required>
                         <?php foreach ($roles as $r): ?>
                             <?php if (!in_array($r['role_name'], ['super_admin', 'seller'], true)): ?>
-                                <option value="<?= $r['role_id'] ?>" <?= $createFormValues['role_id'] === (string)$r['role_id'] ? ' selected' : '' ?>><?= htmlspecialchars($r['role_name']) ?></option>
+                                <option value="<?= $r['role_id'] ?>" <?= $createFormValues['role_id'] === (string)$r['role_id'] ? ' selected' : '' ?>><?= htmlspecialchars(display_label((string)$r['role_name'])) ?></option>
                             <?php endif; ?>
                         <?php endforeach; ?>
                     </select>
@@ -640,13 +675,13 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
                     <select name="branch_id">
                         <option value="" <?= $createFormValues['branch_id'] === '' ? ' selected' : '' ?>>No branch (administrators only)</option>
                         <?php foreach ($branches as $branch): ?>
-                            <?php if ($branch['status'] === 'active'): ?><option value="<?= (int)$branch['branch_id'] ?>" <?= $createFormValues['branch_id'] === (string)$branch['branch_id'] ? ' selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option><?php endif; ?>
+                            <?php if ($branch['status'] === 'active'): ?><option value="<?= (int)$branch['branch_id'] ?>" <?= $createFormValues['branch_id'] === (string)$branch['branch_id'] ? ' selected' : '' ?>><?= htmlspecialchars(display_person_name((string)$branch['branch_name']) . ' (' . $branch['branch_code'] . ')') ?></option><?php endif; ?>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" id="cancelUserModal">Cancel</button>
-                    <button class="btn" type="submit">Create User</button>
+                    <button class="btn manage-users-primary" type="submit"><i class="bi bi-person-plus" aria-hidden="true"></i> Create User</button>
                 </div>
             </form>
         </div>
@@ -678,8 +713,45 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
             const deleteUserId = document.getElementById('deleteUserId');
             const deleteForm = document.getElementById('drawerDeleteForm');
             const deleteButton = document.getElementById('deleteUserButton');
+            const managementTabs = document.querySelectorAll('[data-management-tab]');
+            const managementPanels = document.querySelectorAll('[data-management-panel]');
             let selectedUsername = '';
             let createFormState = null;
+
+            managementTabs.forEach(function(tab) {
+                tab.addEventListener('click', function() {
+                    selectManagementTab(tab.dataset.managementTab);
+                });
+                tab.addEventListener('keydown', function(event) {
+                    const tabIndex = Array.from(managementTabs).indexOf(tab);
+                    let nextIndex = tabIndex;
+                    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (tabIndex + 1) % managementTabs.length;
+                    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (tabIndex - 1 + managementTabs.length) % managementTabs.length;
+                    if (event.key === 'Home') nextIndex = 0;
+                    if (event.key === 'End') nextIndex = managementTabs.length - 1;
+                    if (nextIndex !== tabIndex) {
+                        event.preventDefault();
+                        managementTabs[nextIndex].focus();
+                        selectManagementTab(managementTabs[nextIndex].dataset.managementTab);
+                    }
+                });
+            });
+
+            function selectManagementTab(selectedTab) {
+                const selectedTabElement = Array.from(managementTabs).find(function(tab) {
+                    return tab.dataset.managementTab === selectedTab;
+                });
+                if (!selectedTabElement) return;
+                managementTabs.forEach(function(otherTab) {
+                    const isSelected = otherTab === selectedTabElement;
+                    otherTab.classList.toggle('is-active', isSelected);
+                    otherTab.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                    otherTab.setAttribute('tabindex', isSelected ? '0' : '-1');
+                });
+                managementPanels.forEach(function(panel) {
+                    panel.hidden = panel.dataset.managementPanel !== selectedTab;
+                });
+            }
 
             function saveCreateFormState() {
                 if (!createForm) return;
@@ -773,7 +845,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
             if (userSearch) {
                 userSearch.addEventListener('input', function() {
                     const query = userSearch.value.toLowerCase().trim();
-                    document.querySelectorAll('.users-table tbody tr, .users-table > tr').forEach(function(row) {
+                    document.querySelectorAll('#usersPanel .users-table tbody tr, #usersPanel .users-table > tr').forEach(function(row) {
                         row.hidden = !!query && !row.textContent.toLowerCase().includes(query);
                     });
                 });

@@ -33,6 +33,26 @@ function format_audit_value($value): ?string
     return (string)$value;
 }
 
+function format_display_datetime($value): string
+{
+    if ($value === null || $value === '') {
+        return '-';
+    }
+
+    $timestamp = strtotime((string)$value);
+    return $timestamp === false ? (string)$value : date('m-d-y h:i A', $timestamp);
+}
+
+function format_display_date($value): string
+{
+    if ($value === null || $value === '') {
+        return '-';
+    }
+
+    $timestamp = strtotime((string)$value);
+    return $timestamp === false ? (string)$value : date('m-d-y', $timestamp);
+}
+
 function activity_log_columns(PDO $pdo): array
 {
     static $columns = null;
