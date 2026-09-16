@@ -409,8 +409,16 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
             </div>
 
             <div class="manage-users-tabs" role="tablist" aria-label="User management sections">
-                <button type="button" class="manage-users-tab is-active" id="usersTab" role="tab" aria-selected="true" aria-controls="usersPanel" data-management-tab="users" tabindex="0">Users</button>
-                <button type="button" class="manage-users-tab" id="branchesTab" role="tab" aria-selected="false" aria-controls="branchesPanel" data-management-tab="branches" tabindex="-1">Branches</button>
+                <button type="button" class="manage-users-tab is-active" id="usersTab" role="tab" aria-selected="true" aria-controls="usersPanel" data-management-tab="users" tabindex="0">
+                    <span class="manage-users-tab-icon" aria-hidden="true"><i class="bi bi-people"></i></span>
+                    <span class="manage-users-tab-copy"><span class="manage-users-tab-label">Users</span><span class="manage-users-tab-description">Accounts &amp; access</span></span>
+                    <span class="manage-users-tab-count" aria-label="<?= count($users) ?> users"><?= count($users) ?></span>
+                </button>
+                <button type="button" class="manage-users-tab" id="branchesTab" role="tab" aria-selected="false" aria-controls="branchesPanel" data-management-tab="branches" tabindex="-1">
+                    <span class="manage-users-tab-icon" aria-hidden="true"><i class="bi bi-shop"></i></span>
+                    <span class="manage-users-tab-copy"><span class="manage-users-tab-label">Branches</span><span class="manage-users-tab-description">Store locations</span></span>
+                    <span class="manage-users-tab-count" aria-label="<?= count($branches) ?> branches"><?= count($branches) ?></span>
+                </button>
             </div>
 
             <div class="dashboard-section manage-users-list manage-users-tab-panel is-active" id="usersPanel" role="tabpanel" aria-labelledby="usersTab" data-management-panel="users">

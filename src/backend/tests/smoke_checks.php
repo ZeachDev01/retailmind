@@ -57,6 +57,10 @@ $checks = [
         'needles' => ['components/system_administrator/system_health.php'],
         'forbidden' => ['data-system-health-open', 'systemHealthOverlay', 'systemHealthFrame'],
     ],
+    'Manage Users segmented tabs present' => [
+        'file' => 'src/frontend/components/user_manager/user_manager.php',
+        'needles' => ['role="tablist"', 'manage-users-tab-icon', 'manage-users-tab-description', 'manage-users-tab-count', 'data-management-tab="users"', 'data-management-tab="branches"'],
+    ],
     'Dedicated audit logs DataTable present' => [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',
         'needles' => ['id="auditLogsTable"', 'data-no-smart-table', "new DataTable('#auditLogsTable'", 'dataTables.columnControl.min.js', 'dataTables.dateTime.min.js', "columnControl: ['order'", 'Export CSV'],

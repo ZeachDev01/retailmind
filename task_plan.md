@@ -14,6 +14,9 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - [x] Phase 8: Inspect the existing system-health modal, service data, routes, styles, and tests.
 - [x] Phase 9: Implement a dedicated system-health page and remove the modal entry flow.
 - [x] Phase 10: Run focused checks and review the system-health diff.
+- [x] Phase 11: Inspect the Manage Users tab markup, state handling, counts, and responsive styles.
+- [x] Phase 12: Redesign the Users/Branches tab control without changing its behavior.
+- [x] Phase 13: Run focused checks and review the Manage Users tab diff.
 
 ## Decisions
 - Prefer the project's existing layout, components, and dependency versions over introducing a second table stack.
@@ -24,6 +27,8 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - Use a page-scoped fiscal-period stylesheet and remove the iframe overlay, embedded presentation branches, and trigger attributes.
 - Place System Health under `components/system_administrator`, preserve the read-only service checks and refresh behavior, and retain the former modal URL as an authenticated compatibility redirect.
 - Use a page-scoped system-health stylesheet and remove the iframe overlay, embedded presentation branches, and trigger attributes.
+- Replace the full-width dark Manage Users tab bar with a compact light segmented control on the full page, while providing a coordinated dark variant for embedded mode.
+- Preserve the existing ARIA roles, roving keyboard focus, and panel-switching JavaScript; add only presentational icon, description, and count elements.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -34,3 +39,4 @@ Replace modal-only administration workflows with dedicated pages while preservin
 | `apply_patch` rejected a delete-and-add of the same legacy fiscal route in one patch | 1 | Split creation and compatibility-route replacement into separate patches. |
 | Browser-control JavaScript runtime was not available for local visual QA | 1 | Continue with full PHP lint, smoke checks, source invariants, and diff review. |
 | Browser-control runtime remains unavailable for System Health visual QA | 1 | Complete repository-wide lint, smoke, CSS structure, route-reference, and diff checks instead. |
+| Browser-control runtime remains unavailable for Manage Users visual QA | 1 | Complete source-level responsive-state review plus full lint, smoke, CSS structure, and diff checks. |

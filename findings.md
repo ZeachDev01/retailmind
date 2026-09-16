@@ -31,6 +31,11 @@
 - The existing `admin.css` supplies compact generic health-check styles, but a dedicated page-scoped stylesheet will avoid relying on that legacy aggregate stylesheet.
 - The existing System Health smoke check points at the modal path and must be moved to the canonical page, with a separate direct-navigation regression check for the sidebar.
 - After implementation, frontend search finds no System Health trigger, overlay, iframe, embedded-mode, footer, or modal-route reference; only the canonical page and intentional compatibility redirect remain.
+- The Manage Users screenshot shows the Users/Branches tabs as a full-width dark slab between the stats and content card; this creates excessive visual weight and makes the control feel detached from the panel it switches.
+- The tab markup is already accessible (`tablist`, `tab`, `tabpanel`, `aria-selected`, roving `tabindex`) and should be preserved.
+- Tab styling is centralized in `assets/css/modals.css`; the same control serves full-page and embedded modes, so the redesign needs light-page defaults plus dark embedded overrides.
+- User and branch counts are already loaded on the page and can be surfaced as compact tab badges without additional queries.
+- The new tab control can remain entirely server-rendered and CSS-driven; the existing click and keyboard handlers continue to operate through unchanged `data-management-tab` attributes.
 
 ## Design Notes
 

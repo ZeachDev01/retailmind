@@ -355,42 +355,157 @@ body.audit-log-open {
   min-height: 0;
 }
 .manage-users-tabs {
-  display: flex;
-  gap: 1.5rem;
-  margin-bottom: 0;
-  padding: 0.75rem 1.25rem 0;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.58);
-  background: #111827;
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.35rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 16px;
+  background: #e9eef5;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .manage-users-tab {
-  border: 0;
-  position: relative;
-  padding: 0.5rem 0.25rem 0.75rem;
+  min-width: 190px;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.58rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
   background: transparent;
-  color: #8ea0ba;
+  color: #64748b;
   cursor: pointer;
   font: inherit;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: color 0.2s ease;
+  text-align: left;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 .manage-users-tab:hover,
 .manage-users-tab:focus-visible {
-  color: #e5edf8;
+  background: rgba(255, 255, 255, 0.68);
+  color: #334155;
 }
 .manage-users-tab.is-active {
-  color: #f8fafc;
-  font-weight: 600;
+  border-color: rgba(37, 99, 235, 0.18);
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.09);
+  transform: translateY(-1px);
 }
-.manage-users-tab.is-active::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 3px;
-  border-radius: 3px 3px 0 0;
-  background: #3b82f6;
-  content: "";
+.manage-users-tab-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+  font-size: 1rem;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.manage-users-tab.is-active .manage-users-tab-icon {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--primary);
+}
+.manage-users-tab-copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 0.05rem;
+}
+.manage-users-tab-label {
+  font-size: 0.88rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+.manage-users-tab-description {
+  color: #8492a6;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.manage-users-tab.is-active .manage-users-tab-description {
+  color: #64748b;
+}
+.manage-users-tab-count {
+  min-width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.12);
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.manage-users-tab.is-active .manage-users-tab-count {
+  background: var(--primary);
+  color: #fff;
+}
+.manage-users-embedded .manage-users-tabs {
+  width: 100%;
+  margin-bottom: 0;
+  padding: 0.65rem 1.25rem;
+  border: 0;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.58);
+  border-radius: 0;
+  background: #111827;
+  box-shadow: none;
+}
+.manage-users-embedded .manage-users-tab {
+  color: #94a3b8;
+}
+.manage-users-embedded .manage-users-tab:hover,
+.manage-users-embedded .manage-users-tab:focus-visible {
+  background: rgba(148, 163, 184, 0.08);
+  color: #e5edf8;
+}
+.manage-users-embedded .manage-users-tab.is-active {
+  border-color: #30445f;
+  background: #1b2840;
+  color: #f8fafc;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+.manage-users-embedded .manage-users-tab-icon {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+}
+.manage-users-embedded .manage-users-tab.is-active .manage-users-tab-icon {
+  background: rgba(34, 211, 238, 0.12);
+  color: #22d3ee;
+}
+.manage-users-embedded .manage-users-tab-description,
+.manage-users-embedded .manage-users-tab.is-active .manage-users-tab-description {
+  color: #8ea0ba;
+}
+.manage-users-embedded .manage-users-tab-count {
+  background: rgba(148, 163, 184, 0.12);
+  color: #b7c4d7;
+}
+.manage-users-embedded .manage-users-tab.is-active .manage-users-tab-count {
+  background: #2563eb;
+  color: #fff;
+}
+@media (max-width: 700px) {
+  .manage-users-page:not(.manage-users-embedded) .manage-users-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .manage-users-tab,
+  .manage-users-embedded .manage-users-tab {
+    min-width: 0;
+  }
+  .manage-users-embedded .manage-users-tabs {
+    padding: 0.55rem 1rem;
+  }
+  .manage-users-tab-description {
+    display: none;
+  }
 }
 .manage-users-tab-panel[hidden] {
   display: none;
