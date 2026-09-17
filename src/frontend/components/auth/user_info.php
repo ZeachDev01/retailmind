@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 
+use App\Services\ProfileImageStorage;
+
 if (!is_logged_in()) {
     header('Location: ' . app_url('?login=1'));
     exit;
@@ -26,41 +28,100 @@ function account_role_label(string $role): string
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
-    $fullName = trim((string)($_POST['full_name'] ?? ''));
-    $email = trim((string)($_POST['email'] ?? ''));
-    $emailValue = $email === '' ? null : $email;
+    $action = (string)($_POST['action'] ?? 'update_profile');
 
-    if ($fullName === '') {
-        $message = 'Full name is required.';
-        $messageClass = 'tag-warning';
-    } elseif ($emailValue !== null && !filter_var($emailValue, FILTER_VALIDATE_EMAIL)) {
-        $message = 'Enter a valid email address.';
-        $messageClass = 'tag-warning';
-    } else {
+    if (in_array($action, ['replace_profile_image', 'remove_profile_image'], true)) {
+        if (!is_system_admin()) {
+            http_response_code(403);
+            die('Access denied: only administrators can manage profile pictures.');
+        }
+
+        $imageService = profile_image_storage();
+        $currentFilename = (string)($_SESSION['profile_image'] ?? '');
+
         try {
-            $stmt = $pdo->prepare('UPDATE users SET full_name = ?, email = ? WHERE user_id = ?');
-            $stmt->execute([$fullName, $emailValue, (int)$_SESSION['user_id']]);
-            $_SESSION['full_name'] = $fullName;
+            if ($action === 'replace_profile_image') {
+                $newFilename = $imageService->replace(
+                    $_FILES['profile_image'] ?? [],
+                    $currentFilename,
+                    static function (string $filename) use ($pdo): void {
+                        $stmt = $pdo->prepare('UPDATE users SET profile_image = ? WHERE user_id = ?');
+                        $stmt->execute([$filename, (int)$_SESSION['user_id']]);
+                    }
+                );
+                $_SESSION['profile_image'] = $newFilename;
+                $message = $currentFilename !== '' ? 'Profile picture replaced.' : 'Profile picture uploaded.';
+            } else {
+                $imageService->remove(
+                    $currentFilename,
+                    static function () use ($pdo): void {
+                        $stmt = $pdo->prepare('UPDATE users SET profile_image = NULL WHERE user_id = ?');
+                        $stmt->execute([(int)$_SESSION['user_id']]);
+                    }
+                );
+                $_SESSION['profile_image'] = null;
+                $message = 'Profile picture removed. The default picture is now shown.';
+            }
+
             log_activity(
                 $pdo,
                 (int)$_SESSION['user_id'],
-                'User profile update',
+                $action === 'replace_profile_image' ? 'User profile picture update' : 'User profile picture removal',
                 'Users',
                 (int)$_SESSION['user_id'],
                 null,
-                ['full_name' => $fullName, 'email' => $emailValue]
+                ['has_custom_profile_image' => $action === 'replace_profile_image']
             );
-            $message = 'Profile information updated.';
             $messageClass = 'tag-success';
         } catch (PDOException $e) {
-            $message = 'Unable to update profile. Email may already be used by another account.';
+            error_log('Profile picture database update failed: ' . $e->getMessage());
+            $message = 'Unable to update the profile picture right now. Please try again.';
             $messageClass = 'tag-warning';
+        } catch (RuntimeException $e) {
+            $message = $e->getMessage();
+            $messageClass = 'tag-warning';
+        } catch (Throwable $e) {
+            error_log('Profile picture update failed: ' . $e->getMessage());
+            $message = 'Unable to update the profile picture right now. Please try again.';
+            $messageClass = 'tag-warning';
+        }
+    } else {
+        $fullName = trim((string)($_POST['full_name'] ?? ''));
+        $email = trim((string)($_POST['email'] ?? ''));
+        $emailValue = $email === '' ? null : $email;
+
+        if ($fullName === '') {
+            $message = 'Full name is required.';
+            $messageClass = 'tag-warning';
+        } elseif ($emailValue !== null && !filter_var($emailValue, FILTER_VALIDATE_EMAIL)) {
+            $message = 'Enter a valid email address.';
+            $messageClass = 'tag-warning';
+        } else {
+            try {
+                $stmt = $pdo->prepare('UPDATE users SET full_name = ?, email = ? WHERE user_id = ?');
+                $stmt->execute([$fullName, $emailValue, (int)$_SESSION['user_id']]);
+                $_SESSION['full_name'] = $fullName;
+                log_activity(
+                    $pdo,
+                    (int)$_SESSION['user_id'],
+                    'User profile update',
+                    'Users',
+                    (int)$_SESSION['user_id'],
+                    null,
+                    ['full_name' => $fullName, 'email' => $emailValue]
+                );
+                $message = 'Profile information updated.';
+                $messageClass = 'tag-success';
+            } catch (PDOException $e) {
+                $message = 'Unable to update profile. Email may already be used by another account.';
+                $messageClass = 'tag-warning';
+            }
         }
     }
 }
 
 $stmt = $pdo->prepare(
-    "SELECT u.user_id, u.full_name, u.username, u.email, u.status, u.last_login_at,
+    "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.status, u.last_login_at,
             u.password_changed_at, u.must_change_password, u.created_at, r.role_name
      FROM users u JOIN roles r ON r.role_id = u.role_id
      WHERE u.user_id = ? LIMIT 1"
@@ -75,17 +136,12 @@ if (!$account) {
 }
 
 $displayName = trim((string)$account['full_name']);
-$initials = '';
-foreach (preg_split('/\s+/', $displayName) ?: [] as $namePart) {
-    if ($namePart !== '') {
-        $initials .= strtoupper(substr($namePart, 0, 1));
-    }
-}
-$initials = substr($initials ?: 'RM', 0, 2);
 $roleLabel = account_role_label((string)$account['role_name']);
 $statusClass = $account['status'] === 'active' ? 'tag-success' : 'tag-warning';
 $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required' : 'Current';
 $passwordStatusClass = (int)$account['must_change_password'] === 1 ? 'tag-warning' : 'tag-success';
+$profileImageUrl = profile_image_url((int)$account['user_id']);
+$defaultProfileImageUrl = default_profile_image_url();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -116,7 +172,7 @@ $passwordStatusClass = (int)$account['must_change_password'] === 1 ? 'tag-warnin
             <?php endif; ?>
 
             <section class="account-hero">
-                <div class="account-avatar"><?= htmlspecialchars($initials) ?></div>
+                <?= profile_avatar_html((int)$account['user_id'], $displayName, $account['profile_image'] ?? null, 'account-avatar') ?>
                 <div class="account-hero-copy">
                     <h2><?= htmlspecialchars($account['full_name']) ?></h2>
                     <p>@<?= htmlspecialchars($account['username']) ?></p>
@@ -133,11 +189,37 @@ $passwordStatusClass = (int)$account['must_change_password'] === 1 ? 'tag-warnin
                     <div class="section-header">
                         <div>
                             <h3>Profile</h3>
-                            <p class="section-description">Keep your name and email current for account records.</p>
+                            <p class="section-description">Keep your picture, name, and email current for account records.</p>
                         </div>
                     </div>
+                    <?php if (is_system_admin()): ?>
+                        <div class="profile-picture-settings">
+                            <img id="profile-picture-preview" class="profile-picture-preview" src="<?= htmlspecialchars($profileImageUrl) ?>" alt="Current profile picture" data-default-src="<?= htmlspecialchars($defaultProfileImageUrl) ?>" onerror="this.onerror=null;this.src=this.dataset.defaultSrc">
+                            <div class="profile-picture-controls">
+                                <form method="POST" enctype="multipart/form-data" class="profile-picture-form">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="replace_profile_image">
+                                    <div class="form-group">
+                                        <label for="profile_image"><?= !empty($account['profile_image']) ? 'Replace Profile Picture' : 'Upload Profile Picture' ?></label>
+                                        <input type="hidden" name="MAX_FILE_SIZE" value="<?= ProfileImageStorage::MAX_FILE_SIZE ?>">
+                                        <input type="file" id="profile_image" name="profile_image" accept="image/jpeg,image/png,image/gif,image/webp" required>
+                                        <small class="field-help">JPEG, PNG, GIF, or WebP. Maximum 2 MB.</small>
+                                    </div>
+                                    <button class="btn btn-small" type="submit"><?= !empty($account['profile_image']) ? 'Replace Picture' : 'Upload Picture' ?></button>
+                                </form>
+                                <?php if (!empty($account['profile_image'])): ?>
+                                    <form method="POST" class="profile-picture-remove-form">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="action" value="remove_profile_image">
+                                        <button class="btn btn-quiet btn-small" type="submit">Remove Picture</button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                     <form method="POST" class="form-grid" autocomplete="off">
                         <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="update_profile">
                         <div class="form-group full">
                             <label for="full_name">Full Name</label>
                             <input id="full_name" name="full_name" value="<?= htmlspecialchars($account['full_name']) ?>" required>
@@ -193,6 +275,32 @@ $passwordStatusClass = (int)$account['must_change_password'] === 1 ? 'tag-warnin
             </div>
         </main>
     </div>
+    <script>
+        (function() {
+            var input = document.getElementById('profile_image');
+            var preview = document.getElementById('profile-picture-preview');
+            if (!input || !preview) return;
+
+            input.addEventListener('change', function() {
+                var file = input.files && input.files[0];
+                if (!file) return;
+                var allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                if (allowedTypes.indexOf(file.type) === -1 || file.size > <?= ProfileImageStorage::MAX_FILE_SIZE ?>) {
+                    input.value = '';
+                    if (window.RetailMindUI) {
+                        RetailMindUI.toast('Choose a JPEG, PNG, GIF, or WebP image no larger than 2 MB.', 'warning');
+                    }
+                    return;
+                }
+
+                var reader = new FileReader();
+                reader.addEventListener('load', function(event) {
+                    preview.src = event.target.result;
+                });
+                reader.readAsDataURL(file);
+            });
+        })();
+    </script>
 </body>
 
 </html>

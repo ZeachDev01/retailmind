@@ -13,6 +13,7 @@ for forbidden in \
   'inventory_system/src/backend/storage/logs/app.log' \
   'inventory_system/src/backend/storage/sessions/sess_' \
   'inventory_system/src/backend/storage/backups/backup_' \
+  'inventory_system/.kilo/worktrees/' \
   '.joblib' \
   'model_metrics.json'; do
   if grep -Fq "$forbidden" <<<"$CONTENTS"; then
@@ -20,10 +21,16 @@ for forbidden in \
     exit 1
   fi
 done
+PROFILE_IMAGE_CONTENTS="$(grep '^inventory_system/src/backend/storage/profile-images/' <<<"$CONTENTS" || true)"
+if grep -Fvxq 'inventory_system/src/backend/storage/profile-images/.gitkeep' <<<"$PROFILE_IMAGE_CONTENTS"; then
+  echo 'Release package contains a runtime profile image' >&2
+  exit 1
+fi
 for required in \
   'inventory_system/src/backend/storage/logs/.gitkeep' \
   'inventory_system/src/backend/storage/sessions/.gitkeep' \
   'inventory_system/src/backend/storage/backups/.gitkeep' \
+  'inventory_system/src/backend/storage/profile-images/.gitkeep' \
   'inventory_system/src/backend/legacy/demandForcasting/models/.gitkeep'; do
   if ! grep -Fxq "$required" <<<"$CONTENTS"; then
     echo "Release package is missing placeholder: $required" >&2

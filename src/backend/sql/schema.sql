@@ -46,6 +46,7 @@ CREATE TABLE users (
     full_name VARCHAR(100) NOT NULL,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) UNIQUE,
+    profile_image VARCHAR(80) NULL,
     password_hash VARCHAR(255) NOT NULL,
     role_id INT NOT NULL,
     status ENUM('active','disabled') DEFAULT 'active',

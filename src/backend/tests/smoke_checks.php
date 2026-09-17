@@ -74,6 +74,21 @@ $checks = [
         'file' => 'src/frontend/assets/css/modals.css',
         'needles' => ['max-height: calc(100dvh - 2rem);', '.user-modal > .user-form {', 'overflow-y: auto;', '-webkit-overflow-scrolling: touch;'],
     ],
+    'Staff profile images use secure shared storage' => [
+        'file' => 'src/backend/app/Services/ProfileImageStorage.php',
+        'needles' => ['finfo_file', 'getimagesize', 'is_uploaded_file', 'move_uploaded_file', 'random_bytes', 'MAX_BYTES'],
+        'forbidden' => ["\$file['type']", "\$file['name']"],
+    ],
+    'Staff profile image upload remains optional' => [
+        'file' => 'src/frontend/components/user_manager/modals/add_user_modal.php',
+        'needles' => ['enctype="multipart/form-data"', 'name="profile_image"', 'accept="image/jpeg,image/png,image/gif,image/webp"', 'Optional'],
+        'forbidden' => ['name="profile_image" required'],
+    ],
+    'Staff profile images are rendered through shared fallback logic' => [
+        'file' => 'src/frontend/components/user_manager/user_manager.php',
+        'needles' => ['profile_avatar_html', 'profile_image', 'remove_profile_image'],
+        'forbidden' => ['storage/profile-images/'],
+    ],
     'Preferences live under the profile menu' => [
         'file' => 'src/frontend/components/sidebar.php',
         'needles' => ['components/auth/preferences.php'],
@@ -82,6 +97,16 @@ $checks = [
     'Account preferences preserve notification controls' => [
         'file' => 'src/frontend/components/auth/preferences.php',
         'needles' => ['Preferences', 'preferences.css', 'notify_low_stock', 'notify_replenishment', 'notify_adjustment', 'notify_email', 'notify_inapp', 'low_stock_threshold', 'csrf_field()'],
+    ],
+    'Administrator profile pictures are self-service only' => [
+        'file' => 'src/frontend/components/auth/user_info.php',
+        'needles' => ['replace_profile_image', 'remove_profile_image', 'is_system_admin()', "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp'],
+        'forbidden' => ["\$_POST['user_id']", "\$_GET['user_id']", "\$_REQUEST['user_id']"],
+    ],
+    'Profile pictures are delivered without exposing storage paths' => [
+        'file' => 'src/frontend/components/auth/profile_image.php',
+        'needles' => ['is_logged_in()', 'profile_image_storage()', 'X-Content-Type-Options: nosniff', 'Cache-Control: private'],
+        'forbidden' => ["\$_GET['path']", "\$_GET['filename']"],
     ],
     'Former notification preferences route redirects' => [
         'file' => 'src/frontend/components/notification/notification_preferences.php',

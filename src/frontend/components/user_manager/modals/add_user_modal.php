@@ -7,7 +7,7 @@
             </div>
             <button type="button" class="user-modal-close" id="closeUserModal" aria-label="Close add user form">&times;</button>
         </div>
-        <form method="POST" class="user-form" id="createUserForm">
+        <form method="POST" enctype="multipart/form-data" class="user-form" id="createUserForm">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="create">
             <div class="form-group">
@@ -25,6 +25,11 @@
             <div class="form-group">
                 <label>Email</label>
                 <input type="email" name="email" value="<?= htmlspecialchars($createFormValues['email'], ENT_QUOTES, 'UTF-8') ?>">
+            </div>
+            <div class="form-group">
+                <label for="createProfileImage">Profile Picture <span class="optional-label">Optional</span></label>
+                <input type="file" id="createProfileImage" name="profile_image" accept="image/jpeg,image/png,image/gif,image/webp">
+                <small class="field-help">JPEG, PNG, GIF, or WebP. Maximum 2MB.</small>
             </div>
             <div class="form-group">
                 <label>Password</label>

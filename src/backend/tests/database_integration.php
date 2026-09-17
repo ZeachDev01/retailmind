@@ -18,6 +18,7 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 };
 
 $assert(Schema::columnExists($pdo, 'users', 'must_change_password'), 'users.must_change_password is missing');
+$assert(Schema::columnExists($pdo, 'users', 'profile_image'), 'users.profile_image is missing');
 $assert(Schema::tableExists($pdo, 'login_attempts'), 'login_attempts table is missing');
 $assert(Schema::tableExists($pdo, 'purchase_orders'), 'purchase_orders table is missing');
 $assert(

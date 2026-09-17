@@ -11,6 +11,7 @@ if (PHP_SAPI !== 'cli') {
 require_once __DIR__ . '/../bootstrap/app.php';
 
 use App\Database\DailySalesTrendSeeder;
+use App\Database\ProductSeeder;
 
 $arguments = array_slice($argv, 1);
 if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true)) {
@@ -61,6 +62,11 @@ try {
     $pdo->prepare('SET time_zone = ?')->execute([$now->format('P')]);
 
     echo "Safety confirmed: development environment, local database host, database '{$selectedDatabase}'.\n";
+    ProductSeeder::assertSafeTarget($appEnv, $config, $selectedDatabase);
+    $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/product_seed.csv');
+    $productResult = ProductSeeder::run($pdo, $products);
+    echo "Product dependency ready: {$productResult['inserted']} inserted, {$productResult['skipped']} already present.\n";
+
     $seeder = new DailySalesTrendSeeder($pdo, $now);
     $result = $seeder->run();
     $owned = $seeder->ownedSummary();

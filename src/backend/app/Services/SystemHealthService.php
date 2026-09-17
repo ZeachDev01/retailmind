@@ -61,7 +61,7 @@ final class SystemHealthService
     private function storageChecks(): array
     {
         $checks = [];
-        foreach (['sessions', 'logs', 'backups', 'imports', 'exports', 'receipts'] as $directory) {
+        foreach (['sessions', 'logs', 'backups', 'imports', 'exports', 'receipts', 'profile-images'] as $directory) {
             $path = $this->backendPath . '/storage/' . $directory;
             $exists = is_dir($path);
             $writable = $exists && is_writable($path);

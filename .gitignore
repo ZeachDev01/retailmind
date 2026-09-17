@@ -6,6 +6,8 @@
 !/backend/storage/backups/.gitkeep
 /src/backend/storage/sessions/*
 !/src/backend/storage/sessions/.gitkeep
+/src/backend/storage/profile-images/*
+!/src/backend/storage/profile-images/.gitkeep
 /backend/storage/imports/*
 !/backend/storage/imports/.gitkeep
 /backend/storage/exports/*

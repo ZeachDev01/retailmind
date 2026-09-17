@@ -10,6 +10,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../app/Services/DashboardService.php';
 
 use App\Database\DailySalesTrendSeeder;
+use App\Database\ProductSeeder;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -23,67 +24,35 @@ $asOf = (new DateTimeImmutable('today', $timezone))->setTime(0, 0);
 $pdo->prepare('SET time_zone = ?')->execute([$asOf->format('P')]);
 
 try {
-    $dependencyCount = (int)$pdo->query(
-        "SELECT COUNT(*) FROM products WHERE sku IN (
-            'SKU-BEV-001','SKU-BEV-002','SKU-BEV-004','SKU-BEV-006',
-            'SKU-BEV-007','SKU-BEV-008','SKU-SNK-001','SKU-SNK-003',
-            'SKU-SNK-004','SKU-DRY-001','SKU-DRY-004','SKU-DRY-008'
-        )"
+    $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/product_seed.csv');
+    $firstProducts = ProductSeeder::run($pdo, $products, true);
+    $secondProducts = ProductSeeder::run($pdo, $products, true);
+    $seedProductCount = (int)$pdo->query(
+        "SELECT COUNT(*) FROM products p JOIN branches b ON b.branch_id = p.branch_id WHERE b.branch_code = 'RM-SEED'"
     )->fetchColumn();
-    if ($dependencyCount < 8) {
-        $adminId = (int)$pdo->query("SELECT user_id FROM users ORDER BY user_id LIMIT 1")->fetchColumn();
-        $pdo->prepare(
-            "INSERT INTO branches (branch_name, branch_code, status, created_by)
-             VALUES ('Sales Trend Integration Branch', 'RM-TEST-SALES', 'active', ?)
-             ON DUPLICATE KEY UPDATE branch_id = LAST_INSERT_ID(branch_id), status = 'active'"
-        )->execute([$adminId]);
-        $branchId = (int)$pdo->lastInsertId();
-
-        $categoryStmt = $pdo->prepare(
-            "INSERT INTO categories (category_name)
-             SELECT ? WHERE NOT EXISTS (SELECT 1 FROM categories WHERE category_name = ?)
-             ON DUPLICATE KEY UPDATE category_name = VALUES(category_name)"
-        );
-        $categoryStmt->execute(['Sales Trend Integration', 'Sales Trend Integration']);
-        $categoryStmt = $pdo->prepare('SELECT category_id FROM categories WHERE category_name = ? ORDER BY category_id LIMIT 1');
-        $categoryStmt->execute(['Sales Trend Integration']);
-        $categoryId = (int)$categoryStmt->fetchColumn();
-
-        $csv = fopen(dirname(__DIR__, 3) . '/product_seed.csv', 'r');
-        if ($csv === false) {
-            throw new RuntimeException('product_seed.csv could not be opened for integration setup.');
-        }
-        fgetcsv($csv);
-        $wantedSkus = [
-            'SKU-BEV-001', 'SKU-BEV-002', 'SKU-BEV-004', 'SKU-BEV-006',
-            'SKU-BEV-007', 'SKU-BEV-008', 'SKU-SNK-001', 'SKU-SNK-003',
-            'SKU-SNK-004', 'SKU-DRY-001', 'SKU-DRY-004', 'SKU-DRY-008',
-        ];
-        $insertProduct = $pdo->prepare(
-            "INSERT INTO products
-                (sku, barcode, product_name, brand, category_id, unit_price, cost_price,
-                 reorder_level, status, created_by, branch_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
-        );
-        while (($row = fgetcsv($csv)) !== false) {
-            if (!in_array((string)($row[0] ?? ''), $wantedSkus, true)) {
-                continue;
-            }
-            $insertProduct->execute([
-                $row[0], 'RMTEST-' . $row[1], $row[2], $row[3], $categoryId,
-                $row[5], $row[6], $row[7], $adminId, $branchId,
-            ]);
-            $pdo->prepare('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, 0)')
-                ->execute([(int)$pdo->lastInsertId()]);
-        }
-        fclose($csv);
-    }
+    $assert(
+        (int)$firstProducts['inserted'] + (int)$firstProducts['skipped'] === count($products),
+        'Product dependency seed did not account for every CSV product'
+    );
+    $assert((int)$secondProducts['inserted'] === 0, 'Repeat product dependency seed inserted duplicate products');
+    $assert((int)$secondProducts['skipped'] === count($products), 'Repeat product dependency seed did not recognize every product');
+    $assert($seedProductCount === count($products), 'Product dependency produced a duplicate or missing RM-SEED product');
 
     $seeder = new DailySalesTrendSeeder($pdo, $asOf);
     $first = $seeder->run();
     $firstOwned = $seeder->ownedSummary();
+    $firstStock = $pdo->query(
+        "SELECT SUM(i.quantity_on_hand) AS on_hand, SUM(p.quantity_purchased) AS purchased, SUM(p.quantity_sold) AS sold
+         FROM products p JOIN inventory i ON i.product_id = p.product_id
+         JOIN branches b ON b.branch_id = p.branch_id WHERE b.branch_code = 'RM-SEED'"
+    )->fetch(PDO::FETCH_ASSOC);
     $second = $seeder->run();
     $secondOwned = $seeder->ownedSummary();
+    $secondStock = $pdo->query(
+        "SELECT SUM(i.quantity_on_hand) AS on_hand, SUM(p.quantity_purchased) AS purchased, SUM(p.quantity_sold) AS sold
+         FROM products p JOIN inventory i ON i.product_id = p.product_id
+         JOIN branches b ON b.branch_id = p.branch_id WHERE b.branch_code = 'RM-SEED'"
+    )->fetch(PDO::FETCH_ASSOC);
 
     foreach (['sales', 'sale_items', 'units_sold', 'gross_total', 'start_date', 'end_date', 'sales_days'] as $key) {
         $assert(
@@ -94,6 +63,7 @@ try {
     $assert((int)$secondOwned['sales'] === (int)$second['sales'], 'Owned sale count does not match the second seed plan');
     $assert((int)$secondOwned['sale_items'] === (int)$second['sale_items'], 'Owned line-item count does not match the seed plan');
     $assert((int)$secondOwned['units_sold'] === (int)$second['units_sold'], 'Owned unit count does not match the seed plan');
+    $assert($firstStock === $secondStock, 'Repeat sales seed changed the resulting inventory or product counters');
 
     $service = new DashboardService($pdo);
     foreach ([7, 30, 90] as $days) {

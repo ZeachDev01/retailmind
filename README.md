@@ -95,6 +95,30 @@ Password: RetailMind@2026
 
 The first login is automatically restricted to the mandatory password-change page. Replace the temporary password before using any dashboard or operational module.
 
+## Sample product stock (local development only)
+
+Run the guarded product seed with `--with-stock` to add varied opening stock to
+the sample products in the `RM-SEED` branch. Confirm the actual development
+database name; never use this on a production database:
+
+```bash
+php src/backend/scripts/seed_products.php --confirm-local-database=inventory_system --with-stock
+```
+
+For the unchanged 60-product CSV, 12 products remain out of stock, 12 have low
+stock, and 36 have varied quantities above their reorder levels. Existing stock,
+purchase counters, inactive products, and products with batch/purchase/movement
+history are preserved. This is not a reset or automatic replenishment: repeat
+runs do not restock sold-out products. Products designated out of stock are left
+untouched, never forcibly set to zero.
+
+Each stock addition creates a marked sample batch, a purchase-history entry,
+and a purchase stock movement, and increments inventory and purchased quantity
+in one transaction. Fiscal-period locks are respected. Sample supplier labels
+identify these development records; nullable actor fields remain null rather
+than impersonating a user. No sales, users, or notifications are created.
+Without `--with-stock`, new products still start at zero stock.
+
 ## Database upgrades
 
 Database changes are never executed during normal web requests. After updating the application files, run:
@@ -161,13 +185,13 @@ The included GitHub Actions workflow starts MySQL, imports the fresh schema, run
 
 ## Local Sales Trend demo data
 
-The Sales Trend chart supports 7, 30, and 90 calendar-day ranges, including today. It returns explicit zero-value points for dates without sales. To create deterministic local demo data for this chart, first import `product_seed.csv`, then run this targeted command from the repository root:
+The Sales Trend chart supports 7, 30, and 90 calendar-day ranges, including today. It returns explicit zero-value points for dates without sales. To create deterministic local demo data for this chart, run this targeted command from the repository root:
 
 ```bash
 php src/backend/scripts/seed_sales_trend.php --confirm-local
 ```
 
-The command is intentionally not part of migrations, normal startup, or production seeding. It refuses to run unless `APP_ENV=development`, `DB_HOST` is localhost/loopback, and `--confirm-local` is supplied. It creates 91 days of seed-owned sales history and safely replaces only records associated with the reserved `RM_SEED_SALES_TREND_V1` identifiers when rerun; it never resets the database.
+The command is intentionally not part of migrations or normal startup. It refuses to run unless `APP_ENV=development`, `DB_HOST` is localhost/loopback, and `--confirm-local` is supplied. It first runs the guarded product seed without opening stock, reusing the canonical 60 products in the `RM-SEED` branch without duplicates, then creates 91 days of seed-owned sales history. Reruns preserve product and user data and replace only records associated with the reserved `RM_SEED_SALES_TREND_V1` identifiers; the command never resets the database. Any separately seeded opening stock is preserved because Sales Trend simulation inventory is tracked in its own batches and counters.
 
 ## Automatic maintenance
 

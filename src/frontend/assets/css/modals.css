@@ -63,6 +63,23 @@
 .manage-users-page .user-modal .field-help {
   color: #b7c4d7;
 }
+.optional-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+.profile-image-remove {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.profile-image-remove input {
+  width: auto;
+}
 .user-drawer-overlay {
   position: fixed;
   inset: 0;
@@ -111,6 +128,19 @@
   color: var(--muted);
   margin-top: 0.2rem;
   font-size: 0.9rem;
+}
+.user-drawer-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.user-drawer-avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  font-size: 0.8rem;
 }
 .user-drawer-body {
   flex: 1;
@@ -789,18 +819,21 @@ body.audit-log-open {
 .manage-users-embedded .user-email {
   display: block;
 }
-.manage-users-embedded .user-avatar {
-  display: inline-grid;
-  place-items: center;
+.manage-users-page .user-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+.manage-users-page .user-avatar {
   width: 2.8rem;
   height: 2.8rem;
-  margin-right: 0.75rem;
+  flex: 0 0 2.8rem;
   border-radius: 12px;
   background: linear-gradient(135deg, #2563eb, #7c3aed);
   color: #eff6ff;
   font-size: 0.82rem;
   font-weight: 800;
-  vertical-align: middle;
 }
 .manage-users-embedded .user-identity {
   display: inline-block;

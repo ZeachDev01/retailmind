@@ -11,13 +11,7 @@ try {
     $notificationCount = 0;
 }
 $sidebarUserName = trim((string)($_SESSION['full_name'] ?? 'RetailMind User'));
-$sidebarInitials = '';
-foreach (preg_split('/\s+/', $sidebarUserName) ?: [] as $namePart) {
-    if ($namePart !== '') {
-        $sidebarInitials .= strtoupper(substr($namePart, 0, 1));
-    }
-}
-$sidebarInitials = substr($sidebarInitials ?: 'RM', 0, 2);
+$sidebarProfileImage = isset($_SESSION['profile_image']) ? (string)$_SESSION['profile_image'] : null;
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
 $commandProductTarget = in_array($role, ['admin', 'super_admin', 'inventory_manager'], true) ? app_url('components/inventory_management/products.php') : app_url('components/cashier/pos.php');
 $mobileHomeTarget = $role === 'cashier' ? 'components/cashier/pos.php' : ($role === 'inventory_manager' ? 'components/inventory_management/dashboard.php' : 'components/dashboard.php');
@@ -294,7 +288,7 @@ $sections = $roleSections[$role] ?? [];
                 <i class="bi bi-search" aria-hidden="true"></i>
             </button>
             <a class="admin-mobile-avatar" href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>" aria-label="Open user information">
-                <?= sidebar_e($sidebarInitials) ?>
+                <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage) ?>
             </a>
         </div>
     </div>
@@ -319,7 +313,7 @@ $sections = $roleSections[$role] ?? [];
 
     <div class="sidebar-footer">
         <button type="button" class="sidebar-profile" id="sidebarProfile" aria-expanded="false" aria-controls="sidebarProfileMenu">
-            <span class="sidebar-avatar"><?= sidebar_e($sidebarInitials) ?></span>
+            <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage, 'sidebar-avatar') ?>
             <span class="sidebar-profile-copy">
                 <strong><?= sidebar_e($sidebarUserName) ?></strong>
                 <span><?= sidebar_e($sidebarRoleLabel) ?></span>

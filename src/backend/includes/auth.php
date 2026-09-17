@@ -8,6 +8,7 @@ App\Core\Session::start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/profile_images.php';
 
 function app_base_url(): string
 {
@@ -97,7 +98,7 @@ function login_user(PDO $pdo, string $username, string $password): bool
     $username = trim($username);
 
     $stmt = $pdo->prepare(
-        "SELECT u.user_id, u.full_name, u.username, u.email, u.password_hash, u.status,
+        "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
             u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password,
             u.branch_id, b.branch_name, r.role_name
          FROM users u JOIN roles r ON u.role_id = r.role_id
@@ -121,6 +122,7 @@ function login_user(PDO $pdo, string $username, string $password): bool
         $_SESSION['role'] = $user['role_name'];
         $_SESSION['branch_id'] = $user['branch_id'] !== null ? (int)$user['branch_id'] : null;
         $_SESSION['branch_name'] = $user['branch_name'];
+        $_SESSION['profile_image'] = $user['profile_image'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
         $_SESSION['_authenticated_at'] = time();
@@ -174,7 +176,7 @@ function validate_current_session(PDO $pdo): void
     }
     $validated = true;
     $stmt = $pdo->prepare(
-        "SELECT u.status, u.session_version, u.full_name, u.must_change_password,
+        "SELECT u.status, u.session_version, u.full_name, u.profile_image, u.must_change_password,
             u.branch_id, b.branch_name, r.role_name
          FROM users u JOIN roles r ON r.role_id = u.role_id
          LEFT JOIN branches b ON b.branch_id = u.branch_id
@@ -194,6 +196,7 @@ function validate_current_session(PDO $pdo): void
     $_SESSION['role'] = $user['role_name'];
     $_SESSION['branch_id'] = $user['branch_id'] !== null ? (int)$user['branch_id'] : null;
     $_SESSION['branch_name'] = $user['branch_name'];
+    $_SESSION['profile_image'] = $user['profile_image'];
     $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
 
     $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
@@ -232,6 +235,11 @@ function current_branch_id(): ?int
 function is_system_admin(): bool
 {
     return in_array(current_role(), ['super_admin', 'admin'], true);
+}
+
+function default_profile_image_url(): string
+{
+    return app_url('assets/img/default-profile.svg');
 }
 
 function has_privilege(string $privilegeKey): bool

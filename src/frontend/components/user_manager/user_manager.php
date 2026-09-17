@@ -13,7 +13,7 @@ $branchFormValues = ['branch_name' => '', 'branch_code' => ''];
 
 function get_user_snapshot(PDO $pdo, int $userId): ?array
 {
-    $stmt = $pdo->prepare("SELECT user_id, username, full_name, email, status, role_id, branch_id FROM users WHERE user_id = ?");
+    $stmt = $pdo->prepare("SELECT user_id, username, full_name, email, profile_image, status, role_id, branch_id FROM users WHERE user_id = ?");
     $stmt->execute([$userId]);
     $user = $stmt->fetch();
     return $user ?: null;
@@ -62,17 +62,6 @@ function ensure_single_super_admin(PDO $pdo, int $roleId, ?int $excludeUserId = 
     if ((int)$stmt->fetchColumn() > 0) {
         throw new InvalidArgumentException('Only one Super Admin account is allowed.');
     }
-}
-
-function user_initials(string $name, string $fallback): string
-{
-    $initials = '';
-    foreach (preg_split('/\s+/', trim($name)) ?: [] as $part) {
-        if ($part !== '') {
-            $initials .= strtoupper(substr($part, 0, 1));
-        }
-    }
-    return substr($initials ?: strtoupper(substr($fallback, 0, 2)) ?: 'RM', 0, 2);
 }
 
 function display_label(string $value): string
@@ -131,6 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $message = $passwordError;
         $messageClass = 'tag-warning';
     } else {
+        $newProfileImage = null;
+        $userCreated = false;
         try {
             $roleId = (int)($_POST['role_id'] ?? 0);
             $branchId = (int)($_POST['branch_id'] ?? 0) ?: null;
@@ -147,14 +138,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
                 throw new InvalidArgumentException('Inventory Managers and Cashiers must be assigned to a branch.');
             }
 
-            $stmt = $pdo->prepare("INSERT INTO users (full_name, username, email, password_hash, role_id, branch_id, must_change_password) VALUES (?, ?, ?, ?, ?, ?, 1)");
-            $stmt->execute([$createFullName, $_POST['username'], $_POST['email'], password_hash($_POST['password'], PASSWORD_DEFAULT), $roleId, $branchId]);
+            $newProfileImage = profile_image_storage()->store($_FILES['profile_image'] ?? null);
+            $stmt = $pdo->prepare("INSERT INTO users (full_name, username, email, profile_image, password_hash, role_id, branch_id, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
+            $stmt->execute([$createFullName, $_POST['username'], $_POST['email'], $newProfileImage, password_hash($_POST['password'], PASSWORD_DEFAULT), $roleId, $branchId]);
+            $userCreated = true;
             $newUserId = (int)$pdo->lastInsertId();
             log_activity($pdo, (int)$_SESSION['user_id'], 'User creation', 'Users', $newUserId, null, [
                 'user_id' => $newUserId,
                 'full_name' => $createFullName,
                 'username' => $_POST['username'] ?? '',
                 'email' => $_POST['email'] ?? '',
+                'has_profile_image' => $newProfileImage !== null,
                 'role_id' => $roleId,
                 'status' => 'active',
             ]);
@@ -162,10 +156,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $messageClass = 'tag-success';
             $createFormValues = ['first_name' => '', 'last_name' => '', 'full_name' => '', 'username' => '', 'email' => '', 'role_id' => '', 'branch_id' => ''];
         } catch (InvalidArgumentException $e) {
+            if (!$userCreated && $newProfileImage !== null) {
+                profile_image_storage()->delete($newProfileImage);
+            }
             $message = $e->getMessage();
             $messageClass = 'tag-warning';
         } catch (PDOException $e) {
+            if (!$userCreated && $newProfileImage !== null) {
+                profile_image_storage()->delete($newProfileImage);
+            }
             $message = 'Unable to create user. Username or email may already exist.';
+            $messageClass = 'tag-warning';
+        } catch (RuntimeException $e) {
+            if (!$userCreated && $newProfileImage !== null) {
+                profile_image_storage()->delete($newProfileImage);
+            }
+            $message = $e->getMessage();
             $messageClass = 'tag-warning';
         }
     }
@@ -214,11 +220,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                 $message = 'Inventory Managers and Cashiers must be assigned to a branch.';
                 $messageClass = 'tag-warning';
             } else {
+                $newProfileImage = null;
+                $profileImageCommitted = false;
                 try {
                     ensure_single_super_admin($pdo, $roleId, $userId);
                     $updateParts = ['full_name = ?', 'username = ?', 'email = ?', 'status = ?', 'role_id = ?', 'branch_id = ?'];
                     $params = [$fullName, $username, $email, $status, $roleId, $requestedBranchId];
                     $shouldInvalidateSessions = false;
+
+                    if (\App\Services\ProfileImageStorage::hasUpload($_FILES['profile_image'] ?? null)) {
+                        $newProfileImage = profile_image_storage()->store($_FILES['profile_image']);
+                        $updateParts[] = 'profile_image = ?';
+                        $params[] = $newProfileImage;
+                    } elseif (isset($_POST['remove_profile_image'])) {
+                        $updateParts[] = 'profile_image = NULL';
+                    }
 
                     if ($newPassword !== '') {
                         if ($passwordError = password_policy_error($newPassword)) {
@@ -243,6 +259,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                     $params[] = $userId;
                     $stmt = $pdo->prepare('UPDATE users SET ' . implode(', ', $updateParts) . ' WHERE user_id = ?');
                     $stmt->execute($params);
+                    $profileImageCommitted = true;
+
+                    if (($newProfileImage !== null || isset($_POST['remove_profile_image'])) && !empty($before['profile_image'])) {
+                        if (!profile_image_storage()->delete((string)$before['profile_image'])) {
+                            error_log('Unable to remove a replaced staff profile image.');
+                        }
+                    }
 
                     if (isset($_POST['manage_privileges'])) {
                         $pdo->prepare('DELETE FROM user_privileges WHERE user_id = ?')->execute([$userId]);
@@ -257,14 +280,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                     log_activity($pdo, (int)$_SESSION['user_id'], $newPassword !== '' ? 'User account update with password change' : 'User account update', 'Users', $userId, $before, $after);
                     if ($userId === (int)$_SESSION['user_id']) {
                         $_SESSION['full_name'] = $fullName;
+                        $_SESSION['profile_image'] = $after['profile_image'] ?? null;
                     }
                     $message = 'User account updated successfully.';
                     $messageClass = 'tag-success';
                 } catch (InvalidArgumentException $e) {
+                    if (!$profileImageCommitted && $newProfileImage !== null) {
+                        profile_image_storage()->delete($newProfileImage);
+                    }
                     $message = $e->getMessage();
                     $messageClass = 'tag-warning';
                 } catch (PDOException $e) {
+                    if (!$profileImageCommitted && $newProfileImage !== null) {
+                        profile_image_storage()->delete($newProfileImage);
+                    }
                     $message = 'Unable to update user. Username or email may already exist.';
+                    $messageClass = 'tag-warning';
+                } catch (RuntimeException $e) {
+                    if (!$profileImageCommitted && $newProfileImage !== null) {
+                        profile_image_storage()->delete($newProfileImage);
+                    }
+                    $message = $e->getMessage();
                     $messageClass = 'tag-warning';
                 }
             }
@@ -281,9 +317,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
         $messageClass = 'tag-warning';
     } else {
         try {
+            $before = get_user_snapshot($pdo, $userId);
             $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
             $stmt->execute([$userId]);
             if ($stmt->rowCount() > 0) {
+                if (!empty($before['profile_image']) && !profile_image_storage()->delete((string)$before['profile_image'])) {
+                    error_log('Unable to remove a deleted staff profile image.');
+                }
                 log_activity($pdo, (int)$_SESSION['user_id'], "Deleted user ID {$userId}", 'Users', $userId);
                 $message = 'User deleted successfully.';
                 $messageClass = 'tag-success';
@@ -462,9 +502,10 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                                 $createdLabel = !empty($u['created_at']) ? format_display_date(date('Y-m-d', strtotime((string)$u['created_at']))) : 'Unknown';
                                 $lastActive = user_last_active_label($u['last_login'] ?? null);
                                 $isSelf = (int)$u['user_id'] === (int)$_SESSION['user_id'];
+                                $hasProfileImage = !empty($u['profile_image']) && profile_image_storage()->exists((string)$u['profile_image']);
                                 ?>
                                 <tr>
-                                    <td><strong><?= htmlspecialchars(display_person_name((string)$u['full_name'])) ?></strong></td>
+                                    <td><div class="user-name-cell"><?= profile_avatar_html((int)$u['user_id'], (string)$u['full_name'], $u['profile_image'] ?? null, 'user-avatar') ?><strong><?= htmlspecialchars(display_person_name((string)$u['full_name'])) ?></strong></div></td>
                                     <td class="user-email-cell"><?= htmlspecialchars($displayEmail) ?></td>
                                     <td class="user-role-cell"><?= htmlspecialchars(display_label((string)$u['role_name'])) ?></td>
                                     <td><?= htmlspecialchars($displayBranch) ?></td>
@@ -472,7 +513,7 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                                         <?php if ($isEmbedded): ?>
                                             <a class="btn btn-small" target="_top" href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php?drawer=manage&user_id=' . (int)$u['user_id'])) ?>">Manage</a>
                                         <?php else: ?>
-                                            <button type="button" class="btn btn-small open-user-drawer" data-user-id="<?= (int)$u['user_id'] ?>" data-full-name="<?= htmlspecialchars($u['full_name'], ENT_QUOTES, 'UTF-8') ?>" data-email="<?= htmlspecialchars((string)($u['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-username="<?= htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8') ?>" data-status="<?= htmlspecialchars($u['status'], ENT_QUOTES, 'UTF-8') ?>" data-role-id="<?= (int)$u['role_id'] ?>" data-branch-id="<?= $u['branch_id'] !== null ? (int)$u['branch_id'] : '' ?>" data-privilege-ids="<?= htmlspecialchars((string)($u['assigned_privileges'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-is-self="<?= $isSelf ? '1' : '0' ?>">Manage</button>
+                                            <button type="button" class="btn btn-small open-user-drawer" data-user-id="<?= (int)$u['user_id'] ?>" data-full-name="<?= htmlspecialchars($u['full_name'], ENT_QUOTES, 'UTF-8') ?>" data-email="<?= htmlspecialchars((string)($u['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-username="<?= htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8') ?>" data-status="<?= htmlspecialchars($u['status'], ENT_QUOTES, 'UTF-8') ?>" data-role-id="<?= (int)$u['role_id'] ?>" data-branch-id="<?= $u['branch_id'] !== null ? (int)$u['branch_id'] : '' ?>" data-privilege-ids="<?= htmlspecialchars((string)($u['assigned_privileges'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-profile-initials="<?= htmlspecialchars(profile_initials((string)$u['full_name']), ENT_QUOTES, 'UTF-8') ?>" data-has-profile-image="<?= !empty($u['profile_image']) ? '1' : '0' ?>" data-profile-url="<?= $hasProfileImage ? htmlspecialchars(profile_image_url((int)$u['user_id']), ENT_QUOTES, 'UTF-8') : '' ?>" data-is-self="<?= $isSelf ? '1' : '0' ?>">Manage</button>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -631,7 +672,7 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
 
             function restoreCreateFormState() {
                 if (!createForm || !createFormState) return;
-                createForm.querySelectorAll('input:not([type="hidden"]), select').forEach(function(field) {
+                createForm.querySelectorAll('input:not([type="hidden"]):not([type="file"]), select').forEach(function(field) {
                     if (field.name && createFormState.has(field.name)) {
                         field.value = createFormState.get(field.name);
                     }
@@ -742,11 +783,31 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                 document.getElementById(prefix + 'Role').value = button.dataset.roleId || '';
                 document.getElementById(prefix + 'Branch').value = button.dataset.branchId || '';
                 document.getElementById(prefix + 'Status').value = button.dataset.status === 'disabled' ? 'disabled' : 'active';
+                const profileImageInput = document.getElementById(prefix + 'ProfileImage');
+                if (profileImageInput) profileImageInput.value = '';
+                const removeProfileImage = document.getElementById(prefix + 'RemoveProfileImage');
+                if (removeProfileImage) {
+                    removeProfileImage.checked = false;
+                    removeProfileImage.disabled = button.dataset.hasProfileImage !== '1';
+                }
                 if (prefix === 'drawer') {
                     const nameParts = (button.dataset.fullName || '').trim().split(/\s+/).filter(Boolean);
                     document.getElementById('drawerFirstName').value = nameParts.shift() || '';
                     document.getElementById('drawerLastName').value = nameParts.join(' ');
                     document.getElementById('drawerEmail').value = button.dataset.email || '';
+                    const avatar = document.getElementById('drawerProfileAvatar');
+                    if (avatar) {
+                        avatar.innerHTML = '<span class="profile-avatar-fallback"></span>';
+                        avatar.querySelector('.profile-avatar-fallback').textContent = button.dataset.profileInitials || 'RM';
+                        if (button.dataset.profileUrl) {
+                            const image = document.createElement('img');
+                            image.className = 'profile-avatar-image';
+                            image.alt = '';
+                            image.src = button.dataset.profileUrl;
+                            image.addEventListener('error', function() { image.remove(); });
+                            avatar.appendChild(image);
+                        }
+                    }
                 } else {
                     document.getElementById(prefix + 'FullName').value = button.dataset.fullName || '';
                 }

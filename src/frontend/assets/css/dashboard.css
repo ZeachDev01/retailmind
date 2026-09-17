@@ -78,18 +78,25 @@
     width: 72px;
     height: 72px;
     flex: 0 0 72px;
-    display: grid;
-    place-items: center;
     border-radius: 18px;
     background: #e0f2fe;
     color: #075985;
     font-size: 1.35rem;
     font-weight: 800;
+    object-fit: cover;
 }
 .account-hero-copy { min-width: 0; }
 .account-hero-copy h2 { margin: 0; font-size: 1.35rem; }
 .account-hero-copy p { margin: .2rem 0 .65rem; color: var(--muted); }
 .account-badges { display: flex; flex-wrap: wrap; gap: .45rem; }
+.profile-picture-settings { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 1rem; align-items: start; margin-bottom: 1.2rem; padding-bottom: 1.2rem; border-bottom: 1px solid var(--border); }
+.profile-picture-preview { width: 96px; height: 96px; border: 1px solid var(--border); border-radius: 18px; background: #e0f2fe; object-fit: cover; }
+.profile-picture-controls { min-width: 0; display: flex; align-items: flex-end; gap: .65rem; flex-wrap: wrap; }
+.profile-picture-form { min-width: min(100%, 310px); flex: 1; }
+.profile-picture-form .form-group { margin-bottom: .65rem; }
+.profile-picture-form input[type="file"] { padding: .55rem; background: #fff; }
+.profile-picture-remove-form { padding-bottom: .05rem; }
+.btn-small { padding: .6rem .8rem; font-size: .85rem; }
 .drawer-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .drawer-section h3 { font-size: .92rem; margin-bottom: .65rem; }
 .drawer-action-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .6rem; }

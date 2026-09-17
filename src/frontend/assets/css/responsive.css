@@ -88,6 +88,13 @@
         font-size: .67rem;
         font-weight: 700;
         text-decoration: none;
+        overflow: hidden;
+    }
+
+    .admin-mobile-avatar .profile-avatar {
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
     }
 
     .app-shell { display: block; }
@@ -253,6 +260,8 @@
     .drawer-action-grid { grid-template-columns: 1fr; }
     .account-hero { align-items: flex-start; }
     .account-avatar { width: 56px; height: 56px; flex-basis: 56px; border-radius: 14px; font-size: 1.05rem; }
+    .profile-picture-settings { grid-template-columns: 72px minmax(0, 1fr); }
+    .profile-picture-preview { width: 72px; height: 72px; border-radius: 14px; }
     .detail-item.full,
     .form-grid .full { grid-column: auto; }
     .wizard-step-indicator { font-size: 0; }

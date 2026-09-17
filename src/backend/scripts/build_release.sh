@@ -6,9 +6,10 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/inventory_system"
 rsync -a "$ROOT/" "$TMP/inventory_system/" \
-  --exclude='.git/' --exclude='.env' --exclude='vendor/' \
+  --exclude='.git/' --exclude='.env' --exclude='.kilo/worktrees/' --exclude='vendor/' \
   --exclude='src/backend/storage/logs/*' --exclude='src/backend/storage/backups/*' \
   --exclude='src/backend/storage/sessions/*' --exclude='src/backend/storage/imports/*' \
+  --exclude='src/backend/storage/profile-images/*' \
   --exclude='src/backend/storage/exports/*' --exclude='src/backend/storage/receipts/*' \
   --exclude='src/backend/legacy/demandForcasting/logs/*' --exclude='src/backend/legacy/demandForcasting/models/*' \
   --exclude='src/backend/legacy/demandForcasting/__pycache__/' --exclude='**/__pycache__/' \
@@ -16,7 +17,7 @@ rsync -a "$ROOT/" "$TMP/inventory_system/" \
   --exclude='src/backend/legacy/demandForcasting/model_metrics.json' \
   --exclude='src/backend/legacy/demandForcasting/.training.lock' --exclude='src/backend/legacy/demandForcasting/.api-retrain.lock' \
   --exclude='.release/'
-for directory in logs backups sessions imports exports receipts; do
+for directory in logs backups sessions imports exports receipts profile-images; do
   mkdir -p "$TMP/inventory_system/src/backend/storage/$directory"
   touch "$TMP/inventory_system/src/backend/storage/$directory/.gitkeep"
 done
