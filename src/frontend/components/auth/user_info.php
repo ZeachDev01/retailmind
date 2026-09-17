@@ -151,9 +151,10 @@ $defaultProfileImageUrl = default_profile_image_url();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Info</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/user-info.css')) ?>">
 </head>
 
-<body>
+<body class="user-info-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
@@ -171,9 +172,10 @@ $defaultProfileImageUrl = default_profile_image_url();
                 <div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
 
-            <section class="account-hero">
+            <section class="account-hero user-info-hero">
                 <?= profile_avatar_html((int)$account['user_id'], $displayName, $account['profile_image'] ?? null, 'account-avatar') ?>
                 <div class="account-hero-copy">
+                    <span class="user-info-eyebrow">Signed-in account</span>
                     <h2><?= htmlspecialchars($account['full_name']) ?></h2>
                     <p>@<?= htmlspecialchars($account['username']) ?></p>
                     <div class="account-badges">
@@ -184,8 +186,8 @@ $defaultProfileImageUrl = default_profile_image_url();
                 </div>
             </section>
 
-            <div class="dashboard-layout equal">
-                <section class="dashboard-section">
+            <div class="user-info-layout">
+                <section class="dashboard-section profile-card">
                     <div class="section-header">
                         <div>
                             <h3>Profile</h3>
@@ -194,30 +196,43 @@ $defaultProfileImageUrl = default_profile_image_url();
                     </div>
                     <?php if (is_system_admin()): ?>
                         <div class="profile-picture-settings">
-                            <img id="profile-picture-preview" class="profile-picture-preview" src="<?= htmlspecialchars($profileImageUrl) ?>" alt="Current profile picture" data-default-src="<?= htmlspecialchars($defaultProfileImageUrl) ?>" onerror="this.onerror=null;this.src=this.dataset.defaultSrc">
+                            <div class="profile-picture-frame">
+                                <img id="profile-picture-preview" class="profile-picture-preview" src="<?= htmlspecialchars($profileImageUrl) ?>" alt="Current profile picture" data-default-src="<?= htmlspecialchars($defaultProfileImageUrl) ?>" onerror="this.onerror=null;this.src=this.dataset.defaultSrc">
+                            </div>
                             <div class="profile-picture-controls">
+                                <div class="profile-picture-copy">
+                                    <h4>Profile picture</h4>
+                                    <p>Use a clear, recent image so other administrators can identify your account.</p>
+                                </div>
                                 <form method="POST" enctype="multipart/form-data" class="profile-picture-form">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="replace_profile_image">
-                                    <div class="form-group">
-                                        <label for="profile_image"><?= !empty($account['profile_image']) ? 'Replace Profile Picture' : 'Upload Profile Picture' ?></label>
+                                    <div class="profile-picture-picker">
                                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= ProfileImageStorage::MAX_FILE_SIZE ?>">
-                                        <input type="file" id="profile_image" name="profile_image" accept="image/jpeg,image/png,image/gif,image/webp" required>
-                                        <small class="field-help">JPEG, PNG, GIF, or WebP. Maximum 2 MB.</small>
+                                        <input class="profile-picture-input" type="file" id="profile_image" name="profile_image" accept="image/jpeg,image/png,image/gif,image/webp" required>
+                                        <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-image"></i><?= !empty($account['profile_image']) ? 'Choose replacement' : 'Choose image' ?></label>
+                                        <span class="profile-picture-filename" id="profile-picture-filename">No file selected</span>
                                     </div>
-                                    <button class="btn btn-small" type="submit"><?= !empty($account['profile_image']) ? 'Replace Picture' : 'Upload Picture' ?></button>
+                                    <small class="field-help">JPEG, PNG, GIF, or WebP. Maximum 2 MB.</small>
+                                    <div class="profile-picture-actions">
+                                        <button class="btn btn-small" type="submit"><i class="bi bi-cloud-arrow-up"></i><?= !empty($account['profile_image']) ? 'Save replacement' : 'Upload picture' ?></button>
+                                    </div>
                                 </form>
                                 <?php if (!empty($account['profile_image'])): ?>
                                     <form method="POST" class="profile-picture-remove-form">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="remove_profile_image">
-                                        <button class="btn btn-quiet btn-small" type="submit">Remove Picture</button>
+                                        <button class="btn btn-quiet btn-small" type="submit"><i class="bi bi-trash3"></i>Remove picture</button>
                                     </form>
                                 <?php endif; ?>
                             </div>
                         </div>
                     <?php endif; ?>
-                    <form method="POST" class="form-grid" autocomplete="off">
+                    <div class="profile-details-heading">
+                        <h4>Personal information</h4>
+                        <p>These details appear across account records and administrative activity.</p>
+                    </div>
+                    <form method="POST" class="form-grid profile-details-form" autocomplete="off">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="update_profile">
                         <div class="form-group full">
@@ -226,43 +241,44 @@ $defaultProfileImageUrl = default_profile_image_url();
                         </div>
                         <div class="form-group full">
                             <label for="email">Email</label>
-                            <input type="email" id="email" name="email" value="<?= htmlspecialchars((string)($account['email'] ?? '')) ?>">
+                            <input type="email" id="email" name="email" value="<?= htmlspecialchars((string)($account['email'] ?? '')) ?>" placeholder="name@example.com">
                         </div>
                         <div class="form-group">
-                            <label>Username</label>
-                            <input value="<?= htmlspecialchars($account['username']) ?>" disabled>
+                            <label for="profile_username">Username</label>
+                            <input id="profile_username" value="<?= htmlspecialchars($account['username']) ?>" disabled>
                         </div>
                         <div class="form-group">
-                            <label>Role</label>
-                            <input value="<?= htmlspecialchars($roleLabel) ?>" disabled>
+                            <label for="profile_role">Role</label>
+                            <input id="profile_role" value="<?= htmlspecialchars($roleLabel) ?>" disabled>
                         </div>
-                        <div class="full u-flex-end">
-                            <button class="btn" type="submit">Save Profile</button>
+                        <div class="full profile-save-row">
+                            <button class="btn" type="submit"><i class="bi bi-check2-circle"></i>Save Profile</button>
                         </div>
                     </form>
                 </section>
 
-                <section class="dashboard-section">
-                    <div class="section-header">
+                <section class="dashboard-section account-details-card">
+                    <div class="section-header account-details-header">
                         <div>
+                            <span class="account-details-icon" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
                             <h3>Account Details</h3>
                             <p class="section-description">Your access and security metadata.</p>
                         </div>
                     </div>
-                    <div class="detail-grid">
+                    <div class="detail-grid account-detail-grid">
                         <div class="detail-item">
                             <span>User ID</span>
                             <strong>#<?= (int)$account['user_id'] ?></strong>
                         </div>
                         <div class="detail-item">
                             <span>Status</span>
-                            <strong><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></strong>
+                            <strong class="account-status-value <?= $account['status'] === 'active' ? 'is-active' : 'is-inactive' ?>"><i class="bi <?= $account['status'] === 'active' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill' ?>"></i><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></strong>
                         </div>
-                        <div class="detail-item">
+                        <div class="detail-item full">
                             <span>Last Login</span>
                             <strong><?= htmlspecialchars(account_format_datetime($account['last_login_at'] ?? null)) ?></strong>
                         </div>
-                        <div class="detail-item">
+                        <div class="detail-item full">
                             <span>Password Changed</span>
                             <strong><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></strong>
                         </div>
@@ -271,6 +287,10 @@ $defaultProfileImageUrl = default_profile_image_url();
                             <strong><?= htmlspecialchars(account_format_datetime($account['created_at'] ?? null)) ?></strong>
                         </div>
                     </div>
+                    <a class="account-security-link" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>">
+                        <span><i class="bi bi-key"></i><strong>Security settings</strong></span>
+                        <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                    </a>
                 </section>
             </div>
         </main>
@@ -279,6 +299,7 @@ $defaultProfileImageUrl = default_profile_image_url();
         (function() {
             var input = document.getElementById('profile_image');
             var preview = document.getElementById('profile-picture-preview');
+            var filename = document.getElementById('profile-picture-filename');
             if (!input || !preview) return;
 
             input.addEventListener('change', function() {
@@ -287,6 +308,7 @@ $defaultProfileImageUrl = default_profile_image_url();
                 var allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
                 if (allowedTypes.indexOf(file.type) === -1 || file.size > <?= ProfileImageStorage::MAX_FILE_SIZE ?>) {
                     input.value = '';
+                    if (filename) filename.textContent = 'No file selected';
                     if (window.RetailMindUI) {
                         RetailMindUI.toast('Choose a JPEG, PNG, GIF, or WebP image no larger than 2 MB.', 'warning');
                     }
@@ -298,6 +320,7 @@ $defaultProfileImageUrl = default_profile_image_url();
                     preview.src = event.target.result;
                 });
                 reader.readAsDataURL(file);
+                if (filename) filename.textContent = file.name;
             });
         })();
     </script>

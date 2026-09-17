@@ -64,3 +64,28 @@
 - Added icons to all three User Management summaries and all three Audit Logs summaries using the shared dashboard card pattern, plus focused smoke regressions.
 - Focused PHP lint, 28 smoke checks, and the whitespace check pass; adjusted Disabled Users to show warning styling only when disabled accounts exist.
 - Final icon-card verification passed: all 197 PHP files linted successfully, all 28 smoke checks passed, and `git diff --check` found no whitespace errors.
+
+## 2026-09-17
+
+- Started diagnosis and redesign of the Admin User Info profile image and page layout from the supplied screenshot.
+- Restored the existing project plan and recorded current Windows sandbox limitations affecting `rtk`, Git ownership checks, and the ripgrep shim.
+- Located the User Info PHP, profile-image endpoint, and current shared profile CSS; confirmed the screenshot's oversized image is a frontend layout/cascade issue rather than an upload or serving failure.
+- Tested the initial cascade hypotheses: no duplicate preview override exists, and the stacked hero rendering points to missing shared avatar-child containment as the primary defect.
+- Located the shared avatar base selectors in `global.css`; adjusted the CSS diagnostic after an invalid PowerShell pipeline prevented the first balance check.
+- Confirmed the shared avatar rules are correct on disk and narrowed the failure to the imported/cached styling path; selected a dedicated User Info stylesheet with redundant, page-scoped media containment as the robust fix.
+- Browser-control discovery confirmed the required runtime is unavailable; prepared to use the existing smoke suite as the regression seam and static responsive checks for layout verification.
+- Added User Info layout/media containment regressions and confirmed they fail before the implementation on the missing page namespace, dedicated stylesheet, bounded frame, and cover rules.
+- Added the page-scoped User Info stylesheet and restructured the profile page into a responsive identity banner, bounded photo editor, personal-information form, and account-details panel.
+- The focused PHP lint passes, both new regressions pass within all 36 smoke checks, and the new stylesheet is brace-balanced (65/65).
+- Reviewed the implementation diff and removed fragile absolute positioning from the remove-photo action; account status styling now handles both active and inactive states correctly.
+- Repository verification passed: 208 PHP files linted, all 36 smoke checks passed, profile image storage tests passed, the new stylesheet is brace-balanced (67/67), and `git diff --check` found no whitespace errors.
+- Responsive source invariants passed for the dedicated stylesheet, bounded cover crop, two-column desktop layout, tablet/mobile collapses, and stable remove-photo positioning.
+- Final cleanup passed: no debug instrumentation or trailing whitespace remains, and the final Git whitespace check is clean.
+- The planning helper could not parse this repository's accumulated checkbox plan (`0/0 phases`); manual inspection confirms all 28 phases are complete.
+- User reported the avatar still stacks after navigating away from User Info; the new screenshot confirms the problem is present in the shared sidebar on Admin Dashboard while the page-scoped User Info override works.
+- Inspected shared shell coverage: 42 pages use the unversioned compatibility bundle, while every affected authenticated page renders the avatar through `sidebar.php`; selected the sidebar asset loader as the narrow global seam to test.
+- Reproduced the structural failure from source: removing the `global.css` avatar rules leaves `.sidebar-avatar` as an inline span, so its fallback and image stack exactly as shown. Confirmed profile image URLs are already cache-versioned.
+- Added cross-page avatar regressions and confirmed they fail before the fix on the missing cache-versioned shell link and independent containment stylesheet.
+- Added cache-versioned `avatars.css` to the shared sidebar shell. Focused sidebar lint passes, all 38 smoke checks pass, and the new stylesheet is brace-balanced (3/3).
+- Audited all avatar helper call sites; every call is covered by the sidebar shell asset. Preserved unrelated untracked image files already in the worktree.
+- Final cross-page verification passed: 208 PHP files linted, all 38 smoke checks passed, profile image storage tests passed, both affected stylesheets are balanced and free of trailing whitespace, debug instrumentation is absent, and `git diff --check` is clean.

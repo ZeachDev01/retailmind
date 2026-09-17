@@ -29,6 +29,12 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - [x] Phase 23: Inspect User Management and Audit Logs summary markup and styling.
 - [x] Phase 24: Add meaningful icons to the requested summary cards without changing behavior.
 - [x] Phase 25: Run focused regressions and repository verification checks.
+- [x] Phase 26: Reproduce and diagnose the Admin User Info image/layout defects.
+- [x] Phase 27: Implement a responsive profile image treatment and improved page layout.
+- [x] Phase 28: Run visual, responsive, lint, smoke, and diff verification.
+- [x] Phase 29: Reproduce the cross-page/sidebar avatar failure and inspect shared asset loading.
+- [x] Phase 30: Move avatar containment into a cache-safe shared shell asset and add regression coverage.
+- [x] Phase 31: Verify avatar rendering invariants across page navigation and rerun repository checks.
 
 ## Decisions
 - Prefer the project's existing layout, components, and dependency versions over introducing a second table stack.
@@ -47,6 +53,8 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - Preserve notification preference persistence and validation while changing only where the controls are presented.
 - Make `components/auth/preferences.php` the canonical account-level Preferences page, keep the old notification URL as a compatibility redirect, and scope its styles independently from the notification inbox.
 - Reuse Bootstrap Icons already loaded by the application and style icons through page-specific classes rather than inline presentation.
+- Scope the User Info redesign to a directly linked stylesheet so profile-avatar containment is resilient to stale cached imports in the shared compatibility bundle.
+- Load critical avatar geometry from the shared sidebar shell with a `filemtime` query so navigation across roles/pages cannot reuse stale containment rules.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -63,3 +71,10 @@ Replace modal-only administration workflows with dedicated pages while preservin
 | Add Staff modal could not reach lower fields | 1 | Removed the contradictory dialog overflow rules and added a viewport-constrained scroll region to the modal form. |
 | Browser-control runtime remains unavailable for modal-scroll QA | 1 | Added a deterministic stylesheet regression and completed static/runtime verification instead. |
 | `git diff --check` found a blank line at the end of `notifications.css` after removing the legacy preference block | 1 | Removed the extra trailing blank line and reran verification. |
+| The required `rtk` wrapper cannot execute in the Windows sandbox | 1 | Continue with direct PowerShell commands and record the environment limitation. |
+| Git rejected the repository due to sandbox-user ownership during this session | 1 | Use command-scoped `safe.directory` for read-only Git inspection. |
+| The `rg.exe` WinGet shim is not executable in the sandbox | 1 | Use PowerShell `Get-ChildItem` and `Select-String` for repository search. |
+| PowerShell rejected piping directly from a `foreach` statement in the CSS balance check | 1 | Capture the loop results in a variable, then format the variable in a separate statement. |
+| PowerShell `foreach` pipeline mistake recurred during avatar coverage audit | 2 | Corrected immediately by assigning loop output to `$rows`; retained the earlier command pattern as a known Windows-shell pitfall. |
+| Browser-control JavaScript runtime is unavailable for User Info visual QA | 1 | Use the supplied reproduction screenshot plus deterministic markup/CSS regressions and responsive source verification. |
+| Planning completion helper reported `0/0 phases` for the accumulated checkbox-format plan | 1 | Manually confirmed all 28 listed phases are checked complete; final verification results are recorded in `progress.md`. |

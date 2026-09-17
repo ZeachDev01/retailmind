@@ -13,6 +13,9 @@ try {
 $sidebarUserName = trim((string)($_SESSION['full_name'] ?? 'RetailMind User'));
 $sidebarProfileImage = isset($_SESSION['profile_image']) ? (string)$_SESSION['profile_image'] : null;
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
+$avatarStylesheetPath = __DIR__ . '/../assets/css/avatars.css';
+$avatarStylesheetVersion = is_file($avatarStylesheetPath) ? (string)filemtime($avatarStylesheetPath) : '1';
+$avatarStylesheetUrl = app_url('assets/css/avatars.css') . '?v=' . rawurlencode($avatarStylesheetVersion);
 $commandProductTarget = in_array($role, ['admin', 'super_admin', 'inventory_manager'], true) ? app_url('components/inventory_management/products.php') : app_url('components/cashier/pos.php');
 $mobileHomeTarget = $role === 'cashier' ? 'components/cashier/pos.php' : ($role === 'inventory_manager' ? 'components/inventory_management/dashboard.php' : 'components/dashboard.php');
 $flashMessages = [];
@@ -261,6 +264,7 @@ $roleSections = [
 
 $sections = $roleSections[$role] ?? [];
 ?>
+<link rel="stylesheet" href="<?= sidebar_e($avatarStylesheetUrl) ?>" data-avatar-styles>
 <script>
     (function() {
         var href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';

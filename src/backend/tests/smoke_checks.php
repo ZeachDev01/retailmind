@@ -103,10 +103,31 @@ $checks = [
         'needles' => ['replace_profile_image', 'remove_profile_image', 'is_system_admin()', "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp'],
         'forbidden' => ["\$_POST['user_id']", "\$_GET['user_id']", "\$_REQUEST['user_id']"],
     ],
+    'Admin User Info uses a dedicated responsive layout' => [
+        'file' => 'src/frontend/components/auth/user_info.php',
+        'needles' => ['user-info.css', 'class="user-info-page"', 'user-info-layout', 'profile-picture-frame', 'profile-details-form'],
+    ],
+    'Admin User Info keeps profile media contained' => [
+        'file' => 'src/frontend/assets/css/user-info.css',
+        'needles' => ['.user-info-page .profile-avatar', '.profile-picture-frame', 'overflow: hidden;', 'aspect-ratio: 1;', '.profile-picture-preview', 'object-fit: cover;', '@media (max-width: 720px)'],
+    ],
+    'Shared shell loads cache-safe avatar styling' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['assets/css/avatars.css', 'filemtime', 'data-avatar-styles'],
+    ],
+    'Shared avatar media remains contained across pages' => [
+        'file' => 'src/frontend/assets/css/avatars.css',
+        'needles' => ['.profile-avatar {', 'position: relative;', 'display: inline-grid;', 'overflow: hidden;', '.profile-avatar-image {', 'position: absolute;', 'inset: 0;', 'width: 100%;', 'height: 100%;', 'object-fit: cover;'],
+    ],
     'Profile pictures are delivered without exposing storage paths' => [
         'file' => 'src/frontend/components/auth/profile_image.php',
         'needles' => ['is_logged_in()', 'profile_image_storage()', 'X-Content-Type-Options: nosniff', 'Cache-Control: private'],
         'forbidden' => ["\$_GET['path']", "\$_GET['filename']"],
+    ],
+    'Default profile picture uses the replacement asset' => [
+        'file' => 'src/backend/includes/auth.php',
+        'needles' => ["assets/img/new-default-profile.svg.png"],
+        'forbidden' => ["assets/img/default-profile.svg"],
     ],
     'Former notification preferences route redirects' => [
         'file' => 'src/frontend/components/notification/notification_preferences.php',

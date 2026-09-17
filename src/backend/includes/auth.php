@@ -239,7 +239,7 @@ function is_system_admin(): bool
 
 function default_profile_image_url(): string
 {
-    return app_url('assets/img/default-profile.svg');
+    return app_url('assets/img/new-default-profile.svg.png');
 }
 
 function has_privilege(string $privilegeKey): bool
