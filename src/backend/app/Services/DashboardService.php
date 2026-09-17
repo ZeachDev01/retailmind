@@ -173,16 +173,52 @@ class DashboardService
         return $stmt->fetchAll();
     }
 
-    public function getSalesTrend(int $days = 30): array
+    public function getSalesTrend(int $days = 30, ?DateTimeImmutable $asOf = null): array
     {
         $days = max(7, min(365, $days));
-        return $this->pdo->query(
-            "SELECT DATE(sale_date) AS sale_day, COALESCE(SUM(total_amount), 0) AS total_sales, COUNT(*) AS transactions
+        $asOf = ($asOf ?? new DateTimeImmutable('today'))->setTime(0, 0);
+        $start = $asOf->modify('-' . ($days - 1) . ' days');
+        $endExclusive = $asOf->modify('+1 day');
+
+        // TIMESTAMP values are converted using the MySQL session timezone. Align it
+        // with the configured PHP/application timezone before applying day boundaries.
+        $timezoneStmt = $this->pdo->prepare('SET time_zone = ?');
+        $timezoneStmt->execute([$asOf->format('P')]);
+
+        $stmt = $this->pdo->prepare(
+            "SELECT DATE(sale_date) AS sale_day,
+                    COALESCE(SUM(total_amount), 0) AS total_sales,
+                    COUNT(*) AS transactions
              FROM sales
-             WHERE sale_date >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)
+             WHERE sale_date >= ? AND sale_date < ?
              GROUP BY DATE(sale_date)
              ORDER BY sale_day ASC"
-        )->fetchAll();
+        );
+        $stmt->execute([
+            $start->format('Y-m-d H:i:s'),
+            $endExclusive->format('Y-m-d H:i:s'),
+        ]);
+
+        $recordedByDay = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $recordedByDay[(string)$row['sale_day']] = [
+                'sale_day' => (string)$row['sale_day'],
+                'total_sales' => number_format((float)$row['total_sales'], 2, '.', ''),
+                'transactions' => (int)$row['transactions'],
+            ];
+        }
+
+        $trend = [];
+        for ($day = $start; $day <= $asOf; $day = $day->modify('+1 day')) {
+            $date = $day->format('Y-m-d');
+            $trend[] = $recordedByDay[$date] ?? [
+                'sale_day' => $date,
+                'total_sales' => '0.00',
+                'transactions' => 0,
+            ];
+        }
+
+        return $trend;
     }
 
     public function getInventoryValueByCategory(int $limit = 8): array

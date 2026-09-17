@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 ZIP="$(mktemp --suffix=.zip)"
 trap 'rm -f "$ZIP"' EXIT
 bash "$ROOT/src/backend/scripts/build_release.sh" "$ZIP" >/dev/null

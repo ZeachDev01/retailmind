@@ -159,6 +159,16 @@ bash src/backend/tests/run_all.sh
 
 The included GitHub Actions workflow starts MySQL, imports the fresh schema, runs migrations, executes database integration checks, compiles Python forecasting code, lints PHP files, and verifies that release ZIPs contain no runtime or sensitive artifacts.
 
+## Local Sales Trend demo data
+
+The Sales Trend chart supports 7, 30, and 90 calendar-day ranges, including today. It returns explicit zero-value points for dates without sales. To create deterministic local demo data for this chart, first import `product_seed.csv`, then run this targeted command from the repository root:
+
+```bash
+php src/backend/scripts/seed_sales_trend.php --confirm-local
+```
+
+The command is intentionally not part of migrations, normal startup, or production seeding. It refuses to run unless `APP_ENV=development`, `DB_HOST` is localhost/loopback, and `--confirm-local` is supplied. It creates 91 days of seed-owned sales history and safely replaces only records associated with the reserved `RM_SEED_SALES_TREND_V1` identifiers when rerun; it never resets the database.
+
 ## Automatic maintenance
 
 ### Windows Task Scheduler
