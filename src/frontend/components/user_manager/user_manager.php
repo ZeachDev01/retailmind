@@ -13,17 +13,37 @@ $branchFormValues = ['branch_name' => '', 'branch_code' => ''];
 
 function get_user_snapshot(PDO $pdo, int $userId): ?array
 {
-    $stmt = $pdo->prepare("SELECT user_id, username, full_name, email, profile_image, status, role_id, branch_id FROM users WHERE user_id = ?");
+    $stmt = $pdo->prepare(
+        "SELECT u.user_id, u.username, u.full_name, u.email, u.profile_image, u.status, u.role_id, u.branch_id, r.role_name
+         FROM users u
+         JOIN roles r ON r.role_id = u.role_id
+         WHERE u.user_id = ?"
+    );
     $stmt->execute([$userId]);
     $user = $stmt->fetch();
     return $user ?: null;
+}
+
+function user_is_super_admin(array $user): bool
+{
+    return ($user['role_name'] ?? '') === 'super_admin';
+}
+
+function can_manage_user(array $user): bool
+{
+    if (!user_is_super_admin($user)) {
+        return true;
+    }
+
+    return current_role() === 'super_admin'
+        && (int)($user['user_id'] ?? 0) === (int)($_SESSION['user_id'] ?? 0);
 }
 
 function role_requires_branch(PDO $pdo, int $roleId): bool
 {
     $stmt = $pdo->prepare("SELECT role_name FROM roles WHERE role_id = ?");
     $stmt->execute([$roleId]);
-    return in_array((string)$stmt->fetchColumn(), ['inventory_manager', 'cashier'], true);
+    return in_array((string)$stmt->fetchColumn(), ['admin', 'inventory_manager', 'cashier'], true);
 }
 
 function valid_branch_assignment(PDO $pdo, ?int $branchId): bool
@@ -60,7 +80,7 @@ function ensure_single_super_admin(PDO $pdo, int $roleId, ?int $excludeUserId = 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     if ((int)$stmt->fetchColumn() > 0) {
-        throw new InvalidArgumentException('Only one Super Admin account is allowed.');
+        throw new InvalidArgumentException('Only one Super Administrator account is allowed.');
     }
 }
 
@@ -131,11 +151,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $roleNameStmt = $pdo->prepare('SELECT role_name FROM roles WHERE role_id = ?');
             $roleNameStmt->execute([$roleId]);
             if ($roleNameStmt->fetchColumn() === 'super_admin') {
-                throw new InvalidArgumentException('The Super Admin account is managed separately and cannot be created here.');
+                throw new InvalidArgumentException('The Super Administrator account is managed separately and cannot be created here.');
             }
             ensure_single_super_admin($pdo, $roleId);
             if (role_requires_branch($pdo, $roleId) && $branchId === null) {
-                throw new InvalidArgumentException('Inventory Managers and Cashiers must be assigned to a branch.');
+                throw new InvalidArgumentException('Administrators, Inventory Managers, and Cashiers must be assigned to a branch.');
             }
 
             $newProfileImage = profile_image_storage()->store($_FILES['profile_image'] ?? null);
@@ -201,9 +221,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
         if (!$before) {
             $message = 'User not found.';
             $messageClass = 'tag-warning';
+        } elseif (!can_manage_user($before)) {
+            $message = 'The Super Administrator account is protected and cannot be managed by another administrator.';
+            $messageClass = 'tag-warning';
         } else {
-            $status = in_array($requestedStatus, ['active', 'disabled'], true) ? $requestedStatus : $before['status'];
-            $roleId = $requestedRoleId > 0 ? $requestedRoleId : (int)$before['role_id'];
+            $isProtectedSuperAdmin = user_is_super_admin($before);
+            $status = $isProtectedSuperAdmin
+                ? $before['status']
+                : (in_array($requestedStatus, ['active', 'disabled'], true) ? $requestedStatus : $before['status']);
+            $roleId = $isProtectedSuperAdmin
+                ? (int)$before['role_id']
+                : ($requestedRoleId > 0 ? $requestedRoleId : (int)$before['role_id']);
+            if ($isProtectedSuperAdmin) {
+                $requestedBranchId = $before['branch_id'] !== null ? (int)$before['branch_id'] : null;
+            }
             if ($userId === (int)$_SESSION['user_id'] && $status === 'disabled') {
                 $message = 'You cannot disable your own account while logged in.';
                 $messageClass = 'tag-warning';
@@ -217,7 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                 $message = 'Please choose an active branch.';
                 $messageClass = 'tag-warning';
             } elseif (role_requires_branch($pdo, $roleId) && $requestedBranchId === null) {
-                $message = 'Inventory Managers and Cashiers must be assigned to a branch.';
+                $message = 'Administrators, Inventory Managers, and Cashiers must be assigned to a branch.';
                 $messageClass = 'tag-warning';
             } else {
                 $newProfileImage = null;
@@ -267,7 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                         }
                     }
 
-                    if (isset($_POST['manage_privileges'])) {
+                    if (!$isProtectedSuperAdmin && isset($_POST['manage_privileges'])) {
                         $pdo->prepare('DELETE FROM user_privileges WHERE user_id = ?')->execute([$userId]);
                         foreach (array_unique(array_map('intval', (array)($_POST['privilege_ids'] ?? []))) as $privilegeId) {
                             if ($privilegeId > 0) {
@@ -311,13 +342,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
     csrf_verify();
     $userId = (int)($_POST['user_id'] ?? 0);
+    $before = get_user_snapshot($pdo, $userId);
 
-    if ($userId === (int)$_SESSION['user_id']) {
+    if (!$before) {
+        $message = 'User not found.';
+        $messageClass = 'tag-warning';
+    } elseif (user_is_super_admin($before)) {
+        $message = 'The Super Administrator account is protected and cannot be deleted.';
+        $messageClass = 'tag-warning';
+    } elseif ($userId === (int)$_SESSION['user_id']) {
         $message = 'You cannot delete your own account while logged in.';
         $messageClass = 'tag-warning';
     } else {
         try {
-            $before = get_user_snapshot($pdo, $userId);
             $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
             $stmt->execute([$userId]);
             if ($stmt->rowCount() > 0) {
@@ -376,16 +413,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'toggl
     $toggleId = (int)($_POST['user_id'] ?? 0);
     $before = get_user_snapshot($pdo, $toggleId);
 
-    if ($before) {
-        $stmt = $pdo->prepare("UPDATE users SET status = IF(status='active','disabled','active'), session_version = session_version + 1 WHERE user_id = ?");
-        $stmt->execute([$toggleId]);
-        $after = get_user_snapshot($pdo, $toggleId);
-        $action = ($after['status'] ?? '') === 'disabled' ? 'User deactivation' : 'User activation';
-        log_activity($pdo, (int)$_SESSION['user_id'], $action, 'Users', $toggleId, $before, $after);
-    }
+    if ($before && user_is_super_admin($before)) {
+        http_response_code(403);
+        $message = 'The Super Administrator account is protected and its status cannot be changed.';
+        $messageClass = 'tag-warning';
+    } else {
+        if ($before) {
+            $stmt = $pdo->prepare("UPDATE users SET status = IF(status='active','disabled','active'), session_version = session_version + 1 WHERE user_id = ?");
+            $stmt->execute([$toggleId]);
+            $after = get_user_snapshot($pdo, $toggleId);
+            $action = ($after['status'] ?? '') === 'disabled' ? 'User deactivation' : 'User activation';
+            log_activity($pdo, (int)$_SESSION['user_id'], $action, 'Users', $toggleId, $before, $after);
+        }
 
-    header('Location: user_manager.php' . (isset($_GET['embed']) ? '?embed=1' : ''));
-    exit;
+        header('Location: user_manager.php' . (isset($_GET['embed']) ? '?embed=1' : ''));
+        exit;
+    }
 }
 
 $roles = $pdo->query("SELECT * FROM roles")->fetchAll();
@@ -408,7 +451,7 @@ $autoOpenDrawerUserId = 0;
 if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
     $requestedDrawerUserId = (int)($_GET['user_id'] ?? 0);
     foreach ($users as $user) {
-        if ((int)$user['user_id'] === $requestedDrawerUserId) {
+        if ((int)$user['user_id'] === $requestedDrawerUserId && can_manage_user($user)) {
             $autoOpenDrawerUserId = $requestedDrawerUserId;
             break;
         }
@@ -502,6 +545,8 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                                 $createdLabel = !empty($u['created_at']) ? format_display_date(date('Y-m-d', strtotime((string)$u['created_at']))) : 'Unknown';
                                 $lastActive = user_last_active_label($u['last_login'] ?? null);
                                 $isSelf = (int)$u['user_id'] === (int)$_SESSION['user_id'];
+                                $isProtectedSuperAdmin = user_is_super_admin($u);
+                                $canManageThisUser = can_manage_user($u);
                                 $hasProfileImage = !empty($u['profile_image']) && profile_image_storage()->exists((string)$u['profile_image']);
                                 ?>
                                 <tr>
@@ -510,10 +555,12 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                                     <td class="user-role-cell"><?= htmlspecialchars(display_label((string)$u['role_name'])) ?></td>
                                     <td><?= htmlspecialchars($displayBranch) ?></td>
                                     <td class="action-cell">
-                                        <?php if ($isEmbedded): ?>
+                                        <?php if (!$canManageThisUser): ?>
+                                            <span class="user-protected-label" title="Only the Super Administrator can manage this account"><i class="bi bi-lock-fill" aria-hidden="true"></i> Protected</span>
+                                        <?php elseif ($isEmbedded): ?>
                                             <a class="btn btn-small" target="_top" href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php?drawer=manage&user_id=' . (int)$u['user_id'])) ?>">Manage</a>
                                         <?php else: ?>
-                                            <button type="button" class="btn btn-small open-user-drawer" data-user-id="<?= (int)$u['user_id'] ?>" data-full-name="<?= htmlspecialchars($u['full_name'], ENT_QUOTES, 'UTF-8') ?>" data-email="<?= htmlspecialchars((string)($u['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-username="<?= htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8') ?>" data-status="<?= htmlspecialchars($u['status'], ENT_QUOTES, 'UTF-8') ?>" data-role-id="<?= (int)$u['role_id'] ?>" data-branch-id="<?= $u['branch_id'] !== null ? (int)$u['branch_id'] : '' ?>" data-privilege-ids="<?= htmlspecialchars((string)($u['assigned_privileges'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-profile-initials="<?= htmlspecialchars(profile_initials((string)$u['full_name']), ENT_QUOTES, 'UTF-8') ?>" data-has-profile-image="<?= !empty($u['profile_image']) ? '1' : '0' ?>" data-profile-url="<?= $hasProfileImage ? htmlspecialchars(profile_image_url((int)$u['user_id']), ENT_QUOTES, 'UTF-8') : '' ?>" data-is-self="<?= $isSelf ? '1' : '0' ?>">Manage</button>
+                                            <button type="button" class="btn btn-small open-user-drawer" data-user-id="<?= (int)$u['user_id'] ?>" data-full-name="<?= htmlspecialchars($u['full_name'], ENT_QUOTES, 'UTF-8') ?>" data-email="<?= htmlspecialchars((string)($u['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-username="<?= htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8') ?>" data-status="<?= htmlspecialchars($u['status'], ENT_QUOTES, 'UTF-8') ?>" data-role-id="<?= (int)$u['role_id'] ?>" data-branch-id="<?= $u['branch_id'] !== null ? (int)$u['branch_id'] : '' ?>" data-privilege-ids="<?= htmlspecialchars((string)($u['assigned_privileges'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-profile-initials="<?= htmlspecialchars(profile_initials((string)$u['full_name']), ENT_QUOTES, 'UTF-8') ?>" data-has-profile-image="<?= !empty($u['profile_image']) ? '1' : '0' ?>" data-profile-url="<?= $hasProfileImage ? htmlspecialchars(profile_image_url((int)$u['user_id']), ENT_QUOTES, 'UTF-8') : '' ?>" data-is-self="<?= $isSelf ? '1' : '0' ?>" data-is-super-admin="<?= $isProtectedSuperAdmin ? '1' : '0' ?>">Manage</button>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -829,6 +876,7 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
 
             function openDrawer(button) {
                 const isSelf = button.dataset.isSelf === '1';
+                const isProtectedSuperAdmin = button.dataset.isSuperAdmin === '1';
                 selectedUsername = button.dataset.username || '';
                 fillEditFields('drawer', button);
 
@@ -843,11 +891,13 @@ if (!$isEmbedded && ($_GET['drawer'] ?? '') === 'manage') {
                 const privilegesGroup = document.getElementById('drawerPrivilegesGroup');
                 const selectedRoleText = drawerRole.options[drawerRole.selectedIndex] ? drawerRole.options[drawerRole.selectedIndex].textContent.trim().toLowerCase() : '';
                 const canManageExtraPrivileges = selectedRoleText === 'admin' && !isSelf;
-                drawerRole.disabled = isSelf;
+                drawerRole.disabled = isSelf || isProtectedSuperAdmin;
                 drawerRole.dataset.isSelf = isSelf ? '1' : '0';
-                drawerRole.title = isSelf ? 'You cannot change your own role.' : '';
-                drawerBranch.disabled = false;
-                drawerStatus.disabled = isSelf;
+                drawerRole.title = isProtectedSuperAdmin ? 'The Super Administrator role is protected.' : (isSelf ? 'You cannot change your own role.' : '');
+                drawerBranch.disabled = isProtectedSuperAdmin;
+                drawerBranch.title = isProtectedSuperAdmin ? 'The Super Administrator branch assignment is protected.' : '';
+                drawerStatus.disabled = isSelf || isProtectedSuperAdmin;
+                drawerStatus.title = isProtectedSuperAdmin ? 'The Super Administrator account cannot be disabled.' : '';
                 managePrivileges.disabled = !canManageExtraPrivileges;
                 privilegesGroup.hidden = selectedRoleText !== 'admin';
 

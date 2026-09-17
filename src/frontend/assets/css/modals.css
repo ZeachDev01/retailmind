@@ -875,6 +875,19 @@ body.audit-log-open {
   background: #24344f;
   color: #f8fafc;
 }
+.manage-users-page .user-protected-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.manage-users-page .user-protected-label i {
+  color: #f59e0b;
+}
 .manage-users-embedded .manage-users-toolbar {
   display: flex;
   align-items: center;

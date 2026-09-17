@@ -65,6 +65,29 @@ $checks = [
         'file' => 'src/frontend/components/user_manager/user_manager.php',
         'needles' => ['stat-card with-icon', 'bi-people-fill', 'bi-person-check-fill', 'bi-person-x-fill'],
     ],
+    'Super Admin account is protected' => [
+        'file' => 'src/frontend/components/user_manager/user_manager.php',
+        'needles' => ['function can_manage_user', 'user_is_super_admin($before)', 'The Super Administrator account is protected', 'user-protected-label', 'bi-lock-fill'],
+    ],
+    'Staff role selector excludes protected roles' => [
+        'file' => 'src/frontend/components/user_manager/modals/manage_user_modal.php',
+        'needles' => ["!in_array(\$r['role_name'], ['super_admin', 'seller'], true)"],
+        'forbidden' => ["current_role() === 'super_admin'"],
+    ],
+    'Staff creation requires an active branch' => [
+        'file' => 'src/frontend/components/user_manager/modals/add_user_modal.php',
+        'needles' => ['<select name="branch_id" required>'],
+        'forbidden' => ['No branch (administrators only)'],
+    ],
+    'Staff management requires an active branch' => [
+        'file' => 'src/frontend/components/user_manager/modals/manage_user_modal.php',
+        'needles' => ['<select id="drawerBranch" name="branch_id" required>'],
+        'forbidden' => ['No branch (administrators only)'],
+    ],
+    'All operational staff roles require a branch' => [
+        'file' => 'src/frontend/components/user_manager/user_manager.php',
+        'needles' => ["['admin', 'inventory_manager', 'cashier']", 'Administrators, Inventory Managers, and Cashiers must be assigned to a branch.'],
+    ],
     'Manage Users contextual actions present' => [
         'file' => 'src/frontend/components/user_manager/user_manager.php',
         'needles' => ['manage-users-section-action', 'id="openUserModal"', 'id="openBranchModal"', "include __DIR__ . '/modals/add_branch_modal.php'", "selectManagementTab('branches')"],

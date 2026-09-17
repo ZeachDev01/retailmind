@@ -59,8 +59,7 @@
                 <div class="user-drawer-panel" id="drawerPanelBranch" role="tabpanel" aria-labelledby="drawerTabBranch" data-user-drawer-panel="branch" hidden>
                     <div class="form-group">
                         <label for="drawerBranch">Assigned Branch</label>
-                        <select id="drawerBranch" name="branch_id">
-                            <option value="">No branch (administrators only)</option>
+                        <select id="drawerBranch" name="branch_id" required>
                             <?php foreach ($branches as $branch): ?>
                                 <?php if ($branch['status'] === 'active'): ?>
                                     <option value="<?= (int)$branch['branch_id'] ?>"><?= htmlspecialchars(display_person_name((string)$branch['branch_name']) . ' (' . $branch['branch_code'] . ')') ?></option>

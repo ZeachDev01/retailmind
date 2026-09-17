@@ -50,8 +50,7 @@
             </div>
             <div class="form-group">
                 <label>Assigned Branch</label>
-                <select name="branch_id">
-                    <option value="" <?= $createFormValues['branch_id'] === '' ? ' selected' : '' ?>>No branch (administrators only)</option>
+                <select name="branch_id" required>
                     <?php foreach ($branches as $branch): ?>
                         <?php if ($branch['status'] === 'active'): ?>
                             <option value="<?= (int)$branch['branch_id'] ?>" <?= $createFormValues['branch_id'] === (string)$branch['branch_id'] ? ' selected' : '' ?>><?= htmlspecialchars(display_person_name((string)$branch['branch_name']) . ' (' . $branch['branch_code'] . ')') ?></option>
