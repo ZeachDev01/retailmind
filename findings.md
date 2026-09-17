@@ -79,6 +79,15 @@
 - The shared fix is `avatars.css`, linked by `sidebar.php` with a `filemtime` query. It makes the wrapper an overflow-hidden positioning context and absolutely overlays the image on the fallback, independent of the cached compatibility bundle.
 - Every frontend `profile_avatar_html()` call is on a page that includes `sidebar.php`, so the shared shell link covers the desktop sidebar, mobile shell, User Info hero, and User Management avatars without extra page-specific links.
 - Two unrelated untracked image files (`image.png` and `src/frontend/assets/img/new-default-profile.svg.png`) are present in the worktree and were left untouched.
+- Three issues currently carry `ready-for-agent`: #2 is the parent pilot spec, #3 is the unblocked Receipt Management slice, and #4 is explicitly blocked by #3. This implementation targets #3.
+- Issue #3 explicitly pre-agrees two public test seams: one high-level receipt server-side data contract and page-level smoke coverage.
+- Receipt Management previously loaded every permitted receipt into PHP and rendered the entire table; cashiers were scoped to their own `cashier_id`, while admin, super-admin, and inventory-manager roles shared unrestricted history access.
+- Sales do not store `branch_id`; branch ownership is derived through the cashier user. The server-side service accepts trusted cashier/branch scope separately from client filters, while the page preserves the current role behavior by applying cashier scope only to cashiers.
+- The proven Audit Logs integration uses dependency-free DataTables 3.0.4, 25 rows, custom layout controls, `data-no-smart-table`, and page-scoped styling; Receipt Management can reuse that stack without ColumnControl or DateTime extensions.
+- The existing row actions are View (whose modal includes Print) and Reverse; the server-rendered endpoint must retain those links without broadening detail authorization.
+- Focused smoke tests now pass, and the database-backed receipt contract passes against the local schema with paging, global search, all dedicated filters, numeric sorting, deterministic defaults, trusted cashier/branch scope, counts, and malformed-input fallback.
+- The two-axis review found no standards or spec defects. The server-error state was nevertheless strengthened with an explicit retry affordance and server-side logging.
+- The repository's standard suite depends on `rsync` only for its final release-package check; that executable is absent in the current Windows Git Bash environment, while every preceding check completes successfully.
 
 ## Design Notes
 

@@ -89,3 +89,17 @@
 - Added cache-versioned `avatars.css` to the shared sidebar shell. Focused sidebar lint passes, all 38 smoke checks pass, and the new stylesheet is brace-balanced (3/3).
 - Audited all avatar helper call sites; every call is covered by the sidebar shell asset. Preserved unrelated untracked image files already in the worktree.
 - Final cross-page verification passed: 208 PHP files linted, all 38 smoke checks passed, profile image storage tests passed, both affected stylesheets are balanced and free of trailing whitespace, debug instrumentation is absent, and `git diff --check` is clean.
+
+## 09-17-2026
+
+- Selected and claimed ready-for-agent issue #3, the unblocked first implementation slice of the DataTables pilot; issue #4 remains blocked by it.
+- Confirmed the pre-agreed test seams from the issue: a high-level receipt data contract and page-level smoke coverage.
+- Began inspection of Receipt Management, authorization/query boundaries, Audit Logs conventions, and repository checks.
+- Confirmed Receipt Management previously fetched the complete scoped history and that Audit Logs provides the accepted DataTables 3.0.4 visual/configuration pattern.
+- Added page-level smoke regressions and a database-backed high-level receipt data contract, then confirmed the smoke suite failed before implementation.
+- Added `ReceiptTableService` with trusted authorization scope, permitted/filtered counts, paging, focused filters, global receipt/payment search, numeric/date ordering, an explicit order allowlist, and safe malformed-input fallbacks.
+- Converted Receipt Management to server-side DataTables with 25-row defaults, session-only state restoration, focused controls, Smart Tables exclusion, preserved View/Print/Reverse behavior, and distinct loading/error/empty/filtered-zero states.
+- Focused PHP lint and all 42 smoke checks pass; the receipt database contract passes against the local test database.
+- Review found no documented-standard or issue #3 compliance defects. A recoverability improvement was applied by adding an explicit Retry action and server-side error logging for failed receipt requests.
+- Final focused verification passed again: PHP lint, 42 smoke checks, the live database receipt contract, inline JavaScript syntax, CSS balance (120/120), and Git whitespace validation.
+- The full standard suite passed PHP lint, Python compilation, smoke, profile-image, and product-seed checks; database suites skipped by their normal environment guards. Its final release-package check could not run because this Windows Git Bash environment does not provide `rsync`.

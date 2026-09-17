@@ -35,6 +35,11 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - [x] Phase 29: Reproduce the cross-page/sidebar avatar failure and inspect shared asset loading.
 - [x] Phase 30: Move avatar containment into a cache-safe shared shell asset and add regression coverage.
 - [x] Phase 31: Verify avatar rendering invariants across page navigation and rerun repository checks.
+- [x] Phase 32: Inspect Receipt Management, authorization/query boundaries, Audit Logs DataTables conventions, and existing test seams.
+- [x] Phase 33: Add a failing high-level receipt data contract test and page-level regressions at the issue-defined seams.
+- [x] Phase 34: Implement server-side Receipt Management paging, search, filters, safe sorting, state restoration, and intentional UI states.
+- [x] Phase 35: Run focused checks, type/lint checks, and the full repository suite.
+- [x] Phase 36: Review the implementation against repository standards and issue #3, address findings, and commit the work.
 
 ## Decisions
 - Prefer the project's existing layout, components, and dependency versions over introducing a second table stack.
@@ -55,6 +60,8 @@ Replace modal-only administration workflows with dedicated pages while preservin
 - Reuse Bootstrap Icons already loaded by the application and style icons through page-specific classes rather than inline presentation.
 - Scope the User Info redesign to a directly linked stylesheet so profile-avatar containment is resilient to stale cached imports in the shared compatibility bundle.
 - Load critical avatar geometry from the shared sidebar shell with a `filemtime` query so navigation across roles/pages cannot reuse stale containment rules.
+- Implement issue #3 before blocked issue #4; use the issue-approved seams: one high-level receipt data contract plus page-level smoke coverage.
+- Preserve the untracked `CONTEXT.md` file and avoid unrelated worktree changes.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -66,6 +73,12 @@ Replace modal-only administration workflows with dedicated pages while preservin
 | Browser-control JavaScript runtime was not available for local visual QA | 1 | Continue with full PHP lint, smoke checks, source invariants, and diff review. |
 | Browser-control runtime remains unavailable for System Health visual QA | 1 | Complete repository-wide lint, smoke, CSS structure, route-reference, and diff checks instead. |
 | Browser-control runtime remains unavailable for Manage Users visual QA | 1 | Complete source-level responsive-state review plus full lint, smoke, CSS structure, and diff checks. |
+| `ctx_execute` ran a POSIX `for` loop through PowerShell and failed parsing | 1 | Reissued the GitHub query through Node.js `execFileSync` and parsed JSON there. |
+| PowerShell inventory command lost `$_` and boolean literals through nested shell quoting | 1 | Replaced nested PowerShell exploration with Node.js filesystem inspection. |
+| A Node.js inventory one-liner lost template-literal expressions through shell quoting | 1 | Ran the analysis directly through `ctx_execute` JavaScript instead of `node -e`. |
+| Initial receipt contract paging fixture used a disallowed two-row page size, and each sale had only one line item | 1 | Used a valid 10-row page with an offset and seeded multiple line items so numeric item-count ordering is observable. |
+| Standards review shell command used CMD-style `if exist` under PowerShell | 1 | Used the already-loaded AGENTS guidance and staged diff for the two-axis review instead of repeating the invalid mixed-shell command. |
+| Full `run_all.sh` reached the release package check but the environment has no `rsync` | 1 | Ran the release check separately to confirm the environmental dependency; all preceding suite checks passed, and the failure is recorded rather than changing unrelated release tooling. |
 | Contextual-action patch missed a responsive CSS anchor | 1 | Split PHP markup, modal file, JavaScript, CSS, and smoke updates into independent patches. |
 | Browser-control runtime remains unavailable for contextual-action QA | 1 | Complete full lint, smoke, CSS structure, modal-reference, and diff checks instead. |
 | Add Staff modal could not reach lower fields | 1 | Removed the contradictory dialog overflow rules and added a viewport-constrained scroll region to the modal form. |

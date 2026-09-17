@@ -143,6 +143,20 @@ $checks = [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',
         'needles' => ['audit-log-stats', 'bi-card-checklist', 'bi-person-check-fill', 'bi-boxes'],
     ],
+    'Receipt Management uses a server-side DataTable' => [
+        'file' => 'src/frontend/components/invoice/receipt.php',
+        'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 25', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
+        'forbidden' => ['function performSearch()', 'fetchAll();\n}'],
+    ],
+    'Receipt Management exposes focused filters and existing actions' => [
+        'file' => 'src/frontend/components/invoice/receipt.php',
+        'needles' => ['id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'components/invoice/reversals.php?sale_id=', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
+    ],
+    'Receipt Management server contract is isolated and safe' => [
+        'file' => 'src/backend/app/Services/ReceiptTableService.php',
+        'needles' => ['class ReceiptTableService', 'recordsTotal', 'recordsFiltered', "'s.sale_date'", "'s.total_amount'", "'item_count'", 'LIMIT :limit OFFSET :offset'],
+        'forbidden' => ['ORDER BY {$request', 'ORDER BY ' . "\$_GET"],
+    ],
     'Audit Logs search control is inset' => [
         'file' => 'src/frontend/assets/css/audit-logs.css',
         'needles' => ['.dt-container > .dt-layout-row:first-child', 'padding: 0.65rem 1rem 0.15rem;'],
