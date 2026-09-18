@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../../backend/includes/auth.php';
+require_once __DIR__ . '/../../../../backend/includes/auth.php';
 require_role(['admin','super_admin','inventory_manager','cashier']);
 
 $q = trim((string)($_GET['q'] ?? ''));

@@ -1,8 +1,8 @@
 <?php
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_once __DIR__ . '/../../../backend/includes/pairing.php';
-require_once __DIR__ . '/../../../backend/app/Services/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/../../../../backend/includes/auth.php';
+require_once __DIR__ . '/../../../../backend/includes/pairing.php';
+require_once __DIR__ . '/../../../../backend/app/Services/FiscalPeriodGuardService.php';
 
 function barcode_apply_cors(): void {
     $origin = (string)($_SERVER['HTTP_ORIGIN'] ?? '');

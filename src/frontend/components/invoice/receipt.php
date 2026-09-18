@@ -14,6 +14,7 @@ if (!in_array($action, ['list', 'view', 'data'], true)) {
     $action = 'list';
 }
 $sale_id = (int)($_GET['sale_id'] ?? $_GET['id'] ?? $_GET['receipt_id'] ?? 0);
+$checkoutCompleted = ($_GET['checkout'] ?? '') === 'complete' && $sale_id > 0;
 $storeId = store_scope_id($pdo);
 $can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
@@ -348,6 +349,9 @@ if ($sale_id > 0) {
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css')) ?>">
+<?php if ($checkoutCompleted): ?>
+<script>sessionStorage.removeItem('pos_cart');</script>
+<?php endif; ?>
 </head>
 <body class="receipts-page">
 <div class="app-shell">

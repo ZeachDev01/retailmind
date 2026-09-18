@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
 
     try {
         $result = $salesWorkflowService->checkout($cart, (int)$_SESSION['user_id'], $payment_method, $paymentDetails);
-        header('Location: ' . app_url('components/invoice/receipt.php?sale_id=' . $result['sale_id']));
+        header('Location: ' . app_url('components/invoice/receipt.php?sale_id=' . $result['sale_id'] . '&checkout=complete'));
         exit;
     } catch (RuntimeException $e) {
         $checkout_error = $e->getMessage();
@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
     }
 }
 
-[$quickProductScope, $quickProductParams] = branch_scope('p');
+[$quickProductScope, $quickProductParams] = store_product_scope('p');
 $quickProductStmt = $pdo->prepare(
     "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.variant_label, p.unit_price,
             p.product_image, p.category_id, c.category_name,
@@ -270,11 +270,11 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <div class="payment-grid">
                         <div class="payment-field" id="cash-field">
                             <label class="pos-field-label" for="cash-received">Cash received</label>
-                            <input type="number" min="0" step="0.01" name="cash_received" id="cash-received" placeholder="0.00" inputmode="decimal">
+                            <input type="text" name="cash_received" id="cash-received" placeholder="0.00" inputmode="decimal" autocomplete="off">
                         </div>
                         <div class="payment-field" id="change-field">
                             <label class="pos-field-label" for="change-due">Change due</label>
-                            <input type="text" id="change-due" value="0.00" disabled>
+                            <input type="text" id="change-due" value="0.00" readonly aria-readonly="true">
                         </div>
                     </div>
 
@@ -350,7 +350,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
         </div>
         <div class="checkout-dialog-actions">
             <button type="button" class="btn btn-secondary" onclick="closeCheckoutConfirm()">Review cart</button>
-            <button type="button" class="btn" onclick="submitConfirmedCheckout()"><i class="bi bi-check2" aria-hidden="true"></i>Confirm payment</button>
+            <button type="button" class="btn" id="confirm-checkout-button" onclick="submitConfirmedCheckout()"><i class="bi bi-check2" aria-hidden="true"></i>Confirm payment</button>
         </div>
     </div>
 </div>
@@ -383,6 +383,7 @@ let heldSales = [];
 let scanCooldown = false;
 let scannerActive = false;
 let checkoutConfirmed = false;
+let checkoutSubmitting = false;
 let messageTimer = null;
 let lastScannedCode = '';
 let lastScannedAt = 0;
@@ -417,6 +418,7 @@ const voidModal = document.getElementById('void-modal');
 const voidReason = document.getElementById('void-reason');
 const voidError = document.getElementById('void-error');
 const checkoutButton = document.getElementById('checkout-button');
+const confirmCheckoutButton = document.getElementById('confirm-checkout-button');
 const holdSaleButton = document.getElementById('hold-sale-btn');
 const voidSaleButton = document.getElementById('void-sale-btn');
 const clearCartButton = document.getElementById('clear-cart-btn');
@@ -795,11 +797,24 @@ async function clearCart() {
     }
     if (!await RetailMindUI.confirm({title:'Clear current sale',message:'Remove every item from the cart?',confirmText:'Clear cart',danger:true})) return;
     cart = {};
-    cashReceived.value = '';
-    paymentReference.value = '';
+    resetPaymentState();
     renderCart();
     showCartMessage('Cart cleared.', 'info');
     skuInput.focus();
+}
+
+function resetPaymentState() {
+    paymentMethod.value = 'cash';
+    cashReceived.value = '';
+    paymentReference.value = '';
+    discountType.value = 'none';
+    discountValue.value = '0';
+    discountReason.value = '';
+    const approverUsername = document.getElementById('discount-approver-username');
+    const approverPassword = document.getElementById('discount-approver-password');
+    if (approverUsername) approverUsername.value = '';
+    if (approverPassword) approverPassword.value = '';
+    updatePaymentFields();
 }
 
 function renderCart() {
@@ -845,7 +860,7 @@ function renderCart() {
     document.getElementById('summary-subtotal').textContent = money(gross);
     document.getElementById('summary-discount').textContent = money(discount);
     checkoutButton.disabled = !hasItems || !posShiftOpen;
-    holdSaleButton.disabled = !hasItems;
+    holdSaleButton.disabled = !hasItems || !posShiftOpen;
     voidSaleButton.disabled = !hasItems;
     clearCartButton.disabled = !hasItems;
     updatePaymentFields();
@@ -866,7 +881,8 @@ function updatePaymentFields() {
     paymentReference.required = !isCash;
     cashReceived.required = isCash;
 
-    const received = Number(cashReceived.value || 0);
+    const receivedValue = Number(cashReceived.value);
+    const received = Number.isFinite(receivedValue) && receivedValue >= 0 ? receivedValue : 0;
     changeDue.value = money(Math.max(0, received - total));
     document.getElementById('summary-subtotal').textContent = money(gross);
     document.getElementById('summary-discount').textContent = money(discount);
@@ -899,10 +915,18 @@ function validateCheckout() {
     }
 
     const total = getNetTotal();
-    if (paymentMethod.value === 'cash' && Number(cashReceived.value || 0) < total) {
-        showCartMessage('Cash received is less than the total due.', 'error');
-        cashReceived.focus();
-        return false;
+    if (paymentMethod.value === 'cash') {
+        const received = Number(cashReceived.value);
+        if (!Number.isFinite(received) || received < 0) {
+            showCartMessage('Enter a valid cash amount.', 'error');
+            cashReceived.focus();
+            return false;
+        }
+        if (received < total) {
+            showCartMessage('Cash received is less than the total due.', 'error');
+            cashReceived.focus();
+            return false;
+        }
     }
     if (paymentMethod.value !== 'cash' && paymentReference.value.trim() === '') {
         showCartMessage('Enter the card or e-wallet payment reference.', 'error');
@@ -937,17 +961,22 @@ function checkoutNow() {
 }
 
 function closeCheckoutConfirm() {
+    if (checkoutSubmitting) return;
     checkoutModal.classList.remove('open');
     checkoutConfirmed = false;
     checkoutButton.focus();
 }
 
 function submitConfirmedCheckout() {
+    if (checkoutSubmitting) return;
     if (!validateCheckout()) {
         closeCheckoutConfirm();
         return;
     }
+    checkoutSubmitting = true;
     checkoutConfirmed = true;
+    confirmCheckoutButton.disabled = true;
+    confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
     checkoutForm.submit();
 }
 
@@ -969,10 +998,12 @@ async function loadHeldSales() {
 
 async function holdCurrentSale() {
     if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
+    if (!posShiftOpen) { showCartMessage('Open a cashier shift before holding a sale.', 'error'); return; }
     try {
         const data = await apiHeldSale('hold', {cart});
         heldSales = data.held_sales || [];
-        cart = {}; cashReceived.value = ''; paymentReference.value = '';
+        cart = {};
+        resetPaymentState();
         renderCart(); renderHeldSales(); showCartMessage(`Sale ${data.reference_no} held on the server.`, 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); }
 }
@@ -982,6 +1013,7 @@ async function resumeHeldSale(id) {
     try {
         const data = await apiHeldSale('resume', {id});
         cart = data.cart || {}; heldSales = data.held_sales || [];
+        resetPaymentState();
         renderCart(); renderHeldSales(); showCartMessage('Held sale resumed.', 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); }
 }
@@ -1025,6 +1057,7 @@ function confirmVoidSale() {
     }
 
     cart = {};
+    resetPaymentState();
     persistCart();
     document.getElementById('void-reason-input').value = reason;
     document.getElementById('void-form').submit();

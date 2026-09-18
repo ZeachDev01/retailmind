@@ -11,8 +11,8 @@
 
 header('Content-Type: application/json');
 
-require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_once __DIR__ . '/../../../backend/includes/pairing.php';
+require_once __DIR__ . '/../../../../backend/includes/auth.php';
+require_once __DIR__ . '/../../../../backend/includes/pairing.php';
 
 require_role(['admin', 'inventory_manager', 'cashier']);
 

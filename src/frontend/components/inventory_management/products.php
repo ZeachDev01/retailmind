@@ -190,8 +190,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $categories = $productService->getCategories();
-$selectedBranchId = selected_inventory_branch_id($pdo);
-$branches = $pdo->query("SELECT branch_id, branch_name, branch_code FROM branches WHERE status = 'active' ORDER BY branch_name")->fetchAll();
 $products = $productService->getProductsForManagement();
 $activeProducts = $productService->getActiveProducts();
 $variantParents = $products;
@@ -506,6 +504,13 @@ foreach ($products as $product) {
             color: var(--text);
         }
 
+        .product-pagination-status {
+            min-width: 86px;
+            color: var(--muted);
+            font-size: .82rem;
+            text-align: center;
+        }
+
         @media (max-width: 1100px) {
             .catalog-toolbar-primary {
                 flex-wrap: wrap;
@@ -590,7 +595,6 @@ foreach ($products as $product) {
                         <label class="catalog-field"><span>Category</span><select id="category-filter" aria-label="Filter by category"><option value="">All Categories</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?></select></label>
                         <label class="catalog-field"><span>Status</span><select id="status-filter" aria-label="Filter by product status"><option value="">All Statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
                         <label class="catalog-field"><span>Price</span><select id="price-filter" aria-label="Filter by selling price"><option value="">Any Price</option><option value="0:50">Under ₱50</option><option value="50:100">₱50 - ₱100</option><option value="100:500">₱100 - ₱500</option><option value="500:">₱500 and above</option></select></label>
-                        <?php if (is_system_admin()): ?><form method="get" class="catalog-field"><span>Store</span><select id="inventory-branch" name="branch_id" onchange="this.form.submit()" aria-label="Filter by store"><option value="">All Stores</option><?php foreach ($branches as $branch): ?><option value="<?= (int)$branch['branch_id'] ?>" <?= $selectedBranchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name']) ?></option><?php endforeach; ?></select></form><?php else: ?><label class="catalog-field"><span>Store</span><select disabled aria-label="Assigned store"><option>Assigned Store</option></select></label><?php endif; ?>
                         <div class="catalog-utility-controls">
                             <button type="button" class="catalog-icon-button" id="save-view-button" aria-label="Save current view" title="Save current view"><i class="bi bi-bookmark" aria-hidden="true"></i></button>
                             <select id="saved-view" aria-label="Saved filter view"><option value="">Saved views</option></select>
@@ -673,18 +677,17 @@ foreach ($products as $product) {
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
-                        <div class="empty-state" id="product-empty" hidden>
-                            <div><i class="bi bi-search"></i><strong>No products match these filters</strong><span>Clear the filters or add a new product.</span><br><button type="button" class="btn btn-small btn-quiet u-mt-08" id="empty-clear">Clear filters</button></div>
-                        </div>
                     </div>
-                    <footer class="table-pagination">
-                        <div><span id="page-summary">Showing 1–<?= min(25, $totalProducts) ?> of <?= $totalProducts ?></span></div>
+                    <footer class="table-pagination" aria-label="Product table pagination">
+                        <div><span id="page-summary">Showing <?= $totalProducts > 0 ? 1 : 0 ?>–<?= min(10, $totalProducts) ?> of <?= $totalProducts ?></span></div>
                         <label>Rows <select id="page-size" aria-label="Rows per page">
+                                <option>10</option>
                                 <option>25</option>
                                 <option>50</option>
                                 <option>100</option>
                             </select></label>
-                        <div class="pagination-buttons" id="pagination-buttons"></div>
+                        <span class="product-pagination-status" id="page-status" aria-live="polite"></span>
+                        <nav class="pagination-buttons" id="pagination-buttons" aria-label="Product pages"></nav>
                     </footer>
                 </div>
         </main>
@@ -895,9 +898,8 @@ foreach ($products as $product) {
         const resultCount = document.getElementById('result-count');
         const pageSummary = document.getElementById('page-summary');
         const pageSizeInput = document.getElementById('page-size');
+        const pageStatus = document.getElementById('page-status');
         const paginationButtons = document.getElementById('pagination-buttons');
-        const emptyState = document.getElementById('product-empty');
-        const table = document.getElementById('products-table');
         let filteredRows = productRows.slice();
         let currentPage = 1;
         let sortKey = 'name';
@@ -1000,23 +1002,24 @@ foreach ($products as $product) {
         }
 
         function renderPage() {
-            const size = Number(pageSizeInput.value || 25);
+            const size = Number(pageSizeInput.value || 10);
             const pages = Math.max(1, Math.ceil(filteredRows.length / size));
             currentPage = Math.min(currentPage, pages);
             const start = (currentPage - 1) * size;
             const visibleSet = new Set(filteredRows.slice(start, start + size));
             productRows.forEach(row => row.hidden = !visibleSet.has(row));
-            table.hidden = filteredRows.length === 0;
-            emptyState.hidden = filteredRows.length !== 0;
             resultCount.textContent = `${filteredRows.length} result${filteredRows.length === 1 ? '' : 's'}`;
             pageSummary.textContent = filteredRows.length ? `Showing ${start + 1}–${Math.min(start + size, filteredRows.length)} of ${filteredRows.length}` : 'Showing 0 results';
+            pageStatus.textContent = `Page ${currentPage} of ${pages}`;
             paginationButtons.innerHTML = '';
-            const makeButton = (label, page, disabled = false, active = false) => {
+            const makeButton = (label, page, ariaLabel, disabled = false, active = false) => {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.textContent = label;
+                button.setAttribute('aria-label', ariaLabel);
                 button.disabled = disabled;
                 button.classList.toggle('active', active);
+                if (active) button.setAttribute('aria-current', 'page');
                 button.addEventListener('click', () => {
                     currentPage = page;
                     renderPage();
@@ -1026,11 +1029,16 @@ foreach ($products as $product) {
                 });
                 return button;
             };
-            paginationButtons.appendChild(makeButton('‹', Math.max(1, currentPage - 1), currentPage === 1));
-            const first = Math.max(1, currentPage - 2);
+            paginationButtons.appendChild(makeButton('«', 1, 'First page', currentPage === 1));
+            paginationButtons.appendChild(makeButton('‹', Math.max(1, currentPage - 1), 'Previous page', currentPage === 1));
+            let first = Math.max(1, currentPage - 2);
             const last = Math.min(pages, first + 4);
-            for (let page = first; page <= last; page++) paginationButtons.appendChild(makeButton(String(page), page, false, page === currentPage));
-            paginationButtons.appendChild(makeButton('›', Math.min(pages, currentPage + 1), currentPage === pages));
+            first = Math.max(1, last - 4);
+            for (let page = first; page <= last; page++) {
+                paginationButtons.appendChild(makeButton(String(page), page, `Page ${page}`, false, page === currentPage));
+            }
+            paginationButtons.appendChild(makeButton('›', Math.min(pages, currentPage + 1), 'Next page', currentPage === pages));
+            paginationButtons.appendChild(makeButton('»', pages, 'Last page', currentPage === pages));
             syncSelectAll();
         }
         [searchInput, categoryFilter, stockFilter, statusFilter, priceFilter].forEach(input => input.addEventListener(input.tagName === 'INPUT' ? 'input' : 'change', () => applyFilters()));
@@ -1042,7 +1050,6 @@ foreach ($products as $product) {
         });
         pageSizeInput.addEventListener('change', () => applyFilters());
         document.getElementById('clear-filters').addEventListener('click', clearFilters);
-        document.getElementById('empty-clear').addEventListener('click', clearFilters);
 
         function clearFilters() {
             searchInput.value = '';

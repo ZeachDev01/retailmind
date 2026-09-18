@@ -122,17 +122,15 @@ function sidebar_render_section(array $section): void
 {
 ?>
     <div class="sidebar-section">
-        <div class="sidebar-section-title"><?= sidebar_e($section['title']) ?></div>
+        <?php if (!empty($section['title'])): ?>
+            <div class="sidebar-section-title"><?= sidebar_e($section['title']) ?></div>
+        <?php endif; ?>
         <?php foreach ($section['items'] as $item): ?>
             <?php sidebar_render_item($item); ?>
         <?php endforeach; ?>
     </div>
 <?php
 }
-
-$notificationItems = [
-    ['path' => 'components/notification/notifications.php', 'icon' => 'bi-bell', 'label' => 'View Notifications'],
-];
 
 $superAdministratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-shield-lock', 'label' => 'Users & Access'],
@@ -187,13 +185,6 @@ $warehouseItems = [
     ['path' => 'components/report/inventory_adjustments.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Adjustments'],
 ];
 
-$workspaceSection = [
-    'title' => 'Workspace',
-    'items' => [
-        ['icon' => 'bi-bell', 'label' => 'Notifications', 'badge' => $notificationCount > 0 ? ($notificationCount > 99 ? '99+' : $notificationCount) : null, 'items' => $notificationItems],
-    ],
-];
-
 $superAdministratorSections = [
     [
         'title' => 'Platform Governance',
@@ -221,7 +212,6 @@ $roleSections = [
     'admin' => $administratorSections,
     'inventory_manager' => [
         [
-            'title' => 'Operations',
             'items' => [
                 ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
                 ['icon' => 'bi-boxes', 'label' => 'Inventory', 'items' => $managerInventoryItems],
@@ -312,8 +302,6 @@ $sections = $roleSections[$role] ?? [];
     </button>
 
     <nav class="sidebar-nav" aria-label="Main navigation">
-        <?php sidebar_render_section($workspaceSection); ?>
-
         <?php foreach ($sections as $section): ?>
             <?php sidebar_render_section($section); ?>
         <?php endforeach; ?>

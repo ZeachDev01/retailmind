@@ -804,7 +804,8 @@
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.11);
 }
 
-.payment-field input:disabled {
+.payment-field input:disabled,
+.payment-field input:read-only {
     background: #f8fafc;
     color: #0f172a;
     font-weight: 800;

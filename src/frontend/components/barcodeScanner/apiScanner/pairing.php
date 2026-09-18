@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_once __DIR__ . '/../../../backend/includes/pairing.php';
+require_once __DIR__ . '/../../../../backend/includes/auth.php';
+require_once __DIR__ . '/../../../../backend/includes/pairing.php';
 
 function api_apply_cors(): void {
     $origin = (string)($_SERVER['HTTP_ORIGIN'] ?? '');
