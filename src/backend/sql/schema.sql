@@ -507,7 +507,7 @@ CREATE TABLE `inventory` (
   PRIMARY KEY (`inventory_id`),
   UNIQUE KEY `uq_inventory_product` (`product_id`),
   CONSTRAINT `inventory_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
-  CONSTRAINT `CONSTRAINT_1` CHECK (`quantity_on_hand` >= 0)
+  CONSTRAINT `chk_inventory_quantity_on_hand` CHECK (`quantity_on_hand` >= 0)
 ) ENGINE=InnoDB AUTO_INCREMENT=61 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -817,8 +817,8 @@ CREATE TABLE `products` (
   CONSTRAINT `products_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`),
   CONSTRAINT `products_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `products_ibfk_3` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL,
-  CONSTRAINT `CONSTRAINT_1` CHECK (`unit_price` >= 0),
-  CONSTRAINT `CONSTRAINT_2` CHECK (`cost_price` >= 0)
+  CONSTRAINT `chk_products_unit_price` CHECK (`unit_price` >= 0),
+  CONSTRAINT `chk_products_cost_price` CHECK (`cost_price` >= 0)
 ) ENGINE=InnoDB AUTO_INCREMENT=66 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -986,7 +986,7 @@ CREATE TABLE `replenishment_requests` (
   CONSTRAINT `replenishment_requests_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `replenishment_requests_ibfk_2` FOREIGN KEY (`requested_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `replenishment_requests_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `CONSTRAINT_1` CHECK (`request_qty` > 0)
+  CONSTRAINT `chk_replenishment_requests_quantity` CHECK (`request_qty` > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1614,6 +1614,34 @@ LOCK TABLES `schema_migrations` WRITE;
 INSERT INTO `schema_migrations` (`migration_key`, `description`, `applied_at`) VALUES ('2026_07_operational_updates','Suppliers, purchase orders, shifts, held sales, forecast decisions, units, and inventory insights','2026-09-14 07:29:34'),('202608040001_auth_security','Authentication security tables and mandatory password-change support','2026-09-16 23:47:10'),('202608040002_operational_updates','Operational workflow tables and columns','2026-09-16 23:47:10'),('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases','2026-09-16 23:47:11'),('202609130001_branch_management','Branches, branch-scoped users and privilege assignments','2026-09-16 23:47:11'),('202609130002_role_access_update','Make administrator inventory access read-only','2026-09-16 23:47:11'),('202609130003_superadmin_inventory_read_only','Make super administrator inventory access read-only','2026-09-16 23:47:11'),('202609130004_remove_seller_role','Replace the duplicate seller role with cashier','2026-09-16 23:47:11'),('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches','2026-09-16 23:47:11'),('202609170001_admin_profile_images','Nullable generated profile image filename for administrator accounts','2026-09-16 23:47:11'),('202609170001_profile_images','Optional generated profile image filename for user accounts','2026-09-17 01:06:29'),('202609170001_staff_profile_images','Optional profile image filename for staff accounts','2026-09-16 23:59:31'),('202609180002_audit_record_categories','Categorize Protected Audit Records for authority-scoped visibility','2026-09-18 06:13:38'),('202609180003_emergency_access','Durable reason-bound Emergency Access sessions and audit correlation','2026-09-18 06:13:38'),('202609180004_recovery_account','Sealed Recovery Account identity and offline lifecycle state','2026-09-18 06:13:38'),('202609180005_attention_foundation','Shared live attention settings, active state, and notification keys','2026-09-18 06:13:38');
 /*!40000 ALTER TABLE `schema_migrations` ENABLE KEYS */;
 UNLOCK TABLES;
+
+-- The canonical dump excludes transactional sales. Remove the matching generated
+-- sales-trend stock snapshot and restore opening-stock counters so the fresh seed
+-- remains internally consistent and the deterministic trend seeder can run.
+UPDATE `inventory` i
+JOIN (
+  SELECT `product_id`, SUM(`remaining_quantity`) AS `remaining_quantity`
+  FROM `product_batches`
+  WHERE `batch_number` LIKE 'RM\_SEED\_SALES\_TREND\_V1-%'
+  GROUP BY `product_id`
+) generated ON generated.`product_id` = i.`product_id`
+SET i.`quantity_on_hand` = GREATEST(0, i.`quantity_on_hand` - generated.`remaining_quantity`);
+
+UPDATE `products` p
+JOIN (
+  SELECT `product_id`, SUM(`quantity`) AS `received_quantity`,
+         SUM(`quantity` - `remaining_quantity`) AS `sold_quantity`
+  FROM `product_batches`
+  WHERE `batch_number` LIKE 'RM\_SEED\_SALES\_TREND\_V1-%'
+  GROUP BY `product_id`
+) generated ON generated.`product_id` = p.`product_id`
+SET p.`quantity_purchased` = GREATEST(0, p.`quantity_purchased` - generated.`received_quantity`),
+    p.`quantity_sold` = GREATEST(0, p.`quantity_sold` - generated.`sold_quantity`);
+
+DELETE FROM `product_batches` WHERE `batch_number` LIKE 'RM\_SEED\_SALES\_TREND\_V1-%';
+DELETE FROM `purchase_history` WHERE `supplier` = 'RetailMind Seed Supplier';
+DELETE FROM `stock_receiving` WHERE `batch_number` LIKE 'RM\_SEED\_SALES\_TREND\_V1-%';
+
 -- Canonical fresh-install Super Administrator credentials (change after first login).
 UPDATE `users` SET `password_hash` = '$2y$12$pmB8fB3r3Br3bBIzEE2v9.RgnbJxZCjCCMqefPpwmP26V8veMKj7q', `must_change_password` = 1 WHERE `username` = 'superadmin';
 

@@ -24,6 +24,14 @@ $assertMatches('/attention_count\s+INT(?:\(11\))?(?:\s+DEFAULT)?\s+NULL/i', 'not
 $assertMatches('/attention_destination\s+VARCHAR\(255\)(?:\s+DEFAULT)?\s+NULL/i', 'notifications.attention_destination is missing');
 $assertMatches('/(?:INDEX|KEY)\s+idx_notifications_attention\s*\(user_id,\s*attention_key,\s*created_at\)/i', 'notifications attention index is missing');
 
+if (preg_match_all('/CONSTRAINT\s+`?([^`\s]+)`?\s+CHECK\s*\(/i', $schema, $checkConstraintMatches)) {
+    $constraintNames = array_map('strtolower', $checkConstraintMatches[1]);
+    $duplicates = array_keys(array_filter(array_count_values($constraintNames), static fn(int $count): bool => $count > 1));
+    if ($duplicates) {
+        $failures[] = 'CHECK constraint names must be unique for MySQL 8: ' . implode(', ', $duplicates);
+    }
+}
+
 if ($failures) {
     fwrite(STDERR, "Fresh schema contract failed:\n- " . implode("\n- ", $failures) . "\n");
     exit(1);
