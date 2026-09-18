@@ -57,6 +57,7 @@ CREATE TABLE users (
     password_changed_at DATETIME NULL,
     must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
     branch_id INT NULL,
+    is_recovery_account BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_users_branch_id (branch_id),
     FOREIGN KEY (role_id) REFERENCES roles(role_id),
@@ -357,6 +358,18 @@ CREATE TABLE activity_log (
 -- The activity_log table is still created and used by the application; the
 -- database-level immutability triggers were removed so this schema can import
 -- with standard database-user permissions.
+
+-- The sealed Recovery Account is activated only through the offline CLI procedure.
+CREATE TABLE recovery_accounts (
+    account_key VARCHAR(20) PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE,
+    activation_secret_hash VARCHAR(255) NOT NULL,
+    activated_at DATETIME NULL,
+    sealed_at DATETIME NULL,
+    credentials_rotated_at DATETIME NULL,
+    last_used_at DATETIME NULL,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Emergency Access uses durable, actor-bound sessions rather than a permanent role.
 CREATE TABLE platform_settings (

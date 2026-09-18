@@ -8,6 +8,10 @@ if (!is_logged_in()) {
     header('Location: ' . app_url('?login=1'));
     exit;
 }
+if ((bool)($_SESSION['is_recovery_account'] ?? false)) {
+    http_response_code(403);
+    exit('Recovery Account details are available only through the offline recovery procedure.');
+}
 
 $message = '';
 $messageClass = '';

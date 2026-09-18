@@ -45,6 +45,7 @@ try {
         password_changed_at TEXT NULL,
         must_change_password INTEGER NOT NULL DEFAULT 1,
         branch_id INTEGER NULL,
+        is_recovery_account INTEGER NOT NULL DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     $pdo->exec("CREATE TABLE activity_log (

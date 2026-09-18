@@ -171,6 +171,7 @@ $users = $pdo->query(
     'SELECT u.*, r.role_name
      FROM users u
      JOIN roles r ON r.role_id = u.role_id
+     WHERE u.is_recovery_account = 0
      ORDER BY u.created_at DESC, u.user_id DESC'
 )->fetchAll(PDO::FETCH_ASSOC);
 $activeCount = count(array_filter($users, static fn(array $user): bool => $user['status'] === 'active'));

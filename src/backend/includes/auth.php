@@ -100,7 +100,7 @@ function login_user(PDO $pdo, string $username, string $password): bool
     $stmt = $pdo->prepare(
         "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
             u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password,
-            u.branch_id, b.branch_name, r.role_name
+            u.is_recovery_account, u.branch_id, b.branch_name, r.role_name
          FROM users u JOIN roles r ON u.role_id = r.role_id
          LEFT JOIN branches b ON b.branch_id = u.branch_id
          WHERE u.username = ? LIMIT 1"
@@ -113,6 +113,12 @@ function login_user(PDO $pdo, string $username, string $password): bool
         && password_verify($password, (string)$user['password_hash']);
 
     if ($valid) {
+        if ((bool)$user['is_recovery_account']) {
+            (new App\Services\RecoveryAccountService($pdo))->recordUse(
+                (int)$user['user_id'],
+                get_client_ip_address()
+            );
+        }
         $pdo->prepare(
             'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE user_id = ?'
         )->execute([(int)$user['user_id']]);
@@ -125,6 +131,7 @@ function login_user(PDO $pdo, string $username, string $password): bool
         $_SESSION['profile_image'] = $user['profile_image'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
+        $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
         $_SESSION['_authenticated_at'] = time();
         unset($_SESSION['_login_error']);
         unset($_SESSION['_login_username']);
@@ -177,7 +184,7 @@ function validate_current_session(PDO $pdo): void
     $validated = true;
     $stmt = $pdo->prepare(
         "SELECT u.status, u.session_version, u.full_name, u.profile_image, u.must_change_password,
-            u.branch_id, b.branch_name, r.role_name
+            u.is_recovery_account, u.branch_id, b.branch_name, r.role_name
          FROM users u JOIN roles r ON r.role_id = u.role_id
          LEFT JOIN branches b ON b.branch_id = u.branch_id
          WHERE u.user_id = ?"
@@ -198,6 +205,7 @@ function validate_current_session(PDO $pdo): void
     $_SESSION['branch_name'] = $user['branch_name'];
     $_SESSION['profile_image'] = $user['profile_image'];
     $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
+    $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
 
     $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
     if ($_SESSION['must_change_password'] && !in_array($currentScript, ['change_password.php', 'logout.php'], true)) {

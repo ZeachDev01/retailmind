@@ -6,7 +6,12 @@ $error = '';
 $success = '';
 $reset = null;
 if ($token !== '') {
-    $stmt = $pdo->prepare("SELECT pr.reset_id, pr.user_id FROM password_reset_tokens pr WHERE pr.token_hash = ? AND pr.used_at IS NULL AND pr.expires_at >= NOW() LIMIT 1");
+    $stmt = $pdo->prepare("SELECT pr.reset_id, pr.user_id
+        FROM password_reset_tokens pr
+        JOIN users u ON u.user_id = pr.user_id
+        WHERE pr.token_hash = ? AND pr.used_at IS NULL AND pr.expires_at >= NOW()
+          AND u.is_recovery_account = 0
+        LIMIT 1");
     $stmt->execute([hash('sha256', $token)]);
     $reset = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }

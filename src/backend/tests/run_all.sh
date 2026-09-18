@@ -7,6 +7,7 @@ python -m py_compile src/backend/legacy/demandForcasting/train_model.py src/back
 php src/backend/tests/smoke_checks.php
 php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/emergency_access_lifecycle_test.php
+php src/backend/tests/recovery_account_lifecycle_test.php
 php src/backend/tests/workspace_routing_contract.php
 php src/backend/tests/store_scope_contract.php
 php src/backend/tests/user_lifecycle_contract.php

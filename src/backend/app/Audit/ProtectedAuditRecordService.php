@@ -19,7 +19,8 @@ final class ProtectedAuditRecordService
         [$whereSql, $params] = $this->where($actorRole, $filters);
         $sql = "SELECT al.log_id, al.user_id, al.action, al.category, al.module, al.record_id,
                        al.previous_value, al.new_value, al.metadata, al.ip_address, al.created_at,
-                       u.full_name, u.username
+                       CASE WHEN u.is_recovery_account = 1 THEN 'Recovery Account' ELSE u.full_name END AS full_name,
+                       CASE WHEN u.is_recovery_account = 1 THEN NULL ELSE u.username END AS username
                 FROM activity_log al
                 LEFT JOIN users u ON al.user_id = u.user_id
                 {$whereSql}
@@ -86,7 +87,7 @@ final class ProtectedAuditRecordService
         }
         if (($filters['search'] ?? '') !== '') {
             $search = '%' . (string)$filters['search'] . '%';
-            $clauses[] = '(al.action LIKE ? OR al.module LIKE ? OR CAST(al.record_id AS CHAR) LIKE ? OR u.full_name LIKE ? OR u.username LIKE ?)';
+            $clauses[] = '(al.action LIKE ? OR al.module LIKE ? OR CAST(al.record_id AS CHAR) LIKE ? OR u.full_name LIKE ? OR (u.is_recovery_account = 0 AND u.username LIKE ?))';
             array_push($params, $search, $search, $search, $search, $search);
         }
         if (($filters['critical_only'] ?? false) === true) {

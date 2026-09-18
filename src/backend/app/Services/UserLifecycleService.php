@@ -23,7 +23,8 @@ final class UserLifecycleService
     {
         $statement = $this->pdo->prepare(
             'SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash,
-                    u.status, u.session_version, u.must_change_password, u.role_id, u.branch_id, r.role_name
+                    u.status, u.session_version, u.must_change_password, u.is_recovery_account,
+                    u.role_id, u.branch_id, r.role_name
              FROM users u
              JOIN roles r ON r.role_id = u.role_id
              WHERE u.user_id = ?'
@@ -177,6 +178,9 @@ final class UserLifecycleService
 
     private function requireManageable(int $actorId, string $actorRole, array $target, bool $allowProtectedSelf): void
     {
+        if ((bool)($target['is_recovery_account'] ?? false)) {
+            throw new DomainException('The Recovery Account can be managed only through the offline recovery procedure.');
+        }
         $targetRole = (string)$target['role_name'];
         if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_USERS, $targetRole)) {
             throw new DomainException('Your account cannot manage this privileged user.');

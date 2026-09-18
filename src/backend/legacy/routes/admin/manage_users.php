@@ -10,7 +10,8 @@ $messageClass = '';
 function get_user_snapshot(PDO $pdo, int $userId): ?array {
     $stmt = $pdo->prepare(
         "SELECT u.user_id, u.username, u.full_name, u.email, u.status, u.role_id, r.role_name AS role
-         FROM users u JOIN roles r ON r.role_id = u.role_id WHERE u.user_id = ?"
+         FROM users u JOIN roles r ON r.role_id = u.role_id
+         WHERE u.user_id = ? AND u.is_recovery_account = 0"
     );
     $stmt->execute([$userId]);
     $user = $stmt->fetch();
@@ -155,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $messageClass = 'tag-warning';
     } else {
         try {
-            $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+            $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND is_recovery_account = 0");
             $stmt->execute([$userId]);
 
             if ($stmt->rowCount() > 0) {
@@ -195,7 +196,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 $roles = $pdo->query("SELECT * FROM roles")->fetchAll();
 $users = $pdo->query(
-    "SELECT u.*, r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id ORDER BY u.created_at DESC"
+    "SELECT u.*, r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id
+     WHERE u.is_recovery_account = 0 ORDER BY u.created_at DESC"
 )->fetchAll();
 $activeCount = count(array_filter($users, fn($user) => $user['status'] === 'active'));
 $disabledCount = count($users) - $activeCount;
