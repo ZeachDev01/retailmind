@@ -328,34 +328,15 @@ function require_assigned_branch(): int
     return $branchId;
 }
 
-function selected_inventory_branch_id(PDO $pdo): ?int
+function selected_inventory_branch_id(PDO $pdo): int
 {
-    if (!is_system_admin()) {
-        return require_assigned_branch();
-    }
-
-    $branchId = filter_input(INPUT_GET, 'branch_id', FILTER_VALIDATE_INT);
-    if ($branchId === false || $branchId === null || $branchId <= 0) {
-        return null;
-    }
-
-    $stmt = $pdo->prepare("SELECT branch_id FROM branches WHERE branch_id = ? AND status = 'active'");
-    $stmt->execute([$branchId]);
-    if (!$stmt->fetchColumn()) {
-        http_response_code(400);
-        die('The selected branch is not active.');
-    }
-
-    return (int)$branchId;
+    return store_scope_id($pdo);
 }
 
 function branch_scope(string $alias = 'p', ?int $selectedBranchId = null): array
 {
-    if (is_system_admin()) {
-        return $selectedBranchId !== null ? [" AND {$alias}.branch_id = ?", [$selectedBranchId]] : ['', []];
-    }
-    $branchId = require_assigned_branch();
-    return [" AND {$alias}.branch_id = ?", [$branchId]];
+    global $pdo;
+    return (new App\Store\StoreScope($pdo))->productScope($alias);
 }
 
 function logout_user(): void

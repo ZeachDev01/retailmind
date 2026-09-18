@@ -13,23 +13,9 @@ $import_results = null;
 $fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
 $productService = new ProductService($pdo);
 
-function csv_import_branch_id(PDO $pdo): ?int
+function csv_import_store_id(PDO $pdo): int
 {
-    $stmt = $pdo->prepare(
-        "SELECT u.branch_id, b.status
-         FROM users u
-         LEFT JOIN branches b ON b.branch_id = u.branch_id
-         WHERE u.user_id = ?
-         LIMIT 1"
-    );
-    $stmt->execute([(int)$_SESSION['user_id']]);
-    $branch = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$branch || (int)($branch['branch_id'] ?? 0) <= 0 || ($branch['status'] ?? '') !== 'active') {
-        return null;
-    }
-
-    return (int)$branch['branch_id'];
+    return store_scope_id($pdo);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
@@ -38,11 +24,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
     $import_type = $_POST['import_type'] ?? '';
     $file = $_FILES['csv_file'];
-    $import_branch_id = csv_import_branch_id($pdo);
+    $import_store_id = csv_import_store_id($pdo);
 
-    if ($import_branch_id === null) {
-        $error = 'Import stopped: your account must be assigned to an active branch before importing.';
-    } elseif (!in_array($import_type, ['products', 'inventory'])) {
+    if (!in_array($import_type, ['products', 'inventory'])) {
         $error = 'Invalid import type';
     } elseif ($file['error'] !== UPLOAD_ERR_OK) {
         $error = 'File upload error';
@@ -108,12 +92,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
                     // Insert or update product
                     $prod_stmt = $pdo->prepare("SELECT product_id FROM products WHERE sku = ? AND branch_id = ?");
-                    $prod_stmt->execute([$sku, $import_branch_id]);
+                    $prod_stmt->execute([$sku, $import_store_id]);
                     $prod = $prod_stmt->fetch();
 
                     if ($prod) {
                         $beforeStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
-                        $beforeStmt->execute([(int)$prod['product_id'], $import_branch_id]);
+                        $beforeStmt->execute([(int)$prod['product_id'], $import_store_id]);
                         $beforeProduct = $beforeStmt->fetch();
 
                         // Update existing
@@ -136,10 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $minimum_order_quantity,
                             $units_per_package,
                             $sku,
-                            $import_branch_id,
+                            $import_store_id,
                         ]);
                         $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
-                        $afterStmt->execute([(int)$prod['product_id'], $import_branch_id]);
+                        $afterStmt->execute([(int)$prod['product_id'], $import_store_id]);
                         log_activity(
                             $pdo,
                             (int)$_SESSION['user_id'],
@@ -172,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $minimum_order_quantity,
                             $units_per_package,
                             $_SESSION['user_id'],
-                            $import_branch_id,
+                            $import_store_id,
                         ]);
                         $product_id = $pdo->lastInsertId();
 
@@ -181,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $inv_ins->execute([$product_id]);
 
                         $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
-                        $afterStmt->execute([(int)$product_id, $import_branch_id]);
+                        $afterStmt->execute([(int)$product_id, $import_store_id]);
                         log_activity(
                             $pdo,
                             (int)$_SESSION['user_id'],
@@ -218,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
                     // Find product by SKU
                     $prod_stmt = $pdo->prepare("SELECT product_id FROM products WHERE sku = ? AND branch_id = ?");
-                    $prod_stmt->execute([$sku, $import_branch_id]);
+                    $prod_stmt->execute([$sku, $import_store_id]);
                     $prod = $prod_stmt->fetch();
 
                     if (!$prod) {
@@ -239,10 +223,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                          JOIN products p ON p.product_id = i.product_id
                          WHERE i.product_id = ? AND p.branch_id = ?"
                     );
-                    $beforeInvStmt->execute([(int)$product_id, $import_branch_id]);
+                    $beforeInvStmt->execute([(int)$product_id, $import_store_id]);
                     $beforeInventory = $beforeInvStmt->fetch();
                     if (!$beforeInventory) {
-                        throw new RuntimeException("Inventory record for SKU '$sku' was not found in your branch.");
+                        throw new RuntimeException("Inventory record for SKU '$sku' was not found in this Store.");
                     }
                     $inv_upd = $pdo->prepare(
                         "UPDATE inventory i
@@ -250,7 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                          SET i.quantity_on_hand = i.quantity_on_hand + ?
                          WHERE i.product_id = ? AND p.branch_id = ?"
                     );
-                    $inv_upd->execute([$qty, $product_id, $import_branch_id]);
+                    $inv_upd->execute([$qty, $product_id, $import_store_id]);
 
                     // Log stock movement
                     $mov_ins = $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)

@@ -92,9 +92,10 @@ class InventoryService
 
     private function branchScope(?int $branchId = null): array
     {
-        if (!function_exists('branch_scope')) {
-            return ['', []];
+        if (function_exists('branch_scope')) {
+            return branch_scope('p');
         }
-        return branch_scope('p', $branchId);
+
+        return (new App\Store\StoreScope($this->pdo))->productScope('p');
     }
 }

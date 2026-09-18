@@ -79,20 +79,9 @@ class ProductService
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
         $initialStock = max(0, (int)($data['initial_stock_quantity'] ?? 0));
-        $branchId = null;
-        if (function_exists('is_system_admin') && !is_system_admin()) {
-            $branchId = require_assigned_branch();
-        } elseif (function_exists('is_system_admin') && is_system_admin()) {
-            $branchId = (int)($data['branch_id'] ?? 0);
-            if ($branchId <= 0) {
-                throw new RuntimeException('Select a branch for this product.');
-            }
-            $branchCheck = $this->pdo->prepare("SELECT COUNT(*) FROM branches WHERE branch_id = ? AND status = 'active'");
-            $branchCheck->execute([$branchId]);
-            if ((int)$branchCheck->fetchColumn() === 0) {
-                throw new RuntimeException('Selected branch is not active.');
-            }
-        }
+        $branchId = function_exists('store_scope_id')
+            ? store_scope_id($this->pdo)
+            : (new App\Store\StoreScope($this->pdo))->id();
 
         if ($productName === '') {
             throw new RuntimeException('Product name is required.');
@@ -632,10 +621,11 @@ class ProductService
 
     private function branchScope(?int $branchId = null): array
     {
-        if (!function_exists('branch_scope')) {
-            return ['', []];
+        if (function_exists('branch_scope')) {
+            return branch_scope('p');
         }
-        return branch_scope('p', $branchId);
+
+        return (new App\Store\StoreScope($this->pdo))->productScope('p');
     }
 
     private function createProductBatch(

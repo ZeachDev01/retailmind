@@ -8,7 +8,6 @@ require_role(['admin', 'super_admin', 'inventory_manager']);
 $canManageInventory = has_privilege('manage_inventory');
 $canDirectAdjust = $canManageInventory;
 $productService = new ProductService($pdo);
-$selectedBranchId = selected_inventory_branch_id($pdo);
 
 function product_ids_from_request($value): array
 {
@@ -99,7 +98,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'variant_label' => $_POST['variant_label'] ?? '',
                 'expiration_date' => $_POST['expiration_date'] ?? null,
                 'product_image' => $productImage,
-                'branch_id' => $_POST['branch_id'] ?? '',
                 'status' => $_POST['status'] ?? 'active',
                 'initial_stock_quantity' => 0,
             ], (int)$_SESSION['user_id']);
@@ -192,9 +190,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $categories = $productService->getCategories();
-$branches = $pdo->query("SELECT branch_id, branch_name, branch_code FROM branches WHERE status = 'active' ORDER BY branch_name")->fetchAll();
-$products = $productService->getProductsForManagement($selectedBranchId);
-$activeProducts = $productService->getActiveProducts($selectedBranchId);
+$products = $productService->getProductsForManagement();
+$activeProducts = $productService->getActiveProducts();
 $variantParents = $products;
 $totalProducts = count($products);
 $lowCount = 0;
@@ -244,17 +241,6 @@ foreach ($products as $product) {
                     <h1>Products &amp; Stock</h1>
                     <p class="page-subtitle">Search, filter, organize, and maintain the store's complete product catalog.</p>
                 </div>
-                <?php if (is_system_admin()): ?>
-                    <form method="get" class="page-heading-actions" aria-label="Inventory branch filter">
-                        <label for="inventory-branch" class="u-sr-only">View inventory branch</label>
-                        <select id="inventory-branch" name="branch_id" onchange="this.form.submit()">
-                            <option value="">All branches</option>
-                            <?php foreach ($branches as $branch): ?>
-                                <option value="<?= (int)$branch['branch_id'] ?>" <?= $selectedBranchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </form>
-                <?php endif; ?>
                 <div class="page-heading-actions products-quick-actions">
                     <?php if ($canManageInventory): ?>
                         <button type="button" class="quick-action products-quick-action" id="add-product-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i><strong>Add Product</strong></button>
@@ -469,9 +455,6 @@ foreach ($products as $product) {
                             <div class="form-group"><label>Category *</label><select name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
-                            <?php if (is_system_admin()): ?><div class="form-group"><label>Branch *</label><select name="branch_id" required>
-                                        <option value="">Select branch</option><?php foreach ($branches as $branch): ?><option value="<?= (int)$branch['branch_id'] ?>" <?= $selectedBranchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option><?php endforeach; ?>
-                                    </select></div><?php endif; ?>
                             <div class="form-group"><label>Parent Product Family</label><select name="parent_product_id">
                                     <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
                                 </select></div>

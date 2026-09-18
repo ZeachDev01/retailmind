@@ -4,22 +4,19 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/InventoryService.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
-require_role(['admin', 'inventory_manager']);
+require_role(['admin', 'super_admin', 'inventory_manager']);
 
 $inventoryService = new InventoryService($pdo);
 $productService = new ProductService($pdo);
-$branchId = selected_inventory_branch_id($pdo);
-$branches = $pdo->query("SELECT branch_id, branch_name, branch_code FROM branches WHERE status = 'active' ORDER BY branch_name")->fetchAll();
-$products = $productService->getProductsForManagement($branchId);
-$low_stock = $inventoryService->getLowStockProducts($branchId);
-$expiring_batches = $inventoryService->getExpiringSoonBatches(30, $branchId);
-$expired_batches = $inventoryService->getExpiredBatches($branchId);
-$fefo_recommendations = array_slice($inventoryService->getFefoRecommendations($branchId), 0, 10);
-$summary = $inventoryService->getInventorySummary($branchId);
+$products = $productService->getProductsForManagement();
+$low_stock = $inventoryService->getLowStockProducts();
+$expiring_batches = $inventoryService->getExpiringSoonBatches(30);
+$expired_batches = $inventoryService->getExpiredBatches();
+$fefo_recommendations = array_slice($inventoryService->getFefoRecommendations(), 0, 10);
+$summary = $inventoryService->getInventorySummary();
 $total_products = $summary['total_products'];
 $total_units = $summary['current_stock'];
-$scopeSql = $branchId !== null ? ' AND p.branch_id = ?' : '';
-$scopeParams = $branchId !== null ? [$branchId] : [];
+[$scopeSql, $scopeParams] = branch_scope('p');
 $outOfStockStmt = $pdo->prepare("SELECT COUNT(*) FROM inventory i JOIN products p ON p.product_id = i.product_id WHERE i.quantity_on_hand = 0{$scopeSql}");
 $outOfStockStmt->execute($scopeParams);
 $out_of_stock = $outOfStockStmt->fetchColumn();
@@ -63,17 +60,6 @@ $recent_movements = $recentStmt->fetchAll();
         <div class="topbar">
             <h1>Inventory Overview</h1>
             <span class="badge-role">Inventory Manager: <?= htmlspecialchars($_SESSION['full_name']) ?></span>
-            <?php if (is_system_admin()): ?>
-                <form method="get" aria-label="Inventory branch filter">
-                    <label for="overview-inventory-branch" class="u-sr-only">View inventory branch</label>
-                    <select id="overview-inventory-branch" name="branch_id" onchange="this.form.submit()">
-                        <option value="">All branches</option>
-                        <?php foreach ($branches as $branch): ?>
-                            <option value="<?= (int)$branch['branch_id'] ?>" <?= $branchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </form>
-            <?php endif; ?>
         </div>
 
         <div class="card-grid">

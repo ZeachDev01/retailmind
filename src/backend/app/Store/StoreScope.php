@@ -88,6 +88,21 @@ final class StoreScope
         throw new RuntimeException('The singleton Store compatibility migration has not been applied.');
     }
 
+    /**
+     * Returns the SQL predicate and parameter for product-backed Store data.
+     *
+     * `branch_id` remains an internal compatibility column; callers must not
+     * accept a Store identity from request or session state.
+     */
+    public function productScope(string $alias = 'p'): array
+    {
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
+            throw new RuntimeException('Invalid product scope alias.');
+        }
+
+        return [" AND {$alias}.branch_id = ?", [$this->id()]];
+    }
+
     public function migrate(): int
     {
         $report = $this->preflight();

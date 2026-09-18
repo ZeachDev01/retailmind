@@ -57,6 +57,9 @@ try {
     $assert($one['status'] === 'ready', 'one data-bearing active branch should be ready');
     $assert($scope->id() === $existingId && $scope->id() === $existingId, 'all Store scope resolutions should return the same identity');
     $assert($scope->id() !== 999999, 'request input must not override Store scope');
+    [$scopeSql, $scopeParams] = $scope->productScope('p');
+    $assert($scopeSql === ' AND p.branch_id = ?', 'product queries should use the internal Store compatibility column');
+    $assert($scopeParams === [$existingId], 'product queries must derive the Store identity server-side');
 
     $pdo->exec('DELETE FROM products');
     $pdo->exec('DELETE FROM users');
