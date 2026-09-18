@@ -44,7 +44,11 @@
         min-width: 0;
         align-items: center;
         gap: .6rem;
+        border: 0;
+        background: transparent;
         color: #020617;
+        cursor: pointer;
+        font: inherit;
         font-weight: 700;
         text-decoration: none;
     }
@@ -239,15 +243,34 @@
 @media (max-width: 900px) {
     .sidebar { position: fixed; height: 100vh; min-height: 0; }
     body.sidebar-collapsed .sidebar { width: 260px; max-width: 80vw; }
-    .global-top-tools { right: 4.35rem; }
-    .global-tool-button span { display: none; }
+    body.sidebar-collapsed .sidebar-brand {
+        justify-content: flex-start;
+        padding-right: 2.3rem;
+    }
+    body.sidebar-collapsed .sidebar-brand-copy,
+    body.sidebar-collapsed .sidebar-section-title,
+    body.sidebar-collapsed .sidebar a span:not(.sidebar-badge),
+    body.sidebar-collapsed .sidebar .dropbtn span:not(.sidebar-badge),
+    body.sidebar-collapsed .sidebar .dropdown-chevron,
+    body.sidebar-collapsed .sidebar-profile-copy,
+    body.sidebar-collapsed .sidebar-profile > .bi-three-dots-vertical {
+        display: block;
+    }
+    body.sidebar-collapsed .sidebar a,
+    body.sidebar-collapsed .sidebar .dropbtn,
+    body.sidebar-collapsed .sidebar-profile {
+        justify-content: flex-start;
+        padding-left: .65rem;
+        padding-right: .65rem;
+    }
+    body.sidebar-collapsed .sidebar .dropdown-content { padding-left: .5rem; }
+    body.sidebar-collapsed .sidebar .sidebar-badge { position: static; }
+    .global-topbar { display: none; }
     .page-heading { flex-direction: column; }
     .table-toolbar { align-items: stretch; }
     .table-toolbar > * { flex: 1 1 160px; }
 }
 @media (max-width: 640px) {
-    .global-top-tools { top: .9rem; right: 4rem; }
-    .global-tool-button { width: 40px; padding: 0; justify-content: center; }
     .detail-grid,
     .form-grid,
     .drawer-action-grid { grid-template-columns: 1fr; }
@@ -515,24 +538,6 @@ body.products-page .products-quick-action strong {
         padding-inline: .85rem;
     }
 
-    .global-top-tools {
-        gap: .4rem;
-        right: 4rem;
-    }
-
-    .global-tool-button {
-        width: 40px;
-        min-width: 40px;
-    }
-
-    .connection-status {
-        overflow: hidden;
-        color: transparent;
-    }
-
-    .connection-status::before {
-        margin: 0;
-    }
 
     .card-grid,
     .quick-actions,
@@ -599,9 +604,6 @@ body.products-page .products-quick-action strong {
         height: 40px;
     }
 
-    .global-top-tools {
-        right: 3.7rem;
-    }
 
     .dashboard-section,
     .data-table-shell,
@@ -709,7 +711,7 @@ body.admin-dashboard-page .mobile-role-label {
         background: #f8fafc;
     }
 
-    body.admin-dashboard-page .global-top-tools {
+    body.admin-dashboard-page .global-topbar {
         display: none !important;
     }
 

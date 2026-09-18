@@ -1,5 +1,5 @@
 <?php
-// Public landing page. Authenticated users keep the previous dashboard redirect.
+// Public landing page. Authenticated users are sent to their primary workspace.
 require_once dirname(__DIR__) . '/backend/bootstrap/app.php';
 
 App\Core\Session::start();
@@ -36,7 +36,7 @@ function landing_role_destination(): string
         case 'admin':
             return landing_app_url('components/dashboard.php');
         case 'inventory_manager':
-            return landing_app_url('components/inventory_management/dashboard.php');
+            return landing_app_url('components/inventory_management/inventory_overview.php');
         case 'cashier':
             return landing_app_url('components/cashier/pos.php');
         default:

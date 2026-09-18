@@ -53,7 +53,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
     }
 }
 
-$productLookup = [];
+[$quickProductScope, $quickProductParams] = branch_scope('p');
+$quickProductStmt = $pdo->prepare(
+    "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.variant_label, p.unit_price,
+            p.product_image, p.category_id, c.category_name,
+            COALESCE(p.reorder_level, 0) AS reorder_level,
+            COALESCE(p.safety_stock, 0) AS safety_stock,
+            COALESCE(p.quantity_sold, 0) AS quantity_sold,
+            COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+     FROM products p
+     LEFT JOIN inventory i ON i.product_id = p.product_id
+     LEFT JOIN categories c ON c.category_id = p.category_id
+     WHERE p.status = 'active'{$quickProductScope}
+     ORDER BY COALESCE(p.quantity_sold, 0) DESC, p.product_name
+     LIMIT 120"
+);
+$quickProductStmt->execute($quickProductParams);
+$quickProducts = array_map(static function (array $product): array {
+    $image = trim((string)($product['product_image'] ?? ''));
+    if ($image !== '' && !preg_match('#^(?:https?://|data:image/|/)#i', $image)) {
+        $image = strpos($image, 'storage/images/') === 0
+            ? rtrim(dirname(app_base_url()), '/') . '/backend/' . $image
+            : app_url($image);
+    }
+
+    return [
+        'product_id' => (int)$product['product_id'],
+        'name' => (string)$product['product_name'] . (!empty($product['variant_label']) ? ' - ' . $product['variant_label'] : ''),
+        'sku' => (string)($product['sku'] ?? ''),
+        'barcode' => (string)($product['barcode'] ?? ''),
+        'price' => (float)$product['unit_price'],
+        'quantity_on_hand' => (int)$product['quantity_on_hand'],
+        'reorder_level' => (int)$product['reorder_level'],
+        'safety_stock' => (int)$product['safety_stock'],
+        'quantity_sold' => (int)$product['quantity_sold'],
+        'category_id' => (int)($product['category_id'] ?? 0),
+        'category_name' => (string)($product['category_name'] ?: 'Uncategorized'),
+        'product_image' => $image,
+    ];
+}, $quickProductStmt->fetchAll(PDO::FETCH_ASSOC));
+
+$quickCategories = [];
+foreach ($quickProducts as $product) {
+    $categoryId = $product['category_id'];
+    if (!isset($quickCategories[$categoryId])) {
+        $quickCategories[$categoryId] = ['name' => $product['category_name'], 'count' => 0];
+    }
+    $quickCategories[$categoryId]['count']++;
+}
+uasort($quickCategories, static fn(array $left, array $right): int => strnatcasecmp($left['name'], $right['name']));
+$quickCategoryIcon = static function (string $categoryName): string {
+    $name = strtolower($categoryName);
+    return match (true) {
+        str_contains($name, 'beverage'), str_contains($name, 'drink') => 'bi-cup-straw',
+        str_contains($name, 'snack'), str_contains($name, 'biscuit') => 'bi-cookie',
+        str_contains($name, 'personal'), str_contains($name, 'health') => 'bi-heart-pulse',
+        str_contains($name, 'school'), str_contains($name, 'office') => 'bi-pencil',
+        str_contains($name, 'electronic') => 'bi-battery-charging',
+        str_contains($name, 'baking'), str_contains($name, 'grocery') => 'bi-basket2',
+        str_contains($name, 'canned'), str_contains($name, 'condiment') => 'bi-box2-heart',
+        default => 'bi-bag',
+    };
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -68,59 +129,6 @@ $productLookup = [];
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <header class="topbar cashier-topbar pos-command-bar">
-            <div class="cashier-heading">
-                <span class="pos-kicker">Point of Sale</span>
-                <h1>Checkout</h1>
-                <p>Scan items, review the cart, and collect payment without leaving the counter.</p>
-            </div>
-            <div class="cashier-meta pos-session-meta" aria-label="Register status">
-                <span class="cashier-chip online">Register ready</span>
-                <span class="cashier-chip" id="cashier-clock"><i class="bi bi-clock" aria-hidden="true"></i>--:--</span>
-                <button type="button" class="cashier-chip cashier-fullscreen-toggle" id="pos-fullscreen-toggle" title="Toggle focused POS mode">
-                    <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i><span>Full screen</span>
-                </button>
-            </div>
-            <div class="pos-header-actions">
-                <a class="btn btn-secondary pos-find-product-link" href="<?= htmlspecialchars(app_url('components/cashier/findProduct.php')) ?>" title="Find product (F3)">
-                    <i class="bi bi-search" aria-hidden="true"></i><span>Find product</span>
-                </a>
-                <a class="btn btn-secondary pos-sales-history-link" href="<?= htmlspecialchars(app_url('components/invoice/sales_history.php')) ?>" title="Sales history">
-                    <i class="bi bi-receipt" aria-hidden="true"></i><span>Sales</span>
-                </a>
-                <a class="btn btn-secondary pos-shift-link" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>" title="Cashier shift">
-                    <i class="bi bi-cash-stack" aria-hidden="true"></i><span>Shift</span>
-                </a>
-            </div>
-        </header>
-
-        <div class="cashier-shortcuts" aria-label="Keyboard shortcuts">
-            <strong>Shortcuts:</strong>
-            <kbd>F2</kbd><span>Scan</span>
-            <kbd>F3</kbd><span>Find</span>
-            <kbd>F4</kbd><span>Hold</span>
-            <kbd>Ctrl + Enter</kbd><span>Checkout</span>
-        </div>
-
-        <section class="pos-snapshot" aria-label="Current checkout snapshot">
-            <div>
-                <span>Cart lines</span>
-                <strong id="snapshot-lines">0</strong>
-            </div>
-            <div>
-                <span>Items</span>
-                <strong id="snapshot-items">0</strong>
-            </div>
-            <div>
-                <span>Discount</span>
-                <strong>&#8369;<span id="snapshot-discount">0.00</span></strong>
-            </div>
-            <div class="pos-snapshot-total">
-                <span>Total due</span>
-                <strong>&#8369;<span id="snapshot-total">0.00</span></strong>
-            </div>
-        </section>
-
         <?php if ($checkout_error): ?>
             <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_error) ?></div>
         <?php endif; ?>
@@ -161,29 +169,6 @@ $productLookup = [];
                     </div>
                     <div id="cart-message" class="cart-message" role="status" aria-live="polite"></div>
 
-                    <div id="recent-scan" class="recent-scan">
-                        <div class="recent-scan-icon"><i class="bi bi-upc" aria-hidden="true"></i></div>
-                        <div class="recent-scan-copy">
-                            <strong>Ready to scan</strong>
-                            <span>Your most recently added product will appear here.</span>
-                        </div>
-                        <div class="recent-scan-price">—</div>
-                    </div>
-
-                    <div class="pos-category-section" aria-label="Fast checkout actions">
-                        <div class="pos-category-heading">
-                            <strong>Fast actions</strong>
-                            <span>Use when the line is moving quickly.</span>
-                        </div>
-                        <div class="pos-category-buttons">
-                            <button type="button" class="pos-category-button active" data-pos-focus="scan"><i class="bi bi-upc-scan" aria-hidden="true"></i> Scan next</button>
-                            <button type="button" class="pos-category-button" data-pos-focus="find"><i class="bi bi-search" aria-hidden="true"></i> Product lookup</button>
-                            <button type="button" class="pos-category-button" data-pos-focus="cash"><i class="bi bi-cash" aria-hidden="true"></i> Cash payment</button>
-                            <button type="button" class="pos-category-button" data-pos-focus="discount"><i class="bi bi-percent" aria-hidden="true"></i> Discount</button>
-                            <button type="button" class="pos-category-button" data-pos-focus="hold"><i class="bi bi-pause-circle" aria-hidden="true"></i> Hold sale</button>
-                        </div>
-                    </div>
-
                     <div class="scanner-area" id="scanner-area">
                         <div id="scanner-reader" class="scanner-reader"></div>
                         <div id="scanner-result" class="scanner-status" aria-live="polite">
@@ -192,6 +177,42 @@ $productLookup = [];
                         </div>
                     </div>
                 </div>
+
+                <section class="quick-add-section" aria-labelledby="quick-add-title">
+                    <div class="quick-add-header">
+                        <div class="quick-add-title-row">
+                            <h2 id="quick-add-title">Quick Add Products</h2>
+                            <span id="quick-product-count" class="quick-product-count"></span>
+                        </div>
+                        <div class="quick-add-toolbar">
+                            <div class="quick-product-search">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                                <label class="sr-only" for="quick-product-search">Search product by name or SKU</label>
+                                <input id="quick-product-search" type="search" placeholder="Search product by name or SKU" autocomplete="off">
+                            </div>
+                            <button type="button" class="quick-grid-toggle" id="quick-grid-toggle" title="Toggle compact product grid" aria-label="Toggle compact product grid" aria-pressed="false">
+                                <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="quick-category-filters" id="quick-category-filters" aria-label="Product categories">
+                        <button type="button" class="quick-category-filter active" data-quick-category="all">
+                            <span class="quick-category-icon"><i class="bi bi-grid" aria-hidden="true"></i></span>
+                            <strong>All</strong>
+                            <small><?= count($quickProducts) ?> items</small>
+                        </button>
+                        <?php foreach ($quickCategories as $categoryId => $category): ?>
+                            <button type="button" class="quick-category-filter" data-quick-category="<?= (int)$categoryId ?>">
+                                <span class="quick-category-icon"><i class="bi <?= htmlspecialchars($quickCategoryIcon($category['name'])) ?>" aria-hidden="true"></i></span>
+                                <strong><?= htmlspecialchars($category['name']) ?></strong>
+                                <small><?= (int)$category['count'] ?> item<?= (int)$category['count'] === 1 ? '' : 's' ?></small>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div id="quick-product-grid" class="quick-product-grid" aria-live="polite"></div>
+                </section>
 
             </section>
 
@@ -367,7 +388,13 @@ let lastScannedCode = '';
 let lastScannedAt = 0;
 let posAudioContext = null;
 
-const productLookup = <?= json_encode($productLookup, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const quickProducts = <?= json_encode($quickProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const quickProductById = new Map(quickProducts.map(product => [Number(product.product_id), product]));
+const productLookup = {};
+quickProducts.forEach(product => {
+    if (product.sku) productLookup[product.sku] = product;
+    if (product.barcode) productLookup[product.barcode] = product;
+});
 const skuInput = document.getElementById('sku-input');
 const cartMessage = document.getElementById('cart-message');
 const scannerResult = document.getElementById('scanner-result');
@@ -401,6 +428,11 @@ const discountSummary = document.getElementById('discount-summary');
 const supervisorFields = document.getElementById('supervisor-fields');
 const fullscreenToggle = document.getElementById('pos-fullscreen-toggle');
 const cashierClock = document.getElementById('cashier-clock');
+const quickProductSearch = document.getElementById('quick-product-search');
+const quickCategoryFilters = document.getElementById('quick-category-filters');
+const quickProductGrid = document.getElementById('quick-product-grid');
+const quickProductCount = document.getElementById('quick-product-count');
+const quickGridToggle = document.getElementById('quick-grid-toggle');
 const findProductUrl = <?= json_encode(app_url('components/cashier/findProduct.php')) ?>;
 const barcodeApiUrl = <?= json_encode(app_url('components/barcodeScanner/apiScanner/barcode.php')) ?>;
 const heldSalesApiUrl = <?= json_encode(app_url('components/barcodeScanner/apiScanner/held_sales.php')) ?>;
@@ -450,6 +482,104 @@ function escapeHtml(value) {
         '"': '&quot;',
         "'": '&#039;'
     }[char]));
+}
+
+function setTextIfPresent(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function quickProductMedia(product) {
+    if (product.product_image) {
+        return `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><i class="bi ${quickProductIcon(product)}" aria-hidden="true" hidden></i>`;
+    }
+    return `<i class="bi ${quickProductIcon(product)}" aria-hidden="true"></i>`;
+}
+
+function quickProductIcon(product) {
+    const category = String(product.category_name || '').toLowerCase();
+    if (category.includes('beverage') || category.includes('drink')) return 'bi-cup-straw';
+    if (category.includes('snack') || category.includes('biscuit')) return 'bi-cookie';
+    if (category.includes('personal') || category.includes('health')) return 'bi-heart-pulse';
+    if (category.includes('school') || category.includes('office')) return 'bi-pencil';
+    if (category.includes('electronic')) return 'bi-battery-charging';
+    if (category.includes('baking') || category.includes('grocery')) return 'bi-basket2';
+    return 'bi-bag';
+}
+
+function quickProductStockState(product) {
+    const stock = Number(product.quantity_on_hand || 0);
+    const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0), lowStockFallback);
+    return stock <= 0 ? 'out' : (stock <= threshold ? 'low' : 'available');
+}
+
+function addQuickProduct(productId) {
+    const product = quickProductById.get(Number(productId));
+    if (!product || Number(product.quantity_on_hand) <= 0) {
+        return;
+    }
+    addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode);
+}
+
+function updateQuickProductAvailability() {
+    document.querySelectorAll('.quick-product-card[data-product-id]').forEach(card => {
+        const product = quickProductById.get(Number(card.dataset.productId));
+        if (!product) return;
+        const stock = Number(product.quantity_on_hand);
+        const quantity = Number(cart[product.product_id]?.qty || 0);
+        const remaining = stock - quantity;
+        const action = card.querySelector('.quick-product-action');
+        card.classList.toggle('selected', quantity > 0);
+        if (stock <= 0) {
+            action.innerHTML = '<button type="button" class="quick-product-add" disabled>Out of stock</button>';
+        } else if (quantity > 0) {
+            action.innerHTML = `<div class="quick-product-stepper" aria-label="${escapeHtml(product.name)} quantity">
+                <button type="button" data-quick-decrease="${Number(product.product_id)}" aria-label="Decrease ${escapeHtml(product.name)}"><i class="bi bi-dash-lg" aria-hidden="true"></i></button>
+                <strong>${quantity}</strong>
+                <button type="button" data-quick-add="${Number(product.product_id)}" aria-label="Add another ${escapeHtml(product.name)}" ${remaining <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+            </div>`;
+        } else {
+            action.innerHTML = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}"><i class="bi bi-plus-lg" aria-hidden="true"></i>Add to Cart</button>`;
+        }
+    });
+}
+
+function renderQuickProducts() {
+    const term = quickProductSearch.value.trim().toLowerCase();
+    const activeCategory = quickCategoryFilters.querySelector('.active')?.dataset.quickCategory || 'all';
+    const products = quickProducts.filter(product => {
+        const categoryMatches = activeCategory === 'all' || Number(product.category_id) === Number(activeCategory);
+        const searchText = `${product.name} ${product.sku} ${product.barcode}`.toLowerCase();
+        return categoryMatches && (term === '' || searchText.includes(term));
+    });
+
+    quickProductCount.textContent = `${products.length} product${products.length === 1 ? '' : 's'}`;
+    if (!products.length) {
+        quickProductGrid.innerHTML = '<div class="quick-products-empty"><i class="bi bi-search" aria-hidden="true"></i><span>No matching products found.</span></div>';
+        return;
+    }
+
+    quickProductGrid.innerHTML = products.map(product => {
+        const stock = Number(product.quantity_on_hand || 0);
+        const stockState = quickProductStockState(product);
+        const stockLabel = stockState === 'out' ? 'Out of stock' : `${stock} in stock`;
+        const warning = stockState === 'low' ? '<span class="quick-stock-warning"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>Low stock</span>' : '';
+        return `<article class="quick-product-card ${stockState === 'out' ? 'out-of-stock' : ''}" data-product-id="${Number(product.product_id)}">
+            <div class="quick-product-image">${quickProductMedia(product)}${warning}</div>
+            <div class="quick-product-details">
+                <strong class="quick-product-name" title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong>
+                <span class="quick-product-sku">${escapeHtml(product.category_name)} &middot; ${escapeHtml(product.sku || product.barcode || 'No SKU')}</span>
+                <div class="quick-product-meta">
+                    <strong>&#8369;${money(product.price)}</strong>
+                    <span class="quick-product-stock ${stockState}"><i class="bi bi-circle-fill" aria-hidden="true"></i>${stockLabel}</span>
+                </div>
+                <div class="quick-product-action"></div>
+            </div>
+        </article>`;
+    }).join('');
+    updateQuickProductAvailability();
 }
 
 function getCartTotal() {
@@ -506,14 +636,20 @@ function playScanTone(success = true) {
 }
 
 function pulseRecentScan() {
+    if (!recentScan) {
+        return;
+    }
     recentScan.classList.remove('scan-pulse');
     void recentScan.offsetWidth;
     recentScan.classList.add('scan-pulse');
 }
 
 function showRecentScan(product, code, status = 'success') {
-    recentScan.classList.toggle('warning', status !== 'success');
     playScanTone(status === 'success');
+    if (!recentScan) {
+        return;
+    }
+    recentScan.classList.toggle('warning', status !== 'success');
     pulseRecentScan();
     recentScan.innerHTML = product
         ? `<div class="recent-scan-icon"><i class="bi bi-check2" aria-hidden="true"></i></div>
@@ -702,10 +838,10 @@ function renderCart() {
     document.getElementById('cart-total').textContent = money(net);
     document.getElementById('cart-item-count').textContent = itemCount;
     document.getElementById('cart-line-count').textContent = lineCount;
-    document.getElementById('snapshot-lines').textContent = lineCount;
-    document.getElementById('snapshot-items').textContent = itemCount;
-    document.getElementById('snapshot-discount').textContent = money(discount);
-    document.getElementById('snapshot-total').textContent = money(net);
+    setTextIfPresent('snapshot-lines', lineCount);
+    setTextIfPresent('snapshot-items', itemCount);
+    setTextIfPresent('snapshot-discount', money(discount));
+    setTextIfPresent('snapshot-total', money(net));
     document.getElementById('summary-subtotal').textContent = money(gross);
     document.getElementById('summary-discount').textContent = money(discount);
     checkoutButton.disabled = !hasItems || !posShiftOpen;
@@ -714,6 +850,7 @@ function renderCart() {
     clearCartButton.disabled = !hasItems;
     updatePaymentFields();
     persistCart();
+    updateQuickProductAvailability();
 }
 
 function updatePaymentFields() {
@@ -734,8 +871,8 @@ function updatePaymentFields() {
     document.getElementById('summary-subtotal').textContent = money(gross);
     document.getElementById('summary-discount').textContent = money(discount);
     document.getElementById('summary-change').textContent = money(Math.max(0, received - total));
-    document.getElementById('snapshot-discount').textContent = money(discount);
-    document.getElementById('snapshot-total').textContent = money(total);
+    setTextIfPresent('snapshot-discount', money(discount));
+    setTextIfPresent('snapshot-total', money(total));
     if (discountSummary) {
         discountSummary.textContent = discount > 0 ? `Gross ₱${money(gross)} · Discount ₱${money(discount)} · Net ₱${money(total)}` : 'No discount applied.';
         supervisorFields.classList.toggle('hidden', !(discount > gross * 0.10));
@@ -1006,6 +1143,28 @@ cashQuick.addEventListener('click', event => {
         setQuickTender(button.dataset.tender);
     }
 });
+quickProductSearch.addEventListener('input', renderQuickProducts);
+quickCategoryFilters.addEventListener('click', event => {
+    const button = event.target.closest('[data-quick-category]');
+    if (!button) return;
+    quickCategoryFilters.querySelectorAll('[data-quick-category]').forEach(item => item.classList.toggle('active', item === button));
+    renderQuickProducts();
+});
+quickProductGrid.addEventListener('click', event => {
+    const addButton = event.target.closest('[data-quick-add]');
+    if (addButton && !addButton.disabled) {
+        addQuickProduct(addButton.dataset.quickAdd);
+        return;
+    }
+    const decreaseButton = event.target.closest('[data-quick-decrease]');
+    if (decreaseButton) {
+        changeCartQty(Number(decreaseButton.dataset.quickDecrease), -1);
+    }
+});
+quickGridToggle.addEventListener('click', () => {
+    const compact = quickProductGrid.classList.toggle('compact');
+    quickGridToggle.setAttribute('aria-pressed', compact ? 'true' : 'false');
+});
 document.querySelectorAll('[data-pos-focus]').forEach(button => {
     button.addEventListener('click', () => {
         document.querySelectorAll('[data-pos-focus]').forEach(item => item.classList.toggle('active', item === button));
@@ -1094,6 +1253,7 @@ document.addEventListener('keydown', event => {
     }
 });
 
+renderQuickProducts();
 restoreState();
 if (cashierClock) {
     updateClock();

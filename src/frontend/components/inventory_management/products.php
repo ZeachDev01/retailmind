@@ -197,21 +197,6 @@ $products = $productService->getProductsForManagement($selectedBranchId);
 $activeProducts = $productService->getActiveProducts($selectedBranchId);
 $variantParents = $products;
 $totalProducts = count($products);
-$lowCount = 0;
-$outCount = 0;
-$withoutBarcodeCount = 0;
-foreach ($products as $product) {
-    $quantity = (int)($product['quantity_on_hand'] ?? 0);
-    $threshold = max((int)($product['reorder_level'] ?? 0), (int)($product['safety_stock'] ?? 0));
-    if ($quantity <= 0) {
-        $outCount++;
-    } elseif ($quantity <= $threshold) {
-        $lowCount++;
-    }
-    if (trim((string)($product['barcode'] ?? '')) === '') {
-        $withoutBarcodeCount++;
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -232,113 +217,374 @@ foreach ($products as $product) {
         #add-product-modal .wizard-panel {
             min-height: auto;
         }
+
+        .product-add-menu {
+            position: relative;
+            margin-left: auto;
+        }
+
+        .product-add-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .45rem;
+            min-width: 108px;
+        }
+
+        .product-add-trigger .bi-chevron-down {
+            font-size: .75rem;
+            transition: transform .18s ease;
+        }
+
+        .product-add-trigger[aria-expanded="true"] .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+
+        .product-add-menu-list {
+            position: absolute;
+            z-index: 30;
+            top: calc(100% + .5rem);
+            right: 0;
+            display: grid;
+            width: min(260px, calc(100vw - 2rem));
+            padding: .4rem;
+            background: var(--card-bg, #fff);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, .16);
+        }
+
+        .product-add-menu-list[hidden] {
+            display: none;
+        }
+
+        .product-add-menu-item {
+            display: grid;
+            grid-template-columns: 34px minmax(0, 1fr);
+            align-items: center;
+            gap: .7rem;
+            width: 100%;
+            min-height: 48px;
+            padding: .55rem .65rem;
+            color: var(--text);
+            background: transparent;
+            border: 0;
+            border-radius: 6px;
+            text-align: left;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .product-add-menu-item:hover,
+        .product-add-menu-item:focus-visible {
+            background: #f1f5f9;
+            outline: none;
+        }
+
+        .product-add-menu-item i {
+            display: grid;
+            width: 34px;
+            height: 34px;
+            place-items: center;
+            color: #2563eb;
+            background: #eff6ff;
+            border-radius: 6px;
+        }
+
+        @media (max-width: 768px) {
+            .product-add-menu {
+                width: 100%;
+                margin-left: 0;
+            }
+
+            .product-add-trigger,
+            .product-add-menu-list {
+                width: 100%;
+            }
+
+            .product-add-menu-list {
+                right: auto;
+                left: 0;
+            }
+        }
+
+        .product-drawer-tabs {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: .35rem;
+            padding: .7rem 1rem;
+            background: var(--card-bg, #fff);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .product-drawer-tab {
+            min-height: 42px;
+            padding: .5rem .65rem;
+            color: var(--muted);
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            font: inherit;
+            font-size: .84rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .product-drawer-tab:hover {
+            color: var(--text);
+            background: #f1f5f9;
+        }
+
+        .product-drawer-tab.is-active {
+            color: #1d4ed8;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .product-drawer-panel[hidden],
+        #product-drawer-footer[hidden] {
+            display: none;
+        }
+
+        .product-quantity-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .catalog-toolbar {
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+            overflow: visible;
+        }
+
+        .catalog-toolbar-primary,
+        .catalog-filter-row {
+            display: flex;
+            align-items: end;
+            gap: .65rem;
+            padding: .75rem;
+        }
+
+        .catalog-filter-row {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+            border-top: 1px solid var(--border);
+            background: #fbfcfe;
+        }
+
+        .catalog-filter-row[hidden] {
+            display: none;
+        }
+
+        .catalog-view-controls,
+        .catalog-utility-controls {
+            display: flex;
+            gap: .35rem;
+        }
+
+        .catalog-icon-button {
+            width: 42px;
+            height: 42px;
+            display: inline-grid;
+            place-items: center;
+            flex: 0 0 42px;
+            padding: 0;
+            color: var(--muted);
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .catalog-icon-button:hover,
+        .catalog-icon-button.is-active {
+            color: #2563eb;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .catalog-search {
+            position: relative;
+            flex: 1 1 300px;
+            min-width: 220px;
+        }
+
+        .catalog-search i {
+            position: absolute;
+            top: 50%;
+            left: .8rem;
+            color: var(--muted);
+            transform: translateY(-50%);
+        }
+
+        .catalog-search input {
+            width: 100%;
+            min-height: 42px;
+            padding: .65rem .8rem .65rem 2.25rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #f8fafc;
+        }
+
+        .catalog-field {
+            display: grid;
+            gap: .3rem;
+            min-width: 150px;
+        }
+
+        .catalog-field > span {
+            color: var(--muted);
+            font-size: .68rem;
+            font-weight: 700;
+        }
+
+        .catalog-field select {
+            width: 100%;
+            min-height: 42px;
+            padding: .55rem 2rem .55rem .7rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background-color: #fff;
+            color: var(--text);
+        }
+
+        .catalog-show-field,
+        .catalog-sort-field {
+            flex: 0 1 180px;
+        }
+
+        .catalog-filter-button {
+            min-height: 42px;
+            white-space: nowrap;
+        }
+
+        .catalog-toolbar .product-add-menu {
+            flex: 0 0 auto;
+            margin-left: 0;
+        }
+
+        .catalog-toolbar .product-add-trigger {
+            min-height: 42px;
+            background: #2563eb;
+        }
+
+        .catalog-toolbar .product-add-trigger:hover {
+            background: #1d4ed8;
+        }
+
+        .catalog-utility-controls {
+            align-items: end;
+            justify-content: flex-end;
+        }
+
+        .catalog-utility-controls select {
+            min-width: 130px;
+            min-height: 42px;
+            padding: .55rem .7rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--text);
+        }
+
+        @media (max-width: 1100px) {
+            .catalog-toolbar-primary {
+                flex-wrap: wrap;
+            }
+
+            .catalog-filter-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .catalog-utility-controls {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .catalog-toolbar-primary,
+            .catalog-filter-row {
+                display: grid;
+                grid-template-columns: 1fr;
+                align-items: stretch;
+            }
+
+            .catalog-search,
+            .catalog-field,
+            .catalog-show-field,
+            .catalog-sort-field {
+                min-width: 0;
+                width: 100%;
+            }
+
+            .catalog-view-controls,
+            .catalog-utility-controls {
+                grid-column: auto;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .product-drawer-tabs {
+                padding-inline: .65rem;
+            }
+
+            .product-drawer-tab {
+                padding-inline: .35rem;
+                font-size: .76rem;
+            }
+        }
     </style>
 </head>
 
 <body class="products-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <main class="main-content">
-            <header class="page-heading">
-                <div>
-                    <h1>Products &amp; Stock</h1>
-                    <p class="page-subtitle">Search, filter, organize, and maintain the store's complete product catalog.</p>
-                </div>
-                <?php if (is_system_admin()): ?>
-                    <form method="get" class="page-heading-actions" aria-label="Inventory branch filter">
-                        <label for="inventory-branch" class="u-sr-only">View inventory branch</label>
-                        <select id="inventory-branch" name="branch_id" onchange="this.form.submit()">
-                            <option value="">All branches</option>
-                            <?php foreach ($branches as $branch): ?>
-                                <option value="<?= (int)$branch['branch_id'] ?>" <?= $selectedBranchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </form>
-                <?php endif; ?>
-                <div class="page-heading-actions products-quick-actions">
-                    <?php if ($canManageInventory): ?>
-                        <button type="button" class="quick-action products-quick-action" id="add-product-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i><strong>Add Product</strong></button>
-                        <button type="button" class="quick-action products-quick-action" id="add-category-btn"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button>
-                        <a class="quick-action products-quick-action" href="<?= htmlspecialchars(app_url('components/report/stock_receiving.php')) ?>"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i><strong>Receive Stock</strong></a>
-                    <?php endif; ?>
-                    <a class="quick-action products-quick-action" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>
-                </div>
-            </header>
-
-            <div class="card-grid" style="margin-bottom:1rem;">
-                <a class="stat-card-link" href="#product-table" data-quick-filter="all">
-                    <article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-box-seam"></i></span>
-                        <div class="value"><?= number_format($totalProducts) ?></div>
-                        <div class="label">Total Products</div>
-                        <div class="hint">All active and inactive catalog entries</div>
-                    </article>
-                </a>
-                <a class="stat-card-link" href="#product-table" data-quick-filter="low">
-                    <article class="stat-card with-icon <?= $lowCount ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-exclamation-triangle"></i></span>
-                        <div class="value"><?= number_format($lowCount) ?></div>
-                        <div class="label">Low Stock</div>
-                        <div class="hint">At or below reorder threshold</div>
-                    </article>
-                </a>
-                <a class="stat-card-link" href="#product-table" data-quick-filter="out">
-                    <article class="stat-card with-icon <?= $outCount ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-x-octagon"></i></span>
-                        <div class="value"><?= number_format($outCount) ?></div>
-                        <div class="label">Out of Stock</div>
-                        <div class="hint">Unavailable for checkout</div>
-                    </article>
-                </a>
-                <a class="stat-card-link" href="#product-table" data-quick-filter="no-barcode">
-                    <article class="stat-card with-icon <?= $withoutBarcodeCount ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-upc"></i></span>
-                        <div class="value"><?= number_format($withoutBarcodeCount) ?></div>
-                        <div class="label">Without Barcode</div>
-                        <div class="hint">Need an internal printable barcode</div>
-                    </article>
-                </a>
-            </div>
-
-            <section class="dashboard-section" id="product-table">
-                <div class="section-header">
-                    <div>
-                        <h3>Product Catalog</h3>
-                        <p class="section-description">Select a row for complete planning, supplier, expiration, and barcode details.</p>
+        <main class="main-content" id="product-table">
+                <div class="catalog-toolbar" aria-label="Product catalog controls">
+                    <div class="catalog-toolbar-primary">
+                        <div class="catalog-view-controls" aria-label="Table view controls">
+                            <button type="button" class="catalog-icon-button is-active" aria-label="List view" title="List view"><i class="bi bi-list-ul" aria-hidden="true"></i></button>
+                            <button type="button" class="catalog-icon-button" id="column-button" aria-label="Choose visible columns" title="Choose visible columns"><i class="bi bi-grid" aria-hidden="true"></i></button>
+                        </div>
+                        <label class="catalog-search">
+                            <i class="bi bi-search" aria-hidden="true"></i>
+                            <input type="search" id="product-search" placeholder="Search products..." autocomplete="off">
+                        </label>
+                        <label class="catalog-field catalog-show-field"><span>Show</span><select id="stock-filter" aria-label="Show products by stock status">
+                            <option value="">All Products</option><option value="available">Available</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="no-barcode">Without barcode</option><option value="expiring">Expiring soon</option>
+                        </select></label>
+                        <label class="catalog-field catalog-sort-field"><span>Sort by</span><select id="catalog-sort" aria-label="Sort products">
+                            <option value="name:1">Default</option><option value="name:1">Name A-Z</option><option value="name:-1">Name Z-A</option><option value="stock:1">Stock: Low to High</option><option value="stock:-1">Stock: High to Low</option><option value="price:1">Price: Low to High</option><option value="price:-1">Price: High to Low</option>
+                        </select></label>
+                        <button type="button" class="btn btn-quiet btn-icon catalog-filter-button" id="catalog-filter-toggle" aria-expanded="true" aria-controls="catalog-filter-row"><i class="bi bi-funnel" aria-hidden="true"></i>Filter</button>
+                        <div class="product-add-menu" id="product-add-menu">
+                            <button type="button" class="btn product-add-trigger" id="product-add-trigger" aria-expanded="false" aria-controls="product-add-options" aria-haspopup="menu"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add</span><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+                            <div class="product-add-menu-list" id="product-add-options" role="menu" hidden>
+                                <?php if ($canManageInventory): ?><button type="button" class="product-add-menu-item" id="add-product-btn" role="menuitem"><i class="bi bi-box-seam" aria-hidden="true"></i><strong>Add Product</strong></button><button type="button" class="product-add-menu-item" id="add-category-btn" role="menuitem"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button><?php endif; ?>
+                                <a class="product-add-menu-item" role="menuitem" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>
+                            </div>
+                        </div>
                     </div>
-                    <div class="page-heading-actions">
-                        <?php if ($canDirectAdjust): ?><button type="button" class="btn btn-quiet btn-icon" id="stock-adjust-btn"><i class="bi bi-sliders"></i>Emergency Adjustment</button><?php endif; ?>
+                    <div class="catalog-filter-row" id="catalog-filter-row">
+                        <label class="catalog-field"><span>Category</span><select id="category-filter" aria-label="Filter by category"><option value="">All Categories</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?></select></label>
+                        <label class="catalog-field"><span>Status</span><select id="status-filter" aria-label="Filter by product status"><option value="">All Statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+                        <label class="catalog-field"><span>Price</span><select id="price-filter" aria-label="Filter by selling price"><option value="">Any Price</option><option value="0:50">Under ₱50</option><option value="50:100">₱50 - ₱100</option><option value="100:500">₱100 - ₱500</option><option value="500:">₱500 and above</option></select></label>
+                        <?php if (is_system_admin()): ?><form method="get" class="catalog-field"><span>Store</span><select id="inventory-branch" name="branch_id" onchange="this.form.submit()" aria-label="Filter by store"><option value="">All Stores</option><?php foreach ($branches as $branch): ?><option value="<?= (int)$branch['branch_id'] ?>" <?= $selectedBranchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name']) ?></option><?php endforeach; ?></select></form><?php else: ?><label class="catalog-field"><span>Store</span><select disabled aria-label="Assigned store"><option>Assigned Store</option></select></label><?php endif; ?>
+                        <div class="catalog-utility-controls">
+                            <button type="button" class="catalog-icon-button" id="save-view-button" aria-label="Save current view" title="Save current view"><i class="bi bi-bookmark" aria-hidden="true"></i></button>
+                            <select id="saved-view" aria-label="Saved filter view"><option value="">Saved views</option></select>
+                            <button type="button" class="catalog-icon-button" id="clear-filters" aria-label="Clear filters" title="Clear filters"><i class="bi bi-x-circle" aria-hidden="true"></i></button>
+                            <button type="button" class="catalog-icon-button" id="export-products" aria-label="Export products" title="Export products"><i class="bi bi-download" aria-hidden="true"></i></button>
+                            <span class="toolbar-count" id="result-count"><?= number_format($totalProducts) ?> results</span>
+                        </div>
                     </div>
-                </div>
-
-                <div class="table-toolbar" aria-label="Product filters">
-                    <label class="toolbar-search">
-                        <i class="bi bi-search" aria-hidden="true"></i>
-                        <input type="search" id="product-search" placeholder="Search name, SKU, barcode, or brand" autocomplete="off">
-                    </label>
-                    <select id="category-filter" aria-label="Filter by category">
-                        <option value="">All categories</option>
-                        <?php foreach ($categories as $category): ?>
-                            <option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <select id="stock-filter" aria-label="Filter by stock status">
-                        <option value="">All stock levels</option>
-                        <option value="available">Available</option>
-                        <option value="low">Low stock</option>
-                        <option value="out">Out of stock</option>
-                        <option value="no-barcode">Without barcode</option>
-                        <option value="expiring">Expiring soon</option>
-                    </select>
-                    <select id="status-filter" aria-label="Filter by product status">
-                        <option value="">All statuses</option>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                    <button type="button" class="btn btn-quiet btn-icon" id="column-button"><i class="bi bi-layout-three-columns"></i>Columns</button>
-                    <button type="button" class="btn btn-quiet btn-icon" id="save-view-button"><i class="bi bi-bookmark"></i>Save View</button>
-                    <select id="saved-view" aria-label="Saved filter view">
-                        <option value="">Saved views</option>
-                    </select>
-                    <button type="button" class="btn btn-quiet btn-icon" id="clear-filters"><i class="bi bi-x-circle"></i>Clear</button>
-                    <button type="button" class="btn btn-quiet btn-icon" id="export-products"><i class="bi bi-download"></i>Export</button>
-                    <span class="toolbar-count" id="result-count"><?= number_format($totalProducts) ?> results</span>
                 </div>
 
                 <div class="bulk-bar" id="bulk-bar">
@@ -406,9 +652,7 @@ foreach ($products as $product) {
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">
                                             <div class="row-actions">
-                                                <button type="button" class="icon-button view-product" data-product-id="<?= (int)$product['product_id'] ?>" title="View product details" aria-label="View <?= htmlspecialchars($product['product_name']) ?> details"><i class="bi bi-eye"></i></button>
-                                                <?php if ($barcode !== ''): ?><a class="icon-button" href="print_barcodes.php?product_id=<?= (int)$product['product_id'] ?>&quantity=1" target="_blank" title="Print barcode"><i class="bi bi-printer"></i></a><?php else: ?><button type="button" class="icon-button generate-one" data-product-id="<?= (int)$product['product_id'] ?>" title="Generate barcode"><i class="bi bi-upc"></i></button><?php endif; ?>
-                                                <button type="button" class="icon-button more-product" data-product-id="<?= (int)$product['product_id'] ?>" title="More actions"><i class="bi bi-three-dots"></i></button>
+                                                <button type="button" class="btn btn-small btn-quiet btn-icon manage-product" data-product-id="<?= (int)$product['product_id'] ?>" aria-label="Manage <?= htmlspecialchars($product['product_name']) ?>"><i class="bi bi-sliders" aria-hidden="true"></i>Manage</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -429,7 +673,6 @@ foreach ($products as $product) {
                         <div class="pagination-buttons" id="pagination-buttons"></div>
                     </footer>
                 </div>
-            </section>
         </main>
     </div>
 
@@ -441,7 +684,16 @@ foreach ($products as $product) {
                     <p id="product-drawer-subtitle"></p>
                 </div><button type="button" class="rm-close" data-close-drawer aria-label="Close product details"><i class="bi bi-x-lg"></i></button>
             </header>
-            <div class="rm-drawer-body" id="product-drawer-body"></div>
+            <nav class="product-drawer-tabs" role="tablist" aria-label="Product details sections">
+                <button type="button" class="product-drawer-tab is-active" id="product-tab-info" role="tab" aria-selected="true" aria-controls="product-panel-info" data-product-tab="info">Info</button>
+                <button type="button" class="product-drawer-tab" id="product-tab-quantity" role="tab" aria-selected="false" aria-controls="product-panel-quantity" data-product-tab="quantity" tabindex="-1">Quantity</button>
+                <button type="button" class="product-drawer-tab" id="product-tab-actions" role="tab" aria-selected="false" aria-controls="product-panel-actions" data-product-tab="actions" tabindex="-1">Recommended Actions</button>
+            </nav>
+            <div class="rm-drawer-body" id="product-drawer-body">
+                <section class="product-drawer-panel" id="product-panel-info" role="tabpanel" aria-labelledby="product-tab-info" data-product-panel="info"></section>
+                <section class="product-drawer-panel" id="product-panel-quantity" role="tabpanel" aria-labelledby="product-tab-quantity" data-product-panel="quantity" hidden></section>
+                <section class="product-drawer-panel" id="product-panel-actions" role="tabpanel" aria-labelledby="product-tab-actions" data-product-panel="actions" hidden></section>
+            </div>
             <footer class="rm-drawer-footer" id="product-drawer-footer"></footer>
         </aside>
     </div>
@@ -618,6 +870,7 @@ foreach ($products as $product) {
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
         const productData = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+        const canDirectAdjust = <?= $canDirectAdjust ? 'true' : 'false' ?>;
         const productsById = Object.fromEntries(productData.map(product => [Number(product.product_id), product]));
         const existingBarcodes = new Set(productData.map(product => String(product.barcode || '').trim().toLowerCase()).filter(Boolean));
         const existingProductNames = new Set(productData.map(product => String(product.product_name || '').trim().toLowerCase()).filter(Boolean));
@@ -626,6 +879,8 @@ foreach ($products as $product) {
         const categoryFilter = document.getElementById('category-filter');
         const stockFilter = document.getElementById('stock-filter');
         const statusFilter = document.getElementById('status-filter');
+        const priceFilter = document.getElementById('price-filter');
+        const sortSelect = document.getElementById('catalog-sort');
         const resultCount = document.getElementById('result-count');
         const pageSummary = document.getElementById('page-summary');
         const pageSizeInput = document.getElementById('page-size');
@@ -650,21 +905,54 @@ foreach ($products as $product) {
             if (event.target === overlay) RetailMindUI.closeOverlay(overlay);
         }));
 
-        document.getElementById('add-product-btn').addEventListener('click', () => {
+        const addMenu = document.getElementById('product-add-menu');
+        const addMenuTrigger = document.getElementById('product-add-trigger');
+        const addMenuOptions = document.getElementById('product-add-options');
+
+        function setAddMenuOpen(isOpen) {
+            addMenuOptions.hidden = !isOpen;
+            addMenuTrigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            if (isOpen) addMenuOptions.querySelector('[role="menuitem"]')?.focus();
+        }
+
+        addMenuTrigger.addEventListener('click', () => setAddMenuOpen(addMenuOptions.hidden));
+        document.addEventListener('click', event => {
+            if (!addMenu.contains(event.target)) setAddMenuOpen(false);
+        });
+        addMenu.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                setAddMenuOpen(false);
+                addMenuTrigger.focus();
+            }
+        });
+
+        const addProductButton = document.getElementById('add-product-btn');
+        if (addProductButton) addProductButton.addEventListener('click', () => {
+            setAddMenuOpen(false);
             openModal('add-product-modal');
             restoreFormState();
         });
-        document.getElementById('add-category-btn').addEventListener('click', () => openModal('add-category-modal'));
-        const stockAdjustButton = document.getElementById('stock-adjust-btn');
-        if (stockAdjustButton) stockAdjustButton.addEventListener('click', () => openModal('stock-adjust-modal'));
+        const addCategoryButton = document.getElementById('add-category-btn');
+        if (addCategoryButton) addCategoryButton.addEventListener('click', () => {
+            setAddMenuOpen(false);
+            openModal('add-category-modal');
+        });
         document.getElementById('column-button').addEventListener('click', () => openModal('column-modal'));
+        const filterToggle = document.getElementById('catalog-filter-toggle');
+        const filterRow = document.getElementById('catalog-filter-row');
+        filterToggle.addEventListener('click', () => {
+            filterRow.hidden = !filterRow.hidden;
+            filterToggle.setAttribute('aria-expanded', filterRow.hidden ? 'false' : 'true');
+            filterToggle.classList.toggle('is-active', !filterRow.hidden);
+        });
 
         function getFilters() {
             return {
                 q: searchInput.value.trim().toLowerCase(),
                 category: categoryFilter.value,
                 stock: stockFilter.value,
-                status: statusFilter.value
+                status: statusFilter.value,
+                price: priceFilter.value
             };
         }
 
@@ -674,13 +962,16 @@ foreach ($products as $product) {
                 const searchMatch = !filters.q || row.dataset.search.includes(filters.q);
                 const categoryMatch = !filters.category || row.dataset.category === filters.category;
                 const statusMatch = !filters.status || row.dataset.status === filters.status;
+                const price = Number(row.dataset.price || 0);
+                const [minimumPrice, maximumPrice] = filters.price.split(':');
+                const priceMatch = !filters.price || ((!minimumPrice || price >= Number(minimumPrice)) && (!maximumPrice || price <= Number(maximumPrice)));
                 let stockMatch = true;
                 if (filters.stock === 'available') stockMatch = row.dataset.stockState === 'available';
                 if (filters.stock === 'low') stockMatch = row.dataset.stockState === 'low';
                 if (filters.stock === 'out') stockMatch = row.dataset.stockState === 'out';
                 if (filters.stock === 'no-barcode') stockMatch = !row.dataset.barcode;
                 if (filters.stock === 'expiring') stockMatch = row.dataset.expiring === '1';
-                return searchMatch && categoryMatch && statusMatch && stockMatch;
+                return searchMatch && categoryMatch && statusMatch && priceMatch && stockMatch;
             });
             filteredRows.sort((a, b) => {
                 const values = {
@@ -731,7 +1022,13 @@ foreach ($products as $product) {
             paginationButtons.appendChild(makeButton('›', Math.min(pages, currentPage + 1), currentPage === pages));
             syncSelectAll();
         }
-        [searchInput, categoryFilter, stockFilter, statusFilter].forEach(input => input.addEventListener(input.tagName === 'INPUT' ? 'input' : 'change', () => applyFilters()));
+        [searchInput, categoryFilter, stockFilter, statusFilter, priceFilter].forEach(input => input.addEventListener(input.tagName === 'INPUT' ? 'input' : 'change', () => applyFilters()));
+        sortSelect.addEventListener('change', () => {
+            const [key, direction] = sortSelect.value.split(':');
+            sortKey = key;
+            sortDirection = Number(direction) || 1;
+            applyFilters(false);
+        });
         pageSizeInput.addEventListener('change', () => applyFilters());
         document.getElementById('clear-filters').addEventListener('click', clearFilters);
         document.getElementById('empty-clear').addEventListener('click', clearFilters);
@@ -741,6 +1038,10 @@ foreach ($products as $product) {
             categoryFilter.value = '';
             stockFilter.value = '';
             statusFilter.value = '';
+            priceFilter.value = '';
+            sortSelect.value = 'name:1';
+            sortKey = 'name';
+            sortDirection = 1;
             applyFilters();
         }
         document.querySelectorAll('[data-quick-filter]').forEach(card => card.addEventListener('click', () => {
@@ -852,38 +1153,75 @@ foreach ($products as $product) {
             return text || fallback;
         }
 
+        function setProductDrawerTab(tabName, focusTab = false) {
+            document.querySelectorAll('[data-product-tab]').forEach(tab => {
+                const isActive = tab.dataset.productTab === tabName;
+                tab.classList.toggle('is-active', isActive);
+                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                tab.tabIndex = isActive ? 0 : -1;
+                if (isActive && focusTab) tab.focus();
+            });
+            document.querySelectorAll('[data-product-panel]').forEach(panel => {
+                panel.hidden = panel.dataset.productPanel !== tabName;
+            });
+            document.getElementById('product-drawer-footer').hidden = tabName !== 'actions';
+        }
+
+        document.querySelectorAll('[data-product-tab]').forEach(tab => {
+            tab.addEventListener('click', () => setProductDrawerTab(tab.dataset.productTab));
+            tab.addEventListener('keydown', event => {
+                if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+                event.preventDefault();
+                const tabs = Array.from(document.querySelectorAll('[data-product-tab]'));
+                const direction = event.key === 'ArrowRight' ? 1 : -1;
+                const nextIndex = (tabs.indexOf(tab) + direction + tabs.length) % tabs.length;
+                setProductDrawerTab(tabs[nextIndex].dataset.productTab, true);
+            });
+        });
+
         function openProductDrawer(id) {
             const product = productsById[Number(id)];
             if (!product) return;
             document.getElementById('product-drawer-title').textContent = product.product_name + (product.variant_label ? ` — ${product.variant_label}` : '');
-            document.getElementById('product-drawer-subtitle').textContent = `${escapeHtml(safe(product.sku))} · ${safe(product.category_name, 'Uncategorized')}`;
+            document.getElementById('product-drawer-subtitle').textContent = `${safe(product.sku)} · ${safe(product.category_name, 'Uncategorized')}`;
             const quantity = Number(product.quantity_on_hand || 0);
             const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
             const stockLabel = quantity <= 0 ? 'Out of stock' : quantity <= threshold ? 'Low stock' : 'Available';
-            document.getElementById('product-drawer-body').innerHTML = `<div class="detail-grid">
-        <div class="detail-item"><span>Current Stock</span><strong>${quantity.toLocaleString()} — ${stockLabel}</strong></div><div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div>
+            const quantityActions = canDirectAdjust ? `<div class="product-quantity-actions"><button type="button" class="btn btn-icon" id="drawer-adjust-stock"><i class="bi bi-sliders" aria-hidden="true"></i>Adjust Stock</button></div>` : '';
+            document.getElementById('product-panel-info').innerHTML = `<div class="detail-grid">
+        <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
-        <div class="detail-item"><span>Reorder / Safety</span><strong>${Number(product.reorder_level || 0)} / ${Number(product.safety_stock || 0)}</strong></div><div class="detail-item"><span>MOQ / Units per Case</span><strong>${Number(product.minimum_order_quantity || 1)} / ${Number(product.units_per_package || 1)}</strong></div>
+        <div class="detail-item"><span>Expiration</span><strong>${escapeHtml(safe(product.expiration_date))}</strong></div><div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
+    </div>`;
+            document.getElementById('product-panel-quantity').innerHTML = `<div class="detail-grid">
+        <div class="detail-item"><span>Current Stock</span><strong>${quantity.toLocaleString()} — ${stockLabel}</strong></div><div class="detail-item"><span>Reorder / Safety</span><strong>${Number(product.reorder_level || 0)} / ${Number(product.safety_stock || 0)}</strong></div>
+        <div class="detail-item"><span>MOQ / Units per Case</span><strong>${Number(product.minimum_order_quantity || 1)} / ${Number(product.units_per_package || 1)}</strong></div><div class="detail-item"><span>Units</span><strong>${escapeHtml(safe(product.base_unit))} / ${escapeHtml(safe(product.receiving_unit))}</strong></div>
         <div class="detail-item"><span>Lead Time</span><strong>${Number(product.supplier_lead_time_days || 0)} day(s)</strong></div><div class="detail-item"><span>Preferred Supplier</span><strong>${escapeHtml(safe(product.preferred_supplier || product.supplier))}</strong></div>
-        <div class="detail-item"><span>Expiration</span><strong>${escapeHtml(safe(product.expiration_date))}</strong></div><div class="detail-item"><span>Units</span><strong>${escapeHtml(safe(product.base_unit))} / ${escapeHtml(safe(product.receiving_unit))}</strong></div>
-        <div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
-    </div><div class="drawer-section"><h3>Recommended actions</h3><div class="attention-list">${quantity <= threshold ? '<div class="attention-item"><span class="attention-icon"><i class="bi bi-box-arrow-in-down"></i></span><span class="attention-copy"><strong>Replenishment needed</strong><span>Stock is at or below the planning threshold.</span></span><a class="btn btn-small" href="../report/stock_receiving.php">Receive</a></div>' : '<div class="attention-item"><span class="attention-icon u-stock-ok-icon"><i class="bi bi-check2"></i></span><span class="attention-copy"><strong>Stock level is healthy</strong><span>No immediate replenishment action is required.</span></span></div>'}</div></div>`;
+    </div>${quantityActions}`;
+            document.getElementById('product-panel-actions').innerHTML = `<div class="attention-list">${quantity <= threshold ? '<div class="attention-item"><span class="attention-icon"><i class="bi bi-box-arrow-in-down"></i></span><span class="attention-copy"><strong>Replenishment needed</strong><span>Stock is at or below the planning threshold.</span></span><a class="btn btn-small" href="../report/stock_receiving.php">Receive</a></div>' : '<div class="attention-item"><span class="attention-icon u-stock-ok-icon"><i class="bi bi-check2"></i></span><span class="attention-copy"><strong>Stock level is healthy</strong><span>No immediate replenishment action is required.</span></span></div>'}</div>`;
             const footer = document.getElementById('product-drawer-footer');
             footer.innerHTML = product.barcode ? `<a class="btn btn-warning" target="_blank" href="print_barcodes.php?product_id=${Number(product.product_id)}&quantity=1"><i class="bi bi-printer"></i> Print Barcode</a>` : `<button type="button" class="btn btn-success drawer-generate" data-product-id="${Number(product.product_id)}"><i class="bi bi-upc"></i> Generate Barcode</button>`;
             footer.innerHTML += `<a class="btn btn-quiet" href="../report/stock_receiving.php"><i class="bi bi-box-arrow-in-down"></i> Stock Receiving</a>`;
             const generate = footer.querySelector('.drawer-generate');
             if (generate) generate.addEventListener('click', () => generateBarcode(generate.dataset.productId));
+            const drawerAdjustButton = document.getElementById('drawer-adjust-stock');
+            if (drawerAdjustButton) drawerAdjustButton.addEventListener('click', () => {
+                const productSelect = document.getElementById('adjust-product-select');
+                if (productSelect) productSelect.value = String(product.product_id);
+                RetailMindUI.closeOverlay(document.getElementById('product-drawer'));
+                openModal('stock-adjust-modal');
+                document.querySelector('#stock-adjust-modal [name="qty_change"]')?.focus();
+            });
+            setProductDrawerTab('info');
             RetailMindUI.openOverlay(document.getElementById('product-drawer'));
         }
-        document.querySelectorAll('.view-product, .more-product').forEach(button => button.addEventListener('click', () => openProductDrawer(button.dataset.productId)));
+        document.querySelectorAll('.manage-product').forEach(button => button.addEventListener('click', () => openProductDrawer(button.dataset.productId)));
 
         function generateBarcode(id) {
             document.getElementById('generate-product-id').value = id;
             document.getElementById('generate-barcode-form').submit();
         }
-        document.querySelectorAll('.generate-one').forEach(button => button.addEventListener('click', () => generateBarcode(button.dataset.productId)));
-
         // Column preferences
         const columnPreferences = JSON.parse(localStorage.getItem('retailmind_product_columns') || '{}');
         document.querySelectorAll('[data-column]').forEach(box => {
@@ -910,10 +1248,11 @@ foreach ($products as $product) {
         document.getElementById('save-view-button').addEventListener('click', () => {
             const views = loadSavedViews();
             const filters = getFilters();
-            const nameParts = [filters.q ? `Search: ${filters.q}` : '', categoryFilter.selectedOptions[0]?.text !== 'All categories' ? categoryFilter.selectedOptions[0].text : '', stockFilter.selectedOptions[0]?.text !== 'All stock levels' ? stockFilter.selectedOptions[0].text : '', statusFilter.selectedOptions[0]?.text !== 'All statuses' ? statusFilter.selectedOptions[0].text : ''].filter(Boolean);
+            const nameParts = [filters.q ? `Search: ${filters.q}` : '', categoryFilter.value ? categoryFilter.selectedOptions[0]?.text : '', stockFilter.value ? stockFilter.selectedOptions[0]?.text : '', statusFilter.value ? statusFilter.selectedOptions[0]?.text : '', priceFilter.value ? priceFilter.selectedOptions[0]?.text : ''].filter(Boolean);
             views.push({
                 name: nameParts.join(' · ') || `View ${views.length + 1}`,
-                filters
+                filters,
+                sort: sortSelect.value
             });
             localStorage.setItem('retailmind_product_views', JSON.stringify(views.slice(-8)));
             loadSavedViews();
@@ -929,6 +1268,10 @@ foreach ($products as $product) {
             categoryFilter.value = view.filters.category || '';
             stockFilter.value = view.filters.stock || '';
             statusFilter.value = view.filters.status || '';
+            priceFilter.value = view.filters.price || '';
+            sortSelect.value = view.sort || 'name:1';
+            [sortKey, sortDirection] = sortSelect.value.split(':');
+            sortDirection = Number(sortDirection) || 1;
             applyFilters();
         });
 

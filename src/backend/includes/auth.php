@@ -337,7 +337,7 @@ function redirect_by_role(): void
             header('Location: ' . app_url('components/dashboard.php'));
             break;
         case 'inventory_manager':
-            header('Location: ' . app_url('components/inventory_management/dashboard.php'));
+            header('Location: ' . app_url('components/inventory_management/inventory_overview.php'));
             break;
         case 'cashier':
             header('Location: ' . app_url('components/cashier/pos.php'));

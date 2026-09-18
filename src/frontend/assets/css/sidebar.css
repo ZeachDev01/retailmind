@@ -11,22 +11,41 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    width: 100%;
     padding: 0.25rem 0.35rem 1rem;
     border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-top: 0;
+    border-right: 0;
+    border-left: 0;
     margin-bottom: 1rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.sidebar-brand:hover .brand-icon,
+.sidebar-brand:focus-visible .brand-icon {
+    background: rgba(37, 99, 235, 0.32);
 }
 .sidebar-brand .brand-icon {
     width: 42px;
     height: 42px;
+    flex: 0 0 42px;
     display: grid;
     place-items: center;
     border-radius: 12px;
     background: rgba(37, 99, 235, 0.2);
+    color: #f9fafb;
     font-size: 1.2rem;
+    transition: background .2s ease, transform .2s ease;
 }
-.sidebar-brand h2 {
+.sidebar-brand-title {
+    display: block;
     font-size: 1rem;
     margin: 0;
+    font-weight: 700;
 }
 .sidebar-brand span {
     display: block;
@@ -138,17 +157,16 @@
 .menu-toggle.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
 .sidebar-overlay {
-    display: none;
     position: fixed;
     inset: 0;
     background: rgba(15, 23, 42, 0.5);
     z-index: 900;
     opacity: 0;
-    transform: scaleX(0);
-    transform-origin: left center;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.22s ease, visibility 0.22s ease;
 }
-.sidebar-overlay.open { display: block; opacity: 1; transform: scaleX(1); }
+.sidebar-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
 
 body.no-scroll { overflow: hidden; }
 
@@ -162,14 +180,14 @@ body.no-scroll { overflow: hidden; }
     height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
-    transition: width .22s ease, flex-basis .22s ease;
+    transition: width .24s ease, flex-basis .24s ease, box-shadow .24s ease, transform .24s ease;
     display: flex;
     flex-direction: column;
 }
 .sidebar-nav { flex: 1; }
 .sidebar-brand { position: relative; padding-right: 2.3rem; }
 .sidebar-brand-copy { min-width: 0; }
-.sidebar-brand h2 { font-size: 1.08rem; letter-spacing: -.01em; }
+.sidebar-brand-title { font-size: 1.08rem; letter-spacing: -.01em; color: #f9fafb; }
 .sidebar-collapse {
     position: absolute;
     top: .38rem;
@@ -272,3 +290,5 @@ body.sidebar-collapsed .sidebar .dropdown-content { padding-left: 0; }
 body.sidebar-collapsed .sidebar .dropdown-content a { position: relative; }
 body.sidebar-collapsed .sidebar .sidebar-badge { position: absolute; top: 2px; right: 3px; }
 body.sidebar-collapsed .sidebar-profile-menu a span { display: none; }
+body.sidebar-collapsed .sidebar-brand .brand-icon { transform: translateX(1px); }
+body.sidebar-collapsed .global-topbar { left: var(--sidebar-collapsed-width); }

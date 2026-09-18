@@ -20,7 +20,6 @@ foreach (preg_split('/\s+/', $sidebarUserName) ?: [] as $namePart) {
 $sidebarInitials = substr($sidebarInitials ?: 'RM', 0, 2);
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
 $commandProductTarget = in_array($role, ['admin', 'super_admin', 'inventory_manager'], true) ? app_url('components/inventory_management/products.php') : app_url('components/cashier/pos.php');
-$mobileHomeTarget = $role === 'cashier' ? 'components/cashier/pos.php' : ($role === 'inventory_manager' ? 'components/inventory_management/dashboard.php' : 'components/dashboard.php');
 $flashMessages = [];
 foreach (['success', 'error', 'warning', 'info'] as $flashType) {
     $flashKey = '_flash_' . $flashType;
@@ -159,7 +158,6 @@ $adminStockItems = [
 ];
 
 $managerInventoryItems = [
-    ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Overview'],
     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
     ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products & Stock'],
     ['path' => 'components/invoice/transactions.php', 'icon' => 'bi-receipt', 'label' => 'Transactions'],
@@ -229,7 +227,7 @@ $roleSections = [
         [
             'title' => 'Operations',
             'items' => [
-                ['path' => 'components/inventory_management/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard'],
+                ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
                 ['icon' => 'bi-boxes', 'label' => 'Inventory', 'items' => $managerInventoryItems],
                 [
                     'icon' => 'bi-truck',
@@ -291,10 +289,10 @@ $sections = $roleSections[$role] ?? [];
             <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
                 <i class="bi bi-list" aria-hidden="true"></i>
             </button>
-            <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
+            <button type="button" class="admin-mobile-logo" id="mobileBrandToggle" aria-label="Open sidebar" aria-expanded="false" aria-controls="appSidebar">
                 <span class="admin-mobile-logo-mark"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
                 <span class="admin-mobile-logo-text">RetailMind</span>
-            </a>
+            </button>
         </div>
         <div class="admin-mobile-tools">
             <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
@@ -308,13 +306,13 @@ $sections = $roleSections[$role] ?? [];
 <?php endif; ?>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="appSidebar">
-    <div class="sidebar-brand">
-        <div class="brand-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></div>
-        <div class="sidebar-brand-copy">
-            <h2>RetailMind</h2>
+    <button type="button" class="sidebar-brand" id="sidebarBrandToggle" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="appSidebar">
+        <span class="brand-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+        <span class="sidebar-brand-copy">
+            <span class="sidebar-brand-title">RetailMind</span>
             <span>Inventory &amp; Forecasting</span>
-        </div>
-    </div>
+        </span>
+    </button>
 
     <nav class="sidebar-nav" aria-label="Main navigation">
         <?php sidebar_render_section($workspaceSection); ?>
@@ -343,9 +341,17 @@ $sections = $roleSections[$role] ?? [];
     </div>
 </div>
 
-<div class="global-top-tools" aria-label="Global tools">
-    <button type="button" class="global-tool-button" data-command-open title="Search pages (Ctrl+K)"><i class="bi bi-search" aria-hidden="true"></i><span>Search</span></button>
-    <span class="global-tool-button connection-status" id="rm-connection-status" aria-live="polite">Online</span>
+<div class="global-topbar" aria-label="Global tools">
+    <button type="button" class="global-search-trigger" data-command-open aria-label="Search products, reports, settings, and pages">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <span>Search products, reports, settings, and pages...</span>
+        <kbd>Ctrl K</kbd>
+    </button>
+    <a class="global-notification-button" href="<?= sidebar_e(app_url('components/notification/notifications.php')) ?>" aria-label="Notifications<?= $notificationCount > 0 ? ': ' . (int)$notificationCount . ' unread' : '' ?>">
+        <i class="bi bi-bell" aria-hidden="true"></i>
+        <span>Notifications</span>
+        <?php if ($notificationCount > 0): ?><strong><?= $notificationCount > 99 ? '99+' : (int)$notificationCount ?></strong><?php endif; ?>
+    </a>
 </div>
 
 <div class="command-overlay" id="commandPalette" aria-hidden="true" data-products-api="<?= sidebar_e(app_url('components/barcodeScanner/apiScanner/products.php')) ?>" data-product-target="<?= sidebar_e($commandProductTarget) ?>">
@@ -542,26 +548,72 @@ $sections = $roleSections[$role] ?? [];
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var menuToggle = document.getElementById('menuToggle');
+        var mobileBrandToggle = document.getElementById('mobileBrandToggle');
+        var brandToggle = document.getElementById('sidebarBrandToggle');
         var sidebar = document.getElementById('appSidebar');
         var overlay = document.getElementById('sidebarOverlay');
+        var collapseStorageKey = 'retailmind_sidebar_collapsed';
+
+        function isMobileDrawer() {
+            return window.innerWidth <= 900;
+        }
+
+        function updateBrandState() {
+            var isOpen = sidebar && sidebar.classList.contains('open');
+            var isCollapsed = document.body.classList.contains('sidebar-collapsed');
+            var expanded = isMobileDrawer() ? isOpen : !isCollapsed;
+
+            if (brandToggle) {
+                brandToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                brandToggle.setAttribute('aria-label', expanded ? 'Collapse sidebar' : 'Expand sidebar');
+            }
+            if (mobileBrandToggle) {
+                mobileBrandToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                mobileBrandToggle.setAttribute('aria-label', isOpen ? 'Close sidebar' : 'Open sidebar');
+            }
+        }
 
         function setSidebarOpen(isOpen) {
             sidebar.classList.toggle('open', isOpen);
             overlay.classList.toggle('open', isOpen);
-            menuToggle.classList.toggle('active', isOpen);
-            menuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-            menuToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
-            var menuIcon = menuToggle.querySelector('i');
-            if (menuIcon) {
-                menuIcon.className = 'bi ' + (isOpen ? 'bi-x-lg' : 'bi-list');
+            if (menuToggle) {
+                menuToggle.classList.toggle('active', isOpen);
+                menuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                menuToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+                var menuIcon = menuToggle.querySelector('i');
+                if (menuIcon) {
+                    menuIcon.className = 'bi ' + (isOpen ? 'bi-x-lg' : 'bi-list');
+                }
             }
             document.body.classList.toggle('no-scroll', isOpen);
+            updateBrandState();
+        }
+
+        function setSidebarCollapsed(isCollapsed) {
+            document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+            localStorage.setItem(collapseStorageKey, isCollapsed ? '1' : '0');
+            updateBrandState();
+        }
+
+        function toggleBrandSidebar() {
+            if (!sidebar || !overlay) {
+                return;
+            }
+
+            if (isMobileDrawer()) {
+                setSidebarOpen(!sidebar.classList.contains('open'));
+                return;
+            }
+
+            setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
         }
 
         if (menuToggle && sidebar && overlay) {
             menuToggle.addEventListener('click', function() {
                 setSidebarOpen(!sidebar.classList.contains('open'));
             });
+        }
+        if (sidebar && overlay) {
             overlay.addEventListener('click', function() {
                 setSidebarOpen(false);
             });
@@ -574,8 +626,16 @@ $sections = $roleSections[$role] ?? [];
                 if (window.innerWidth > 900) {
                     setSidebarOpen(false);
                 }
+                updateBrandState();
             });
         }
+        if (brandToggle) {
+            brandToggle.addEventListener('click', toggleBrandSidebar);
+        }
+        if (mobileBrandToggle) {
+            mobileBrandToggle.addEventListener('click', toggleBrandSidebar);
+        }
+        updateBrandState();
 
         document.querySelectorAll('.sidebar .dropdown').forEach(function(dropdown) {
             var button = dropdown.querySelector('.dropbtn');
