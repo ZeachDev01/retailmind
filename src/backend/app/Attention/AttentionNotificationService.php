@@ -2,7 +2,10 @@
 
 namespace App\Attention;
 
+use DateTimeImmutable;
 use PDO;
+use PDOException;
+use Throwable;
 
 final class AttentionNotificationService
 {
@@ -10,43 +13,77 @@ final class AttentionNotificationService
     {
     }
 
-    public function synchronize(int $userId, array $items): void
+    /** @param AttentionItem[] $items */
+    public function synchronize(int $userId, array $items, bool $createInApp = true): AttentionRefreshResult
+    {
+        if ($this->pdo->inTransaction()) {
+            return $this->synchronizeInTransaction($userId, $items, $createInApp);
+        }
+
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $this->pdo->beginTransaction();
+            try {
+                $result = $this->synchronizeInTransaction($userId, $items, $createInApp);
+                $this->pdo->commit();
+                return $result;
+            } catch (Throwable $exception) {
+                if ($this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
+                if ($attempt === 0 && $this->isConstraintConflict($exception)) {
+                    continue;
+                }
+                throw $exception;
+            }
+        }
+
+        throw new PDOException('Unable to synchronize attention state.');
+    }
+
+    /** @param AttentionItem[] $items */
+    private function synchronizeInTransaction(int $userId, array $items, bool $createInApp): AttentionRefreshResult
     {
         $currentKeys = [];
+        $dashboardItems = [];
+        $newItems = [];
+
         foreach ($items as $item) {
-            $key = (string)$item['key'];
-            $currentKeys[] = $key;
-            $fingerprint = hash('sha256', json_encode([
-                $item['severity'],
-                $item['count'] ?? null,
-                $item['explanation'],
-                $item['destination'],
-            ], JSON_THROW_ON_ERROR));
-            $state = $this->state($userId, $key);
+            $currentKeys[] = $item->key;
+            $state = $this->state($userId, $item->key);
+            $dashboardItem = $state !== null && (bool)$state['is_active']
+                ? $item->withDetectedAt(new DateTimeImmutable((string)$state['first_detected_at']))
+                : $item;
+            $fingerprint = $dashboardItem->fingerprint();
             $shouldNotify = $state === null
                 || !(bool)$state['is_active']
                 || !hash_equals((string)$state['fingerprint'], $fingerprint);
 
             if ($shouldNotify) {
-                $this->notify($userId, $item);
+                if ($createInApp) {
+                    $this->notify($userId, $dashboardItem);
+                }
+                $newItems[] = $dashboardItem;
             }
-            $this->activate($userId, $key, $fingerprint, (string)$item['detected_at'], $state);
+            $this->activate($userId, $dashboardItem, $fingerprint, $state);
+            $dashboardItems[] = $dashboardItem;
         }
 
         $this->resolveMissing($userId, $currentKeys);
+        return new AttentionRefreshResult($dashboardItems, $newItems);
     }
 
     private function state(int $userId, string $key): ?array
     {
+        $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
         $statement = $this->pdo->prepare(
-            'SELECT fingerprint, is_active, first_detected_at FROM attention_states WHERE user_id = ? AND attention_key = ?'
+            'SELECT fingerprint, is_active, first_detected_at FROM attention_states WHERE user_id = ? AND attention_key = ?' . $lock
         );
         $statement->execute([$userId, $key]);
         $state = $statement->fetch(PDO::FETCH_ASSOC);
         return $state ?: null;
     }
 
-    private function notify(int $userId, array $item): void
+    private function notify(int $userId, AttentionItem $item): void
     {
         $statement = $this->pdo->prepare(
             'INSERT INTO notifications
@@ -57,20 +94,21 @@ final class AttentionNotificationService
         $statement->execute([
             $userId,
             'attention',
-            $item['title'],
-            $item['explanation'],
+            $item->title,
+            $item->explanation,
             'attention',
-            $item['key'],
-            $item['severity'],
-            $item['count'] ?? null,
-            $item['destination'],
+            $item->key,
+            $item->severity,
+            $item->count,
+            $item->destination,
             $this->clock->now()->format('Y-m-d H:i:s'),
         ]);
     }
 
-    private function activate(int $userId, string $key, string $fingerprint, string $detectedAt, ?array $state): void
+    private function activate(int $userId, AttentionItem $item, string $fingerprint, ?array $state): void
     {
         $now = $this->clock->now()->format('Y-m-d H:i:s');
+        $detectedAt = $item->detectedAt->format('Y-m-d H:i:s');
         if ($state !== null) {
             $firstDetected = (bool)$state['is_active'] ? (string)$state['first_detected_at'] : $detectedAt;
             $statement = $this->pdo->prepare(
@@ -78,7 +116,7 @@ final class AttentionNotificationService
                  SET fingerprint = ?, is_active = 1, first_detected_at = ?, last_detected_at = ?, resolved_at = NULL
                  WHERE user_id = ? AND attention_key = ?'
             );
-            $statement->execute([$fingerprint, $firstDetected, $now, $userId, $key]);
+            $statement->execute([$fingerprint, $firstDetected, $now, $userId, $item->key]);
             return;
         }
         $statement = $this->pdo->prepare(
@@ -86,13 +124,14 @@ final class AttentionNotificationService
                 (user_id, attention_key, fingerprint, is_active, first_detected_at, last_detected_at, resolved_at)
              VALUES (?, ?, ?, 1, ?, ?, NULL)'
         );
-        $statement->execute([$userId, $key, $fingerprint, $detectedAt, $now]);
+        $statement->execute([$userId, $item->key, $fingerprint, $detectedAt, $now]);
     }
 
     private function resolveMissing(int $userId, array $currentKeys): void
     {
+        $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
         $statement = $this->pdo->prepare(
-            'SELECT attention_key FROM attention_states WHERE user_id = ? AND is_active = 1'
+            'SELECT attention_key FROM attention_states WHERE user_id = ? AND is_active = 1' . $lock
         );
         $statement->execute([$userId]);
         $resolve = $this->pdo->prepare(
@@ -104,5 +143,11 @@ final class AttentionNotificationService
                 $resolve->execute([$now, $userId, $key]);
             }
         }
+    }
+
+    private function isConstraintConflict(Throwable $exception): bool
+    {
+        return $exception instanceof PDOException
+            && (($exception->errorInfo[0] ?? null) === '23000' || (string)$exception->getCode() === '23000');
     }
 }

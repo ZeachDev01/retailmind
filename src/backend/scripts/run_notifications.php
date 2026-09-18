@@ -25,11 +25,21 @@ $healthChecks = (new SystemHealthService($pdo, dirname(__DIR__)))->checks();
 $platformSignals = $signalSource->platform($healthChecks);
 $storeSignals = $signalSource->store();
 foreach ($recipients as $recipient) {
-    if (empty($recipient['notify_inapp']) || !in_array($recipient['role_name'], ['super_admin', 'admin'], true)) {
+    if (!in_array($recipient['role_name'], ['super_admin', 'admin'], true)) {
         continue;
     }
     $signals = $recipient['role_name'] === 'super_admin' ? $platformSignals : $storeSignals;
-    $attentionCenter->refresh((int)$recipient['user_id'], (string)$recipient['role_name'], $signals);
+    $result = $attentionCenter->refreshResult(
+        (int)$recipient['user_id'],
+        (string)$recipient['role_name'],
+        $signals,
+        !empty($recipient['notify_inapp'])
+    );
+    if (!empty($recipient['notify_email']) && !empty($recipient['email'])) {
+        foreach ($result->newItems() as $item) {
+            send_email_notification((string)$recipient['email'], $item->title, $item->explanation);
+        }
+    }
 }
 
 function scheduled_alert(PDO $pdo, array $recipient, string $title, string $body, ?int $referenceId = null, string $referenceType = 'system'): void {

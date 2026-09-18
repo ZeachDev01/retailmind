@@ -113,7 +113,14 @@ try {
         $assert(str_starts_with($item['destination'], 'components/'), 'Attention destinations must be application-relative permitted routes');
     }
     $firstNotificationCount = (int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn();
-    $center->refresh(1, 'super_admin', $platformSignals);
+    $laterPlatformSignals = $platformSignals;
+    foreach ($laterPlatformSignals as &$signal) {
+        $signal['detected_at'] = '2026-09-18 10:00:00';
+    }
+    unset($signal);
+    $refreshedPlatformItems = $center->refresh(1, 'super_admin', $laterPlatformSignals);
+    $refreshedByKey = array_column($refreshedPlatformItems, null, 'key');
+    $assert($refreshedByKey['platform.security.failed-logins']['detected_at'] === '2026-09-18 09:10:00', 'An unchanged condition should retain its first detected time');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() === $firstNotificationCount, 'Unchanged active conditions must not create duplicate notifications');
 
     $storeSignals = [
@@ -144,10 +151,25 @@ try {
         $assert($notification['attention_destination'] === $storeItems[$index]['destination'], 'Notification destination should come from the shared evaluated item');
     }
 
+    $emailOnly = $center->refreshResult(11, 'admin', $storeSignals, false);
+    $assert(count($emailOnly->newItems()) === count($storeItems), 'Email-only recipients should receive each newly active attention item');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE user_id = 11')->fetchColumn() === 0, 'Email-only evaluation should not create in-app notifications');
+    $emailOnlyRepeat = $center->refreshResult(11, 'admin', $storeSignals, false);
+    $assert($emailOnlyRepeat->newItems() === [], 'Email-only attention should use the same deduplication state');
+
     $resolved = $center->refresh(7, 'admin', []);
     $assert($resolved === [], 'Resolved live conditions should disappear without a manual lifecycle');
     $activeStates = (int)$pdo->query('SELECT COUNT(*) FROM attention_states WHERE user_id = 7 AND is_active = 1')->fetchColumn();
     $assert($activeStates === 0, 'Resolved conditions should be marked inactive for future reactivation');
+
+    $pdo->exec("CREATE TRIGGER fail_attention_state BEFORE INSERT ON attention_states BEGIN SELECT RAISE(ABORT, 'state failure'); END");
+    try {
+        $center->refresh(99, 'admin', ['reversal_count' => ['value' => 3, 'count' => 3]]);
+        $assert(false, 'Attention synchronization should surface persistence failures');
+    } catch (PDOException $exception) {
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE user_id = 99')->fetchColumn() === 0, 'Notification and deduplication state must commit atomically');
+    }
+    $pdo->exec('DROP TRIGGER fail_attention_state');
 } catch (Throwable $exception) {
     $failures[] = 'Attention rules contract threw: ' . $exception->getMessage();
 }

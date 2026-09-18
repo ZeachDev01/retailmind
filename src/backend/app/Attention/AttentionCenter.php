@@ -14,11 +14,21 @@ final class AttentionCenter
      * Evaluates live conditions once, then uses that exact result for both
      * dashboard rendering and notification synchronization.
      */
-    public function refresh(int $userId, string $role, array $signals): array
+    public function refresh(int $userId, string $role, array $signals, bool $createInApp = true): array
     {
-        $items = $this->rules->evaluate($role, $signals);
-        $this->notifications->synchronize($userId, $items);
+        return $this->refreshResult($userId, $role, $signals, $createInApp)->dashboardItems();
+    }
 
-        return $items;
+    public function refreshResult(
+        int $userId,
+        string $role,
+        array $signals,
+        bool $createInApp = true
+    ): AttentionRefreshResult {
+        return $this->notifications->synchronize(
+            $userId,
+            $this->rules->evaluate($role, $signals),
+            $createInApp
+        );
     }
 }

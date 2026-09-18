@@ -240,7 +240,11 @@ $checks = [
     ],
     'Shared attention evaluation feeds scheduled notifications' => [
         'file' => 'src/backend/scripts/run_notifications.php',
-        'needles' => ['DatabaseAttentionSignalSource', 'AttentionRuleService', 'AttentionNotificationService', "['super_admin', 'admin']"],
+        'needles' => ['DatabaseAttentionSignalSource', 'AttentionRuleService', 'AttentionNotificationService', 'refreshResult', 'notify_email', 'newItems'],
+    ],
+    'Live Store attention includes explicit inventory escalations' => [
+        'file' => 'src/backend/app/Attention/DatabaseAttentionSignalSource.php',
+        'needles' => ["'inventory_escalated_count'", "ia.status = 'pending'", 'item_count'],
     ],
     'Platform Settings govern attention safety limits' => [
         'file' => 'src/backend/legacy/routes/admin/system_settings.php',

@@ -110,6 +110,9 @@ final class DatabaseAttentionSignalSource
             'max_discount_percent' => $this->signal((float)($discount['value'] ?? 0)),
             'cash_variance_amount' => $this->signal((float)($cash['value'] ?? 0)),
             'oldest_approval_hours' => $this->signal((float)($approvals['value'] ?? 0)),
+            // A pending inventory adjustment is an explicit escalation from routine
+            // inventory execution into the Administrator approval workflow.
+            'inventory_escalated_count' => $this->signal((int)($inventory['item_count'] ?? 0), (int)($inventory['item_count'] ?? 0)),
             'oldest_inventory_risk_hours' => $this->signal((float)($inventory['value'] ?? 0)),
             'inventory_risk_value' => $this->signal((float)($inventory['risk_value'] ?? 0)),
             'oldest_unresolved_inventory_hours' => $this->signal((float)($inventory['value'] ?? 0)),

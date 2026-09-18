@@ -64,31 +64,27 @@ final class AttentionRuleService
                 continue;
             }
 
-            $detectedAt = $this->date($signal['detected_at'] ?? null);
-            $item = [
-                'key' => $rule['key'],
-                'severity' => $rule['severity'],
-                'category' => $rule['category'],
-                'title' => $rule['title'],
-                'explanation' => isset($signal['explanation'])
+            $items[] = new AttentionItem(
+                $rule['key'],
+                $rule['severity'],
+                $rule['category'],
+                $rule['title'],
+                isset($signal['explanation'])
                     ? (string)$signal['explanation']
                     : $this->explanation($rule['title'], $value, $threshold),
-                'detected_at' => $detectedAt->format('Y-m-d H:i:s'),
-                'destination' => $rule['destination'],
-            ];
-            if (array_key_exists('count', $signal)) {
-                $item['count'] = max(0, (int)$signal['count']);
-            }
-            $items[] = $item;
+                $this->date($signal['detected_at'] ?? null),
+                $rule['destination'],
+                array_key_exists('count', $signal) ? max(0, (int)$signal['count']) : null
+            );
         }
 
-        usort($items, static function (array $left, array $right): int {
-            $severity = self::SEVERITY_ORDER[$left['severity']] <=> self::SEVERITY_ORDER[$right['severity']];
+        usort($items, static function (AttentionItem $left, AttentionItem $right): int {
+            $severity = self::SEVERITY_ORDER[$left->severity] <=> self::SEVERITY_ORDER[$right->severity];
             if ($severity !== 0) {
                 return $severity;
             }
-            $detected = strcmp($left['detected_at'], $right['detected_at']);
-            return $detected !== 0 ? $detected : strcmp($left['key'], $right['key']);
+            $detected = $left->detectedAt <=> $right->detectedAt;
+            return $detected !== 0 ? $detected : strcmp($left->key, $right->key);
         });
 
         return $items;
