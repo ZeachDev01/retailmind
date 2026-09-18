@@ -25,13 +25,16 @@ $capabilities = [
     RoleCapabilityPolicy::ASSIGN_ROLES,
     RoleCapabilityPolicy::ASSIGN_PRIVILEGES,
     RoleCapabilityPolicy::ACTIVATE_EMERGENCY_ACCESS,
+    RoleCapabilityPolicy::VIEW_SALES_HISTORY,
+    RoleCapabilityPolicy::VIEW_STORE_REPORTS,
+    RoleCapabilityPolicy::MANAGE_SALE_REVERSALS,
 ];
 
 $expected = [
-    'super_admin' => [true, false, true, false, false, true, true, true, true, true, true],
-    'admin' => [false, true, true, false, false, true, false, true, true, false, false],
-    'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, false],
-    'cashier' => [false, false, true, false, true, false, false, false, false, false, false],
+    'super_admin' => [true, false, true, false, false, true, true, true, true, true, true, true, true, false],
+    'admin' => [false, true, true, false, false, true, false, true, true, false, false, true, true, true],
+    'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, false, true, true, true],
+    'cashier' => [false, false, true, false, true, false, false, false, false, false, false, true, false, false],
 ];
 
 foreach ($expected as $role => $decisions) {

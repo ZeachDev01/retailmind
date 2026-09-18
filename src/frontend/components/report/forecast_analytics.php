@@ -1,23 +1,35 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_role(['admin', 'inventory_manager']);
+
+use App\Authorization\RoleCapabilityPolicy;
+
+require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
+$storeId = store_scope_id($pdo);
 
 $metrics = get_ml_model_metrics();
 $featureImportance = $metrics['feature_importance'] ?? [];
 $productMetrics = $metrics['product_metrics'] ?? [];
 $productsById = [];
-foreach ($pdo->query('SELECT product_id, product_name FROM products')->fetchAll(PDO::FETCH_ASSOC) as $product) {
+$productStatement = $pdo->prepare('SELECT product_id, product_name FROM products WHERE branch_id = ?');
+$productStatement->execute([$storeId]);
+foreach ($productStatement->fetchAll(PDO::FETCH_ASSOC) as $product) {
     $productsById[(int)$product['product_id']] = $product['product_name'];
 }
+$productMetrics = array_values(array_filter(
+    $productMetrics,
+    static fn(array $metric): bool => isset($productsById[(int)$metric['product_id']])
+));
 
 $actualVsForecast = [];
 try {
-    $actualVsForecast = $pdo->query(
+    $actualStatement = $pdo->prepare(
         "SELECT p.product_name, sp.forecast_value, sp.actual_demand, sp.generated_at
          FROM stock_predictions sp JOIN products p ON p.product_id = sp.product_id
-         WHERE sp.actual_demand IS NOT NULL
+         WHERE sp.actual_demand IS NOT NULL AND p.branch_id = ?
          ORDER BY sp.generated_at DESC LIMIT 20"
-    )->fetchAll(PDO::FETCH_ASSOC);
+    );
+    $actualStatement->execute([$storeId]);
+    $actualVsForecast = $actualStatement->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {}
 
 $trainingTrend = [];

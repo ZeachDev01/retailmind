@@ -2,6 +2,7 @@
 
 namespace App\Database;
 
+use App\Store\StoreScope;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -149,16 +150,7 @@ final class ProductSeeder
                     throw new RuntimeException('Opening stock requires existing InnoDB batch, purchase and stock movement tables.');
                 }
             }
-            $branch = $pdo->query("SELECT branch_id, branch_name, status FROM branches WHERE branch_code = 'RM-SEED' FOR UPDATE")->fetch();
-            if (!$branch) {
-                $pdo->exec("INSERT INTO branches (branch_name, branch_code) VALUES ('RetailMind Sample Products', 'RM-SEED')");
-                $branchId = (int)$pdo->lastInsertId();
-            } else {
-                if ($branch['branch_name'] !== 'RetailMind Sample Products' || $branch['status'] !== 'active') {
-                    throw new RuntimeException('Sample branch identifier is occupied or inactive; no data changed.');
-                }
-                $branchId = (int)$branch['branch_id'];
-            }
+            $storeId = (new StoreScope($pdo))->migrate();
             $find = $pdo->prepare('SELECT product_id, sku, barcode FROM products WHERE branch_id = ? AND (sku IN (?, ?) OR barcode IN (?, ?) OR case_barcode IN (?, ?)) FOR UPDATE');
             $category = $pdo->prepare('SELECT category_id FROM categories WHERE category_name = ? ORDER BY category_id LIMIT 1');
             $addCategory = $pdo->prepare('INSERT INTO categories (category_name) VALUES (?)');
@@ -167,7 +159,7 @@ final class ProductSeeder
             $verify = $pdo->prepare('SELECT p.product_id, p.sku, p.barcode, p.product_name, p.status, p.reorder_level, i.quantity_on_hand FROM products p JOIN inventory i ON i.product_id = p.product_id JOIN categories c ON c.category_id = p.category_id WHERE p.product_id = ? AND p.branch_id = ?');
             $result = ['inserted' => 0, 'skipped' => 0, 'records' => []];
             foreach ($products as $row) {
-                $find->execute([$branchId, $row['sku'], $row['barcode'], $row['sku'], $row['barcode'], $row['sku'], $row['barcode']]);
+                $find->execute([$storeId, $row['sku'], $row['barcode'], $row['sku'], $row['barcode'], $row['sku'], $row['barcode']]);
                 $matches = $find->fetchAll();
                 if ($matches !== []) {
                     if (count($matches) !== 1 || $matches[0]['sku'] !== $row['sku'] || $matches[0]['barcode'] !== $row['barcode']) {
@@ -182,13 +174,13 @@ final class ProductSeeder
                         $addCategory->execute([$row['category_name']]);
                         $categoryId = $pdo->lastInsertId();
                     }
-                    $insert->execute([$row['sku'], $row['barcode'], $row['product_name'], $row['brand'], $categoryId, $row['unit_price'], $row['cost_price'], $row['reorder_level'], $row['preferred_supplier'], $row['preferred_supplier'], $row['supplier_lead_time_days'], $row['safety_stock'], $row['minimum_order_quantity'], $row['units_per_package'], $branchId]);
+                    $insert->execute([$row['sku'], $row['barcode'], $row['product_name'], $row['brand'], $categoryId, $row['unit_price'], $row['cost_price'], $row['reorder_level'], $row['preferred_supplier'], $row['preferred_supplier'], $row['supplier_lead_time_days'], $row['safety_stock'], $row['minimum_order_quantity'], $row['units_per_package'], $storeId]);
                     $productId = (int)$pdo->lastInsertId();
                     $inventory->execute([$productId]);
                     $result['inserted']++;
                 }
                 $stockResult = $withStock ? self::seedOpeningStock($pdo, $productId, $row) : 'not_requested';
-                $verify->execute([$productId, $branchId]);
+                $verify->execute([$productId, $storeId]);
                 $record = $verify->fetch();
                 if (!$record) {
                     throw new RuntimeException('Seed verification failed: missing category or inventory. No existing records repaired.');

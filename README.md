@@ -98,7 +98,7 @@ The first login is automatically restricted to the mandatory password-change pag
 ## Sample product stock (local development only)
 
 Run the guarded product seed with `--with-stock` to add varied opening stock to
-the sample products in the `RM-SEED` branch. Confirm the actual development
+the sample products in the singleton Store. Confirm the actual development
 database name; never use this on a production database:
 
 ```bash
@@ -191,7 +191,7 @@ The Sales Trend chart supports 7, 30, and 90 calendar-day ranges, including toda
 php src/backend/scripts/seed_sales_trend.php --confirm-local
 ```
 
-The command is intentionally not part of migrations or normal startup. It refuses to run unless `APP_ENV=development`, `DB_HOST` is localhost/loopback, and `--confirm-local` is supplied. It first runs the guarded product seed without opening stock, reusing the canonical 60 products in the `RM-SEED` branch without duplicates, then creates 91 days of seed-owned sales history. Reruns preserve product and user data and replace only records associated with the reserved `RM_SEED_SALES_TREND_V1` identifiers; the command never resets the database. Any separately seeded opening stock is preserved because Sales Trend simulation inventory is tracked in its own batches and counters.
+The command is intentionally not part of migrations or normal startup. It refuses to run unless `APP_ENV=development`, `DB_HOST` is localhost/loopback, and `--confirm-local` is supplied. It first runs the guarded product seed without opening stock, reusing the canonical 60 products attached to the singleton Store without duplicates, then creates 91 days of seed-owned sales history. Reruns preserve product and user data and replace only records associated with the reserved `RM_SEED_SALES_TREND_V1` identifiers; the command never resets the database. Any separately seeded opening stock is preserved because Sales Trend simulation inventory is tracked in its own batches and counters.
 
 ## Automatic maintenance
 

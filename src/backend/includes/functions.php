@@ -278,6 +278,7 @@ function get_store_settings(PDO $pdo): array
 
 function get_forecasting_readiness(PDO $pdo): array
 {
+    $storeId = store_scope_id($pdo);
     $settings = get_ml_settings($pdo);
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
     $preferredHistoryDays = max($minimumHistoryDays, (int)$settings['preferred_history_days']);
@@ -353,11 +354,13 @@ function get_forecasting_readiness(PDO $pdo): array
                 WHERE fe2.product_id = p.product_id
                 ORDER BY fe2.generated_at DESC, fe2.evaluation_id DESC LIMIT 1
             )
-            WHERE p.status = 'active'
+            WHERE p.status = 'active' AND p.branch_id = ?
             ORDER BY p.product_name";
 
     try {
-        $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $statement = $pdo->prepare($sql);
+        $statement->execute([$storeId]);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $exception) {
         // The migration has not been run yet. Keep the page usable with the legacy columns.
         error_log('Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: ' . $exception->getMessage());

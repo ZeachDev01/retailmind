@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Store\StoreScope;
 use DateTimeImmutable;
 use PDO;
 
@@ -20,21 +21,26 @@ final class ReceiptTableService
     ];
     private const REVERSAL_STATUSES = ['pending', 'approved', 'rejected', 'none'];
 
-    public function __construct(private readonly PDO $pdo)
+    private readonly StoreScope $storeScope;
+
+    public function __construct(private readonly PDO $pdo, ?StoreScope $storeScope = null)
     {
+        $this->storeScope = $storeScope ?? new StoreScope($pdo);
     }
 
     /**
-     * Return one DataTables server-side response inside an already-authorized scope.
+     * Return one DataTables server-side response inside the server-resolved Store scope.
+     *
+     * The optional cashier identifier is an authorization decision made by the caller;
+     * Store identity is never accepted from request or session input.
      *
      * @param array<string, mixed> $request
-     * @param array{cashier_id: ?int, branch_id: ?int} $scope
      * @return array{draw: int, recordsTotal: int, recordsFiltered: int, data: array<int, array<string, mixed>>}
      */
-    public function fetch(array $request, array $scope): array
+    public function fetch(array $request, ?int $cashierId = null): array
     {
         $normalized = $this->normalizeRequest($request);
-        [$scopeClauses, $scopeParams] = $this->scopeConditions($scope);
+        [$scopeClauses, $scopeParams] = $this->scopeConditions($cashierId);
         [$filterClauses, $filterParams] = $this->filterConditions($normalized);
 
         $recordsTotal = $this->countReceipts($scopeClauses, $scopeParams);
@@ -133,21 +139,21 @@ final class ReceiptTableService
         return $date && $date->format('Y-m-d') === $value ? $value : null;
     }
 
-    /**
-     * @param array{cashier_id: ?int, branch_id: ?int} $scope
-     * @return array{0: array<int, string>, 1: array<string, int|string>}
-     */
-    private function scopeConditions(array $scope): array
+    /** @return array{0: array<int, string>, 1: array<string, int|string>} */
+    private function scopeConditions(?int $cashierId): array
     {
-        $clauses = [];
-        $params = [];
-        if (($scope['cashier_id'] ?? null) !== null) {
+        $clauses = [
+            '(u.branch_id = :scope_store_id OR EXISTS (
+                SELECT 1 FROM sale_items scope_si
+                JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = :scope_store_product_id
+            ))',
+        ];
+        $storeId = $this->storeScope->id();
+        $params = [':scope_store_id' => $storeId, ':scope_store_product_id' => $storeId];
+        if ($cashierId !== null) {
             $clauses[] = 's.cashier_id = :scope_cashier_id';
-            $params[':scope_cashier_id'] = (int)$scope['cashier_id'];
-        }
-        if (($scope['branch_id'] ?? null) !== null) {
-            $clauses[] = 'u.branch_id = :scope_branch_id';
-            $params[':scope_branch_id'] = (int)$scope['branch_id'];
+            $params[':scope_cashier_id'] = $cashierId;
         }
         return [$clauses, $params];
     }

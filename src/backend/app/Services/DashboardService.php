@@ -4,10 +4,12 @@
 class DashboardService
 {
     private PDO $pdo;
+    private App\Store\StoreScope $storeScope;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
+        $this->storeScope = new App\Store\StoreScope($pdo);
     }
 
     public function getAdminMetrics(int $days = 30): array
@@ -189,12 +191,20 @@ class DashboardService
             "SELECT DATE(sale_date) AS sale_day,
                     COALESCE(SUM(total_amount), 0) AS total_sales,
                     COUNT(*) AS transactions
-             FROM sales
-             WHERE sale_date >= ? AND sale_date < ?
-             GROUP BY DATE(sale_date)
+             FROM sales s
+             JOIN users u ON u.user_id = s.cashier_id
+             WHERE (u.branch_id = ? OR EXISTS (
+                 SELECT 1 FROM sale_items scope_si
+                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+             )) AND s.sale_date >= ? AND s.sale_date < ?
+             GROUP BY DATE(s.sale_date)
              ORDER BY sale_day ASC"
         );
+        $storeId = $this->storeScope->id();
         $stmt->execute([
+            $storeId,
+            $storeId,
             $start->format('Y-m-d H:i:s'),
             $endExclusive->format('Y-m-d H:i:s'),
         ]);

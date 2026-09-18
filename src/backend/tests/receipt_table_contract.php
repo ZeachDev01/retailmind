@@ -9,6 +9,7 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../config/db.php';
 
 use App\Services\ReceiptTableService;
+use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -22,22 +23,16 @@ try {
     $suffix = bin2hex(random_bytes(4));
     $cashierRoleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name = 'cashier' LIMIT 1")->fetchColumn();
 
-    $branchStatement = $pdo->prepare(
-        "INSERT INTO branches (branch_name, branch_code, status) VALUES (?, ?, 'active')"
-    );
-    $branchStatement->execute(["Receipt Contract A {$suffix}", "RCA-{$suffix}"]);
-    $branchA = (int)$pdo->lastInsertId();
-    $branchStatement->execute(["Receipt Contract B {$suffix}", "RCB-{$suffix}"]);
-    $branchB = (int)$pdo->lastInsertId();
+    $storeId = (new StoreScope($pdo))->migrate();
 
     $userStatement = $pdo->prepare(
         "INSERT INTO users (full_name, username, email, password_hash, role_id, status, must_change_password, branch_id)
          VALUES (?, ?, ?, ?, ?, 'active', 0, ?)"
     );
     $password = password_hash('ReceiptContract123', PASSWORD_DEFAULT);
-    $userStatement->execute(['Alice Receipt', "receipt_alice_{$suffix}", "receipt_alice_{$suffix}@example.test", $password, $cashierRoleId, $branchA]);
+    $userStatement->execute(['Alice Receipt', "receipt_alice_{$suffix}", "receipt_alice_{$suffix}@example.test", $password, $cashierRoleId, $storeId]);
     $aliceId = (int)$pdo->lastInsertId();
-    $userStatement->execute(['Bob Receipt', "receipt_bob_{$suffix}", "receipt_bob_{$suffix}@example.test", $password, $cashierRoleId, $branchB]);
+    $userStatement->execute(['Bob Receipt', "receipt_bob_{$suffix}", "receipt_bob_{$suffix}@example.test", $password, $cashierRoleId, $storeId]);
     $bobId = (int)$pdo->lastInsertId();
 
     $productStatement = $pdo->prepare(
@@ -45,7 +40,7 @@ try {
             (sku, barcode, product_name, unit_price, cost_price, quantity_purchased, quantity_sold, reorder_level, status, branch_id)
          VALUES (?, ?, 'Receipt Contract Product', 20.00, 10.00, 10, 0, 1, 'active', ?)"
     );
-    $productStatement->execute(["RC-{$suffix}", "RCB-{$suffix}", $branchA]);
+    $productStatement->execute(["RC-{$suffix}", "RCB-{$suffix}", $storeId]);
     $productId = (int)$pdo->lastInsertId();
 
     $saleStatement = $pdo->prepare(
@@ -77,41 +72,40 @@ try {
     $reversalStatement->execute([$saleIds[0], 'pending', $aliceId]);
     $reversalStatement->execute([$saleIds[1], 'approved', $aliceId]);
 
+    // Historical receipts remain Store-queryable even if an old cashier record has no compatibility identity.
+    $pdo->prepare('UPDATE users SET branch_id = NULL WHERE user_id = ?')->execute([$bobId]);
+
     $service = new ReceiptTableService($pdo);
-    $unrestricted = ['cashier_id' => null, 'branch_id' => null];
-    $baseRequest = ['draw' => '7', 'start' => '0', 'length' => '25'];
+    $baseRequest = ['draw' => '7', 'start' => '0', 'length' => '25', 'branch_id' => '999999'];
 
-    $default = $service->fetch($baseRequest, ['cashier_id' => null, 'branch_id' => $branchA]);
+    $default = $service->fetch($baseRequest);
     $assert($default['draw'] === 7, 'draw should be returned as an integer');
-    $assert($default['recordsTotal'] === 3, 'total should include every receipt in the permitted branch');
-    $assert(count($default['data']) === 3, 'default page should return the permitted receipts');
-    $assert(array_column($default['data'], 'sale_id') === [$saleIds[2], $saleIds[1], $saleIds[0]], 'default order should be date then receipt identifier descending');
+    $assert($default['recordsTotal'] === 4, 'Store totals should include every receipt regardless of client branch input');
+    $assert(count($default['data']) === 4, 'default page should return the Store receipts');
+    $assert(array_column($default['data'], 'sale_id') === [$saleIds[3], $saleIds[2], $saleIds[1], $saleIds[0]], 'default order should be date then receipt identifier descending');
 
-    $paged = $service->fetch(array_merge($baseRequest, ['start' => '1', 'length' => '10']), ['cashier_id' => $aliceId, 'branch_id' => null]);
-    $assert($paged['recordsTotal'] === 3, 'cashier scope should be applied to the permitted total');
+    $paged = $service->fetch(array_merge($baseRequest, ['start' => '1', 'length' => '10']), $aliceId);
+    $assert($paged['recordsTotal'] === 3, 'cashier capability scope should be applied to the permitted total');
     $assert($paged['recordsFiltered'] === 3 && count($paged['data']) === 2, 'paging should return the requested permitted slice');
     $assert(count(array_filter($paged['data'], static fn(array $row): bool => (int)$row['cashier_id'] !== $aliceId)) === 0, 'cashier scope must constrain returned rows');
 
-    $branchScoped = $service->fetch($baseRequest, ['cashier_id' => null, 'branch_id' => $branchA]);
-    $assert($branchScoped['recordsTotal'] === 3, 'branch scope should constrain permitted totals before filtering');
-
-    $searched = $service->fetch($baseRequest + ['search' => ['value' => 'ewallet']], ['cashier_id' => $aliceId, 'branch_id' => null]);
+    $searched = $service->fetch($baseRequest + ['search' => ['value' => 'ewallet']], $aliceId);
     $assert($searched['recordsFiltered'] === 1 && (int)$searched['data'][0]['sale_id'] === $saleIds[2], 'global search should match payment method');
-    $byReceipt = $service->fetch($baseRequest + ['search' => ['value' => (string)$saleIds[1]]], ['cashier_id' => $aliceId, 'branch_id' => null]);
+    $byReceipt = $service->fetch($baseRequest + ['search' => ['value' => (string)$saleIds[1]]], $aliceId);
     $assert($byReceipt['recordsFiltered'] === 1, 'global search should match receipt number');
 
-    $dateFiltered = $service->fetch($baseRequest + ['date_from' => '2026-01-03', 'date_to' => '2026-01-03'], ['cashier_id' => $aliceId, 'branch_id' => null]);
+    $dateFiltered = $service->fetch($baseRequest + ['date_from' => '2026-01-03', 'date_to' => '2026-01-03'], $aliceId);
     $assert($dateFiltered['recordsFiltered'] === 2, 'date range should filter permitted rows');
-    $cashierFiltered = $service->fetch($baseRequest + ['cashier_id' => (string)$bobId], $unrestricted);
+    $cashierFiltered = $service->fetch($baseRequest + ['cashier_id' => (string)$bobId]);
     $assert($cashierFiltered['recordsFiltered'] === 1, 'authorized cashier filter should match one cashier');
-    $pending = $service->fetch($baseRequest + ['reversal_status' => 'pending'], ['cashier_id' => $aliceId, 'branch_id' => null]);
-    $approved = $service->fetch($baseRequest + ['reversal_status' => 'approved'], ['cashier_id' => $aliceId, 'branch_id' => null]);
-    $none = $service->fetch($baseRequest + ['reversal_status' => 'none'], ['cashier_id' => $aliceId, 'branch_id' => null]);
+    $pending = $service->fetch($baseRequest + ['reversal_status' => 'pending'], $aliceId);
+    $approved = $service->fetch($baseRequest + ['reversal_status' => 'approved'], $aliceId);
+    $none = $service->fetch($baseRequest + ['reversal_status' => 'none'], $aliceId);
     $assert($pending['recordsFiltered'] === 1 && $approved['recordsFiltered'] === 1 && $none['recordsFiltered'] === 1, 'each reversal-status filter should be applied');
 
-    $totalAscending = $service->fetch($baseRequest + ['order' => [['column' => '4', 'dir' => 'asc']]], ['cashier_id' => $aliceId, 'branch_id' => null]);
+    $totalAscending = $service->fetch($baseRequest + ['order' => [['column' => '4', 'dir' => 'asc']]], $aliceId);
     $assert(array_column($totalAscending['data'], 'sale_id') === [$saleIds[0], $saleIds[2], $saleIds[1]], 'total should sort numerically');
-    $itemDescending = $service->fetch($baseRequest + ['order' => [['column' => '3', 'dir' => 'desc']]], ['cashier_id' => $aliceId, 'branch_id' => null]);
+    $itemDescending = $service->fetch($baseRequest + ['order' => [['column' => '3', 'dir' => 'desc']]], $aliceId);
     $assert(array_column($itemDescending['data'], 'item_count') === [3, 2, 1], 'item count should sort numerically');
 
     $malformed = $service->fetch(array_merge($baseRequest, [
@@ -119,7 +113,7 @@ try {
         'date_from' => 'not-a-date',
         'reversal_status' => 'arbitrary',
         'order' => [['column' => '999', 'dir' => 'sideways']],
-    ]), ['cashier_id' => $aliceId, 'branch_id' => null]);
+    ]), $aliceId);
     $assert(count($malformed['data']) === 3, 'malformed filters and ordering should safely fall back without excluding rows');
     $assert(array_column($malformed['data'], 'sale_id') === [$saleIds[2], $saleIds[1], $saleIds[0]], 'unsupported ordering should use deterministic newest-first fallback');
 

@@ -3,16 +3,19 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
-require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
 
+use App\Authorization\RoleCapabilityPolicy;
 use App\Services\ReceiptTableService;
+
+require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
 $action = $_GET['action'] ?? 'list';
 if (!in_array($action, ['list', 'view', 'data'], true)) {
     $action = 'list';
 }
 $sale_id = (int)($_GET['sale_id'] ?? $_GET['id'] ?? $_GET['receipt_id'] ?? 0);
-$can_manage_all = in_array(current_role(), ['admin', 'super_admin', 'inventory_manager'], true);
+$storeId = store_scope_id($pdo);
+$can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
 function receipt_store_info(): array {
     static $cached = null;
@@ -58,7 +61,7 @@ function receipt_verification_code(array $sale): string {
     return implode('-', str_split(substr(strtoupper(hash('sha256', $raw)), 0, 12), 4));
 }
 
-function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
+function receipt_fetch_sale(PDO $pdo, int $sale_id, int $storeId): ?array {
     $saleColumns = receipt_table_columns($pdo, 'sales');
     $cashReceivedSql = isset($saleColumns['cash_received']) ? 's.cash_received' : 'NULL';
     $changeDueSql = isset($saleColumns['change_due']) ? 's.change_due' : 'NULL';
@@ -78,9 +81,15 @@ function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
                 u.full_name AS cashier_name
          FROM sales s
          JOIN users u ON s.cashier_id = u.user_id
-         WHERE s.sale_id = ?"
+         WHERE s.sale_id = ? AND (
+             u.branch_id = ? OR EXISTS (
+                 SELECT 1 FROM sale_items scope_si
+                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+             )
+         )"
     );
-    $saleStmt->execute([$sale_id]);
+    $saleStmt->execute([$sale_id, $storeId, $storeId]);
     $sale = $saleStmt->fetch();
 
     return $sale ?: null;
@@ -193,13 +202,10 @@ if ($action === 'data') {
     if (!$can_manage_all) {
         unset($request['cashier_id']);
     }
-    $scope = [
-        'cashier_id' => $can_manage_all ? null : (int)$_SESSION['user_id'],
-        'branch_id' => null,
-    ];
+    $cashierScope = $can_manage_all ? null : (int)$_SESSION['user_id'];
 
     try {
-        echo json_encode((new ReceiptTableService($pdo))->fetch($request, $scope), JSON_THROW_ON_ERROR);
+        echo json_encode((new ReceiptTableService($pdo))->fetch($request, $cashierScope), JSON_THROW_ON_ERROR);
     } catch (Throwable $exception) {
         error_log('Receipt table request failed: ' . $exception->getMessage());
         http_response_code(500);
@@ -220,6 +226,11 @@ if ($can_manage_all) {
         "SELECT DISTINCT u.user_id, u.full_name
          FROM users u
          JOIN sales s ON s.cashier_id = u.user_id
+         WHERE u.branch_id = " . (int)$storeId . " OR EXISTS (
+             SELECT 1 FROM sale_items scope_si
+             JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+             WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = " . (int)$storeId . "
+         )
          ORDER BY u.full_name, u.user_id"
     );
     $receiptCashiers = $cashierStatement->fetchAll(PDO::FETCH_ASSOC);
@@ -231,9 +242,15 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date, u.full_name AS cashier_name
          FROM sales s
          JOIN users u ON s.cashier_id = u.user_id
-         WHERE s.sale_id = ?"
+         WHERE s.sale_id = ? AND (
+             u.branch_id = ? OR EXISTS (
+                 SELECT 1 FROM sale_items scope_si
+                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+             )
+         )"
     );
-    $saleStmt->execute([$sale_id]);
+    $saleStmt->execute([$sale_id, $storeId, $storeId]);
     $sale = $saleStmt->fetch();
 
     if (!$sale) {
@@ -248,7 +265,7 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         exit;
     }
 
-    $sale = receipt_fetch_sale($pdo, $sale_id);
+    $sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
     receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id));
     exit;
 
@@ -311,7 +328,7 @@ $selected_sale = null;
 $selected_items = [];
 $selected_error = '';
 if ($sale_id > 0) {
-    $selected_sale = receipt_fetch_sale($pdo, $sale_id);
+    $selected_sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
     if (!$selected_sale) {
         $selected_error = 'Receipt not found.';
     } elseif (!$can_manage_all && (int)$selected_sale['cashier_id'] !== (int)$_SESSION['user_id']) {

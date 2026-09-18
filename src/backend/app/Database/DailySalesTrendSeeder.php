@@ -2,6 +2,7 @@
 
 namespace App\Database;
 
+use App\Store\StoreScope;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -31,7 +32,8 @@ final class DailySalesTrendSeeder
     {
         $this->assertSafeEnvironment();
         $this->assertRequiredSchema();
-        $products = $this->loadProductSeedDependency();
+        $storeId = (new StoreScope($this->pdo))->id();
+        $products = $this->loadProductSeedDependency($storeId);
         $plan = $this->buildPlan($products);
 
         $this->pdo->beginTransaction();
@@ -41,14 +43,14 @@ final class DailySalesTrendSeeder
                 'RetailMind Sales Trend Seed',
                 'rm-seed-sales-trend@example.test',
                 'cashier',
-                (int)$products[0]['branch_id']
+                $storeId
             );
             $receiverUserId = $this->resolveSeedUser(
                 self::RECEIVER_USERNAME,
                 'RetailMind Sales Seed Receiver',
                 'rm-seed-sales-receiver@example.test',
                 'admin',
-                (int)$products[0]['branch_id']
+                $storeId
             );
             $this->removePreviousRun($seedUserId, $receiverUserId);
             $batches = $this->receiveSimulationStock($products, $plan['units_by_product'], $receiverUserId);
@@ -130,33 +132,22 @@ final class DailySalesTrendSeeder
         }
     }
 
-    private function loadProductSeedDependency(): array
+    private function loadProductSeedDependency(int $storeId): array
     {
         $placeholders = implode(',', array_fill(0, count(self::PRODUCT_SKUS), '?'));
         $stmt = $this->pdo->prepare(
-            "SELECT p.product_id, p.sku, p.product_name, p.unit_price, p.cost_price, p.branch_id, b.branch_code
+            "SELECT p.product_id, p.sku, p.product_name, p.unit_price, p.cost_price
              FROM products p
              JOIN inventory i ON i.product_id = p.product_id
-             JOIN branches b ON b.branch_id = p.branch_id AND b.status = 'active'
-             WHERE p.sku IN ({$placeholders}) AND p.status = 'active' AND p.unit_price > 0
-             ORDER BY (b.branch_code = 'RM-SEED') DESC, p.branch_id ASC,
-                      FIELD(p.sku, {$placeholders})"
+             WHERE p.branch_id = ? AND p.sku IN ({$placeholders})
+               AND p.status = 'active' AND p.unit_price > 0
+             ORDER BY FIELD(p.sku, {$placeholders})"
         );
-        $stmt->execute(array_merge(self::PRODUCT_SKUS, self::PRODUCT_SKUS));
-        $byBranch = [];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $product) {
-            $byBranch[(int)$product['branch_id']][] = $product;
-        }
-
-        uasort($byBranch, static function (array $left, array $right): int {
-            $leftPreferred = ($left[0]['branch_code'] ?? '') === 'RM-SEED';
-            $rightPreferred = ($right[0]['branch_code'] ?? '') === 'RM-SEED';
-            return ($rightPreferred <=> $leftPreferred) ?: (count($right) <=> count($left));
-        });
-        $products = $byBranch ? reset($byBranch) : [];
+        $stmt->execute(array_merge([$storeId], self::PRODUCT_SKUS, self::PRODUCT_SKUS));
+        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (count($products) < 8) {
             throw new RuntimeException(
-                'Sales trend seed requires at least 8 active products from product_seed.csv in one active branch. '
+                'Sales trend seed requires at least 8 active Store products from product_seed.csv. '
                 . 'Import that product seed first; no products were created automatically.'
             );
         }
@@ -265,7 +256,7 @@ final class DailySalesTrendSeeder
         string $fullName,
         string $email,
         string $roleName,
-        int $branchId
+        int $storeId
     ): int
     {
         $roleStmt = $this->pdo->prepare('SELECT role_id FROM roles WHERE role_name = ? LIMIT 1');
@@ -283,7 +274,7 @@ final class DailySalesTrendSeeder
                 throw new RuntimeException("The reserved seed username '{$username}' is owned by an unexpected user.");
             }
             $this->pdo->prepare("UPDATE users SET role_id = ?, status = 'disabled', branch_id = ? WHERE user_id = ?")
-                ->execute([$roleId, $branchId, (int)$existing['user_id']]);
+                ->execute([$roleId, $storeId, (int)$existing['user_id']]);
             return (int)$existing['user_id'];
         }
 
@@ -292,7 +283,7 @@ final class DailySalesTrendSeeder
                 (full_name, username, email, password_hash, role_id, status, must_change_password, branch_id)
              VALUES (?, ?, ?, '!RM_SEED_LOGIN_DISABLED!', ?, 'disabled', 1, ?)"
         );
-        $insert->execute([$fullName, $username, $email, $roleId, $branchId]);
+        $insert->execute([$fullName, $username, $email, $roleId, $storeId]);
         return (int)$this->pdo->lastInsertId();
     }
 

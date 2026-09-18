@@ -2,24 +2,31 @@
 // components/invoice/sales_history.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
-require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
 
-$is_cashier = current_role() === 'cashier';
+use App\Authorization\RoleCapabilityPolicy;
+
+require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
+
+$storeId = store_scope_id($pdo);
+$is_cashier = !has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 $summarySql = $is_cashier
     ? "SELECT COUNT(DISTINCT s.sale_id) AS sale_count,
               COALESCE(SUM(si.quantity), 0) AS quantity_sold,
               COALESCE(SUM(si.subtotal), 0) AS total_amount
        FROM sales s
        JOIN sale_items si ON s.sale_id = si.sale_id
-       WHERE s.cashier_id = ?"
+       JOIN products p ON p.product_id = si.product_id
+       WHERE p.branch_id = ? AND s.cashier_id = ?"
     : "SELECT COUNT(DISTINCT s.sale_id) AS sale_count,
               COALESCE(SUM(si.quantity), 0) AS quantity_sold,
               COALESCE(SUM(si.subtotal), 0) AS total_amount
        FROM sales s
-       JOIN sale_items si ON s.sale_id = si.sale_id";
+       JOIN sale_items si ON s.sale_id = si.sale_id
+       JOIN products p ON p.product_id = si.product_id
+       WHERE p.branch_id = ?";
 
 $summaryStmt = $pdo->prepare($summarySql);
-$summaryStmt->execute($is_cashier ? [$_SESSION['user_id']] : []);
+$summaryStmt->execute($is_cashier ? [$storeId, $_SESSION['user_id']] : [$storeId]);
 $summary = $summaryStmt->fetch();
 
 $historySql = $is_cashier
@@ -28,7 +35,7 @@ $historySql = $is_cashier
        FROM sales s
        JOIN sale_items si ON s.sale_id = si.sale_id
        JOIN products p ON si.product_id = p.product_id
-       WHERE s.cashier_id = ?
+       WHERE p.branch_id = ? AND s.cashier_id = ?
        ORDER BY s.sale_date DESC, s.sale_id DESC, si.sale_item_id DESC
        LIMIT 200"
     : "SELECT s.sale_id, s.sale_date, si.quantity, si.unit_price, si.subtotal,
@@ -36,11 +43,12 @@ $historySql = $is_cashier
        FROM sales s
        JOIN sale_items si ON s.sale_id = si.sale_id
        JOIN products p ON si.product_id = p.product_id
+       WHERE p.branch_id = ?
        ORDER BY s.sale_date DESC, s.sale_id DESC, si.sale_item_id DESC
        LIMIT 200";
 
 $historyStmt = $pdo->prepare($historySql);
-$historyStmt->execute($is_cashier ? [$_SESSION['user_id']] : []);
+$historyStmt->execute($is_cashier ? [$storeId, $_SESSION['user_id']] : [$storeId]);
 $sales_history = $historyStmt->fetchAll();
 ?>
 <!DOCTYPE html>

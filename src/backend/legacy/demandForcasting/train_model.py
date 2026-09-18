@@ -270,7 +270,35 @@ def finish_training_run(
     cursor.close()
 
 
-def load_product_catalog(conn) -> pd.DataFrame:
+def resolve_store_id(conn) -> int:
+    """Resolve the internal singleton Store identity without accepting client scope."""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT b.branch_id, b.status,
+               (SELECT COUNT(*) FROM users u WHERE u.branch_id = b.branch_id) AS user_count,
+               (SELECT COUNT(*) FROM products p WHERE p.branch_id = b.branch_id) AS product_count
+        FROM branches b
+        ORDER BY b.branch_id
+        """
+    )
+    branches = cursor.fetchall()
+    cursor.close()
+    data_bearing = [
+        row for row in branches
+        if int(row["user_count"] or 0) > 0 or int(row["product_count"] or 0) > 0
+    ]
+    if len(data_bearing) == 1 and data_bearing[0]["status"] == "active":
+        return int(data_bearing[0]["branch_id"])
+    active = [row for row in branches if row["status"] == "active"]
+    if not data_bearing and len(active) == 1:
+        return int(active[0]["branch_id"])
+    raise RuntimeError(
+        "Demand forecasting requires the singleton Store migration before training or prediction."
+    )
+
+
+def load_product_catalog(conn, store_id: int) -> pd.DataFrame:
     query = """
         SELECT
             p.product_id,
@@ -290,28 +318,31 @@ def load_product_catalog(conn) -> pd.DataFrame:
         LEFT JOIN categories c ON p.category_id = c.category_id
         LEFT JOIN sale_items si ON si.product_id = p.product_id
         LEFT JOIN sales s ON s.sale_id = si.sale_id
-        WHERE p.status = 'active'
+        WHERE p.status = 'active' AND p.branch_id = %s
         GROUP BY p.product_id, c.category_name
         HAVING first_sale_day IS NOT NULL
         ORDER BY p.product_id
     """
-    return pd.read_sql(query, conn)
+    return pd.read_sql(query, conn, params=(store_id,))
 
 
-def load_sales_totals(conn) -> pd.DataFrame:
+def load_sales_totals(conn, store_id: int) -> pd.DataFrame:
     query = """
         SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM(si.quantity) AS qty_sold
         FROM sale_items si
         JOIN sales s ON s.sale_id = si.sale_id
+        JOIN products p ON p.product_id = si.product_id
+        WHERE p.branch_id = %s
         GROUP BY si.product_id, DATE(s.sale_date)
         ORDER BY si.product_id, sale_day
     """
-    return pd.read_sql(query, conn)
+    return pd.read_sql(query, conn, params=(store_id,))
 
 
 def build_complete_daily_history(conn, settings: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame]:
-    catalog = load_product_catalog(conn)
-    sales = load_sales_totals(conn)
+    store_id = resolve_store_id(conn)
+    catalog = load_product_catalog(conn, store_id)
+    sales = load_sales_totals(conn, store_id)
     if catalog.empty:
         return pd.DataFrame(), catalog
 

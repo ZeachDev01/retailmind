@@ -192,8 +192,23 @@ $checks = [
     ],
     'Receipt Management server contract is isolated and safe' => [
         'file' => 'src/backend/app/Services/ReceiptTableService.php',
-        'needles' => ['class ReceiptTableService', 'recordsTotal', 'recordsFiltered', "'s.sale_date'", "'s.total_amount'", "'item_count'", 'LIMIT :limit OFFSET :offset'],
-        'forbidden' => ['ORDER BY {$request', 'ORDER BY ' . "\$_GET"],
+        'needles' => ['class ReceiptTableService', 'StoreScope', 'recordsTotal', 'recordsFiltered', "'s.sale_date'", "'s.total_amount'", "'item_count'", 'LIMIT :limit OFFSET :offset'],
+        'forbidden' => ['ORDER BY {$request', 'ORDER BY ' . "\$_GET", "scope['branch_id']", 'scope_branch_id'],
+    ],
+    'Sales and receipt routes use capability and Store scope' => [
+        'file' => 'src/frontend/components/invoice/receipt.php',
+        'needles' => ['VIEW_SALES_HISTORY', 'store_scope_id($pdo)', 'ReceiptTableService($pdo)'],
+        'forbidden' => ["require_role(['admin', 'super_admin', 'inventory_manager', 'cashier'])", "'branch_id' => null"],
+    ],
+    'Report generation uses capability and Store scope' => [
+        'file' => 'src/frontend/components/report/report_generation.php',
+        'needles' => ['VIEW_STORE_REPORTS', "'store_id' => store_scope_id(\$pdo)", '{$alias}.branch_id = ?'],
+        'forbidden' => ["require_role(['admin', 'inventory_manager'])"],
+    ],
+    'Forecast training keeps Store Product and Day grain' => [
+        'file' => 'src/backend/legacy/demandForcasting/train_model.py',
+        'needles' => ['resolve_store_id', 'p.branch_id = %s', 'GROUP BY si.product_id, DATE(s.sale_date)'],
+        'forbidden' => ['branch_id AS', 'groupby("branch_id"', "groupby(['branch_id'"],
     ],
     'Audit Logs search control is inset' => [
         'file' => 'src/frontend/assets/css/audit-logs.css',

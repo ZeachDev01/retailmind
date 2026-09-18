@@ -11,6 +11,7 @@ require_once __DIR__ . '/../app/Services/DashboardService.php';
 
 use App\Database\DailySalesTrendSeeder;
 use App\Database\ProductSeeder;
+use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -27,32 +28,32 @@ try {
     $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/product_seed.csv');
     $firstProducts = ProductSeeder::run($pdo, $products, true);
     $secondProducts = ProductSeeder::run($pdo, $products, true);
-    $seedProductCount = (int)$pdo->query(
-        "SELECT COUNT(*) FROM products p JOIN branches b ON b.branch_id = p.branch_id WHERE b.branch_code = 'RM-SEED'"
-    )->fetchColumn();
+    $storeId = (new StoreScope($pdo))->id();
+    $seedProductStatement = $pdo->prepare('SELECT COUNT(*) FROM products WHERE branch_id = ?');
+    $seedProductStatement->execute([$storeId]);
+    $seedProductCount = (int)$seedProductStatement->fetchColumn();
     $assert(
         (int)$firstProducts['inserted'] + (int)$firstProducts['skipped'] === count($products),
         'Product dependency seed did not account for every CSV product'
     );
     $assert((int)$secondProducts['inserted'] === 0, 'Repeat product dependency seed inserted duplicate products');
     $assert((int)$secondProducts['skipped'] === count($products), 'Repeat product dependency seed did not recognize every product');
-    $assert($seedProductCount === count($products), 'Product dependency produced a duplicate or missing RM-SEED product');
+    $assert($seedProductCount === count($products), 'Product dependency produced a duplicate or missing Store product');
 
     $seeder = new DailySalesTrendSeeder($pdo, $asOf);
     $first = $seeder->run();
     $firstOwned = $seeder->ownedSummary();
-    $firstStock = $pdo->query(
+    $stockStatement = $pdo->prepare(
         "SELECT SUM(i.quantity_on_hand) AS on_hand, SUM(p.quantity_purchased) AS purchased, SUM(p.quantity_sold) AS sold
          FROM products p JOIN inventory i ON i.product_id = p.product_id
-         JOIN branches b ON b.branch_id = p.branch_id WHERE b.branch_code = 'RM-SEED'"
-    )->fetch(PDO::FETCH_ASSOC);
+         WHERE p.branch_id = ?"
+    );
+    $stockStatement->execute([$storeId]);
+    $firstStock = $stockStatement->fetch(PDO::FETCH_ASSOC);
     $second = $seeder->run();
     $secondOwned = $seeder->ownedSummary();
-    $secondStock = $pdo->query(
-        "SELECT SUM(i.quantity_on_hand) AS on_hand, SUM(p.quantity_purchased) AS purchased, SUM(p.quantity_sold) AS sold
-         FROM products p JOIN inventory i ON i.product_id = p.product_id
-         JOIN branches b ON b.branch_id = p.branch_id WHERE b.branch_code = 'RM-SEED'"
-    )->fetch(PDO::FETCH_ASSOC);
+    $stockStatement->execute([$storeId]);
+    $secondStock = $stockStatement->fetch(PDO::FETCH_ASSOC);
 
     foreach (['sales', 'sale_items', 'units_sold', 'gross_total', 'start_date', 'end_date', 'sales_days'] as $key) {
         $assert(
@@ -64,6 +65,21 @@ try {
     $assert((int)$secondOwned['sale_items'] === (int)$second['sale_items'], 'Owned line-item count does not match the seed plan');
     $assert((int)$secondOwned['units_sold'] === (int)$second['units_sold'], 'Owned unit count does not match the seed plan');
     $assert($firstStock === $secondStock, 'Repeat sales seed changed the resulting inventory or product counters');
+    $seedUsers = $pdo->prepare('SELECT COUNT(*) FROM users WHERE username IN (?, ?) AND branch_id = ?');
+    $seedUsers->execute([DailySalesTrendSeeder::USERNAME, DailySalesTrendSeeder::RECEIVER_USERNAME, $storeId]);
+    $assert((int)$seedUsers->fetchColumn() === 2, 'Sales seed users are not attached to the singleton Store identity');
+
+    $forecastGrain = $pdo->prepare(
+        "SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM(si.quantity) AS qty_sold
+         FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+         JOIN products p ON p.product_id = si.product_id
+         WHERE p.branch_id = ?
+         GROUP BY si.product_id, DATE(s.sale_date)"
+    );
+    $forecastGrain->execute([$storeId]);
+    $grainRows = $forecastGrain->fetchAll(PDO::FETCH_ASSOC);
+    $grainKeys = array_map(static fn(array $row): string => $row['product_id'] . '|' . $row['sale_day'], $grainRows);
+    $assert(count($grainKeys) === count(array_unique($grainKeys)), 'Forecast source grain must remain Product + Day for the Store');
 
     $service = new DashboardService($pdo);
     foreach ([7, 30, 90] as $days) {

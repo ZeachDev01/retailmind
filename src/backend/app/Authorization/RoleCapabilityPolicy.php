@@ -11,6 +11,9 @@ final class RoleCapabilityPolicy
     public const OPERATE_POINT_OF_SALE = 'operate_point_of_sale';
     public const VIEW_STORE_AUDIT = 'view_store_audit';
     public const VIEW_PLATFORM_AUDIT = 'view_platform_audit';
+    public const VIEW_SALES_HISTORY = 'view_sales_history';
+    public const VIEW_STORE_REPORTS = 'view_store_reports';
+    public const MANAGE_SALE_REVERSALS = 'manage_sale_reversals';
     public const MANAGE_USERS = 'manage_users';
     public const ASSIGN_ROLES = 'assign_roles';
     public const ASSIGN_PRIVILEGES = 'assign_privileges';
@@ -22,6 +25,8 @@ final class RoleCapabilityPolicy
             self::VIEW_INVENTORY,
             self::VIEW_STORE_AUDIT,
             self::VIEW_PLATFORM_AUDIT,
+            self::VIEW_SALES_HISTORY,
+            self::VIEW_STORE_REPORTS,
             self::MANAGE_USERS,
             self::ASSIGN_ROLES,
             self::ASSIGN_PRIVILEGES,
@@ -31,16 +36,23 @@ final class RoleCapabilityPolicy
             self::STORE_OPERATIONS,
             self::VIEW_INVENTORY,
             self::VIEW_STORE_AUDIT,
+            self::VIEW_SALES_HISTORY,
+            self::VIEW_STORE_REPORTS,
+            self::MANAGE_SALE_REVERSALS,
             self::MANAGE_USERS,
             self::ASSIGN_ROLES,
         ],
         'inventory_manager' => [
             self::VIEW_INVENTORY,
             self::MUTATE_INVENTORY,
+            self::VIEW_SALES_HISTORY,
+            self::VIEW_STORE_REPORTS,
+            self::MANAGE_SALE_REVERSALS,
         ],
         'cashier' => [
             self::VIEW_INVENTORY,
             self::OPERATE_POINT_OF_SALE,
+            self::VIEW_SALES_HISTORY,
         ],
     ];
 

@@ -3,11 +3,15 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/SaleReversalService.php';
-require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
+
+use App\Authorization\RoleCapabilityPolicy;
+
+require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
 $service = new SaleReversalService($pdo);
 $sale_id = (int)($_GET['sale_id'] ?? $_POST['sale_id'] ?? 0);
-$can_approve = in_array(current_role(), ['admin', 'super_admin', 'inventory_manager'], true);
+$can_approve = has_capability(RoleCapabilityPolicy::MANAGE_SALE_REVERSALS);
+$can_view_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 $message = '';
 $error = '';
 
@@ -52,12 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $sale = $sale_id > 0 ? $service->getSaleWithItems($sale_id) : null;
-if ($sale && !$can_approve && (int)$sale['cashier_id'] !== (int)$_SESSION['user_id']) {
+if ($sale && !$can_view_all && (int)$sale['cashier_id'] !== (int)$_SESSION['user_id']) {
     $error = 'You can only view reversals for your own sales.';
     $sale = null;
 }
 
-$reversals = $sale_id > 0 && $sale ? $service->getReversals($sale_id) : ($can_approve ? $service->getReversals() : []);
+$reversals = $sale_id > 0 && $sale ? $service->getReversals($sale_id) : ($can_view_all ? $service->getReversals() : []);
 $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['status'] === 'pending'));
 ?>
 <!DOCTYPE html>

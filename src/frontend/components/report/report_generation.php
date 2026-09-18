@@ -3,7 +3,10 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
-require_role(['admin', 'inventory_manager']);
+
+use App\Authorization\RoleCapabilityPolicy;
+
+require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
 $reportCatalog = [
     'sales_period' => 'Daily, Weekly and Monthly Sales',
@@ -64,8 +67,8 @@ function send_csv(string $filename, array $rows, array $headers): void
 
 function product_filters(array $filters, string $alias = 'p'): array
 {
-    $where = [];
-    $params = [];
+    $where = ["{$alias}.branch_id = ?"];
+    $params = [$filters['store_id']];
 
     if ($filters['product_id'] > 0) {
         $where[] = "{$alias}.product_id = ?";
@@ -560,6 +563,7 @@ if (!array_key_exists($selectedReport, $reportCatalog)) {
 }
 
 $filters = [
+    'store_id' => store_scope_id($pdo),
     'from' => normalize_date(request_value('from', date('Y-m-01')), date('Y-m-01')),
     'to' => normalize_date(request_value('to', date('Y-m-d')), date('Y-m-d')),
     'product_id' => max(0, (int)request_value('product_id', '0')),
@@ -571,12 +575,21 @@ if (strtotime($filters['from']) > strtotime($filters['to'])) {
     [$filters['from'], $filters['to']] = [$filters['to'], $filters['from']];
 }
 
-$products = $pdo->query(
+$productStatement = $pdo->prepare(
     "SELECT p.product_id, COALESCE(p.barcode, p.sku) AS sku, p.product_name
      FROM products p
+     WHERE p.branch_id = ?
      ORDER BY p.product_name"
-)->fetchAll();
-$categories = $pdo->query("SELECT category_id, category_name FROM categories ORDER BY category_name")->fetchAll();
+);
+$productStatement->execute([$filters['store_id']]);
+$products = $productStatement->fetchAll();
+$categoryStatement = $pdo->prepare(
+    'SELECT DISTINCT c.category_id, c.category_name
+     FROM categories c JOIN products p ON p.category_id = c.category_id
+     WHERE p.branch_id = ? ORDER BY c.category_name'
+);
+$categoryStatement->execute([$filters['store_id']]);
+$categories = $categoryStatement->fetchAll();
 $reportData = run_report($pdo, $selectedReport, $filters);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
