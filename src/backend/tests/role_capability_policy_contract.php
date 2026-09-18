@@ -59,14 +59,16 @@ $assert(!$policy->allows('admin', RoleCapabilityPolicy::ASSIGN_PRIVILEGES, 'cash
 $assert($policy->allows('super_admin', RoleCapabilityPolicy::MANAGE_USERS, 'admin'), 'Super Administrator should manage Administrator accounts');
 $assert($policy->allows('super_admin', RoleCapabilityPolicy::ASSIGN_ROLES, 'super_admin'), 'Super Administrator should govern privileged roles');
 
-$emergency = AuthorizationContext::emergencyAccess('Restore Store operations during an incident');
-$assert($policy->allows('super_admin', RoleCapabilityPolicy::STORE_OPERATIONS, null, $emergency), 'Emergency Access should permit isolated Store operations');
-$assert($policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $emergency), 'Emergency Access should permit emergency inventory mutation');
-$assert(!$policy->allows('admin', RoleCapabilityPolicy::PLATFORM_GOVERNANCE, null, $emergency), 'Emergency context must not elevate an Administrator');
-$assert(!$policy->allows('super_admin', RoleCapabilityPolicy::OPERATE_POINT_OF_SALE, null, $emergency), 'Emergency Access must not turn the Super Administrator into a Cashier');
-$expiredEmergency = AuthorizationContext::expiredEmergencyAccess('Expired incident intervention');
-$assert(!$policy->allows('super_admin', RoleCapabilityPolicy::STORE_OPERATIONS, null, $expiredEmergency), 'Expired Emergency Access must not grant Store operations');
-$assert(!$policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $expiredEmergency), 'Expired Emergency Access must not grant inventory mutation');
+$emergency = AuthorizationContext::emergencyAccess(101, 41, 'Restore Store operations during an incident');
+$assert($policy->allows('super_admin', RoleCapabilityPolicy::STORE_OPERATIONS, null, $emergency, 41), 'Emergency Access should permit isolated Store operations');
+$assert($policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $emergency, 41), 'Emergency Access should permit emergency inventory mutation');
+$assert(!$policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $emergency), 'Emergency Access should require an authenticated actor identifier');
+$assert(!$policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $emergency, 42), 'Emergency context must not elevate another Super Administrator');
+$assert(!$policy->allows('admin', RoleCapabilityPolicy::PLATFORM_GOVERNANCE, null, $emergency, 41), 'Emergency context must not elevate an Administrator');
+$assert(!$policy->allows('super_admin', RoleCapabilityPolicy::OPERATE_POINT_OF_SALE, null, $emergency, 41), 'Emergency Access must not turn the Super Administrator into a Cashier');
+$expiredEmergency = AuthorizationContext::standard();
+$assert(!$policy->allows('super_admin', RoleCapabilityPolicy::STORE_OPERATIONS, null, $expiredEmergency, 41), 'Expired Emergency Access must not grant Store operations');
+$assert(!$policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $expiredEmergency, 41), 'Expired Emergency Access must not grant inventory mutation');
 $assert(!$policy->allows('unknown', RoleCapabilityPolicy::VIEW_INVENTORY), 'Unknown actors must be denied');
 $assert(!$policy->allows('admin', 'unknown_capability'), 'Unknown capabilities must be denied');
 

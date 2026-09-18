@@ -63,14 +63,15 @@ final class RoleCapabilityPolicy
         string $actorRole,
         string $capability,
         ?string $targetRole = null,
-        ?AuthorizationContext $context = null
+        ?AuthorizationContext $context = null,
+        ?int $actorUserId = null
     ): bool {
         if (!isset(self::BASE_CAPABILITIES[$actorRole])) {
             return false;
         }
 
         if ($actorRole === 'super_admin'
-            && ($context ?? AuthorizationContext::standard())->hasActiveEmergencyAccess()
+            && ($context ?? AuthorizationContext::standard())->hasActiveEmergencyAccess($actorUserId)
             && in_array($capability, self::EMERGENCY_CAPABILITIES, true)
         ) {
             return true;
@@ -94,7 +95,8 @@ final class RoleCapabilityPolicy
         string $actorRole,
         string $privilegeKey,
         ?string $targetRole = null,
-        ?AuthorizationContext $context = null
+        ?AuthorizationContext $context = null,
+        ?int $actorUserId = null
     ): bool {
         $capability = [
             'manage_users' => self::MANAGE_USERS,
@@ -105,6 +107,6 @@ final class RoleCapabilityPolicy
             'view_inventory' => self::VIEW_INVENTORY,
         ][$privilegeKey] ?? null;
 
-        return $capability !== null && $this->allows($actorRole, $capability, $targetRole, $context);
+        return $capability !== null && $this->allows($actorRole, $capability, $targetRole, $context, $actorUserId);
     }
 }

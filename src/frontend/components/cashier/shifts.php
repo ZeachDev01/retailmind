@@ -17,6 +17,9 @@ $message = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (current_role() === 'super_admin') {
+        require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
+    }
     csrf_verify();
     $action = $_POST['action'] ?? '';
     try {

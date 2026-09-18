@@ -19,6 +19,9 @@ if ($_SERVER['REQUEST_METHOD']==='GET') {
     echo json_encode(['success'=>true,'held_sales'=>held_sale_rows($pdo,$userId)]);exit;
 }
 if ($_SERVER['REQUEST_METHOD']!=='POST') { http_response_code(405);echo json_encode(['success'=>false,'message'=>'Method not allowed.']);exit; }
+if (current_role() === 'super_admin') {
+    require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
+}
 $input=json_decode((string)file_get_contents('php://input'),true)?:[];
 csrf_verify($_SERVER['HTTP_X_CSRF_TOKEN']??($input['csrf_token']??null));
 $action=(string)($input['action']??'');

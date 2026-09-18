@@ -18,7 +18,7 @@ final class ProtectedAuditRecordService
     {
         [$whereSql, $params] = $this->where($actorRole, $filters);
         $sql = "SELECT al.log_id, al.user_id, al.action, al.category, al.module, al.record_id,
-                       al.previous_value, al.new_value, al.ip_address, al.created_at,
+                       al.previous_value, al.new_value, al.metadata, al.ip_address, al.created_at,
                        u.full_name, u.username
                 FROM activity_log al
                 LEFT JOIN users u ON al.user_id = u.user_id

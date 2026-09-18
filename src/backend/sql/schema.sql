@@ -344,6 +344,7 @@ CREATE TABLE activity_log (
     record_id INT NULL,
     previous_value TEXT NULL,
     new_value TEXT NULL,
+    metadata JSON NULL,
     ip_address VARCHAR(45) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_activity_log_category_created (category, created_at),
@@ -356,6 +357,33 @@ CREATE TABLE activity_log (
 -- The activity_log table is still created and used by the application; the
 -- database-level immutability triggers were removed so this schema can import
 -- with standard database-user permissions.
+
+-- Emergency Access uses durable, actor-bound sessions rather than a permanent role.
+CREATE TABLE platform_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_by INT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (updated_by) REFERENCES users(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO platform_settings (setting_key, setting_value) VALUES
+('emergency_access_duration_minutes', '15');
+
+CREATE TABLE emergency_access_sessions (
+    session_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id INT NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    activated_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    duration_minutes SMALLINT UNSIGNED NOT NULL,
+    status ENUM('active','expired','revoked') NOT NULL DEFAULT 'active',
+    revoked_at DATETIME NULL,
+    revoked_by INT NULL,
+    INDEX idx_emergency_actor_status (actor_user_id, status, expires_at),
+    FOREIGN KEY (actor_user_id) REFERENCES users(user_id) ON DELETE RESTRICT,
+    FOREIGN KEY (revoked_by) REFERENCES users(user_id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------- Fiscal Periods (Admin) ----------
 CREATE TABLE fiscal_periods (
