@@ -238,6 +238,19 @@ $checks = [
         'file' => 'src/frontend/components/inventory_management/reorder_planner.php',
         'needles' => ['Supplier-Based Reorder Planning', 'minimum_order_quantity', 'Create selected replenishment requests'],
     ],
+    'Shared attention evaluation feeds scheduled notifications' => [
+        'file' => 'src/backend/scripts/run_notifications.php',
+        'needles' => ['DatabaseAttentionSignalSource', 'AttentionRuleService', 'AttentionNotificationService', "['super_admin', 'admin']"],
+    ],
+    'Platform Settings govern attention safety limits' => [
+        'file' => 'src/backend/legacy/routes/admin/system_settings.php',
+        'needles' => ['save_attention', 'updatePlatform', 'store_cash_variance_amount_max', 'Platform attention thresholds'],
+    ],
+    'Store Settings expose Administrator-owned attention thresholds' => [
+        'file' => 'src/frontend/components/administrator/store_settings.php',
+        'needles' => ["require_role(['admin'])", 'updateStore', 'thresholdsFor', 'Platform-limited value'],
+        'forbidden' => ["require_role(['super_admin'])"],
+    ],
     'Release cleanup covers runtime files' => [
         'file' => 'src/backend/scripts/build_release.sh',
         'needles' => ['src/backend/storage/sessions/*', 'src/backend/storage/imports/*', 'src/backend/legacy/demandForcasting/models/*'],

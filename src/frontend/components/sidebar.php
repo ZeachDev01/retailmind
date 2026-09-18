@@ -147,6 +147,7 @@ $superAdministratorSystemItems = [
 
 $administratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Store Staff'],
+    ['path' => 'components/administrator/store_settings.php', 'icon' => 'bi-sliders', 'label' => 'Store Settings'],
     ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Operational Audit'],
 ];

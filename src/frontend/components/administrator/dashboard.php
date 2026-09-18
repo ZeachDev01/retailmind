@@ -30,6 +30,7 @@ $displayName = trim((string)($_SESSION['full_name'] ?? 'Administrator'));
                 </div>
                 <div class="quick-actions">
                     <a class="quick-action" href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php')) ?>"><i class="bi bi-people"></i><strong>Store Staff</strong><span>Manage Cashiers and Inventory Managers</span></a>
+                    <a class="quick-action" href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php')) ?>"><i class="bi bi-sliders"></i><strong>Store Settings</strong><span>Govern operational attention thresholds</span></a>
                     <a class="quick-action" href="<?= htmlspecialchars(app_url('components/system_administrator/fiscal_periods.php')) ?>"><i class="bi bi-calendar-check"></i><strong>Fiscal Periods</strong><span>Govern Store accounting windows</span></a>
                     <a class="quick-action" href="<?= htmlspecialchars(app_url('components/invoice/receipt.php')) ?>"><i class="bi bi-receipt"></i><strong>Receipt Management</strong><span>Review Store sales activity</span></a>
                     <a class="quick-action" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>"><i class="bi bi-clock-history"></i><strong>Operational Audit</strong><span>Review Store lifecycle records</span></a>
