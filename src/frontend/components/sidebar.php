@@ -24,7 +24,7 @@ $commandProductTarget = match ($role) {
 $mobileHomeTarget = match ($role) {
     'super_admin' => 'components/super_administrator/dashboard.php',
     'admin' => 'components/administrator/dashboard.php',
-    'inventory_manager' => 'components/inventory_management/dashboard.php',
+    'inventory_manager' => 'components/inventory_management/inventory_overview.php',
     default => 'components/cashier/pos.php',
 };
 $flashMessages = [];

@@ -59,7 +59,7 @@ $checks = [
     ],
     'Dedicated administrator workspaces are canonical' => [
         'file' => 'src/backend/app/Authorization/RoleWorkspaceRouter.php',
-        'needles' => ["'super_admin' => 'components/super_administrator/dashboard.php'", "'admin' => 'components/administrator/dashboard.php'", "'inventory_manager' => 'components/inventory_management/dashboard.php'", "'cashier' => 'components/cashier/pos.php'"],
+        'needles' => ["'super_admin' => 'components/super_administrator/dashboard.php'", "'admin' => 'components/administrator/dashboard.php'", "'inventory_manager' => 'components/inventory_management/inventory_overview.php'", "'cashier' => 'components/cashier/pos.php'"],
     ],
     'Landing routes through the canonical workspace map' => [
         'file' => 'src/frontend/index.php',
