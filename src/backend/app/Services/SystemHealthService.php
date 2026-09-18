@@ -2,7 +2,7 @@
 
 use App\Database\Schema;
 
-final class SystemHealthService
+final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
 {
     public function __construct(private PDO $pdo, private string $backendPath) {}
 

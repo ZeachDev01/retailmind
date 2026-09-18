@@ -13,29 +13,30 @@ final class DatabaseAttentionSignalSource
 
     public function platform(array $healthChecks = []): array
     {
+        $dayAgo = $this->clock->now()->modify('-24 hours')->format('Y-m-d H:i:s');
         $failedLogins = $this->scalar(
-            "SELECT COUNT(*) FROM login_attempts WHERE was_successful = 0 AND attempted_at >= DATE_SUB(?, INTERVAL 24 HOUR)",
-            [$this->now()]
+            "SELECT COUNT(*) FROM login_attempts WHERE was_successful = 0 AND attempted_at >= ?",
+            [$dayAgo]
         );
         $lockedAccounts = $this->scalar(
             "SELECT COUNT(*) FROM users WHERE status = 'active' AND locked_until > ?",
             [$this->now()]
         );
-        $backupAge = $this->scalar(
-            "SELECT COALESCE(DATEDIFF(?, MAX(created_at)), 9999) FROM backup_history WHERE status = 'completed' AND backup_type <> 'restore'",
-            [$this->now()]
+        $latestBackup = $this->row(
+            "SELECT created_at FROM backup_history WHERE status = 'completed' AND backup_type <> 'restore' ORDER BY created_at DESC LIMIT 1"
         );
+        $backupAge = $this->ageDays($latestBackup['created_at'] ?? null);
         $recoveryFailures = $this->scalar(
-            "SELECT COUNT(*) FROM backup_history WHERE status = 'failed' AND created_at >= DATE_SUB(?, INTERVAL 24 HOUR)",
-            [$this->now()]
+            "SELECT COUNT(*) FROM backup_history WHERE status = 'failed' AND created_at >= ?",
+            [$dayAgo]
         );
-        $modelAge = $this->scalar(
-            "SELECT COALESCE(DATEDIFF(?, MAX(completed_at)), 9999) FROM model_training_runs WHERE status = 'completed'",
-            [$this->now()]
+        $latestModel = $this->row(
+            "SELECT completed_at FROM model_training_runs WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 1"
         );
+        $modelAge = $this->ageDays($latestModel['completed_at'] ?? null);
         $platformChanges = $this->scalar(
-            "SELECT COUNT(*) FROM activity_log WHERE category = 'platform_setting' AND created_at >= DATE_SUB(?, INTERVAL 24 HOUR)",
-            [$this->now()]
+            "SELECT COUNT(*) FROM activity_log WHERE category = 'platform_setting' AND created_at >= ?",
+            [$dayAgo]
         );
         $emergencyAccess = $this->scalar(
             "SELECT COUNT(*) FROM emergency_access_sessions WHERE status = 'active' AND expires_at > ?",
@@ -154,6 +155,18 @@ final class DatabaseAttentionSignalSource
         } catch (Throwable $exception) {
             error_log('Attention signal query skipped: ' . $exception->getMessage());
             return [];
+        }
+    }
+
+    private function ageDays(mixed $value): int
+    {
+        if (!is_string($value) || $value === '') {
+            return 9999;
+        }
+        try {
+            return max(0, (int)(new \DateTimeImmutable($value))->diff($this->clock->now())->format('%a'));
+        } catch (Throwable) {
+            return 9999;
         }
     }
 

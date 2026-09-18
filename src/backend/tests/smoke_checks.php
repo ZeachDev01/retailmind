@@ -68,8 +68,13 @@ $checks = [
     ],
     'Super Administrator workspace is exactly guarded' => [
         'file' => 'src/frontend/components/super_administrator/dashboard.php',
-        'needles' => ["require_role(['super_admin'])", 'Platform Control Center', "include __DIR__ . '/../sidebar.php'", 'system_health.php', 'backup_restore.php', 'ml_settings.php', 'system_settings.php'],
+        'needles' => ["require_role(['super_admin'])", 'Platform Control Center', "include __DIR__ . '/../sidebar.php'", 'DashboardWorkspace', 'RoleCapabilityPolicy'],
         'forbidden' => ['inventory_counts.php', 'csv_import.php', 'stock_receiving.php', 'inventory_adjustments.php'],
+    ],
+    'Super Administrator control center uses policy-filtered destinations' => [
+        'file' => 'src/backend/app/Dashboard/DashboardWorkspace.php',
+        'needles' => ['RoleCapabilityPolicy::PLATFORM_GOVERNANCE', 'RoleCapabilityPolicy::MANAGE_USERS', 'RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT', 'permittedActions'],
+        'forbidden' => ['inventory_counts.php', 'stock_receiving.php', 'inventory_adjustments.php'],
     ],
     'Administrator workspace is exactly guarded' => [
         'file' => 'src/frontend/components/administrator/dashboard.php',

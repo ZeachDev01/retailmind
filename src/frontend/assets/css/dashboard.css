@@ -113,6 +113,58 @@
 .attention-copy strong { display: block; font-size: .86rem; }
 .attention-copy span { color: var(--muted); font-size: .76rem; }
 
+/* Super Administrator control center */
+.control-center-heading { align-items: center; }
+.dashboard-freshness { display: flex; align-items: center; gap: .4rem; margin-top: .55rem; color: var(--muted); font-size: .8rem; }
+.dashboard-stale { display: flex; align-items: center; gap: .55rem; margin: 0 0 1rem; padding: .75rem 1rem; border: 1px solid #f59e0b; border-radius: 10px; background: #fffbeb; color: #92400e; }
+.dashboard-stale[hidden] { display: none; }
+.governance-queue { margin-bottom: 1.5rem; border-top: 4px solid #2563eb; }
+.section-eyebrow { margin-bottom: .25rem; color: #2563eb; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.control-center-section-header { margin-bottom: .8rem; }
+.control-center-headlines { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.control-center-headlines .stat-card { margin: 0; }
+.control-center-headlines .value { padding-right: .25rem; font-size: clamp(1.15rem, 1.6vw, 1.6rem); }
+.stat-card.status-critical { border-color: #fecaca; background: #fef2f2; }
+.stat-card.status-critical .stat-icon { background: #fee2e2; color: #dc2626; }
+.stat-card.status-warning { border-color: #fde68a; background: #fffbeb; }
+.stat-card.status-warning .stat-icon { background: #fef3c7; color: #d97706; }
+.stat-card.status-healthy { border-color: #bbf7d0; background: #f0fdf4; }
+.stat-card.status-healthy .stat-icon { background: #dcfce7; color: #16a34a; }
+.attention-critical { border-color: #fecaca; background: #fef2f2; }
+.attention-critical .attention-icon { background: #fee2e2; color: #dc2626; }
+.attention-warning { border-color: #fde68a; background: #fffbeb; }
+.attention-info { border-color: #bfdbfe; background: #eff6ff; }
+.severity-label { display: block; margin-bottom: .18rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.dashboard-state { display: flex; align-items: center; gap: .8rem; min-height: 92px; padding: 1rem; border: 1px dashed var(--border); border-radius: 11px; background: #f8fafc; }
+.dashboard-state > i { font-size: 1.5rem; color: #16a34a; }
+.dashboard-state div { flex: 1; }
+.dashboard-state p { margin: .2rem 0 0; color: var(--muted); }
+.dashboard-state-error { border-color: #fecaca; background: #fef2f2; }
+.dashboard-state-error > i { color: #dc2626; }
+.indicator-link { color: inherit; text-decoration: none; }
+.indicator-link:hover strong { color: var(--primary); }
+.continuity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+.continuity-item { display: flex; gap: .65rem; min-width: 0; padding: .8rem; border: 1px solid var(--border); border-radius: 11px; background: #f8fafc; }
+.continuity-item > i { flex: 0 0 auto; color: #16a34a; }
+.continuity-item.needs-attention { border-color: #fde68a; background: #fffbeb; }
+.continuity-item.needs-attention > i { color: #d97706; }
+.continuity-item strong { display: block; font-size: .86rem; }
+.continuity-item p { margin: .2rem 0 0; color: var(--muted); font-size: .76rem; }
+.control-center-actions { margin-top: 1.5rem; }
+.control-center-actions .quick-actions { margin-bottom: 0; }
+
+@media (max-width: 1180px) {
+    .control-center-headlines { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+    .control-center-headlines,
+    .continuity-grid { grid-template-columns: 1fr; }
+    .dashboard-state { align-items: flex-start; flex-wrap: wrap; }
+    .governance-queue .attention-item { grid-template-columns: 32px minmax(0, 1fr); }
+    .governance-queue .attention-item .btn { grid-column: 1 / -1; }
+}
+
 .skeleton { position: relative; overflow: hidden; background: #e2e8f0; border-radius: 8px; color: transparent !important; }
 .skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); animation: rm-skeleton 1.35s infinite; }
 @keyframes rm-skeleton { to { transform: translateX(100%); } }
