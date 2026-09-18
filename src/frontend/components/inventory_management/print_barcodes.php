@@ -25,7 +25,7 @@ $labelSize = $allowedSizes[$sizeKey];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'generate_barcode') {
     if (current_role() === 'super_admin') {
-        require_inventory_management();
+        require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
     }
     csrf_verify();
     try {

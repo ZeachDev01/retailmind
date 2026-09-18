@@ -86,6 +86,31 @@ $checks = [
         'needles' => ['redirect_by_role();'],
         'forbidden' => ['DashboardService', 'getAdminMetrics'],
     ],
+    'Authentication does not expose compatibility Store identity' => [
+        'file' => 'src/backend/includes/auth.php',
+        'needles' => ['function store_product_scope(string $alias = \'p\'): array'],
+        'forbidden' => ['branch_name', "\$_SESSION['branch_id']", 'current_branch_id', 'require_assigned_branch', 'selected_inventory_branch_id', 'function branch_scope(', 'is_system_admin', 'has_privilege', 'require_privilege', 'require_inventory_management'],
+    ],
+    'Capability policy has no legacy privilege bypass' => [
+        'file' => 'src/backend/app/Authorization/RoleCapabilityPolicy.php',
+        'needles' => [],
+        'forbidden' => ['allowsLegacyPrivilege', 'manage_branches', 'manage_inventory'],
+    ],
+    'Store Staff is a dedicated workspace page' => [
+        'file' => 'src/frontend/components/user_manager/user_manager.php',
+        'needles' => ['<body class="manage-users-page">'],
+        'forbidden' => ["\$_GET['embed']", 'isEmbedded', 'manage-users-embedded'],
+    ],
+    'Navigation does not embed Store Staff' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ["'path' => 'components/user_manager/user_manager.php'"],
+        'forbidden' => ['userManagementOverlay', 'userManagementFrame', 'data-user-management-open', '?embed=1', 'isset($isEmbedded)'],
+    ],
+    'Branch-facing Store Staff styles are retired' => [
+        'file' => 'src/frontend/assets/css/modals.css',
+        'needles' => [],
+        'forbidden' => ['.branch-modal', 'manage-users-branches', 'users-col-branch', 'branches-col-', 'manage-users-embedded', 'manage-users-tab'],
+    ],
     'Administrator navigation is role-specific' => [
         'file' => 'src/frontend/components/sidebar.php',
         'needles' => ['$superAdministratorSections', '$administratorSections', "'super_admin' => \$superAdministratorSections", "'admin' => \$administratorSections"],
@@ -143,8 +168,8 @@ $checks = [
     ],
     'Administrator profile pictures are self-service only' => [
         'file' => 'src/frontend/components/auth/user_info.php',
-        'needles' => ['replace_profile_image', 'remove_profile_image', 'is_system_admin()', "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp'],
-        'forbidden' => ["\$_POST['user_id']", "\$_GET['user_id']", "\$_REQUEST['user_id']"],
+        'needles' => ['replace_profile_image', 'remove_profile_image', 'RoleCapabilityPolicy::PLATFORM_GOVERNANCE', 'RoleCapabilityPolicy::STORE_OPERATIONS', "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp'],
+        'forbidden' => ['is_system_admin', "\$_POST['user_id']", "\$_GET['user_id']", "\$_REQUEST['user_id']"],
     ],
     'Admin User Info uses a dedicated responsive layout' => [
         'file' => 'src/frontend/components/auth/user_info.php',

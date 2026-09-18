@@ -281,27 +281,25 @@ $sections = $roleSections[$role] ?? [];
         }
     })();
 </script>
-<?php if (!isset($isEmbedded) || !$isEmbedded): ?>
-    <div class="admin-mobile-topbar" aria-label="Mobile navigation">
-        <div class="admin-mobile-brand">
-            <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
-                <i class="bi bi-list" aria-hidden="true"></i>
-            </button>
-            <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
-                <span class="admin-mobile-logo-mark"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
-                <span class="admin-mobile-logo-text">RetailMind</span>
-            </a>
-        </div>
-        <div class="admin-mobile-tools">
-            <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
-                <i class="bi bi-search" aria-hidden="true"></i>
-            </button>
-            <a class="admin-mobile-avatar" href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>" aria-label="Open user information">
-                <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage) ?>
-            </a>
-        </div>
+<div class="admin-mobile-topbar" aria-label="Mobile navigation">
+    <div class="admin-mobile-brand">
+        <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
+            <i class="bi bi-list" aria-hidden="true"></i>
+        </button>
+        <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
+            <span class="admin-mobile-logo-mark"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+            <span class="admin-mobile-logo-text">RetailMind</span>
+        </a>
     </div>
-<?php endif; ?>
+    <div class="admin-mobile-tools">
+        <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
+            <i class="bi bi-search" aria-hidden="true"></i>
+        </button>
+        <a class="admin-mobile-avatar" href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>" aria-label="Open user information">
+            <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage) ?>
+        </a>
+    </div>
+</div>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="appSidebar">
     <div class="sidebar-brand">
@@ -355,49 +353,6 @@ $sections = $roleSections[$role] ?? [];
         <div class="command-footer"><span>↑↓ Navigate</span><span>Enter Open</span><span>Esc Close</span></div>
     </section>
 </div>
-
-<?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS)): ?>
-    <div class="user-management-overlay" id="userManagementOverlay" aria-hidden="true">
-        <div class="user-management-frame" role="dialog" aria-modal="true" aria-label="Users and access management">
-            <iframe title="Users &amp; Access Management" id="userManagementFrame" loading="lazy"></iframe>
-        </div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var userOverlay = document.getElementById('userManagementOverlay');
-            var userFrame = document.getElementById('userManagementFrame');
-            if (!userOverlay || !userFrame) return;
-            var userSource = <?= json_encode(app_url('components/user_manager/user_manager.php?embed=1')) ?>;
-
-            function closeUserManagement() {
-                userOverlay.classList.remove('open');
-                userOverlay.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('user-management-open');
-            }
-            document.querySelectorAll('[data-user-management-open]').forEach(function(link) {
-                link.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    userFrame.src = userSource;
-                    userOverlay.classList.add('open');
-                    userOverlay.setAttribute('aria-hidden', 'false');
-                    document.body.classList.add('user-management-open');
-                });
-            });
-            userOverlay.querySelectorAll('[data-user-management-close]').forEach(function(button) {
-                button.addEventListener('click', closeUserManagement);
-            });
-            userOverlay.addEventListener('click', function(event) {
-                if (event.target === userOverlay) closeUserManagement();
-            });
-            window.addEventListener('message', function(event) {
-                if (event.data && event.data.type === 'close-user-management') closeUserManagement();
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && userOverlay.classList.contains('open')) closeUserManagement();
-            });
-        });
-    </script>
-<?php endif; ?>
 
 <div id="rm-flash-messages" hidden<?php foreach ($flashMessages as $flashType => $flashMessage): ?> data-<?= sidebar_e($flashType) ?>="<?= sidebar_e($flashMessage) ?>" <?php endforeach; ?>></div>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">

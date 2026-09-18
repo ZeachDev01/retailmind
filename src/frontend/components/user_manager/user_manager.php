@@ -176,7 +176,6 @@ $users = $pdo->query(
 )->fetchAll(PDO::FETCH_ASSOC);
 $activeCount = count(array_filter($users, static fn(array $user): bool => $user['status'] === 'active'));
 $disabledCount = count($users) - $activeCount;
-$isEmbedded = ($_GET['embed'] ?? '') === '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -186,7 +185,7 @@ $isEmbedded = ($_GET['embed'] ?? '') === '1';
     <title>Store Staff</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 </head>
-<body class="manage-users-page<?= $isEmbedded ? ' manage-users-embedded' : '' ?>">
+<body class="manage-users-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">

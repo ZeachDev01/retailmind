@@ -16,7 +16,7 @@ $fefo_recommendations = array_slice($inventoryService->getFefoRecommendations(),
 $summary = $inventoryService->getInventorySummary();
 $total_products = $summary['total_products'];
 $total_units = $summary['current_stock'];
-[$scopeSql, $scopeParams] = branch_scope('p');
+[$scopeSql, $scopeParams] = store_product_scope('p');
 $outOfStockStmt = $pdo->prepare("SELECT COUNT(*) FROM inventory i JOIN products p ON p.product_id = i.product_id WHERE i.quantity_on_hand = 0{$scopeSql}");
 $outOfStockStmt->execute($scopeParams);
 $out_of_stock = $outOfStockStmt->fetchColumn();

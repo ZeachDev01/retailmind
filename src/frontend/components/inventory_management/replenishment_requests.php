@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     try {
         if ($action === 'create') {
-            require_inventory_management();
+            require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
             $productId = (int)($_POST['product_id'] ?? 0);
             $requestQty = (int)($_POST['request_qty'] ?? 0);
             $notes = trim((string)($_POST['notes'] ?? ''));
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($productId <= 0 || $requestQty <= 0) {
                 throw new RuntimeException('Product and quantity are required.');
             }
-            [$scopeSql, $scopeParams] = branch_scope('p');
+            [$scopeSql, $scopeParams] = store_product_scope('p');
             $productStmt = $pdo->prepare("SELECT product_id FROM products p WHERE p.product_id = ?{$scopeSql}");
             $productStmt->execute(array_merge([$productId], $scopeParams));
             if (!$productStmt->fetchColumn()) {
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $message = "Replenishment request #{$requestId} created successfully";
         } elseif ($action === 'reject_forecast') {
-            require_inventory_management();
+            require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
             $predictionId = (int)($_POST['forecast_prediction_id'] ?? 0);
             $productId = (int)($_POST['product_id'] ?? 0);
             $originalQty = max(0, (int)($_POST['original_suggested_qty'] ?? 0));
@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Invalid request ID.');
             }
             $pdo->beginTransaction();
-            [$scopeSql, $scopeParams] = branch_scope('p');
+            [$scopeSql, $scopeParams] = store_product_scope('p');
             $beforeStmt = $pdo->prepare("SELECT rr.* FROM replenishment_requests rr JOIN products p ON p.product_id = rr.product_id WHERE rr.request_id = ?{$scopeSql} FOR UPDATE");
             $beforeStmt->execute(array_merge([$requestId], $scopeParams));
             $before = $beforeStmt->fetch(PDO::FETCH_ASSOC);
@@ -128,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Get all products in the server-derived Store scope.
-[$scopeSql, $scopeParams] = branch_scope('p');
+[$scopeSql, $scopeParams] = store_product_scope('p');
 $productsStmt = $pdo->prepare("SELECT product_id, sku, product_name FROM products p WHERE status = 'active'{$scopeSql} ORDER BY product_name");
 $productsStmt->execute($scopeParams);
 $products = $productsStmt->fetchAll();

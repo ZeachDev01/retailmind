@@ -19,8 +19,8 @@ class ReceivingService
 
     public function receiveStock(array $data, int $userId): array
     {
-        if (function_exists('require_inventory_management')) {
-            require_inventory_management();
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
         $productId = (int)($data['product_id'] ?? 0);
         $quantityMode = ($data['quantity_mode'] ?? 'units') === 'packages' ? 'packages' : 'units';
@@ -342,8 +342,8 @@ class ReceivingService
 
     private function productScope(): array
     {
-        if (function_exists('branch_scope')) {
-            return branch_scope('p');
+        if (function_exists('store_product_scope')) {
+            return store_product_scope('p');
         }
 
         return (new App\Store\StoreScope($this->pdo))->productScope('p');

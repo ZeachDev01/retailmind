@@ -136,8 +136,8 @@ function get_low_stock_products(PDO $pdo, ?int $threshold = null): array
 {
     $scopeSql = '';
     $scopeParams = [];
-    if (function_exists('branch_scope')) {
-        [$scopeSql, $scopeParams] = branch_scope('p');
+    if (function_exists('store_product_scope')) {
+        [$scopeSql, $scopeParams] = store_product_scope('p');
     }
     $sql = "SELECT p.product_id, p.product_name, p.sku, i.quantity_on_hand, p.reorder_level
             FROM products p

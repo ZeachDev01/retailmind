@@ -19,7 +19,7 @@ function csv_import_store_id(PDO $pdo): int
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
-    require_inventory_management();
+    require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     $import_type = $_POST['import_type'] ?? '';

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 
+use App\Authorization\RoleCapabilityPolicy;
 use App\Services\ProfileImageStorage;
 
 if (!is_logged_in()) {
@@ -30,12 +31,18 @@ function account_role_label(string $role): string
     return ucwords(str_replace('_', ' ', $role));
 }
 
+function can_manage_own_profile_image(): bool
+{
+    return has_capability(RoleCapabilityPolicy::PLATFORM_GOVERNANCE)
+        || has_capability(RoleCapabilityPolicy::STORE_OPERATIONS);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $action = (string)($_POST['action'] ?? 'update_profile');
 
     if (in_array($action, ['replace_profile_image', 'remove_profile_image'], true)) {
-        if (!is_system_admin()) {
+        if (!can_manage_own_profile_image()) {
             http_response_code(403);
             die('Access denied: only administrators can manage profile pictures.');
         }
@@ -198,7 +205,7 @@ $defaultProfileImageUrl = default_profile_image_url();
                             <p class="section-description">Keep your picture, name, and email current for account records.</p>
                         </div>
                     </div>
-                    <?php if (is_system_admin()): ?>
+                    <?php if (can_manage_own_profile_image()): ?>
                         <div class="profile-picture-settings">
                             <div class="profile-picture-frame">
                                 <img id="profile-picture-preview" class="profile-picture-preview" src="<?= htmlspecialchars($profileImageUrl) ?>" alt="Current profile picture" data-default-src="<?= htmlspecialchars($defaultProfileImageUrl) ?>" onerror="this.onerror=null;this.src=this.dataset.defaultSrc">

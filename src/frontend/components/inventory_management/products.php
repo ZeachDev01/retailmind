@@ -5,7 +5,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
 require_role(['admin', 'super_admin', 'inventory_manager']);
 
-$canManageInventory = has_privilege('manage_inventory');
+$canManageInventory = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 $canDirectAdjust = $canManageInventory;
 $productService = new ProductService($pdo);
 
@@ -24,7 +24,7 @@ function redirect_products(string $type, string $message): void
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
 
-    require_inventory_management();
+    require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 
     if ($action === 'create_category') {
         csrf_verify();
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Select at least one product.');
             }
             $placeholders = implode(',', array_fill(0, count($productIds), '?'));
-            [$bulkScopeSql, $bulkScopeParams] = branch_scope('products');
+            [$bulkScopeSql, $bulkScopeParams] = store_product_scope('products');
 
             if ($action === 'bulk_status') {
                 $status = in_array($_POST['status'] ?? '', ['active', 'inactive'], true) ? $_POST['status'] : '';

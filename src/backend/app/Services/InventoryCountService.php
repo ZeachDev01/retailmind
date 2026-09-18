@@ -256,8 +256,8 @@ class InventoryCountService
 
     private function productScope(): array
     {
-        if (function_exists('branch_scope')) {
-            return branch_scope('p');
+        if (function_exists('store_product_scope')) {
+            return store_product_scope('p');
         }
 
         return (new App\Store\StoreScope($this->pdo))->productScope('p');

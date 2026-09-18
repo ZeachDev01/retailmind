@@ -100,9 +100,8 @@ function login_user(PDO $pdo, string $username, string $password): bool
     $stmt = $pdo->prepare(
         "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
             u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password,
-            u.is_recovery_account, u.branch_id, b.branch_name, r.role_name
+            u.is_recovery_account, r.role_name
          FROM users u JOIN roles r ON u.role_id = r.role_id
-         LEFT JOIN branches b ON b.branch_id = u.branch_id
          WHERE u.username = ? LIMIT 1"
     );
     $stmt->execute([$username]);
@@ -126,8 +125,6 @@ function login_user(PDO $pdo, string $username, string $password): bool
         $_SESSION['user_id'] = (int)$user['user_id'];
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['role'] = $user['role_name'];
-        $_SESSION['branch_id'] = $user['branch_id'] !== null ? (int)$user['branch_id'] : null;
-        $_SESSION['branch_name'] = $user['branch_name'];
         $_SESSION['profile_image'] = $user['profile_image'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
@@ -184,9 +181,8 @@ function validate_current_session(PDO $pdo): void
     $validated = true;
     $stmt = $pdo->prepare(
         "SELECT u.status, u.session_version, u.full_name, u.profile_image, u.must_change_password,
-            u.is_recovery_account, u.branch_id, b.branch_name, r.role_name
+            u.is_recovery_account, r.role_name
          FROM users u JOIN roles r ON r.role_id = u.role_id
-         LEFT JOIN branches b ON b.branch_id = u.branch_id
          WHERE u.user_id = ?"
     );
     $stmt->execute([(int)$_SESSION['user_id']]);
@@ -201,8 +197,6 @@ function validate_current_session(PDO $pdo): void
     }
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['role'] = $user['role_name'];
-    $_SESSION['branch_id'] = $user['branch_id'] !== null ? (int)$user['branch_id'] : null;
-    $_SESSION['branch_name'] = $user['branch_name'];
     $_SESSION['profile_image'] = $user['profile_image'];
     $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
     $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
@@ -305,77 +299,12 @@ function store_scope_id(PDO $pdo): int
     return $storeId ??= (new App\Store\StoreScope($pdo))->id();
 }
 
-function current_branch_id(): ?int
-{
-    return isset($_SESSION['branch_id']) && $_SESSION['branch_id'] !== null
-        ? (int)$_SESSION['branch_id']
-        : null;
-}
-
-function is_system_admin(): bool
-{
-    return in_array(current_role(), ['super_admin', 'admin'], true);
-}
-
 function default_profile_image_url(): string
 {
     return app_url('assets/img/new-default-profile.svg.png');
 }
 
-function has_privilege(string $privilegeKey): bool
-{
-    $role = current_role();
-    global $pdo;
-    $actorUserId = (int)($_SESSION['user_id'] ?? 0);
-    return is_logged_in()
-        && $role !== null
-        && role_capability_policy()->allowsLegacyPrivilege(
-            $role,
-            $privilegeKey,
-            null,
-            current_authorization_context($pdo),
-            $actorUserId
-        );
-}
-
-function require_privilege(string $privilegeKey): void
-{
-    global $pdo;
-    if (!is_logged_in()) {
-        header('Location: ' . app_url('?login=1'));
-        exit;
-    }
-    validate_current_session($pdo);
-    if (!has_privilege($privilegeKey)) {
-        http_response_code(403);
-        die('Access denied: your account does not have this privilege.');
-    }
-}
-
-function require_inventory_management(): void
-{
-    require_privilege('manage_inventory');
-}
-
-function require_assigned_branch(): int
-{
-    if (is_system_admin() && current_branch_id() === null) {
-        return 0;
-    }
-    $branchId = current_branch_id();
-    if ($branchId === null) {
-        http_response_code(403);
-        die('Access denied: your account is not assigned to a branch.');
-    }
-    return $branchId;
-}
-
-function selected_inventory_branch_id(PDO $pdo): int
-{
-    return store_scope_id($pdo);
-}
-
-function branch_scope(string $alias = 'p', ?int $selectedBranchId = null): array
+function store_product_scope(string $alias = 'p'): array
 {
     global $pdo;
     return (new App\Store\StoreScope($pdo))->productScope($alias);

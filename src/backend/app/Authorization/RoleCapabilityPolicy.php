@@ -90,23 +90,4 @@ final class RoleCapabilityPolicy
 
         return true;
     }
-
-    public function allowsLegacyPrivilege(
-        string $actorRole,
-        string $privilegeKey,
-        ?string $targetRole = null,
-        ?AuthorizationContext $context = null,
-        ?int $actorUserId = null
-    ): bool {
-        $capability = [
-            'manage_users' => self::MANAGE_USERS,
-            'manage_roles' => self::ASSIGN_ROLES,
-            'manage_privileges' => self::ASSIGN_PRIVILEGES,
-            'manage_branches' => self::STORE_OPERATIONS,
-            'manage_inventory' => self::MUTATE_INVENTORY,
-            'view_inventory' => self::VIEW_INVENTORY,
-        ][$privilegeKey] ?? null;
-
-        return $capability !== null && $this->allows($actorRole, $capability, $targetRole, $context, $actorUserId);
-    }
 }

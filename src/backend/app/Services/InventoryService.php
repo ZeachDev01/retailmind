@@ -10,9 +10,9 @@ class InventoryService
         $this->pdo = $pdo;
     }
 
-    public function getLowStockProducts(?int $branchId = null): array
+    public function getLowStockProducts(): array
     {
-        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
         $sql = "SELECT p.product_id, p.product_name, p.sku, i.quantity_on_hand, p.reorder_level
                 FROM products p
                 JOIN inventory i ON p.product_id = i.product_id
@@ -22,9 +22,9 @@ class InventoryService
         return $stmt->fetchAll();
     }
 
-    public function getInventorySummary(?int $branchId = null): array
+    public function getInventorySummary(): array
     {
-        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
         $productStmt = $this->pdo->prepare("SELECT COUNT(*) FROM products p WHERE 1 = 1{$scopeSql}");
         $productStmt->execute($scopeParams);
         $stockStmt = $this->pdo->prepare("SELECT COALESCE(SUM(i.quantity_on_hand), 0) FROM inventory i JOIN products p ON p.product_id = i.product_id WHERE 1 = 1{$scopeSql}");
@@ -32,15 +32,15 @@ class InventoryService
         return [
             'total_products' => (int)$productStmt->fetchColumn(),
             'current_stock' => (int)$stockStmt->fetchColumn(),
-            'low_stock_count' => count($this->getLowStockProducts($branchId)),
-            'expiring_soon_count' => count($this->getExpiringSoonBatches(30, $branchId)),
-            'expired_batch_count' => count($this->getExpiredBatches($branchId)),
+            'low_stock_count' => count($this->getLowStockProducts()),
+            'expiring_soon_count' => count($this->getExpiringSoonBatches(30)),
+            'expired_batch_count' => count($this->getExpiredBatches()),
         ];
     }
 
-    public function getExpiringSoonBatches(int $days = 30, ?int $branchId = null): array
+    public function getExpiringSoonBatches(int $days = 30): array
     {
-        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
             "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity,
                     pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name
@@ -54,9 +54,9 @@ class InventoryService
         return $stmt->fetchAll();
     }
 
-    public function getExpiredBatches(?int $branchId = null): array
+    public function getExpiredBatches(): array
     {
-        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
             "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity,
                     pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name
@@ -70,9 +70,9 @@ class InventoryService
         return $stmt->fetchAll();
     }
 
-    public function getFefoRecommendations(?int $branchId = null): array
+    public function getFefoRecommendations(): array
     {
-        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
             "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity,
                     pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name
@@ -90,10 +90,10 @@ class InventoryService
         return $stmt->fetchAll();
     }
 
-    private function branchScope(?int $branchId = null): array
+    private function storeProductScope(): array
     {
-        if (function_exists('branch_scope')) {
-            return branch_scope('p');
+        if (function_exists('store_product_scope')) {
+            return store_product_scope('p');
         }
 
         return (new App\Store\StoreScope($this->pdo))->productScope('p');

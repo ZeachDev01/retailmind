@@ -11,7 +11,7 @@ $message = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_inventory_management();
+    require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
     csrf_verify();
     $action = $_POST['action'] ?? 'record';
 
