@@ -153,13 +153,36 @@
 .control-center-actions { margin-top: 1.5rem; }
 .control-center-actions .quick-actions { margin-bottom: 0; }
 
+/* Administrator Store-operations workspace */
+.store-operations-headlines { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.store-operations-headlines .stat-card { margin: 0; }
+.store-operations-headlines .value { font-size: clamp(1.15rem, 1.7vw, 1.6rem); }
+.period-comparison { margin-bottom: 1.5rem; }
+.comparison-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+.comparison-card { min-width: 0; padding: .9rem; border: 1px solid var(--border); border-radius: 11px; background: #f8fafc; }
+.comparison-card > span,
+.comparison-card small { display: block; color: var(--muted); font-size: .76rem; }
+.comparison-card strong { display: block; margin: .25rem 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.operations-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.operations-overview-grid .inventory-escalation-summary { grid-column: 1 / -1; }
+.metric-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: .65rem; margin-bottom: .75rem; }
+.metric-pair article { padding: .75rem; border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; }
+.metric-pair span { display: block; color: var(--muted); font-size: .76rem; }
+.metric-pair strong { display: block; margin-top: .2rem; font-size: 1.15rem; }
+
 @media (max-width: 1180px) {
-    .control-center-headlines { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .control-center-headlines,
+    .store-operations-headlines,
+    .comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {
     .control-center-headlines,
+    .store-operations-headlines,
+    .comparison-grid,
+    .operations-overview-grid,
     .continuity-grid { grid-template-columns: 1fr; }
+    .operations-overview-grid .inventory-escalation-summary { grid-column: auto; }
     .dashboard-state { align-items: flex-start; flex-wrap: wrap; }
     .governance-queue .attention-item { grid-template-columns: 32px minmax(0, 1fr); }
     .governance-queue .attention-item .btn { grid-column: 1 / -1; }

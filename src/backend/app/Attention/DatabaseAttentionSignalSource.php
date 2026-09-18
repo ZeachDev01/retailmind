@@ -74,49 +74,53 @@ final class DatabaseAttentionSignalSource
 
     public function store(): array
     {
+        $now = $this->clock->now();
         $reversals = $this->scalar("SELECT COUNT(*) FROM sale_reversals WHERE status = 'pending'");
         $discount = $this->row(
             "SELECT COALESCE(MAX(discount_value), 0) AS value, COUNT(*) AS item_count
-             FROM sales WHERE discount_type = 'percentage' AND sale_date >= DATE_SUB(?, INTERVAL 24 HOUR)",
-            [$this->now()]
+             FROM sales WHERE discount_type = 'percentage' AND sale_date >= ?",
+            [$now->modify('-24 hours')->format('Y-m-d H:i:s')]
         );
         $cash = $this->row(
             "SELECT COALESCE(MAX(ABS(cash_variance)), 0) AS value, COUNT(*) AS item_count
              FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL"
         );
         $approvals = $this->row(
-            "SELECT COALESCE(TIMESTAMPDIFF(HOUR, MIN(request_date), ?), 0) AS value, COUNT(*) AS item_count
-             FROM replenishment_requests WHERE status = 'pending'",
-            [$this->now()]
+            "SELECT MIN(request_date) AS oldest_at, COUNT(*) AS item_count
+             FROM replenishment_requests WHERE status = 'pending'"
         );
         $inventory = $this->row(
-            "SELECT COALESCE(TIMESTAMPDIFF(HOUR, MIN(ia.reported_at), ?), 0) AS value,
+            "SELECT MIN(ia.reported_at) AS oldest_at,
                     COUNT(*) AS item_count,
                     COALESCE(MAX(ABS(ia.adjustment_qty) * p.cost_price), 0) AS risk_value
              FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id
-             WHERE ia.status = 'pending'",
-            [$this->now()]
+             WHERE ia.status = 'pending'"
         );
-        $fiscalDays = $this->scalar(
-            "SELECT COALESCE(MIN(DATEDIFF(end_date, DATE(?))), 9999) FROM fiscal_periods WHERE status = 'open' AND end_date >= DATE(?)",
-            [$this->now(), $this->now()]
+        $fiscal = $this->row(
+            "SELECT MIN(end_date) AS next_end FROM fiscal_periods WHERE status = 'open' AND end_date >= ?",
+            [$now->format('Y-m-d')]
         );
         $fiscalOverdue = $this->scalar(
-            "SELECT COUNT(*) FROM fiscal_periods WHERE status = 'open' AND end_date < DATE(?)",
-            [$this->now()]
+            "SELECT COUNT(*) FROM fiscal_periods WHERE status = 'open' AND end_date < ?",
+            [$now->format('Y-m-d')]
         );
+        $approvalHours = $this->ageHours($approvals['oldest_at'] ?? null);
+        $inventoryHours = $this->ageHours($inventory['oldest_at'] ?? null);
+        $fiscalDays = isset($fiscal['next_end'])
+            ? max(0, (int)$now->setTime(0, 0)->diff(new \DateTimeImmutable((string)$fiscal['next_end']))->format('%a'))
+            : 9999;
 
         return [
             'reversal_count' => $this->signal($reversals, (int)$reversals),
             'max_discount_percent' => $this->signal((float)($discount['value'] ?? 0)),
             'cash_variance_amount' => $this->signal((float)($cash['value'] ?? 0)),
-            'oldest_approval_hours' => $this->signal((float)($approvals['value'] ?? 0)),
+            'oldest_approval_hours' => $this->signal($approvalHours),
             // A pending inventory adjustment is an explicit escalation from routine
             // inventory execution into the Administrator approval workflow.
             'inventory_escalated_count' => $this->signal((int)($inventory['item_count'] ?? 0), (int)($inventory['item_count'] ?? 0)),
-            'oldest_inventory_risk_hours' => $this->signal((float)($inventory['value'] ?? 0)),
+            'oldest_inventory_risk_hours' => $this->signal($inventoryHours),
             'inventory_risk_value' => $this->signal((float)($inventory['risk_value'] ?? 0)),
-            'oldest_unresolved_inventory_hours' => $this->signal((float)($inventory['value'] ?? 0)),
+            'oldest_unresolved_inventory_hours' => $this->signal($inventoryHours),
             'fiscal_period_days_remaining' => $this->signal($fiscalDays),
             'fiscal_period_overdue_count' => $this->signal($fiscalOverdue, (int)$fiscalOverdue),
         ];
@@ -167,6 +171,19 @@ final class DatabaseAttentionSignalSource
             return max(0, (int)(new \DateTimeImmutable($value))->diff($this->clock->now())->format('%a'));
         } catch (Throwable) {
             return 9999;
+        }
+    }
+
+    private function ageHours(mixed $value): float
+    {
+        if (!is_string($value) || $value === '') {
+            return 0.0;
+        }
+        try {
+            $seconds = $this->clock->now()->getTimestamp() - (new \DateTimeImmutable($value))->getTimestamp();
+            return max(0.0, $seconds / 3600);
+        } catch (Throwable) {
+            return 0.0;
         }
     }
 

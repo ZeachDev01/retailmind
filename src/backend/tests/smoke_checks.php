@@ -78,7 +78,7 @@ $checks = [
     ],
     'Administrator workspace is exactly guarded' => [
         'file' => 'src/frontend/components/administrator/dashboard.php',
-        'needles' => ["require_role(['admin'])", 'Store Operations', "include __DIR__ . '/../sidebar.php'", 'fiscal_periods.php'],
+        'needles' => ["require_role(['admin'])", 'Store Operations', "include __DIR__ . '/../sidebar.php'", 'StoreOperationsDashboardWorkspace'],
         'forbidden' => ['system_health.php', 'backup_restore.php', 'ml_settings.php', 'system_settings.php'],
     ],
     'Shared administrator dashboard is retired' => [
@@ -235,7 +235,7 @@ $checks = [
         'forbidden' => ['data-fiscal-periods-open', 'fiscalPeriodsOverlay', 'fiscalPeriodsFrame'],
     ],
     'Fiscal periods use direct dashboard navigation' => [
-        'file' => 'src/frontend/components/administrator/dashboard.php',
+        'file' => 'src/backend/app/Dashboard/StoreOperationsDashboardWorkspace.php',
         'needles' => ['components/system_administrator/fiscal_periods.php'],
         'forbidden' => ['components/modals/fiscal_periods.php', 'data-fiscal-periods-open'],
     ],
