@@ -80,12 +80,17 @@ function log_activity(
     ?int $record_id = null,
     $previous_value = null,
     $new_value = null,
-    ?string $ip_address = null
+    ?string $ip_address = null,
+    ?string $category = null
 ): void {
     $columns = activity_log_columns($pdo);
+    $category = $category === null
+        ? App\Audit\AuditRecordCategory::classify($module, $action, $new_value, $previous_value)
+        : App\Audit\AuditRecordCategory::requireValid($category);
     $data = [
         'user_id' => $user_id,
         'action' => $action,
+        'category' => $category,
         'module' => $module,
         'record_id' => $record_id,
         'previous_value' => format_audit_value($previous_value),

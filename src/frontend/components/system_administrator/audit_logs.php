@@ -25,56 +25,15 @@ if ($isExport) {
     $tableSearch = trim((string)($_POST['table_search'] ?? ''));
 }
 
-$whereClauses = [];
-$params = [];
-$logColumns = activity_log_columns($pdo);
-
-if ($userFilter !== '') {
-    $whereClauses[] = 'al.user_id = ?';
-    $params[] = (int)$userFilter;
-}
-if ($actionFilter !== '') {
-    $whereClauses[] = 'al.action LIKE ?';
-    $params[] = '%' . $actionFilter . '%';
-}
-if ($moduleFilter !== '' && isset($logColumns['module'])) {
-    $whereClauses[] = 'al.module = ?';
-    $params[] = $moduleFilter;
-}
-if ($dateFrom !== '') {
-    $whereClauses[] = 'DATE(al.created_at) >= ?';
-    $params[] = $dateFrom;
-}
-if ($dateTo !== '') {
-    $whereClauses[] = 'DATE(al.created_at) <= ?';
-    $params[] = $dateTo;
-}
-if ($tableSearch !== '') {
-    $searchClauses = ['al.action LIKE ?', 'u.full_name LIKE ?', 'u.username LIKE ?'];
-    $searchParams = array_fill(0, 3, '%' . $tableSearch . '%');
-    if (isset($logColumns['module'])) {
-        $searchClauses[] = 'al.module LIKE ?';
-        $searchParams[] = '%' . $tableSearch . '%';
-    }
-    if (isset($logColumns['record_id'])) {
-        $searchClauses[] = 'CAST(al.record_id AS CHAR) LIKE ?';
-        $searchParams[] = '%' . $tableSearch . '%';
-    }
-    $whereClauses[] = '(' . implode(' OR ', $searchClauses) . ')';
-    array_push($params, ...$searchParams);
-}
-
-$whereSql = $whereClauses ? 'WHERE ' . implode(' AND ', $whereClauses) : '';
-$moduleSelect = isset($logColumns['module']) ? 'al.module' : 'NULL AS module';
-$recordSelect = isset($logColumns['record_id']) ? 'al.record_id' : 'NULL AS record_id';
-$previousSelect = isset($logColumns['previous_value']) ? 'al.previous_value' : 'NULL AS previous_value';
-$newSelect = isset($logColumns['new_value']) ? 'al.new_value' : 'NULL AS new_value';
-$selectSql = "SELECT al.user_id, al.action, {$moduleSelect}, {$recordSelect}, {$previousSelect}, {$newSelect},
-        al.created_at, u.full_name, u.username
-    FROM activity_log al
-    LEFT JOIN users u ON al.user_id = u.user_id
-    {$whereSql}
-    ORDER BY al.created_at DESC";
+$protectedAuditRecords = new \App\Audit\ProtectedAuditRecordService($pdo, role_capability_policy());
+$auditFilters = [
+    'user_id' => $userFilter,
+    'action' => $actionFilter,
+    'module' => $moduleFilter,
+    'date_from' => $dateFrom,
+    'date_to' => $dateTo,
+    'search' => $tableSearch,
+];
 
 function audit_log_display_value($value): string
 {
@@ -126,7 +85,7 @@ function audit_log_send_csv(string $filename, array $rows): void
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Date & Time', 'User', 'Action', 'Module', 'Record ID', 'Previous Value', 'New Value']);
+    fputcsv($output, ['Date & Time', 'User', 'Action', 'Category', 'Module', 'Record ID', 'Previous Value', 'New Value']);
     foreach ($rows as $row) {
         fputcsv($output, array_map('audit_log_csv_value', $row));
     }
@@ -134,9 +93,10 @@ function audit_log_send_csv(string $filename, array $rows): void
     exit;
 }
 
-$logsStatement = $pdo->prepare($selectSql);
-$logsStatement->execute($params);
-$logs = $logsStatement->fetchAll();
+$actorRole = (string)current_role();
+$logs = $isExport
+    ? $protectedAuditRecords->exportRows($actorRole, $auditFilters)
+    : $protectedAuditRecords->records($actorRole, $auditFilters);
 
 if ($isExport) {
     $rows = array_map(static function (array $log): array {
@@ -144,6 +104,7 @@ if ($isExport) {
             format_display_datetime($log['created_at']),
             $log['full_name'] ?: ($log['username'] ?: 'System / Unknown'),
             $log['action'],
+            $log['category'],
             $log['module'] ?? '-',
             $log['record_id'] ?? '-',
             audit_log_display_value($log['previous_value'] ?? null),
@@ -154,16 +115,14 @@ if ($isExport) {
 }
 
 $activeUserCount = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status = 'active'")->fetchColumn();
-$modules = isset($logColumns['module'])
-    ? $pdo->query("SELECT DISTINCT module FROM activity_log WHERE module IS NOT NULL AND module <> '' ORDER BY module")->fetchAll(PDO::FETCH_COLUMN)
-    : [];
+$modules = $protectedAuditRecords->modules($actorRole);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audit Logs</title>
+    <title>Protected Audit Records</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/columncontrol/2.0.2/css/columnControl.dataTables.min.css">
@@ -176,8 +135,8 @@ $modules = isset($logColumns['module'])
         <main class="main-content">
             <div class="topbar">
                 <div>
-                    <h1>Audit Logs</h1>
-                    <p class="page-subtitle">Review account activity, system events, and operational changes.</p>
+                    <h1>Protected Audit Records</h1>
+                    <p class="page-subtitle">Review immutable account, platform, recovery, and Store-operational records.</p>
                 </div>
                 <form method="POST" class="audit-log-export-form" id="auditLogExportForm" target="_blank">
                     <?= csrf_field() ?>
@@ -213,7 +172,7 @@ $modules = isset($logColumns['module'])
             <section class="dashboard-section audit-table-card" aria-labelledby="audit-table-title">
                 <div class="section-header">
                     <div>
-                        <h3 id="audit-table-title">Activity history</h3>
+                        <h3 id="audit-table-title">Record history</h3>
                         <p class="section-description">Use the table search for quick matching across the filtered records.</p>
                     </div>
                 </div>
@@ -224,6 +183,7 @@ $modules = isset($logColumns['module'])
                                 <th>Date &amp; Time</th>
                                 <th>User</th>
                                 <th>Action</th>
+                                <th>Category</th>
                                 <th>Module</th>
                                 <th>Record ID</th>
                                 <th>Details</th>
@@ -247,6 +207,7 @@ $modules = isset($logColumns['module'])
                                         <?php endif; ?>
                                     </td>
                                     <td><span class="audit-action-badge <?= audit_log_action_class((string)$log['action']) ?>"><?= htmlspecialchars($log['action']) ?></span></td>
+                                    <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string)$log['category']))) ?></td>
                                     <td><?= htmlspecialchars((string)($log['module'] ?? '-')) ?></td>
                                     <td><?= htmlspecialchars((string)($log['record_id'] ?? '-')) ?></td>
                                     <td>
@@ -304,7 +265,7 @@ $modules = isset($logColumns['module'])
                         ]
                     },
                     {
-                        targets: 5,
+                        targets: 6,
                         orderable: false,
                         columnControl: [['search']]
                     }
@@ -333,7 +294,7 @@ $modules = isset($logColumns['module'])
                     bottomEnd: null
                 },
                 language: {
-                    emptyTable: 'No audit activity matches the selected filters.',
+                    emptyTable: 'No Protected Audit Records match the selected filters.',
                     search: 'Search:'
                 }
             });

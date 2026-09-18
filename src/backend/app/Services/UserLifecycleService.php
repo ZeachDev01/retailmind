@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Store\StoreScope;
 use DomainException;
@@ -202,14 +203,22 @@ final class UserLifecycleService
     private function audit(int $actorId, string $actorRole, string $action, int $recordId, ?array $before, ?array $after): void
     {
         $statement = $this->pdo->prepare(
-            'INSERT INTO activity_log (user_id, action, module, record_id, previous_value, new_value, ip_address)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $payload = $after ?? [];
         $payload['actor_role'] = $actorRole;
+        $roles = [
+            (string)($before['role'] ?? $before['target_role'] ?? ''),
+            (string)($payload['role'] ?? $payload['target_role'] ?? ''),
+        ];
+        $category = array_intersect($roles, ['super_admin', 'admin']) !== []
+            ? AuditRecordCategory::SECURITY
+            : AuditRecordCategory::STORE_OPERATION;
         $statement->execute([
             $actorId,
             $action,
+            $category,
             'User Access',
             $recordId,
             $before === null ? null : json_encode($before, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),

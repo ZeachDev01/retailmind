@@ -51,6 +51,7 @@ try {
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NULL,
         action TEXT NOT NULL,
+        category TEXT NOT NULL,
         module TEXT NULL,
         record_id INTEGER NULL,
         previous_value TEXT NULL,
@@ -151,7 +152,7 @@ try {
     $assert($service->get($privilegedId)['full_name'] === 'Privileged Administrator', 'Super Administrator should manage privileged identities');
     $service->revokeSessions($superId, 'super_admin', $managerId);
 
-    $auditRows = $pdo->query("SELECT action, new_value FROM activity_log WHERE module = 'User Access' ORDER BY log_id")->fetchAll(PDO::FETCH_ASSOC);
+    $auditRows = $pdo->query("SELECT action, category, new_value FROM activity_log WHERE module = 'User Access' ORDER BY log_id")->fetchAll(PDO::FETCH_ASSOC);
     $auditActions = array_column($auditRows, 'action');
     foreach (['User created', 'User updated', 'Password reset', 'Sessions revoked', 'User disabled'] as $expectedAction) {
         $assert(in_array($expectedAction, $auditActions, true), "Protected Audit Records must include {$expectedAction}");
@@ -160,6 +161,14 @@ try {
         count(array_filter($auditRows, static fn(array $row): bool => str_contains((string)$row['new_value'], '"actor_role":"admin"'))) > 0
         && count(array_filter($auditRows, static fn(array $row): bool => str_contains((string)$row['new_value'], '"actor_role":"super_admin"'))) > 0,
         'Protected Audit Records must retain the authority context for each actor role'
+    );
+    $assert(
+        count(array_filter($auditRows, static fn(array $row): bool => $row['category'] === 'store_operation')) > 0,
+        'delegated Store staff lifecycle records should remain visible to the Administrator'
+    );
+    $assert(
+        count(array_filter($auditRows, static fn(array $row): bool => $row['category'] === 'security')) > 0,
+        'privileged-account lifecycle records should be categorized as security'
     );
 } catch (Throwable $exception) {
     $failures[] = 'User lifecycle contract threw: ' . $exception->getMessage();

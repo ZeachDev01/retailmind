@@ -5,14 +5,19 @@ class DashboardService
 {
     private PDO $pdo;
     private App\Store\StoreScope $storeScope;
+    private App\Audit\ProtectedAuditRecordService $protectedAuditRecords;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
         $this->storeScope = new App\Store\StoreScope($pdo);
+        $this->protectedAuditRecords = new App\Audit\ProtectedAuditRecordService(
+            $pdo,
+            new App\Authorization\RoleCapabilityPolicy()
+        );
     }
 
-    public function getAdminMetrics(int $days = 30): array
+    public function getAdminMetrics(string $actorRole, int $days = 30): array
     {
         $days = max(1, min(365, $days));
         return [
@@ -26,33 +31,25 @@ class DashboardService
             )->fetchColumn(),
             'total_sales' => (float)$this->pdo->query("SELECT COALESCE(SUM(total_amount), 0) FROM sales")->fetchColumn(),
             'period_sales' => (float)$this->pdo->query("SELECT COALESCE(SUM(total_amount), 0) FROM sales WHERE sale_date >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)")->fetchColumn(),
-            'audit_events' => (int)$this->pdo->query("SELECT COUNT(*) FROM activity_log")->fetchColumn(),
+            'audit_events' => $this->protectedAuditRecords->count($actorRole),
             'open_periods' => (int)$this->pdo->query("SELECT COUNT(*) FROM fiscal_periods WHERE status = 'open'")->fetchColumn(),
             'closed_periods' => (int)$this->pdo->query("SELECT COUNT(*) FROM fiscal_periods WHERE status IN ('closed', 'locked')")->fetchColumn(),
         ];
     }
 
-    public function getRecentCriticalActions(int $limit = 8): array
+    public function getRecentCriticalActions(string $actorRole, int $limit = 8): array
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT al.action, al.created_at, COALESCE(u.full_name, 'System') AS user_name
-             FROM activity_log al
-             LEFT JOIN users u ON u.user_id = al.user_id
-             WHERE LOWER(al.action) LIKE '%void%'
-                OR LOWER(al.action) LIKE '%delete%'
-                OR LOWER(al.action) LIKE '%reversal%'
-                OR LOWER(al.action) LIKE '%refund%'
-                OR LOWER(al.action) LIKE '%fiscal%'
-                OR LOWER(al.action) LIKE '%locked%'
-                OR LOWER(al.action) LIKE '%toggled%'
-                OR LOWER(al.action) LIKE '%adjustment%'
-                OR LOWER(al.action) LIKE '%count%'
-             ORDER BY al.created_at DESC
-             LIMIT ?"
+        return array_map(
+            static fn(array $record): array => [
+                'action' => $record['action'],
+                'created_at' => $record['created_at'],
+                'user_name' => $record['full_name'] ?: ($record['username'] ?: 'System'),
+            ],
+            $this->protectedAuditRecords->records($actorRole, [
+                'critical_only' => true,
+                'limit' => $limit,
+            ])
         );
-        $stmt->bindValue(1, $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        return $stmt->fetchAll();
     }
 
     public function getManagerMetrics(): array

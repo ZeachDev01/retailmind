@@ -339,12 +339,14 @@ CREATE TABLE activity_log (
     log_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
     action VARCHAR(255) NOT NULL,
+    category ENUM('store_operation', 'security', 'recovery', 'platform_setting', 'recovery_account') NOT NULL,
     module VARCHAR(100) NULL,
     record_id INT NULL,
     previous_value TEXT NULL,
     new_value TEXT NULL,
     ip_address VARCHAR(45) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_activity_log_category_created (category, created_at),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

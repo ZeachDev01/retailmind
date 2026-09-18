@@ -12,6 +12,7 @@ php src/backend/tests/user_lifecycle_contract.php
 php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/product_seed_checks.php
 php src/backend/tests/database_integration.php
+php src/backend/tests/audit_visibility_integration.php
 php src/backend/tests/receipt_table_contract.php
 php src/backend/tests/sales_trend_integration.php
 bash src/backend/tests/release_package_check.sh

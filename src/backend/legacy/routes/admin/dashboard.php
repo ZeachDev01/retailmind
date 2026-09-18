@@ -12,10 +12,10 @@ require_any_capability([
 $salesService = new SalesService($pdo);
 $dashboardService = new DashboardService($pdo);
 
-$adminMetrics = $dashboardService->getAdminMetrics();
+$adminMetrics = $dashboardService->getAdminMetrics((string)current_role());
 $salesSummary = $salesService->getSalesSummary();
 $recentTransactions = $salesService->getRecentTransactions();
-$recentCriticalActions = $dashboardService->getRecentCriticalActions();
+$recentCriticalActions = $dashboardService->getRecentCriticalActions((string)current_role());
 $periodTotal = max(1, $adminMetrics['open_periods'] + $adminMetrics['closed_periods']);
 $openPeriodWidth = min(100, round(($adminMetrics['open_periods'] / $periodTotal) * 100));
 $closedPeriodWidth = min(100, round(($adminMetrics['closed_periods'] / $periodTotal) * 100));
