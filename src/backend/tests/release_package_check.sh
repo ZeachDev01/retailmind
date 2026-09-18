@@ -21,7 +21,7 @@ for forbidden in \
     exit 1
   fi
 done
-PROFILE_IMAGE_CONTENTS="$(grep '^inventory_system/src/backend/storage/profile-images/' <<<"$CONTENTS" || true)"
+PROFILE_IMAGE_CONTENTS="$(grep '^inventory_system/src/backend/storage/profile-images/' <<<"$CONTENTS" | grep -v '/$' || true)"
 if grep -Fvxq 'inventory_system/src/backend/storage/profile-images/.gitkeep' <<<"$PROFILE_IMAGE_CONTENTS"; then
   echo 'Release package contains a runtime profile image' >&2
   exit 1
