@@ -1624,8 +1624,8 @@ JOIN (
   FROM `product_batches`
   WHERE `batch_number` LIKE 'RM\_SEED\_SALES\_TREND\_V1-%'
   GROUP BY `product_id`
-) generated ON generated.`product_id` = i.`product_id`
-SET i.`quantity_on_hand` = GREATEST(0, i.`quantity_on_hand` - generated.`remaining_quantity`);
+) seed_stock ON seed_stock.`product_id` = i.`product_id`
+SET i.`quantity_on_hand` = GREATEST(0, i.`quantity_on_hand` - seed_stock.`remaining_quantity`);
 
 UPDATE `products` p
 JOIN (
@@ -1634,9 +1634,9 @@ JOIN (
   FROM `product_batches`
   WHERE `batch_number` LIKE 'RM\_SEED\_SALES\_TREND\_V1-%'
   GROUP BY `product_id`
-) generated ON generated.`product_id` = p.`product_id`
-SET p.`quantity_purchased` = GREATEST(0, p.`quantity_purchased` - generated.`received_quantity`),
-    p.`quantity_sold` = GREATEST(0, p.`quantity_sold` - generated.`sold_quantity`);
+) seed_stock ON seed_stock.`product_id` = p.`product_id`
+SET p.`quantity_purchased` = GREATEST(0, p.`quantity_purchased` - seed_stock.`received_quantity`),
+    p.`quantity_sold` = GREATEST(0, p.`quantity_sold` - seed_stock.`sold_quantity`);
 
 DELETE FROM `product_batches` WHERE `batch_number` LIKE 'RM\_SEED\_SALES\_TREND\_V1-%';
 DELETE FROM `purchase_history` WHERE `supplier` = 'RetailMind Seed Supplier';
