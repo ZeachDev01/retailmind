@@ -19,8 +19,16 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 
 $assert(Schema::columnExists($pdo, 'users', 'must_change_password'), 'users.must_change_password is missing');
 $assert(Schema::columnExists($pdo, 'users', 'profile_image'), 'users.profile_image is missing');
+$assert(Schema::columnExists($pdo, 'users', 'is_recovery_account'), 'users.is_recovery_account is missing');
 $assert(Schema::tableExists($pdo, 'login_attempts'), 'login_attempts table is missing');
+$assert(Schema::tableExists($pdo, 'attention_settings'), 'attention_settings table is missing');
+$assert(Schema::tableExists($pdo, 'attention_states'), 'attention_states table is missing');
+$assert(Schema::columnExists($pdo, 'notifications', 'attention_key'), 'notifications.attention_key is missing');
 $assert(Schema::tableExists($pdo, 'purchase_orders'), 'purchase_orders table is missing');
+$assert(
+    Schema::indexExists($pdo, 'notifications', 'idx_notifications_attention'),
+    'notifications attention index is missing'
+);
 $assert(
     Schema::foreignKeyRelationExists($pdo, 'supplier_products', 'supplier_id', 'suppliers', 'supplier_id'),
     'supplier_products.supplier_id is not protected by a foreign key'
