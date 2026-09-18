@@ -103,3 +103,36 @@
 - Review found no documented-standard or issue #3 compliance defects. A recoverability improvement was applied by adding an explicit Retry action and server-side error logging for failed receipt requests.
 - Final focused verification passed again: PHP lint, 42 smoke checks, the live database receipt contract, inline JavaScript syntax, CSS balance (120/120), and Git whitespace validation.
 - The full standard suite passed PHP lint, Python compilation, smoke, profile-image, and product-seed checks; database suites skipped by their normal environment guards. Its final release-package check could not run because this Windows Git Bash environment does not provide `rsync`.
+
+## 09-18-2026
+
+- Completed the role/dashboard design interview and confirmed RetailMind as a single-Store system rather than a multi-branch product.
+- Updated `CONTEXT.md` with the accepted Super Administrator, Administrator, Inventory Manager, Store, settings, forecasting, account-lifecycle, audit, Emergency Access, and Recovery Account language.
+- Confirmed that the current Product + Day demand-forecasting grain remains unchanged and that technical model governance belongs to the Super Administrator.
+- Received approval to record the architecture decision and produce an implementation-ready plan; added phases 37–44 to `task_plan.md`.
+- Audited the current shared dashboard, role bypass, navigation, user management, platform-page guards, branch assumptions, forecasting ownership, and existing test seams.
+- Recorded ADR-0001: operate RetailMind as one Store with separate Super Administrator technical authority and Administrator Store authority while retaining a temporary internal singleton branch for compatibility.
+- Confirmed the testing seams with the user: one database-backed dashboard workspace contract, one role-access policy contract, and thin route smoke coverage.
+- Published the complete specification as GitHub issue #5 with the `ready-for-agent` label: https://github.com/ZeachDev01/retailmind/issues/5
+- Verified issue #5 contains all required sections, 50 user stories, the accepted implementation/testing decisions, and no extra triage labels.
+- Completed planning phases 37–44; no application, schema, or ML implementation was performed in this specification pass.
+- Final documentation verification passed: ADR-0001 and all canonical glossary terms are present, phases 37–44 are complete, Git whitespace validation is clean, and no application files were modified.
+- Started ticket decomposition for specification issue #5; added phases 45–48 for context gathering, user-approved slicing, publication, and verification.
+- Re-fetched issue #5 in full, confirmed it has no comments or overlapping open issues, and measured the branch-compatibility blast radius at 251 references across 21 files.
+- Chose an expand–migrate–contract decomposition for the wide single-Store refactor, with singleton Store scope and explicit role capability policy as the initial unblocked frontier.
+- Received user approval for a 14-ticket tracer-bullet breakdown and its blocking edges; publication can now proceed in dependency order.
+- Published issues #6–#19 in dependency order, each referencing parent #5, declaring real blocking issue numbers, and carrying only the `ready-for-agent` label.
+- Verified all 14 ticket bodies contain Parent, What to build, Acceptance criteria, and Blocked by sections; the initial unblocked frontier is #6 and #7.
+- Completed ticket-decomposition phases 45–48 without modifying parent issue #5.
+- Final ticket verification passed: 14 child issues are open and correctly labeled, the published frontier is #6/#7, Git whitespace validation is clean, and no application files were modified.
+- Started implementation of issues #6 and #7 using their pre-agreed seams: a database-backed singleton Store scope contract and a deterministic capability-matrix contract.
+- Inspected the branch schema, migrations, database-test conventions, authentication helpers, sidebar navigation, and User Management target restrictions.
+- Completed phase 49: selected a server-owned singleton Store adapter with a no-write consolidation preflight, plus a pure capability policy integrated through compatibility authorization helpers and target-role checks.
+- Added the issue-defined contracts first. The capability contract was red because the policy did not exist; the initial Store contract setup exposed a MySQL temporary-table `LIKE` name-resolution error. The contract was moved to an isolated SQLite database so it remains database-backed without touching configured operational data.
+- Implemented `StoreScope`, a clear consolidation exception/report, and an idempotent migration that creates the compatibility record only when no branch exists; zero-, one-, request-override, and multiple-data-bearing states now pass.
+- Implemented the deterministic `RoleCapabilityPolicy` and reason-bearing authorization context, covering every supported role, target-role restrictions, arbitrary privilege denial, and bounded Emergency Access behavior.
+- Removed the blanket Super Administrator role/privilege bypasses, routed compatibility privilege checks through the policy, added capability guards, filtered administration navigation through policy decisions, and enforced target-role/privilege restrictions in User Management.
+- Focused verification passes: new policy and Store contracts, affected PHP lint, and all 47 smoke checks. A read-only preflight against the configured database correctly reported two data-bearing legacy branches and made no changes.
+- Full-suite verification passed repository-wide PHP lint, Python compilation, 47 smoke checks, both new contracts, profile-image tests, 17 product-seed checks, database integration, receipt contract, and sales-trend integration; only the known release-package step failed because `rsync` is unavailable in this Windows environment.
+- Completed the two-axis review against fixed point `017706f`: no documented-standard or final spec defects remained. During review, target-role enforcement was extended to delete/status mutations and transitional branch mutations were capability-guarded; ordinary Store resolution was also kept read-only so only the migration can create compatibility data.
+- Committed the issue #6/#7 implementation as `f1cce92` (`feat(auth): add Store scope and capability policy`). Existing uncommitted planning/domain documentation remains preserved outside the commit.

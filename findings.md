@@ -96,3 +96,52 @@
 - For the current app, client-side DataTables over the filtered result set is the smallest reliable integration; `deferRender` and a 25-row default reduce initial DOM work. If the log grows very large, the follow-up should be DataTables server-side processing.
 - The browser-control runtime is not exposed in this session, so visual QA must be completed with static/runtime checks rather than an automated screenshot pass.
 - The repository smoke suite is content-based and can be extended with a regression check for the new canonical route, DataTables initialization, and absence of audit modal hooks.
+
+## Single-Store Role Dashboard Specification
+
+- The accepted domain is one Store. Multi-branch concepts are removed from user-facing language and behavior, while one internal singleton branch may remain temporarily for schema compatibility.
+- The current shared dashboard admits both `admin` and `super_admin`, uses unscoped Store-wide queries, and mixes technical governance with routine operations.
+- The accepted split makes the Super Administrator the technical owner for security, access policy, Platform Settings, recovery, system health, ML operation, privileged users, Emergency Access, and the Recovery Account.
+- The Administrator owns Store performance, staff, approvals, Fiscal Periods, Store Settings, operational exceptions, and delegated Cashier/Inventory Manager lifecycle actions, but cannot mutate inventory directly or grant arbitrary privileges.
+- Demand forecasting remains a single-Store Product + Day model. The Super Administrator governs model operation, the Administrator reviews performance/exceptions, and the Inventory Manager consumes forecasts for replenishment.
+- Existing test prior art is strongest at two seams: database-backed module contracts for query behavior and repository smoke checks for route/authorization/markup invariants. The specification should prefer one high-level role-dashboard data contract, supplemented only by route/authorization smoke coverage.
+- `smoke_checks.php` currently encodes multi-branch assumptions, including required branch assignment and branch-management controls; these checks must be replaced rather than preserved.
+- The issue tracker is GitHub Issues through `gh`; published specs receive only the `ready-for-agent` label.
+- `require_role(['admin'])` currently admits the Super Administrator through a global bypass, so the shared dashboard and every platform page guarded this way are reachable by both roles.
+- The Super Administrator currently receives every privilege except `manage_inventory`; both Administrator roles are explicitly denied that privilege, but routine pages often rely on role checks rather than privilege checks.
+- Both roles redirect to the same dashboard and share the same sidebar sections, including System Health, ML Settings, Backup & Restore, System Settings, sales, reports, and inventory navigation.
+- The shared dashboard mixes active cashier sessions, Store sales, total audit count, Fiscal Period counts, critical-action matching, sales trends, inventory valuation, and ordinary recent sales.
+- `DashboardService` returns broad query fragments rather than role-specific dashboard models; its existing interface is a suitable implementation to replace with deeper role-specific dashboard modules.
+- System Health, Backup & Restore, ML Settings, and System Settings currently use the same Administrator role guard, so the new specification must require explicit Super Administrator authorization at the backend, not just hidden navigation.
+- User management currently mixes branch creation/status controls with user lifecycle actions and branch-required staff forms. The single-Store implementation must remove the branch interface while retaining one internal singleton branch during compatibility migration.
+- The accepted primary test seam is a database-backed dashboard workspace contract with seeded role-specific data and an injectable clock; the accepted authorization seam is a capability matrix covering actor role, target role, and Emergency Access context.
+- Existing route smoke checks remain only for wiring: redirects, backend guards, role navigation, branch-control removal, shared-dashboard retirement, refresh metadata, and canonical page availability.
+- GitHub issue #5 is the implementation-ready specification. It has the sole `ready-for-agent` label, all seven required specification sections, and 50 user stories.
+- Issue #5 has no comments or later clarifications, so its body and ADR-0001 are the complete source of truth for ticket decomposition.
+- The internal branch compatibility blast radius is wide: 251 branch-related references across 21 source/test files, concentrated in user management, inventory workflows, authentication, schema/migrations, services, seeders, and integration contracts.
+- The single-Store transition should therefore use expand–migrate–contract: add a singleton Store adapter, migrate user/inventory/sales caller groups while green, then remove transitional user-facing branch and shared-dashboard interfaces.
+- Role capability policy is an independent prefactor that can proceed in parallel with the singleton Store adapter; these two foundation tickets form the initial frontier.
+- Issue #6's compatibility schema has only two direct branch-bearing tables (`users` and `products`); downstream sales and inventory records inherit Store ownership through those records, so migration preflight can report direct counts without rewriting operational data.
+- The singleton Store contract can safely exercise zero/one/multiple states against the configured database by shadowing `branches`, `users`, and `products` with connection-local temporary tables, leaving permanent data untouched.
+- Existing migrations are ordered PHP arrays run by `MigrationRunner`; an idempotent Store compatibility migration should delegate to the same adapter used by callers and throw before writes when consolidation is required.
+- Current authorization is split between a blanket `super_admin` bypass in `require_role()`, another implicit bypass in `has_privilege()`, database role privileges, direct role checks in the sidebar, and ad hoc target-account checks in User Management.
+- Issue #7 therefore needs a pure, deterministic policy as the source of truth, compatibility mappings for current privilege helpers, exact role guarding without the blanket bypass, capability-aware navigation, and target-role checks at User Management mutation boundaries.
+- Blocked tickets #8–#19 own the later dedicated workspaces and broad caller migrations, so this foundation must avoid removing branch columns/UI or redesigning dashboards while still exposing stable Store and authority interfaces.
+
+## Published Ticket Map
+
+- #6 singleton Store scope adapter — unblocked.
+- #7 role capability policy — unblocked.
+- #8 dedicated guarded workspaces — blocked by #7.
+- #9 delegated Store staff lifecycle — blocked by #6 and #7.
+- #10 Store-scoped inventory/product workflows — blocked by #6 and #7.
+- #11 Store-scoped sales/reporting/forecast boundaries — blocked by #6 and #7.
+- #12 role-scoped Protected Audit Records — blocked by #7.
+- #13 Emergency Access — blocked by #8 and #12.
+- #14 Recovery Account lifecycle — blocked by #9 and #12.
+- #15 platform attention and notifications — blocked by #8 and #12.
+- #16 Store attention and notifications — blocked by #10, #11, and #12.
+- #17 Super Administrator dashboard — blocked by #13, #14, #15, and #16.
+- #18 Administrator dashboard — blocked by #8, #9, and #16.
+- #19 contract transitional branch/shared-dashboard interfaces — blocked by #9, #10, #11, #17, and #18.
+- Every ticket references parent #5, has explicit acceptance criteria, and carries only `ready-for-agent`; parent #5 was not modified.
