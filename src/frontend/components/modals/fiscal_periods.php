@@ -1,7 +1,7 @@
 <?php
 // Backward-compatible route for bookmarks created before Fiscal Periods became a dedicated page.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
 
 $query = $_SERVER['QUERY_STRING'] ?? '';
 $destination = app_url('components/system_administrator/fiscal_periods.php');

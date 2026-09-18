@@ -2,7 +2,7 @@
 // admin/manage_users.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS);
 
 $message = '';
 $messageClass = '';

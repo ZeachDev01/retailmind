@@ -2,7 +2,10 @@
 // admin/audit_log.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_role(['admin']);
+require_any_capability([
+    \App\Authorization\RoleCapabilityPolicy::VIEW_STORE_AUDIT,
+    \App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT,
+]);
 
 // Get filter parameters
 $user_filter = $_GET['user_id'] ?? '';

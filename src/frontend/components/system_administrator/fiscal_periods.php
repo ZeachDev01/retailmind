@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
 
 $message = '';
 $error = '';

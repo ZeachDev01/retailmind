@@ -4,7 +4,10 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Services/SalesService.php';
 require_once __DIR__ . '/../app/Services/DashboardService.php';
-require_role(['admin']);
+require_any_capability([
+    \App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE,
+    \App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS,
+]);
 
 $salesService = new SalesService($pdo);
 $dashboardService = new DashboardService($pdo);

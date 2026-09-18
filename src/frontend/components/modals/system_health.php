@@ -1,7 +1,7 @@
 <?php
 // Backward-compatible route for bookmarks created before System Health became a dedicated page.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 
 $query = $_SERVER['QUERY_STRING'] ?? '';
 $destination = app_url('components/system_administrator/system_health.php');

@@ -125,15 +125,27 @@ $notificationItems = [
     ['path' => 'components/notification/notifications.php', 'icon' => 'bi-bell', 'label' => 'View Notifications'],
 ];
 
-$adminSystemItems = [
-    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
-    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Logs'],
-    ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
-    ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
-    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-sliders', 'label' => 'ML Settings'],
-    ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
-    ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'System Settings'],
-];
+$adminSystemItems = [];
+if (has_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS)) {
+    $adminSystemItems[] = ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'];
+}
+if (has_capability(\App\Authorization\RoleCapabilityPolicy::VIEW_STORE_AUDIT)
+    || has_capability(\App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT)
+) {
+    $adminSystemItems[] = ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Logs'];
+}
+if (has_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS)) {
+    $adminSystemItems[] = ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'];
+}
+if (has_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE)) {
+    array_push(
+        $adminSystemItems,
+        ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
+        ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-sliders', 'label' => 'ML Settings'],
+        ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
+        ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'System Settings']
+    );
+}
 
 $adminStockItems = [
     ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
@@ -351,7 +363,7 @@ $sections = $roleSections[$role] ?? [];
     </section>
 </div>
 
-<?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
+<?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS)): ?>
     <div class="user-management-overlay" id="userManagementOverlay" aria-hidden="true">
         <div class="user-management-frame" role="dialog" aria-modal="true" aria-label="Users and access management">
             <iframe title="Users &amp; Access Management" id="userManagementFrame" loading="lazy"></iframe>

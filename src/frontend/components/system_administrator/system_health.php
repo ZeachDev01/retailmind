@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/app/Services/SystemHealthService.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 
 $backendPath = $GLOBALS['app']['backend_path'] ?? dirname(__DIR__, 3) . '/backend';
 $service = new SystemHealthService($pdo, $backendPath);

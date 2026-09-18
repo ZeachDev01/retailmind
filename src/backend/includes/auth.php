@@ -216,13 +216,59 @@ function require_role(array $allowed_roles): void
         exit;
     }
     validate_current_session($pdo);
-    if (current_role() === 'super_admin') {
-        return;
-    }
     if (!in_array(current_role(), $allowed_roles, true)) {
         http_response_code(403);
         die('Access denied: your role does not have permission to view this page.');
     }
+}
+
+function role_capability_policy(): App\Authorization\RoleCapabilityPolicy
+{
+    static $policy;
+    return $policy ??= new App\Authorization\RoleCapabilityPolicy();
+}
+
+function has_capability(
+    string $capability,
+    ?string $targetRole = null,
+    ?App\Authorization\AuthorizationContext $context = null
+): bool {
+    $role = current_role();
+    return $role !== null && role_capability_policy()->allows($role, $capability, $targetRole, $context);
+}
+
+function require_capability(
+    string $capability,
+    ?string $targetRole = null,
+    ?App\Authorization\AuthorizationContext $context = null
+): void {
+    require_any_capability([$capability], $targetRole, $context);
+}
+
+function require_any_capability(
+    array $capabilities,
+    ?string $targetRole = null,
+    ?App\Authorization\AuthorizationContext $context = null
+): void {
+    global $pdo;
+    if (!is_logged_in()) {
+        header('Location: ' . app_url('?login=1'));
+        exit;
+    }
+    validate_current_session($pdo);
+    foreach ($capabilities as $capability) {
+        if (has_capability((string)$capability, $targetRole, $context)) {
+            return;
+        }
+    }
+    http_response_code(403);
+    die('Access denied: your account does not have this capability.');
+}
+
+function store_scope_id(PDO $pdo): int
+{
+    static $storeId;
+    return $storeId ??= (new App\Store\StoreScope($pdo))->id();
 }
 
 function current_branch_id(): ?int
@@ -244,30 +290,10 @@ function default_profile_image_url(): string
 
 function has_privilege(string $privilegeKey): bool
 {
-    global $pdo;
-    if (!is_logged_in()) {
-        return false;
-    }
-    if (current_role() === 'super_admin' && $privilegeKey !== 'manage_inventory') {
-        return true;
-    }
-    if (in_array(current_role(), ['admin', 'super_admin'], true) && $privilegeKey === 'manage_inventory') {
-        return false;
-    }
-    $stmt = $pdo->prepare(
-        "SELECT EXISTS(
-            SELECT 1
-            FROM privileges p
-            LEFT JOIN user_privileges up ON up.privilege_id = p.privilege_id AND up.user_id = ?
-            LEFT JOIN role_privileges rp ON rp.privilege_id = p.privilege_id
-            JOIN users u ON u.user_id = ?
-            WHERE p.privilege_key = ?
-              AND ((up.user_id IS NOT NULL AND up.allowed = 1) OR (up.user_id IS NULL AND rp.role_id = u.role_id))
-        )"
-    );
-    $userId = (int)$_SESSION['user_id'];
-    $stmt->execute([$userId, $userId, $privilegeKey]);
-    return (bool)$stmt->fetchColumn();
+    $role = current_role();
+    return is_logged_in()
+        && $role !== null
+        && role_capability_policy()->allowsLegacyPrivilege($role, $privilegeKey);
 }
 
 function require_privilege(string $privilegeKey): void

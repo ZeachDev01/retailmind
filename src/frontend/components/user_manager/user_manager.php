@@ -2,7 +2,7 @@
 // components/user_manager/user_manager.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS);
 
 $message = '';
 $messageClass = '';
@@ -31,12 +31,10 @@ function user_is_super_admin(array $user): bool
 
 function can_manage_user(array $user): bool
 {
-    if (!user_is_super_admin($user)) {
-        return true;
-    }
-
-    return current_role() === 'super_admin'
-        && (int)($user['user_id'] ?? 0) === (int)($_SESSION['user_id'] ?? 0);
+    return has_capability(
+        \App\Authorization\RoleCapabilityPolicy::MANAGE_USERS,
+        (string)($user['role_name'] ?? '')
+    );
 }
 
 function role_requires_branch(PDO $pdo, int $roleId): bool
@@ -56,11 +54,17 @@ function valid_branch_assignment(PDO $pdo, ?int $branchId): bool
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function role_name_for_id(PDO $pdo, int $roleId): ?string
+{
+    $stmt = $pdo->prepare("SELECT role_name FROM roles WHERE role_id = ? AND role_name <> 'seller'");
+    $stmt->execute([$roleId]);
+    $roleName = $stmt->fetchColumn();
+    return $roleName !== false ? (string)$roleName : null;
+}
+
 function role_exists(PDO $pdo, int $roleId): bool
 {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM roles WHERE role_id = ? AND role_name <> 'seller'");
-    $stmt->execute([$roleId]);
-    return (int)$stmt->fetchColumn() > 0;
+    return role_name_for_id($pdo, $roleId) !== null;
 }
 
 function ensure_single_super_admin(PDO $pdo, int $roleId, ?int $excludeUserId = null): void
@@ -148,9 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             if (!role_exists($pdo, $roleId) || !valid_branch_assignment($pdo, $branchId)) {
                 throw new InvalidArgumentException('Please choose a valid active branch and role.');
             }
-            $roleNameStmt = $pdo->prepare('SELECT role_name FROM roles WHERE role_id = ?');
-            $roleNameStmt->execute([$roleId]);
-            if ($roleNameStmt->fetchColumn() === 'super_admin') {
+            $roleName = role_name_for_id($pdo, $roleId);
+            if ($roleName === null || !has_capability(\App\Authorization\RoleCapabilityPolicy::ASSIGN_ROLES, $roleName)) {
+                throw new InvalidArgumentException('Your account cannot assign the selected role.');
+            }
+            if ($roleName === 'super_admin') {
                 throw new InvalidArgumentException('The Super Administrator account is managed separately and cannot be created here.');
             }
             ensure_single_super_admin($pdo, $roleId);
@@ -244,6 +250,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
             } elseif (!role_exists($pdo, $roleId)) {
                 $message = 'Please choose a valid role.';
                 $messageClass = 'tag-warning';
+            } elseif (!has_capability(\App\Authorization\RoleCapabilityPolicy::ASSIGN_ROLES, role_name_for_id($pdo, $roleId))) {
+                $message = 'Your account cannot assign the selected role.';
+                $messageClass = 'tag-warning';
             } elseif (!valid_branch_assignment($pdo, $requestedBranchId)) {
                 $message = 'Please choose an active branch.';
                 $messageClass = 'tag-warning';
@@ -298,7 +307,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                         }
                     }
 
-                    if (!$isProtectedSuperAdmin && isset($_POST['manage_privileges'])) {
+                    if (!$isProtectedSuperAdmin
+                        && isset($_POST['manage_privileges'])
+                        && has_capability(\App\Authorization\RoleCapabilityPolicy::ASSIGN_PRIVILEGES)
+                    ) {
                         $pdo->prepare('DELETE FROM user_privileges WHERE user_id = ?')->execute([$userId]);
                         foreach (array_unique(array_map('intval', (array)($_POST['privilege_ids'] ?? []))) as $privilegeId) {
                             if ($privilegeId > 0) {
@@ -350,6 +362,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     } elseif (user_is_super_admin($before)) {
         $message = 'The Super Administrator account is protected and cannot be deleted.';
         $messageClass = 'tag-warning';
+    } elseif (!can_manage_user($before)) {
+        $message = 'Your account cannot delete this privileged user.';
+        $messageClass = 'tag-warning';
     } elseif ($userId === (int)$_SESSION['user_id']) {
         $message = 'You cannot delete your own account while logged in.';
         $messageClass = 'tag-warning';
@@ -377,6 +392,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_branch') {
     csrf_verify();
+    require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
     $branchFormSubmitted = true;
     $branchName = trim((string)($_POST['branch_name'] ?? ''));
     $branchCode = strtoupper(trim((string)($_POST['branch_code'] ?? '')));
@@ -399,6 +415,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'toggle_branch') {
     csrf_verify();
+    require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
     $branchId = (int)($_POST['branch_id'] ?? 0);
     if ($branchId > 0) {
         $stmt = $pdo->prepare("UPDATE branches SET status = IF(status = 'active', 'inactive', 'active') WHERE branch_id = ?");
@@ -416,6 +433,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'toggl
     if ($before && user_is_super_admin($before)) {
         http_response_code(403);
         $message = 'The Super Administrator account is protected and its status cannot be changed.';
+        $messageClass = 'tag-warning';
+    } elseif ($before && !can_manage_user($before)) {
+        http_response_code(403);
+        $message = 'Your account cannot change this privileged user.';
         $messageClass = 'tag-warning';
     } else {
         if ($before) {

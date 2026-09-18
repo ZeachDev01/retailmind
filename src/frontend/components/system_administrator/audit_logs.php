@@ -1,7 +1,10 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
-require_role(['admin']);
+require_any_capability([
+    \App\Authorization\RoleCapabilityPolicy::VIEW_STORE_AUDIT,
+    \App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT,
+]);
 
 $userFilter = trim((string)($_GET['user_id'] ?? ''));
 $actionFilter = trim((string)($_GET['action'] ?? ''));

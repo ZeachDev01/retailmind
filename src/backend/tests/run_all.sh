@@ -5,6 +5,8 @@ cd "$ROOT"
 find . -type f -name '*.php' -not -path './vendor/*' -not -path './.kilo/worktrees/*' -print0 | sort -z | xargs -0 -n1 php -l >/tmp/retailmind_php_lint.log
 python -m py_compile src/backend/legacy/demandForcasting/train_model.py src/backend/legacy/demandForcasting/auto_retrain.py src/backend/legacy/demandForcasting/db.py src/backend/legacy/demandForcasting/predict_api.py
 php src/backend/tests/smoke_checks.php
+php src/backend/tests/role_capability_policy_contract.php
+php src/backend/tests/store_scope_contract.php
 php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/product_seed_checks.php
 php src/backend/tests/database_integration.php

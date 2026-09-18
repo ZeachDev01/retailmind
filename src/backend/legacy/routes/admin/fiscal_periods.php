@@ -3,7 +3,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/csrf.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
 
 // Handle form actions
 $message = '';
