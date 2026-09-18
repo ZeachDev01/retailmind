@@ -61,6 +61,12 @@ Record the accepted single-Store architecture decision and produce an implementa
 - [x] Phase 52: Integrate the new foundations at safe current seams without prematurely implementing blocked migration tickets.
 - [x] Phase 53: Run focused checks, type/lint checks, and the full repository suite.
 - [x] Phase 54: Review the implementation against repository standards and issues #6/#7, address findings, and commit the work.
+- [x] Phase 55: Inspect administrator routing, shared shell navigation, guarded platform tools, and user-management lifecycle seams for issues #8/#9.
+- [x] Phase 56: Add failing thin route/navigation regressions and public user-lifecycle integration/authorization contracts at the ticket-defined seams.
+- [x] Phase 57: Implement dedicated guarded administrator workspaces and backend-protected platform governance routes.
+- [x] Phase 58: Convert User Management to a single-Store delegated lifecycle with session revocation and Protected Audit Records.
+- [x] Phase 59: Run focused checks, type/lint checks, and the full repository suite.
+- [x] Phase 60: Review against repository standards and issues #8/#9, address findings, and commit the work.
 
 ## Decisions
 - Prefer the project's existing layout, components, and dependency versions over introducing a second table stack.
@@ -94,6 +100,7 @@ Record the accepted single-Store architecture decision and produce an implementa
 - Publish the approved child tickets as issues #6–#19 with textual blocker references because the configured `gh` workflow does not expose native dependency creation; do not modify parent issue #5.
 - Implement issues #6 and #7 together as independent foundation slices; use their explicitly pre-agreed seams: a database-backed singleton Store scope contract and a deterministic capability-matrix contract.
 - Preserve the current uncommitted domain documentation/planning files and avoid prematurely implementing the caller migrations assigned to issues #8–#19.
+- Implement issues #8 and #9 together now that #6 and #7 are closed; use their pre-agreed seams: thin route/navigation regressions plus public user-management integration and authorization contracts.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -128,3 +135,4 @@ Record the accepted single-Store architecture decision and produce an implementa
 | `gh issue view` rejected combining `--comments` with `--json` | 1 | Fetch the `comments` JSON field without the incompatible `--comments` display flag and derive the needed context in JavaScript. |
 | MySQL rejected a temporary table created `LIKE` its shadowed permanent name | 1 | Run the Store scope contract against isolated in-memory SQLite tables instead of touching or shadowing configured operational data. |
 | A PHP one-liner lost `$n` to shell interpolation and produced a parse error | 1 | Do not repeat the unnecessary file-count probe; the full suite had already completed repository-wide PHP lint successfully before its known `rsync` packaging failure. |
+| The focused lint helper passed a quoted Git pathspec through Node and discovered only the six explicitly appended new files | 1 | Treat that result as focused lint only; run the repository's standard full-suite lint in Phase 59. |

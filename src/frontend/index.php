@@ -31,17 +31,7 @@ function landing_app_url(string $path = ''): string
 
 function landing_role_destination(): string
 {
-    switch ($_SESSION['role'] ?? null) {
-        case 'super_admin':
-        case 'admin':
-            return landing_app_url('components/dashboard.php');
-        case 'inventory_manager':
-            return landing_app_url('components/inventory_management/dashboard.php');
-        case 'cashier':
-            return landing_app_url('components/cashier/pos.php');
-        default:
-            return landing_app_url('?login=1');
-    }
+    return landing_app_url(App\Authorization\RoleWorkspaceRouter::pathFor($_SESSION['role'] ?? null));
 }
 
 function landing_redirect_by_role(): void

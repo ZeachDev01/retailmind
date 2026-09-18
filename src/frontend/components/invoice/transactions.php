@@ -16,7 +16,9 @@ $transactions = $pdo->query(
 )->fetchAll();
 
 $role = current_role();
-$back_url = $role === 'inventory_manager' ? app_url('components/inventory_management/dashboard.php') : app_url('components/dashboard.php');
+$back_url = $role === 'inventory_manager'
+    ? app_url('components/inventory_management/dashboard.php')
+    : app_url('components/administrator/dashboard.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">

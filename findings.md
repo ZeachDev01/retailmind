@@ -127,6 +127,12 @@
 - Current authorization is split between a blanket `super_admin` bypass in `require_role()`, another implicit bypass in `has_privilege()`, database role privileges, direct role checks in the sidebar, and ad hoc target-account checks in User Management.
 - Issue #7 therefore needs a pure, deterministic policy as the source of truth, compatibility mappings for current privilege helpers, exact role guarding without the blanket bypass, capability-aware navigation, and target-role checks at User Management mutation boundaries.
 - Blocked tickets #8–#19 own the later dedicated workspaces and broad caller migrations, so this foundation must avoid removing branch columns/UI or redesigning dashboards while still exposing stable Store and authority interfaces.
+- Issues #8 and #9 are now unblocked because foundation issues #6 and #7 are closed.
+- Issue #8 requires separate canonical Super Administrator and Administrator home routes, backend workspace isolation, role-specific navigation, Super Administrator-only platform tools, unchanged Cashier/Inventory Manager routing, and thin route/navigation tests.
+- Issue #9 requires branch-free single-Store User Management, server-owned Store scope, delegated Administrator lifecycle authority over Cashiers and Inventory Managers, privileged-account protection, session revocation on disable, Protected Audit Records, and public integration/authorization coverage.
+- The shared administrator dashboard and sidebar were the primary authority leak: both administrator roles used `components/dashboard.php` and the same navigation array, while the four named platform pages already used the centralized Platform Governance capability guard.
+- User Management mixed lifecycle behavior, branch administration, custom privilege assignment, profile media, and presentation in one page. A public `UserLifecycleService` is the stable integration seam for fixed role templates, server-owned Store scope, session invalidation, and User Access audit records.
+- The existing `session_version` mechanism is the canonical session-revocation seam: current-session validation rejects a stale version, so disable, password reset, role change, and explicit revoke can invalidate sessions without deleting the retained user identity.
 
 ## Published Ticket Map
 

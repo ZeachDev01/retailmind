@@ -6,7 +6,9 @@ find . -type f -name '*.php' -not -path './vendor/*' -not -path './.kilo/worktre
 python -m py_compile src/backend/legacy/demandForcasting/train_model.py src/backend/legacy/demandForcasting/auto_retrain.py src/backend/legacy/demandForcasting/db.py src/backend/legacy/demandForcasting/predict_api.py
 php src/backend/tests/smoke_checks.php
 php src/backend/tests/role_capability_policy_contract.php
+php src/backend/tests/workspace_routing_contract.php
 php src/backend/tests/store_scope_contract.php
+php src/backend/tests/user_lifecycle_contract.php
 php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/product_seed_checks.php
 php src/backend/tests/database_integration.php

@@ -57,41 +57,56 @@ $checks = [
         'needles' => ['components/system_administrator/system_health.php'],
         'forbidden' => ['data-system-health-open', 'systemHealthOverlay', 'systemHealthFrame'],
     ],
-    'Manage Users segmented tabs present' => [
+    'Dedicated administrator workspaces are canonical' => [
+        'file' => 'src/backend/app/Authorization/RoleWorkspaceRouter.php',
+        'needles' => ["'super_admin' => 'components/super_administrator/dashboard.php'", "'admin' => 'components/administrator/dashboard.php'", "'inventory_manager' => 'components/inventory_management/dashboard.php'", "'cashier' => 'components/cashier/pos.php'"],
+    ],
+    'Landing routes through the canonical workspace map' => [
+        'file' => 'src/frontend/index.php',
+        'needles' => ['RoleWorkspaceRouter::pathFor'],
+        'forbidden' => ["case 'super_admin':", "case 'admin':"],
+    ],
+    'Super Administrator workspace is exactly guarded' => [
+        'file' => 'src/frontend/components/super_administrator/dashboard.php',
+        'needles' => ["require_role(['super_admin'])", 'Platform Control Center', "include __DIR__ . '/../sidebar.php'", 'system_health.php', 'backup_restore.php', 'ml_settings.php', 'system_settings.php'],
+        'forbidden' => ['inventory_counts.php', 'csv_import.php', 'stock_receiving.php', 'inventory_adjustments.php'],
+    ],
+    'Administrator workspace is exactly guarded' => [
+        'file' => 'src/frontend/components/administrator/dashboard.php',
+        'needles' => ["require_role(['admin'])", 'Store Operations', "include __DIR__ . '/../sidebar.php'", 'fiscal_periods.php'],
+        'forbidden' => ['system_health.php', 'backup_restore.php', 'ml_settings.php', 'system_settings.php'],
+    ],
+    'Shared administrator dashboard is retired' => [
+        'file' => 'src/frontend/components/dashboard.php',
+        'needles' => ['redirect_by_role();'],
+        'forbidden' => ['DashboardService', 'getAdminMetrics'],
+    ],
+    'Administrator navigation is role-specific' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['$superAdministratorSections', '$administratorSections', "'super_admin' => \$superAdministratorSections", "'admin' => \$administratorSections"],
+    ],
+    'User Management is a single-Store workflow' => [
         'file' => 'src/frontend/components/user_manager/user_manager.php',
-        'needles' => ['role="tablist"', 'manage-users-tab-icon', 'manage-users-tab-description', 'manage-users-tab-count', 'data-management-tab="users"', 'data-management-tab="branches"'],
+        'needles' => ['UserLifecycleService', 'store_scope_id($pdo)', "\$action === 'revoke_sessions'"],
+        'forbidden' => ['create_branch', 'toggle_branch', 'branchesPanel', 'openBranchModal', 'data-management-tab="branches"'],
     ],
     'Manage Users summary icons present' => [
         'file' => 'src/frontend/components/user_manager/user_manager.php',
         'needles' => ['stat-card with-icon', 'bi-people-fill', 'bi-person-check-fill', 'bi-person-x-fill'],
     ],
-    'Super Admin account is protected' => [
-        'file' => 'src/frontend/components/user_manager/user_manager.php',
-        'needles' => ['function can_manage_user', 'user_is_super_admin($before)', 'The Super Administrator account is protected', 'user-protected-label', 'bi-lock-fill'],
+    'Super Administrator account is protected' => [
+        'file' => 'src/backend/app/Services/UserLifecycleService.php',
+        'needles' => ["\$targetRole === 'super_admin'", 'The Super Administrator account is protected.', 'requireManageable'],
     ],
-    'Staff role selector excludes protected roles' => [
-        'file' => 'src/frontend/components/user_manager/modals/manage_user_modal.php',
-        'needles' => ["!in_array(\$r['role_name'], ['super_admin', 'seller'], true)"],
-        'forbidden' => ["current_role() === 'super_admin'"],
-    ],
-    'Staff creation requires an active branch' => [
+    'Staff role selectors use fixed templates without branch assignment' => [
         'file' => 'src/frontend/components/user_manager/modals/add_user_modal.php',
-        'needles' => ['<select name="branch_id" required>'],
-        'forbidden' => ['No branch (administrators only)'],
+        'needles' => ["!in_array(\$r['role_name'], ['super_admin', 'seller'], true)"],
+        'forbidden' => ['name="branch_id"', 'Assigned Branch'],
     ],
-    'Staff management requires an active branch' => [
+    'Staff management has no branch or arbitrary privilege controls' => [
         'file' => 'src/frontend/components/user_manager/modals/manage_user_modal.php',
-        'needles' => ['<select id="drawerBranch" name="branch_id" required>'],
-        'forbidden' => ['No branch (administrators only)'],
-    ],
-    'All operational staff roles require a branch' => [
-        'file' => 'src/frontend/components/user_manager/user_manager.php',
-        'needles' => ["['admin', 'inventory_manager', 'cashier']", 'Administrators, Inventory Managers, and Cashiers must be assigned to a branch.'],
-    ],
-    'Manage Users contextual actions present' => [
-        'file' => 'src/frontend/components/user_manager/user_manager.php',
-        'needles' => ['manage-users-section-action', 'id="openUserModal"', 'id="openBranchModal"', "include __DIR__ . '/modals/add_branch_modal.php'", "selectManagementTab('branches')"],
-        'forbidden' => ['class="user-form manage-users-branch-form"'],
+        'needles' => ['data-user-drawer-tab="security"', 'Revoke Sessions'],
+        'forbidden' => ['drawerBranch', 'privilege_ids[]', 'manage_privileges', 'Delete User'],
     ],
     'Manage Users modal form remains scrollable' => [
         'file' => 'src/frontend/assets/css/modals.css',
@@ -200,7 +215,7 @@ $checks = [
         'forbidden' => ['data-fiscal-periods-open', 'fiscalPeriodsOverlay', 'fiscalPeriodsFrame'],
     ],
     'Fiscal periods use direct dashboard navigation' => [
-        'file' => 'src/frontend/components/dashboard.php',
+        'file' => 'src/frontend/components/administrator/dashboard.php',
         'needles' => ['components/system_administrator/fiscal_periods.php'],
         'forbidden' => ['components/modals/fiscal_periods.php', 'data-fiscal-periods-open'],
     ],

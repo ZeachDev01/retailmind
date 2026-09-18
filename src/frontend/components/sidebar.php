@@ -16,8 +16,17 @@ $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
 $avatarStylesheetPath = __DIR__ . '/../assets/css/avatars.css';
 $avatarStylesheetVersion = is_file($avatarStylesheetPath) ? (string)filemtime($avatarStylesheetPath) : '1';
 $avatarStylesheetUrl = app_url('assets/css/avatars.css') . '?v=' . rawurlencode($avatarStylesheetVersion);
-$commandProductTarget = in_array($role, ['admin', 'super_admin', 'inventory_manager'], true) ? app_url('components/inventory_management/products.php') : app_url('components/cashier/pos.php');
-$mobileHomeTarget = $role === 'cashier' ? 'components/cashier/pos.php' : ($role === 'inventory_manager' ? 'components/inventory_management/dashboard.php' : 'components/dashboard.php');
+$commandProductTarget = match ($role) {
+    'super_admin' => app_url('components/inventory_management/inventory_overview.php'),
+    'admin', 'inventory_manager' => app_url('components/inventory_management/products.php'),
+    default => app_url('components/cashier/pos.php'),
+};
+$mobileHomeTarget = match ($role) {
+    'super_admin' => 'components/super_administrator/dashboard.php',
+    'admin' => 'components/administrator/dashboard.php',
+    'inventory_manager' => 'components/inventory_management/dashboard.php',
+    default => 'components/cashier/pos.php',
+};
 $flashMessages = [];
 foreach (['success', 'error', 'warning', 'info'] as $flashType) {
     $flashKey = '_flash_' . $flashType;
@@ -125,39 +134,19 @@ $notificationItems = [
     ['path' => 'components/notification/notifications.php', 'icon' => 'bi-bell', 'label' => 'View Notifications'],
 ];
 
-$adminSystemItems = [];
-if (has_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS)) {
-    $adminSystemItems[] = ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'];
-}
-if (has_capability(\App\Authorization\RoleCapabilityPolicy::VIEW_STORE_AUDIT)
-    || has_capability(\App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT)
-) {
-    $adminSystemItems[] = ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Logs'];
-}
-if (has_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS)) {
-    $adminSystemItems[] = ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'];
-}
-if (has_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE)) {
-    array_push(
-        $adminSystemItems,
-        ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
-        ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-sliders', 'label' => 'ML Settings'],
-        ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
-        ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'System Settings']
-    );
-}
+$superAdministratorSystemItems = [
+    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-shield-lock', 'label' => 'Users & Access'],
+    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Protected Audit Records'],
+    ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
+    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-cpu', 'label' => 'ML Operation'],
+    ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
+    ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'Platform Settings'],
+];
 
-$adminStockItems = [
-    ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
-    ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Inventory Insights'],
-    ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products & Stock'],
-    ['path' => 'components/invoice/transactions.php', 'icon' => 'bi-receipt', 'label' => 'Inventory Transactions'],
-    ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Counts'],
-    ['path' => 'components/inventory_management/csv_import.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'CSV Import'],
-    ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
-    ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Replenishment Requests'],
-    ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
-    ['path' => 'components/invoice/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
+$administratorSystemItems = [
+    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Store Staff'],
+    ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
+    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Operational Audit'],
 ];
 
 $managerInventoryItems = [
@@ -184,13 +173,10 @@ $salesHistoryItems = [
     ['path' => 'components/invoice/sales_history.php', 'icon' => 'bi-clock-history', 'label' => 'Sales History'],
 ];
 
-$reportItems = [
-    ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecasting'],
+$administratorReportItems = [
     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Forecast Analytics'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
-    ['path' => 'components/report/stock_receiving.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'Stock Receiving'],
-    ['path' => 'components/report/inventory_adjustments.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Adjustments'],
     ['path' => 'components/report/report_generation.php', 'icon' => 'bi-file-earmark-bar-graph', 'label' => 'Report Generation'],
 ];
 
@@ -206,27 +192,31 @@ $workspaceSection = [
     ],
 ];
 
-$adminSections = [
+$superAdministratorSections = [
     [
-        'title' => 'Administration',
+        'title' => 'Platform Governance',
         'items' => [
-            ['path' => 'components/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard'],
-            ['icon' => 'bi-gear', 'label' => 'System Administration', 'items' => $adminSystemItems],
+            ['path' => 'components/super_administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Control Center'],
+            ['icon' => 'bi-shield-lock', 'label' => 'Platform Administration', 'items' => $superAdministratorSystemItems],
         ],
     ],
+];
+
+$administratorSections = [
     [
-        'title' => 'Inventory',
+        'title' => 'Store Operations',
         'items' => [
-            ['icon' => 'bi-boxes', 'label' => 'Inventory Management', 'items' => $adminStockItems],
-            ['icon' => 'bi-receipt', 'label' => 'Sales', 'items' => $adminSalesItems],
-            ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Reports', 'items' => $reportItems],
+            ['path' => 'components/administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Store Overview'],
+            ['icon' => 'bi-shop', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
+            ['icon' => 'bi-receipt', 'label' => 'Sales Oversight', 'items' => $adminSalesItems],
+            ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Store Reports', 'items' => $administratorReportItems],
         ],
     ],
 ];
 
 $roleSections = [
-    'admin' => $adminSections,
-    'super_admin' => $adminSections,
+    'super_admin' => $superAdministratorSections,
+    'admin' => $administratorSections,
     'inventory_manager' => [
         [
             'title' => 'Operations',
