@@ -7,37 +7,92 @@
         padding: 2rem 1rem;
     }
 
-    .search-section {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
+    .receipts-page .receipt-table-card {
+        overflow: visible;
     }
 
-    .search-group {
-        display: flex;
-        gap: 0.5rem;
-        flex: 1;
-        min-width: 250px;
+    .receipts-page .receipt-table-heading {
+        align-items: center;
     }
 
-    .search-group input {
-        flex: 1;
-        padding: 0.75rem;
+    .receipts-page .receipt-table-heading .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        white-space: nowrap;
+    }
+
+    .receipts-page .receipt-filters {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+        gap: 0.75rem;
+        align-items: end;
+        padding: 1rem;
+        border-block: 1px solid var(--border);
+        background: #f8fafc;
+    }
+
+    .receipts-page .receipt-filters label {
+        display: grid;
+        gap: 0.35rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .receipts-page .receipt-filters input,
+    .receipts-page .receipt-filters select {
+        width: 100%;
+        min-height: 42px;
+        padding: 0.58rem 0.7rem;
         border: 1px solid var(--border);
         border-radius: 8px;
-        font-size: 0.95rem;
+        background: #fff;
+        color: var(--text);
+        font: inherit;
     }
 
-    .search-group select {
-        padding: 0.75rem;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-size: 0.95rem;
+    .receipts-page .receipt-filters input:focus-visible,
+    .receipts-page .receipt-filters select:focus-visible,
+    .receipts-page .dt-container button:focus-visible,
+    .receipts-page .dt-container input:focus-visible,
+    .receipts-page .dt-container select:focus-visible,
+    .receipts-page .btn-small:focus-visible {
+        outline: 3px solid color-mix(in srgb, var(--primary) 35%, transparent);
+        outline-offset: 2px;
+    }
+
+    .receipts-page .receipt-table-status {
+        display: flex;
+        min-height: 1.4rem;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.65rem 1rem 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+    }
+
+    .receipts-page .receipt-table-status .btn {
+        min-height: 32px;
+        padding: 0.3rem 0.65rem;
+    }
+
+    .receipts-page .receipt-table-status.is-error {
+        color: #991b1b;
+        font-weight: 700;
+    }
+
+    .receipts-page .receipt-empty-state {
+        margin: 1rem;
+    }
+
+    .receipts-page .receipt-table-wrap {
+        overflow-x: auto;
+        overflow-y: visible;
     }
 
     .receipts-table {
-        width: 100%;
+        width: 100% !important;
         border-collapse: collapse;
         background: var(--card-bg);
         border: 1px solid var(--border);
@@ -71,6 +126,76 @@
 
     .receipts-table tbody tr:hover {
         background: #fafbfc;
+    }
+
+    .receipts-page .receipt-tag-neutral {
+        display: inline-flex;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        background: #e2e8f0;
+        color: #475569;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .receipts-page .dt-container .dt-layout-row {
+        align-items: center;
+        gap: 1rem;
+        margin: 0 0 1rem;
+    }
+
+    .receipts-page .dt-container > .dt-layout-row:first-child {
+        padding: 0.65rem 1rem 0.15rem;
+    }
+
+    .receipts-page .dt-container .dt-layout-row:last-child {
+        margin: 1rem 0 0;
+    }
+
+    .receipts-page .dt-container .dt-layout-row:last-child .dt-layout-cell {
+        display: grid;
+        width: 100%;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .receipts-page .dt-container .dt-layout-row:last-child .dt-info {
+        justify-self: start;
+    }
+
+    .receipts-page .dt-container .dt-layout-row:last-child .dt-length {
+        justify-self: center;
+        white-space: nowrap;
+    }
+
+    .receipts-page .dt-container .dt-layout-row:last-child .dt-paging {
+        justify-self: end;
+    }
+
+    .receipts-page .dt-container .dt-search input,
+    .receipts-page .dt-container .dt-length select {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .receipts-page .dt-container .dt-search input {
+        min-width: 280px;
+        padding: 0.55rem 0.7rem;
+    }
+
+    .receipts-page .dt-container .dt-length select {
+        margin: 0 0.3rem;
+        padding: 0.35rem 1.6rem 0.35rem 0.5rem;
+    }
+
+    .receipts-page .dt-container .dt-info {
+        color: var(--muted);
+    }
+
+    .receipts-page .dt-container .dt-paging .dt-paging-button {
+        border-radius: 8px;
     }
 
     .receipt-id {
@@ -413,13 +538,45 @@
         }
     }
 
-    @media (max-width: 768px) {
-        .search-section {
-            flex-direction: column;
+    @media (max-width: 980px) {
+        .receipts-page .receipt-filters {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .search-group {
-            min-width: auto;
+        .receipts-page .receipt-filters .btn {
+            justify-self: start;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .receipts-page .receipt-table-heading {
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .receipts-page .receipt-filters {
+            grid-template-columns: 1fr;
+        }
+
+        .receipts-page .dt-container .dt-layout-row {
+            align-items: stretch;
+        }
+
+        .receipts-page .dt-container .dt-search,
+        .receipts-page .dt-container .dt-search input {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .receipts-page .dt-container .dt-layout-row:last-child .dt-layout-cell {
+            grid-template-columns: 1fr;
+            justify-items: center;
+        }
+
+        .receipts-page .dt-container .dt-layout-row:last-child .dt-info,
+        .receipts-page .dt-container .dt-layout-row:last-child .dt-length,
+        .receipts-page .dt-container .dt-layout-row:last-child .dt-paging {
+            justify-self: center;
         }
 
         .receipt-summary {

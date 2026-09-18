@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/backup.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 
 $message = '';
 $messageClass = '';

@@ -38,13 +38,15 @@ class InventoryCountService
 
         $this->pdo->beginTransaction();
         try {
+            [$scopeSql, $scopeParams] = $this->productScope();
             $stmt = $this->pdo->prepare(
-                "SELECT quantity_on_hand
-                 FROM inventory
-                 WHERE product_id = ?
+                "SELECT i.quantity_on_hand
+                 FROM inventory i
+                 JOIN products p ON p.product_id = i.product_id
+                 WHERE i.product_id = ?{$scopeSql}
                  FOR UPDATE"
             );
-            $stmt->execute([$productId]);
+            $stmt->execute(array_merge([$productId], $scopeParams));
             $inventory = $stmt->fetch();
 
             if (!$inventory) {
@@ -88,13 +90,15 @@ class InventoryCountService
 
         $this->pdo->beginTransaction();
         try {
+            [$scopeSql, $scopeParams] = $this->productScope();
             $stmt = $this->pdo->prepare(
-                "SELECT *
-                 FROM inventory_counts
-                 WHERE count_id = ?
+                "SELECT ic.*
+                 FROM inventory_counts ic
+                 JOIN products p ON p.product_id = ic.product_id
+                 WHERE ic.count_id = ?{$scopeSql}
                  FOR UPDATE"
             );
-            $stmt->execute([$countId]);
+            $stmt->execute(array_merge([$countId], $scopeParams));
             $count = $stmt->fetch();
 
             if (!$count) {
@@ -187,12 +191,14 @@ class InventoryCountService
             throw new RuntimeException('Invalid count selected.');
         }
 
+        [$scopeSql, $scopeParams] = $this->productScope();
         $stmt = $this->pdo->prepare(
-            "UPDATE inventory_counts
-             SET status = 'rejected', approved_by = ?, approved_at = CURRENT_TIMESTAMP
-             WHERE count_id = ? AND status = 'pending'"
+            "UPDATE inventory_counts ic
+             JOIN products p ON p.product_id = ic.product_id
+             SET ic.status = 'rejected', ic.approved_by = ?, ic.approved_at = CURRENT_TIMESTAMP
+             WHERE ic.count_id = ? AND ic.status = 'pending'{$scopeSql}"
         );
-        $stmt->execute([$userId, $countId]);
+        $stmt->execute(array_merge([$userId, $countId], $scopeParams));
 
         if ($stmt->rowCount() === 0) {
             throw new RuntimeException('Only pending counts can be rejected.');
@@ -201,17 +207,21 @@ class InventoryCountService
 
     public function getActiveProducts(): array
     {
-        return $this->pdo->query(
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare(
             "SELECT p.product_id, p.sku, p.product_name, i.quantity_on_hand
              FROM products p
              JOIN inventory i ON i.product_id = p.product_id
-             WHERE p.status = 'active'
+             WHERE p.status = 'active'{$scopeSql}
              ORDER BY p.product_name"
-        )->fetchAll();
+        );
+        $stmt->execute($scopeParams);
+        return $stmt->fetchAll();
     }
 
     public function getRecentCounts(int $limit = 50): array
     {
+        [$scopeSql, $scopeParams] = $this->productScope();
         $stmt = $this->pdo->prepare(
             "SELECT ic.*, p.sku, p.product_name,
                     counted_user.full_name AS counted_by_name,
@@ -220,16 +230,36 @@ class InventoryCountService
              JOIN products p ON p.product_id = ic.product_id
              JOIN users counted_user ON counted_user.user_id = ic.counted_by
              LEFT JOIN users approved_user ON approved_user.user_id = ic.approved_by
+             WHERE 1 = 1{$scopeSql}
              ORDER BY ic.counted_at DESC
              LIMIT ?"
         );
-        $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+        foreach ($scopeParams as $index => $value) {
+            $stmt->bindValue($index + 1, $value, PDO::PARAM_INT);
+        }
+        $stmt->bindValue(count($scopeParams) + 1, $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
     }
 
     public function getPendingCountTotal(): int
     {
-        return (int)$this->pdo->query("SELECT COUNT(*) FROM inventory_counts WHERE status = 'pending'")->fetchColumn();
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM inventory_counts ic
+             JOIN products p ON p.product_id = ic.product_id
+             WHERE ic.status = 'pending'{$scopeSql}"
+        );
+        $stmt->execute($scopeParams);
+        return (int)$stmt->fetchColumn();
+    }
+
+    private function productScope(): array
+    {
+        if (function_exists('store_product_scope')) {
+            return store_product_scope('p');
+        }
+
+        return (new App\Store\StoreScope($this->pdo))->productScope('p');
     }
 }

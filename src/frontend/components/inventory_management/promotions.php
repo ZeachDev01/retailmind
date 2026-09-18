@@ -4,6 +4,9 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_role(['admin','super_admin']);
 $message='';$error='';
 if($_SERVER['REQUEST_METHOD']==='POST'){
+    if (current_role() === 'super_admin') {
+        require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
+    }
     csrf_verify();
     try{
         $action=$_POST['action']??'';

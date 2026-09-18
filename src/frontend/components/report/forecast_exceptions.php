@@ -1,7 +1,11 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
-require_role(['admin', 'super_admin', 'inventory_manager']);
+
+use App\Authorization\RoleCapabilityPolicy;
+
+require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
+$storeId = store_scope_id($pdo);
 
 $metrics = get_ml_model_metrics();
 $settings = get_ml_settings($pdo);
@@ -10,7 +14,7 @@ $staleDays = max(1, (int)($settings['retrain_frequency_days'] ?? 7));
 $productMetricMap = [];
 foreach (($metrics['product_metrics'] ?? []) as $metric) $productMetricMap[(int)$metric['product_id']] = $metric;
 
-$predictions = $pdo->query("SELECT sp.*,p.sku,p.product_name,i.quantity_on_hand,
+$predictionStatement = $pdo->prepare("SELECT sp.*,p.sku,p.product_name,i.quantity_on_hand,
         COALESCE(s.units_30,0) units_30, COALESCE(s.nonzero_days,0) nonzero_days, s.first_sale_date
     FROM stock_predictions sp
     JOIN products p ON p.product_id=sp.product_id
@@ -22,8 +26,11 @@ $predictions = $pdo->query("SELECT sp.*,p.sku,p.product_name,i.quantity_on_hand,
         MIN(sa.sale_date) first_sale_date
       FROM sale_items si JOIN sales sa ON sa.sale_id=si.sale_id GROUP BY si.product_id
     ) s ON s.product_id=sp.product_id
-    WHERE sp.prediction_id=(SELECT sp2.prediction_id FROM stock_predictions sp2 WHERE sp2.product_id=sp.product_id ORDER BY sp2.generated_at DESC,sp2.prediction_id DESC LIMIT 1)
-    ORDER BY sp.generated_at DESC,p.product_name")->fetchAll(PDO::FETCH_ASSOC);
+    WHERE p.branch_id = ?
+      AND sp.prediction_id=(SELECT sp2.prediction_id FROM stock_predictions sp2 WHERE sp2.product_id=sp.product_id ORDER BY sp2.generated_at DESC,sp2.prediction_id DESC LIMIT 1)
+    ORDER BY sp.generated_at DESC,p.product_name");
+$predictionStatement->execute([$storeId]);
+$predictions = $predictionStatement->fetchAll(PDO::FETCH_ASSOC);
 
 $exceptions=[];
 foreach($predictions as $row){
@@ -43,9 +50,11 @@ foreach($predictions as $row){
     $exceptions[]=$row;
 }
 
-$decisions=$pdo->query("SELECT fd.*,p.sku,p.product_name,u.full_name decided_by_name
+$decisionStatement=$pdo->prepare("SELECT fd.*,p.sku,p.product_name,u.full_name decided_by_name
     FROM forecast_decisions fd JOIN products p ON p.product_id=fd.product_id LEFT JOIN users u ON u.user_id=fd.decided_by
-    ORDER BY fd.decided_at DESC LIMIT 30")->fetchAll(PDO::FETCH_ASSOC);
+    WHERE p.branch_id = ? ORDER BY fd.decided_at DESC LIMIT 30");
+$decisionStatement->execute([$storeId]);
+$decisions=$decisionStatement->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forecast Exceptions</title><link rel="stylesheet" href="<?=htmlspecialchars(app_url('assets/css/style.css'))?>"><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>"></head><body><div class="app-shell"><?php include __DIR__.'/../sidebar.php';?><main class="main-content"><div class="topbar"><div><h1>Forecast Exceptions</h1><p class="page-subtitle">Products requiring human review before AI recommendations become replenishment requests.</p></div><div class="u-flex-wrap"><a class="btn" href="<?=htmlspecialchars(app_url('components/report/forecast_analytics.php'))?>">Analytics</a><a class="btn" href="<?=htmlspecialchars(app_url('components/inventory_management/replenishment_requests.php'))?>">Review recommendations</a></div></div>
 <div class="card-grid"><div class="stat-card"><div class="value"><?=count($exceptions)?></div><div class="label">Products needing review</div></div><div class="stat-card"><div class="value"><?=htmlspecialchars(number_format($wapeThreshold,0))?>%</div><div class="label">WAPE alert threshold</div></div><div class="stat-card"><div class="value"><?=htmlspecialchars(format_ml_metric($metrics,'wape'))?><?=isset($metrics['wape'])?'%':''?></div><div class="label">Current model WAPE</div></div><div class="stat-card"><div class="value"><?=!empty($metrics['model_beats_baseline'])?'Yes':(array_key_exists('model_beats_baseline',$metrics)?'No':'-')?></div><div class="label">Beats 7-day baseline</div></div></div>

@@ -8,6 +8,7 @@ App\Core\Session::start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/profile_images.php';
 
 function app_base_url(): string
 {
@@ -97,11 +98,10 @@ function login_user(PDO $pdo, string $username, string $password): bool
     $username = trim($username);
 
     $stmt = $pdo->prepare(
-        "SELECT u.user_id, u.full_name, u.username, u.email, u.password_hash, u.status,
+        "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
             u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password,
-            u.branch_id, b.branch_name, r.role_name
+            u.is_recovery_account, r.role_name
          FROM users u JOIN roles r ON u.role_id = r.role_id
-         LEFT JOIN branches b ON b.branch_id = u.branch_id
          WHERE u.username = ? LIMIT 1"
     );
     $stmt->execute([$username]);
@@ -112,6 +112,12 @@ function login_user(PDO $pdo, string $username, string $password): bool
         && password_verify($password, (string)$user['password_hash']);
 
     if ($valid) {
+        if ((bool)$user['is_recovery_account']) {
+            (new App\Services\RecoveryAccountService($pdo))->recordUse(
+                (int)$user['user_id'],
+                get_client_ip_address()
+            );
+        }
         $pdo->prepare(
             'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE user_id = ?'
         )->execute([(int)$user['user_id']]);
@@ -119,10 +125,10 @@ function login_user(PDO $pdo, string $username, string $password): bool
         $_SESSION['user_id'] = (int)$user['user_id'];
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['role'] = $user['role_name'];
-        $_SESSION['branch_id'] = $user['branch_id'] !== null ? (int)$user['branch_id'] : null;
-        $_SESSION['branch_name'] = $user['branch_name'];
+        $_SESSION['profile_image'] = $user['profile_image'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
+        $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
         $_SESSION['_authenticated_at'] = time();
         unset($_SESSION['_login_error']);
         unset($_SESSION['_login_username']);
@@ -174,10 +180,9 @@ function validate_current_session(PDO $pdo): void
     }
     $validated = true;
     $stmt = $pdo->prepare(
-        "SELECT u.status, u.session_version, u.full_name, u.must_change_password,
-            u.branch_id, b.branch_name, r.role_name
+        "SELECT u.status, u.session_version, u.full_name, u.profile_image, u.must_change_password,
+            u.is_recovery_account, r.role_name
          FROM users u JOIN roles r ON r.role_id = u.role_id
-         LEFT JOIN branches b ON b.branch_id = u.branch_id
          WHERE u.user_id = ?"
     );
     $stmt->execute([(int)$_SESSION['user_id']]);
@@ -192,9 +197,9 @@ function validate_current_session(PDO $pdo): void
     }
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['role'] = $user['role_name'];
-    $_SESSION['branch_id'] = $user['branch_id'] !== null ? (int)$user['branch_id'] : null;
-    $_SESSION['branch_name'] = $user['branch_name'];
+    $_SESSION['profile_image'] = $user['profile_image'];
     $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
+    $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
 
     $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
     if ($_SESSION['must_change_password'] && !in_array($currentScript, ['change_password.php', 'logout.php'], true)) {
@@ -213,115 +218,96 @@ function require_role(array $allowed_roles): void
         exit;
     }
     validate_current_session($pdo);
-    if (current_role() === 'super_admin') {
-        return;
-    }
     if (!in_array(current_role(), $allowed_roles, true)) {
         http_response_code(403);
         die('Access denied: your role does not have permission to view this page.');
     }
 }
 
-function current_branch_id(): ?int
+function role_capability_policy(): App\Authorization\RoleCapabilityPolicy
 {
-    return isset($_SESSION['branch_id']) && $_SESSION['branch_id'] !== null
-        ? (int)$_SESSION['branch_id']
-        : null;
+    static $policy;
+    return $policy ??= new App\Authorization\RoleCapabilityPolicy();
 }
 
-function is_system_admin(): bool
+function emergency_access_service(PDO $pdo): App\Authorization\EmergencyAccessService
 {
-    return in_array(current_role(), ['super_admin', 'admin'], true);
+    static $services = [];
+    $key = spl_object_id($pdo);
+    return $services[$key] ??= new App\Authorization\EmergencyAccessService($pdo);
 }
 
-function has_privilege(string $privilegeKey): bool
+function current_authorization_context(PDO $pdo): App\Authorization\AuthorizationContext
 {
+    $role = current_role();
+    $actorUserId = (int)($_SESSION['user_id'] ?? 0);
+    if ($role === null || $actorUserId <= 0) {
+        return App\Authorization\AuthorizationContext::standard();
+    }
+    try {
+        return emergency_access_service($pdo)->authorizationContext($actorUserId, $role);
+    } catch (PDOException $exception) {
+        error_log('Emergency Access schema is unavailable: ' . $exception->getMessage());
+        return App\Authorization\AuthorizationContext::standard();
+    }
+}
+
+function has_capability(
+    string $capability,
+    ?string $targetRole = null,
+    ?App\Authorization\AuthorizationContext $context = null
+): bool {
     global $pdo;
-    if (!is_logged_in()) {
-        return false;
-    }
-    if (current_role() === 'super_admin' && $privilegeKey !== 'manage_inventory') {
-        return true;
-    }
-    if (in_array(current_role(), ['admin', 'super_admin'], true) && $privilegeKey === 'manage_inventory') {
-        return false;
-    }
-    $stmt = $pdo->prepare(
-        "SELECT EXISTS(
-            SELECT 1
-            FROM privileges p
-            LEFT JOIN user_privileges up ON up.privilege_id = p.privilege_id AND up.user_id = ?
-            LEFT JOIN role_privileges rp ON rp.privilege_id = p.privilege_id
-            JOIN users u ON u.user_id = ?
-            WHERE p.privilege_key = ?
-              AND ((up.user_id IS NOT NULL AND up.allowed = 1) OR (up.user_id IS NULL AND rp.role_id = u.role_id))
-        )"
-    );
-    $userId = (int)$_SESSION['user_id'];
-    $stmt->execute([$userId, $userId, $privilegeKey]);
-    return (bool)$stmt->fetchColumn();
+    $role = current_role();
+    $actorUserId = (int)($_SESSION['user_id'] ?? 0);
+    $context ??= current_authorization_context($pdo);
+    return $role !== null
+        && role_capability_policy()->allows($role, $capability, $targetRole, $context, $actorUserId);
 }
 
-function require_privilege(string $privilegeKey): void
-{
+function require_capability(
+    string $capability,
+    ?string $targetRole = null,
+    ?App\Authorization\AuthorizationContext $context = null
+): void {
+    require_any_capability([$capability], $targetRole, $context);
+}
+
+function require_any_capability(
+    array $capabilities,
+    ?string $targetRole = null,
+    ?App\Authorization\AuthorizationContext $context = null
+): void {
     global $pdo;
     if (!is_logged_in()) {
         header('Location: ' . app_url('?login=1'));
         exit;
     }
     validate_current_session($pdo);
-    if (!has_privilege($privilegeKey)) {
-        http_response_code(403);
-        die('Access denied: your account does not have this privilege.');
+    foreach ($capabilities as $capability) {
+        if (has_capability((string)$capability, $targetRole, $context)) {
+            return;
+        }
     }
+    http_response_code(403);
+    die('Access denied: your account does not have this capability.');
 }
 
-function require_inventory_management(): void
+function store_scope_id(PDO $pdo): int
 {
-    require_privilege('manage_inventory');
+    static $storeId;
+    return $storeId ??= (new App\Store\StoreScope($pdo))->id();
 }
 
-function require_assigned_branch(): int
+function default_profile_image_url(): string
 {
-    if (is_system_admin() && current_branch_id() === null) {
-        return 0;
-    }
-    $branchId = current_branch_id();
-    if ($branchId === null) {
-        http_response_code(403);
-        die('Access denied: your account is not assigned to a branch.');
-    }
-    return $branchId;
+    return app_url('assets/img/new-default-profile.svg.png');
 }
 
-function selected_inventory_branch_id(PDO $pdo): ?int
+function store_product_scope(string $alias = 'p'): array
 {
-    if (!is_system_admin()) {
-        return require_assigned_branch();
-    }
-
-    $branchId = filter_input(INPUT_GET, 'branch_id', FILTER_VALIDATE_INT);
-    if ($branchId === false || $branchId === null || $branchId <= 0) {
-        return null;
-    }
-
-    $stmt = $pdo->prepare("SELECT branch_id FROM branches WHERE branch_id = ? AND status = 'active'");
-    $stmt->execute([$branchId]);
-    if (!$stmt->fetchColumn()) {
-        http_response_code(400);
-        die('The selected branch is not active.');
-    }
-
-    return (int)$branchId;
-}
-
-function branch_scope(string $alias = 'p', ?int $selectedBranchId = null): array
-{
-    if (is_system_admin()) {
-        return $selectedBranchId !== null ? [" AND {$alias}.branch_id = ?", [$selectedBranchId]] : ['', []];
-    }
-    $branchId = require_assigned_branch();
-    return [" AND {$alias}.branch_id = ?", [$branchId]];
+    global $pdo;
+    return (new App\Store\StoreScope($pdo))->productScope($alias);
 }
 
 function logout_user(): void
@@ -331,20 +317,7 @@ function logout_user(): void
 
 function redirect_by_role(): void
 {
-    switch (current_role()) {
-        case 'super_admin':
-        case 'admin':
-            header('Location: ' . app_url('components/dashboard.php'));
-            break;
-        case 'inventory_manager':
-            header('Location: ' . app_url('components/inventory_management/inventory_overview.php'));
-            break;
-        case 'cashier':
-            header('Location: ' . app_url('components/cashier/pos.php'));
-            break;
-        default:
-            header('Location: ' . app_url('?login=1'));
-    }
+    header('Location: ' . app_url(App\Authorization\RoleWorkspaceRouter::pathFor(current_role())));
     exit;
 }
 

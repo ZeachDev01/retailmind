@@ -73,7 +73,7 @@ foreach ($rows as &$row) {
 unset($row);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_inventory_management();
+    require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
     csrf_verify();
     try {
         if (($_POST['action'] ?? '') === 'schedule_all') {

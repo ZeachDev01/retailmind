@@ -25,7 +25,7 @@ class ProductService
             return null;
         }
 
-           [$scopeSql, $scopeParams] = $this->branchScope();
+           [$scopeSql, $scopeParams] = $this->storeProductScope();
            $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand
              FROM products p
@@ -54,8 +54,8 @@ class ProductService
 
     public function createProduct(array $data, int $userId): int
     {
-        if (function_exists('require_inventory_management')) {
-            require_inventory_management();
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
         $barcode = trim((string)($data['barcode'] ?? ''));
         $productName = trim((string)($data['product_name'] ?? ''));
@@ -79,20 +79,9 @@ class ProductService
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
         $initialStock = max(0, (int)($data['initial_stock_quantity'] ?? 0));
-        $branchId = null;
-        if (function_exists('is_system_admin') && !is_system_admin()) {
-            $branchId = require_assigned_branch();
-        } elseif (function_exists('is_system_admin') && is_system_admin()) {
-            $branchId = (int)($data['branch_id'] ?? 0);
-            if ($branchId <= 0) {
-                throw new RuntimeException('Select a branch for this product.');
-            }
-            $branchCheck = $this->pdo->prepare("SELECT COUNT(*) FROM branches WHERE branch_id = ? AND status = 'active'");
-            $branchCheck->execute([$branchId]);
-            if ((int)$branchCheck->fetchColumn() === 0) {
-                throw new RuntimeException('Selected branch is not active.');
-            }
-        }
+        $branchId = function_exists('store_scope_id')
+            ? store_scope_id($this->pdo)
+            : (new App\Store\StoreScope($this->pdo))->id();
 
         if ($productName === '') {
             throw new RuntimeException('Product name is required.');
@@ -112,7 +101,7 @@ class ProductService
             if ($caseStmt->fetch()) throw new RuntimeException('That case barcode is already assigned.');
         }
         if ($parentProductId > 0) {
-            [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+            [$scopeSql, $scopeParams] = $this->storeProductScope();
             $parentStmt = $this->pdo->prepare("SELECT product_id FROM products WHERE product_id=? AND status='active'{$scopeSql}");
             $parentStmt->execute(array_merge([$parentProductId], $scopeParams));
             if (!$parentStmt->fetchColumn()) {
@@ -211,8 +200,8 @@ class ProductService
 
     public function purchaseStock(array $data, int $userId): int
     {
-        if (function_exists('require_inventory_management')) {
-            require_inventory_management();
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
         $searchTerm = trim((string)($data['search_term'] ?? ''));
         $purchaseQuantity = max(0, (int)($data['purchase_quantity'] ?? 0));
@@ -393,8 +382,8 @@ class ProductService
 
     public function adjustStock(array $data, int $userId): void
     {
-        if (function_exists('require_inventory_management')) {
-            require_inventory_management();
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
         $qtyChange = (int)($data['qty_change'] ?? 0);
         $productId = (int)($data['product_id'] ?? 0);
@@ -421,7 +410,7 @@ class ProductService
 
         $this->pdo->beginTransaction();
         try {
-            [$scopeSql, $scopeParams] = $this->branchScope();
+            [$scopeSql, $scopeParams] = $this->storeProductScope();
             $beforeStmt = $this->pdo->prepare(
                 "SELECT p.product_id, p.sku, p.product_name, i.quantity_on_hand
                  FROM products p
@@ -475,8 +464,8 @@ class ProductService
 
     public function assignGeneratedBarcode(int $productId, int $userId): string
     {
-        if (function_exists('require_inventory_management')) {
-            require_inventory_management();
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
         if ($productId <= 0) {
             throw new RuntimeException('Invalid product selected.');
@@ -484,7 +473,7 @@ class ProductService
 
         $this->pdo->beginTransaction();
         try {
-            [$scopeSql, $scopeParams] = $this->branchScope();
+            [$scopeSql, $scopeParams] = $this->storeProductScope();
             $stmt = $this->pdo->prepare(
                 "SELECT product_id, sku, barcode, product_name FROM products WHERE product_id = ?{$scopeSql} FOR UPDATE"
             );
@@ -535,7 +524,7 @@ class ProductService
             return null;
         }
 
-        [$scopeSql, $scopeParams] = $this->branchScope();
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
             "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.brand, p.unit_price,
                     p.status, c.category_name
@@ -575,9 +564,9 @@ class ProductService
         throw new RuntimeException('Unable to generate a unique barcode. Please try again.');
     }
 
-    public function getProductsForManagement(?int $branchId = null): array
+    public function getProductsForManagement(): array
     {
-        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand, c.category_name
              FROM products p
@@ -616,9 +605,9 @@ class ProductService
         return $this->pdo->query("SELECT * FROM categories")->fetchAll();
     }
 
-    public function getActiveProducts(?int $branchId = null): array
+    public function getActiveProducts(): array
     {
-        [$scopeSql, $scopeParams] = $this->branchScope($branchId);
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
             "SELECT p.product_id, p.sku, p.barcode, p.product_name, i.quantity_on_hand
              FROM products p
@@ -630,12 +619,13 @@ class ProductService
         return $stmt->fetchAll();
     }
 
-    private function branchScope(?int $branchId = null): array
+    private function storeProductScope(): array
     {
-        if (!function_exists('branch_scope')) {
-            return ['', []];
+        if (function_exists('store_product_scope')) {
+            return store_product_scope('p');
         }
-        return branch_scope('p', $branchId);
+
+        return (new App\Store\StoreScope($this->pdo))->productScope('p');
     }
 
     private function createProductBatch(

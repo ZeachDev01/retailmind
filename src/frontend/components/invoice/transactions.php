@@ -2,21 +2,30 @@
 // components/invoice/transactions.php - Inventory Transaction History
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
-require_role(['admin', 'inventory_manager']);
+
+use App\Authorization\RoleCapabilityPolicy;
+
+require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
+$storeId = store_scope_id($pdo);
 
 // Get transaction history
-$transactions = $pdo->query(
+$transactionStatement = $pdo->prepare(
     "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.barcode, p.product_name, u.full_name AS moved_by_name, i.quantity_on_hand
      FROM stock_movements sm
      JOIN products p ON sm.product_id = p.product_id
      JOIN inventory i ON p.product_id = i.product_id
      LEFT JOIN users u ON sm.moved_by = u.user_id
+     WHERE p.branch_id = ?
      ORDER BY sm.moved_at DESC
      LIMIT 100"
-)->fetchAll();
+);
+$transactionStatement->execute([$storeId]);
+$transactions = $transactionStatement->fetchAll();
 
 $role = current_role();
-$back_url = $role === 'inventory_manager' ? app_url('components/inventory_management/inventory_overview.php') : app_url('components/dashboard.php');
+$back_url = $role === 'inventory_manager'
+    ? app_url('components/inventory_management/inventory_overview.php')
+    : app_url('components/administrator/dashboard.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">

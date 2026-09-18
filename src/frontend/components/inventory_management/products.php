@@ -5,10 +5,9 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
 require_role(['admin', 'super_admin', 'inventory_manager']);
 
-$canManageInventory = has_privilege('manage_inventory');
+$canManageInventory = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 $canDirectAdjust = $canManageInventory;
 $productService = new ProductService($pdo);
-$selectedBranchId = selected_inventory_branch_id($pdo);
 
 function product_ids_from_request($value): array
 {
@@ -25,7 +24,7 @@ function redirect_products(string $type, string $message): void
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
 
-    require_inventory_management();
+    require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 
     if ($action === 'create_category') {
         csrf_verify();
@@ -99,7 +98,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'variant_label' => $_POST['variant_label'] ?? '',
                 'expiration_date' => $_POST['expiration_date'] ?? null,
                 'product_image' => $productImage,
-                'branch_id' => $_POST['branch_id'] ?? '',
                 'status' => $_POST['status'] ?? 'active',
                 'initial_stock_quantity' => 0,
             ], (int)$_SESSION['user_id']);
@@ -164,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Select at least one product.');
             }
             $placeholders = implode(',', array_fill(0, count($productIds), '?'));
-            [$bulkScopeSql, $bulkScopeParams] = branch_scope('products');
+            [$bulkScopeSql, $bulkScopeParams] = store_product_scope('products');
 
             if ($action === 'bulk_status') {
                 $status = in_array($_POST['status'] ?? '', ['active', 'inactive'], true) ? $_POST['status'] : '';
@@ -192,11 +190,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $categories = $productService->getCategories();
+$selectedBranchId = selected_inventory_branch_id($pdo);
 $branches = $pdo->query("SELECT branch_id, branch_name, branch_code FROM branches WHERE status = 'active' ORDER BY branch_name")->fetchAll();
-$products = $productService->getProductsForManagement($selectedBranchId);
-$activeProducts = $productService->getActiveProducts($selectedBranchId);
+$products = $productService->getProductsForManagement();
+$activeProducts = $productService->getActiveProducts();
 $variantParents = $products;
 $totalProducts = count($products);
+$lowCount = 0;
+$outCount = 0;
+$withoutBarcodeCount = 0;
+foreach ($products as $product) {
+    $quantity = (int)($product['quantity_on_hand'] ?? 0);
+    $threshold = max((int)($product['reorder_level'] ?? 0), (int)($product['safety_stock'] ?? 0));
+    if ($quantity <= 0) {
+        $outCount++;
+    } elseif ($quantity <= $threshold) {
+        $lowCount++;
+    }
+    if (trim((string)($product['barcode'] ?? '')) === '') {
+        $withoutBarcodeCount++;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -721,9 +735,6 @@ $totalProducts = count($products);
                             <div class="form-group"><label>Category *</label><select name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
-                            <?php if (is_system_admin()): ?><div class="form-group"><label>Branch *</label><select name="branch_id" required>
-                                        <option value="">Select branch</option><?php foreach ($branches as $branch): ?><option value="<?= (int)$branch['branch_id'] ?>" <?= $selectedBranchId === (int)$branch['branch_id'] ? 'selected' : '' ?>><?= htmlspecialchars($branch['branch_name'] . ' (' . $branch['branch_code'] . ')') ?></option><?php endforeach; ?>
-                                    </select></div><?php endif; ?>
                             <div class="form-group"><label>Parent Product Family</label><select name="parent_product_id">
                                     <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
                                 </select></div>

@@ -19,8 +19,8 @@ class ReceivingService
 
     public function receiveStock(array $data, int $userId): array
     {
-        if (function_exists('require_inventory_management')) {
-            require_inventory_management();
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
         $productId = (int)($data['product_id'] ?? 0);
         $quantityMode = ($data['quantity_mode'] ?? 'units') === 'packages' ? 'packages' : 'units';
@@ -59,8 +59,9 @@ class ReceivingService
             $remainingBefore = null;
             $requestStatus = null;
 
-            $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, cost_price, preferred_supplier FROM products WHERE product_id = ? AND status = 'active' FOR UPDATE");
-            $productStmt->execute([$productId]);
+            [$scopeSql, $scopeParams] = $this->productScope();
+            $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, cost_price, preferred_supplier FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
+            $productStmt->execute(array_merge([$productId], $scopeParams));
             $product = $productStmt->fetch(PDO::FETCH_ASSOC);
             if (!$product) {
                 throw new RuntimeException('Active product not found.');
@@ -284,7 +285,8 @@ class ReceivingService
 
     public function getPendingReplenishmentRequests(): array
     {
-        return $this->pdo->query("SELECT rr.request_id, rr.product_id, rr.request_qty, rr.status, p.sku, p.product_name,
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare("SELECT rr.request_id, rr.product_id, rr.request_qty, rr.status, p.sku, p.product_name,
                                         COALESCE(received.received_to_date, 0) AS received_to_date,
                                         GREATEST(rr.request_qty - COALESCE(received.received_to_date, 0), 0) AS remaining_qty
                                  FROM replenishment_requests rr
@@ -295,13 +297,18 @@ class ReceivingService
                                      WHERE replenishment_request_id IS NOT NULL
                                      GROUP BY replenishment_request_id
                                  ) received ON received.replenishment_request_id = rr.request_id
-                                 WHERE rr.status IN ('approved', 'partially_received')
-                                 ORDER BY rr.request_date ASC")->fetchAll();
+                                 WHERE rr.status IN ('approved', 'partially_received'){$scopeSql}
+                                 ORDER BY rr.request_date ASC");
+        $stmt->execute($scopeParams);
+        return $stmt->fetchAll();
     }
 
     public function getActiveProducts(): array
     {
-        return $this->pdo->query("SELECT product_id, sku, product_name, cost_price, units_per_package, base_unit, receiving_unit FROM products WHERE status = 'active' ORDER BY product_name")->fetchAll();
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare("SELECT product_id, sku, product_name, cost_price, units_per_package, base_unit, receiving_unit FROM products p WHERE status = 'active'{$scopeSql} ORDER BY product_name");
+        $stmt->execute($scopeParams);
+        return $stmt->fetchAll();
     }
 
     public function getReceivablePurchaseOrderItems(): array
@@ -331,6 +338,15 @@ class ReceivingService
                         LIMIT 20");
         $stmt->execute([$userId]);
         return $stmt->fetchAll();
+    }
+
+    private function productScope(): array
+    {
+        if (function_exists('store_product_scope')) {
+            return store_product_scope('p');
+        }
+
+        return (new App\Store\StoreScope($this->pdo))->productScope('p');
     }
 
     private function getRequestForReceiving(int $requestId): ?array

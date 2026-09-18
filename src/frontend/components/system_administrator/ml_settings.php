@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 
 $message = '';
 $messageClass = '';

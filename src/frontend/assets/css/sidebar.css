@@ -251,12 +251,11 @@ body.no-scroll { overflow: hidden; }
     width: 36px;
     height: 36px;
     flex: 0 0 36px;
-    display: grid;
-    place-items: center;
     border-radius: 10px;
     background: linear-gradient(135deg, #2563eb, #38bdf8);
     color: #fff;
     font-weight: 800;
+    overflow: hidden;
 }
 .sidebar-profile-copy { min-width: 0; flex: 1; }
 .sidebar-profile-copy strong,

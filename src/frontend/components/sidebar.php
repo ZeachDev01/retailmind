@@ -11,15 +11,22 @@ try {
     $notificationCount = 0;
 }
 $sidebarUserName = trim((string)($_SESSION['full_name'] ?? 'RetailMind User'));
-$sidebarInitials = '';
-foreach (preg_split('/\s+/', $sidebarUserName) ?: [] as $namePart) {
-    if ($namePart !== '') {
-        $sidebarInitials .= strtoupper(substr($namePart, 0, 1));
-    }
-}
-$sidebarInitials = substr($sidebarInitials ?: 'RM', 0, 2);
+$sidebarProfileImage = isset($_SESSION['profile_image']) ? (string)$_SESSION['profile_image'] : null;
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
-$commandProductTarget = in_array($role, ['admin', 'super_admin', 'inventory_manager'], true) ? app_url('components/inventory_management/products.php') : app_url('components/cashier/pos.php');
+$avatarStylesheetPath = __DIR__ . '/../assets/css/avatars.css';
+$avatarStylesheetVersion = is_file($avatarStylesheetPath) ? (string)filemtime($avatarStylesheetPath) : '1';
+$avatarStylesheetUrl = app_url('assets/css/avatars.css') . '?v=' . rawurlencode($avatarStylesheetVersion);
+$commandProductTarget = match ($role) {
+    'super_admin' => app_url('components/inventory_management/inventory_overview.php'),
+    'admin', 'inventory_manager' => app_url('components/inventory_management/products.php'),
+    default => app_url('components/cashier/pos.php'),
+};
+$mobileHomeTarget = match ($role) {
+    'super_admin' => 'components/super_administrator/dashboard.php',
+    'admin' => 'components/administrator/dashboard.php',
+    'inventory_manager' => 'components/inventory_management/dashboard.php',
+    default => 'components/cashier/pos.php',
+};
 $flashMessages = [];
 foreach (['success', 'error', 'warning', 'info'] as $flashType) {
     $flashKey = '_flash_' . $flashType;
@@ -80,11 +87,8 @@ function sidebar_item_paths(array $items): array
 
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
-    $isAuditLog = ($item['path'] ?? '') === 'components/modals/audit_log.php';
-    $isFiscalPeriods = ($item['path'] ?? '') === 'components/modals/fiscal_periods.php';
-    $isSystemHealth = ($item['path'] ?? '') === 'components/modals/system_health.php';
 ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?><?= $isAuditLog ? ' data-audit-log-open' : '' ?><?= $isFiscalPeriods ? ' data-fiscal-periods-open' : '' ?><?= $isSystemHealth ? ' data-system-health-open' : '' ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
 <?php
 }
 
@@ -130,31 +134,22 @@ $notificationItems = [
     ['path' => 'components/notification/notifications.php', 'icon' => 'bi-bell', 'label' => 'View Notifications'],
 ];
 
-if ($role !== 'cashier') {
-    $notificationItems[] = ['path' => 'components/notification/notification_preferences.php', 'icon' => 'bi-gear', 'label' => 'Preferences'];
-}
-
-$adminSystemItems = [
-    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Manage Users'],
-    ['path' => 'components/modals/audit_log.php', 'icon' => 'bi-clock-history', 'label' => 'Audit Log'],
-    ['path' => 'components/modals/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
-    ['path' => 'components/modals/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
-    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-sliders', 'label' => 'ML Settings'],
+$superAdministratorSystemItems = [
+    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-shield-lock', 'label' => 'Users & Access'],
+    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Protected Audit Records'],
+    ['path' => 'components/system_administrator/emergency_access.php', 'icon' => 'bi-exclamation-octagon', 'label' => 'Emergency Access'],
+    ['path' => 'components/system_administrator/recovery_account.php', 'icon' => 'bi-safe', 'label' => 'Recovery Account'],
+    ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
+    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-cpu', 'label' => 'ML Operation'],
     ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
-    ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'System Settings'],
+    ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'Platform Settings'],
 ];
 
-$adminStockItems = [
-    ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
-    ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Inventory Insights'],
-    ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products & Stock'],
-    ['path' => 'components/invoice/transactions.php', 'icon' => 'bi-receipt', 'label' => 'Inventory Transactions'],
-    ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Counts'],
-    ['path' => 'components/inventory_management/csv_import.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'CSV Import'],
-    ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
-    ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Replenishment Requests'],
-    ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
-    ['path' => 'components/invoice/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
+$administratorSystemItems = [
+    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Store Staff'],
+    ['path' => 'components/administrator/store_settings.php', 'icon' => 'bi-sliders', 'label' => 'Store Settings'],
+    ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
+    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Operational Audit'],
 ];
 
 $managerInventoryItems = [
@@ -180,13 +175,10 @@ $salesHistoryItems = [
     ['path' => 'components/invoice/sales_history.php', 'icon' => 'bi-clock-history', 'label' => 'Sales History'],
 ];
 
-$reportItems = [
-    ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecasting'],
+$administratorReportItems = [
     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Forecast Analytics'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
-    ['path' => 'components/report/stock_receiving.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'Stock Receiving'],
-    ['path' => 'components/report/inventory_adjustments.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Adjustments'],
     ['path' => 'components/report/report_generation.php', 'icon' => 'bi-file-earmark-bar-graph', 'label' => 'Report Generation'],
 ];
 
@@ -202,27 +194,31 @@ $workspaceSection = [
     ],
 ];
 
-$adminSections = [
+$superAdministratorSections = [
     [
-        'title' => 'Administration',
+        'title' => 'Platform Governance',
         'items' => [
-            ['path' => 'components/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard'],
-            ['icon' => 'bi-gear', 'label' => 'System Administration', 'items' => $adminSystemItems],
+            ['path' => 'components/super_administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Control Center'],
+            ['icon' => 'bi-shield-lock', 'label' => 'Platform Administration', 'items' => $superAdministratorSystemItems],
         ],
     ],
+];
+
+$administratorSections = [
     [
-        'title' => 'Inventory',
+        'title' => 'Store Operations',
         'items' => [
-            ['icon' => 'bi-boxes', 'label' => 'Inventory Management', 'items' => $adminStockItems],
-            ['icon' => 'bi-receipt', 'label' => 'Sales', 'items' => $adminSalesItems],
-            ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Reports', 'items' => $reportItems],
+            ['path' => 'components/administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Store Overview'],
+            ['icon' => 'bi-shop', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
+            ['icon' => 'bi-receipt', 'label' => 'Sales Oversight', 'items' => $adminSalesItems],
+            ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Store Reports', 'items' => $administratorReportItems],
         ],
     ],
 ];
 
 $roleSections = [
-    'admin' => $adminSections,
-    'super_admin' => $adminSections,
+    'super_admin' => $superAdministratorSections,
+    'admin' => $administratorSections,
     'inventory_manager' => [
         [
             'title' => 'Operations',
@@ -272,6 +268,7 @@ $roleSections = [
 
 $sections = $roleSections[$role] ?? [];
 ?>
+<link rel="stylesheet" href="<?= sidebar_e($avatarStylesheetUrl) ?>" data-avatar-styles>
 <script>
     (function() {
         var href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';
@@ -284,25 +281,25 @@ $sections = $roleSections[$role] ?? [];
     })();
 </script>
 <?php if (!isset($isEmbedded) || !$isEmbedded): ?>
-    <div class="admin-mobile-topbar" aria-label="Mobile navigation">
-        <div class="admin-mobile-brand">
-            <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
-                <i class="bi bi-list" aria-hidden="true"></i>
-            </button>
-            <button type="button" class="admin-mobile-logo" id="mobileBrandToggle" aria-label="Open sidebar" aria-expanded="false" aria-controls="appSidebar">
-                <span class="admin-mobile-logo-mark"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
-                <span class="admin-mobile-logo-text">RetailMind</span>
-            </button>
-        </div>
-        <div class="admin-mobile-tools">
-            <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
-                <i class="bi bi-search" aria-hidden="true"></i>
-            </button>
-            <a class="admin-mobile-avatar" href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>" aria-label="Open user information">
-                <?= sidebar_e($sidebarInitials) ?>
-            </a>
-        </div>
+<div class="admin-mobile-topbar" aria-label="Mobile navigation">
+    <div class="admin-mobile-brand">
+        <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
+            <i class="bi bi-list" aria-hidden="true"></i>
+        </button>
+        <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
+            <span class="admin-mobile-logo-mark"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+            <span class="admin-mobile-logo-text">RetailMind</span>
+        </a>
     </div>
+    <div class="admin-mobile-tools">
+        <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
+            <i class="bi bi-search" aria-hidden="true"></i>
+        </button>
+        <a class="admin-mobile-avatar" href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>" aria-label="Open user information">
+            <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage) ?>
+        </a>
+    </div>
+</div>
 <?php endif; ?>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="appSidebar">
@@ -324,7 +321,7 @@ $sections = $roleSections[$role] ?? [];
 
     <div class="sidebar-footer">
         <button type="button" class="sidebar-profile" id="sidebarProfile" aria-expanded="false" aria-controls="sidebarProfileMenu">
-            <span class="sidebar-avatar"><?= sidebar_e($sidebarInitials) ?></span>
+            <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage, 'sidebar-avatar') ?>
             <span class="sidebar-profile-copy">
                 <strong><?= sidebar_e($sidebarUserName) ?></strong>
                 <span><?= sidebar_e($sidebarRoleLabel) ?></span>
@@ -334,7 +331,7 @@ $sections = $roleSections[$role] ?? [];
         <div class="sidebar-profile-menu" id="sidebarProfileMenu">
             <a href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>"><i class="bi bi-person-circle" aria-hidden="true"></i><span>User Info</span></a>
             <?php if ($role !== 'cashier'): ?>
-                <a href="<?= sidebar_e(app_url('components/notification/notification_preferences.php')) ?>"><i class="bi bi-sliders" aria-hidden="true"></i><span>Preferences</span></a>
+                <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>"><i class="bi bi-sliders" aria-hidden="true"></i><span>Preferences</span></a>
             <?php endif; ?>
             <a href="<?= sidebar_e(app_url('components/auth/logout.php')) ?>" class="sidebar-logout"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>Logout</span></a>
         </div>
@@ -365,181 +362,6 @@ $sections = $roleSections[$role] ?? [];
         <div class="command-footer"><span>↑↓ Navigate</span><span>Enter Open</span><span>Esc Close</span></div>
     </section>
 </div>
-
-<?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-    <div class="user-management-overlay" id="userManagementOverlay" aria-hidden="true">
-        <div class="user-management-frame" role="dialog" aria-modal="true" aria-label="Users and access management">
-            <iframe title="Users &amp; Access Management" id="userManagementFrame" loading="lazy"></iframe>
-        </div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var userOverlay = document.getElementById('userManagementOverlay');
-            var userFrame = document.getElementById('userManagementFrame');
-            if (!userOverlay || !userFrame) return;
-            var userSource = <?= json_encode(app_url('components/user_manager/user_manager.php?embed=1')) ?>;
-
-            function closeUserManagement() {
-                userOverlay.classList.remove('open');
-                userOverlay.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('user-management-open');
-            }
-            document.querySelectorAll('[data-user-management-open]').forEach(function(link) {
-                link.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    userFrame.src = userSource;
-                    userOverlay.classList.add('open');
-                    userOverlay.setAttribute('aria-hidden', 'false');
-                    document.body.classList.add('user-management-open');
-                });
-            });
-            userOverlay.querySelectorAll('[data-user-management-close]').forEach(function(button) {
-                button.addEventListener('click', closeUserManagement);
-            });
-            userOverlay.addEventListener('click', function(event) {
-                if (event.target === userOverlay) closeUserManagement();
-            });
-            window.addEventListener('message', function(event) {
-                if (event.data && event.data.type === 'close-user-management') closeUserManagement();
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && userOverlay.classList.contains('open')) closeUserManagement();
-            });
-        });
-    </script>
-<?php endif; ?>
-
-<?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-    <div class="system-health-overlay" id="systemHealthOverlay" aria-hidden="true">
-        <div class="system-health-frame" role="dialog" aria-modal="true" aria-label="System health">
-            <button type="button" class="system-health-frame-close" data-system-health-close aria-label="Close system health"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-            <iframe title="System Health" id="systemHealthFrame" loading="lazy"></iframe>
-        </div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var healthOverlay = document.getElementById('systemHealthOverlay');
-            var healthFrame = document.getElementById('systemHealthFrame');
-            if (!healthOverlay || !healthFrame) return;
-            var healthSource = <?= json_encode(app_url('components/modals/system_health.php?embed=1')) ?>;
-
-            function closeSystemHealth() {
-                healthOverlay.classList.remove('open');
-                healthOverlay.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('system-health-open');
-            }
-            document.querySelectorAll('[data-system-health-open]').forEach(function(link) {
-                link.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    healthFrame.src = healthSource;
-                    healthOverlay.classList.add('open');
-                    healthOverlay.setAttribute('aria-hidden', 'false');
-                    document.body.classList.add('system-health-open');
-                });
-            });
-            healthOverlay.querySelectorAll('[data-system-health-close]').forEach(function(button) {
-                button.addEventListener('click', closeSystemHealth);
-            });
-            healthOverlay.addEventListener('click', function(event) {
-                if (event.target === healthOverlay) closeSystemHealth();
-            });
-            window.addEventListener('message', function(event) {
-                if (event.data && event.data.type === 'close-system-health') closeSystemHealth();
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && healthOverlay.classList.contains('open')) closeSystemHealth();
-            });
-        });
-    </script>
-<?php endif; ?>
-
-<?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-    <div class="fiscal-periods-overlay" id="fiscalPeriodsOverlay" aria-hidden="true">
-        <div class="fiscal-periods-frame" role="dialog" aria-modal="true" aria-label="Fiscal period management">
-            <button type="button" class="fiscal-periods-frame-close" data-fiscal-periods-close aria-label="Close fiscal period management"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-            <iframe title="Fiscal Period Management" id="fiscalPeriodsFrame" loading="lazy"></iframe>
-        </div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var fiscalOverlay = document.getElementById('fiscalPeriodsOverlay');
-            var fiscalFrame = document.getElementById('fiscalPeriodsFrame');
-            if (!fiscalOverlay || !fiscalFrame) return;
-            var fiscalSource = <?= json_encode(app_url('components/modals/fiscal_periods.php?embed=1')) ?>;
-
-            function closeFiscalPeriods() {
-                fiscalOverlay.classList.remove('open');
-                fiscalOverlay.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('fiscal-periods-open');
-            }
-            document.querySelectorAll('[data-fiscal-periods-open]').forEach(function(link) {
-                link.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    fiscalFrame.src = fiscalSource;
-                    fiscalOverlay.classList.add('open');
-                    fiscalOverlay.setAttribute('aria-hidden', 'false');
-                    document.body.classList.add('fiscal-periods-open');
-                });
-            });
-            fiscalOverlay.querySelectorAll('[data-fiscal-periods-close]').forEach(function(button) {
-                button.addEventListener('click', closeFiscalPeriods);
-            });
-            fiscalOverlay.addEventListener('click', function(event) {
-                if (event.target === fiscalOverlay) closeFiscalPeriods();
-            });
-            window.addEventListener('message', function(event) {
-                if (event.data && event.data.type === 'close-fiscal-periods') closeFiscalPeriods();
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && fiscalOverlay.classList.contains('open')) closeFiscalPeriods();
-            });
-        });
-    </script>
-<?php endif; ?>
-
-<?php if (in_array($role, ['admin', 'super_admin'], true)): ?>
-    <div class="audit-log-overlay" id="auditLogOverlay" aria-hidden="true">
-        <div class="audit-log-frame" role="dialog" aria-modal="true" aria-label="Audit activity log">
-            <button type="button" class="audit-log-frame-close" data-audit-log-close aria-label="Close audit log"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-            <iframe title="Audit Activity Log" id="auditLogFrame" loading="lazy"></iframe>
-        </div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var auditOverlay = document.getElementById('auditLogOverlay');
-            var auditFrame = document.getElementById('auditLogFrame');
-            if (!auditOverlay || !auditFrame) return;
-            var auditSource = <?= json_encode(app_url('components/modals/audit_log.php?embed=1')) ?>;
-
-            function closeAuditLog() {
-                auditOverlay.classList.remove('open');
-                auditOverlay.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('audit-log-open');
-            }
-            document.querySelectorAll('[data-audit-log-open]').forEach(function(link) {
-                link.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    auditFrame.src = auditSource;
-                    auditOverlay.classList.add('open');
-                    auditOverlay.setAttribute('aria-hidden', 'false');
-                    document.body.classList.add('audit-log-open');
-                });
-            });
-            auditOverlay.querySelectorAll('[data-audit-log-close]').forEach(function(button) {
-                button.addEventListener('click', closeAuditLog);
-            });
-            auditOverlay.addEventListener('click', function(event) {
-                if (event.target === auditOverlay) closeAuditLog();
-            });
-            window.addEventListener('message', function(event) {
-                if (event.data && event.data.type === 'close-audit-log') closeAuditLog();
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && auditOverlay.classList.contains('open')) closeAuditLog();
-            });
-        });
-    </script>
-<?php endif; ?>
 
 <div id="rm-flash-messages" hidden<?php foreach ($flashMessages as $flashType => $flashMessage): ?> data-<?= sidebar_e($flashType) ?>="<?= sidebar_e($flashMessage) ?>" <?php endforeach; ?>></div>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">

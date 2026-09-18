@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 
 $message = '';
 $messageClass = '';
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageClass = 'tag-warning';
         } else {
             save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Store settings update', 'System Settings', null, null, $updates);
+            log_activity($pdo, (int)$_SESSION['user_id'], 'Store settings update', 'Store Settings', null, null, $updates);
             $message = 'Store and receipt settings saved.';
             $messageClass = 'tag-success';
         }

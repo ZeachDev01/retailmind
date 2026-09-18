@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/ReceivingService.php';
-require_role(['admin', 'super_admin', 'cashier']);
+require_role(['admin', 'super_admin', 'inventory_manager']);
 
 $receivingService = new ReceivingService($pdo);
 
@@ -13,7 +13,7 @@ $error = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_inventory_management();
+    require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     try {

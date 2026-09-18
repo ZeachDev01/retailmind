@@ -1,0 +1,286 @@
+.system-health-page .main-content {
+    min-width: 0;
+}
+
+.system-health-heading {
+    align-items: flex-start;
+}
+
+.system-health-checked {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.system-health-heading .page-heading-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.system-health-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.system-health-stats .system-health-critical {
+    border-color: #fca5a5;
+    background: #fff7f7;
+}
+
+.system-health-stats .system-health-critical .stat-icon {
+    background: rgba(220, 38, 38, 0.11);
+    color: var(--danger);
+}
+
+.system-health-stats .system-health-critical.is-clear {
+    border-color: #86efac;
+    background: #f0fdf4;
+}
+
+.system-health-stats .system-health-critical.is-clear .stat-icon {
+    background: rgba(22, 163, 74, 0.12);
+    color: var(--success);
+}
+
+.system-health-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(290px, 0.75fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.system-health-checks,
+.system-health-maintenance {
+    min-width: 0;
+}
+
+.system-health-checks .section-header,
+.system-health-maintenance .section-header {
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.system-health-checks .section-header h2,
+.system-health-maintenance .section-header h2 {
+    margin-bottom: 0.25rem;
+    font-size: 1.05rem;
+}
+
+.system-health-check-count {
+    flex: 0 0 auto;
+    padding: 0.28rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.system-health-groups {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.system-health-group h3 {
+    margin-bottom: 0.55rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.system-health-group-list {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.health-check {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.85rem;
+    align-items: start;
+    padding: 0.9rem 1rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.health-check:last-child {
+    border-bottom: 0;
+}
+
+.health-icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-size: 1rem;
+}
+
+.health-icon.healthy {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.health-icon.warning {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.health-icon.critical {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.health-check-copy {
+    min-width: 0;
+}
+
+.health-check-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.health-check-title strong {
+    overflow-wrap: anywhere;
+    font-size: 0.9rem;
+}
+
+.health-status {
+    flex: 0 0 auto;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+
+.health-status.healthy {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.health-status.warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.health-status.critical {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.health-detail {
+    margin-top: 0.25rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+.system-health-maintenance {
+    position: sticky;
+    top: 1.25rem;
+}
+
+.maintenance-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.maintenance-item {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.7rem;
+    padding: 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface-soft);
+}
+
+.maintenance-icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary);
+}
+
+.maintenance-item strong {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.84rem;
+}
+
+.maintenance-item code {
+    display: block;
+    overflow-x: auto;
+    padding: 0.45rem 0.55rem;
+    border-radius: 7px;
+    background: #111827;
+    color: #e5edf8;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.system-health-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 0.76rem;
+}
+
+@media (max-width: 1050px) {
+    .system-health-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .system-health-maintenance {
+        position: static;
+    }
+}
+
+@media (max-width: 760px) {
+    .system-health-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .system-health-heading .page-heading-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+@media (max-width: 520px) {
+    .system-health-heading .page-heading-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .system-health-heading .decision-pill {
+        justify-content: center;
+    }
+
+    .health-check-title {
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .system-health-check-count {
+        display: none;
+    }
+}

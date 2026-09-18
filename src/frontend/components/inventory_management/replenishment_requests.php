@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_role(['admin', 'super_admin', 'inventory_manager']);
-$isAdmin = in_array(current_role(), ['admin', 'super_admin'], true);
+$isAdmin = current_role() === 'admin';
 
 $message = '';
 $error = '';
@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     try {
         if ($action === 'create') {
-            require_inventory_management();
+            require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
             $productId = (int)($_POST['product_id'] ?? 0);
             $requestQty = (int)($_POST['request_qty'] ?? 0);
             $notes = trim((string)($_POST['notes'] ?? ''));
@@ -25,6 +25,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $overrideReason = trim((string)($_POST['override_reason'] ?? ''));
             if ($productId <= 0 || $requestQty <= 0) {
                 throw new RuntimeException('Product and quantity are required.');
+            }
+            [$scopeSql, $scopeParams] = store_product_scope('p');
+            $productStmt = $pdo->prepare("SELECT product_id FROM products p WHERE p.product_id = ?{$scopeSql}");
+            $productStmt->execute(array_merge([$productId], $scopeParams));
+            if (!$productStmt->fetchColumn()) {
+                throw new RuntimeException('Product not found in this Store.');
             }
             if ($source === 'ml_forecast' && $originalQty !== null && $requestQty !== $originalQty && $overrideReason === '') {
                 throw new RuntimeException('Explain why the forecast quantity was changed.');
@@ -51,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $message = "Replenishment request #{$requestId} created successfully";
         } elseif ($action === 'reject_forecast') {
-            require_inventory_management();
+            require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
             $predictionId = (int)($_POST['forecast_prediction_id'] ?? 0);
             $productId = (int)($_POST['product_id'] ?? 0);
             $originalQty = max(0, (int)($_POST['original_suggested_qty'] ?? 0));
@@ -73,8 +79,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Invalid request ID.');
             }
             $pdo->beginTransaction();
-            $beforeStmt = $pdo->prepare("SELECT * FROM replenishment_requests WHERE request_id = ? FOR UPDATE");
-            $beforeStmt->execute([$requestId]);
+            [$scopeSql, $scopeParams] = store_product_scope('p');
+            $beforeStmt = $pdo->prepare("SELECT rr.* FROM replenishment_requests rr JOIN products p ON p.product_id = rr.product_id WHERE rr.request_id = ?{$scopeSql} FOR UPDATE");
+            $beforeStmt->execute(array_merge([$requestId], $scopeParams));
             $before = $beforeStmt->fetch(PDO::FETCH_ASSOC);
             if (!$before) {
                 throw new RuntimeException('Replenishment request not found.');
@@ -86,9 +93,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('You cannot approve or reject your own replenishment request.');
             }
             $newStatus = $action === 'approve' ? 'approved' : 'rejected';
-            $stmt = $pdo->prepare("UPDATE replenishment_requests SET status = ?, approved_by = ?, approved_at = NOW()
-                                  WHERE request_id = ? AND status = 'pending' AND requested_by <> ?");
-            $stmt->execute([$newStatus, (int)$_SESSION['user_id'], $requestId, (int)$_SESSION['user_id']]);
+            $stmt = $pdo->prepare("UPDATE replenishment_requests rr JOIN products p ON p.product_id = rr.product_id
+                                  SET rr.status = ?, rr.approved_by = ?, rr.approved_at = NOW()
+                                  WHERE rr.request_id = ? AND rr.status = 'pending' AND rr.requested_by <> ?{$scopeSql}");
+            $stmt->execute(array_merge([$newStatus, (int)$_SESSION['user_id'], $requestId, (int)$_SESSION['user_id']], $scopeParams));
             if ($stmt->rowCount() === 0) {
                 throw new RuntimeException('The request changed before it could be reviewed.');
             }
@@ -119,17 +127,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get all products
-$products_stmt = $pdo->query("SELECT product_id, sku, product_name FROM products WHERE status = 'active' ORDER BY product_name");
-$products = $products_stmt->fetchAll();
+// Get all products in the server-derived Store scope.
+[$scopeSql, $scopeParams] = store_product_scope('p');
+$productsStmt = $pdo->prepare("SELECT product_id, sku, product_name FROM products p WHERE status = 'active'{$scopeSql} ORDER BY product_name");
+$productsStmt->execute($scopeParams);
+$products = $productsStmt->fetchAll();
 
-// Get replenishment requests
+// Get replenishment requests.
 $status_filter = $_GET['status'] ?? 'pending';
-$status_sql = '';
+$status_sql = 'WHERE 1 = 1';
 $status_param = [];
 if ($status_filter && $status_filter !== 'all') {
-    $status_sql = "WHERE rr.status = ?";
-    $status_param = [$status_filter];
+    $status_sql .= ' AND rr.status = ?';
+    $status_param[] = $status_filter;
 }
 
 $requests_stmt = $pdo->prepare("SELECT rr.*, p.sku, p.product_name, u.full_name as requested_by_name, au.full_name as approved_by_name,
@@ -145,9 +155,9 @@ $requests_stmt = $pdo->prepare("SELECT rr.*, p.sku, p.product_name, u.full_name 
                                     WHERE replenishment_request_id IS NOT NULL
                                     GROUP BY replenishment_request_id
                                 ) received ON received.replenishment_request_id = rr.request_id
-                                $status_sql
+                                $status_sql{$scopeSql}
                                 ORDER BY rr.request_date DESC");
-$requests_stmt->execute($status_param);
+$requests_stmt->execute(array_merge($status_param, $scopeParams));
 $requests = $requests_stmt->fetchAll();
 
 // Get stored predictions for Random Forest forecast suggestions

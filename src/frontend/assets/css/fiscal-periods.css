@@ -1,0 +1,320 @@
+.fiscal-period-page .main-content {
+    min-width: 0;
+}
+
+.fiscal-period-page .message {
+    margin-bottom: 1.25rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.fiscal-period-page .message.success {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.fiscal-period-page .message.error {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.fiscal-period-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fiscal-period-stats .fiscal-stat-locked {
+    border-color: #fecaca;
+    background: #fff7f7;
+}
+
+.fiscal-period-stats .fiscal-stat-locked .stat-icon {
+    background: rgba(220, 38, 38, 0.11);
+    color: var(--danger);
+}
+
+.fiscal-period-create {
+    margin-bottom: 1.75rem;
+}
+
+.fiscal-period-create .section-header {
+    margin-bottom: 1rem;
+}
+
+.fiscal-period-create .section-header h3 {
+    margin-bottom: 0.2rem;
+}
+
+.fiscal-period-form-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.25fr) repeat(2, minmax(170px, 0.8fr)) auto;
+    gap: 1rem;
+    align-items: end;
+}
+
+.fiscal-period-form-grid .form-group {
+    min-width: 0;
+    margin: 0;
+}
+
+.fiscal-period-form-grid input {
+    width: 100%;
+    min-height: 42px;
+}
+
+.fiscal-create-button {
+    min-height: 42px;
+    white-space: nowrap;
+}
+
+.fiscal-period-list {
+    min-width: 0;
+}
+
+.fiscal-period-list-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.fiscal-period-list-heading h2 {
+    font-size: 1.2rem;
+}
+
+.fiscal-period-list-heading p {
+    margin-top: 0.2rem;
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+.fiscal-period-count {
+    flex: 0 0 auto;
+    padding: 0.28rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card-bg);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.fiscal-period-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.fiscal-period-card {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 1.2rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card-bg);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.fiscal-period-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.fiscal-period-title {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.fiscal-period-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.fiscal-period-title h3 {
+    overflow-wrap: anywhere;
+    font-size: 1rem;
+}
+
+.fiscal-period-title span {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.fiscal-status-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+
+.fiscal-status-badge.open {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.fiscal-status-badge.closed {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.fiscal-status-badge.locked {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.fiscal-period-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem 1.2rem;
+    margin: 1rem 0;
+}
+
+.fiscal-period-details div {
+    min-width: 0;
+}
+
+.fiscal-period-details dt {
+    margin-bottom: 0.16rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.fiscal-period-details dd {
+    overflow-wrap: anywhere;
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+
+.fiscal-period-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 38px;
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.fiscal-period-actions form {
+    margin: 0;
+}
+
+.fiscal-period-actions .btn {
+    min-height: 38px;
+}
+
+.fiscal-action-close {
+    border: 1px solid #f59e0b;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.fiscal-action-close:hover {
+    background: #fef3c7;
+}
+
+.fiscal-action-lock {
+    border: 1px solid #fca5a5;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.fiscal-action-lock:hover {
+    background: #fee2e2;
+}
+
+.fiscal-read-only {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.fiscal-period-empty {
+    min-height: 210px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 0.35rem;
+    text-align: center;
+    color: var(--muted);
+}
+
+.fiscal-period-empty i {
+    margin-bottom: 0.3rem;
+    color: var(--primary);
+    font-size: 2rem;
+}
+
+.fiscal-period-empty strong {
+    color: var(--text);
+}
+
+@media (max-width: 1100px) {
+    .fiscal-period-form-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .fiscal-create-button {
+        width: max-content;
+    }
+}
+
+@media (max-width: 850px) {
+    .fiscal-period-stats,
+    .fiscal-period-card-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fiscal-period-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fiscal-create-button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 520px) {
+    .fiscal-period-card-header,
+    .fiscal-period-list-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .fiscal-period-details {
+        grid-template-columns: 1fr;
+    }
+
+    .fiscal-period-actions,
+    .fiscal-period-actions form,
+    .fiscal-period-actions .btn {
+        width: 100%;
+    }
+}

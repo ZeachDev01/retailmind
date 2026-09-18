@@ -24,6 +24,9 @@ if (!isset($allowedSizes[$sizeKey])) {
 $labelSize = $allowedSizes[$sizeKey];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'generate_barcode') {
+    if (current_role() === 'super_admin') {
+        require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+    }
     csrf_verify();
     try {
         $targetId = max(0, (int)($_POST['product_id'] ?? $productId));

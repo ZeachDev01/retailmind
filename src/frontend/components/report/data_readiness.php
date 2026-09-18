@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_role(['admin', 'inventory_manager']);
+
+use App\Authorization\RoleCapabilityPolicy;
+
+require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 $rows = get_forecasting_readiness($pdo);
 $counts = [];
 foreach ($rows as $row) { $counts[$row['forecast_status']] = ($counts[$row['forecast_status']] ?? 0) + 1; }

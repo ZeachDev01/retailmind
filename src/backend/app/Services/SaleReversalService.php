@@ -10,12 +10,14 @@ class SaleReversalService
     private PDO $pdo;
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
+    private App\Store\StoreScope $storeScope;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
         $this->notificationService = new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
+        $this->storeScope = new App\Store\StoreScope($pdo);
     }
 
     public function getSaleWithItems(int $saleId): ?array
@@ -25,9 +27,16 @@ class SaleReversalService
                     u.full_name AS cashier_name
              FROM sales s
              JOIN users u ON u.user_id = s.cashier_id
-             WHERE s.sale_id = ?"
+             WHERE s.sale_id = ? AND (
+                 u.branch_id = ? OR EXISTS (
+                     SELECT 1 FROM sale_items scope_si
+                     JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                     WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+                 )
+             )"
         );
-        $stmt->execute([$saleId]);
+        $storeId = $this->storeScope->id();
+        $stmt->execute([$saleId, $storeId, $storeId]);
         $sale = $stmt->fetch();
 
         if (!$sale) {
@@ -59,10 +68,15 @@ class SaleReversalService
 
     public function getReversals(?int $saleId = null): array
     {
-        $params = [];
-        $where = '';
+        $storeId = $this->storeScope->id();
+        $params = [$storeId, $storeId];
+        $where = 'WHERE (cashier.branch_id = ? OR EXISTS (
+            SELECT 1 FROM sale_items scope_si
+            JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+            WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+        ))';
         if ($saleId !== null) {
-            $where = 'WHERE sr.sale_id = ?';
+            $where .= ' AND sr.sale_id = ?';
             $params[] = $saleId;
         }
 
@@ -71,6 +85,7 @@ class SaleReversalService
                     approver.full_name AS approved_by_name
              FROM sale_reversals sr
              JOIN sales s ON s.sale_id = sr.sale_id
+             JOIN users cashier ON cashier.user_id = s.cashier_id
              LEFT JOIN users requester ON requester.user_id = sr.requested_by
              LEFT JOIN users approver ON approver.user_id = sr.approved_by
              $where
@@ -188,9 +203,19 @@ class SaleReversalService
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                "SELECT * FROM sale_reversals WHERE reversal_id = ? FOR UPDATE"
+                "SELECT sr.* FROM sale_reversals sr
+                 JOIN sales s ON s.sale_id = sr.sale_id
+                 JOIN users u ON u.user_id = s.cashier_id
+                 WHERE sr.reversal_id = ? AND (
+                     u.branch_id = ? OR EXISTS (
+                         SELECT 1 FROM sale_items scope_si
+                         JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                         WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+                     )
+                 ) FOR UPDATE"
             );
-            $stmt->execute([$reversalId]);
+            $storeId = $this->storeScope->id();
+            $stmt->execute([$reversalId, $storeId, $storeId]);
             $reversal = $stmt->fetch();
 
             if (!$reversal) {
@@ -298,11 +323,22 @@ class SaleReversalService
         }
 
         $stmt = $this->pdo->prepare(
-            "UPDATE sale_reversals
-             SET status = 'rejected', approved_by = ?, approved_at = CURRENT_TIMESTAMP, rejection_reason = ?
-             WHERE reversal_id = ? AND status = 'pending'"
+            "UPDATE sale_reversals sr
+             SET sr.status = 'rejected', sr.approved_by = ?, sr.approved_at = CURRENT_TIMESTAMP, sr.rejection_reason = ?
+             WHERE sr.reversal_id = ? AND sr.status = 'pending'
+               AND EXISTS (
+                   SELECT 1 FROM sales s JOIN users u ON u.user_id = s.cashier_id
+                   WHERE s.sale_id = sr.sale_id AND (
+                       u.branch_id = ? OR EXISTS (
+                           SELECT 1 FROM sale_items scope_si
+                           JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                           WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+                       )
+                   )
+               )"
         );
-        $stmt->execute([$rejectedBy, $reason, $reversalId]);
+        $storeId = $this->storeScope->id();
+        $stmt->execute([$rejectedBy, $reason, $reversalId, $storeId, $storeId]);
 
         if ($stmt->rowCount() === 0) {
             throw new RuntimeException('Only pending reversal requests can be rejected.');

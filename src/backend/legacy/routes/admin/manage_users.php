@@ -2,17 +2,27 @@
 // admin/manage_users.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_role(['admin']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS);
 
 $message = '';
 $messageClass = '';
 
 function get_user_snapshot(PDO $pdo, int $userId): ?array {
-    $stmt = $pdo->prepare("SELECT user_id, username, full_name, email, status, role_id FROM users WHERE user_id = ?");
+    $stmt = $pdo->prepare(
+        "SELECT u.user_id, u.username, u.full_name, u.email, u.status, u.role_id, r.role_name AS role
+         FROM users u JOIN roles r ON r.role_id = u.role_id
+         WHERE u.user_id = ? AND u.is_recovery_account = 0"
+    );
     $stmt->execute([$userId]);
     $user = $stmt->fetch();
 
     return $user ?: null;
+}
+
+function get_role_name(PDO $pdo, int $roleId): string {
+    $stmt = $pdo->prepare('SELECT role_name FROM roles WHERE role_id = ?');
+    $stmt->execute([$roleId]);
+    return (string)$stmt->fetchColumn();
 }
 
 // Handle create user
@@ -47,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 'username' => $_POST['username'] ?? '',
                 'email' => $_POST['email'] ?? '',
                 'role_id' => (int)($_POST['role_id'] ?? 0),
+                'role' => get_role_name($pdo, (int)($_POST['role_id'] ?? 0)),
                 'status' => 'active',
             ]
         );
@@ -145,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $messageClass = 'tag-warning';
     } else {
         try {
-            $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+            $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND is_recovery_account = 0");
             $stmt->execute([$userId]);
 
             if ($stmt->rowCount() > 0) {
@@ -185,7 +196,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 $roles = $pdo->query("SELECT * FROM roles")->fetchAll();
 $users = $pdo->query(
-    "SELECT u.*, r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id ORDER BY u.created_at DESC"
+    "SELECT u.*, r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id
+     WHERE u.is_recovery_account = 0 ORDER BY u.created_at DESC"
 )->fetchAll();
 $activeCount = count(array_filter($users, fn($user) => $user['status'] === 'active'));
 $disabledCount = count($users) - $activeCount;

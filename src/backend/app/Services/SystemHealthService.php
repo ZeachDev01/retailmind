@@ -2,7 +2,7 @@
 
 use App\Database\Schema;
 
-final class SystemHealthService
+final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
 {
     public function __construct(private PDO $pdo, private string $backendPath) {}
 
@@ -61,7 +61,7 @@ final class SystemHealthService
     private function storageChecks(): array
     {
         $checks = [];
-        foreach (['sessions', 'logs', 'backups', 'imports', 'exports', 'receipts'] as $directory) {
+        foreach (['sessions', 'logs', 'backups', 'imports', 'exports', 'receipts', 'profile-images'] as $directory) {
             $path = $this->backendPath . '/storage/' . $directory;
             $exists = is_dir($path);
             $writable = $exists && is_writable($path);

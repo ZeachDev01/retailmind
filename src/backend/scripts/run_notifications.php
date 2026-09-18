@@ -7,12 +7,40 @@ require_once dirname(__DIR__) . '/includes/functions.php';
 check_and_notify_low_stock($pdo);
 
 $recipients = $pdo->query(
-    "SELECT u.user_id, u.email, COALESCE(np.notify_email, 0) AS notify_email,
+    "SELECT u.user_id, u.email, r.role_name, COALESCE(np.notify_email, 0) AS notify_email,
             COALESCE(np.notify_inapp, 1) AS notify_inapp
      FROM users u JOIN roles r ON r.role_id = u.role_id
      LEFT JOIN notification_preferences np ON np.user_id = u.user_id
      WHERE u.status = 'active' AND r.role_name IN ('super_admin','admin','inventory_manager')"
 )->fetchAll(PDO::FETCH_ASSOC);
+
+$clock = new App\Attention\SystemClock();
+$signalSource = new App\Attention\DatabaseAttentionSignalSource($pdo, $clock);
+$attentionCenter = new App\Attention\AttentionCenter(
+    new App\Attention\AttentionRuleService(new App\Attention\AttentionSettingsService($pdo, $clock), $clock),
+    new App\Attention\AttentionNotificationService($pdo, $clock)
+);
+require_once dirname(__DIR__) . '/app/Services/SystemHealthService.php';
+$healthChecks = (new SystemHealthService($pdo, dirname(__DIR__)))->checks();
+$platformSignals = $signalSource->platform($healthChecks);
+$storeSignals = $signalSource->store();
+foreach ($recipients as $recipient) {
+    if (!in_array($recipient['role_name'], ['super_admin', 'admin'], true)) {
+        continue;
+    }
+    $signals = $recipient['role_name'] === 'super_admin' ? $platformSignals : $storeSignals;
+    $result = $attentionCenter->refreshResult(
+        (int)$recipient['user_id'],
+        (string)$recipient['role_name'],
+        $signals,
+        !empty($recipient['notify_inapp'])
+    );
+    if (!empty($recipient['notify_email']) && !empty($recipient['email'])) {
+        foreach ($result->newItems() as $item) {
+            send_email_notification((string)$recipient['email'], $item->title, $item->explanation);
+        }
+    }
+}
 
 function scheduled_alert(PDO $pdo, array $recipient, string $title, string $body, ?int $referenceId = null, string $referenceType = 'system'): void {
     $check = $pdo->prepare("SELECT notification_id FROM notifications WHERE user_id = ? AND type = 'system' AND title = ? AND DATE(created_at) = CURDATE() LIMIT 1");

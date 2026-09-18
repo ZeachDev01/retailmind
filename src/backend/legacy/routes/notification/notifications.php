@@ -9,7 +9,9 @@ $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $per_page = 20;
 $offset = ($page - 1) * $per_page;
 
-$sql = "SELECT notification_id, type, title, message, reference_type, reference_id, is_read, created_at
+$sql = "SELECT notification_id, type, title, message, reference_type, reference_id,
+                              attention_key, attention_severity, attention_count, attention_destination,
+                              is_read, created_at
                        FROM notifications WHERE user_id = ?
                        ORDER BY created_at DESC
                        LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
@@ -233,7 +235,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             'system' => 'ℹ️',
                             'fiscal_period' => '📋',
                             'expiring_stock' => '⏳',
-                            'expired_stock' => '⛔'
+                            'expired_stock' => '⛔',
+                            'attention' => '⚠️'
                         ];
                         echo $icons[$notif['type']] ?? '•';
                         ?>
@@ -241,6 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="notification-content">
                         <h4><?= htmlspecialchars($notif['title']) ?></h4>
                         <p><?= htmlspecialchars($notif['message']) ?></p>
+                        <?php if (!empty($notif['attention_destination'])): ?><p><a href="<?= htmlspecialchars(app_url((string)$notif['attention_destination'])) ?>">Review condition<?= $notif['attention_count'] !== null ? ' (' . (int)$notif['attention_count'] . ')' : '' ?></a></p><?php endif; ?>
                     </div>
                     <div style="text-align: right; min-width: 120px;">
                         <div class="notification-time"><?= htmlspecialchars(date('M d, H:i', strtotime($notif['created_at']))) ?></div>

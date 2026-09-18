@@ -62,8 +62,14 @@ function activity_log_columns(PDO $pdo): array
 
     $columns = [];
     try {
-        foreach ($pdo->query('SHOW COLUMNS FROM activity_log')->fetchAll(PDO::FETCH_ASSOC) as $column) {
-            $columns[$column['Field']] = true;
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            foreach ($pdo->query('PRAGMA table_info(activity_log)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                $columns[$column['name']] = true;
+            }
+        } else {
+            foreach ($pdo->query('SHOW COLUMNS FROM activity_log')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                $columns[$column['Field']] = true;
+            }
         }
     } catch (Throwable $e) {
         $columns = ['user_id' => true, 'action' => true];
@@ -80,16 +86,36 @@ function log_activity(
     ?int $record_id = null,
     $previous_value = null,
     $new_value = null,
-    ?string $ip_address = null
+    ?string $ip_address = null,
+    ?string $category = null,
+    array $metadata = []
 ): void {
     $columns = activity_log_columns($pdo);
+    $category = $category === null
+        ? App\Audit\AuditRecordCategory::classify($module, $action, $new_value, $previous_value)
+        : App\Audit\AuditRecordCategory::requireValid($category);
+    if ($category === App\Audit\AuditRecordCategory::STORE_OPERATION
+        && function_exists('current_role')
+        && current_role() === 'super_admin'
+        && function_exists('emergency_access_service')) {
+        try {
+            $session = emergency_access_service($pdo)->status((int)$user_id);
+            if ($session !== null && $session['status'] === 'active') {
+                $metadata['emergency_access_session_id'] = $session['session_id'];
+            }
+        } catch (Throwable $exception) {
+            error_log('Could not correlate Emergency Access audit metadata: ' . $exception->getMessage());
+        }
+    }
     $data = [
         'user_id' => $user_id,
         'action' => $action,
+        'category' => $category,
         'module' => $module,
         'record_id' => $record_id,
         'previous_value' => format_audit_value($previous_value),
         'new_value' => format_audit_value($new_value),
+        'metadata' => $metadata === [] ? null : format_audit_value($metadata),
         'ip_address' => $ip_address ?: get_client_ip_address(),
     ];
 
@@ -110,8 +136,8 @@ function get_low_stock_products(PDO $pdo, ?int $threshold = null): array
 {
     $scopeSql = '';
     $scopeParams = [];
-    if (function_exists('branch_scope')) {
-        [$scopeSql, $scopeParams] = branch_scope('p');
+    if (function_exists('store_product_scope')) {
+        [$scopeSql, $scopeParams] = store_product_scope('p');
     }
     $sql = "SELECT p.product_id, p.product_name, p.sku, i.quantity_on_hand, p.reorder_level
             FROM products p
@@ -278,6 +304,7 @@ function get_store_settings(PDO $pdo): array
 
 function get_forecasting_readiness(PDO $pdo): array
 {
+    $storeId = store_scope_id($pdo);
     $settings = get_ml_settings($pdo);
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
     $preferredHistoryDays = max($minimumHistoryDays, (int)$settings['preferred_history_days']);
@@ -353,11 +380,13 @@ function get_forecasting_readiness(PDO $pdo): array
                 WHERE fe2.product_id = p.product_id
                 ORDER BY fe2.generated_at DESC, fe2.evaluation_id DESC LIMIT 1
             )
-            WHERE p.status = 'active'
+            WHERE p.status = 'active' AND p.branch_id = ?
             ORDER BY p.product_name";
 
     try {
-        $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $statement = $pdo->prepare($sql);
+        $statement->execute([$storeId]);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $exception) {
         // The migration has not been run yet. Keep the page usable with the legacy columns.
         error_log('Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: ' . $exception->getMessage());

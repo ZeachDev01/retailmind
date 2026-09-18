@@ -3,16 +3,19 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
-require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
+
+use App\Authorization\RoleCapabilityPolicy;
+use App\Services\ReceiptTableService;
+
+require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
 $action = $_GET['action'] ?? 'list';
-if (!in_array($action, ['list', 'view'], true)) {
+if (!in_array($action, ['list', 'view', 'data'], true)) {
     $action = 'list';
 }
 $sale_id = (int)($_GET['sale_id'] ?? $_GET['id'] ?? $_GET['receipt_id'] ?? 0);
-$search_query = $_GET['search'] ?? '';
-$search_field = $_GET['field'] ?? 'all';
-$can_manage_all = in_array(current_role(), ['admin', 'super_admin', 'inventory_manager'], true);
+$storeId = store_scope_id($pdo);
+$can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
 function receipt_store_info(): array {
     static $cached = null;
@@ -58,7 +61,7 @@ function receipt_verification_code(array $sale): string {
     return implode('-', str_split(substr(strtoupper(hash('sha256', $raw)), 0, 12), 4));
 }
 
-function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
+function receipt_fetch_sale(PDO $pdo, int $sale_id, int $storeId): ?array {
     $saleColumns = receipt_table_columns($pdo, 'sales');
     $cashReceivedSql = isset($saleColumns['cash_received']) ? 's.cash_received' : 'NULL';
     $changeDueSql = isset($saleColumns['change_due']) ? 's.change_due' : 'NULL';
@@ -78,9 +81,15 @@ function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
                 u.full_name AS cashier_name
          FROM sales s
          JOIN users u ON s.cashier_id = u.user_id
-         WHERE s.sale_id = ?"
+         WHERE s.sale_id = ? AND (
+             u.branch_id = ? OR EXISTS (
+                 SELECT 1 FROM sale_items scope_si
+                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+             )
+         )"
     );
-    $saleStmt->execute([$sale_id]);
+    $saleStmt->execute([$sale_id, $storeId, $storeId]);
     $sale = $saleStmt->fetch();
 
     return $sale ?: null;
@@ -187,57 +196,44 @@ function receipt_render_details(array $sale, array $items): void {
     <?php
 }
 
-// Fetch receipts for list view
-if ($action === 'list' || $action === 'view') {
-    $query = "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date,
-              u.full_name AS cashier_name, COUNT(si.sale_item_id) as item_count,
-              COALESCE(reversal_summary.pending_count, 0) AS pending_reversals,
-              COALESCE(reversal_summary.approved_count, 0) AS approved_reversals
-              FROM sales s
-              JOIN users u ON s.cashier_id = u.user_id
-              LEFT JOIN sale_items si ON s.sale_id = si.sale_id
-              LEFT JOIN (
-                SELECT sale_id,
-                       SUM(status = 'pending') AS pending_count,
-                       SUM(status = 'approved') AS approved_count
-                FROM sale_reversals
-                GROUP BY sale_id
-              ) reversal_summary ON reversal_summary.sale_id = s.sale_id";
-
-    $params = [];
-    $where_conditions = [];
-
+if ($action === 'data') {
+    header('Content-Type: application/json; charset=utf-8');
+    $request = $_GET;
     if (!$can_manage_all) {
-        $where_conditions[] = "s.cashier_id = ?";
-        $params[] = $_SESSION['user_id'];
+        unset($request['cashier_id']);
     }
+    $cashierScope = $can_manage_all ? null : (int)$_SESSION['user_id'];
 
-    if (!empty($search_query)) {
-        if ($search_field === 'all') {
-            $where_conditions[] = "(s.sale_id LIKE ? OR s.sale_date LIKE ? OR u.full_name LIKE ?)";
-            $search_term = "%$search_query%";
-            $params = array_merge($params, [$search_term, $search_term, $search_term]);
-        } elseif ($search_field === 'id') {
-            $where_conditions[] = "s.sale_id LIKE ?";
-            $params[] = "%$search_query%";
-        } elseif ($search_field === 'date') {
-            $where_conditions[] = "s.sale_date LIKE ?";
-            $params[] = "%$search_query%";
-        } elseif ($search_field === 'cashier') {
-            $where_conditions[] = "u.full_name LIKE ?";
-            $params[] = "%$search_query%";
-        }
+    try {
+        echo json_encode((new ReceiptTableService($pdo))->fetch($request, $cashierScope), JSON_THROW_ON_ERROR);
+    } catch (Throwable $exception) {
+        error_log('Receipt table request failed: ' . $exception->getMessage());
+        http_response_code(500);
+        echo json_encode([
+            'draw' => max(0, (int)($_GET['draw'] ?? 0)),
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => [],
+            'error' => 'Unable to load receipts. Please retry.',
+        ]);
     }
+    exit;
+}
 
-    if (!empty($where_conditions)) {
-        $query .= " WHERE " . implode(" AND ", $where_conditions);
-    }
-
-    $query .= " GROUP BY s.sale_id ORDER BY s.sale_date DESC, s.sale_id DESC";
-
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $receipts = $stmt->fetchAll();
+$receiptCashiers = [];
+if ($can_manage_all) {
+    $cashierStatement = $pdo->query(
+        "SELECT DISTINCT u.user_id, u.full_name
+         FROM users u
+         JOIN sales s ON s.cashier_id = u.user_id
+         WHERE u.branch_id = " . (int)$storeId . " OR EXISTS (
+             SELECT 1 FROM sale_items scope_si
+             JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+             WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = " . (int)$storeId . "
+         )
+         ORDER BY u.full_name, u.user_id"
+    );
+    $receiptCashiers = $cashierStatement->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Handle AJAX view request
@@ -246,9 +242,15 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date, u.full_name AS cashier_name
          FROM sales s
          JOIN users u ON s.cashier_id = u.user_id
-         WHERE s.sale_id = ?"
+         WHERE s.sale_id = ? AND (
+             u.branch_id = ? OR EXISTS (
+                 SELECT 1 FROM sale_items scope_si
+                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
+                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
+             )
+         )"
     );
-    $saleStmt->execute([$sale_id]);
+    $saleStmt->execute([$sale_id, $storeId, $storeId]);
     $sale = $saleStmt->fetch();
 
     if (!$sale) {
@@ -263,7 +265,7 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         exit;
     }
 
-    $sale = receipt_fetch_sale($pdo, $sale_id);
+    $sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
     receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id));
     exit;
 
@@ -326,7 +328,7 @@ $selected_sale = null;
 $selected_items = [];
 $selected_error = '';
 if ($sale_id > 0) {
-    $selected_sale = receipt_fetch_sale($pdo, $sale_id);
+    $selected_sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
     if (!$selected_sale) {
         $selected_error = 'Receipt not found.';
     } elseif (!$can_manage_all && (int)$selected_sale['cashier_id'] !== (int)$_SESSION['user_id']) {
@@ -344,14 +346,18 @@ if ($sale_id > 0) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Receipt Management</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css')) ?>">
 </head>
-<body>
+<body class="receipts-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <div class="main-content">
         <div class="topbar">
-            <h1>Receipt Management</h1>
+            <div>
+                <h1>Receipt Management</h1>
+                <p class="page-subtitle">Find completed sales, review receipt details, and manage reversals.</p>
+            </div>
             <span class="badge-role"><?= ucfirst(htmlspecialchars(current_role())) ?></span>
         </div>
         <div class="receipts-container">
@@ -365,73 +371,77 @@ if ($sale_id > 0) {
 
             <div class="alert alert-success">Completed receipts are locked. Use reversals for cancellations, returns, refunds, and exchanges.</div>
 
-            <div class="search-section">
-                <div class="search-group">
-                    <input type="text" id="search-input" placeholder="Search..." value="<?= htmlspecialchars($search_query) ?>">
-                    <select id="search-field">
-                        <option value="all" <?= $search_field === 'all' ? 'selected' : '' ?>>All Fields</option>
-                        <option value="id" <?= $search_field === 'id' ? 'selected' : '' ?>>Receipt #</option>
-                        <option value="date" <?= $search_field === 'date' ? 'selected' : '' ?>>Date</option>
-                        <option value="cashier" <?= $search_field === 'cashier' ? 'selected' : '' ?>>Cashier</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="performSearch()">🔍 Search</button>
+            <section class="dashboard-section receipt-table-card" aria-labelledby="receipt-table-title">
+                <div class="section-header receipt-table-heading">
+                    <div>
+                        <h2 id="receipt-table-title">Receipt history</h2>
+                        <p class="section-description">Search by receipt number or payment method, then narrow the permitted history with the filters.</p>
+                    </div>
+                    <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
                 </div>
-                <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>" class="btn">➕ New Sale</a>
-            </div>
 
-            <?php if (empty($receipts)): ?>
-                <div class="empty-state">
-                    <h2>No receipts found</h2>
-                    <p><?= $search_query ? 'Try adjusting your search criteria.' : 'No receipts available yet. Run a sale to generate your first receipt.' ?></p>
+                <div class="receipt-filters" aria-label="Receipt filters">
+                    <label>
+                        <span>From</span>
+                        <input type="date" id="receiptDateFrom">
+                    </label>
+                    <label>
+                        <span>To</span>
+                        <input type="date" id="receiptDateTo">
+                    </label>
+                    <label>
+                        <span>Reversal status</span>
+                        <select id="receiptReversalStatus">
+                            <option value="">All statuses</option>
+                            <option value="none">No reversal</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </label>
+                    <?php if ($can_manage_all): ?>
+                        <label>
+                            <span>Cashier</span>
+                            <select id="receiptCashier">
+                                <option value="">All cashiers</option>
+                                <?php foreach ($receiptCashiers as $cashier): ?>
+                                    <option value="<?= (int)$cashier['user_id'] ?>"><?= htmlspecialchars($cashier['full_name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                    <?php endif; ?>
+                    <button type="button" class="btn btn-quiet" id="clearReceiptFilters"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear filters</button>
+                </div>
+
+                <div id="receiptTableStatus" class="receipt-table-status" role="status" aria-live="polite">
+                    <span id="receiptTableStatusMessage"></span>
+                    <button type="button" class="btn btn-quiet" id="retryReceiptTable" hidden>Retry</button>
+                </div>
+                <div id="receiptEmptyState" class="empty-state receipt-empty-state" hidden>
+                    <h2>No receipts have been created yet.</h2>
+                    <p>Complete a sale to create the first receipt.</p>
                     <div class="empty-actions">
                         <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Start a Sale</a>
                     </div>
                 </div>
-            <?php else: ?>
-                <table class="receipts-table">
-                    <thead>
-                        <tr>
-                            <th>Receipt #</th>
-                            <th>Date</th>
-                            <th>Cashier</th>
-                            <th>Items</th>
-                            <th>Total</th>
-                            <th>Payment</th>
-                            <th>Reversals</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($receipts as $receipt): ?>
-                        <tr>
-                            <td class="receipt-id">#<?= $receipt['sale_id'] ?></td>
-                            <td><?= htmlspecialchars($receipt['sale_date']) ?></td>
-                            <td><?= htmlspecialchars($receipt['cashier_name']) ?></td>
-                            <td><?= (int)$receipt['item_count'] ?></td>
-                            <td><strong>₱<?= number_format($receipt['total_amount'], 2) ?></strong></td>
-                            <td><?= htmlspecialchars(strtoupper($receipt['payment_method'])) ?></td>
-                            <td>
-                                <?php if ((int)$receipt['pending_reversals'] > 0): ?>
-                                    <span class="tag-warning"><?= (int)$receipt['pending_reversals'] ?> pending</span>
-                                <?php endif; ?>
-                                <?php if ((int)$receipt['approved_reversals'] > 0): ?>
-                                    <span class="tag-success"><?= (int)$receipt['approved_reversals'] ?> approved</span>
-                                <?php endif; ?>
-                                <?php if ((int)$receipt['pending_reversals'] === 0 && (int)$receipt['approved_reversals'] === 0): ?>
-                                    <span class="u-text-muted">None</span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <div class="actions-cell">
-                                    <button class="btn-small btn-view" onclick="viewReceipt(<?= $receipt['sale_id'] ?>)">👁️ View</button>
-                                    <a href="<?= htmlspecialchars(app_url('components/invoice/reversals.php?sale_id=' . $receipt['sale_id'])) ?>" class="btn-small btn-edit">Reverse</a>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php endif; ?>
+                <div class="table-wrap receipt-table-wrap">
+                    <table id="receiptsTable" class="receipts-table display" data-no-smart-table>
+                        <thead>
+                            <tr>
+                                <th>Receipt #</th>
+                                <th>Date</th>
+                                <th>Cashier</th>
+                                <th>Items</th>
+                                <th>Total</th>
+                                <th>Payment</th>
+                                <th>Reversals</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
         </div>
     </div>
 </div>
@@ -511,7 +521,193 @@ if ($sale_id > 0) {
     <?php endif; ?>
 <?php endif; ?>
 
+<script src="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.js"></script>
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof DataTable === 'undefined') {
+        return;
+    }
+
+    const dateFrom = document.getElementById('receiptDateFrom');
+    const dateTo = document.getElementById('receiptDateTo');
+    const reversalStatus = document.getElementById('receiptReversalStatus');
+    const cashier = document.getElementById('receiptCashier');
+    const clearFilters = document.getElementById('clearReceiptFilters');
+    const status = document.getElementById('receiptTableStatus');
+    const statusMessage = document.getElementById('receiptTableStatusMessage');
+    const retryButton = document.getElementById('retryReceiptTable');
+    const emptyState = document.getElementById('receiptEmptyState');
+    const tableWrap = document.querySelector('.receipt-table-wrap');
+    const stateKey = 'retailmind.receipts.' + window.location.pathname;
+    const textRenderer = DataTable.render.text();
+
+    function updateStatus(message, isError, canRetry) {
+        statusMessage.textContent = message;
+        status.classList.toggle('is-error', Boolean(isError));
+        retryButton.hidden = !canRetry;
+    }
+
+    function currentFilters() {
+        return {
+            date_from: dateFrom.value,
+            date_to: dateTo.value,
+            reversal_status: reversalStatus.value,
+            cashier_id: cashier ? cashier.value : ''
+        };
+    }
+
+    function restoreFilters(savedState) {
+        const filters = savedState && savedState.receiptFilters ? savedState.receiptFilters : {};
+        dateFrom.value = filters.date_from || '';
+        dateTo.value = filters.date_to || '';
+        reversalStatus.value = filters.reversal_status || '';
+        if (cashier) cashier.value = filters.cashier_id || '';
+    }
+
+    const table = new DataTable('#receiptsTable', {
+        serverSide: true,
+        processing: true,
+        pageLength: 25,
+        lengthMenu: [10, 25, 50, 100],
+        order: [[1, 'desc'], [0, 'desc']],
+        stateSave: true,
+        stateDuration: -1,
+        stateSaveCallback: function(settings, data) {
+            data.receiptFilters = currentFilters();
+            sessionStorage.setItem(stateKey, JSON.stringify(data));
+        },
+        stateLoadCallback: function() {
+            try {
+                const savedState = JSON.parse(sessionStorage.getItem(stateKey) || 'null');
+                restoreFilters(savedState);
+                return savedState;
+            } catch (error) {
+                sessionStorage.removeItem(stateKey);
+                return null;
+            }
+        },
+        ajax: {
+            url: '<?= htmlspecialchars(app_url('components/invoice/receipt.php?action=data')) ?>',
+            data: function(request) {
+                Object.assign(request, currentFilters());
+            },
+            error: function() {
+                updateStatus('Unable to load receipts. Check your connection and retry.', true, true);
+                emptyState.hidden = true;
+                tableWrap.hidden = false;
+            }
+        },
+        columns: [
+            {
+                data: 'sale_id',
+                render: function(value, type) {
+                    return type === 'display' ? '<strong class="receipt-id">#' + Number(value) + '</strong>' : Number(value);
+                }
+            },
+            { data: 'sale_date' },
+            { data: 'cashier_name', render: textRenderer },
+            { data: 'item_count' },
+            {
+                data: 'total_amount',
+                render: function(value, type) {
+                    const amount = Number(value);
+                    return type === 'display' ? '<strong>₱' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</strong>' : amount;
+                }
+            },
+            {
+                data: 'payment_method',
+                render: function(value, type) {
+                    const payment = String(value || '');
+                    return type === 'display' ? textRenderer.display(payment.toUpperCase()) : payment;
+                }
+            },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                render: function(row, type) {
+                    if (type !== 'display') return Number(row.reversal_count || 0);
+                    const badges = [];
+                    if (Number(row.pending_reversals) > 0) badges.push('<span class="tag-warning">' + Number(row.pending_reversals) + ' pending</span>');
+                    if (Number(row.approved_reversals) > 0) badges.push('<span class="tag-success">' + Number(row.approved_reversals) + ' approved</span>');
+                    if (Number(row.rejected_reversals) > 0) badges.push('<span class="receipt-tag-neutral">' + Number(row.rejected_reversals) + ' rejected</span>');
+                    return badges.length ? badges.join(' ') : '<span class="u-text-muted">None</span>';
+                }
+            },
+            {
+                data: 'sale_id',
+                orderable: false,
+                searchable: false,
+                render: function(value, type) {
+                    if (type !== 'display') return value;
+                    const saleId = Number(value);
+                    return '<div class="actions-cell">' +
+                        '<button type="button" class="btn-small btn-view" onclick="viewReceipt(' + saleId + ')"><i class="bi bi-eye" aria-hidden="true"></i> View</button>' +
+                        '<a href="<?= htmlspecialchars(app_url('components/invoice/reversals.php?sale_id=')) ?>' + saleId + '" class="btn-small btn-edit">Reverse</a>' +
+                        '</div>';
+                }
+            }
+        ],
+        layout: {
+            topStart: null,
+            topEnd: {
+                search: {
+                    placeholder: 'Receipt number or payment method...'
+                }
+            },
+            bottom: ['info', {pageLength: {menu: [10, 25, 50, 100]}}, {paging: {numbers: 5}}],
+            bottomStart: null,
+            bottomEnd: null
+        },
+        language: {
+            processing: 'Loading receipts…',
+            emptyTable: 'No receipts have been created yet.',
+            zeroRecords: 'No receipts match the current search and filters.',
+            search: 'Search:'
+        }
+    });
+
+    table.on('preXhr', function() {
+        updateStatus('Loading receipts…', false, false);
+    });
+    table.on('xhr', function(event, settings, json) {
+        if (json && json.error) {
+            updateStatus('Unable to load receipts. Please retry.', true, true);
+        }
+    });
+    table.on('draw', function() {
+        const info = table.page.info();
+        emptyState.hidden = info.recordsTotal !== 0;
+        tableWrap.hidden = info.recordsTotal === 0;
+        if (info.recordsTotal === 0) {
+            updateStatus('No receipt history is available yet.', false, false);
+        } else if (info.recordsDisplay === 0) {
+            updateStatus('No receipts match the current search and filters.', false, false);
+        } else {
+            updateStatus(info.recordsDisplay + ' permitted receipt' + (info.recordsDisplay === 1 ? '' : 's') + ' found.', false, false);
+        }
+    });
+
+    retryButton.addEventListener('click', function() {
+        table.ajax.reload(null, false);
+    });
+    [dateFrom, dateTo, reversalStatus, cashier].filter(Boolean).forEach(function(control) {
+        control.addEventListener('change', function() {
+            table.ajax.reload(null, true);
+        });
+    });
+    clearFilters.addEventListener('click', function() {
+        dateFrom.value = '';
+        dateTo.value = '';
+        reversalStatus.value = '';
+        if (cashier) cashier.value = '';
+        table.search('');
+        table.order([[1, 'desc'], [0, 'desc']]);
+        table.page.len(25);
+        table.ajax.reload(null, true);
+    });
+});
+
 function printReceiptSection(trigger) {
     const currentTarget = trigger
         ? trigger.closest('.receipt-container')?.querySelector('.receipt-print-area')
@@ -526,15 +722,6 @@ function printReceiptSection(trigger) {
 
 function exportReceiptPdf(trigger) {
     printReceiptSection(trigger);
-}
-
-function performSearch() {
-    const search = document.getElementById('search-input').value;
-    const field = document.getElementById('search-field').value;
-    const url = new URL(window.location);
-    url.searchParams.set('search', search);
-    url.searchParams.set('field', field);
-    window.location = url.toString();
 }
 
 function viewReceipt(saleId) {
@@ -589,9 +776,6 @@ async function legacyDeleteReceiptDisabled(saleId) {
     form.submit();
 }
 
-document.getElementById('search-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') performSearch();
-});
 </script>
 </body>
 </html>

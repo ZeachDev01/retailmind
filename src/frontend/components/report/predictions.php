@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_role(['admin', 'inventory_manager']);
+
+use App\Authorization\RoleCapabilityPolicy;
+
+require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
 $message = '';
 $messageClass = '';

@@ -13,6 +13,8 @@
         "optimize-autoloader": true
     },
     "scripts": {
-        "check": "php src/backend/tests/smoke_checks.php"
+        "check": "php src/backend/tests/smoke_checks.php",
+        "seed:products": "php src/backend/scripts/seed_products.php",
+        "seed:sales-trend": "php src/backend/scripts/seed_sales_trend.php --confirm-local"
     }
 }

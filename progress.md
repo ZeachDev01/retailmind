@@ -1,0 +1,147 @@
+# Progress
+
+## 2026-09-16
+
+- Initialized the task plan for the dedicated audit logs page.
+- Began repository inspection; recorded sandbox-specific Git and ripgrep issues and switched to safe alternatives.
+- Located the audit-log page, sidebar modal trigger/overlay, server-side filters/export, styling, and confirmed DataTables is not currently installed.
+- Checked the official DataTables installation guidance and selected the dependency-free v3 browser build.
+- Completed the implementation survey and chose a canonical System Administrator page with a compatibility redirect from the former modal URL.
+- Added the dedicated Audit Logs page, scoped styles, DataTables initialization, and direct navigation from the sidebar and admin dashboard.
+- Removed the audit iframe overlay and all JavaScript modal-opening hooks; retained the former route only as a compatibility redirect.
+- PHP lint and whitespace validation pass for the changed PHP files.
+- Existing smoke checks pass (14 checks); database integration correctly skipped because `RUN_DB_TESTS` was not enabled.
+- Attempted a live browser verification, but the browser-control runtime was unavailable; continued with static and CLI verification.
+- Added two audit-log regression smoke checks for the dedicated DataTable page and direct navigation behavior.
+- Final verification passed: 189 PHP files linted, 16 smoke checks passed, and `git diff --check` reported no whitespace errors.
+- Started follow-up work to replace the fiscal-period modal with a dedicated page.
+- Located the fiscal-period action page, sidebar trigger/overlay, embedded presentation mode, and modal-specific CSS.
+- Confirmed both admin-dashboard launch points, the dedicated administration-page convention, and the existing smoke-test location.
+- Completed the fiscal-period implementation survey and chose a canonical System Administrator page with a compatibility redirect from the former modal URL.
+- Confirmed the shared design tokens and card patterns needed for a page-scoped fiscal-period layout.
+- The first combined implementation patch made no changes because one file was targeted for both deletion and addition; split the operations for the retry.
+- Added the dedicated Fiscal Periods page with status summaries, responsive create controls, period cards, and the existing create/close/lock workflows.
+- Updated the sidebar and both admin-dashboard entry points for direct navigation, replaced the former modal file with a compatibility redirect, and removed all fiscal iframe/embedded CSS and JavaScript.
+- Added three fiscal-period smoke checks covering the dedicated page and direct navigation behavior.
+- Focused PHP lint passed for all touched PHP files, all 19 smoke checks passed, and `git diff --check` reported no whitespace errors.
+- Attempted to start the browser-control workflow for visual QA, but its required runtime is not exposed in this session.
+- Final verification passed: 195 PHP files linted, 19 smoke checks passed, fiscal and modal stylesheets have balanced braces, and `git diff --check` reported no whitespace errors. Database integration remained intentionally skipped because `RUN_DB_TESTS` was not enabled.
+- Started follow-up work to replace the System Health modal with a dedicated page.
+- Located the System Health service-driven page, sidebar trigger/overlay, embedded presentation branches, and modal-specific CSS.
+- Completed the System Health implementation survey and chose a canonical System Administrator page with a compatibility redirect from the former modal URL.
+- Added the dedicated System Health page with summary cards, category-grouped diagnostic checks, refresh controls, and maintenance guidance.
+- Updated the sidebar for direct navigation, replaced the former modal page with a compatibility redirect, and removed the System Health iframe/embedded JavaScript and CSS.
+- Updated the System Health smoke coverage for the canonical page and added a direct-navigation regression check.
+- Focused PHP lint passed, all 20 smoke checks passed, the new and modified stylesheets have balanced braces, and `git diff --check` reported no whitespace errors.
+- Attempted the browser-control workflow for visual QA, but its required runtime remains unavailable in this session.
+- Final verification passed: 196 PHP files linted, 20 smoke checks passed, System Health and modal stylesheets have balanced braces, and `git diff --check` reported no whitespace errors. Database integration remained intentionally skipped because `RUN_DB_TESTS` was not enabled.
+- Started a follow-up UI refinement for the Manage Users Users/Branches tabs based on the supplied screenshot.
+- Inspected the tab markup, page data, existing styling, and responsive/embedded variants; behavior and accessibility can remain intact while presentation is redesigned.
+- Chose a compact segmented-control treatment with icon tiles, supporting labels, and user/branch count badges, plus responsive and embedded-mode variants.
+- Implemented the redesigned Users/Branches segmented tabs while preserving their ARIA structure and switching logic, and added a smoke regression for the new markup.
+- Focused PHP lint passed, all 21 smoke checks passed, the stylesheet has balanced braces, and `git diff --check` reported no whitespace errors.
+- Attempted browser-based comparison against the supplied screenshot, but the required browser runtime remains unavailable; continued with source-level responsive-state review.
+- Final Manage Users tab verification passed: 196 PHP files linted, 21 smoke checks passed, CSS braces are balanced, and `git diff --check` reported no whitespace errors. Database integration remained intentionally skipped because `RUN_DB_TESTS` was not enabled.
+- Started a follow-up to move Add Staff User and Create Branch into their respective panel headers and modalize branch creation.
+- Inspected the existing add-user modal, branch form, section-header layout, and shared modal lifecycle behavior.
+- The first combined contextual-action patch made no changes because a responsive CSS context no longer matched; split the retry into smaller verified edits.
+- Moved Add Staff User into the Users panel header, moved Create Branch into the Branches panel header, and replaced the always-visible branch form with a compact modal.
+- Integrated the branch modal with backdrop, cancel, Escape, validation-state restoration, and post-submit tab selection behavior.
+- Focused PHP lint passed, all 22 smoke checks passed, CSS braces are balanced, and `git diff --check` reported no whitespace errors.
+- Attempted browser-based interaction and layout QA for the contextual actions, but the required runtime remains unavailable.
+- Final contextual-action verification passed: PHP lint succeeded for 197 files, all 22 smoke checks passed, CSS braces were balanced (287/287), and `git diff --check` reported no whitespace errors. Database integration checks were skipped because `RUN_DB_TESTS` is not enabled.
+- Diagnosed the Add Staff modal scrolling failure: a later `overflow: hidden` overrode the dialog's vertical scrolling while its long form had no internal scroll region.
+- Added a regression check and confirmed it failed before the fix on the missing dynamic-height and form-scroll rules.
+- Updated the shared user modal layout to keep its header fixed and let the form scroll within a `100dvh`-constrained dialog, including touch momentum and overscroll containment.
+- Final modal-scroll verification passed: 197 PHP files linted successfully, all 23 smoke checks passed, modal CSS braces were balanced (288/288), and `git diff --check` found no whitespace errors.
+- Started follow-up work to relocate Notification Preferences from the Notifications area into Profile Preferences.
+- Confirmed that both navigation entries currently target the same notification-owned page; selected a canonical account Preferences route with a compatibility redirect from the former URL.
+- Added the account-level Preferences page, redirected the former notification URL, removed the Notifications-section entry, and moved the form styles into a scoped stylesheet.
+- Focused PHP lint and all 25 smoke checks passed; the first whitespace check found one trailing blank line in the trimmed notification stylesheet.
+- Removed the trailing blank line, added a compatibility-route regression, and completed final verification: all 197 PHP files linted successfully, all 26 smoke checks passed, both affected stylesheets had balanced braces, navigation invariants passed, and `git diff --check` found no whitespace errors.
+- Started follow-up work to add icons to User Management and Audit Logs summary cards.
+- Confirmed both pages use the shared three-card summary pattern and can reuse the existing `with-icon`/`stat-icon` styles.
+- Added icons to all three User Management summaries and all three Audit Logs summaries using the shared dashboard card pattern, plus focused smoke regressions.
+- Focused PHP lint, 28 smoke checks, and the whitespace check pass; adjusted Disabled Users to show warning styling only when disabled accounts exist.
+- Final icon-card verification passed: all 197 PHP files linted successfully, all 28 smoke checks passed, and `git diff --check` found no whitespace errors.
+
+## 2026-09-17
+
+- Started diagnosis and redesign of the Admin User Info profile image and page layout from the supplied screenshot.
+- Restored the existing project plan and recorded current Windows sandbox limitations affecting `rtk`, Git ownership checks, and the ripgrep shim.
+- Located the User Info PHP, profile-image endpoint, and current shared profile CSS; confirmed the screenshot's oversized image is a frontend layout/cascade issue rather than an upload or serving failure.
+- Tested the initial cascade hypotheses: no duplicate preview override exists, and the stacked hero rendering points to missing shared avatar-child containment as the primary defect.
+- Located the shared avatar base selectors in `global.css`; adjusted the CSS diagnostic after an invalid PowerShell pipeline prevented the first balance check.
+- Confirmed the shared avatar rules are correct on disk and narrowed the failure to the imported/cached styling path; selected a dedicated User Info stylesheet with redundant, page-scoped media containment as the robust fix.
+- Browser-control discovery confirmed the required runtime is unavailable; prepared to use the existing smoke suite as the regression seam and static responsive checks for layout verification.
+- Added User Info layout/media containment regressions and confirmed they fail before the implementation on the missing page namespace, dedicated stylesheet, bounded frame, and cover rules.
+- Added the page-scoped User Info stylesheet and restructured the profile page into a responsive identity banner, bounded photo editor, personal-information form, and account-details panel.
+- The focused PHP lint passes, both new regressions pass within all 36 smoke checks, and the new stylesheet is brace-balanced (65/65).
+- Reviewed the implementation diff and removed fragile absolute positioning from the remove-photo action; account status styling now handles both active and inactive states correctly.
+- Repository verification passed: 208 PHP files linted, all 36 smoke checks passed, profile image storage tests passed, the new stylesheet is brace-balanced (67/67), and `git diff --check` found no whitespace errors.
+- Responsive source invariants passed for the dedicated stylesheet, bounded cover crop, two-column desktop layout, tablet/mobile collapses, and stable remove-photo positioning.
+- Final cleanup passed: no debug instrumentation or trailing whitespace remains, and the final Git whitespace check is clean.
+- The planning helper could not parse this repository's accumulated checkbox plan (`0/0 phases`); manual inspection confirms all 28 phases are complete.
+- User reported the avatar still stacks after navigating away from User Info; the new screenshot confirms the problem is present in the shared sidebar on Admin Dashboard while the page-scoped User Info override works.
+- Inspected shared shell coverage: 42 pages use the unversioned compatibility bundle, while every affected authenticated page renders the avatar through `sidebar.php`; selected the sidebar asset loader as the narrow global seam to test.
+- Reproduced the structural failure from source: removing the `global.css` avatar rules leaves `.sidebar-avatar` as an inline span, so its fallback and image stack exactly as shown. Confirmed profile image URLs are already cache-versioned.
+- Added cross-page avatar regressions and confirmed they fail before the fix on the missing cache-versioned shell link and independent containment stylesheet.
+- Added cache-versioned `avatars.css` to the shared sidebar shell. Focused sidebar lint passes, all 38 smoke checks pass, and the new stylesheet is brace-balanced (3/3).
+- Audited all avatar helper call sites; every call is covered by the sidebar shell asset. Preserved unrelated untracked image files already in the worktree.
+- Final cross-page verification passed: 208 PHP files linted, all 38 smoke checks passed, profile image storage tests passed, both affected stylesheets are balanced and free of trailing whitespace, debug instrumentation is absent, and `git diff --check` is clean.
+
+## 09-17-2026
+
+- Selected and claimed ready-for-agent issue #3, the unblocked first implementation slice of the DataTables pilot; issue #4 remains blocked by it.
+- Confirmed the pre-agreed test seams from the issue: a high-level receipt data contract and page-level smoke coverage.
+- Began inspection of Receipt Management, authorization/query boundaries, Audit Logs conventions, and repository checks.
+- Confirmed Receipt Management previously fetched the complete scoped history and that Audit Logs provides the accepted DataTables 3.0.4 visual/configuration pattern.
+- Added page-level smoke regressions and a database-backed high-level receipt data contract, then confirmed the smoke suite failed before implementation.
+- Added `ReceiptTableService` with trusted authorization scope, permitted/filtered counts, paging, focused filters, global receipt/payment search, numeric/date ordering, an explicit order allowlist, and safe malformed-input fallbacks.
+- Converted Receipt Management to server-side DataTables with 25-row defaults, session-only state restoration, focused controls, Smart Tables exclusion, preserved View/Print/Reverse behavior, and distinct loading/error/empty/filtered-zero states.
+- Focused PHP lint and all 42 smoke checks pass; the receipt database contract passes against the local test database.
+- Review found no documented-standard or issue #3 compliance defects. A recoverability improvement was applied by adding an explicit Retry action and server-side error logging for failed receipt requests.
+- Final focused verification passed again: PHP lint, 42 smoke checks, the live database receipt contract, inline JavaScript syntax, CSS balance (120/120), and Git whitespace validation.
+- The full standard suite passed PHP lint, Python compilation, smoke, profile-image, and product-seed checks; database suites skipped by their normal environment guards. Its final release-package check could not run because this Windows Git Bash environment does not provide `rsync`.
+
+## 09-18-2026
+
+- Completed the role/dashboard design interview and confirmed RetailMind as a single-Store system rather than a multi-branch product.
+- Updated `CONTEXT.md` with the accepted Super Administrator, Administrator, Inventory Manager, Store, settings, forecasting, account-lifecycle, audit, Emergency Access, and Recovery Account language.
+- Confirmed that the current Product + Day demand-forecasting grain remains unchanged and that technical model governance belongs to the Super Administrator.
+- Received approval to record the architecture decision and produce an implementation-ready plan; added phases 37–44 to `task_plan.md`.
+- Audited the current shared dashboard, role bypass, navigation, user management, platform-page guards, branch assumptions, forecasting ownership, and existing test seams.
+- Recorded ADR-0001: operate RetailMind as one Store with separate Super Administrator technical authority and Administrator Store authority while retaining a temporary internal singleton branch for compatibility.
+- Confirmed the testing seams with the user: one database-backed dashboard workspace contract, one role-access policy contract, and thin route smoke coverage.
+- Published the complete specification as GitHub issue #5 with the `ready-for-agent` label: https://github.com/ZeachDev01/retailmind/issues/5
+- Verified issue #5 contains all required sections, 50 user stories, the accepted implementation/testing decisions, and no extra triage labels.
+- Completed planning phases 37–44; no application, schema, or ML implementation was performed in this specification pass.
+- Final documentation verification passed: ADR-0001 and all canonical glossary terms are present, phases 37–44 are complete, Git whitespace validation is clean, and no application files were modified.
+- Started ticket decomposition for specification issue #5; added phases 45–48 for context gathering, user-approved slicing, publication, and verification.
+- Re-fetched issue #5 in full, confirmed it has no comments or overlapping open issues, and measured the branch-compatibility blast radius at 251 references across 21 files.
+- Chose an expand–migrate–contract decomposition for the wide single-Store refactor, with singleton Store scope and explicit role capability policy as the initial unblocked frontier.
+- Received user approval for a 14-ticket tracer-bullet breakdown and its blocking edges; publication can now proceed in dependency order.
+- Published issues #6–#19 in dependency order, each referencing parent #5, declaring real blocking issue numbers, and carrying only the `ready-for-agent` label.
+- Verified all 14 ticket bodies contain Parent, What to build, Acceptance criteria, and Blocked by sections; the initial unblocked frontier is #6 and #7.
+- Completed ticket-decomposition phases 45–48 without modifying parent issue #5.
+- Final ticket verification passed: 14 child issues are open and correctly labeled, the published frontier is #6/#7, Git whitespace validation is clean, and no application files were modified.
+- Started implementation of issues #6 and #7 using their pre-agreed seams: a database-backed singleton Store scope contract and a deterministic capability-matrix contract.
+- Inspected the branch schema, migrations, database-test conventions, authentication helpers, sidebar navigation, and User Management target restrictions.
+- Completed phase 49: selected a server-owned singleton Store adapter with a no-write consolidation preflight, plus a pure capability policy integrated through compatibility authorization helpers and target-role checks.
+- Added the issue-defined contracts first. The capability contract was red because the policy did not exist; the initial Store contract setup exposed a MySQL temporary-table `LIKE` name-resolution error. The contract was moved to an isolated SQLite database so it remains database-backed without touching configured operational data.
+- Implemented `StoreScope`, a clear consolidation exception/report, and an idempotent migration that creates the compatibility record only when no branch exists; zero-, one-, request-override, and multiple-data-bearing states now pass.
+- Implemented the deterministic `RoleCapabilityPolicy` and reason-bearing authorization context, covering every supported role, target-role restrictions, arbitrary privilege denial, and bounded Emergency Access behavior.
+- Removed the blanket Super Administrator role/privilege bypasses, routed compatibility privilege checks through the policy, added capability guards, filtered administration navigation through policy decisions, and enforced target-role/privilege restrictions in User Management.
+- Focused verification passes: new policy and Store contracts, affected PHP lint, and all 47 smoke checks. A read-only preflight against the configured database correctly reported two data-bearing legacy branches and made no changes.
+- Full-suite verification passed repository-wide PHP lint, Python compilation, 47 smoke checks, both new contracts, profile-image tests, 17 product-seed checks, database integration, receipt contract, and sales-trend integration; only the known release-package step failed because `rsync` is unavailable in this Windows environment.
+- Completed the two-axis review against fixed point `017706f`: no documented-standard or final spec defects remained. During review, target-role enforcement was extended to delete/status mutations and transitional branch mutations were capability-guarded; ordinary Store resolution was also kept read-only so only the migration can create compatibility data.
+- Committed the issue #6/#7 implementation as `f1cce92` (`feat(auth): add Store scope and capability policy`). Existing uncommitted planning/domain documentation remains preserved outside the commit.
+- Claimed issues #8 and #9 after confirming their blockers (#6 and #7) are closed.
+- Added phases 55–60 for dedicated guarded administrator workspaces and the delegated single-Store staff lifecycle.
+- Confirmed the ticket-defined TDD seams: thin route/navigation regressions for #8 and public user-management integration plus authorization contracts for #9.
+- Added failing workspace-routing and user-lifecycle contracts plus updated smoke regressions; confirmed the expected missing-router, missing-service, shared-shell, and branch-workflow failures before implementation.
+- Added separate exactly guarded Super Administrator and Administrator workspaces, a canonical role router used by login/home redirects, role-specific navigation, and a compatibility redirect from the retired shared dashboard.
+- Replaced branch-oriented User Management with a single-Store staff workflow backed by `UserLifecycleService`; Store scope is server-owned, roles are fixed templates, custom privileges and deletion are absent, disable/reset/revoke invalidate sessions, and lifecycle actions write User Access audit records.
+- Removed the unused branch, legacy edit, and legacy view modal files. Focused routing, capability, Store scope, lifecycle, smoke, and changed-file lint checks pass.
+- Full-suite verification passed repository-wide PHP lint, Python compilation, 50 smoke checks, workspace routing, capability, Store scope, user lifecycle, profile image, and product seed tests. Environment-guarded MySQL tests skipped normally; the final release-package step hit the known missing `rsync` dependency.
+- Completed the two-axis review from fixed point `f15186c`: no documented-standard violations or issue #8/#9 compliance defects remained. Review cleanup removed dead administrator inventory navigation and kept mutation-oriented report links out of the Administrator shell.
