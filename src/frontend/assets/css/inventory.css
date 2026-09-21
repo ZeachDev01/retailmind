@@ -35,6 +35,23 @@ button.overview-metric:hover,button.overview-metric:focus-visible { border-color
 .overview-section-icon { width: 36px; height: 36px; flex: 0 0 36px; display: grid; place-items: center; border-radius: 8px; background: #eff6ff; color: #2563eb; }
 .overview-section-icon--amber { background: #fffbeb; color: #d97706; }
 .overview-table-shell { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.overview-tab-card { overflow: hidden; border-top: 1px solid var(--border); }
+.overview-tabs { display: flex; align-items: center; gap: .35rem; padding: .8rem .9rem 0; border-bottom: 1px solid var(--border); background: #f8fafc; overflow-x: auto; }
+.overview-tab { min-height: 42px; padding: .65rem 1rem; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font: inherit; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.overview-tab:hover,.overview-tab:focus-visible { color: #2563eb; outline: none; }
+.overview-tab.is-active { color: #1d4ed8; border-bottom-color: #2563eb; }
+.overview-tab-panels { padding-top: .35rem; }
+.overview-tab-panel[hidden] { display: none; }
+.overview-tab-card .overview-section { border-top: 0; }
+#overview-panel-fefo .overview-table-shell { scrollbar-width: none; -ms-overflow-style: none; }
+#overview-panel-fefo .overview-table-shell::-webkit-scrollbar { display: none; }
+html.overview-fefo-active { scrollbar-width: none; -ms-overflow-style: none; }
+html.overview-fefo-active::-webkit-scrollbar { display: none; }
+.overview-tab-pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .85rem; color: var(--muted); font-size: .78rem; }
+.overview-tab-pagination[hidden] { display: none; }
+.overview-tab-pagination > div { display: flex; align-items: center; gap: .65rem; }
+.overview-tab-pagination .btn { min-height: 34px; padding: .4rem .7rem; }
+#movement-page-status,#fefo-page-status { min-width: 84px; text-align: center; }
 .overview-table { width: 100%; border-collapse: collapse; }
 .overview-table th,.overview-table td { padding: .75rem .85rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
 .overview-table th { background: #f8fafc; color: var(--muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
@@ -92,7 +109,7 @@ button.overview-metric:hover,button.overview-metric:focus-visible { border-color
 .overview-metric.is-active { border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
 @media(max-width:1200px){.overview-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:900px){.overview-header{align-items:stretch;flex-direction:column}.overview-header-actions{justify-content:flex-start}.overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-table-shell{overflow-x:auto}.overview-table{min-width:720px}.overview-product-view-header{align-items:flex-start;flex-direction:column}}
-@media(max-width:560px){.overview-header-actions,.overview-workflow-actions{align-items:stretch;flex-direction:column}.overview-branch-filter select,.overview-workflow-actions .btn{width:100%}.overview-metrics{grid-template-columns:1fr}.overview-section-header{align-items:flex-start;flex-direction:column}.overview-section-header>a{padding-left:2.9rem}.overview-product-pagination{align-items:stretch;flex-direction:column}.overview-product-pagination>div{justify-content:space-between}.overview-product-pagination .btn{padding-inline:.65rem}}
+@media(max-width:560px){.overview-header-actions,.overview-workflow-actions{align-items:stretch;flex-direction:column}.overview-branch-filter select,.overview-workflow-actions .btn{width:100%}.overview-metrics{grid-template-columns:1fr}.overview-tabs{padding-inline:.65rem}.overview-tab{flex:1 0 auto;padding-inline:.75rem}.overview-section-header{align-items:flex-start;flex-direction:column}.overview-section-header>a{padding-left:2.9rem}.overview-tab-pagination,.overview-product-pagination{align-items:stretch;flex-direction:column}.overview-tab-pagination>div,.overview-product-pagination>div{justify-content:space-between}.overview-tab-pagination .btn,.overview-product-pagination .btn{padding-inline:.65rem}}
 
 /* Source: frontend\modules\inventory_management\csv_import.php */
 .import-section {

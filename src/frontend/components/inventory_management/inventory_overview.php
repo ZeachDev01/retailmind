@@ -90,8 +90,13 @@ $recent_movements = $recentStmt->fetchAll();
             </button>
         </section>
 
-        <div id="overview-default-view">
-        <section class="overview-section" aria-labelledby="movement-heading">
+        <div id="overview-default-view" class="overview-tab-card">
+        <div class="overview-tabs" role="tablist" aria-label="Inventory overview sections">
+            <button type="button" class="overview-tab is-active" id="overview-tab-movements" role="tab" aria-selected="true" aria-controls="overview-panel-movements" data-overview-tab="movements">Recent Stock Movements</button>
+            <button type="button" class="overview-tab" id="overview-tab-fefo" role="tab" aria-selected="false" aria-controls="overview-panel-fefo" data-overview-tab="fefo" tabindex="-1">FEFO Pick Recommendations</button>
+        </div>
+        <div class="overview-tab-panels">
+        <section class="overview-section overview-tab-panel is-active" id="overview-panel-movements" role="tabpanel" aria-labelledby="overview-tab-movements" data-overview-tab-panel="movements">
             <header class="overview-section-header">
                 <div><span class="overview-section-icon" aria-hidden="true"><i class="bi bi-arrow-left-right"></i></span><div><h2 id="movement-heading">Recent Stock Movements</h2><p>Latest inventory changes recorded across this store scope.</p></div></div>
                 <a href="<?= htmlspecialchars(app_url('components/invoice/transactions.php')) ?>">View all transactions <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
@@ -115,9 +120,17 @@ $recent_movements = $recentStmt->fetchAll();
                     </tbody>
                 </table>
             </div>
+            <nav class="overview-tab-pagination" id="movement-pagination" aria-label="Stock movement pagination" hidden>
+                <span id="movement-page-summary">Showing 0 movements</span>
+                <div>
+                    <button type="button" class="btn btn-quiet" id="movement-page-previous"><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
+                    <span id="movement-page-status" aria-live="polite">Page 1 of 1</span>
+                    <button type="button" class="btn btn-quiet" id="movement-page-next">Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                </div>
+            </nav>
         </section>
 
-        <section class="overview-section" aria-labelledby="fefo-heading">
+        <section class="overview-section overview-tab-panel" id="overview-panel-fefo" role="tabpanel" aria-labelledby="overview-tab-fefo" data-overview-tab-panel="fefo" hidden>
             <header class="overview-section-header">
                 <div><span class="overview-section-icon overview-section-icon--amber" aria-hidden="true"><i class="bi bi-calendar2-week"></i></span><div><h2 id="fefo-heading">FEFO Pick Recommendations</h2><p>Prioritize batches with the nearest expiration dates.</p></div></div>
                 <a href="<?= htmlspecialchars(app_url('components/report/stock_receiving.php')) ?>">Open stock receiving <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
@@ -145,7 +158,16 @@ $recent_movements = $recentStmt->fetchAll();
                     </tbody>
                 </table>
             </div>
+            <nav class="overview-tab-pagination" id="fefo-pagination" aria-label="FEFO recommendation pagination" hidden>
+                <span id="fefo-page-summary">Showing 0 recommendations</span>
+                <div>
+                    <button type="button" class="btn btn-quiet" id="fefo-page-previous"><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
+                    <span id="fefo-page-status" aria-live="polite">Page 1 of 1</span>
+                    <button type="button" class="btn btn-quiet" id="fefo-page-next">Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                </div>
+            </nav>
         </section>
+        </div>
         </div>
 
         <section class="overview-product-view" id="overview-product-view" aria-label="Filtered products" hidden>
@@ -197,6 +219,117 @@ $recent_movements = $recentStmt->fetchAll();
 <?php include __DIR__ . '/../modals/product_overview/product.php'; ?>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const overviewTabs = Array.from(document.querySelectorAll('[data-overview-tab]'));
+    const overviewTabPanels = Array.from(document.querySelectorAll('[data-overview-tab-panel]'));
+
+    function selectOverviewTab(tab, focusTab) {
+        const selectedTab = tab.dataset.overviewTab;
+        document.documentElement.classList.toggle('overview-fefo-active', selectedTab === 'fefo');
+        overviewTabs.forEach(function (button) {
+            const isActive = button === tab;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            button.tabIndex = isActive ? 0 : -1;
+        });
+        overviewTabPanels.forEach(function (panel) {
+            const isActive = panel.dataset.overviewTabPanel === selectedTab;
+            panel.classList.toggle('is-active', isActive);
+            panel.hidden = !isActive;
+        });
+        if (focusTab) tab.focus();
+    }
+
+    overviewTabs.forEach(function (tab, index) {
+        tab.addEventListener('click', function () {
+            selectOverviewTab(tab, false);
+        });
+        tab.addEventListener('keydown', function (event) {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            const direction = event.key === 'ArrowRight' ? 1 : -1;
+            const nextIndex = (index + direction + overviewTabs.length) % overviewTabs.length;
+            selectOverviewTab(overviewTabs[nextIndex], true);
+        });
+    });
+
+    const movementRows = Array.from(document.querySelectorAll('#overview-panel-movements tbody tr')).filter(function (row) {
+        return !row.querySelector('.overview-empty');
+    });
+    const movementPagination = document.getElementById('movement-pagination');
+    const movementPageSummary = document.getElementById('movement-page-summary');
+    const movementPageStatus = document.getElementById('movement-page-status');
+    const movementPreviousButton = document.getElementById('movement-page-previous');
+    const movementNextButton = document.getElementById('movement-page-next');
+    const movementPageSize = 5;
+    let movementPage = 1;
+
+    function renderMovementPage() {
+        const pageCount = Math.max(1, Math.ceil(movementRows.length / movementPageSize));
+        const firstRow = (movementPage - 1) * movementPageSize;
+        movementRows.forEach(function (row, index) {
+            row.hidden = index < firstRow || index >= firstRow + movementPageSize;
+        });
+        movementPagination.hidden = movementRows.length <= movementPageSize;
+        movementPageSummary.textContent = 'Showing ' + (firstRow + 1) + '-' + Math.min(firstRow + movementPageSize, movementRows.length) + ' of ' + movementRows.length;
+        movementPageStatus.textContent = 'Page ' + movementPage + ' of ' + pageCount;
+        movementPreviousButton.disabled = movementPage === 1;
+        movementNextButton.disabled = movementPage === pageCount;
+    }
+
+    movementPreviousButton.addEventListener('click', function () {
+        if (movementPage <= 1) return;
+        movementPage -= 1;
+        renderMovementPage();
+    });
+
+    movementNextButton.addEventListener('click', function () {
+        const pageCount = Math.max(1, Math.ceil(movementRows.length / movementPageSize));
+        if (movementPage >= pageCount) return;
+        movementPage += 1;
+        renderMovementPage();
+    });
+
+    renderMovementPage();
+
+    const fefoRows = Array.from(document.querySelectorAll('#overview-panel-fefo tbody tr')).filter(function (row) {
+        return !row.querySelector('.overview-empty');
+    });
+    const fefoPagination = document.getElementById('fefo-pagination');
+    const fefoPageSummary = document.getElementById('fefo-page-summary');
+    const fefoPageStatus = document.getElementById('fefo-page-status');
+    const fefoPreviousButton = document.getElementById('fefo-page-previous');
+    const fefoNextButton = document.getElementById('fefo-page-next');
+    const fefoPageSize = 5;
+    let fefoPage = 1;
+
+    function renderFefoPage() {
+        const pageCount = Math.max(1, Math.ceil(fefoRows.length / fefoPageSize));
+        const firstRow = (fefoPage - 1) * fefoPageSize;
+        fefoRows.forEach(function (row, index) {
+            row.hidden = index < firstRow || index >= firstRow + fefoPageSize;
+        });
+        fefoPagination.hidden = fefoRows.length <= fefoPageSize;
+        fefoPageSummary.textContent = 'Showing ' + (firstRow + 1) + '-' + Math.min(firstRow + fefoPageSize, fefoRows.length) + ' of ' + fefoRows.length;
+        fefoPageStatus.textContent = 'Page ' + fefoPage + ' of ' + pageCount;
+        fefoPreviousButton.disabled = fefoPage === 1;
+        fefoNextButton.disabled = fefoPage === pageCount;
+    }
+
+    fefoPreviousButton.addEventListener('click', function () {
+        if (fefoPage <= 1) return;
+        fefoPage -= 1;
+        renderFefoPage();
+    });
+
+    fefoNextButton.addEventListener('click', function () {
+        const pageCount = Math.max(1, Math.ceil(fefoRows.length / fefoPageSize));
+        if (fefoPage >= pageCount) return;
+        fefoPage += 1;
+        renderFefoPage();
+    });
+
+    renderFefoPage();
+
     if (!window.RetailMindUI) return;
 
     const pageSize = 10;
