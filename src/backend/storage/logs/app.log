@@ -254,3 +254,33 @@ Stack trace:
 [18-Sep-2026 14:32:25 Asia/Manila] PHP Deprecated:  Function curl_close() is deprecated since 8.5, as it has no effect since PHP 8.0 in C:\Users\Mike\AppData\Local\Temp\.ctx-mode-vfYoHV\script.php on line 6
 [18-Sep-2026 14:32:35 Asia/Manila] PHP Deprecated:  Function curl_close() is deprecated since 8.5, as it has no effect since PHP 8.0 in C:\Users\Mike\AppData\Local\Temp\.ctx-mode-xMTUnN\script.php on line 2
 [18-Sep-2026 14:33:03 Asia/Manila] PHP Deprecated:  Function curl_close() is deprecated since 8.5, as it has no effect since PHP 8.0 in C:\Users\Mike\AppData\Local\Temp\.ctx-mode-TzoM99\script.php on line 2
+[18-Sep-2026 20:51:46 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'u.profile_image' in 'field list' in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:182
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(182): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(324): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\inventory_management\inventory_overview.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[18-Sep-2026 20:51:50 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'u.profile_image' in 'field list' in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:182
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(182): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(324): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\inventory_management\inventory_overview.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[18-Sep-2026 20:54:28 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'u.profile_image' in 'field list' in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:182
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(182): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(324): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\inventory_management\inventory_overview.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[18-Sep-2026 20:54:55 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'u.profile_image' in 'field list' in C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php:182
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(182): PDO->prepare('SELECT u.status...')
+#1 C:\xampp\htdocs\inventory_system\src\backend\includes\auth.php(324): validate_current_session(Object(PDO))
+#2 C:\xampp\htdocs\inventory_system\src\frontend\components\inventory_management\inventory_overview.php(3): require_once('C:\\xampp\\htdocs...')
+#3 {main}
+[18-Sep-2026 21:08:18 Asia/Manila] Error: Call to undefined function selected_inventory_branch_id() in C:\xampp\htdocs\inventory_system\src\frontend\components\inventory_management\products.php:193
+Stack trace:
+#0 {main}
+[18-Sep-2026 21:26:06 Asia/Manila] Error: Call to undefined function branch_scope() in C:\xampp\htdocs\inventory_system\src\frontend\components\cashier\pos.php:56
+Stack trace:
+#0 {main}

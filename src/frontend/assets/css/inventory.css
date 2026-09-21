@@ -219,6 +219,14 @@ button.overview-metric:hover,button.overview-metric:focus-visible { border-color
 
 /* Source: frontend\modules\inventory_management\inventory_insights.php */
 .insight-toolbar{display:flex;gap:.65rem;align-items:center;flex-wrap:wrap}.status{font-weight:700}.table-wrap{overflow:auto}.risk{max-width:270px}.pill{display:inline-block;padding:.2rem .5rem;border-radius:999px;background:var(--surface-2,#e2e8f0);font-size:.8rem}
+.insights-tab-card{padding:0;overflow:hidden}
+.insights-tabs{display:flex;gap:.35rem;align-items:center;padding:.8rem .9rem 0;border-bottom:1px solid var(--border);background:#f8fafc;overflow-x:auto}
+.insights-tab{position:relative;min-height:42px;padding:.65rem 1rem;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--muted);font:inherit;font-weight:800;white-space:nowrap;cursor:pointer}
+.insights-tab:hover,.insights-tab:focus-visible{color:#2563eb;outline:none}
+.insights-tab.is-active{color:#1d4ed8;border-bottom-color:#2563eb}
+.insights-tab-panels{padding:1rem}
+.insights-tab-panel[hidden]{display:none}
+@media(max-width:620px){.insights-tabs{padding-inline:.65rem}.insights-tab{flex:1 0 auto;padding-inline:.75rem}.insights-tab-panels{padding:.75rem}}
 
 /* Source: frontend\modules\inventory_management\inventory_counts.php */
 .count-layout {

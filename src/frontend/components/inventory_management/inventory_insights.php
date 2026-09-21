@@ -118,7 +118,7 @@ foreach ($rows as $row) {
 <div class="topbar"><div><h1>Inventory Insights</h1><p class="page-subtitle">Days of stock, dead stock, excess inventory, expiry risk, and ABC cycle counting.</p></div><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="schedule_all"><button class="btn">Generate cycle schedule</button></form></div>
 <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?><?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 <div class="card-grid"><div class="stat-card"><div class="value"><?= $summary['critical'] ?></div><div class="label">Critical / out of stock</div></div><div class="stat-card"><div class="value"><?= $summary['dead'] ?></div><div class="label">Dead stock (90 days)</div></div><div class="stat-card"><div class="value"><?= $summary['excess'] ?></div><div class="label">Excess stock</div></div><div class="stat-card"><div class="value"><?= $summary['expiry'] ?></div><div class="label">Expiry-risk products</div></div></div>
-<section class="dashboard-section"><h3>Product risk analysis</h3><div class="table-wrap"><table><tr><th>Class</th><th>Product</th><th>On hand</th><th>30-day sales</th><th>Days of stock</th><th>Status</th><th>Expiry</th><th>Suggested action</th></tr>
+<section class="dashboard-section insights-tab-card"><div class="insights-tabs" role="tablist" aria-label="Inventory insight sections"><button type="button" class="insights-tab is-active" id="tab-product-risk" role="tab" aria-selected="true" aria-controls="panel-product-risk" data-insights-tab="product-risk">Product risk analysis</button><button type="button" class="insights-tab" id="tab-cycle-counts" role="tab" aria-selected="false" aria-controls="panel-cycle-counts" data-insights-tab="cycle-counts" tabindex="-1">Scheduled cycle counts</button></div><div class="insights-tab-panels"><div class="insights-tab-panel is-active" id="panel-product-risk" role="tabpanel" aria-labelledby="tab-product-risk" data-insights-panel="product-risk"><div class="table-wrap"><table><tr><th>Class</th><th>Product</th><th>On hand</th><th>30-day sales</th><th>Days of stock</th><th>Status</th><th>Expiry</th><th>Suggested action</th></tr>
 <?php foreach ($rows as $row):
 $actions=[];
 if ((int)$row['expired_qty']>0) $actions[]='Block and dispose/return expired stock';
@@ -128,6 +128,36 @@ if (in_array($row['stock_status'],['Critical','Out of stock'],true)) $actions[]=
 if ($row['stock_status']==='Excess') $actions[]='Reduce reorder quantity';
 if (!$actions) $actions[]='No immediate action'; ?>
 <tr><td><span class="pill"><?= $row['abc_class'] ?></span></td><td><?= htmlspecialchars($row['sku'].' - '.$row['product_name']) ?></td><td><?= (int)$row['quantity_on_hand'] ?></td><td><?= (int)$row['units_30'] ?></td><td><?= $row['days_of_stock']===null ? 'No demand' : number_format((float)$row['days_of_stock'],1) ?></td><td class="status"><?= htmlspecialchars($row['stock_status']) ?></td><td><?= (int)$row['expired_qty'] ?> expired / <?= (int)$row['expiring_90'] ?> near</td><td class="risk"><?= htmlspecialchars(implode('; ',$actions)) ?></td></tr>
-<?php endforeach; ?><?php if(!$rows):?><tr><td colspan="8">No active products found.</td></tr><?php endif;?></table></div></section>
-<section class="dashboard-section"><h3>Scheduled cycle counts</h3><div class="table-wrap"><table><tr><th>Due</th><th>Class</th><th>Product</th><th>Frequency</th><th>Priority</th><th>Assigned</th></tr><?php foreach($dueSchedules as $item):?><tr><td><?= htmlspecialchars($item['next_count_date']) ?></td><td><?= htmlspecialchars($item['abc_class']) ?></td><td><?= htmlspecialchars($item['sku'].' - '.$item['product_name']) ?></td><td>Every <?= (int)$item['frequency_days'] ?> days</td><td><?= number_format((float)$item['priority_score'],0) ?></td><td><?= htmlspecialchars($item['assigned_name'] ?? 'Unassigned') ?></td></tr><?php endforeach;?><?php if(!$dueSchedules):?><tr><td colspan="6">No cycle counts scheduled yet.</td></tr><?php endif;?></table></div><div class="u-mt-1"><a class="btn" href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php')) ?>">Open inventory counts</a></div></section>
-</main></div></body></html>
+<?php endforeach; ?><?php if(!$rows):?><tr><td colspan="8">No active products found.</td></tr><?php endif;?></table></div></div>
+<div class="insights-tab-panel" id="panel-cycle-counts" role="tabpanel" aria-labelledby="tab-cycle-counts" data-insights-panel="cycle-counts" hidden><div class="table-wrap"><table><tr><th>Due</th><th>Class</th><th>Product</th><th>Frequency</th><th>Priority</th><th>Assigned</th></tr><?php foreach($dueSchedules as $item):?><tr><td><?= htmlspecialchars($item['next_count_date']) ?></td><td><?= htmlspecialchars($item['abc_class']) ?></td><td><?= htmlspecialchars($item['sku'].' - '.$item['product_name']) ?></td><td>Every <?= (int)$item['frequency_days'] ?> days</td><td><?= number_format((float)$item['priority_score'],0) ?></td><td><?= htmlspecialchars($item['assigned_name'] ?? 'Unassigned') ?></td></tr><?php endforeach;?><?php if(!$dueSchedules):?><tr><td colspan="6">No cycle counts scheduled yet.</td></tr><?php endif;?></table></div><div class="u-mt-1"><a class="btn" href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php')) ?>">Open inventory counts</a></div></div></div></section>
+</main></div><script>
+(function() {
+    var tabs = Array.from(document.querySelectorAll('[data-insights-tab]'));
+    function selectInsightsTab(tab, focusTab) {
+        var selected = tab.dataset.insightsTab;
+        tabs.forEach(function(item) {
+            var active = item.dataset.insightsTab === selected;
+            item.classList.toggle('is-active', active);
+            item.setAttribute('aria-selected', active ? 'true' : 'false');
+            item.tabIndex = active ? 0 : -1;
+        });
+        document.querySelectorAll('[data-insights-panel]').forEach(function(panel) {
+            panel.hidden = panel.dataset.insightsPanel !== selected;
+            panel.classList.toggle('is-active', !panel.hidden);
+        });
+        if (focusTab) tab.focus();
+    }
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            selectInsightsTab(tab, false);
+        });
+        tab.addEventListener('keydown', function(event) {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            var direction = event.key === 'ArrowRight' ? 1 : -1;
+            var nextIndex = (tabs.indexOf(tab) + direction + tabs.length) % tabs.length;
+            selectInsightsTab(tabs[nextIndex], true);
+        });
+    });
+})();
+</script></body></html>
