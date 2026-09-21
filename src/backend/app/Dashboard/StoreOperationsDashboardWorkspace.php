@@ -19,7 +19,7 @@ final class StoreOperationsDashboardWorkspace
 
     private const ACTIONS = [
         ['label' => 'Store Staff', 'description' => 'Manage Cashiers and Inventory Managers', 'icon' => 'bi-people', 'destination' => 'components/user_manager/user_manager.php', 'capability' => RoleCapabilityPolicy::MANAGE_USERS],
-        ['label' => 'Sales Exceptions', 'description' => 'Review reversals and unusual discounts', 'icon' => 'bi-receipt-cutoff', 'destination' => 'components/invoice/reversals.php', 'capability' => RoleCapabilityPolicy::MANAGE_SALE_REVERSALS],
+        ['label' => 'Sales Exceptions', 'description' => 'Review reversals and unusual discounts', 'icon' => 'bi-receipt-cutoff', 'destination' => 'components/invoice/sales.php?tab=reversals', 'capability' => RoleCapabilityPolicy::MANAGE_SALE_REVERSALS],
         ['label' => 'Store Approvals', 'description' => 'Resolve pending replenishment decisions', 'icon' => 'bi-check2-square', 'destination' => 'components/inventory_management/replenishment_requests.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Fiscal Periods', 'description' => 'Govern Store accounting windows', 'icon' => 'bi-calendar-check', 'destination' => 'components/system_administrator/fiscal_periods.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_STORE_REPORTS],
@@ -170,7 +170,7 @@ final class StoreOperationsDashboardWorkspace
              FROM sale_reversals sr JOIN sales s ON s.sale_id = sr.sale_id
              WHERE sr.status = 'pending' ORDER BY sr.created_at ASC LIMIT 20"
         ) as $row) {
-            $items[] = $this->exception('warning', 'Sales reversal', ucfirst((string)$row['reversal_type']) . ' · ' . (string)$row['reason'], (string)$row['created_at'], 'components/invoice/reversals.php');
+            $items[] = $this->exception('warning', 'Sales reversal', ucfirst((string)$row['reversal_type']) . ' · ' . (string)$row['reason'], (string)$row['created_at'], 'components/invoice/sales.php?tab=reversals');
         }
         foreach ($this->rows(
             "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.full_name
@@ -187,7 +187,7 @@ final class StoreOperationsDashboardWorkspace
              ORDER BY sale_date DESC LIMIT 20",
             [(float)$thresholds['unusual_discount_percent'], $start, $end]
         ) as $row) {
-            $items[] = $this->exception('warning', 'Unusual discount', number_format((float)$row['discount_value'], 2) . '% discount on sale #' . (int)$row['sale_id'], (string)$row['sale_date'], 'components/invoice/sales_history.php');
+            $items[] = $this->exception('warning', 'Unusual discount', number_format((float)$row['discount_value'], 2) . '% discount on sale #' . (int)$row['sale_id'], (string)$row['sale_date'], 'components/invoice/sales.php?tab=transactions');
         }
         foreach ($this->rows(
             "SELECT rr.request_id, rr.request_qty, rr.request_date, p.product_name

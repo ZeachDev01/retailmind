@@ -4,7 +4,85 @@
 .table-wrap{overflow:auto}.reason{display:inline-block;margin:.1rem;padding:.2rem .45rem;border-radius:999px;background:#fee2e2;color:#991b1b;font-size:.78rem}
 
 /* Source: frontend\report\forecast_analytics.php */
-.chart-card{min-height:310px}.chart-card canvas{width:100%;height:240px}.analytics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem;margin-bottom:1rem}
+.chart-card{min-height:310px}.chart-card canvas{width:100%;height:240px}
+
+.forecast-analytics-tabs {
+    margin-top: 1.25rem;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+}
+
+.analytics-tab-list {
+    display: flex;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+    background: #f8fafc;
+}
+
+.analytics-tab {
+    display: inline-flex;
+    min-height: 48px;
+    flex: 1 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.75rem 1rem;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.analytics-tab:hover,
+.analytics-tab:focus-visible {
+    color: var(--primary);
+    background: #fff;
+}
+
+.analytics-tab:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--primary) 30%, transparent);
+    outline-offset: -3px;
+}
+
+.analytics-tab.is-active {
+    border-bottom-color: var(--primary);
+    background: #fff;
+    color: var(--primary);
+}
+
+.analytics-tab-panel {
+    min-height: 360px;
+    padding: 1.5rem;
+}
+
+.analytics-tab-panel[hidden] {
+    display: none;
+}
+
+.analytics-tab-panel h2 {
+    margin: 0 0 1.25rem;
+    font-size: 1.15rem;
+}
+
+.analytics-tab-panel.chart-card canvas {
+    height: 280px;
+}
+
+@media (max-width: 720px) {
+    .analytics-tab {
+        flex: 0 0 auto;
+        justify-content: flex-start;
+    }
+
+    .analytics-tab-panel {
+        min-height: 320px;
+        padding: 1rem;
+    }
+}
 
 /* Source: frontend\report\inventory_adjustments.php */
 .report-form {

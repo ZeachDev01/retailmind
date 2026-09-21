@@ -1,8 +1,9 @@
 <?php
-// components/invoice/receipt.php - CRUD interface for receipts
+// components/invoice/sales.php - sales transactions and reversal workflows
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
+require_once __DIR__ . '/../../../backend/app/Services/SaleReversalService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\ReceiptTableService;
@@ -17,6 +18,8 @@ $sale_id = (int)($_GET['sale_id'] ?? $_GET['id'] ?? $_GET['receipt_id'] ?? 0);
 $checkoutCompleted = ($_GET['checkout'] ?? '') === 'complete' && $sale_id > 0;
 $storeId = store_scope_id($pdo);
 $can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
+$canStartSale = current_role() !== 'inventory_manager';
+$activeTab = ($_GET['tab'] ?? 'transactions') === 'reversals' ? 'reversals' : 'transactions';
 
 function receipt_store_info(): array {
     static $cached = null;
@@ -108,13 +111,13 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
     return $itemsStmt->fetchAll();
 }
 
-function receipt_render_details(array $sale, array $items): void {
+function receipt_render_details(array $sale, array $items, bool $canStartSale): void {
     $store = receipt_store_info();
     $itemSubtotal = array_reduce($items, fn($total, $item) => $total + (float)$item['subtotal'], 0.0);
     $quantityTotal = array_reduce($items, fn($total, $item) => $total + (int)$item['quantity'], 0);
     $discount = max((float)($sale['discount_amount'] ?? 0), $itemSubtotal - (float)$sale['total_amount']);
     $verificationCode = receipt_verification_code($sale);
-    $receiptUrl = app_url('components/invoice/receipt.php?sale_id=' . (int)$sale['sale_id']);
+    $receiptUrl = app_url('components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
     ?>
     <div class="receipt-container">
         <div class="checkout-complete-banner no-print">
@@ -123,9 +126,11 @@ function receipt_render_details(array $sale, array $items): void {
             <div class="checkout-complete-change"><span>Change due</span><strong><?= $sale['change_due'] !== null ? receipt_money($sale['change_due']) : '-' ?></strong></div>
         </div>
         <div class="receipt-actions no-print">
-            <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>" class="btn"><i class="bi bi-plus-lg"></i> New Sale</a>
+            <?php if ($canStartSale): ?>
+                <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>" class="btn"><i class="bi bi-plus-lg"></i> New Sale</a>
+            <?php endif; ?>
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
-            <a href="<?= htmlspecialchars(app_url('components/invoice/receipt.php')) ?>" class="btn btn-secondary"><i class="bi bi-receipt"></i> Receipt History</a>
+            <a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>" class="btn btn-secondary"><i class="bi bi-receipt"></i> Receipt History</a>
         </div>
         <div class="receipt-card receipt-print-area">
             <div class="receipt-header">
@@ -221,6 +226,66 @@ if ($action === 'data') {
     exit;
 }
 
+$reversalService = new SaleReversalService($pdo);
+$reversalCanApprove = has_capability(RoleCapabilityPolicy::MANAGE_SALE_REVERSALS);
+$reversalMessage = '';
+$reversalError = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $activeTab = 'reversals';
+    csrf_verify();
+    $postAction = $_POST['action'] ?? '';
+
+    try {
+        if ($postAction === 'request') {
+            $requestedSale = $reversalService->getSaleWithItems((int)$_POST['sale_id']);
+            if (!$requestedSale) {
+                throw new RuntimeException('Sale not found.');
+            }
+            if (!$reversalCanApprove && (int)$requestedSale['cashier_id'] !== (int)$_SESSION['user_id']) {
+                throw new RuntimeException('You can only request reversals for your own sales.');
+            }
+
+            $reversalId = $reversalService->requestReversal(
+                (int)$_POST['sale_id'],
+                $_POST['reversal_type'] ?? '',
+                $_POST['reason'] ?? '',
+                $_POST['items'] ?? [],
+                (int)$_SESSION['user_id'],
+                $_POST['settlement_method'] ?? 'none',
+                (float)($_POST['refund_amount'] ?? 0),
+                $_POST['exchange_details'] ?? ''
+            );
+            $reversalMessage = "Reversal request #{$reversalId} was submitted for supervisor approval.";
+            $sale_id = (int)$_POST['sale_id'];
+        } elseif ($postAction === 'approve' && $reversalCanApprove) {
+            $reversalService->approveReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id']);
+            $reversalMessage = 'Reversal approved and returned stock was restored.';
+        } elseif ($postAction === 'reject' && $reversalCanApprove) {
+            $reversalService->rejectReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id'], $_POST['rejection_reason'] ?? '');
+            $reversalMessage = 'Reversal request rejected.';
+        }
+    } catch (RuntimeException $exception) {
+        $reversalError = $exception->getMessage();
+    } catch (PDOException $exception) {
+        $reversalError = 'The reversal could not be saved because of a database error.';
+    }
+}
+
+$reversalSale = $activeTab === 'reversals' && $sale_id > 0
+    ? $reversalService->getSaleWithItems($sale_id)
+    : null;
+if ($reversalSale && !$can_manage_all && (int)$reversalSale['cashier_id'] !== (int)$_SESSION['user_id']) {
+    $reversalError = 'You can only view reversals for your own sales.';
+    $reversalSale = null;
+}
+$reversals = $activeTab === 'reversals'
+    ? ($sale_id > 0 && $reversalSale
+        ? $reversalService->getReversals($sale_id)
+        : ($can_manage_all ? $reversalService->getReversals() : []))
+    : [];
+$pendingReversals = array_values(array_filter($reversals, static fn(array $row): bool => $row['status'] === 'pending'));
+
 $receiptCashiers = [];
 if ($can_manage_all) {
     $cashierStatement = $pdo->query(
@@ -267,7 +332,7 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
     }
 
     $sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
-    receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id));
+    receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale);
     exit;
 
     $itemsStmt = $pdo->prepare(
@@ -345,7 +410,7 @@ if ($sale_id > 0) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Receipt Management</title>
+<title>Sales</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css')) ?>">
@@ -357,31 +422,35 @@ if ($sale_id > 0) {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <div class="main-content">
-        <div class="topbar">
-            <div>
-                <h1>Receipt Management</h1>
-                <p class="page-subtitle">Find completed sales, review receipt details, and manage reversals.</p>
-            </div>
-            <span class="badge-role"><?= ucfirst(htmlspecialchars(current_role())) ?></span>
-        </div>
         <div class="receipts-container">
+            <nav class="sales-tabs" aria-label="Sales views">
+                <a class="sales-tab<?= $activeTab === 'transactions' ? ' is-active' : '' ?>" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">
+                    <i class="bi bi-receipt" aria-hidden="true"></i> Sales Transactions
+                </a>
+                <a class="sales-tab<?= $activeTab === 'reversals' ? ' is-active' : '' ?>" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>">
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Sales Reversals
+                </a>
+            </nav>
+
+            <?php if ($activeTab === 'transactions'): ?>
             <?php if ($selected_error): ?>
                 <div class="alert alert-success"><?= htmlspecialchars($selected_error) ?></div>
             <?php endif; ?>
 
             <?php if ($selected_sale): ?>
-                <?php receipt_render_details($selected_sale, $selected_items); ?>
+                <?php receipt_render_details($selected_sale, $selected_items, $canStartSale); ?>
             <?php endif; ?>
 
-            <div class="alert alert-success">Completed receipts are locked. Use reversals for cancellations, returns, refunds, and exchanges.</div>
-
-            <section class="dashboard-section receipt-table-card" aria-labelledby="receipt-table-title">
-                <div class="section-header receipt-table-heading">
+            <div class="section-header receipt-table-heading">
                     <div>
                         <h2 id="receipt-table-title">Receipt history</h2>
                         <p class="section-description">Search by receipt number or payment method, then narrow the permitted history with the filters.</p>
                     </div>
-                    <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
+                    <div class="receipt-heading-actions">
+                        <?php if ($canStartSale): ?>
+                            <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <div class="receipt-filters" aria-label="Receipt filters">
@@ -424,9 +493,11 @@ if ($sale_id > 0) {
                 <div id="receiptEmptyState" class="empty-state receipt-empty-state" hidden>
                     <h2>No receipts have been created yet.</h2>
                     <p>Complete a sale to create the first receipt.</p>
-                    <div class="empty-actions">
-                        <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Start a Sale</a>
-                    </div>
+                    <?php if ($canStartSale): ?>
+                        <div class="empty-actions">
+                            <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Start a Sale</a>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="table-wrap receipt-table-wrap">
                     <table id="receiptsTable" class="receipts-table display" data-no-smart-table>
@@ -445,7 +516,98 @@ if ($sale_id > 0) {
                         <tbody></tbody>
                     </table>
                 </div>
-            </section>
+            <?php else: ?>
+                <?php if ($reversalMessage): ?><div class="alert tag-success"><?= htmlspecialchars($reversalMessage) ?></div><?php endif; ?>
+                <?php if ($reversalError): ?><div class="alert tag-warning"><?= htmlspecialchars($reversalError) ?></div><?php endif; ?>
+
+                <div class="section-header reversal-heading">
+                    <div>
+                        <h2>Sales reversals</h2>
+                        <p class="section-description">Corrections create separate approved records; completed sales stay unchanged.</p>
+                    </div>
+                    <form method="GET" class="actions-row reversal-search">
+                        <input type="hidden" name="tab" value="reversals">
+                        <label for="reversalSaleId">Receipt / Sale ID</label>
+                        <input type="number" min="1" name="sale_id" id="reversalSaleId" value="<?= $sale_id ?: '' ?>" placeholder="Receipt number">
+                        <button class="btn" type="submit"><i class="bi bi-search" aria-hidden="true"></i> Load</button>
+                    </form>
+                </div>
+
+                <div class="grid-two sales-reversal-grid">
+                    <div>
+                        <?php if ($reversalSale): ?>
+                            <div class="panel">
+                                <div class="section-header">
+                                    <div>
+                                        <h3>Sale #<?= (int)$reversalSale['sale_id'] ?></h3>
+                                        <p class="section-description"><?= htmlspecialchars($reversalSale['sale_date']) ?> by <?= htmlspecialchars($reversalSale['cashier_name']) ?>, <?= htmlspecialchars(strtoupper($reversalSale['payment_method'])) ?>, &#8369;<?= number_format((float)$reversalSale['total_amount'], 2) ?></p>
+                                    </div>
+                                    <?php if (!empty($reversalSale['approved_full_reversal'])): ?><span class="status-pill status-approved">Cancelled</span><?php endif; ?>
+                                </div>
+
+                                <form method="POST" action="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="request">
+                                    <input type="hidden" name="sale_id" value="<?= (int)$reversalSale['sale_id'] ?>">
+                                    <div class="form-group">
+                                        <label for="reversal_type">Correction Type</label>
+                                        <select name="reversal_type" id="reversal_type">
+                                            <option value="return">Product Return</option><option value="refund">Refund</option><option value="exchange">Exchange</option><option value="cancel">Cancel Entire Transaction</option>
+                                        </select>
+                                    </div>
+                                    <div class="u-table-scroll-spaced">
+                                        <table>
+                                            <tr><th>Product</th><th>Sold</th><th>Reversed</th><th>Return Qty</th><th>Unit Price</th></tr>
+                                            <?php foreach ($reversalSale['items'] as $item): $remaining = (int)$item['quantity'] - (int)$item['reversed_qty']; ?>
+                                                <tr>
+                                                    <td><?= htmlspecialchars($item['sku'] . ' - ' . $item['product_name']) ?></td><td><?= (int)$item['quantity'] ?></td><td><?= (int)$item['reversed_qty'] ?></td>
+                                                    <td><input class="reversal-quantity" type="number" name="items[<?= (int)$item['sale_item_id'] ?>]" min="0" max="<?= max(0, $remaining) ?>" value="0" <?= $remaining <= 0 ? 'disabled' : '' ?>></td>
+                                                    <td>&#8369;<?= number_format((float)$item['unit_price'], 2) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </table>
+                                    </div>
+                                    <div class="form-group"><label for="settlement_method">Refund / Exchange Handling</label><select name="settlement_method" id="settlement_method"><option value="none">No money movement</option><option value="cash">Cash Refund</option><option value="card">Card Refund</option><option value="ewallet">E-Wallet Refund</option><option value="exchange">Exchange / Store Credit</option></select></div>
+                                    <div class="form-group"><label for="refund_amount">Refund Amount</label><input type="number" step="0.01" min="0" name="refund_amount" id="refund_amount" value="0.00"></div>
+                                    <div class="form-group"><label for="exchange_details">Exchange Details</label><textarea name="exchange_details" id="exchange_details" placeholder="Replacement item, store credit reference, or exchange notes"></textarea></div>
+                                    <div class="form-group"><label for="reason">Reason</label><textarea name="reason" id="reason" required placeholder="Reason required for audit and supervisor approval"></textarea></div>
+                                    <button class="btn" type="submit">Submit for Supervisor Approval</button>
+                                </form>
+                            </div>
+                        <?php elseif ($sale_id > 0): ?>
+                            <div class="panel">Sale #<?= $sale_id ?> was not found.</div>
+                        <?php else: ?>
+                            <div class="empty-state reversal-empty"><i class="bi bi-receipt"></i><strong>Load a sale to request a reversal</strong><span>Enter a receipt number above to review eligible items.</span></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div>
+                        <?php if ($reversalCanApprove && $pendingReversals): ?>
+                            <div class="panel">
+                                <h3>Pending Supervisor Approval</h3>
+                                <p class="section-description">Approving restores returned stock and records the audit entry.</p>
+                                <?php foreach ($pendingReversals as $row): ?>
+                                    <div class="u-section-divider">
+                                        <strong>#<?= (int)$row['reversal_id'] ?> <?= htmlspecialchars(strtoupper($row['reversal_type'])) ?></strong>
+                                        <p class="muted">Sale #<?= (int)$row['sale_id'] ?> requested by <?= htmlspecialchars($row['requested_by_name'] ?? 'Unknown') ?></p><p><?= htmlspecialchars($row['reason']) ?></p>
+                                        <div class="actions-row u-mt-075">
+                                            <form method="POST" action="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>" class="inline-form"><?= csrf_field() ?><input type="hidden" name="action" value="approve"><input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>"><button class="btn btn-small" type="submit">Approve</button></form>
+                                            <form method="POST" action="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>" class="actions-row u-m-0"><?= csrf_field() ?><input type="hidden" name="action" value="reject"><input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>"><input class="u-field-basic" type="text" name="rejection_reason" placeholder="Rejection reason" required><button class="btn btn-small btn-danger" type="submit">Reject</button></form>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                        <div class="panel">
+                            <h3><?= $sale_id > 0 ? 'Sale Reversal History' : 'Recent Reversals' ?></h3>
+                            <div class="u-table-scroll u-mt-075"><table><tr><th>ID</th><th>Sale</th><th>Type</th><th>Status</th><th>Requested</th></tr>
+                                <?php foreach ($reversals as $row): ?><tr><td>#<?= (int)$row['reversal_id'] ?></td><td><a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals&sale_id=' . $row['sale_id'])) ?>">#<?= (int)$row['sale_id'] ?></a></td><td><?= htmlspecialchars(ucfirst($row['reversal_type'])) ?></td><td><span class="status-pill status-<?= htmlspecialchars($row['status']) ?>"><?= htmlspecialchars($row['status']) ?></span></td><td><?= htmlspecialchars(format_display_datetime($row['created_at'])) ?></td></tr><?php endforeach; ?>
+                                <?php if (!$reversals): ?><tr><td class="u-empty-cell" colspan="5">No reversal records yet.</td></tr><?php endif; ?>
+                            </table></div>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -478,7 +640,7 @@ if ($sale_id > 0) {
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Edit Receipt #<?= $sale_id ?></h2>
-                <button type="button" class="modal-close" title="Close" onclick="window.location.href='<?= htmlspecialchars(app_url('components/invoice/receipt.php')) ?>'">&times;</button>
+                <button type="button" class="modal-close" title="Close" onclick="window.location.href='<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>'">&times;</button>
             </div>
             <div class="receipt-container">
                 <form method="POST">
@@ -516,7 +678,7 @@ if ($sale_id > 0) {
 
                     <div class="u-flex-wrap">
                         <button type="submit" class="btn btn-primary">💾 Save Changes</button>
-                        <a href="<?= htmlspecialchars(app_url('components/invoice/receipt.php')) ?>" class="btn">Cancel</a>
+                        <a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>" class="btn">Cancel</a>
                     </div>
                 </form>
             </div>
@@ -528,6 +690,20 @@ if ($sale_id > 0) {
 <script src="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    if (!document.getElementById('receiptsTable')) {
+        return;
+    }
+
+    if (window.Swal && typeof window.Swal.fire === 'function') {
+        window.Swal.fire({
+            icon: 'info',
+            title: 'Completed receipts are locked',
+            text: 'Use reversals for cancellations, returns, refunds, and exchanges.',
+            confirmButtonText: 'Understood',
+            customClass: {confirmButton: 'btn rm-swal-confirm'}
+        });
+    }
+
     if (typeof DataTable === 'undefined') {
         return;
     }
@@ -591,7 +767,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
         ajax: {
-            url: '<?= htmlspecialchars(app_url('components/invoice/receipt.php?action=data')) ?>',
+            url: '<?= htmlspecialchars(app_url('components/invoice/sales.php?action=data')) ?>',
             data: function(request) {
                 Object.assign(request, currentFilters());
             },
@@ -647,7 +823,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const saleId = Number(value);
                     return '<div class="actions-cell">' +
                         '<button type="button" class="btn-small btn-view" onclick="viewReceipt(' + saleId + ')"><i class="bi bi-eye" aria-hidden="true"></i> View</button>' +
-                        '<a href="<?= htmlspecialchars(app_url('components/invoice/reversals.php?sale_id=')) ?>' + saleId + '" class="btn-small btn-edit">Reverse</a>' +
+                        '<a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals&sale_id=')) ?>' + saleId + '" class="btn-small btn-edit">Reverse</a>' +
                         '</div>';
                 }
             }
@@ -729,7 +905,7 @@ function exportReceiptPdf(trigger) {
 }
 
 function viewReceipt(saleId) {
-    const url = '<?= htmlspecialchars(app_url('components/invoice/receipt.php')) ?>?action=view&sale_id=' + saleId + '&ajax=1';
+    const url = '<?= htmlspecialchars(app_url('components/invoice/sales.php')) ?>?action=view&sale_id=' + saleId + '&ajax=1';
 
     fetch(url)
         .then(r => {
@@ -774,7 +950,7 @@ async function legacyDeleteReceiptDisabled(saleId) {
 
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = '<?= htmlspecialchars(app_url('components/invoice/receipt.php?action=delete&sale_id=')) ?>' + saleId;
+    form.action = '<?= htmlspecialchars(app_url('components/invoice/sales.php?action=delete&sale_id=')) ?>' + saleId;
     form.innerHTML = '<input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">';
     document.body.appendChild(form);
     form.submit();

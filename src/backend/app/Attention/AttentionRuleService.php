@@ -21,8 +21,8 @@ final class AttentionRuleService
     ];
 
     private const STORE_RULES = [
-        ['key' => 'store.sales.reversals', 'signal' => 'reversal_count', 'threshold' => 'reversal_count', 'severity' => 'warning', 'category' => 'sales', 'title' => 'Sales reversals require review', 'destination' => 'components/invoice/reversals.php'],
-        ['key' => 'store.sales.unusual-discounts', 'signal' => 'max_discount_percent', 'threshold' => 'unusual_discount_percent', 'severity' => 'warning', 'category' => 'sales', 'title' => 'Unusual discounts require review', 'destination' => 'components/invoice/sales_history.php'],
+        ['key' => 'store.sales.reversals', 'signal' => 'reversal_count', 'threshold' => 'reversal_count', 'severity' => 'warning', 'category' => 'sales', 'title' => 'Sales reversals require review', 'destination' => 'components/invoice/sales.php?tab=reversals'],
+        ['key' => 'store.sales.unusual-discounts', 'signal' => 'max_discount_percent', 'threshold' => 'unusual_discount_percent', 'severity' => 'warning', 'category' => 'sales', 'title' => 'Unusual discounts require review', 'destination' => 'components/invoice/sales.php?tab=transactions'],
         ['key' => 'store.cash.variance', 'signal' => 'cash_variance_amount', 'threshold' => 'cash_variance_amount', 'severity' => 'critical', 'category' => 'cash', 'title' => 'Cash variance exceeds tolerance', 'destination' => 'components/report/report_generation.php', 'absolute' => true],
         ['key' => 'store.approvals.overdue', 'signal' => 'oldest_approval_hours', 'threshold' => 'overdue_approval_hours', 'severity' => 'warning', 'category' => 'approvals', 'title' => 'Store approvals are overdue', 'destination' => 'components/inventory_management/replenishment_requests.php'],
         ['key' => 'store.inventory.escalated', 'signal' => 'inventory_escalated_count', 'threshold' => 'inventory_escalation_count', 'severity' => 'warning', 'category' => 'inventory', 'title' => 'Inventory risks were escalated', 'destination' => 'components/inventory_management/inventory_insights.php'],

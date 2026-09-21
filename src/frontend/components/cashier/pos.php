@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
 
     try {
         $result = $salesWorkflowService->checkout($cart, (int)$_SESSION['user_id'], $payment_method, $paymentDetails);
-        header('Location: ' . app_url('components/invoice/receipt.php?sale_id=' . $result['sale_id'] . '&checkout=complete'));
+        header('Location: ' . app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $result['sale_id'] . '&checkout=complete'));
         exit;
     } catch (RuntimeException $e) {
         $checkout_error = $e->getMessage();

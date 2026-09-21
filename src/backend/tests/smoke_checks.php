@@ -211,22 +211,22 @@ $checks = [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',
         'needles' => ['audit-log-stats', 'bi-card-checklist', 'bi-person-check-fill', 'bi-boxes'],
     ],
-    'Receipt Management uses a server-side DataTable' => [
-        'file' => 'src/frontend/components/invoice/receipt.php',
+    'Sales Transactions uses a server-side DataTable' => [
+        'file' => 'src/frontend/components/invoice/sales.php',
         'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 25', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
         'forbidden' => ['function performSearch()', 'fetchAll();\n}'],
     ],
-    'Receipt Management exposes focused filters and existing actions' => [
-        'file' => 'src/frontend/components/invoice/receipt.php',
-        'needles' => ['id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'components/invoice/reversals.php?sale_id=', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
+    'Sales workspace exposes transaction filters and reversal actions' => [
+        'file' => 'src/frontend/components/invoice/sales.php',
+        'needles' => ['sales-tabs', 'Sales Transactions', 'Sales Reversals', 'id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'tab=reversals&sale_id=', 'SaleReversalService', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
     ],
-    'Receipt Management server contract is isolated and safe' => [
+    'Sales transaction server contract is isolated and safe' => [
         'file' => 'src/backend/app/Services/ReceiptTableService.php',
         'needles' => ['class ReceiptTableService', 'StoreScope', 'recordsTotal', 'recordsFiltered', "'s.sale_date'", "'s.total_amount'", "'item_count'", 'LIMIT :limit OFFSET :offset'],
         'forbidden' => ['ORDER BY {$request', 'ORDER BY ' . "\$_GET", "scope['branch_id']", 'scope_branch_id'],
     ],
     'Sales and receipt routes use capability and Store scope' => [
-        'file' => 'src/frontend/components/invoice/receipt.php',
+        'file' => 'src/frontend/components/invoice/sales.php',
         'needles' => ['VIEW_SALES_HISTORY', 'store_scope_id($pdo)', 'ReceiptTableService($pdo)'],
         'forbidden' => ["require_role(['admin', 'super_admin', 'inventory_manager', 'cashier'])", "'branch_id' => null"],
     ],

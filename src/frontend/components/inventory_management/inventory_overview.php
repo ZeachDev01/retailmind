@@ -99,7 +99,6 @@ $recent_movements = $recentStmt->fetchAll();
         <section class="overview-section overview-tab-panel is-active" id="overview-panel-movements" role="tabpanel" aria-labelledby="overview-tab-movements" data-overview-tab-panel="movements">
             <header class="overview-section-header">
                 <div><span class="overview-section-icon" aria-hidden="true"><i class="bi bi-arrow-left-right"></i></span><div><h2 id="movement-heading">Recent Stock Movements</h2><p>Latest inventory changes recorded across this store scope.</p></div></div>
-                <a href="<?= htmlspecialchars(app_url('components/invoice/transactions.php')) ?>">View all transactions <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
             </header>
             <div class="overview-table-shell">
                 <table class="overview-table">

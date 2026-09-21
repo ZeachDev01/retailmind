@@ -1,18 +1,35 @@
 /* invoices.css - extracted view-specific styles. */
 
-/* Source: frontend\modules\invoice\receipt.php */
+/* Sales transactions */
 .receipts-container {
         max-width: 1200px;
         margin: 0 auto;
         padding: 2rem 1rem;
     }
 
-    .receipts-page .receipt-table-card {
-        overflow: visible;
-    }
-
     .receipts-page .receipt-table-heading {
         align-items: center;
+    }
+
+    .sales-tabs { display:flex;gap:0;margin-bottom:1.5rem;border-bottom:1px solid var(--border); }
+    .sales-tab { display:inline-flex;min-height:44px;align-items:center;gap:.45rem;padding:.7rem 1rem;border-bottom:3px solid transparent;color:var(--muted);font-weight:700;text-decoration:none; }
+    .sales-tab:hover,.sales-tab:focus-visible,.sales-tab.is-active { color:var(--primary); }
+    .sales-tab.is-active { border-bottom-color:var(--primary); }
+    .reversal-heading { align-items:flex-end; }
+    .reversal-search { align-items:flex-end; }
+    .reversal-search label { font-size:.8rem;font-weight:700; }
+    .reversal-search input,.reversal-quantity { min-height:40px;padding:.5rem .65rem;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);color:var(--text); }
+    .reversal-quantity { width:5.5rem; }
+    .sales-reversal-grid { align-items:start; }
+    .reversal-empty { min-height:260px; }
+
+    .receipts-page .receipt-heading-actions {
+        display: flex;
+        width: min(440px, 100%);
+        flex: 0 1 440px;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.75rem;
     }
 
     .receipts-page .receipt-table-heading .btn {
@@ -75,6 +92,12 @@
     .receipts-page .receipt-table-status .btn {
         min-height: 32px;
         padding: 0.3rem 0.65rem;
+    }
+
+    .receipts-page .receipt-table-status .btn[hidden],
+    .receipts-page .receipt-empty-state[hidden],
+    .receipts-page .receipt-table-wrap[hidden] {
+        display: none;
     }
 
     .receipts-page .receipt-table-status.is-error {
@@ -549,9 +572,18 @@
     }
 
     @media (max-width: 768px) {
+        .sales-tabs { overflow-x:auto; }
+        .sales-tab { flex:1 0 max-content;justify-content:center; }
         .receipts-page .receipt-table-heading {
             align-items: flex-start;
             gap: 0.75rem;
+        }
+
+        .receipts-page .receipt-heading-actions {
+            width: 100%;
+            flex: 1 1 100%;
+            align-items: stretch;
+            flex-direction: column;
         }
 
         .receipts-page .receipt-filters {
@@ -592,7 +624,7 @@
         }
     }
 
-/* Source: frontend\modules\invoice\reversals.php */
+/* Sales reversals */
 .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem; margin-bottom: 1rem; }
     .grid-two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr); gap: 1rem; align-items: start; }
     .status-pill { display: inline-flex; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; }
