@@ -92,144 +92,126 @@ unset($_SESSION['_login_username']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RetailMind Inventory</title>
+    <title>RetailMind — Store inventory, sales, and forecasting</title>
+    <meta name="description" content="RetailMind keeps Shalom Store inventory, barcode sales, purchasing, cashier shifts, and demand forecasting in one operational workspace.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= $styleUrl ?>">
 </head>
 
 <body class="landing-page">
-    <header class="landing-hero" role="img" aria-label="Organized retail inventory station with barcode scanner, tablet dashboard, and stock shelves">
+    <header class="landing-header">
         <nav class="landing-nav" aria-label="Primary">
             <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
-                <span class="landing-brand__mark" aria-hidden="true">R</span>
+                <span class="landing-brand__mark" aria-hidden="true">RM</span>
                 <span>
                     <strong>RetailMind</strong>
-                    <small>Inventory System</small>
+                    <small>Shalom Store / Operations</small>
                 </span>
             </a>
             <div class="landing-nav__links">
-                <a href="#capabilities">Capabilities</a>
-                <a href="#workflow">Workflow</a>
-                <a class="landing-nav__login" href="<?= $loginUrl ?>" data-login-modal-open>Log in</a>
+                <a href="#capabilities">System</a>
+                <a href="#workflow">Process</a>
+                <a class="landing-nav__login" href="<?= $loginUrl ?>" data-login-modal-open>Staff login</a>
             </div>
         </nav>
-
-        <section class="landing-hero__content" aria-labelledby="landing-title">
-            <p class="landing-eyebrow">Retail inventory, sales, and forecasting</p>
-            <h1 id="landing-title">RetailMind Inventory</h1>
-            <p class="landing-hero__copy">
-                Run Shalom Store operations from one focused system: product stock, barcode sales,
-                replenishment, purchase orders, cashier shifts, reports, and Random Forest demand forecasts.
-            </p>
-            <div class="landing-actions">
-                <a class="btn landing-btn landing-btn--primary" href="<?= $loginUrl ?>" data-login-modal-open>Log in to workspace</a>
-                <a class="btn landing-btn landing-btn--secondary" href="#workflow">See workflow</a>
-            </div>
-            <dl class="landing-metrics" aria-label="System highlights">
-                <div>
-                    <dt>3</dt>
-                    <dd>operational roles</dd>
-                </div>
-                <div>
-                    <dt>24h</dt>
-                    <dd>held sale expiry</dd>
-                </div>
-                <div>
-                    <dt>RF</dt>
-                    <dd>demand forecasting</dd>
-                </div>
-            </dl>
-        </section>
     </header>
 
     <main>
-        <section class="landing-proof" aria-label="Operational focus">
-            <div class="landing-proof__inner">
-                <span>Stock monitoring</span>
-                <span>Barcode checkout</span>
-                <span>Supplier purchasing</span>
-                <span>Cashier reconciliation</span>
-                <span>Forecast analytics</span>
+        <section class="landing-hero" aria-labelledby="landing-title">
+            <div class="landing-hero__content">
+                <p class="landing-kicker"><span>01</span> Store operations, kept in order</p>
+                <h1 id="landing-title">Know what is on the shelf. Reorder before it runs out.</h1>
+                <p class="landing-hero__copy">
+                    RetailMind gives Shalom Store one working system for product stock, barcode sales,
+                    purchasing, cashier shifts, reports, and demand forecasts.
+                </p>
+                <div class="landing-actions">
+                    <a class="btn landing-btn landing-btn--primary" href="<?= $loginUrl ?>" data-login-modal-open>Open staff workspace</a>
+                    <a class="landing-text-link" href="#workflow">View the operating process</a>
+                </div>
+            </div>
+            <figure class="landing-hero__visual">
+                <img src="<?= htmlspecialchars(landing_app_url('assets/img/landing-hero.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Barcode scanner and inventory dashboard at a stocked retail counter">
+                <figcaption>
+                    <span>RM / INVENTORY DESK</span>
+                    Live stock, checkout data, and purchasing decisions stay connected.
+                </figcaption>
+            </figure>
+            <div class="landing-hero__index" aria-hidden="true">
+                <span>SCAN</span><span>COUNT</span><span>FORECAST</span><span>ORDER</span>
             </div>
         </section>
 
-        <section id="capabilities" class="landing-section">
-            <div class="landing-section__intro">
-                <p class="landing-eyebrow">Capabilities</p>
-                <h2>Built for the daily store rhythm</h2>
-                <p>
-                    RetailMind keeps the core work close together, so teams can move from the shelf,
-                    to the cashier counter, to the reorder decision without switching systems.
-                </p>
-            </div>
-            <div class="landing-feature-grid">
-                <article class="landing-feature-card">
-                    <h3>Inventory Control</h3>
-                    <p>Track product status, low stock, expiry risk, dead stock, excess stock, and ABC cycle-count priorities.</p>
+        <section id="capabilities" class="landing-system">
+            <header class="landing-section-heading">
+                <p class="landing-kicker"><span>02</span> One operating record</p>
+                <h2>The shelf, the till, and the order book agree.</h2>
+                <p>Store teams move through the day without rebuilding the same information in separate tools.</p>
+            </header>
+
+            <div class="landing-capabilities">
+                <article class="landing-capability landing-capability--lead">
+                    <p class="landing-capability__code">INV / 001</p>
+                    <h3>Inventory control</h3>
+                    <p>See low stock, expiry risk, dead stock, excess stock, and ABC cycle-count priorities in the same record used for receiving and sales.</p>
+                    <ul aria-label="Inventory control details">
+                        <li>Stock status</li>
+                        <li>Expiry exposure</li>
+                        <li>Count priorities</li>
+                    </ul>
                 </article>
-                <article class="landing-feature-card">
-                    <h3>Barcode Sales</h3>
-                    <p>Scan manufacturer labels or generated Code 128 labels, hold sales, apply controlled discounts, and print receipts.</p>
-                </article>
-                <article class="landing-feature-card">
-                    <h3>Forecast Planning</h3>
-                    <p>Review Random Forest demand forecasts, confidence ranges, baseline comparisons, and transparent reorder inputs.</p>
-                </article>
-                <article class="landing-feature-card">
-                    <h3>Purchase Flow</h3>
-                    <p>Manage suppliers, purchase orders, partial receiving, package conversion, and approval separation.</p>
-                </article>
-                <article class="landing-feature-card">
-                    <h3>Shift Closeout</h3>
-                    <p>Open cashier shifts, record pay-ins and pay-outs, reconcile end-of-shift cash, and review variances.</p>
-                </article>
-                <article class="landing-feature-card">
-                    <h3>Reports</h3>
-                    <p>Use operational dashboards, inventory insights, forecast exceptions, receipt settings, backups, and notifications.</p>
-                </article>
+                <div class="landing-capability-list">
+                    <article class="landing-capability">
+                        <p class="landing-capability__code">POS / 002</p>
+                        <div><h3>Barcode sales</h3><p>Scan labels, hold sales, control discounts, and print receipts.</p></div>
+                    </article>
+                    <article class="landing-capability">
+                        <p class="landing-capability__code">FCST / 003</p>
+                        <div><h3>Forecast planning</h3><p>Compare Random Forest forecasts, confidence ranges, and reorder inputs.</p></div>
+                    </article>
+                    <article class="landing-capability">
+                        <p class="landing-capability__code">PO / 004</p>
+                        <div><h3>Purchase flow</h3><p>Manage suppliers, approvals, package conversion, and partial receiving.</p></div>
+                    </article>
+                    <article class="landing-capability">
+                        <p class="landing-capability__code">SHIFT / 005</p>
+                        <div><h3>Shift closeout</h3><p>Track pay-ins, pay-outs, expected cash, and end-of-shift variance.</p></div>
+                    </article>
+                    <article class="landing-capability">
+                        <p class="landing-capability__code">RPT / 006</p>
+                        <div><h3>Operational reports</h3><p>Review inventory insights, forecast exceptions, backups, and notifications.</p></div>
+                    </article>
+                </div>
             </div>
         </section>
 
         <section id="workflow" class="landing-workflow">
-            <div class="landing-workflow__content">
-                <p class="landing-eyebrow">Workflow</p>
-                <h2>From checkout data to better replenishment</h2>
+            <header class="landing-workflow__content">
+                <p class="landing-kicker"><span>03</span> The operating process</p>
+                <h2>Each sale leaves the next decision better informed.</h2>
                 <p>
-                    Sales activity feeds stock movement and forecast history. Managers can review low-confidence
-                    items, accept or adjust recommendations, and create purchase orders with the right approvals.
+                    Sales activity updates stock movement and forecast history. Managers review uncertain items,
+                    adjust recommendations where needed, and create purchase orders with the right approvals.
                 </p>
-            </div>
-            <div class="landing-steps" aria-label="Inventory workflow steps">
-                <article>
-                    <span>01</span>
-                    <h3>Sell and scan</h3>
-                    <p>Cashiers process barcode sales and shift activity.</p>
-                </article>
-                <article>
-                    <span>02</span>
-                    <h3>Monitor stock</h3>
-                    <p>Inventory teams catch low, stale, excess, and expiry-risk items.</p>
-                </article>
-                <article>
-                    <span>03</span>
-                    <h3>Forecast demand</h3>
-                    <p>The model compares recent demand patterns with baseline performance.</p>
-                </article>
-                <article>
-                    <span>04</span>
-                    <h3>Replenish</h3>
-                    <p>Managers turn reviewed recommendations into controlled purchase orders.</p>
-                </article>
-            </div>
+            </header>
+            <ol class="landing-steps" aria-label="Inventory workflow steps">
+                <li><span>01</span><h3>Sell and scan</h3><p>Cashiers process barcode sales and shift activity.</p></li>
+                <li><span>02</span><h3>Monitor stock</h3><p>Inventory teams catch low, stale, excess, and expiry-risk items.</p></li>
+                <li><span>03</span><h3>Review demand</h3><p>The model compares recent patterns with baseline performance.</p></li>
+                <li><span>04</span><h3>Replenish</h3><p>Reviewed recommendations become controlled purchase orders.</p></li>
+            </ol>
         </section>
 
         <section class="landing-access" aria-labelledby="access-title">
+            <p class="landing-access__label">STAFF ACCESS / SECURE</p>
             <div>
-                <p class="landing-eyebrow">Staff access</p>
-                <h2 id="access-title">Continue to your RetailMind workspace</h2>
-                <p>Administrators, inventory managers, and cashiers are routed to their role-specific tools after login.</p>
+                <h2 id="access-title">Your tools are ready at the counter.</h2>
+                <p>Administrators, Inventory Managers, and Cashiers are sent to the workspace assigned to their role.</p>
             </div>
             <div class="landing-access__actions">
-                <a class="btn landing-btn landing-btn--primary" href="<?= $loginUrl ?>" data-login-modal-open>Log in</a>
+                <a class="btn landing-btn landing-btn--primary" href="<?= $loginUrl ?>" data-login-modal-open>Log in to RetailMind</a>
                 <a class="landing-link" href="<?= $forgotPasswordUrl ?>">Reset password</a>
             </div>
         </section>
