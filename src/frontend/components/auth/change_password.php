@@ -10,6 +10,13 @@ if ((bool)($_SESSION['is_recovery_account'] ?? false)) {
     exit('Recovery Account credentials can be rotated only through the offline recovery procedure.');
 }
 
+// Dual-mode screen (ticket #44, part of #42): the Temporary Password flag
+// selects Mandatory mode (forced copy, navigation blocked by the session
+// gate) versus Voluntary mode (standard copy, reachable from Profile).
+// Validation, flag clearing, session revocation, and workspace landing are
+// shared by both modes on the single code path below.
+$isMandatory = (bool)($_SESSION['must_change_password'] ?? false);
+
 $message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
@@ -41,11 +48,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         log_activity(
             $pdo,
             (int)$_SESSION['user_id'],
-            'Mandatory password change completed',
+            $isMandatory ? 'Mandatory password change completed' : 'Voluntary password change completed',
             'Authentication',
             (int)$_SESSION['user_id'],
             null,
-            ['status' => 'completed']
+            ['status' => 'completed', 'mode' => $isMandatory ? 'mandatory' : 'voluntary']
         );
         redirect_by_role();
     }
@@ -67,8 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="section-header">
                 <div>
                     <p class="u-text-muted u-m-0">Account security</p>
-                    <h1 class="u-auth-title">Create a new password</h1>
+                    <h1 class="u-auth-title"><?= $isMandatory ? 'Create a new password' : 'Change password' ?></h1>
+                    <?php if ($isMandatory): ?>
                     <p class="section-description">The temporary password must be replaced before you can access RetailMind.</p>
+                    <?php else: ?>
+                    <p class="section-description">You are changing your password voluntarily. Enter your current password to set a new one.</p>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php if ($message): ?><div class="alert tag-warning"><?= htmlspecialchars($message) ?></div><?php endif; ?>
