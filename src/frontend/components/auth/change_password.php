@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="password-input"><input type="password" id="current_password" name="current_password" required autocomplete="current-password"><button type="button" class="password-toggle" data-password-toggle="current_password" aria-controls="current_password" aria-pressed="false" aria-label="Show current password">Show</button></div>
                 </div>
                 <div class="form-group u-grid-full"><label for="new_password">New password</label>
-                    <div class="password-input"><input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="new_password" aria-controls="new_password" aria-pressed="false" aria-label="Show new password">Show</button></div><small>Use at least 8 characters with uppercase, lowercase, and a number.</small>
+                    <div class="password-input"><input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="new_password" aria-controls="new_password" aria-pressed="false" aria-label="Show new password">Show</button></div><small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
                 </div>
                 <div class="form-group u-grid-full"><label for="confirm_password">Confirm new password</label>
                     <div class="password-input"><input type="password" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-controls="confirm_password" aria-pressed="false" aria-label="Show confirmation password">Show</button></div>
@@ -90,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/ui.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(app_url('assets/js/password-feedback.js')) ?>"></script>
     <script>
         document.querySelectorAll('[data-password-toggle]').forEach(function(toggle) {
             var input = document.getElementById(toggle.dataset.passwordToggle);

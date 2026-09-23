@@ -51,6 +51,7 @@
                             <input type="password" id="drawerPassword" name="new_password" autocomplete="new-password" minlength="8">
                             <button type="button" class="password-toggle" data-password-toggle="drawerPassword" aria-label="Show password"><i class="bi bi-eye"></i></button>
                         </div>
+                        <small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
                         <small class="field-help">A reset revokes active sessions and requires a password change at next login.</small>
                     </div>
                 </div>

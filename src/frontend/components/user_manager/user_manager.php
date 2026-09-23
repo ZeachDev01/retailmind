@@ -244,6 +244,7 @@ $disabledCount = count($users) - $activeCount;
 </div>
 <?php include __DIR__ . '/modals/manage_user_modal.php'; ?>
 <?php include __DIR__ . '/modals/add_user_modal.php'; ?>
+<script src="<?= htmlspecialchars(app_url('assets/js/password-feedback.js')) ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const addOverlay = document.getElementById('userModalOverlay');
