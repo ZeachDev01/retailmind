@@ -530,7 +530,7 @@ CREATE TABLE `inventory_adjustments` (
   `approved_at` timestamp NULL DEFAULT NULL,
   `reason` text DEFAULT NULL,
   `review_notes` text DEFAULT NULL,
-  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `status` enum('pending','approved','rejected','returned','cancelled') DEFAULT 'pending',
   PRIMARY KEY (`adjustment_id`),
   KEY `product_id` (`product_id`),
   KEY `reported_by` (`reported_by`),
@@ -541,6 +541,29 @@ CREATE TABLE `inventory_adjustments` (
   CONSTRAINT `inventory_adjustments_ibfk_2` FOREIGN KEY (`reported_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `inventory_adjustments_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `fk_inventory_adjustments_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `inventory_adjustment_revisions`
+--
+
+DROP TABLE IF EXISTS `inventory_adjustment_revisions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `inventory_adjustment_revisions` (
+  `revision_id` int(11) NOT NULL AUTO_INCREMENT,
+  `adjustment_id` int(11) NOT NULL,
+  `actor_id` int(11) DEFAULT NULL,
+  `action` varchar(50) NOT NULL,
+  `old_status` varchar(20) DEFAULT NULL,
+  `new_status` varchar(20) DEFAULT NULL,
+  `old_values` text DEFAULT NULL,
+  `new_values` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`revision_id`),
+  KEY `idx_adjustment_revisions_adjustment` (`adjustment_id`),
+  CONSTRAINT `fk_adjustment_revisions_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

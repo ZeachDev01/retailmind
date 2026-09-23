@@ -1,14 +1,16 @@
 <?php
 // app/Services/StockIssueService.php
 //
-// Cashier-to-Inventory-Manager stock-issue workflow (ticket #29).
+// Cashier-to-Inventory-Manager stock-issue workflow (tickets #29 + #30).
 //
-// Cashiers report damaged / missing / expired / other stock discrepancies as
-// pending reports. Submission never mutates inventory. Inventory Managers
-// review the queue: rejection records actor + timestamp + reason without
-// touching inventory, while approval atomically re-checks available stock,
-// refuses insufficient stock, deducts the full reported quantity, and records
-// a linked stock movement.
+// Lifecycle: pending -> approved | rejected | returned | cancelled, plus
+// returned -> pending (resubmit). Cashiers edit/cancel their own pending
+// reports and edit/resubmit their own returned reports. Managers return a
+// pending report with a mandatory reason and may recategorize an Other report
+// while returning, but never rewrite quantity/explanation. Approved and
+// rejected reports are permanently locked. Every action appends a revision;
+// managers are notified about new/resubmitted reports and cashiers about
+// returned/approved/rejected reports.
 
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
@@ -17,6 +19,8 @@ require_once __DIR__ . '/../../includes/functions.php';
 class StockIssueService
 {
     public const CATEGORIES = ['damaged', 'missing', 'expired', 'other'];
+
+    public const STATUSES = ['pending', 'returned', 'cancelled', 'approved', 'rejected'];
 
     // Minimum explanation length that counts as "meaningful" for Other reports.
     public const OTHER_MIN_EXPLANATION = 10;
@@ -46,23 +50,7 @@ class StockIssueService
         $quantity = (int)($data['quantity'] ?? $data['adjustment_qty'] ?? 0);
         $explanation = trim((string)($data['explanation'] ?? $data['reason'] ?? ''));
 
-        if ($productId <= 0) {
-            throw new RuntimeException('Product is required.');
-        }
-        if (!in_array($category, self::CATEGORIES, true)) {
-            throw new RuntimeException('Select Damaged, Missing/Lost, Expired, or Other.');
-        }
-        if ($quantity <= 0) {
-            throw new RuntimeException('Quantity must be a positive number of units.');
-        }
-        if ($explanation === '') {
-            throw new RuntimeException('An explanation is required for every stock issue report.');
-        }
-        if ($category === 'other' && mb_strlen($explanation) < self::OTHER_MIN_EXPLANATION) {
-            throw new RuntimeException(
-                'Other reports require a meaningful explanation of at least ' . self::OTHER_MIN_EXPLANATION . ' characters.'
-            );
-        }
+        $this->validateReportFields($productId, $category, $quantity, $explanation);
 
         $shift = $this->getOpenShift($cashierId);
         if ($shift === null) {
@@ -92,6 +80,23 @@ class StockIssueService
             $stmt->execute([$productId, -$quantity, $category, $cashierId, (int)$shift['shift_id'], $explanation]);
             $adjustmentId = (int)$this->pdo->lastInsertId();
 
+            $this->ensureRevisionsTable();
+            $this->insertRevision(
+                $adjustmentId,
+                $cashierId,
+                'submitted',
+                null,
+                'pending',
+                [],
+                [
+                    'product_id' => $productId,
+                    'adjustment_qty' => -$quantity,
+                    'adjustment_type' => $category,
+                    'reason' => $explanation,
+                    'status' => 'pending',
+                ]
+            );
+
             log_activity(
                 $this->pdo,
                 $cashierId,
@@ -111,13 +116,362 @@ class StockIssueService
             );
 
             $this->pdo->commit();
-            return $adjustmentId;
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e;
         }
+
+        $this->notifyManagers($adjustmentId, "New stock issue report #{$adjustmentId}", 'A cashier submitted a stock issue report for review.');
+        return $adjustmentId;
+    }
+
+    /**
+     * Cashier edit of their own pending or returned report. Never changes
+     * status or inventory; appends an edited revision.
+     */
+    public function editReport(int $adjustmentId, int $cashierId, array $data): void
+    {
+        if ($adjustmentId <= 0) {
+            throw new RuntimeException('Invalid report selected.');
+        }
+        $this->assertRole($cashierId, 'cashier');
+        $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue correction');
+
+        $this->pdo->beginTransaction();
+        try {
+            [$scopeSql, $scopeParams] = $this->productScope();
+            $reportStmt = $this->pdo->prepare(
+                "SELECT ia.* FROM inventory_adjustments ia
+                  JOIN products p ON p.product_id = ia.product_id
+                  WHERE ia.adjustment_id = ?{$scopeSql}{$this->forUpdate()}"
+            );
+            $reportStmt->execute(array_merge([$adjustmentId], $scopeParams));
+            $report = $reportStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$report) {
+                throw new RuntimeException('Stock issue report not found.');
+            }
+            if ((int)$report['reported_by'] !== $cashierId) {
+                throw new RuntimeException('Cashiers can only edit their own reports.');
+            }
+            if (!in_array($report['status'], ['pending', 'returned'], true)) {
+                throw new RuntimeException('Only pending or returned reports can be edited.');
+            }
+
+            $hasQuantity = array_key_exists('quantity', $data) || array_key_exists('adjustment_qty', $data);
+            $hasCategory = array_key_exists('category', $data) || array_key_exists('adjustment_type', $data);
+            $hasExplanation = array_key_exists('explanation', $data) || array_key_exists('reason', $data);
+            if (!$hasQuantity && !$hasCategory && !$hasExplanation) {
+                throw new RuntimeException('No changes supplied for the report.');
+            }
+
+            $quantity = $hasQuantity ? (int)($data['quantity'] ?? $data['adjustment_qty'] ?? 0) : abs((int)$report['adjustment_qty']);
+            $category = $hasCategory
+                ? strtolower(trim((string)($data['category'] ?? $data['adjustment_type'] ?? '')))
+                : (string)$report['adjustment_type'];
+            $explanation = $hasExplanation
+                ? trim((string)($data['explanation'] ?? $data['reason'] ?? ''))
+                : (string)($report['reason'] ?? '');
+
+            $this->validateReportFields((int)$report['product_id'], $category, $quantity, $explanation);
+
+            $oldValues = [
+                'adjustment_qty' => (int)$report['adjustment_qty'],
+                'adjustment_type' => (string)$report['adjustment_type'],
+                'reason' => (string)($report['reason'] ?? ''),
+                'status' => (string)$report['status'],
+            ];
+            $newValues = [
+                'adjustment_qty' => -$quantity,
+                'adjustment_type' => $category,
+                'reason' => $explanation,
+                'status' => (string)$report['status'],
+            ];
+            if ($oldValues === $newValues) {
+                throw new RuntimeException('No changes supplied for the report.');
+            }
+
+            $update = $this->pdo->prepare(
+                "UPDATE inventory_adjustments
+                  SET adjustment_qty = ?, adjustment_type = ?, reason = ?
+                  WHERE adjustment_id = ? AND reported_by = ? AND status IN ('pending', 'returned')"
+            );
+            $update->execute([-$quantity, $category, $explanation, $adjustmentId, $cashierId]);
+            if ($update->rowCount() === 0) {
+                throw new RuntimeException('This report changed while editing. Refresh and try again.');
+            }
+
+            $this->ensureRevisionsTable();
+            $this->insertRevision($adjustmentId, $cashierId, 'edited', (string)$report['status'], (string)$report['status'], $oldValues, $newValues);
+
+            log_activity(
+                $this->pdo,
+                $cashierId,
+                'Stock issue edited',
+                'Inventory Adjustments',
+                $adjustmentId,
+                $oldValues,
+                $newValues
+            );
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Cashier cancel of their own pending report: pending -> cancelled.
+     */
+    public function cancelReport(int $adjustmentId, int $cashierId): void
+    {
+        if ($adjustmentId <= 0) {
+            throw new RuntimeException('Invalid report selected.');
+        }
+        $this->assertRole($cashierId, 'cashier');
+        $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue cancellation');
+
+        $this->pdo->beginTransaction();
+        try {
+            [$scopeSql, $scopeParams] = $this->productScope();
+            $reportStmt = $this->pdo->prepare(
+                "SELECT ia.* FROM inventory_adjustments ia
+                  JOIN products p ON p.product_id = ia.product_id
+                  WHERE ia.adjustment_id = ?{$scopeSql}{$this->forUpdate()}"
+            );
+            $reportStmt->execute(array_merge([$adjustmentId], $scopeParams));
+            $report = $reportStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$report) {
+                throw new RuntimeException('Stock issue report not found.');
+            }
+            if ((int)$report['reported_by'] !== $cashierId) {
+                throw new RuntimeException('Cashiers can only cancel their own reports.');
+            }
+            if ($report['status'] !== 'pending') {
+                throw new RuntimeException('Only pending reports can be cancelled.');
+            }
+
+            $update = $this->pdo->prepare(
+                "UPDATE inventory_adjustments
+                  SET status = 'cancelled'
+                  WHERE adjustment_id = ? AND reported_by = ? AND status = 'pending'"
+            );
+            $update->execute([$adjustmentId, $cashierId]);
+            if ($update->rowCount() === 0) {
+                throw new RuntimeException('This report changed while cancelling. Refresh and try again.');
+            }
+
+            $this->ensureRevisionsTable();
+            $this->insertRevision(
+                $adjustmentId,
+                $cashierId,
+                'cancelled',
+                'pending',
+                'cancelled',
+                ['status' => 'pending'],
+                ['status' => 'cancelled']
+            );
+
+            log_activity(
+                $this->pdo,
+                $cashierId,
+                'Stock issue cancelled',
+                'Inventory Adjustments',
+                $adjustmentId,
+                ['status' => 'pending'],
+                ['status' => 'cancelled']
+            );
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Manager return of a pending report: pending -> returned. Requires a
+     * reason. May recategorize an Other report to a concrete category; the
+     * reported quantity and explanation are never rewritten here.
+     */
+    public function returnReport(int $adjustmentId, int $managerId, string $reason, ?string $newCategory = null): void
+    {
+        if ($adjustmentId <= 0) {
+            throw new RuntimeException('Invalid report selected.');
+        }
+        $this->assertRole($managerId, 'inventory_manager');
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new RuntimeException('A return reason is required.');
+        }
+        $recategorize = null;
+        if ($newCategory !== null && trim($newCategory) !== '') {
+            $recategorize = strtolower(trim($newCategory));
+            if (!in_array($recategorize, self::CATEGORIES, true)) {
+                throw new RuntimeException('Select Damaged, Missing/Lost, Expired, or Other.');
+            }
+            if ($recategorize === 'other') {
+                throw new RuntimeException('Recategorization must move an Other report to a concrete type.');
+            }
+        }
+        $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue return');
+
+        $report = null;
+        $this->pdo->beginTransaction();
+        try {
+            [$scopeSql, $scopeParams] = $this->productScope();
+            $reportStmt = $this->pdo->prepare(
+                "SELECT ia.* FROM inventory_adjustments ia
+                  JOIN products p ON p.product_id = ia.product_id
+                  WHERE ia.adjustment_id = ?{$scopeSql}{$this->forUpdate()}"
+            );
+            $reportStmt->execute(array_merge([$adjustmentId], $scopeParams));
+            $report = $reportStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$report) {
+                throw new RuntimeException('Stock issue report not found.');
+            }
+            if ($report['status'] !== 'pending') {
+                throw new RuntimeException('Only pending reports can be returned.');
+            }
+            if ($recategorize !== null) {
+                if ((string)$report['adjustment_type'] !== 'other') {
+                    throw new RuntimeException('Only Other reports can be recategorized.');
+                }
+                if ($recategorize === (string)$report['adjustment_type']) {
+                    throw new RuntimeException('No category change supplied.');
+                }
+            }
+
+            if ($recategorize !== null) {
+                $update = $this->pdo->prepare(
+                    "UPDATE inventory_adjustments
+                      SET status = 'returned', approved_by = ?, approved_at = {$this->nowExpr()}, review_notes = ?, adjustment_type = ?
+                      WHERE adjustment_id = ? AND status = 'pending'"
+                );
+                $update->execute([$managerId, $reason, $recategorize, $adjustmentId]);
+            } else {
+                $update = $this->pdo->prepare(
+                    "UPDATE inventory_adjustments
+                      SET status = 'returned', approved_by = ?, approved_at = {$this->nowExpr()}, review_notes = ?
+                      WHERE adjustment_id = ? AND status = 'pending'"
+                );
+                $update->execute([$managerId, $reason, $adjustmentId]);
+            }
+            if ($update->rowCount() === 0) {
+                throw new RuntimeException('This report changed while returning. Refresh and try again.');
+            }
+
+            $oldValues = ['status' => 'pending', 'adjustment_type' => (string)$report['adjustment_type']];
+            $newValues = ['status' => 'returned', 'adjustment_type' => $recategorize ?? (string)$report['adjustment_type'], 'review_notes' => $reason];
+            $this->ensureRevisionsTable();
+            $this->insertRevision($adjustmentId, $managerId, 'returned', 'pending', 'returned', $oldValues, $newValues);
+
+            log_activity(
+                $this->pdo,
+                $managerId,
+                'Stock issue returned',
+                'Inventory Adjustments',
+                $adjustmentId,
+                $oldValues,
+                $newValues
+            );
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        $cashierId = (int)($report['reported_by'] ?? 0);
+        if ($cashierId > 0) {
+            $this->notifyUser(
+                $cashierId,
+                $adjustmentId,
+                "Stock issue report #{$adjustmentId} returned",
+                'An Inventory Manager returned your report: ' . $reason
+            );
+        }
+    }
+
+    /**
+     * Cashier resubmit of their own returned report: returned -> pending.
+     */
+    public function resubmitReport(int $adjustmentId, int $cashierId): void
+    {
+        if ($adjustmentId <= 0) {
+            throw new RuntimeException('Invalid report selected.');
+        }
+        $this->assertRole($cashierId, 'cashier');
+        $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue resubmission');
+
+        $this->pdo->beginTransaction();
+        try {
+            [$scopeSql, $scopeParams] = $this->productScope();
+            $reportStmt = $this->pdo->prepare(
+                "SELECT ia.* FROM inventory_adjustments ia
+                  JOIN products p ON p.product_id = ia.product_id
+                  WHERE ia.adjustment_id = ?{$scopeSql}{$this->forUpdate()}"
+            );
+            $reportStmt->execute(array_merge([$adjustmentId], $scopeParams));
+            $report = $reportStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$report) {
+                throw new RuntimeException('Stock issue report not found.');
+            }
+            if ((int)$report['reported_by'] !== $cashierId) {
+                throw new RuntimeException('Cashiers can only resubmit their own reports.');
+            }
+            if ($report['status'] !== 'returned') {
+                throw new RuntimeException('Only returned reports can be resubmitted.');
+            }
+
+            $update = $this->pdo->prepare(
+                "UPDATE inventory_adjustments
+                  SET status = 'pending'
+                  WHERE adjustment_id = ? AND reported_by = ? AND status = 'returned'"
+            );
+            $update->execute([$adjustmentId, $cashierId]);
+            if ($update->rowCount() === 0) {
+                throw new RuntimeException('This report changed while resubmitting. Refresh and try again.');
+            }
+
+            $this->ensureRevisionsTable();
+            $this->insertRevision(
+                $adjustmentId,
+                $cashierId,
+                'resubmitted',
+                'returned',
+                'pending',
+                ['status' => 'returned'],
+                ['status' => 'pending']
+            );
+
+            log_activity(
+                $this->pdo,
+                $cashierId,
+                'Stock issue resubmitted',
+                'Inventory Adjustments',
+                $adjustmentId,
+                ['status' => 'returned'],
+                ['status' => 'pending']
+            );
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        $this->notifyManagers($adjustmentId, "Stock issue report #{$adjustmentId} resubmitted", 'A cashier resubmitted a returned report for review.');
     }
 
     /**
@@ -132,6 +486,7 @@ class StockIssueService
         }
         $this->assertRole($approverId, 'inventory_manager');
 
+        $cashierId = 0;
         $this->pdo->beginTransaction();
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
@@ -157,6 +512,7 @@ class StockIssueService
             if ($quantity <= 0) {
                 throw new RuntimeException('Report quantity is invalid.');
             }
+            $cashierId = (int)$report['reported_by'];
 
             $inventoryStmt = $this->pdo->prepare(
                 "SELECT quantity_on_hand FROM inventory WHERE product_id = ?{$this->forUpdate()}"
@@ -206,6 +562,17 @@ class StockIssueService
                 throw new RuntimeException('This report was already reviewed.');
             }
 
+            $this->ensureRevisionsTable();
+            $this->insertRevision(
+                $adjustmentId,
+                $approverId,
+                'approved',
+                'pending',
+                'approved',
+                ['status' => 'pending', 'quantity_on_hand' => $available],
+                ['status' => 'approved', 'quantity_on_hand' => $available - $quantity, 'deducted_qty' => $quantity, 'review_notes' => $notes]
+            );
+
             log_activity(
                 $this->pdo,
                 $approverId,
@@ -235,6 +602,15 @@ class StockIssueService
             }
             throw $e;
         }
+
+        if ($cashierId > 0) {
+            $this->notifyUser(
+                $cashierId,
+                $adjustmentId,
+                "Stock issue report #{$adjustmentId} approved",
+                'An Inventory Manager approved your report and deducted the reported quantity.'
+            );
+        }
     }
 
     /**
@@ -250,35 +626,114 @@ class StockIssueService
         if ($reason === '') {
             throw new RuntimeException('A rejection reason is required.');
         }
+        $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue rejection');
 
-        // SQLite has no multi-table UPDATE; it uses a scoped SELECT + simple UPDATE.
-        if ($this->isSqlite()) {
-            $this->rejectReportSqlite($adjustmentId, $approverId, $reason);
-            return;
+        $cashierId = 0;
+        $this->pdo->beginTransaction();
+        try {
+            [$scopeSql, $scopeParams] = $this->productScope();
+            $reportStmt = $this->pdo->prepare(
+                "SELECT ia.* FROM inventory_adjustments ia
+                  JOIN products p ON p.product_id = ia.product_id
+                  WHERE ia.adjustment_id = ?{$scopeSql}{$this->forUpdate()}"
+            );
+            $reportStmt->execute(array_merge([$adjustmentId], $scopeParams));
+            $report = $reportStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$report) {
+                throw new RuntimeException('Stock issue report not found.');
+            }
+            if ($report['status'] !== 'pending') {
+                throw new RuntimeException('Only pending reports can be rejected.');
+            }
+            $cashierId = (int)$report['reported_by'];
+
+            $update = $this->pdo->prepare(
+                "UPDATE inventory_adjustments
+                  SET status = 'rejected', approved_by = ?, approved_at = {$this->nowExpr()}, review_notes = ?
+                  WHERE adjustment_id = ? AND status = 'pending'"
+            );
+            $update->execute([$approverId, $reason, $adjustmentId]);
+            if ($update->rowCount() === 0) {
+                throw new RuntimeException('Only pending reports can be rejected.');
+            }
+
+            $this->ensureRevisionsTable();
+            $this->insertRevision(
+                $adjustmentId,
+                $approverId,
+                'rejected',
+                'pending',
+                'rejected',
+                ['status' => 'pending'],
+                ['status' => 'rejected', 'review_notes' => $reason]
+            );
+
+            log_activity(
+                $this->pdo,
+                $approverId,
+                'Stock issue rejected',
+                'Inventory Adjustments',
+                $adjustmentId,
+                ['status' => 'pending'],
+                ['status' => 'rejected', 'review_notes' => $reason]
+            );
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
         }
 
+        if ($cashierId > 0) {
+            $this->notifyUser(
+                $cashierId,
+                $adjustmentId,
+                "Stock issue report #{$adjustmentId} rejected",
+                'An Inventory Manager rejected your report: ' . $reason
+            );
+        }
+    }
+
+    /**
+     * Single report with product/cashier/reviewer context. Viewing never locks.
+     */
+    public function getReport(int $adjustmentId): ?array
+    {
         [$scopeSql, $scopeParams] = $this->productScope();
         $stmt = $this->pdo->prepare(
-            "UPDATE inventory_adjustments ia
-              JOIN products p ON p.product_id = ia.product_id
-              SET ia.status = 'rejected', ia.approved_by = ?, ia.approved_at = {$this->nowExpr()}, ia.review_notes = ?
-              WHERE ia.adjustment_id = ? AND ia.status = 'pending'{$scopeSql}"
+            "SELECT ia.*,
+                    p.sku, p.product_name,
+                    reporter.full_name AS cashier_name,
+                    reviewer.full_name AS reviewer_name
+             FROM inventory_adjustments ia
+             JOIN products p ON p.product_id = ia.product_id
+             JOIN users reporter ON reporter.user_id = ia.reported_by
+             LEFT JOIN users reviewer ON reviewer.user_id = ia.approved_by
+             WHERE ia.adjustment_id = ?{$scopeSql}
+             LIMIT 1"
         );
-        // MySQL multi-table UPDATE placeholder order: SET values, then WHERE id, then scope params.
-        $stmt->execute(array_merge([$approverId, $reason, $adjustmentId], $scopeParams));
-        if ($stmt->rowCount() === 0) {
-            throw new RuntimeException('Only pending reports can be rejected.');
-        }
+        $stmt->execute(array_merge([$adjustmentId], $scopeParams));
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
 
-        log_activity(
-            $this->pdo,
-            $approverId,
-            'Stock issue rejected',
-            'Inventory Adjustments',
-            $adjustmentId,
-            ['status' => 'pending'],
-            ['status' => 'rejected', 'review_notes' => $reason]
+    /**
+     * Append-only revision trail for a report, oldest first.
+     */
+    public function getRevisions(int $adjustmentId): array
+    {
+        $this->ensureRevisionsTable();
+        $stmt = $this->pdo->prepare(
+            'SELECT revision_id, adjustment_id, actor_id, action, old_status, new_status,
+                    old_values, new_values, created_at
+             FROM inventory_adjustment_revisions
+             WHERE adjustment_id = ?
+             ORDER BY created_at ASC, revision_id ASC'
         );
+        $stmt->execute([$adjustmentId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**
@@ -290,6 +745,7 @@ class StockIssueService
         $stmt = $this->pdo->prepare(
             "SELECT ia.adjustment_id, ia.product_id, ia.adjustment_qty, ia.adjustment_type,
                     ia.reported_by, ia.shift_id, ia.reported_at, ia.reason, ia.status,
+                    ia.approved_at, ia.review_notes,
                     p.sku, p.product_name,
                     u.full_name AS cashier_name,
                     COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
@@ -302,6 +758,48 @@ class StockIssueService
         );
         $stmt->execute($scopeParams);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Returned reports awaiting cashier correction (manager visibility).
+     */
+    public function getReturnedReports(int $limit = 50): array
+    {
+        $limit = max(1, min(100, $limit));
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare(
+            "SELECT ia.adjustment_id, ia.product_id, ia.adjustment_qty, ia.adjustment_type,
+                    ia.reported_by, ia.shift_id, ia.reported_at, ia.reason, ia.status,
+                    ia.approved_by, ia.approved_at, ia.review_notes,
+                    p.sku, p.product_name,
+                    reporter.full_name AS cashier_name,
+                    reviewer.full_name AS reviewer_name
+             FROM inventory_adjustments ia
+             JOIN products p ON p.product_id = ia.product_id
+             JOIN users reporter ON reporter.user_id = ia.reported_by
+             LEFT JOIN users reviewer ON reviewer.user_id = ia.approved_by
+             WHERE ia.status = 'returned'{$scopeSql}
+             ORDER BY ia.approved_at DESC, ia.reported_at DESC
+             LIMIT {$limit}"
+        );
+        $stmt->execute($scopeParams);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Accurate count for the manager pending-review badge.
+     */
+    public function getPendingCount(): int
+    {
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*)
+             FROM inventory_adjustments ia
+             JOIN products p ON p.product_id = ia.product_id
+             WHERE ia.status = 'pending'{$scopeSql}"
+        );
+        $stmt->execute($scopeParams);
+        return (int)$stmt->fetchColumn();
     }
 
     /**
@@ -347,7 +845,7 @@ class StockIssueService
              JOIN products p ON p.product_id = ia.product_id
              JOIN users reporter ON reporter.user_id = ia.reported_by
              LEFT JOIN users reviewer ON reviewer.user_id = ia.approved_by
-             WHERE ia.status IN ('approved', 'rejected'){$scopeSql}
+             WHERE ia.status IN ('approved', 'rejected', 'returned', 'cancelled'){$scopeSql}
              ORDER BY ia.approved_at DESC, ia.reported_at DESC
              LIMIT {$limit}"
         );
@@ -375,37 +873,25 @@ class StockIssueService
         return $shift ?: null;
     }
 
-    private function rejectReportSqlite(int $adjustmentId, int $approverId, string $reason): void
+    private function validateReportFields(int $productId, string $category, int $quantity, string $explanation): void
     {
-        [$scopeSql, $scopeParams] = $this->productScope();
-        $check = $this->pdo->prepare(
-            "SELECT ia.adjustment_id FROM inventory_adjustments ia
-              JOIN products p ON p.product_id = ia.product_id
-              WHERE ia.adjustment_id = ? AND ia.status = 'pending'{$scopeSql}"
-        );
-        $check->execute(array_merge([$adjustmentId], $scopeParams));
-        if (!$check->fetch()) {
-            throw new RuntimeException('Only pending reports can be rejected.');
+        if ($productId <= 0) {
+            throw new RuntimeException('Product is required.');
         }
-        $update = $this->pdo->prepare(
-            "UPDATE inventory_adjustments
-              SET status = 'rejected', approved_by = ?, approved_at = {$this->nowExpr()}, review_notes = ?
-              WHERE adjustment_id = ? AND status = 'pending'"
-        );
-        $update->execute([$approverId, $reason, $adjustmentId]);
-        if ($update->rowCount() === 0) {
-            throw new RuntimeException('Only pending reports can be rejected.');
+        if (!in_array($category, self::CATEGORIES, true)) {
+            throw new RuntimeException('Select Damaged, Missing/Lost, Expired, or Other.');
         }
-
-        log_activity(
-            $this->pdo,
-            $approverId,
-            'Stock issue rejected',
-            'Inventory Adjustments',
-            $adjustmentId,
-            ['status' => 'pending'],
-            ['status' => 'rejected', 'review_notes' => $reason]
-        );
+        if ($quantity <= 0) {
+            throw new RuntimeException('Quantity must be a positive number of units.');
+        }
+        if ($explanation === '') {
+            throw new RuntimeException('An explanation is required for every stock issue report.');
+        }
+        if ($category === 'other' && mb_strlen($explanation) < self::OTHER_MIN_EXPLANATION) {
+            throw new RuntimeException(
+                'Other reports require a meaningful explanation of at least ' . self::OTHER_MIN_EXPLANATION . ' characters.'
+            );
+        }
     }
 
     private function assertRole(int $userId, string $expectedRole): void
@@ -418,6 +904,127 @@ class StockIssueService
         if ($role !== $expectedRole) {
             $label = $expectedRole === 'cashier' ? 'Cashiers' : 'Inventory Managers';
             throw new RuntimeException("{$label} only: this action requires the {$expectedRole} role.");
+        }
+    }
+
+    private function ensureRevisionsTable(): void
+    {
+        if ($this->isSqlite()) {
+            $this->pdo->exec(
+                'CREATE TABLE IF NOT EXISTS inventory_adjustment_revisions (
+                    revision_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    adjustment_id INTEGER NOT NULL,
+                    actor_id INTEGER NULL,
+                    action TEXT NOT NULL,
+                    old_status TEXT NULL,
+                    new_status TEXT NULL,
+                    old_values TEXT NULL,
+                    new_values TEXT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )'
+            );
+            $this->pdo->exec(
+                'CREATE INDEX IF NOT EXISTS idx_adjustment_revisions_adjustment ON inventory_adjustment_revisions (adjustment_id)'
+            );
+            return;
+        }
+
+        $this->pdo->exec(
+            'CREATE TABLE IF NOT EXISTS `inventory_adjustment_revisions` (
+                `revision_id` INT NOT NULL AUTO_INCREMENT,
+                `adjustment_id` INT NOT NULL,
+                `actor_id` INT NULL,
+                `action` VARCHAR(50) NOT NULL,
+                `old_status` VARCHAR(20) NULL,
+                `new_status` VARCHAR(20) NULL,
+                `old_values` TEXT NULL,
+                `new_values` TEXT NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`revision_id`),
+                KEY `idx_adjustment_revisions_adjustment` (`adjustment_id`),
+                CONSTRAINT `fk_adjustment_revisions_adjustment` FOREIGN KEY (`adjustment_id`)
+                    REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+    }
+
+    private function insertRevision(
+        int $adjustmentId,
+        ?int $actorId,
+        string $action,
+        ?string $oldStatus,
+        ?string $newStatus,
+        array $oldValues,
+        array $newValues
+    ): void {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO inventory_adjustment_revisions
+                (adjustment_id, actor_id, action, old_status, new_status, old_values, new_values)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $adjustmentId,
+            $actorId,
+            $action,
+            $oldStatus,
+            $newStatus,
+            $oldValues === [] ? null : json_encode($oldValues),
+            $newValues === [] ? null : json_encode($newValues),
+        ]);
+    }
+
+    private function notifyManagers(int $adjustmentId, string $title, string $message): void
+    {
+        try {
+            foreach ($this->managerUserIds() as $managerId) {
+                $this->insertNotification($managerId, $adjustmentId, $title, $message);
+            }
+        } catch (Throwable $e) {
+            error_log('Stock issue manager notification skipped: ' . $e->getMessage());
+        }
+    }
+
+    private function notifyUser(int $userId, int $adjustmentId, string $title, string $message): void
+    {
+        try {
+            $this->insertNotification($userId, $adjustmentId, $title, $message);
+        } catch (Throwable $e) {
+            error_log('Stock issue user notification skipped: ' . $e->getMessage());
+        }
+    }
+
+    private function insertNotification(int $userId, int $adjustmentId, string $title, string $message): void
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO notifications (user_id, type, title, message, reference_id, reference_type)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        // `adjustment` is an existing notifications.type enum value; the
+        // stock-issue link lives in reference_type so no enum change is needed.
+        $stmt->execute([$userId, 'adjustment', $title, $message, $adjustmentId, 'stock_issue']);
+    }
+
+    /**
+     * @return int[]
+     */
+    private function managerUserIds(): array
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                "SELECT u.user_id FROM users u
+                  JOIN roles r ON r.role_id = u.role_id
+                  WHERE r.role_name = 'inventory_manager' AND u.status = 'active'"
+            );
+            $stmt->execute();
+            return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        } catch (Throwable $e) {
+            $stmt = $this->pdo->prepare(
+                "SELECT u.user_id FROM users u
+                  JOIN roles r ON r.role_id = u.role_id
+                  WHERE r.role_name = 'inventory_manager'"
+            );
+            $stmt->execute();
+            return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
         }
     }
 

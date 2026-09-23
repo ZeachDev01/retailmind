@@ -1,10 +1,12 @@
 <?php
-// cashier/stock_issues.php — Report Stock Issue (ticket #29).
+// cashier/stock_issues.php — Report Stock Issue (tickets #29 + #30).
 //
 // Cashiers with an active shift report damaged / missing / expired / other
 // stock discrepancies as pending reports. Submission never changes inventory.
 // Product selection uses barcode scan or searchable lookup (no full dropdown).
-// Own report history is viewable without an active shift.
+// Own report history is viewable without an active shift. Own pending reports
+// can be edited/cancelled; own returned reports can be edited/resubmitted.
+// Approved and rejected reports are permanently locked.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
@@ -21,28 +23,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     try {
-        if (!$stockIssueService->getOpenShift((int)$_SESSION['user_id'])) {
-            throw new RuntimeException('An active cashier shift is required to submit a stock issue report.');
-        }
-        $adjustmentId = $stockIssueService->submitReport([
-            'product_id' => $_POST['product_id'] ?? 0,
-            'category' => $_POST['category'] ?? '',
-            'quantity' => $_POST['quantity'] ?? 0,
-            'explanation' => $_POST['explanation'] ?? '',
-        ], (int)$_SESSION['user_id']);
+        $correctionAction = $_POST['correction_action'] ?? 'submit';
+        $cashierId = (int)$_SESSION['user_id'];
+        if ($correctionAction === 'edit') {
+            $adjustmentId = (int)($_POST['adjustment_id'] ?? 0);
+            $stockIssueService->editReport($adjustmentId, $cashierId, [
+                'category' => $_POST['category'] ?? '',
+                'quantity' => $_POST['quantity'] ?? 0,
+                'explanation' => $_POST['explanation'] ?? '',
+            ]);
+            $message = "Report #{$adjustmentId} updated. It keeps its current state until reviewed or resubmitted.";
+            log_activity($pdo, $cashierId, 'Stock issue edited', 'Inventory Adjustments', $adjustmentId, ['status' => 'pending/returned'], ['status' => 'pending/returned']);
+        } elseif ($correctionAction === 'cancel') {
+            $adjustmentId = (int)($_POST['adjustment_id'] ?? 0);
+            $stockIssueService->cancelReport($adjustmentId, $cashierId);
+            $message = "Report #{$adjustmentId} cancelled.";
+            log_activity($pdo, $cashierId, 'Stock issue cancelled', 'Inventory Adjustments', $adjustmentId, ['status' => 'pending'], ['status' => 'cancelled']);
+        } elseif ($correctionAction === 'resubmit') {
+            $adjustmentId = (int)($_POST['adjustment_id'] ?? 0);
+            $stockIssueService->resubmitReport($adjustmentId, $cashierId);
+            $message = "Report #{$adjustmentId} resubmitted for review. Inventory Managers were notified.";
+            log_activity($pdo, $cashierId, 'Stock issue resubmitted', 'Inventory Adjustments', $adjustmentId, ['status' => 'returned'], ['status' => 'pending']);
+        } else {
+            if (!$stockIssueService->getOpenShift($cashierId)) {
+                throw new RuntimeException('An active cashier shift is required to submit a stock issue report.');
+            }
+            $adjustmentId = $stockIssueService->submitReport([
+                'product_id' => $_POST['product_id'] ?? 0,
+                'category' => $_POST['category'] ?? '',
+                'quantity' => $_POST['quantity'] ?? 0,
+                'explanation' => $_POST['explanation'] ?? '',
+            ], $cashierId);
 
-        $message = "Stock issue report #{$adjustmentId} submitted for review. Inventory is unchanged until an Inventory Manager approves it.";
-        log_activity(
-            $pdo,
-            (int)$_SESSION['user_id'],
-            'Stock issue reported',
-            'Inventory Adjustments',
-            (int)$adjustmentId,
-            null,
-            ['adjustment_id' => (int)$adjustmentId, 'status' => 'pending']
-        );
+            $message = "Stock issue report #{$adjustmentId} submitted for review. Inventory is unchanged until an Inventory Manager approves it.";
+            log_activity(
+                $pdo,
+                $cashierId,
+                'Stock issue reported',
+                'Inventory Adjustments',
+                (int)$adjustmentId,
+                null,
+                ['adjustment_id' => (int)$adjustmentId, 'status' => 'pending']
+            );
+        }
     } catch (Exception $e) {
-        $error = 'Could not submit the report: ' . $e->getMessage();
+        $error = 'Could not save the report: ' . $e->getMessage();
     }
 }
 
@@ -157,8 +182,10 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                     <div class="tabs">
                         <button type="button" class="tab-link active" onclick="filterByStatus('all', event)">All</button>
                         <button type="button" class="tab-link" onclick="filterByStatus('pending', event)">Pending</button>
+                        <button type="button" class="tab-link" onclick="filterByStatus('returned', event)">Returned</button>
                         <button type="button" class="tab-link" onclick="filterByStatus('approved', event)">Approved</button>
                         <button type="button" class="tab-link" onclick="filterByStatus('rejected', event)">Rejected</button>
+                        <button type="button" class="tab-link" onclick="filterByStatus('cancelled', event)">Cancelled</button>
                     </div>
 
                     <div id="adjustments-list">
@@ -196,6 +223,41 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                                     <div class="adjustment-reason">
                                         <strong>Reviewer note:</strong> <?= htmlspecialchars($adj['review_notes']) ?>
                                     </div>
+                                <?php endif; ?>
+                                <?php if (in_array($adj['status'], ['pending', 'returned'], true)): ?>
+                                    <form method="POST" class="review-form">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                        <input type="hidden" name="adjustment_id" value="<?= (int)$adj['adjustment_id'] ?>">
+                                        <div class="form-grid">
+                                            <div class="form-group">
+                                                <label for="edit-category-<?= (int)$adj['adjustment_id'] ?>">Issue type</label>
+                                                <select name="category" id="edit-category-<?= (int)$adj['adjustment_id'] ?>">
+                                                    <?php foreach (['damaged' => 'Damaged', 'missing' => 'Missing / Lost', 'expired' => 'Expired', 'other' => 'Other'] as $value => $label): ?>
+                                                        <option value="<?= $value ?>" <?= $adj['adjustment_type'] === $value ? 'selected' : '' ?>><?= $label ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="edit-qty-<?= (int)$adj['adjustment_id'] ?>">Quantity</label>
+                                                <input type="number" name="quantity" id="edit-qty-<?= (int)$adj['adjustment_id'] ?>" min="1" step="1" value="<?= abs((int)$adj['adjustment_qty']) ?>" required>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="edit-expl-<?= (int)$adj['adjustment_id'] ?>">Explanation</label>
+                                            <textarea name="explanation" id="edit-expl-<?= (int)$adj['adjustment_id'] ?>" required><?= htmlspecialchars($adj['reason'] ?? '') ?></textarea>
+                                        </div>
+                                        <div class="review-actions">
+                                            <button type="submit" name="correction_action" value="edit" class="btn-submit">Save Changes</button>
+                                            <?php if ($adj['status'] === 'pending'): ?>
+                                                <button type="submit" name="correction_action" value="cancel" class="btn btn-secondary" onclick="return confirm('Cancel this pending report?')">Cancel Report</button>
+                                            <?php endif; ?>
+                                            <?php if ($adj['status'] === 'returned'): ?>
+                                                <button type="submit" name="correction_action" value="resubmit" class="btn-submit">Resubmit for Review</button>
+                                            <?php endif; ?>
+                                        </div>
+                                    </form>
+                                <?php elseif (in_array($adj['status'], ['approved', 'rejected'], true)): ?>
+                                    <div class="adjustment-reason"><small>This report is locked and cannot be edited, cancelled, reopened, or deleted.</small></div>
                                 <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
