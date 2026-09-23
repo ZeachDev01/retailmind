@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $messageClass = 'tag-warning';
     } else try {
         $stmt = $pdo->prepare(
-            "INSERT INTO users (full_name, username, email, password_hash, role_id) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO users (full_name, username, email, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, ?, 1)"
         );
         $stmt->execute([
             $_POST['full_name'],
@@ -107,6 +107,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         $updateParts[] = 'password_hash = ?';
                         $params[] = password_hash($newPassword, PASSWORD_DEFAULT);
                         $updateParts[] = 'password_changed_at = NOW()';
+                        // Administrator-issued credential is a Temporary Password:
+                        // force replacement on next login (same as the domain
+                        // service resetPassword path, ticket #43).
+                        $updateParts[] = 'must_change_password = 1';
                         $updateParts[] = 'session_version = session_version + 1';
                     }
                     if ($status !== $before['status']) {
