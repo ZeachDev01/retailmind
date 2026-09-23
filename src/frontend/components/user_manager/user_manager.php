@@ -58,6 +58,18 @@ function can_manage_user(array $user): bool
 }
 
 $action = (string)($_POST['action'] ?? '');
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string)($_GET['action'] ?? '') === 'availability') {
+    header('Content-Type: application/json; charset=UTF-8');
+    try {
+        $availability = $lifecycle->availability($actorRole, (string)($_GET['username'] ?? ''), (string)($_GET['email'] ?? ''));
+    } catch (DomainException $exception) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Access denied.']);
+        exit;
+    }
+    echo json_encode(['username_taken' => $availability['username_taken'], 'email_taken' => $availability['email_taken']]);
+    exit;
+}
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     csrf_verify();
     try {
