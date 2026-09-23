@@ -8,6 +8,7 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../includes/password_policy.php';
 
 use App\Services\RecoveryAccountService;
 
@@ -33,12 +34,12 @@ function recovery_input(string $name, bool $required = true): ?string
 function recovery_password_hash(string $environmentName): string
 {
     $password = (string)recovery_input($environmentName);
-    // Unified Recovery Account policy (ticket #34): fixed 8-character minimum,
-    // same complexity as standard staff in password_policy_error() (auth.php).
-    // Existing hashes stay valid (verified via password_verify on login,
-    // never re-validated against this policy).
-    if (strlen($password) < 8 || !preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/\d/', $password)) {
-        throw new InvalidArgumentException('Recovery Account login passwords require at least 8 characters with uppercase, lowercase, and numeric characters.');
+    // Unified Recovery Account policy (tickets #34/#36): same shared rule as
+    // standard staff in password_policy.php — the configured minimum can
+    // raise the bar but never drops below 8. Existing hashes stay valid
+    // (verified via password_verify on login, never re-validated here).
+    if ($policyError = recovery_password_policy_error($password)) {
+        throw new InvalidArgumentException($policyError);
     }
     return password_hash($password, PASSWORD_DEFAULT);
 }

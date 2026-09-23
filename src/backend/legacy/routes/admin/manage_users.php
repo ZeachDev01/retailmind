@@ -301,7 +301,8 @@ $disabledCount = count($users) - $activeCount;
                 </div>
                 <div class="form-group">
                     <label for="drawerPassword">New Password</label>
-                    <input type="password" id="drawerPassword" name="new_password" autocomplete="new-password">
+                    <input type="password" id="drawerPassword" name="new_password" autocomplete="new-password" minlength="8">
+                    <small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
                 </div>
                 <div class="form-group">
                     <label for="drawerStatus">Status</label>
@@ -353,10 +354,11 @@ $disabledCount = count($users) - $activeCount;
                 <label>Email</label>
                 <input type="email" name="email">
             </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" required>
-            </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required minlength="8">
+                    <small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
+                </div>
             <div class="form-group">
                 <label>Role</label>
                 <select name="role_id" required>
@@ -489,5 +491,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+<script src="<?= htmlspecialchars(app_url('assets/js/password-feedback.js')) ?>"></script>
 </body>
 </html>
