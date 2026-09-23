@@ -255,13 +255,14 @@ $disabledCount = count($users) - $activeCount;
 
             <div class="table-wrap">
                 <table class="users-table">
-                    <tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Action</th></tr>
+                    <tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Password</th><th>Action</th></tr>
                     <?php foreach ($users as $u): ?>
                     <tr>
                         <td><?= htmlspecialchars($u['full_name']) ?></td>
                         <td><?= htmlspecialchars($u['username']) ?></td>
                         <td><?= htmlspecialchars($u['role_name']) ?></td>
                         <td><?= $u['status'] === 'active' ? '<span class="tag-success">active</span>' : '<span class="tag-warning">disabled</span>' ?></td>
+                        <td><?= ((int)($u['must_change_password'] ?? 0) === 1) ? '<span class="tag-warning">Change required</span>' : '<span class="tag-success">Current</span>' ?></td>
                         <td class="action-cell">
                             <button
                                 type="button"

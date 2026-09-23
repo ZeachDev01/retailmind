@@ -217,7 +217,7 @@ $disabledCount = count($users) - $activeCount;
             </div>
             <div class="table-wrap">
                 <table class="users-table">
-                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Password</th><th>Action</th></tr></thead>
                     <tbody>
                     <?php foreach ($users as $user):
                         $canManage = can_manage_user($user);
@@ -230,6 +230,7 @@ $disabledCount = count($users) - $activeCount;
                             <td><?= htmlspecialchars((string)($user['email'] ?: $user['username'])) ?></td>
                             <td><?= htmlspecialchars(display_label((string)$user['role_name'])) ?></td>
                             <td><?= htmlspecialchars(display_label((string)$user['status'])) ?></td>
+                            <td><?= ((int)($user['must_change_password'] ?? 0) === 1) ? '<span class="tag-warning">Change required</span>' : '<span class="tag-success">Current</span>' ?></td>
                             <td class="action-cell">
                                 <?php if (!$canManage): ?>
                                     <span class="user-protected-label"><i class="bi bi-lock-fill"></i> Protected</span>

@@ -6,9 +6,10 @@ $error = '';
 $success = '';
 $reset = null;
 if ($token !== '') {
-    $stmt = $pdo->prepare("SELECT pr.reset_id, pr.user_id
+    $stmt = $pdo->prepare("SELECT pr.reset_id, pr.user_id, r.role_name
         FROM password_reset_tokens pr
         JOIN users u ON u.user_id = pr.user_id
+        JOIN roles r ON r.role_id = u.role_id
         WHERE pr.token_hash = ? AND pr.used_at IS NULL AND pr.expires_at >= NOW()
           AND u.is_recovery_account = 0
         LIMIT 1");
@@ -30,6 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare('UPDATE users SET password_hash = ?, password_changed_at = NOW(), must_change_password = 0, session_version = session_version + 1, failed_login_attempts = 0, locked_until = NULL WHERE user_id = ?')
             ->execute([password_hash($password, PASSWORD_DEFAULT), (int)$reset['user_id']]);
         $pdo->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE reset_id = ?')->execute([(int)$reset['reset_id']]);
+        log_activity(
+            $pdo,
+            (int)$reset['user_id'],
+            'Password reset completed via email link',
+            'User Access',
+            (int)$reset['user_id'],
+            null,
+            ['role' => (string)($reset['role_name'] ?? ''), 'sessions_revoked' => true, 'password_change_required' => false]
+        );
         $pdo->commit();
         $success = 'Your password has been reset. You may now sign in.';
         $reset = null;
