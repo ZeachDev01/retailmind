@@ -289,6 +289,38 @@ $checks = [
         'file' => 'src/backend/scripts/build_release.sh',
         'needles' => ['src/backend/storage/sessions/*', 'src/backend/storage/imports/*', 'src/backend/legacy/demandForcasting/models/*'],
     ],
+    'Cashier navigation offers one direct Report Stock Issue destination' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ["'path' => 'components/cashier/stock_issues.php'", "'label' => 'Report Stock Issue'", "'path' => 'components/inventory_management/stock_issues.php'"],
+        'forbidden' => ["'label' => 'Warehouse'", 'components/report/stock_receiving.php', 'components/report/inventory_adjustments.php'],
+    ],
+    'Stock receiving stays closed to cashiers server-side' => [
+        'file' => 'src/frontend/components/report/stock_receiving.php',
+        'needles' => ["require_role(['admin', 'super_admin', 'inventory_manager'])"],
+        'forbidden' => ["'cashier'"],
+    ],
+    'Legacy damage report redirects cashiers to the shift-gated flow' => [
+        'file' => 'src/frontend/components/report/inventory_adjustments.php',
+        'needles' => ["require_role(['admin'])", 'components/cashier/stock_issues.php'],
+        'forbidden' => ["require_role(['admin', 'cashier'])"],
+    ],
+    'Cashier stock-issue submission is shift-gated with lookup selection' => [
+        'file' => 'src/frontend/components/cashier/stock_issues.php',
+        'needles' => ["require_role(['cashier'])", 'getOpenShift', 'active cashier shift', 'apiScanner/products.php', 'submitReport', 'getReportsByCashier'],
+        'forbidden' => ['-- Select Product --'],
+    ],
+    'Manager review queue guards approvals and requires rejection reasons' => [
+        'file' => 'src/frontend/components/inventory_management/stock_issues.php',
+        'needles' => ["require_role(['inventory_manager'])", 'MUTATE_INVENTORY', 'approveReport', 'rejectReport', 'getPendingReports', 'required to reject'],
+    ],
+    'Stock-issue approvals deduct atomically with linked movements' => [
+        'file' => 'src/backend/app/Services/StockIssueService.php',
+        'needles' => ['getOpenShift', 'quantity_on_hand >= ?', 'adjustment_id', 'Insufficient available stock', 'A rejection reason is required', "'inventory_manager'"],
+    ],
+    'Stock-issue schema links reports to shifts and movements' => [
+        'file' => 'src/backend/sql/schema.sql',
+        'needles' => ['fk_inventory_adjustments_shift', 'fk_stock_movements_adjustment', 'review_notes'],
+    ],
 ];
 $failures = [];
 foreach ($checks as $label => $check) {

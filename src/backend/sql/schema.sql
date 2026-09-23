@@ -524,18 +524,23 @@ CREATE TABLE `inventory_adjustments` (
   `adjustment_qty` int(11) NOT NULL,
   `adjustment_type` enum('damaged','missing','expired','other') NOT NULL,
   `reported_by` int(11) NOT NULL,
+  `shift_id` int(11) DEFAULT NULL,
   `reported_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `approved_by` int(11) DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,
   `reason` text DEFAULT NULL,
+  `review_notes` text DEFAULT NULL,
   `status` enum('pending','approved','rejected') DEFAULT 'pending',
   PRIMARY KEY (`adjustment_id`),
   KEY `product_id` (`product_id`),
   KEY `reported_by` (`reported_by`),
   KEY `approved_by` (`approved_by`),
+  KEY `idx_inventory_adjustments_shift` (`shift_id`),
+  KEY `idx_inventory_adjustments_status` (`status`),
   CONSTRAINT `inventory_adjustments_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `inventory_adjustments_ibfk_2` FOREIGN KEY (`reported_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `inventory_adjustments_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `inventory_adjustments_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_inventory_adjustments_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1180,13 +1185,16 @@ CREATE TABLE `stock_movements` (
   `change_qty` int(11) NOT NULL,
   `reason` enum('purchase','sale','adjustment','return') NOT NULL,
   `moved_by` int(11) DEFAULT NULL,
+  `adjustment_id` int(11) DEFAULT NULL,
   `moved_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`movement_id`),
   KEY `idx_stock_movements_product_id` (`product_id`),
   KEY `idx_stock_movements_moved_at` (`moved_at`),
+  KEY `idx_stock_movements_adjustment` (`adjustment_id`),
   KEY `moved_by` (`moved_by`),
   CONSTRAINT `stock_movements_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
-  CONSTRAINT `stock_movements_ibfk_2` FOREIGN KEY (`moved_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `stock_movements_ibfk_2` FOREIGN KEY (`moved_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_stock_movements_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=19723 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

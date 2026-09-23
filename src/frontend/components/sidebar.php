@@ -153,6 +153,7 @@ $administratorSystemItems = [
 $managerInventoryItems = [
     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
     ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products & Stock'],
+    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
     ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Counts'],
     ['path' => 'components/inventory_management/csv_import.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'CSV Import'],
     ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
@@ -163,11 +164,6 @@ $administratorReportItems = [
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
     ['path' => 'components/report/report_generation.php', 'icon' => 'bi-file-earmark-bar-graph', 'label' => 'Report Generation'],
-];
-
-$warehouseItems = [
-    ['path' => 'components/report/stock_receiving.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'Stock Receiving'],
-    ['path' => 'components/report/inventory_adjustments.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Adjustments'],
 ];
 
 $superAdministratorSections = [
@@ -224,7 +220,7 @@ $roleSections = [
                 ['path' => 'components/cashier/pos.php', 'icon' => 'bi-cart-check', 'label' => 'Point of Sale'],
                 ['path' => 'components/cashier/shifts.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shift'],
                 ['path' => 'components/cashier/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Cashier Dashboard'],
-                ['icon' => 'bi-boxes', 'label' => 'Warehouse', 'items' => $warehouseItems],
+                ['path' => 'components/cashier/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Report Stock Issue'],
             ],
         ],
         [

@@ -4,7 +4,14 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/FiscalPeriodGuardService.php';
-require_role(['admin', 'cashier']);
+// Cashiers report through components/cashier/stock_issues.php (shift-gated,
+// barcode/search lookup, pending-only). Keep them off this generic page
+// server-side, including direct URLs and crafted requests.
+if (is_logged_in() && current_role() === 'cashier') {
+    header('Location: ' . app_url('components/cashier/stock_issues.php'));
+    exit;
+}
+require_role(['admin']);
 
 $message = '';
 $error = '';
