@@ -33,8 +33,12 @@ function recovery_input(string $name, bool $required = true): ?string
 function recovery_password_hash(string $environmentName): string
 {
     $password = (string)recovery_input($environmentName);
-    if (strlen($password) < 12 || !preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/\d/', $password)) {
-        throw new InvalidArgumentException('Recovery Account login passwords require at least 12 characters with uppercase, lowercase, and numeric characters.');
+    // Unified Recovery Account policy (ticket #34): fixed 8-character minimum,
+    // same complexity as standard staff in password_policy_error() (auth.php).
+    // Existing hashes stay valid (verified via password_verify on login,
+    // never re-validated against this policy).
+    if (strlen($password) < 8 || !preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/\d/', $password)) {
+        throw new InvalidArgumentException('Recovery Account login passwords require at least 8 characters with uppercase, lowercase, and numeric characters.');
     }
     return password_hash($password, PASSWORD_DEFAULT);
 }
