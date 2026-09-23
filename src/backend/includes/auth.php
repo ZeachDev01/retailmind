@@ -46,7 +46,11 @@ function current_role(): ?string
 
 function password_policy_error(string $password): ?string
 {
-    $minimum = max(8, (int)env('PASSWORD_MIN_LENGTH', 10));
+    // Unified standard staff policy (ticket #33): fixed 8-character minimum.
+    // PASSWORD_MIN_LENGTH is intentionally ignored so create/change/reset
+    // agree on one expectation; existing hashes stay valid (checked on login
+    // via password_verify, never re-validated against this policy).
+    $minimum = 8;
     if (strlen($password) < $minimum) {
         return "Password must contain at least {$minimum} characters.";
     }

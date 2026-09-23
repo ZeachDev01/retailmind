@@ -48,7 +48,7 @@
                     <div class="form-group">
                         <label for="drawerPassword">Reset password</label>
                         <div class="password-field">
-                            <input type="password" id="drawerPassword" name="new_password" autocomplete="new-password">
+                            <input type="password" id="drawerPassword" name="new_password" autocomplete="new-password" minlength="8">
                             <button type="button" class="password-toggle" data-password-toggle="drawerPassword" aria-label="Show password"><i class="bi bi-eye"></i></button>
                         </div>
                         <small class="field-help">A reset revokes active sessions and requires a password change at next login.</small>

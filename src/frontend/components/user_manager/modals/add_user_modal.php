@@ -18,7 +18,8 @@
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <div class="password-field"><input type="password" name="password" id="createUserPassword" required><button type="button" class="password-toggle" data-password-toggle="createUserPassword" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
+                <div class="password-field"><input type="password" name="password" id="createUserPassword" required minlength="8"><button type="button" class="password-toggle" data-password-toggle="createUserPassword" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
+                <small class="field-help">At least 8 characters with uppercase, lowercase, and a number.</small>
             </div>
             <div class="form-group">
                 <label>Role template</label>
