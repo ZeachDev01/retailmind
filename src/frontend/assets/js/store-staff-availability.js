@@ -1,14 +1,17 @@
 (function () {
   "use strict";
 
-  // Live duplicate notice for ticket #39 (create dialog, username only).
-  // Server-side availability query plus submit-time unique handling remain the
-  // source of truth; this module only surfaces an advisory per-field notice
-  // and blocks the Create action while the duplicate flag is active.
+  // Live duplicate notice for tickets #39 (username) and #40 (email plus
+  // duplicate summary). Server-side availability query plus submit-time
+  // unique handling remain the source of truth; this module only surfaces
+  // advisory per-field notices and blocks the Create action while any
+  // duplicate flag is active.
   var DEBOUNCE_MS = 300;
+  var usernameTaken = false;
+  var emailTaken = false;
   var duplicateActive = false;
 
-  function setDuplicate(group, input, submit, isTaken) {
+  function setFieldState(group, input, isTaken) {
     if (group) {
       group.classList.toggle("invalid", isTaken);
     }
@@ -19,14 +22,36 @@
         input.removeAttribute("aria-invalid");
       }
     }
+  }
+
+  function updateDuplicateState(usernameGroup, usernameInput, emailGroup, emailInput, summary, submit, nextUsernameTaken, nextEmailTaken) {
+    // An empty email is optional and never counts as a duplicate, even if a
+    // stale response arrives after the field was cleared.
+    var usernameValue = usernameInput ? usernameInput.value || "" : "";
+    var emailValue = emailInput ? emailInput.value || "" : "";
+    if (usernameValue.trim() === "") {
+      nextUsernameTaken = false;
+    }
+    if (emailValue.trim() === "") {
+      nextEmailTaken = false;
+    }
+    usernameTaken = nextUsernameTaken;
+    emailTaken = nextEmailTaken;
+    var anyTaken = usernameTaken || emailTaken;
+    setFieldState(usernameGroup, usernameInput, usernameTaken);
+    setFieldState(emailGroup, emailInput, emailTaken);
+    if (summary) {
+      summary.hidden = !anyTaken;
+    }
     if (submit) {
-      if (isTaken) {
+      if (anyTaken) {
         submit.disabled = true;
+        duplicateActive = true;
       } else if (duplicateActive) {
         submit.disabled = false;
+        duplicateActive = false;
       }
     }
-    duplicateActive = isTaken;
   }
 
   function init() {
@@ -34,18 +59,28 @@
     if (!form) {
       return;
     }
-    var input = document.getElementById("createUsernameInput");
-    var group = document.getElementById("createUsernameGroup");
+    var usernameInput = document.getElementById("createUsernameInput");
+    var usernameGroup = document.getElementById("createUsernameGroup");
+    var emailInput = document.getElementById("createEmailInput");
+    var emailGroup = document.getElementById("createEmailGroup");
+    var summary = document.getElementById("createDuplicateSummary");
     var submit = document.getElementById("createUserSubmit");
-    if (!input || !submit) {
+    if (!usernameInput || !submit) {
       return;
     }
-    if (!group) {
-      group = input.closest ? input.closest(".form-group") : null;
+    if (!usernameGroup) {
+      usernameGroup = usernameInput.closest ? usernameInput.closest(".form-group") : null;
+    }
+    if (emailInput && !emailGroup) {
+      emailGroup = emailInput.closest ? emailInput.closest(".form-group") : null;
     }
 
     var timer = null;
     var sequence = 0;
+
+    function clearDuplicateState() {
+      updateDuplicateState(usernameGroup, usernameInput, emailGroup, emailInput, summary, submit, false, false);
+    }
 
     function clear() {
       if (timer) {
@@ -53,11 +88,15 @@
         timer = null;
       }
       sequence += 1;
-      setDuplicate(group, input, submit, false);
+      clearDuplicateState();
     }
 
-    function check(value, requestId) {
-      var url = "?action=availability&username=" + encodeURIComponent(value);
+    function check(usernameValue, emailValue, requestId) {
+      var url =
+        "?action=availability&username=" +
+        encodeURIComponent(usernameValue) +
+        "&email=" +
+        encodeURIComponent(emailValue);
       fetch(url, { headers: { Accept: "application/json" } })
         .then(function (response) {
           if (!response.ok) {
@@ -69,33 +108,48 @@
           if (requestId !== sequence) {
             return;
           }
-          setDuplicate(group, input, submit, payload && payload.username_taken === true);
+          updateDuplicateState(
+            usernameGroup,
+            usernameInput,
+            emailGroup,
+            emailInput,
+            summary,
+            submit,
+            payload && payload.username_taken === true,
+            payload && payload.email_taken === true
+          );
         })
         .catch(function () {
           if (requestId !== sequence) {
             return;
           }
-          setDuplicate(group, input, submit, false);
+          clearDuplicateState();
         });
     }
 
-    input.addEventListener("input", function () {
+    function schedule() {
       if (timer) {
         clearTimeout(timer);
         timer = null;
       }
-      var value = input.value || "";
-      if (value.trim() === "") {
+      var usernameValue = usernameInput.value || "";
+      var emailValue = emailInput ? emailInput.value || "" : "";
+      if (usernameValue.trim() === "" && emailValue.trim() === "") {
         sequence += 1;
-        setDuplicate(group, input, submit, false);
+        clearDuplicateState();
         return;
       }
       timer = setTimeout(function () {
         timer = null;
         sequence += 1;
-        check(value, sequence);
+        check(usernameValue, emailValue, sequence);
       }, DEBOUNCE_MS);
-    });
+    }
+
+    usernameInput.addEventListener("input", schedule);
+    if (emailInput) {
+      emailInput.addEventListener("input", schedule);
+    }
 
     form.addEventListener("reset", clear);
 

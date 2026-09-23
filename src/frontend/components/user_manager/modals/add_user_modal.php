@@ -10,7 +10,8 @@
             <div class="form-group" id="createUsernameGroup"><label for="createUsernameInput">Username</label><input id="createUsernameInput" name="username" value="<?= htmlspecialchars($createFormValues['username'], ENT_QUOTES, 'UTF-8') ?>" required autocomplete="off" aria-describedby="createUsernameNotice"><small class="field-error" id="createUsernameNotice" aria-live="polite">This username is already in use.</small></div>
             <div class="form-group"><label>First Name</label><input name="first_name" value="<?= htmlspecialchars($createFormValues['first_name'], ENT_QUOTES, 'UTF-8') ?>" required></div>
             <div class="form-group"><label>Last Name</label><input name="last_name" value="<?= htmlspecialchars($createFormValues['last_name'], ENT_QUOTES, 'UTF-8') ?>"></div>
-            <div class="form-group"><label>Email</label><input type="email" name="email" value="<?= htmlspecialchars($createFormValues['email'], ENT_QUOTES, 'UTF-8') ?>"></div>
+            <div class="duplicate-summary" id="createDuplicateSummary" role="alert" hidden>An account with this username or email already exists.</div>
+            <div class="form-group" id="createEmailGroup"><label for="createEmailInput">Email</label><input type="email" id="createEmailInput" name="email" value="<?= htmlspecialchars($createFormValues['email'], ENT_QUOTES, 'UTF-8') ?>" autocomplete="off" aria-describedby="createEmailNotice"><small class="field-error" id="createEmailNotice" aria-live="polite">This email is already in use.</small></div>
             <div class="form-group">
                 <label for="createProfileImage">Profile Picture <span class="optional-label">Optional</span></label>
                 <input type="file" id="createProfileImage" name="profile_image" accept="image/jpeg,image/png,image/gif,image/webp">

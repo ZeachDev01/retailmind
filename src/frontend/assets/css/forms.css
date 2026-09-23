@@ -196,5 +196,7 @@ textarea {
 .form-group.invalid input,
 .form-group.invalid select { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,.1); }
 .form-group.invalid .field-error { display: block; }
+.duplicate-summary { color: var(--danger); font-size: .78rem; font-weight: 600; margin: 0 0 .4rem; }
+.duplicate-summary[hidden] { display: none; }
 .advanced-settings { margin-top: .8rem; border: 1px solid var(--border); border-radius: 12px; padding: .75rem; }
 .advanced-settings summary { cursor: pointer; font-weight: 700; color: var(--text); }
