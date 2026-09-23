@@ -7,10 +7,11 @@
         <form method="POST" enctype="multipart/form-data" class="user-form" id="createUserForm">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="create">
-            <div class="form-group"><label>Username</label><input name="username" value="<?= htmlspecialchars($createFormValues['username'], ENT_QUOTES, 'UTF-8') ?>" required></div>
+            <div class="form-group" id="createUsernameGroup"><label for="createUsernameInput">Username</label><input id="createUsernameInput" name="username" value="<?= htmlspecialchars($createFormValues['username'], ENT_QUOTES, 'UTF-8') ?>" required autocomplete="off" aria-describedby="createUsernameNotice"><small class="field-error" id="createUsernameNotice" aria-live="polite">This username is already in use.</small></div>
             <div class="form-group"><label>First Name</label><input name="first_name" value="<?= htmlspecialchars($createFormValues['first_name'], ENT_QUOTES, 'UTF-8') ?>" required></div>
             <div class="form-group"><label>Last Name</label><input name="last_name" value="<?= htmlspecialchars($createFormValues['last_name'], ENT_QUOTES, 'UTF-8') ?>"></div>
-            <div class="form-group"><label>Email</label><input type="email" name="email" value="<?= htmlspecialchars($createFormValues['email'], ENT_QUOTES, 'UTF-8') ?>"></div>
+            <div class="duplicate-summary" id="createDuplicateSummary" role="alert" hidden>An account with this username or email already exists.</div>
+            <div class="form-group" id="createEmailGroup"><label for="createEmailInput">Email</label><input type="email" id="createEmailInput" name="email" value="<?= htmlspecialchars($createFormValues['email'], ENT_QUOTES, 'UTF-8') ?>" autocomplete="off" aria-describedby="createEmailNotice"><small class="field-error" id="createEmailNotice" aria-live="polite">This email is already in use.</small></div>
             <div class="form-group">
                 <label for="createProfileImage">Profile Picture <span class="optional-label">Optional</span></label>
                 <input type="file" id="createProfileImage" name="profile_image" accept="image/jpeg,image/png,image/gif,image/webp">
@@ -18,7 +19,8 @@
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <div class="password-field"><input type="password" name="password" id="createUserPassword" required><button type="button" class="password-toggle" data-password-toggle="createUserPassword" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
+                <div class="password-field"><input type="password" name="password" id="createUserPassword" required minlength="8"><button type="button" class="password-toggle" data-password-toggle="createUserPassword" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
+                <small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
             </div>
             <div class="form-group">
                 <label>Role template</label>
@@ -33,7 +35,7 @@
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="cancelUserModal">Cancel</button>
-                <button class="btn manage-users-primary" type="submit"><i class="bi bi-person-plus"></i> Create User</button>
+                <button class="btn manage-users-primary" type="submit" id="createUserSubmit"><i class="bi bi-person-plus"></i> Create User</button>
             </div>
         </form>
     </div>

@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $messageClass = 'tag-warning';
     } else try {
         $stmt = $pdo->prepare(
-            "INSERT INTO users (full_name, username, email, password_hash, role_id) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO users (full_name, username, email, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, ?, 1)"
         );
         $stmt->execute([
             $_POST['full_name'],
@@ -107,6 +107,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         $updateParts[] = 'password_hash = ?';
                         $params[] = password_hash($newPassword, PASSWORD_DEFAULT);
                         $updateParts[] = 'password_changed_at = NOW()';
+                        // Administrator-issued credential is a Temporary Password:
+                        // force replacement on next login (same as the domain
+                        // service resetPassword path, ticket #43).
+                        $updateParts[] = 'must_change_password = 1';
                         $updateParts[] = 'session_version = session_version + 1';
                     }
                     if ($status !== $before['status']) {
@@ -251,13 +255,14 @@ $disabledCount = count($users) - $activeCount;
 
             <div class="table-wrap">
                 <table class="users-table">
-                    <tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Action</th></tr>
+                    <tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Password</th><th>Action</th></tr>
                     <?php foreach ($users as $u): ?>
                     <tr>
                         <td><?= htmlspecialchars($u['full_name']) ?></td>
                         <td><?= htmlspecialchars($u['username']) ?></td>
                         <td><?= htmlspecialchars($u['role_name']) ?></td>
                         <td><?= $u['status'] === 'active' ? '<span class="tag-success">active</span>' : '<span class="tag-warning">disabled</span>' ?></td>
+                        <td><?= ((int)($u['must_change_password'] ?? 0) === 1) ? '<span class="tag-warning">Change required</span>' : '<span class="tag-success">Current</span>' ?></td>
                         <td class="action-cell">
                             <button
                                 type="button"
@@ -301,7 +306,8 @@ $disabledCount = count($users) - $activeCount;
                 </div>
                 <div class="form-group">
                     <label for="drawerPassword">New Password</label>
-                    <input type="password" id="drawerPassword" name="new_password" autocomplete="new-password">
+                    <input type="password" id="drawerPassword" name="new_password" autocomplete="new-password" minlength="8">
+                    <small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
                 </div>
                 <div class="form-group">
                     <label for="drawerStatus">Status</label>
@@ -353,10 +359,11 @@ $disabledCount = count($users) - $activeCount;
                 <label>Email</label>
                 <input type="email" name="email">
             </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" required>
-            </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required minlength="8">
+                    <small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
+                </div>
             <div class="form-group">
                 <label>Role</label>
                 <select name="role_id" required>
@@ -489,5 +496,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+<script src="<?= htmlspecialchars(app_url('assets/js/password-feedback.js')) ?>"></script>
 </body>
 </html>

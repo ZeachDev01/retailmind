@@ -18,6 +18,7 @@ The application UI exposes only the lifecycle status and last-use time. It never
 Create two files outside the web root, readable only by the operator running PHP:
 
 - one containing a strong Recovery Account login password;
+  (at least 8 characters with uppercase, lowercase, and a number — the same unified policy as standard Store staff);
 - one containing a different activation secret of at least 20 characters.
 
 Set the username in the environment, point the command at both files, and provision the sealed identity:

@@ -10,6 +10,13 @@ if ((bool)($_SESSION['is_recovery_account'] ?? false)) {
     exit('Recovery Account credentials can be rotated only through the offline recovery procedure.');
 }
 
+// Dual-mode screen (ticket #44, part of #42): the Temporary Password flag
+// selects Mandatory mode (forced copy, navigation blocked by the session
+// gate) versus Voluntary mode (standard copy, reachable from Profile).
+// Validation, flag clearing, session revocation, and workspace landing are
+// shared by both modes on the single code path below.
+$isMandatory = (bool)($_SESSION['must_change_password'] ?? false);
+
 $message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
@@ -41,11 +48,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         log_activity(
             $pdo,
             (int)$_SESSION['user_id'],
-            'Mandatory password change completed',
+            $isMandatory ? 'Mandatory password change completed' : 'Voluntary password change completed',
             'Authentication',
             (int)$_SESSION['user_id'],
             null,
-            ['status' => 'completed']
+            ['status' => 'completed', 'mode' => $isMandatory ? 'mandatory' : 'voluntary']
         );
         redirect_by_role();
     }
@@ -67,8 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="section-header">
                 <div>
                     <p class="u-text-muted u-m-0">Account security</p>
-                    <h1 class="u-auth-title">Create a new password</h1>
+                    <h1 class="u-auth-title"><?= $isMandatory ? 'Create a new password' : 'Change password' ?></h1>
+                    <?php if ($isMandatory): ?>
                     <p class="section-description">The temporary password must be replaced before you can access RetailMind.</p>
+                    <?php else: ?>
+                    <p class="section-description">You are changing your password voluntarily. Enter your current password to set a new one.</p>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php if ($message): ?><div class="alert tag-warning"><?= htmlspecialchars($message) ?></div><?php endif; ?>
@@ -78,10 +89,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="password-input"><input type="password" id="current_password" name="current_password" required autocomplete="current-password"><button type="button" class="password-toggle" data-password-toggle="current_password" aria-controls="current_password" aria-pressed="false" aria-label="Show current password">Show</button></div>
                 </div>
                 <div class="form-group u-grid-full"><label for="new_password">New password</label>
-                    <div class="password-input"><input type="password" id="new_password" name="new_password" required autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="new_password" aria-controls="new_password" aria-pressed="false" aria-label="Show new password">Show</button></div><small>Use at least <?= max(8, (int)env('PASSWORD_MIN_LENGTH', 10)) ?> characters with uppercase, lowercase, and a number.</small>
+                    <div class="password-input"><input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="new_password" aria-controls="new_password" aria-pressed="false" aria-label="Show new password">Show</button></div><small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
                 </div>
                 <div class="form-group u-grid-full"><label for="confirm_password">Confirm new password</label>
-                    <div class="password-input"><input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-controls="confirm_password" aria-pressed="false" aria-label="Show confirmation password">Show</button></div>
+                    <div class="password-input"><input type="password" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-controls="confirm_password" aria-pressed="false" aria-label="Show confirmation password">Show</button></div>
                 </div>
                 <div class="u-auth-actions"><a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/logout.php')) ?>">Log out</a><button class="btn" type="submit">Save new password</button></div>
             </form>
@@ -90,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/ui.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(app_url('assets/js/password-feedback.js')) ?>"></script>
     <script>
         document.querySelectorAll('[data-password-toggle]').forEach(function(toggle) {
             var input = document.getElementById(toggle.dataset.passwordToggle);

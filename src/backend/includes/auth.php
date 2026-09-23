@@ -8,6 +8,7 @@ App\Core\Session::start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/password_policy.php';
 require_once __DIR__ . '/profile_images.php';
 
 function app_base_url(): string
@@ -44,17 +45,11 @@ function current_role(): ?string
     return $_SESSION['role'] ?? null;
 }
 
-function password_policy_error(string $password): ?string
-{
-    $minimum = max(8, (int)env('PASSWORD_MIN_LENGTH', 10));
-    if (strlen($password) < $minimum) {
-        return "Password must contain at least {$minimum} characters.";
-    }
-    if (!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/\d/', $password)) {
-        return 'Password must include uppercase, lowercase, and numeric characters.';
-    }
-    return null;
-}
+// Unified password policy lives in password_policy.php (required above):
+// password_policy_error(), recovery_password_policy_error(),
+// password_minimum_length(), and password_meets_complexity() are shared so
+// every entry point enforces one rule. Existing hashes stay valid (checked
+// on login via password_verify, never re-validated against this policy).
 
 function login_security_limits(): array
 {

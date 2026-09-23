@@ -18,6 +18,13 @@ php src/backend/tests/super_administrator_dashboard_route_test.php
 php src/backend/tests/workspace_routing_contract.php
 php src/backend/tests/store_scope_contract.php
 php src/backend/tests/user_lifecycle_contract.php
+php src/backend/tests/store_staff_availability_contract.php
+php src/backend/tests/store_staff_username_notice_contract.php
+php src/backend/tests/store_staff_email_notice_contract.php
+php src/backend/tests/store_staff_race_fallback_contract.php
+php src/backend/tests/password_policy_contract.php
+php src/backend/tests/password_change_modes_contract.php
+php src/backend/tests/recovery_exclusion_reset_audit_contract.php
 php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/product_seed_checks.php
 php src/backend/tests/database_integration.php

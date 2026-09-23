@@ -55,3 +55,19 @@ _Avoid_: Editable log, activity note
 **Supplier Product Terms**:
 The purchasing relationship between a supplier and a product, including unit cost, minimum order quantity, lead time, and whether the supplier is preferred for that product.
 _Avoid_: Supplier mapping, supplier directory
+
+**Temporary Password**:
+An Administrator-issued credential for a Cashier or Inventory Manager that must be replaced by the holder before Store access. Creating Store staff and resetting a staff password both issue one; completing a Mandatory Password Change or an email-link reset clears it.
+_Avoid_: Default password, live credential
+
+**Mandatory Password Change**:
+The forced gate that blocks all Store access until the holder replaces a Temporary Password. It triggers solely on the Temporary Password flag and always permits Logout.
+_Avoid_: Voluntary change, password expiry
+
+**Voluntary Password Change**:
+A Profile-initiated password rotation available at any time when no Temporary Password flag is set. It verifies the current password and revokes other sessions without blocking navigation.
+_Avoid_: Forced reset, recovery flow
+
+**Administrator Password Reset**:
+The Administrator action that issues a Temporary Password for a Cashier or Inventory Manager, revokes the holder's other sessions, and forces replacement on next login. It is recorded as a Protected Audit Record.
+_Avoid_: Self-service reset, Recovery Account rotation

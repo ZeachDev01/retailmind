@@ -58,6 +58,18 @@ function can_manage_user(array $user): bool
 }
 
 $action = (string)($_POST['action'] ?? '');
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string)($_GET['action'] ?? '') === 'availability') {
+    header('Content-Type: application/json; charset=UTF-8');
+    try {
+        $availability = $lifecycle->availability($actorRole, (string)($_GET['username'] ?? ''), (string)($_GET['email'] ?? ''));
+    } catch (DomainException $exception) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Access denied.']);
+        exit;
+    }
+    echo json_encode(['username_taken' => $availability['username_taken'], 'email_taken' => $availability['email_taken']]);
+    exit;
+}
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     csrf_verify();
     try {
@@ -205,7 +217,7 @@ $disabledCount = count($users) - $activeCount;
             </div>
             <div class="table-wrap">
                 <table class="users-table">
-                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Password</th><th>Action</th></tr></thead>
                     <tbody>
                     <?php foreach ($users as $user):
                         $canManage = can_manage_user($user);
@@ -218,6 +230,7 @@ $disabledCount = count($users) - $activeCount;
                             <td><?= htmlspecialchars((string)($user['email'] ?: $user['username'])) ?></td>
                             <td><?= htmlspecialchars(display_label((string)$user['role_name'])) ?></td>
                             <td><?= htmlspecialchars(display_label((string)$user['status'])) ?></td>
+                            <td><?= ((int)($user['must_change_password'] ?? 0) === 1) ? '<span class="tag-warning">Change required</span>' : '<span class="tag-success">Current</span>' ?></td>
                             <td class="action-cell">
                                 <?php if (!$canManage): ?>
                                     <span class="user-protected-label"><i class="bi bi-lock-fill"></i> Protected</span>
@@ -244,6 +257,8 @@ $disabledCount = count($users) - $activeCount;
 </div>
 <?php include __DIR__ . '/modals/manage_user_modal.php'; ?>
 <?php include __DIR__ . '/modals/add_user_modal.php'; ?>
+<script src="<?= htmlspecialchars(app_url('assets/js/password-feedback.js')) ?>"></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/store-staff-availability.js')) ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const addOverlay = document.getElementById('userModalOverlay');

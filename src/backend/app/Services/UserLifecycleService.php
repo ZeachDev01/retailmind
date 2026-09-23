@@ -37,6 +37,31 @@ final class UserLifecycleService
         return $user;
     }
 
+    public function availability(string $actorRole, string $username, string $email): array
+    {
+        if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_USERS)) {
+            throw new DomainException('Your account cannot check Store account availability.');
+        }
+        return [
+            'username_taken' => $this->existsByColumn('username', $username),
+            'email_taken' => $this->existsByColumn('email', $email),
+        ];
+    }
+
+    private function existsByColumn(string $column, string $value): bool
+    {
+        if ($column !== 'username' && $column !== 'email') {
+            throw new InvalidArgumentException('Unknown availability field.');
+        }
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+        $statement = $this->pdo->prepare("SELECT 1 FROM users WHERE LOWER(TRIM({$column})) = LOWER(?) LIMIT 1");
+        $statement->execute([$value]);
+        return $statement->fetchColumn() !== false;
+    }
+
     public function create(int $actorId, string $actorRole, array $account): int
     {
         $targetRole = $this->requireAssignableRole($actorRole, (string)($account['role'] ?? ''));
