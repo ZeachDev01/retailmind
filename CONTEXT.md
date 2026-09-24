@@ -28,6 +28,10 @@ _Avoid_: Deleted user, removed history, inactive account
 A user account with no successful login for the configured dormancy period; an account that has never logged in is measured from its creation date.
 _Avoid_: Inactive account, unused account, stale login
 
+**Login Identifier**:
+The single Staff login field value: a Username OR an Email Address. Username is primary and never contains `@`; Email Address is an alternate co-option, optional and unique where present. The Recovery Account is excluded from email matching and stays reachable by Username only.
+_Avoid_: Login name, email-only login, second login field
+
 **Dormancy Policy**:
 The Platform Setting that disables Dormant Accounts after a configured number of days, warns Administrators beforehand, and never leaves the Store without an active Administrator. Disabling retains historical attribution, revokes sessions, and emails the holder when an address is on file.
 _Avoid_: Auto-disable rule, inactivity timeout, session timeout

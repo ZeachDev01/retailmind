@@ -88,19 +88,49 @@ function last_login_error(): string
     return (string)($_SESSION['_login_error'] ?? 'Invalid username or password.');
 }
 
-function login_user(PDO $pdo, string $username, string $password): bool
+// Login Identifier resolution: the single Staff login field accepts a
+// Username OR an Email Address. The caller trims the typed value once;
+// matching is case-insensitive for both identifiers, following the
+// established LOWER(TRIM()) availability precedent. A Username match
+// (Recovery Account included) always wins, so a value stored as both a
+// Username row and an Email Address row signs in as the Username row. The
+// Email Address co-option excludes the Recovery Account, which stays
+// reachable by Username only.
+function resolve_login_user(PDO $pdo, string $identifier): array
 {
-    $username = trim($username);
+    if ($identifier === '') {
+        return ['user' => null, 'identifier_type' => 'unknown'];
+    }
 
-    $stmt = $pdo->prepare(
-        "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
+    $select = "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
             u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password,
             u.is_recovery_account, r.role_name
-         FROM users u JOIN roles r ON u.role_id = r.role_id
-         WHERE u.username = ? LIMIT 1"
-    );
-    $stmt->execute([$username]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+         FROM users u JOIN roles r ON u.role_id = r.role_id";
+
+    $byUsername = $pdo->prepare($select . ' WHERE LOWER(TRIM(u.username)) = LOWER(?) LIMIT 1');
+    $byUsername->execute([$identifier]);
+    $user = $byUsername->fetch(PDO::FETCH_ASSOC);
+    if (is_array($user)) {
+        return ['user' => $user, 'identifier_type' => 'username'];
+    }
+
+    $byEmail = $pdo->prepare($select . ' WHERE u.is_recovery_account = 0 AND LOWER(TRIM(u.email)) = LOWER(?) LIMIT 1');
+    $byEmail->execute([$identifier]);
+    $user = $byEmail->fetch(PDO::FETCH_ASSOC);
+    if (is_array($user)) {
+        return ['user' => $user, 'identifier_type' => 'email'];
+    }
+
+    return ['user' => null, 'identifier_type' => 'unknown'];
+}
+
+function login_user(PDO $pdo, string $identifier, string $password): bool
+{
+    $identifier = trim($identifier);
+
+    $resolved = resolve_login_user($pdo, $identifier);
+    $user = $resolved['user'];
+    $identifierType = $resolved['identifier_type'];
 
     $passwordMatches = $user && password_verify($password, (string)$user['password_hash']);
     $valid = $user
@@ -115,7 +145,7 @@ function login_user(PDO $pdo, string $username, string $password): bool
             );
         }
         $pdo->prepare(
-            'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE user_id = ?'
+            'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = CURRENT_TIMESTAMP WHERE user_id = ?'
         )->execute([(int)$user['user_id']]);
         App\Core\Session::regenerate();
         $_SESSION['user_id'] = (int)$user['user_id'];
@@ -135,7 +165,7 @@ function login_user(PDO $pdo, string $username, string $password): bool
             'Authentication',
             (int)$user['user_id'],
             null,
-            ['username' => $user['username'], 'role' => $user['role_name'], 'action' => 'success']
+            ['username' => $user['username'], 'role' => $user['role_name'], 'action' => 'success', 'identifier_type' => $identifierType]
         );
         return true;
     }
@@ -154,7 +184,8 @@ function login_user(PDO $pdo, string $username, string $password): bool
         $user ? (int)$user['user_id'] : null,
         null,
         [
-            'username' => $username,
+            'username' => $identifier,
+            'identifier_type' => $identifierType,
             'reason' => $user && $passwordMatches && $user['status'] !== 'active' ? 'inactive_account' : 'invalid_credentials',
         ]
     );

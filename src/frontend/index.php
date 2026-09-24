@@ -246,8 +246,8 @@ unset($_SESSION['_login_username']);
                     <form method="POST" action="<?= $loginActionUrl ?>" class="landing-login-form">
                         <?= csrf_field() ?>
                         <div class="form-group">
-                            <label for="landing-login-username">Username</label>
-                            <input type="text" id="landing-login-username" name="username" value="<?= htmlspecialchars($loginUsername, ENT_QUOTES, 'UTF-8') ?>" placeholder="Enter your username" required autocomplete="username">
+                            <label for="landing-login-username">Username or email</label>
+                            <input type="text" id="landing-login-username" name="username" value="<?= htmlspecialchars($loginUsername, ENT_QUOTES, 'UTF-8') ?>" placeholder="Enter your username or email" required autocomplete="username">
                         </div>
                         <div class="form-group">
                             <label for="landing-login-password">Password</label>
