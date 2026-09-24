@@ -46,9 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
         $result = $salesWorkflowService->checkout($cart, (int)$_SESSION['user_id'], $payment_method, $paymentDetails);
         header('Location: ' . app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $result['sale_id'] . '&checkout=complete'));
         exit;
-    } catch (RuntimeException $e) {
-        $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
     }
 }
@@ -614,7 +612,11 @@ function getLowStockThreshold(item) {
 
 function showCartMessage(message, type = 'info') {
     window.clearTimeout(messageTimer);
-    cartMessage.textContent = message;
+    const kind = ['error', 'warning', 'success', 'info'].includes(type) ? type : 'info';
+    const clean = (window.RetailMindUI && typeof window.RetailMindUI.sanitizeAlert === 'function')
+        ? window.RetailMindUI.sanitizeAlert(String(message == null ? '' : message), kind)
+        : { message: String(message == null ? '' : message), tech: '' };
+    cartMessage.textContent = clean.tech ? clean.message + '\n' + clean.tech : clean.message;
     cartMessage.className = `cart-message visible ${type}`;
     messageTimer = window.setTimeout(() => {
         cartMessage.className = 'cart-message';
@@ -981,9 +983,22 @@ function submitConfirmedCheckout() {
 }
 
 async function apiHeldSale(action, payload = {}) {
-    const response = await fetch(heldSalesApiUrl, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({action,...payload})});
-    const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.message || 'Held sale request failed.');
+    const heldSaleFallback = 'The held sale could not be completed. Check your connection and try again. Tell your Administrator if this keeps happening.';
+    let response;
+    try {
+        response = await fetch(heldSalesApiUrl, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({action,...payload})});
+    } catch (networkError) {
+        console.error('Held sale request failed:', networkError);
+        throw new Error(heldSaleFallback);
+    }
+    let data;
+    try {
+        data = await response.json();
+    } catch (parseError) {
+        console.error('Held sale response could not be read:', parseError);
+        throw new Error(heldSaleFallback);
+    }
+    if (!response.ok || !data.success) throw new Error(data.message || heldSaleFallback);
     return data;
 }
 
@@ -1102,19 +1117,33 @@ function onScanSuccess(decodedText) {
     addCodeFromInput();
 }
 
+function showCameraStartFailure(hint, detail) {
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    scannerResult.innerHTML = '<strong>Camera could not start</strong><span>' + escapeHtml(hint) + '</span>';
+    if (detail !== undefined) {
+        console.error('Camera start failed:', detail);
+    }
+    if (window.RetailMindUI && typeof window.RetailMindUI.toast === 'function') {
+        const easy = 'The camera could not start. Check your camera permission, or enter the code manually to continue. Tell your Administrator if this keeps happening.';
+        const tech = window.RetailMindUI.isDebug() && detail !== undefined ? '\n' + String(detail) : '';
+        window.RetailMindUI.toast(easy + tech, 'error');
+    }
+}
+
 function startScanner() {
     scannerArea.classList.add('open');
     if (!html5QrCode) {
-        scannerResult.innerHTML = '<strong>Camera unavailable</strong><span>The scanner library could not be loaded.</span>';
+        showCameraStartFailure('The scanner library could not be loaded. Enter the code manually instead.', 'Html5Qrcode library is unavailable');
         return;
     }
     const localHost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
     if (!window.isSecureContext && !localHost) {
-        scannerResult.innerHTML = '<strong>Camera blocked</strong><span>Open this page over HTTPS or use a localhost scanner URL.</span>';
+        showCameraStartFailure('Open this page over HTTPS, or enter the code manually.', 'Camera requires a secure context (HTTPS or localhost)');
         return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        scannerResult.innerHTML = '<strong>Camera unsupported</strong><span>This browser does not allow camera scanning.</span>';
+        showCameraStartFailure('This browser does not allow camera scanning. Enter the code manually.', 'navigator.mediaDevices.getUserMedia is unavailable');
         return;
     }
     if (scannerActive) {
@@ -1130,9 +1159,7 @@ function startScanner() {
             scannerResult.innerHTML = '<strong>Camera active</strong><span>Place a barcode inside the frame.</span>';
         })
         .catch(error => {
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            scannerResult.innerHTML = `<strong>Camera error</strong><span>${escapeHtml(error)}</span>`;
+            showCameraStartFailure('Check camera permission, or type the code manually.', error);
         });
 }
 

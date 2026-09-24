@@ -918,7 +918,9 @@ function viewReceipt(saleId) {
         })
         .catch(error => {
             console.error('Error fetching receipt:', error);
-            RetailMindUI.toast('The receipt could not be shown. Please try again.', 'error');
+            const easy = 'The receipt could not be shown. Please try again. Tell your Administrator if this keeps happening.';
+            const detail = window.RetailMindUI && window.RetailMindUI.isDebug() ? '\n' + String(error) : '';
+            RetailMindUI.toast(easy + detail, 'error');
         });
 }
 

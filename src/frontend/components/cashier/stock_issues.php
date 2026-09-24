@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ['adjustment_id' => (int)$adjustmentId, 'status' => 'pending']
             );
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         $error = \App\Support\OperatorAlert::message($e, 'The stock report could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.');
     }
 }

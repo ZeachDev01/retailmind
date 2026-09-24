@@ -53,4 +53,4 @@ try {
         echo json_encode(['success'=>true,'cart'=>json_decode((string)$json,true)?:[],'held_sales'=>held_sale_rows($pdo,$userId)]);exit;
     }
     throw new RuntimeException('Invalid action.');
-} catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();http_response_code(400);echo json_encode(['success'=>false,'message'=>$e->getMessage()]);}
+} catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();http_response_code(400);echo json_encode(['success'=>false,'message'=>\App\Support\OperatorAlert::message($e, 'The held sale could not be completed. Check your connection and try again. Tell your Administrator if this keeps happening.')]);}

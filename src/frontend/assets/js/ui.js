@@ -281,7 +281,13 @@
     qsa(".alert, .error-msg, .message, .pos-alert").forEach((node) => {
       if (node === flash) return;
       if (node.dataset.rmAlertProcessed === "1") return;
-      const message = (node.textContent || "").replace(/\s+/g, " ").trim();
+      const message = (node.textContent || "")
+        .split(/\r?\n/)
+        .map(function (line) {
+          return line.replace(/\s+/g, " ").trim();
+        })
+        .filter(Boolean)
+        .join("\n");
       if (!message) return;
       const kind = node.matches(
         ".error-msg, .message.error, .alert-error, .pos-alert.error, .tag-warning, .alert-warning",
@@ -477,9 +483,9 @@
         : "Connection unavailable. Unsaved actions may fail.";
       if (!online)
         RM.toast(
-          "Internet connection was lost. Keep this page open and retry when online.",
+          "You are offline. Check your connection and try again. Tell your Administrator if this keeps happening.",
           "warning",
-          "You are offline",
+          "Attention",
           6500,
         );
     }
