@@ -284,3 +284,106 @@ Stack trace:
 [18-Sep-2026 21:26:06 Asia/Manila] Error: Call to undefined function branch_scope() in C:\xampp\htdocs\inventory_system\src\frontend\components\cashier\pos.php:56
 Stack trace:
 #0 {main}
+[24-Sep-2026 13:33:53 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'ia.shift_id' in 'field list' in C:\xampp\htdocs\retailmind\src\backend\app\Services\StockIssueService.php:982
+Stack trace:
+#0 C:\xampp\htdocs\retailmind\src\backend\app\Services\StockIssueService.php(982): PDO->prepare('SELECT ia.adjus...')
+#1 C:\xampp\htdocs\retailmind\src\frontend\components\cashier\stock_issues.php(74): StockIssueService->getReportsByCashier(46)
+#2 {main}
+[24-Sep-2026 13:53:10 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 13:53:10 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 13:53:21 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 13:53:21 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 13:53:21 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 13:53:21 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 13:53:21 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 13:53:21 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 13:53:21 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 13:53:21 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 13:53:21 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 13:53:21 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 13:53:21 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 13:53:21 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 13:53:21 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 13:53:21 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:00:16 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:00:16 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:00:27 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:00:27 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:00:27 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:00:27 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:00:27 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:00:27 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:00:27 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:00:27 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:00:27 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:00:27 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:00:27 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:00:27 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:00:27 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:00:27 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:20:52 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:20:52 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:21:04 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:21:04 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:21:04 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:21:04 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:21:04 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:21:04 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:21:04 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:21:04 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:21:04 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:21:04 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:21:04 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:21:04 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:21:04 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:21:04 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:35:30 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:35:30 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:36:18 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:36:18 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:36:29 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:36:29 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:36:29 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:36:29 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:36:29 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:36:29 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:36:29 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:36:29 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:36:29 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:36:29 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:36:29 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:36:29 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:36:29 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:36:29 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:53:07 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:53:07 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:53:18 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:53:18 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:53:18 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:53:18 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:53:18 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:53:18 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:53:18 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:53:18 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:53:18 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:53:18 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 14:53:18 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:53:18 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 14:53:18 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 14:53:18 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 15:11:58 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 15:11:58 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 15:12:15 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 15:12:15 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 15:12:15 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 15:12:15 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 15:12:15 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 15:12:15 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 15:12:15 Asia/Manila] Stock issue user notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 15:12:15 Asia/Manila] Stock issue manager notification skipped: SQLSTATE[HY000]: General error: 1 no such table: notifications
+[24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
+[24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
