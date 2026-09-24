@@ -1615,7 +1615,7 @@ UNLOCK TABLES;
 
 LOCK TABLES `platform_settings` WRITE;
 /*!40000 ALTER TABLE `platform_settings` DISABLE KEYS */;
-INSERT INTO `platform_settings` (`setting_key`, `setting_value`, `updated_by`, `updated_at`) VALUES ('emergency_access_duration_minutes','15',NULL,'2026-09-18 06:13:38');
+INSERT INTO `platform_settings` (`setting_key`, `setting_value`, `updated_by`, `updated_at`) VALUES ('emergency_access_duration_minutes','15',NULL,'2026-09-18 06:13:38'),('dormancy_disable_days','45',NULL,'2026-09-24 00:00:00'),('dormancy_warn_days','30',NULL,'2026-09-24 00:00:00');
 /*!40000 ALTER TABLE `platform_settings` ENABLE KEYS */;
 UNLOCK TABLES;
 
