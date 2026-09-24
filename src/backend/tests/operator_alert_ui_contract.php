@@ -19,6 +19,7 @@ try {
 
     $ui = $read('src/frontend/assets/js/ui.js');
     $bootstrap = $read('src/backend/bootstrap/app.php');
+    $fallback = $read('src/backend/app/Support/ErrorFallback.php');
     $dbConfig = $read('src/backend/config/db.php');
     $sidebar = $read('src/frontend/components/sidebar.php');
     $login = $read('src/frontend/index.php');
@@ -79,15 +80,16 @@ try {
     $assert(!str_contains($sidebar, 'APP_DEBUG_NEW'), 'No new debug env key may be introduced');
 
     // --- Global fallback gated by debug ---
+    $assert($fallback !== '', 'ErrorFallback must be readable');
     $assert(
-        str_contains($bootstrap, 'Tell your Administrator if this keeps happening'),
+        str_contains($bootstrap . $fallback, 'Tell your Administrator if this keeps happening'),
         'Global HTML fallback must use the easy line shape'
     );
     $assert(str_contains($bootstrap, 'debug'), 'Global fallback must gate the tech detail on the debug flag');
-    $assert(str_contains($bootstrap, 'tech'), 'Global fallback must be able to surface a tech line in debug mode');
+    $assert(str_contains($fallback, 'tech'), 'Global fallback must be able to surface a tech line in debug mode');
     $assert(str_contains($bootstrap, 'error_log'), 'Global fallback must keep full detail in server logs');
     $assert(
-        str_contains($bootstrap, 'The request could not be completed') || str_contains($bootstrap, 'Try again'),
+        str_contains($fallback, 'The request could not be completed') || str_contains($fallback, 'Try again'),
         'Global JSON fallback must keep an easy message'
     );
 

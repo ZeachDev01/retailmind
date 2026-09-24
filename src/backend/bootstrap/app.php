@@ -1,6 +1,8 @@
 <?php
 
 use App\Core\Environment;
+use App\Support\ErrorFallback;
+use App\Support\OperatorAlert;
 
 $rootPath = dirname(__DIR__, 2);
 $backendPath = dirname(__DIR__);
@@ -76,35 +78,17 @@ set_exception_handler(static function (Throwable $exception): void {
         http_response_code(500);
     }
 
-    $easyLine = 'Something went wrong. Please try again. Tell your Administrator if this keeps happening.';
-    $techLine = $debug ? get_class($exception) . ': ' . $exception->getMessage() : null;
+    $debug = OperatorAlert::isDebug();
 
-    $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
-    $uri = $_SERVER['REQUEST_URI'] ?? '';
-    $expectsJson = stripos($accept, 'application/json') !== false || strpos($uri, '/barcodeScanner/apiScanner/') !== false || strpos($uri, '/api/') !== false;
-
-    if ($expectsJson) {
+    if (ErrorFallback::expectsJson()) {
         if (!headers_sent()) {
             header('Content-Type: application/json');
         }
-        $payload = [
-            'success' => false,
-            'message' => 'The request could not be completed. Please try again.',
-            'errors' => [],
-        ];
-        if ($techLine !== null) {
-            $payload['tech'] = $techLine;
-        }
-        echo json_encode($payload);
+        echo json_encode(ErrorFallback::json($exception, $debug));
         return;
     }
 
-    echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Application Error</title></head><body>';
-    echo '<h1>Application Error</h1><p>' . htmlspecialchars($easyLine, ENT_QUOTES, 'UTF-8') . '</p>';
-    if ($techLine !== null) {
-        echo '<pre style="color:#9ca3af;font-size:0.8rem;white-space:pre-wrap;">' . htmlspecialchars($techLine, ENT_QUOTES, 'UTF-8') . '</pre>';
-    }
-    echo '</body></html>';
+    echo ErrorFallback::page($exception, $debug);
 });
 
 return $GLOBALS['app'];

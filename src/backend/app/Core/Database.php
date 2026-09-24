@@ -41,8 +41,8 @@ final class Database
                 PDO::ATTR_STRINGIFY_FETCHES => false,
             ]);
         } catch (PDOException $exception) {
-            error_log('Database connection failed: ' . $exception->getMessage());
-            throw new RuntimeException('Unable to connect to the database.');
+            error_log('Database connection failed: ' . $exception);
+            throw new RuntimeException('Unable to connect to the database.', 0, $exception);
         }
 
         return self::$connection;
