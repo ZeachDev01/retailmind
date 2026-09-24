@@ -1,6 +1,4 @@
 Fresh-install login:
 
 - Username: superadmin
-- Password: RetailMind@2026  
-
-
+- Password: RetailMind@2026
