@@ -32,6 +32,7 @@ node src/backend/tests/operator_alert_wrapper_behavior_test.js
 php src/backend/tests/operator_alert_fallback_contract.php
 php src/backend/tests/cashier_alert_contract.php
 php src/backend/tests/inventory_alert_contract.php
+php src/backend/tests/admin_alert_contract.php
 php src/backend/tests/product_seed_checks.php
 php src/backend/tests/stock_issue_contract.php
 php src/backend/tests/stock_issue_correction_contract.php

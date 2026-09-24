@@ -27,22 +27,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($policy = password_policy_error($password)) {
         $error = $policy;
     } else {
-        $pdo->beginTransaction();
-        $pdo->prepare('UPDATE users SET password_hash = ?, password_changed_at = NOW(), must_change_password = 0, session_version = session_version + 1, failed_login_attempts = 0, locked_until = NULL WHERE user_id = ?')
-            ->execute([password_hash($password, PASSWORD_DEFAULT), (int)$reset['user_id']]);
-        $pdo->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE reset_id = ?')->execute([(int)$reset['reset_id']]);
-        log_activity(
-            $pdo,
-            (int)$reset['user_id'],
-            'Password reset completed via email link',
-            'User Access',
-            (int)$reset['user_id'],
-            null,
-            ['role' => (string)($reset['role_name'] ?? ''), 'sessions_revoked' => true, 'password_change_required' => false]
-        );
-        $pdo->commit();
-        $success = 'Your password has been reset. You may now sign in.';
-        $reset = null;
+        try {
+            $pdo->beginTransaction();
+            $pdo->prepare('UPDATE users SET password_hash = ?, password_changed_at = NOW(), must_change_password = 0, session_version = session_version + 1, failed_login_attempts = 0, locked_until = NULL WHERE user_id = ?')
+                ->execute([password_hash($password, PASSWORD_DEFAULT), (int)$reset['user_id']]);
+            $pdo->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE reset_id = ?')->execute([(int)$reset['reset_id']]);
+            log_activity(
+                $pdo,
+                (int)$reset['user_id'],
+                'Password reset completed via email link',
+                'User Access',
+                (int)$reset['user_id'],
+                null,
+                ['role' => (string)($reset['role_name'] ?? ''), 'sessions_revoked' => true, 'password_change_required' => false]
+            );
+            $pdo->commit();
+            $success = 'Your password has been reset. You may now sign in.';
+            $reset = null;
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $error = \App\Support\OperatorAlert::message($exception, 'Your password could not be reset. Check your connection and try again. Tell your Administrator if this keeps happening.');
+        }
     }
 }
 ?>
@@ -60,14 +67,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="login-wrapper">
         <div class="login-card">
             <h1>Choose a new password</h1>
-            <?php if ($error): ?><div class="error-msg"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($error): ?><div class="alert tag-warning"><?= htmlspecialchars($error) ?></div><?php endif; ?>
             <?php if ($success): ?><div class="alert tag-success"><?= htmlspecialchars($success) ?></div>
                 <p><a href="<?= htmlspecialchars(app_url('?login=1')) ?>">Continue to login</a></p>
             <?php elseif ($reset): ?><form method="post"><?= csrf_field() ?><input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>">
                     <div class="form-group"><label>New password</label><input type="password" name="password" required minlength="8"><small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small></div>
                     <div class="form-group"><label>Confirm password</label><input type="password" name="password_confirm" required minlength="8"></div><button class="btn btn-block">Reset password</button>
                 </form>
-            <?php else: ?><div class="error-msg">This reset link is invalid or expired.</div><?php endif; ?>
+            <?php else: ?><div class="alert tag-warning">This reset link is invalid or expired.</div><?php endif; ?>
         </div>
     </div>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">

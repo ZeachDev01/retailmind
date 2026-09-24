@@ -37,24 +37,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($policyError = password_policy_error($newPassword)) {
         $message = $policyError;
     } else {
-        $newVersion = (int)$user['session_version'] + 1;
-        $pdo->prepare(
-            'UPDATE users SET password_hash = ?, password_changed_at = NOW(), must_change_password = 0, session_version = ?, failed_login_attempts = 0, locked_until = NULL WHERE user_id = ?'
-        )->execute([password_hash($newPassword, PASSWORD_DEFAULT), $newVersion, (int)$_SESSION['user_id']]);
+        try {
+            $newVersion = (int)$user['session_version'] + 1;
+            $pdo->prepare(
+                'UPDATE users SET password_hash = ?, password_changed_at = NOW(), must_change_password = 0, session_version = ?, failed_login_attempts = 0, locked_until = NULL WHERE user_id = ?'
+            )->execute([password_hash($newPassword, PASSWORD_DEFAULT), $newVersion, (int)$_SESSION['user_id']]);
 
-        $_SESSION['session_version'] = $newVersion;
-        $_SESSION['must_change_password'] = false;
-        $_SESSION['_flash_success'] = 'Password changed successfully.';
-        log_activity(
-            $pdo,
-            (int)$_SESSION['user_id'],
-            $isMandatory ? 'Mandatory password change completed' : 'Voluntary password change completed',
-            'Authentication',
-            (int)$_SESSION['user_id'],
-            null,
-            ['status' => 'completed', 'mode' => $isMandatory ? 'mandatory' : 'voluntary']
-        );
-        redirect_by_role();
+            $_SESSION['session_version'] = $newVersion;
+            $_SESSION['must_change_password'] = false;
+            $_SESSION['_flash_success'] = 'Password changed successfully.';
+            log_activity(
+                $pdo,
+                (int)$_SESSION['user_id'],
+                $isMandatory ? 'Mandatory password change completed' : 'Voluntary password change completed',
+                'Authentication',
+                (int)$_SESSION['user_id'],
+                null,
+                ['status' => 'completed', 'mode' => $isMandatory ? 'mandatory' : 'voluntary']
+            );
+        } catch (Throwable $exception) {
+            $message = \App\Support\OperatorAlert::message($exception, 'Your password could not be changed. Check your connection and try again. Tell your Administrator if this keeps happening.');
+        }
+        if ($message === '') {
+            redirect_by_role();
+        }
     }
 }
 ?>

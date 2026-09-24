@@ -102,9 +102,10 @@ function login_user(PDO $pdo, string $username, string $password): bool
     $stmt->execute([$username]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    $passwordMatches = $user && password_verify($password, (string)$user['password_hash']);
     $valid = $user
         && $user['status'] === 'active'
-        && password_verify($password, (string)$user['password_hash']);
+        && $passwordMatches;
 
     if ($valid) {
         if ((bool)$user['is_recovery_account']) {
@@ -139,12 +140,8 @@ function login_user(PDO $pdo, string $username, string $password): bool
         return true;
     }
 
-    if ($user) {
-        if ($user['status'] !== 'active') {
-            $_SESSION['_login_error'] = 'This account has been disabled.';
-        } else {
-            $_SESSION['_login_error'] = 'Invalid username or password.';
-        }
+    if ($user && $passwordMatches && $user['status'] !== 'active') {
+        $_SESSION['_login_error'] = 'This account has been disabled.';
     } else {
         $_SESSION['_login_error'] = 'Invalid username or password.';
     }
@@ -158,7 +155,7 @@ function login_user(PDO $pdo, string $username, string $password): bool
         null,
         [
             'username' => $username,
-            'reason' => $user && $user['status'] !== 'active' ? 'inactive_account' : 'invalid_credentials',
+            'reason' => $user && $passwordMatches && $user['status'] !== 'active' ? 'inactive_account' : 'invalid_credentials',
         ]
     );
     return false;
