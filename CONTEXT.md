@@ -32,6 +32,14 @@ _Avoid_: Inactive account, unused account, stale login
 The single Staff login field value: a Username OR an Email Address. Username is primary and never contains `@`; Email Address is an alternate co-option, optional and unique where present. The Recovery Account is excluded from email matching and stays reachable by Username only.
 _Avoid_: Login name, email-only login, second login field
 
+**Username**:
+The primary Staff sign-in name and the fallback for accounts with no Email Address on file. It never contains `@` and never contains whitespace; letters, numbers, `.`, `_`, and `-` keep working. The Recovery Account signs in by Username only.
+_Avoid_: Login name, email-style username
+
+**Email Address**:
+The alternate Staff sign-in co-option typed into the same single login field. It is optional and unique where present; an empty value stays stored as NULL and simply means email sign-in fails generic for that person. Matching is case-insensitive, and changing it immediately invalidates the old address. The Recovery Account is excluded from email matching and stays reachable by Username only.
+_Avoid_: Second login field, email-only login
+
 **Dormancy Policy**:
 The Platform Setting that disables Dormant Accounts after a configured number of days, warns Administrators beforehand, and never leaves the Store without an active Administrator. Disabling retains historical attribution, revokes sessions, and emails the holder when an address is on file.
 _Avoid_: Auto-disable rule, inactivity timeout, session timeout

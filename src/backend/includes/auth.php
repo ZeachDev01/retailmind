@@ -60,27 +60,45 @@ function login_security_limits(): array
     ];
 }
 
-function login_attempt_count(PDO $pdo, string $username, string $ipAddress, int $windowMinutes): int
+function login_attempt_count(PDO $pdo, string $identityKey, string $ipAddress, int $windowMinutes): int
 {
+    // The identity key is the resolved-identity throttle key from
+    // login_throttle_identity(), never the raw typed Login Identifier.
+    $cutoff = date('Y-m-d H:i:s', time() - max(1, $windowMinutes) * 60);
     $stmt = $pdo->prepare(
         "SELECT COUNT(*) FROM login_attempts
          WHERE username = ? AND ip_address = ? AND was_successful = 0
-           AND attempted_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)"
+           AND attempted_at >= ?"
     );
-    $stmt->execute([$username, $ipAddress, $windowMinutes]);
+    $stmt->execute([$identityKey, $ipAddress, $cutoff]);
     return (int)$stmt->fetchColumn();
 }
 
-function record_login_attempt(PDO $pdo, string $username, string $ipAddress, bool $success): void
+function record_login_attempt(PDO $pdo, string $identityKey, string $ipAddress, bool $success): void
 {
+    // The identity key is the resolved-identity throttle key from
+    // login_throttle_identity(), never the raw typed Login Identifier, so
+    // Username vs Email Address share one bucket (no double guesses).
     $stmt = $pdo->prepare(
         'INSERT INTO login_attempts (username, ip_address, was_successful) VALUES (?, ?, ?)'
     );
-    $stmt->execute([$username, $ipAddress, $success ? 1 : 0]);
+    $stmt->execute([$identityKey, $ipAddress, $success ? 1 : 0]);
     if ($success) {
         $cleanup = $pdo->prepare('DELETE FROM login_attempts WHERE username = ? AND ip_address = ? AND was_successful = 0');
-        $cleanup->execute([$username, $ipAddress]);
+        $cleanup->execute([$identityKey, $ipAddress]);
     }
+}
+
+// Resolved-identity throttle key (#68): a signed-in or attempted account
+// keys on its stable resolved identity plus network address at the call
+// site; an unresolvable identifier keys on its normalized form plus
+// network address. Callers must never pass the raw typed string.
+function login_throttle_identity(?array $user, string $identifier): string
+{
+    if (is_array($user) && isset($user['user_id'])) {
+        return 'user:' . (int)$user['user_id'];
+    }
+    return 'unknown:' . strtolower(trim($identifier));
 }
 
 function last_login_error(): string
@@ -136,6 +154,20 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
     $valid = $user
         && $user['status'] === 'active'
         && $passwordMatches;
+
+    // Throttle / failed-attempt accounting shares one bucket per resolved
+    // identity plus network address, never the raw typed string, so the two
+    // identifiers do not grant double guesses. Guarded so the
+    // extracted-function contract harnesses (which eval only the named entry
+    // points) keep working; accounting must never break sign-in, so a
+    // storage failure is logged and swallowed here.
+    if (function_exists('login_throttle_identity') && function_exists('record_login_attempt')) {
+        try {
+            record_login_attempt($pdo, login_throttle_identity($user, $identifier), get_client_ip_address(), $valid);
+        } catch (Throwable $throttleException) {
+            error_log('Login throttle accounting skipped: ' . $throttleException->getMessage());
+        }
+    }
 
     if ($valid) {
         if ((bool)$user['is_recovery_account']) {

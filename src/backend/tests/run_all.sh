@@ -27,6 +27,7 @@ php src/backend/tests/store_staff_email_notice_contract.php
 php src/backend/tests/store_staff_race_fallback_contract.php
 php src/backend/tests/store_staff_account_rules_contract.php
 php src/backend/tests/staff_login_identifier_contract.php
+php src/backend/tests/staff_login_parity_contract.php
 php src/backend/tests/password_policy_contract.php
 php src/backend/tests/password_change_modes_contract.php
 php src/backend/tests/recovery_exclusion_reset_audit_contract.php
