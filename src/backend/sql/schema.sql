@@ -1424,6 +1424,7 @@ CREATE TABLE `users` (
   `must_change_password` tinyint(1) NOT NULL DEFAULT 1,
   `branch_id` int(11) DEFAULT NULL,
   `is_recovery_account` tinyint(1) NOT NULL DEFAULT 0,
+  `disabled_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `username` (`username`),

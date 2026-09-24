@@ -15,15 +15,17 @@ final class UserLifecycleService
     public function __construct(
         private PDO $pdo,
         private RoleCapabilityPolicy $policy,
-        private StoreScope $storeScope
+        private StoreScope $storeScope,
+        private ?UserAccountNotifier $notifier = null
     ) {
+        $this->notifier = $notifier ?? new UserAccountNotifier();
     }
 
     public function get(int $userId): array
     {
         $statement = $this->pdo->prepare(
             'SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash,
-                    u.status, u.session_version, u.must_change_password, u.is_recovery_account,
+                    u.status, u.disabled_at, u.session_version, u.must_change_password, u.is_recovery_account,
                     u.role_id, u.branch_id, r.role_name
              FROM users u
              JOIN roles r ON r.role_id = u.role_id
@@ -146,11 +148,27 @@ final class UserLifecycleService
         return $this->transaction(function () use ($actorId, $actorRole, $userId, $status): array {
             $before = $this->get($userId);
             $this->requireManageable($actorId, $actorRole, $before, false);
-            if ($before['status'] !== $status) {
-                $statement = $this->pdo->prepare('UPDATE users SET status = ?, session_version = session_version + 1 WHERE user_id = ?');
+            $changed = $before['status'] !== $status;
+            if ($changed) {
+                if ($status === 'disabled') {
+                    $statement = $this->pdo->prepare(
+                        'UPDATE users SET status = ?, disabled_at = CURRENT_TIMESTAMP, session_version = session_version + 1 WHERE user_id = ?'
+                    );
+                } else {
+                    $statement = $this->pdo->prepare(
+                        'UPDATE users SET status = ?, disabled_at = NULL, session_version = session_version + 1 WHERE user_id = ?'
+                    );
+                }
                 $statement->execute([$status, $userId]);
             }
             $after = $this->get($userId);
+            if ($changed) {
+                if ($status === 'disabled') {
+                    $this->notifier->disabledNotice($after['email'] ?? null);
+                } else {
+                    $this->notifier->enabledNotice($after['email'] ?? null);
+                }
+            }
             $action = $status === 'disabled' ? 'User disabled' : 'User enabled';
             $this->audit($actorId, $actorRole, $action, $userId, $this->auditSnapshot($before), $this->auditSnapshot($after));
             return $after;

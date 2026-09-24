@@ -51,6 +51,7 @@ try {
         must_change_password INTEGER NOT NULL DEFAULT 1,
         branch_id INTEGER NULL,
         is_recovery_account INTEGER NOT NULL DEFAULT 0,
+        disabled_at TEXT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     $pdo->exec("CREATE TABLE recovery_accounts (

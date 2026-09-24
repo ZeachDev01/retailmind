@@ -15,6 +15,7 @@ $assertMatches = static function (string $pattern, string $message) use ($normal
 };
 
 $assertMatches('/\bis_recovery_account\s+(?:BOOLEAN|TINYINT\(1\))\s+NOT NULL\s+DEFAULT\s+(?:FALSE|\'?0\'?)/i', 'users.is_recovery_account is missing');
+$assertMatches('/\bdisabled_at\s+datetime\s+DEFAULT\s+NULL/i', 'users.disabled_at is missing');
 $assertMatches('/CREATE TABLE(?: IF NOT EXISTS)? recovery_accounts\s*\(/i', 'recovery_accounts table is missing');
 $assertMatches('/CREATE TABLE(?: IF NOT EXISTS)? attention_settings\s*\(/i', 'attention_settings table is missing');
 $assertMatches('/CREATE TABLE(?: IF NOT EXISTS)? attention_states\s*\(/i', 'attention_states table is missing');
