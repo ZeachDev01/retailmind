@@ -272,6 +272,11 @@ $checks = [
         'file' => 'src/backend/scripts/run_notifications.php',
         'needles' => ['DatabaseAttentionSignalSource', 'AttentionRuleService', 'AttentionNotificationService', 'refreshResult', 'notify_email', 'newItems'],
     ],
+    'Daily job runs the Dormancy Policy runner' => [
+        'file' => 'src/backend/scripts/run_notifications.php',
+        'needles' => ['App\Authorization\DormancyRunner', '->run()'],
+        'forbidden' => ['DormancyPolicyService', 'disable_days', 'warn_days', 'dormancy_warn', 'last_login_at'],
+    ],
     'Live Store attention includes explicit inventory escalations' => [
         'file' => 'src/backend/app/Attention/DatabaseAttentionSignalSource.php',
         'needles' => ["'inventory_escalated_count'", "ia.status = 'pending'", 'item_count'],

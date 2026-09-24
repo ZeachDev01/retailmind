@@ -6,6 +6,9 @@ require_once dirname(__DIR__) . '/includes/functions.php';
 
 check_and_notify_low_stock($pdo);
 
+$clock = new App\Attention\SystemClock();
+(new App\Authorization\DormancyRunner($pdo, $clock))->run();
+
 $recipients = $pdo->query(
     "SELECT u.user_id, u.email, r.role_name, COALESCE(np.notify_email, 0) AS notify_email,
             COALESCE(np.notify_inapp, 1) AS notify_inapp
@@ -14,7 +17,6 @@ $recipients = $pdo->query(
      WHERE u.status = 'active' AND r.role_name IN ('super_admin','admin','inventory_manager')"
 )->fetchAll(PDO::FETCH_ASSOC);
 
-$clock = new App\Attention\SystemClock();
 $signalSource = new App\Attention\DatabaseAttentionSignalSource($pdo, $clock);
 $attentionCenter = new App\Attention\AttentionCenter(
     new App\Attention\AttentionRuleService(new App\Attention\AttentionSettingsService($pdo, $clock), $clock),
