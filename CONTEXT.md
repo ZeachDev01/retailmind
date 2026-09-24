@@ -22,7 +22,15 @@ _Avoid_: System administrator, global administrator, inventory manager
 
 **Disabled Account**:
 A retained user identity that cannot authenticate and whose active sessions have been revoked. Its historical sales, approvals, and Protected Audit Records remain attributed to it.
-_Avoid_: Deleted user, removed history
+_Avoid_: Deleted user, removed history, inactive account
+
+**Dormant Account**:
+A user account with no successful login for the configured dormancy period; an account that has never logged in is measured from its creation date.
+_Avoid_: Inactive account, unused account, stale login
+
+**Dormancy Policy**:
+The Platform Setting that disables Dormant Accounts after a configured number of days, warns Administrators beforehand, and never leaves the Store without an active Administrator. Disabling retains historical attribution, revokes sessions, and emails the holder when an address is on file.
+_Avoid_: Auto-disable rule, inactivity timeout, session timeout
 
 **Inventory Manager**:
 The Store operator responsible for routine inventory execution, including stock monitoring, replenishment, receiving, and inventory control. It does not own Store-wide staff, compliance, or access oversight.
