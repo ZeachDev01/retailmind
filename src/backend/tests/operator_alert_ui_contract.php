@@ -48,19 +48,29 @@ try {
     $assert(str_contains($ui, 'rm-toast-tech'), 'Debug tech line must render in toasts as a small grey line');
     $assert(str_contains($ui, 'rm-swal-tech'), 'Debug tech line must render in modal alerts');
     $assert(
+        str_contains($ui, 'console.error'),
+        'Debug mode must emit the technical detail to the developer console'
+    );
+    $assert(
         str_contains($ui, 'Tell your Administrator if this keeps happening'),
         'Generic easy line must tell the operator who to contact when it repeats'
     );
+    $assert((bool)preg_match('/error:\s*"Unable to continue"/', $ui), 'Blocked work must keep the red title Unable to continue');
+    $assert((bool)preg_match('/warning:\s*"Attention"/', $ui), 'Retryable work must keep the yellow title Attention');
+    $assert(
+        (bool)preg_match('/success:\s*"Success"/', $ui) && (bool)preg_match('/info:\s*"Update"/', $ui),
+        'Success and info alert titles must stay unchanged'
+    );
     $assert(str_contains($ui, 'RM.toast = function') || str_contains($ui, 'RM.toast ='), 'toast entry point must remain');
     $assert(str_contains($ui, 'RM.alert = function') || str_contains($ui, 'RM.alert ='), 'alert entry point must remain');
-    // Both entry points must run the safety net.
+    // All alert surfaces must run the safety net (toast, alert, confirm).
     $toastStart = strpos($ui, 'RM.toast');
     $alertStart = strpos($ui, 'RM.alert');
     $queueStart = strpos($ui, 'RM.queueAlert');
     $assert($toastStart !== false && $alertStart !== false && $queueStart !== false, 'alert API surface must remain');
     $assert(
-        substr_count($ui, 'sanitizeAlert') >= 2,
-        'Both RM.toast and RM.alert must apply the safety net'
+        substr_count($ui, 'sanitizeAlert') >= 4,
+        'Toast, alert, and confirm must all apply the safety net'
     );
 
     // --- Debug flag wiring (reuse APP_DEBUG, no new env key) ---

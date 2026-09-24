@@ -21,13 +21,15 @@
 
   const TECH_PATTERNS = [
     /SQLSTATE/i,
-    /\b(?:PDOException|RuntimeException|LogicException|DomainException|InvalidArgumentException|UnexpectedValueException|Throwable|Exception)\b/,
+    /\b(?:PDOException|RuntimeException|LogicException|DomainException|InvalidArgumentException|UnexpectedValueException|Throwable|Exception|Error)\b/,
+    /[A-Za-z_][A-Za-z0-9_\\]*(?:Exception|Error)\b/,
     /Stack trace/i,
     /#\d+\s+\S+\.php/,
     /\.php\s*:\s*\d+/,
     /[A-Za-z]:\\[^\s]+/,
     /\/(?:var|home|usr|etc|opt|proc|xampp|Users|Applications)\/[^\s]+/,
     /Object of class/i,
+    /\bobject\([^\)]*\)#\d+/i,
     /Call to (?:a )?member function/i,
     /Undefined (?:variable|array key| property)/i,
     /allowed memory size/i,
@@ -48,25 +50,36 @@
 
   // Safety net: unknown technical text never reaches the shop floor as-is.
   // Returns { message, tech } — tech is only rendered when debug is on.
+  // A technical first line demotes the whole message; otherwise only
+  // technical-looking tail lines are demoted and plain lines stay.
   RM.sanitizeAlert = function (message, type) {
     const kind = type || "info";
     const raw = String(message == null ? "" : message);
-    const lines = raw.split(/\r?\n/);
-    let easy = (lines[0] || "").trim();
-    const rest = lines
-      .slice(1)
+    const lines = raw
+      .split(/\r?\n/)
       .map(function (line) {
         return line.trim();
       })
       .filter(Boolean);
-    let techParts = rest.slice();
-
-    if (!easy || looksTechnical(easy)) {
-      if (easy) techParts.unshift(easy);
+    const first = lines[0] || "";
+    const rest = lines.slice(1);
+    let easy;
+    let techParts;
+    if (!first || looksTechnical(first)) {
       easy = GENERIC_ALERT[kind] || GENERIC_ALERT.info;
+      techParts = lines.slice();
+    } else {
+      const plainTail = rest.filter(function (line) {
+        return !looksTechnical(line);
+      });
+      techParts = rest.filter(looksTechnical);
+      easy = [first].concat(plainTail).join("\n");
     }
 
     const tech = RM.isDebug() && techParts.length ? techParts.join("\n") : "";
+    if (tech && typeof console !== "undefined" && console.error) {
+      console.error("Operator Alert technical detail:", raw);
+    }
     return { message: easy, tech: tech };
   };
 
@@ -210,8 +223,11 @@
       qs("h2", overlay).textContent = opts.title || "Confirm action";
       qs(".rm-modal-header p", overlay).textContent =
         opts.subtitle || "Review this action before continuing.";
-      qs(".rm-modal-body", overlay).textContent =
-        opts.message || "Are you sure you want to continue?";
+      const cleanBody = RM.sanitizeAlert(
+        opts.message || "Are you sure you want to continue?",
+        opts.danger ? "error" : "warning",
+      );
+      qs(".rm-modal-body", overlay).textContent = cleanBody.message;
       const accept = qs(".rm-accept", overlay);
       accept.textContent = opts.confirmText || "Confirm";
       if (opts.danger) accept.classList.add("btn-danger");

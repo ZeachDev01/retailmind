@@ -28,6 +28,7 @@ php src/backend/tests/recovery_exclusion_reset_audit_contract.php
 php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/operator_alert_test.php
 php src/backend/tests/operator_alert_ui_contract.php
+node src/backend/tests/operator_alert_wrapper_behavior_test.js
 php src/backend/tests/product_seed_checks.php
 php src/backend/tests/stock_issue_contract.php
 php src/backend/tests/stock_issue_correction_contract.php
