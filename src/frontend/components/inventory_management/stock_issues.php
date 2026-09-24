@@ -266,6 +266,12 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                 <strong>Cashier:</strong> <?= htmlspecialchars($review['cashier_name']) ?> |
                                 <strong>Reviewed by:</strong> <?= htmlspecialchars($review['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($review['approved_at'])) ?>
                             </div>
+                            <?php if ($review['status'] === 'approved'): ?>
+                                <div class="adjustment-reason">
+                                    <strong>This report is locked.</strong> If the approval was wrong, do not reopen it — record a separate linked inventory count:
+                                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php?correct=' . (int)$review['adjustment_id'])) ?>">Correct via inventory count</a>
+                                </div>
+                            <?php endif; ?>
                             <?php if (!empty($review['review_notes'])): ?>
                                 <div class="adjustment-reason">
                                     <strong>Reviewer note:</strong> <?= htmlspecialchars($review['review_notes']) ?>

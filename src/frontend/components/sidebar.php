@@ -184,6 +184,7 @@ $administratorSections = [
             ['icon' => 'bi-shop', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
             ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'bi-percent', 'label' => 'Promotions'],
+            ['path' => 'components/administrator/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issues'],
             ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Store Reports', 'items' => $administratorReportItems],
         ],
     ],
@@ -246,7 +247,6 @@ $sections = $roleSections[$role] ?? [];
         }
     })();
 </script>
-<?php if (!isset($isEmbedded) || !$isEmbedded): ?>
 <div class="admin-mobile-topbar" aria-label="Mobile navigation">
     <div class="admin-mobile-brand">
         <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
@@ -266,7 +266,6 @@ $sections = $roleSections[$role] ?? [];
         </a>
     </div>
 </div>
-<?php endif; ?>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="appSidebar">
     <button type="button" class="sidebar-brand" id="sidebarBrandToggle" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="appSidebar">

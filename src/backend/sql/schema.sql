@@ -586,14 +586,17 @@ CREATE TABLE `inventory_counts` (
   `counted_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `approved_at` timestamp NULL DEFAULT NULL,
   `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `related_adjustment_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`count_id`),
   KEY `idx_inventory_counts_status` (`status`),
   KEY `idx_inventory_counts_product_counted_at` (`product_id`,`counted_at`),
   KEY `counted_by` (`counted_by`),
   KEY `approved_by` (`approved_by`),
+  KEY `idx_inventory_counts_related_adjustment` (`related_adjustment_id`),
   CONSTRAINT `inventory_counts_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `inventory_counts_ibfk_2` FOREIGN KEY (`counted_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `inventory_counts_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `inventory_counts_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_inventory_counts_related_adjustment` FOREIGN KEY (`related_adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

@@ -28,6 +28,7 @@ class StockIssueService
     private PDO $pdo;
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
+    private ?bool $correctionLinkColumn = null;
 
     public function __construct(PDO $pdo, ?NotificationService $notificationService = null)
     {
@@ -697,6 +698,172 @@ class StockIssueService
     }
 
     /**
+     * Read-only oversight list (ticket #31). The viewer's role is derived from
+     * the database, never trusted from the caller: Administrators and Inventory
+     * Managers see every report for operational review; Cashiers see only their
+     * own. Filters: status, category, product_id, product (text), cashier_id,
+     * approver_id, date_from, date_to (Y-m-d). Never mutates.
+     */
+    public function getOversightReports(array $filters, int $viewerId): array
+    {
+        $viewerRole = $this->roleOf($viewerId);
+        $this->assertOversightRole($viewerRole);
+
+        $where = ['1 = 1'];
+        $params = [];
+        if ($viewerRole === 'cashier') {
+            $where[] = 'ia.reported_by = ?';
+            $params[] = $viewerId;
+        }
+
+        $status = trim((string)($filters['status'] ?? ''));
+        if ($status !== '') {
+            $status = strtolower($status);
+            if (!in_array($status, self::STATUSES, true)) {
+                throw new RuntimeException('Unknown stock issue status filter.');
+            }
+            $where[] = 'ia.status = ?';
+            $params[] = $status;
+        }
+
+        $category = trim((string)($filters['category'] ?? ''));
+        if ($category !== '') {
+            $category = strtolower($category);
+            if (!in_array($category, self::CATEGORIES, true)) {
+                throw new RuntimeException('Select Damaged, Missing/Lost, Expired, or Other.');
+            }
+            $where[] = 'ia.adjustment_type = ?';
+            $params[] = $category;
+        }
+
+        $productId = (int)($filters['product_id'] ?? 0);
+        if ($productId > 0) {
+            $where[] = 'ia.product_id = ?';
+            $params[] = $productId;
+        }
+
+        $productQuery = trim((string)($filters['product'] ?? ''));
+        if ($productQuery !== '') {
+            $where[] = '(p.sku LIKE ? OR p.product_name LIKE ?)';
+            $like = '%' . $productQuery . '%';
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        $cashierId = (int)($filters['cashier_id'] ?? 0);
+        if ($cashierId > 0) {
+            $where[] = 'ia.reported_by = ?';
+            $params[] = $cashierId;
+        }
+
+        $approverId = (int)($filters['approver_id'] ?? 0);
+        if ($approverId > 0) {
+            $where[] = 'ia.approved_by = ?';
+            $params[] = $approverId;
+        }
+
+        $dateFrom = trim((string)($filters['date_from'] ?? ''));
+        if ($dateFrom !== '') {
+            $this->assertFilterDate($dateFrom);
+            $where[] = 'ia.reported_at >= ?';
+            $params[] = $dateFrom . ' 00:00:00';
+        }
+
+        $dateTo = trim((string)($filters['date_to'] ?? ''));
+        if ($dateTo !== '') {
+            $this->assertFilterDate($dateTo);
+            $where[] = 'ia.reported_at <= ?';
+            $params[] = $dateTo . ' 23:59:59';
+        }
+
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare(
+            "SELECT ia.adjustment_id, ia.product_id, ia.adjustment_qty, ia.adjustment_type,
+                    ia.reported_by, ia.shift_id, ia.reported_at, ia.reason, ia.status,
+                    ia.approved_by, ia.approved_at, ia.review_notes,
+                    p.sku, p.product_name,
+                    reporter.full_name AS cashier_name,
+                    reviewer.full_name AS reviewer_name
+             FROM inventory_adjustments ia
+             JOIN products p ON p.product_id = ia.product_id
+             JOIN users reporter ON reporter.user_id = ia.reported_by
+             LEFT JOIN users reviewer ON reviewer.user_id = ia.approved_by
+             WHERE " . implode(' AND ', $where) . $scopeSql . '
+             ORDER BY ia.reported_at DESC, ia.adjustment_id DESC
+             LIMIT 200'
+        );
+        $stmt->execute(array_merge($params, $scopeParams));
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Full read-only report detail for oversight: the report row, append-only
+     * revisions, linked stock movements, and any correction inventory counts.
+     * Returns null when the report does not exist; the viewer's role is
+     * derived from the database and Cashiers may only open their own reports.
+     */
+    public function getReportDetail(int $adjustmentId, int $viewerId): ?array
+    {
+        $viewerRole = $this->roleOf($viewerId);
+        $this->assertOversightRole($viewerRole);
+        $report = $this->getReport($adjustmentId);
+        if ($report === null) {
+            return null;
+        }
+        if ($viewerRole === 'cashier' && (int)$report['reported_by'] !== $viewerId) {
+            throw new RuntimeException('Cashiers can only view their own reports.');
+        }
+
+        $movementStmt = $this->pdo->prepare(
+            'SELECT sm.movement_id, sm.product_id, sm.change_qty, sm.reason, sm.moved_by, sm.adjustment_id, sm.moved_at,
+                    mover.full_name AS moved_by_name
+             FROM stock_movements sm
+             LEFT JOIN users mover ON mover.user_id = sm.moved_by
+             WHERE sm.adjustment_id = ?
+             ORDER BY sm.movement_id ASC'
+        );
+        $movementStmt->execute([$adjustmentId]);
+
+        return [
+            'report' => $report,
+            'revisions' => $this->getRevisions($adjustmentId),
+            'stock_movements' => $movementStmt->fetchAll(PDO::FETCH_ASSOC),
+            'correction_counts' => $this->getCorrectionCounts($adjustmentId),
+        ];
+    }
+
+    /**
+     * Correction inventory counts linked to a stock-issue report through
+     * inventory_counts.related_adjustment_id. The original report is never
+     * rewritten; both records stay independently auditable.
+     */
+    public function getCorrectionCounts(int $adjustmentId): array
+    {
+        if (!$this->hasCorrectionLinkColumn()) {
+            // inventory_counts.related_adjustment_id arrives via migration;
+            // detail views degrade gracefully until it is applied.
+            return [];
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT ic.count_id, ic.product_id, ic.system_quantity, ic.physical_quantity,
+                    ic.difference_qty, ic.discrepancy_reason, ic.counted_by, ic.approved_by,
+                    ic.counted_at, ic.approved_at, ic.status, ic.related_adjustment_id,
+                    p.sku, p.product_name,
+                    counter.full_name AS counted_by_name,
+                    approver.full_name AS approved_by_name
+             FROM inventory_counts ic
+             JOIN products p ON p.product_id = ic.product_id
+             LEFT JOIN users counter ON counter.user_id = ic.counted_by
+             LEFT JOIN users approver ON approver.user_id = ic.approved_by
+             WHERE ic.related_adjustment_id = ?
+             ORDER BY ic.counted_at DESC, ic.count_id DESC'
+        );
+        $stmt->execute([$adjustmentId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
      * Single report with product/cashier/reviewer context. Viewing never locks.
      */
     public function getReport(int $adjustmentId): ?array
@@ -726,11 +893,13 @@ class StockIssueService
     {
         $this->ensureRevisionsTable();
         $stmt = $this->pdo->prepare(
-            'SELECT revision_id, adjustment_id, actor_id, action, old_status, new_status,
-                    old_values, new_values, created_at
-             FROM inventory_adjustment_revisions
-             WHERE adjustment_id = ?
-             ORDER BY created_at ASC, revision_id ASC'
+            'SELECT r.revision_id, r.adjustment_id, r.actor_id, r.action, r.old_status, r.new_status,
+                    r.old_values, r.new_values, r.created_at,
+                    actor.full_name AS actor_name
+             FROM inventory_adjustment_revisions r
+             LEFT JOIN users actor ON actor.user_id = r.actor_id
+             WHERE r.adjustment_id = ?
+             ORDER BY r.created_at ASC, r.revision_id ASC'
         );
         $stmt->execute([$adjustmentId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -894,13 +1063,73 @@ class StockIssueService
         }
     }
 
-    private function assertRole(int $userId, string $expectedRole): void
+    private function assertOversightRole(string $viewerRole): void
+    {
+        // Deliberate scope for this Store-operations oversight surface (ADR-0001):
+        // Administrators own Store operational exceptions, Inventory Managers keep
+        // operational review, and Cashiers see only their own reports. The Super
+        // Administrator inspects Store operations through audit records and the
+        // platform workspace, not this page.
+        if (!in_array($viewerRole, ['admin', 'inventory_manager', 'cashier'], true)) {
+            throw new RuntimeException(
+                'Stock issue oversight is limited to Administrators, Inventory Managers, and Cashiers viewing their own reports.'
+            );
+        }
+    }
+
+    private function assertFilterDate(string $value): void
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
+            throw new RuntimeException('Date filters must use the YYYY-MM-DD format.');
+        }
+    }
+
+    private function roleOf(int $userId): string
     {
         $stmt = $this->pdo->prepare(
             'SELECT r.role_name FROM users u JOIN roles r ON r.role_id = u.role_id WHERE u.user_id = ?'
         );
         $stmt->execute([$userId]);
-        $role = (string)$stmt->fetchColumn();
+        return (string)$stmt->fetchColumn();
+    }
+
+    private function hasCorrectionLinkColumn(): bool
+    {
+        if ($this->correctionLinkColumn !== null) {
+            return $this->correctionLinkColumn;
+        }
+
+        if ($this->isSqlite()) {
+            $columns = [];
+            try {
+                foreach ($this->pdo->query('PRAGMA table_info(inventory_counts)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                    $columns[] = strtolower((string)$column['name']);
+                }
+            } catch (Throwable $e) {
+                $columns = [];
+            }
+            $this->correctionLinkColumn = in_array('related_adjustment_id', $columns, true);
+            return $this->correctionLinkColumn;
+        }
+
+        try {
+            $stmt = $this->pdo->prepare(
+                "SELECT COUNT(*) FROM information_schema.columns
+                  WHERE table_schema = DATABASE()
+                    AND table_name = 'inventory_counts'
+                    AND column_name = 'related_adjustment_id'"
+            );
+            $stmt->execute();
+            $this->correctionLinkColumn = (int)$stmt->fetchColumn() > 0;
+        } catch (Throwable $e) {
+            $this->correctionLinkColumn = false;
+        }
+        return $this->correctionLinkColumn;
+    }
+
+    private function assertRole(int $userId, string $expectedRole): void
+    {
+        $role = $this->roleOf($userId);
         if ($role !== $expectedRole) {
             $label = $expectedRole === 'cashier' ? 'Cashiers' : 'Inventory Managers';
             throw new RuntimeException("{$label} only: this action requires the {$expectedRole} role.");

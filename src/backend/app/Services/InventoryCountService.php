@@ -23,7 +23,7 @@ class InventoryCountService
         $productId = (int)($data['product_id'] ?? 0);
         $physicalQty = (int)($data['physical_quantity'] ?? -1);
         $reason = trim((string)($data['discrepancy_reason'] ?? ''));
-
+        $relatedAdjustmentId = (int)($data['related_adjustment_id'] ?? 0);
         if ($productId <= 0) {
             throw new RuntimeException('Product is required.');
         }
@@ -32,6 +32,14 @@ class InventoryCountService
         }
         if ($reason === '') {
             throw new RuntimeException('Reason for discrepancy is required.');
+        }
+
+        if ($relatedAdjustmentId > 0) {
+            // Correcting an erroneous approved stock-issue report is a
+            // separate controlled Inventory Manager inventory-count transaction;
+            // the original report is never reopened or rewritten.
+            $this->assertRole($userId, 'inventory_manager');
+            $this->loadApprovedStockIssueReport($relatedAdjustmentId, $productId);
         }
 
         $this->fiscalPeriodGuard->assertOpenNow('inventory_counts', 'inventory count');
@@ -43,8 +51,7 @@ class InventoryCountService
                 "SELECT i.quantity_on_hand
                  FROM inventory i
                  JOIN products p ON p.product_id = i.product_id
-                 WHERE i.product_id = ?{$scopeSql}
-                 FOR UPDATE"
+                 WHERE i.product_id = ?{$scopeSql}{$this->forUpdate()}"
             );
             $stmt->execute(array_merge([$productId], $scopeParams));
             $inventory = $stmt->fetch();
@@ -59,8 +66,8 @@ class InventoryCountService
             $stmt = $this->pdo->prepare(
                 "INSERT INTO inventory_counts (
                     product_id, system_quantity, physical_quantity, difference_qty,
-                    discrepancy_reason, counted_by, counted_at, status
-                 ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'pending')"
+                    discrepancy_reason, counted_by, counted_at, status, related_adjustment_id
+                 ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'pending', ?)"
             );
             $stmt->execute([
                 $productId,
@@ -69,6 +76,7 @@ class InventoryCountService
                 $differenceQty,
                 $reason,
                 $userId,
+                $relatedAdjustmentId > 0 ? $relatedAdjustmentId : null,
             ]);
 
             $countId = (int)$this->pdo->lastInsertId();
@@ -254,6 +262,41 @@ class InventoryCountService
         return (int)$stmt->fetchColumn();
     }
 
+    private function loadApprovedStockIssueReport(int $adjustmentId, int $productId): array
+    {
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare(
+            "SELECT ia.adjustment_id, ia.product_id, ia.status
+             FROM inventory_adjustments ia
+             JOIN products p ON p.product_id = ia.product_id
+             WHERE ia.adjustment_id = ?{$scopeSql}"
+        );
+        $stmt->execute(array_merge([$adjustmentId], $scopeParams));
+        $adjustment = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$adjustment) {
+            throw new RuntimeException('Stock issue report not found.');
+        }
+        if ((string)$adjustment['status'] !== 'approved') {
+            throw new RuntimeException('Only approved stock issue reports can be corrected through a separate inventory count.');
+        }
+        if ((int)$adjustment['product_id'] !== $productId) {
+            throw new RuntimeException('The correction count must target the same product as the stock issue report.');
+        }
+        return $adjustment;
+    }
+
+    private function assertRole(int $userId, string $expectedRole): void
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT r.role_name FROM users u JOIN roles r ON r.role_id = u.role_id WHERE u.user_id = ?'
+        );
+        $stmt->execute([$userId]);
+        $role = (string)$stmt->fetchColumn();
+        if ($role !== $expectedRole) {
+            throw new RuntimeException('Only Inventory Managers can link a correction count to a stock issue report.');
+        }
+    }
+
     private function productScope(): array
     {
         if (function_exists('store_product_scope')) {
@@ -261,5 +304,12 @@ class InventoryCountService
         }
 
         return (new App\Store\StoreScope($this->pdo))->productScope('p');
+    }
+
+    private function forUpdate(): string
+    {
+        // SQLite does not support SELECT ... FOR UPDATE; the surrounding
+        // transaction still protects the read-then-write window there.
+        return $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? '' : ' FOR UPDATE';
     }
 }

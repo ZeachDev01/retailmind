@@ -27,6 +27,9 @@ php src/backend/tests/password_change_modes_contract.php
 php src/backend/tests/recovery_exclusion_reset_audit_contract.php
 php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/product_seed_checks.php
+php src/backend/tests/stock_issue_contract.php
+php src/backend/tests/stock_issue_correction_contract.php
+php src/backend/tests/stock_issue_oversight_contract.php
 php src/backend/tests/database_integration.php
 php src/backend/tests/audit_visibility_integration.php
 php src/backend/tests/receipt_table_contract.php

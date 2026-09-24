@@ -319,7 +319,33 @@ $checks = [
     ],
     'Stock-issue schema links reports to shifts and movements' => [
         'file' => 'src/backend/sql/schema.sql',
-        'needles' => ['fk_inventory_adjustments_shift', 'fk_stock_movements_adjustment', 'review_notes'],
+        'needles' => ['fk_inventory_adjustments_shift', 'fk_stock_movements_adjustment', 'review_notes', 'related_adjustment_id', 'fk_inventory_counts_related_adjustment'],
+    ],
+    'Administrator stock-issue oversight is read-only' => [
+        'file' => 'src/frontend/components/administrator/stock_issues.php',
+        'needles' => ["require_role(['admin'])", 'getOversightReports', 'getReportDetail', 'Stock Issue Oversight', 'date_from', 'date_to', 'Missing/Lost', 'Read-only oversight', 'correction_counts'],
+        'forbidden' => ['approveReport', 'rejectReport', 'returnReport', 'editReport', 'cancelReport', 'resubmitReport', 'submitReport'],
+    ],
+    'Administrator navigation offers stock-issue oversight' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ["'path' => 'components/administrator/stock_issues.php'", "'label' => 'Stock Issues'"],
+    ],
+    'Legacy damage report page hands administrators to read-only oversight' => [
+        'file' => 'src/frontend/components/report/inventory_adjustments.php',
+        'needles' => ['components/administrator/stock_issues.php', 'components/cashier/stock_issues.php'],
+        'forbidden' => ['INSERT INTO inventory_adjustments'],
+    ],
+    'Correction counts link back to approved stock-issue reports' => [
+        'file' => 'src/backend/app/Services/InventoryCountService.php',
+        'needles' => ['related_adjustment_id', 'Only approved stock issue reports can be corrected', "assertRole(\$userId, 'inventory_manager')"],
+    ],
+    'Inventory counts page pre-fills linked corrections' => [
+        'file' => 'src/frontend/components/inventory_management/inventory_counts.php',
+        'needles' => ['related_adjustment_id', "?correct=", 'Correcting approved stock issue report'],
+    ],
+    'Manager queue offers the separate correction path for approved reports' => [
+        'file' => 'src/frontend/components/inventory_management/stock_issues.php',
+        'needles' => ['Correct via inventory count', 'inventory_counts.php?correct='],
     ],
 ];
 $failures = [];

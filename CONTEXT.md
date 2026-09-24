@@ -28,6 +28,10 @@ _Avoid_: Deleted user, removed history
 The Store operator responsible for routine inventory execution, including stock monitoring, replenishment, receiving, and inventory control. It does not own Store-wide staff, compliance, or access oversight.
 _Avoid_: Administrator, stock administrator
 
+**Stock Issue**:
+A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Other, moving through pending, returned, cancelled, approved, or rejected. Inventory Managers decide reports; only an approval deducts stock through a linked stock movement. Approved and rejected reports are immutable, and an erroneous approval is corrected only through a separate Inventory Manager inventory count linked back to the report. Administrators hold read-only oversight.
+_Avoid_: Damage report, damage claim, reopen an approval
+
 **Emergency Access**:
 A temporary, reason-bound, fully audited elevation that permits the Super Administrator to perform otherwise-isolated Store operations.
 _Avoid_: Role bypass, master access

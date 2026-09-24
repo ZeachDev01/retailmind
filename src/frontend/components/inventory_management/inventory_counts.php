@@ -4,11 +4,39 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/InventoryCountService.php';
+require_once __DIR__ . '/../../../backend/app/Services/StockIssueService.php';
 require_role(['admin', 'inventory_manager']);
 
 $countService = new InventoryCountService($pdo);
+$stockIssueService = new StockIssueService($pdo);
 $message = '';
 $error = '';
+
+// Correction entry point: ?correct=<adjustment_id> pre-fills a separate
+// inventory-count transaction linked to an approved stock-issue report. The
+// original report is never reopened or rewritten (ticket #31).
+$correctReport = null;
+$correctId = (int)($_GET['correct'] ?? 0);
+if ($correctId > 0) {
+    try {
+        $correctReport = $stockIssueService->getReport($correctId);
+        if ($correctReport === null) {
+            throw new RuntimeException('Stock issue report not found.');
+        }
+        if ($correctReport['status'] !== 'approved') {
+            throw new RuntimeException('Only approved stock issue reports can be corrected through a separate inventory count.');
+        }
+    } catch (Throwable $e) {
+        $correctReport = null;
+        $error = $e->getMessage();
+    }
+}
+
+// The linked-correction pre-fill is a mutation affordance, so it is shown only
+// to viewers holding MUTATE_INVENTORY (Inventory Managers). Administrators get
+// a read-only notice instead: their oversight access never offers a submit path.
+$correctionFormActive = $correctReport !== null
+    && has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
@@ -96,9 +124,27 @@ $pendingTotal = $countService->getPendingCountTotal();
                     <h3>New Physical Count</h3>
                     <p class="section-description">The system quantity is captured when you submit the count.</p>
 
+                    <?php if ($correctionFormActive): ?>
+                        <div class="message success">
+                            Correcting approved stock issue report #<?= (int)$correctReport['adjustment_id'] ?>
+                            (<?= htmlspecialchars($correctReport['product_name']) ?>, <?= htmlspecialchars($correctReport['adjustment_type']) ?>).
+                            The original report stays immutable; this count is a separate linked record.
+                            <a href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php')) ?>">Clear correction link</a>
+                        </div>
+                    <?php elseif ($correctReport !== null): ?>
+                        <div class="message">
+                            Stock issue report #<?= (int)$correctReport['adjustment_id'] ?> is approved and immutable.
+                            Corrections are recorded only through a separate Inventory Manager inventory count; Administrator access to this page is read-only.
+                            <a href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php?detail=' . (int)$correctReport['adjustment_id'])) ?>">Back to oversight</a>
+                        </div>
+                    <?php endif; ?>
+
                     <form method="POST" class="count-form">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
                         <input type="hidden" name="action" value="record">
+                        <?php if ($correctionFormActive): ?>
+                            <input type="hidden" name="related_adjustment_id" value="<?= (int)$correctReport['adjustment_id'] ?>">
+                        <?php endif; ?>
 
                         <div class="form-group">
                             <label for="product_id">Product</label>
@@ -107,7 +153,8 @@ $pendingTotal = $countService->getPendingCountTotal();
                                 <?php foreach ($products as $product): ?>
                                     <option
                                         value="<?= (int)$product['product_id'] ?>"
-                                        data-system-qty="<?= (int)$product['quantity_on_hand'] ?>">
+                                        data-system-qty="<?= (int)$product['quantity_on_hand'] ?>"
+                                        <?= $correctionFormActive && (int)$correctReport['product_id'] === (int)$product['product_id'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($product['sku'] . ' - ' . $product['product_name']) ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -140,7 +187,9 @@ $pendingTotal = $countService->getPendingCountTotal();
                                 name="discrepancy_reason"
                                 id="discrepancy_reason"
                                 required
-                                placeholder="Damaged, missing, expired, incorrect receiving, counting correction, or other details."></textarea>
+                                placeholder="<?= $correctionFormActive
+                                    ? htmlspecialchars('Correction for approved stock issue report #' . (int)$correctReport['adjustment_id'] . ': describe what the recount found.')
+                                    : 'Damaged, missing, expired, incorrect receiving, counting correction, or other details.' ?>"></textarea>
                         </div>
 
                         <button type="submit" class="btn btn-block">Record Count</button>
@@ -188,7 +237,12 @@ $pendingTotal = $countService->getPendingCountTotal();
                                                     <?= $difference > 0 ? '+' . $difference : $difference ?>
                                                 </strong>
                                             </td>
-                                            <td><?= htmlspecialchars($count['discrepancy_reason']) ?></td>
+                                            <td>
+                                                <?= htmlspecialchars($count['discrepancy_reason']) ?>
+                                                <?php if (!empty($count['related_adjustment_id'])): ?>
+                                                    <br><small class="muted">Correction of stock issue report #<?= (int)$count['related_adjustment_id'] ?></small>
+                                                <?php endif; ?>
+                                            </td>
                                             <td><?= htmlspecialchars($count['counted_by_name']) ?></td>
                                             <td>
                                                 <?= htmlspecialchars($count['approved_by_name'] ?? '-') ?>
@@ -269,6 +323,7 @@ $pendingTotal = $countService->getPendingCountTotal();
 
         productSelect.addEventListener('change', updatePreview);
         physicalInput.addEventListener('input', updatePreview);
+        updatePreview();
     </script>
 </body>
 
