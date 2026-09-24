@@ -7,7 +7,7 @@
         <form method="POST" enctype="multipart/form-data" class="user-form" id="createUserForm">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="create">
-            <div class="form-group" id="createUsernameGroup"><label for="createUsernameInput">Username</label><input id="createUsernameInput" name="username" value="<?= htmlspecialchars($createFormValues['username'], ENT_QUOTES, 'UTF-8') ?>" required autocomplete="off" aria-describedby="createUsernameNotice"><small class="field-error" id="createUsernameNotice" aria-live="polite">This username is already in use.</small></div>
+            <div class="form-group" id="createUsernameGroup"><label for="createUsernameInput">Username</label><input id="createUsernameInput" name="username" value="<?= htmlspecialchars($createFormValues['username'], ENT_QUOTES, 'UTF-8') ?>" required autocomplete="off" aria-describedby="createUsernameNotice"><small class="field-help">Usernames cannot contain @ or spaces. Use letters, numbers, dots, underscores, and hyphens.</small><small class="field-error" id="createUsernameNotice" aria-live="polite">This username is already in use.</small></div>
             <div class="form-group"><label>First Name</label><input name="first_name" value="<?= htmlspecialchars($createFormValues['first_name'], ENT_QUOTES, 'UTF-8') ?>" required></div>
             <div class="form-group"><label>Last Name</label><input name="last_name" value="<?= htmlspecialchars($createFormValues['last_name'], ENT_QUOTES, 'UTF-8') ?>"></div>
             <div class="duplicate-summary" id="createDuplicateSummary" role="alert" hidden>An account with this username or email already exists.</div>

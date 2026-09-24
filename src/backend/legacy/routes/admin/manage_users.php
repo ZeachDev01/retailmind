@@ -29,8 +29,12 @@ function get_role_name(PDO $pdo, int $roleId): string {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create') {
     csrf_verify();
     $passwordError = password_policy_error((string)($_POST['password'] ?? ''));
+    $usernameShapeError = \App\Services\UserLifecycleService::usernameShapeError(trim((string)($_POST['username'] ?? '')));
     if ($passwordError) {
         $message = $passwordError;
+        $messageClass = 'tag-warning';
+    } elseif ($usernameShapeError) {
+        $message = $usernameShapeError;
         $messageClass = 'tag-warning';
     } else try {
         $stmt = $pdo->prepare(
@@ -80,6 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if ($userId <= 0 || $fullName === '' || $username === '') {
         $message = 'Full name and username are required.';
+        $messageClass = 'tag-warning';
+    } elseif ($usernameShapeError = \App\Services\UserLifecycleService::usernameShapeError($username)) {
+        $message = $usernameShapeError;
         $messageClass = 'tag-warning';
     } else {
         $before = get_user_snapshot($pdo, $userId);

@@ -39,6 +39,20 @@ final class UserLifecycleService
         return $user;
     }
 
+    /**
+     * Username shape rule (ticket #66): a `@` in the login box unambiguously
+     * means Email Address, so new Usernames reject `@` and whitespace.
+     * Letters, numbers, `.`, `_`, `-` keep working. Returns the easy inline
+     * message when the value breaks the rule, or null when it is allowed.
+     */
+    public static function usernameShapeError(string $username): ?string
+    {
+        if (str_contains($username, '@') || preg_match('/\s/', $username) === 1) {
+            return 'Usernames cannot contain @ or spaces. Use letters, numbers, dots, underscores, and hyphens.';
+        }
+        return null;
+    }
+
     public function availability(string $actorRole, string $username, string $email): array
     {
         if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_USERS)) {
@@ -72,6 +86,9 @@ final class UserLifecycleService
         $passwordHash = (string)($account['password_hash'] ?? '');
         if ($fullName === '' || $username === '' || $passwordHash === '') {
             throw new InvalidArgumentException('Full name, username, and password are required.');
+        }
+        if ($shapeError = self::usernameShapeError($username)) {
+            throw new InvalidArgumentException($shapeError);
         }
 
         return $this->transaction(function () use ($actorId, $actorRole, $account, $targetRole, $fullName, $username, $passwordHash): int {
@@ -112,6 +129,9 @@ final class UserLifecycleService
             $username = trim((string)($account['username'] ?? ''));
             if ($fullName === '' || $username === '') {
                 throw new InvalidArgumentException('Full name and username are required.');
+            }
+            if ($shapeError = self::usernameShapeError($username)) {
+                throw new InvalidArgumentException($shapeError);
             }
 
             $parts = ['full_name = ?', 'username = ?', 'email = ?', 'role_id = ?', 'branch_id = ?'];

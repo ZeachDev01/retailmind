@@ -18,7 +18,7 @@
                 <input type="hidden" name="action" value="update">
                 <input type="hidden" name="user_id" id="drawerUserId">
                 <div class="user-drawer-panel is-active" data-user-drawer-panel="user">
-                    <div class="form-group"><label for="drawerUsername">Username</label><input id="drawerUsername" name="username" required></div>
+                    <div class="form-group"><label for="drawerUsername">Username</label><input id="drawerUsername" name="username" required><small class="field-help">Usernames cannot contain @ or spaces. Use letters, numbers, dots, underscores, and hyphens.</small></div>
                     <div class="form-group"><label for="drawerFirstName">First Name</label><input id="drawerFirstName" name="first_name" required></div>
                     <div class="form-group"><label for="drawerLastName">Last Name</label><input id="drawerLastName" name="last_name"></div>
                     <div class="form-group"><label for="drawerEmail">Email</label><input type="email" id="drawerEmail" name="email"></div>
