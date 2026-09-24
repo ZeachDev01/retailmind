@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Throwable $e) {
             record_backup_history($pdo, $filename, 'manual', 0, 'failed', (int)$_SESSION['user_id'], $e->getMessage());
-            $message = 'Backup failed: ' . $e->getMessage();
+            $message = \App\Support\OperatorAlert::message($e, 'The backup could not be created. Check free space and your connection, then try again. Tell your Super Administrator if this keeps happening.');
             $messageClass = 'tag-warning';
         }
     }
@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageClass = 'tag-success';
             } catch (Throwable $e) {
                 record_backup_history($pdo, basename((string)$file['name']), 'restore', (int)$file['size'], 'failed', (int)$_SESSION['user_id'], $e->getMessage());
-                $message = 'Restore failed: ' . $e->getMessage();
+                $message = \App\Support\OperatorAlert::message($e, 'The restore could not be completed. Check the backup file and try again. Tell your Super Administrator if this keeps happening.');
                 $messageClass = 'tag-warning';
             }
         }

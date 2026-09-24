@@ -166,10 +166,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $messageClass = 'tag-success';
         }
     } catch (DomainException | InvalidArgumentException | RuntimeException $exception) {
-        $message = $exception->getMessage();
+        $message = \App\Support\OperatorAlert::message($exception, 'The account could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
         $messageClass = 'tag-warning';
     } catch (PDOException $exception) {
-        $message = 'Unable to save the account. Username or email may already exist.';
+        $message = \App\Support\OperatorAlert::message($exception, 'Unable to save the account. Username or email may already exist. Tell your Administrator if this keeps happening.');
         $messageClass = 'tag-warning';
     }
 }

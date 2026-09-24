@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Shift closed. Cash variance: ₱' . number_format((float)$summary['cash_variance'], 2) . '.';
         }
     } catch (Throwable $e) {
-        $error = $e->getMessage();
+        $error = \App\Support\OperatorAlert::message($e, 'The shift change could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
     }
 }
 

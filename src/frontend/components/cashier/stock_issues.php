@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
         }
     } catch (Exception $e) {
-        $error = 'Could not save the report: ' . $e->getMessage();
+        $error = \App\Support\OperatorAlert::message($e, 'The stock report could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.');
     }
 }
 

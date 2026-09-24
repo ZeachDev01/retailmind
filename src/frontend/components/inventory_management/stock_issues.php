@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Invalid review action.');
         }
     } catch (Exception $e) {
-        $error = 'Review failed: ' . $e->getMessage();
+        $error = \App\Support\OperatorAlert::message($e, 'The review could not be saved. Refresh the page and try again. Tell your Administrator if this keeps happening.');
     }
 }
 

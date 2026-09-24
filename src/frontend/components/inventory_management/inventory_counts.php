@@ -28,7 +28,7 @@ if ($correctId > 0) {
         }
     } catch (Throwable $e) {
         $correctReport = null;
-        $error = $e->getMessage();
+        $error = \App\Support\OperatorAlert::message($e, 'The linked report could not be loaded. Refresh the page and try again. Tell your Administrator if this keeps happening.');
     }
 }
 
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Invalid action.');
         }
     } catch (Throwable $e) {
-        $error = $e->getMessage();
+        $error = \App\Support\OperatorAlert::message($e, 'The inventory count could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.');
     }
 }
 

@@ -329,6 +329,7 @@ $sections = $roleSections[$role] ?? [];
 <div id="rm-flash-messages" hidden<?php foreach ($flashMessages as $flashType => $flashMessage): ?> data-<?= sidebar_e($flashType) ?>="<?= sidebar_e($flashMessage) ?>" <?php endforeach; ?>></div>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
 <script src="<?= sidebar_e(app_url('assets/js/ui.js')) ?>"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {

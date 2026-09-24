@@ -9,5 +9,9 @@ try {
 } catch (RuntimeException $exception) {
     error_log($exception->getMessage());
     http_response_code(500);
-    die('Database connection failed. Please contact the system administrator.');
+    $easyLine = 'RetailMind cannot reach its data right now. Please try again shortly. Tell your Super Administrator if this continues.';
+    if (!empty($GLOBALS['app']['debug'])) {
+        die($easyLine . "\n" . App\Support\OperatorAlert::techDetail($exception));
+    }
+    die($easyLine);
 }

@@ -1501,6 +1501,22 @@ body.system-health-open {
   font-size: 0.8rem;
   margin-top: 0.1rem;
 }
+.rm-toast-tech {
+  display: block;
+  color: #9ca3af;
+  font-size: 0.72rem;
+  margin-top: 0.25rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rm-swal-tech {
+  margin-top: 0.75rem;
+  color: #9ca3af;
+  font-size: 0.78rem;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .rm-toast-close {
   border: 0;
   background: transparent;

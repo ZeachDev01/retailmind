@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Store attention thresholds saved. Platform safety limits are applied automatically.';
         $messageClass = 'tag-success';
     } catch (Throwable $exception) {
-        $message = $exception->getMessage();
+        $message = \App\Support\OperatorAlert::message($exception, 'The Store Setting could not be saved. Check the values and try again. Tell your Administrator if this keeps happening.');
         $messageClass = 'tag-warning';
     }
 }

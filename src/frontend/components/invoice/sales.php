@@ -266,9 +266,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reversalMessage = 'Reversal request rejected.';
         }
     } catch (RuntimeException $exception) {
-        $reversalError = $exception->getMessage();
+        $reversalError = \App\Support\OperatorAlert::message($exception, 'The reversal could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
     } catch (PDOException $exception) {
-        $reversalError = 'The reversal could not be saved because of a database error.';
+        $reversalError = \App\Support\OperatorAlert::message($exception, 'The reversal could not be saved. Please try again. Tell your Administrator if this keeps happening.');
     }
 }
 
@@ -918,7 +918,7 @@ function viewReceipt(saleId) {
         })
         .catch(error => {
             console.error('Error fetching receipt:', error);
-            RetailMindUI.toast('Failed to load receipt. Please try again.', 'error');
+            RetailMindUI.toast('The receipt could not be shown. Please try again.', 'error');
         });
 }
 

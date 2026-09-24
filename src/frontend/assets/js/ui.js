@@ -10,6 +10,66 @@
     return Array.from((root || document).querySelectorAll(selector));
   }
 
+  const GENERIC_ALERT = {
+    error:
+      "Something went wrong. Please try again. Tell your Administrator if this keeps happening.",
+    warning:
+      "This could not be completed right now. Please try again. Tell your Administrator if this keeps happening.",
+    success: "Update saved.",
+    info: "Update saved.",
+  };
+
+  const TECH_PATTERNS = [
+    /SQLSTATE/i,
+    /\b(?:PDOException|RuntimeException|LogicException|DomainException|InvalidArgumentException|UnexpectedValueException|Throwable|Exception)\b/,
+    /Stack trace/i,
+    /#\d+\s+\S+\.php/,
+    /\.php\s*:\s*\d+/,
+    /[A-Za-z]:\\[^\s]+/,
+    /\/(?:var|home|usr|etc|opt|proc|xampp|Users|Applications)\/[^\s]+/,
+    /Object of class/i,
+    /Call to (?:a )?member function/i,
+    /Undefined (?:variable|array key| property)/i,
+    /allowed memory size/i,
+    /Maximum execution time/i,
+    /syntax error/i,
+    /Array to string conversion/i,
+  ];
+
+  function looksTechnical(text) {
+    return TECH_PATTERNS.some(function (pattern) {
+      return pattern.test(text);
+    });
+  }
+
+  RM.isDebug = function () {
+    return window.RM_DEBUG === true || window.RM_DEBUG === "true";
+  };
+
+  // Safety net: unknown technical text never reaches the shop floor as-is.
+  // Returns { message, tech } — tech is only rendered when debug is on.
+  RM.sanitizeAlert = function (message, type) {
+    const kind = type || "info";
+    const raw = String(message == null ? "" : message);
+    const lines = raw.split(/\r?\n/);
+    let easy = (lines[0] || "").trim();
+    const rest = lines
+      .slice(1)
+      .map(function (line) {
+        return line.trim();
+      })
+      .filter(Boolean);
+    let techParts = rest.slice();
+
+    if (!easy || looksTechnical(easy)) {
+      if (easy) techParts.unshift(easy);
+      easy = GENERIC_ALERT[kind] || GENERIC_ALERT.info;
+    }
+
+    const tech = RM.isDebug() && techParts.length ? techParts.join("\n") : "";
+    return { message: easy, tech: tech };
+  };
+
   RM.toast = function (message, type, title, duration) {
     const stack =
       qs("#rm-toast-stack") ||
@@ -44,7 +104,14 @@
       '<div class="rm-toast-copy"><strong></strong><span></span></div>' +
       '<button type="button" class="rm-toast-close" aria-label="Dismiss notification"><i class="bi bi-x-lg"></i></button>';
     qs("strong", toast).textContent = title || labels[kind] || labels.info;
-    qs("span", toast).textContent = String(message || "");
+    const clean = RM.sanitizeAlert(message, kind);
+    qs("span", toast).textContent = clean.message;
+    if (clean.tech) {
+      const techLine = document.createElement("small");
+      techLine.className = "rm-toast-tech";
+      techLine.textContent = clean.tech;
+      qs(".rm-toast-copy", toast).appendChild(techLine);
+    }
     const remove = () => {
       toast.classList.remove("show");
       setTimeout(() => toast.remove(), 250);
@@ -72,10 +139,25 @@
           ".swal2-container { z-index: 10000 !important; }";
         document.head.appendChild(layerStyle);
       }
+      const clean = RM.sanitizeAlert(message, kind);
+      const escapeHtml = function (value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      };
+      const html =
+        "<p>" +
+        escapeHtml(clean.message) +
+        "</p>" +
+        (clean.tech
+          ? '<div class="rm-swal-tech">' + escapeHtml(clean.tech) + "</div>"
+          : "");
       return window.Swal.fire({
         icon: kind,
         title: title || labels[kind] || labels.info,
-        text: String(message || ""),
+        html: html,
         confirmButtonText: "OK",
         buttonsStyling: false,
         customClass: { confirmButton: "btn rm-swal-confirm" },

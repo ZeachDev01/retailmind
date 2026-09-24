@@ -76,6 +76,9 @@ set_exception_handler(static function (Throwable $exception): void {
         http_response_code(500);
     }
 
+    $easyLine = 'Something went wrong. Please try again. Tell your Administrator if this keeps happening.';
+    $techLine = $debug ? get_class($exception) . ': ' . $exception->getMessage() : null;
+
     $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
     $uri = $_SERVER['REQUEST_URI'] ?? '';
     $expectsJson = stripos($accept, 'application/json') !== false || strpos($uri, '/barcodeScanner/apiScanner/') !== false || strpos($uri, '/api/') !== false;
@@ -84,16 +87,23 @@ set_exception_handler(static function (Throwable $exception): void {
         if (!headers_sent()) {
             header('Content-Type: application/json');
         }
-        echo json_encode([
+        $payload = [
             'success' => false,
-            'message' => 'The request could not be completed.',
+            'message' => 'The request could not be completed. Please try again.',
             'errors' => [],
-        ]);
+        ];
+        if ($techLine !== null) {
+            $payload['tech'] = $techLine;
+        }
+        echo json_encode($payload);
         return;
     }
 
     echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Application Error</title></head><body>';
-    echo '<h1>Application Error</h1><p>The request could not be completed. Please try again.</p>';
+    echo '<h1>Application Error</h1><p>' . htmlspecialchars($easyLine, ENT_QUOTES, 'UTF-8') . '</p>';
+    if ($techLine !== null) {
+        echo '<pre style="color:#9ca3af;font-size:0.8rem;white-space:pre-wrap;">' . htmlspecialchars($techLine, ENT_QUOTES, 'UTF-8') . '</pre>';
+    }
     echo '</body></html>';
 });
 

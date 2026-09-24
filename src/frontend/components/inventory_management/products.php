@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             log_activity($pdo, (int)$_SESSION['user_id'], 'Added category ' . $categoryName);
             redirect_products('success', 'Category added successfully.');
         } catch (Throwable $e) {
-            redirect_products('error', $e->getMessage());
+            redirect_products('error', \App\Support\OperatorAlert::message($e, 'The category could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.'));
         }
     }
 
@@ -123,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            redirect_products('error', $e->getMessage());
+            redirect_products('error', \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.'));
         }
     }
 
@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: print_barcodes.php?product_id=' . $productId . '&quantity=' . $labelQuantity . '&autoprint=1');
             exit;
         } catch (Throwable $e) {
-            redirect_products('error', $e->getMessage());
+            redirect_products('error', \App\Support\OperatorAlert::message($e, 'The barcode could not be generated. Try again. Tell your Administrator if this keeps happening.'));
         }
     }
 
@@ -150,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ], (int)$_SESSION['user_id']);
             redirect_products('success', 'Emergency inventory adjustment recorded.');
         } catch (Throwable $e) {
-            redirect_products('error', $e->getMessage());
+            redirect_products('error', \App\Support\OperatorAlert::message($e, 'The stock adjustment could not be saved. Check the quantity and try again. Tell your Administrator if this keeps happening.'));
         }
     }
 
@@ -184,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             log_activity($pdo, (int)$_SESSION['user_id'], 'Bulk product category updated for ' . count($productIds) . ' products');
             redirect_products('success', 'Category updated for ' . count($productIds) . ' product(s).');
         } catch (Throwable $e) {
-            redirect_products('error', $e->getMessage());
+            redirect_products('error', \App\Support\OperatorAlert::message($e, 'The products could not be updated. Check the selection and try again. Tell your Administrator if this keeps happening.'));
         }
     }
 }
@@ -1570,7 +1570,8 @@ foreach ($products as $product) {
                     section.hidden = true;
                 }, () => {});
             } catch (error) {
-                RetailMindUI.toast(String(error), 'error', 'Camera unavailable');
+                console.error('Camera start failed:', error);
+                RetailMindUI.toast('The camera could not start. Allow camera permission for this site, or enter the code manually.', 'error', 'Camera unavailable');
                 section.hidden = true;
             }
         });

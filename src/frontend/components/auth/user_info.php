@@ -86,14 +86,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageClass = 'tag-success';
         } catch (PDOException $e) {
             error_log('Profile picture database update failed: ' . $e->getMessage());
-            $message = 'Unable to update the profile picture right now. Please try again.';
+            $message = \App\Support\OperatorAlert::message($e, 'The profile picture could not be updated. Please try again. Tell your Administrator if this keeps happening.');
             $messageClass = 'tag-warning';
         } catch (RuntimeException $e) {
-            $message = $e->getMessage();
+            $message = \App\Support\OperatorAlert::message($e, 'The profile picture could not be updated. Check the file size and type, then try again. Tell your Administrator if this keeps happening.');
             $messageClass = 'tag-warning';
         } catch (Throwable $e) {
             error_log('Profile picture update failed: ' . $e->getMessage());
-            $message = 'Unable to update the profile picture right now. Please try again.';
+            $message = \App\Support\OperatorAlert::message($e, 'The profile picture could not be updated. Please try again. Tell your Administrator if this keeps happening.');
             $messageClass = 'tag-warning';
         }
     } else {
