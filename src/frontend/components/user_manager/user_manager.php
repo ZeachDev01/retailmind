@@ -4,11 +4,13 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS);
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Authorization\DormancyStatusTab;
 use App\Services\UserLifecycleService;
 use App\Store\StoreScope;
 
 $storeId = store_scope_id($pdo);
 $lifecycle = new UserLifecycleService($pdo, role_capability_policy(), new StoreScope($pdo));
+$dormancyStatusTab = new DormancyStatusTab($pdo);
 $actorId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
 $message = '';
@@ -224,6 +226,7 @@ $disabledCount = count($users) - $activeCount;
                         $isSelf = (int)$user['user_id'] === $actorId;
                         $isSuper = $user['role_name'] === 'super_admin';
                         $hasImage = !empty($user['profile_image']) && profile_image_storage()->exists((string)$user['profile_image']);
+                        $statusView = $dormancyStatusTab->view($user);
                     ?>
                         <tr>
                             <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['full_name'], $user['profile_image'] ?? null, 'user-avatar') ?><strong><?= htmlspecialchars(display_person_name((string)$user['full_name'])) ?></strong></div></td>
@@ -241,6 +244,9 @@ $disabledCount = count($users) - $activeCount;
                                         data-username="<?= htmlspecialchars((string)$user['username'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-email="<?= htmlspecialchars((string)($user['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-role-id="<?= (int)$user['role_id'] ?>" data-status="<?= htmlspecialchars((string)$user['status']) ?>"
+                                        data-last-login="<?= htmlspecialchars($statusView['last_login'], ENT_QUOTES, 'UTF-8') ?>"
+                                        data-auto-disable-date="<?= htmlspecialchars((string)($statusView['auto_disable_date'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-policy-disabled="<?= htmlspecialchars((string)($statusView['policy_disabled_line'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-is-self="<?= $isSelf ? '1' : '0' ?>" data-is-super-admin="<?= $isSuper ? '1' : '0' ?>"
                                         data-profile-initials="<?= htmlspecialchars(profile_initials((string)$user['full_name'])) ?>"
                                         data-profile-url="<?= $hasImage ? htmlspecialchars(profile_image_url((int)$user['user_id'])) : '' ?>"
@@ -286,6 +292,13 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('drawerEmail').value = button.dataset.email || '';
         document.getElementById('drawerRole').value = button.dataset.roleId || '';
         document.getElementById('drawerStatus').value = button.dataset.status || 'active';
+        document.getElementById('drawerLastLogin').textContent = button.dataset.lastLogin || 'Never';
+        const autoDisableDate = button.dataset.autoDisableDate || '';
+        document.getElementById('drawerAutoDisableDate').textContent = autoDisableDate;
+        document.getElementById('drawerAutoDisableRow').hidden = autoDisableDate === '';
+        const policyDisabledLine = button.dataset.policyDisabled || '';
+        document.getElementById('drawerPolicyDisabledLine').textContent = policyDisabledLine;
+        document.getElementById('drawerPolicyDisabledLine').hidden = policyDisabledLine === '';
         document.getElementById('userDrawerMeta').textContent = '@' + (button.dataset.username || '');
         const isSelf = button.dataset.isSelf === '1';
         const isSuper = button.dataset.isSuperAdmin === '1';

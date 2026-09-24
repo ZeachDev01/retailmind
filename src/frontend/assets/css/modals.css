@@ -185,6 +185,9 @@
 .drawer-modal-actions[hidden] {
   display: none;
 }
+.user-drawer-panel [hidden] {
+  display: none;
+}
 .user-drawer-form {
   padding: 0;
 }

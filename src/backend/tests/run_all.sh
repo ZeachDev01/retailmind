@@ -15,6 +15,7 @@ php src/backend/tests/recovery_account_lifecycle_test.php
 php src/backend/tests/attention_rules_contract.php
 php src/backend/tests/dormancy_policy_settings_contract.php
 php src/backend/tests/dormancy_runner_contract.php
+php src/backend/tests/dormancy_status_tab_contract.php
 php src/backend/tests/super_administrator_dashboard_workspace_test.php
 php src/backend/tests/super_administrator_dashboard_route_test.php
 php src/backend/tests/workspace_routing_contract.php

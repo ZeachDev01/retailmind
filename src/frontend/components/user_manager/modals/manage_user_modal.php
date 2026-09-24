@@ -43,6 +43,16 @@
                         <select id="drawerStatus" name="status"><option value="active">Active</option><option value="disabled">Disabled</option></select>
                         <small class="field-help">Disabling retains historical attribution and revokes active sessions.</small>
                     </div>
+                    <div class="form-group" id="drawerLastLoginRow">
+                        <label id="drawerLastLoginLabel">Last login</label>
+                        <strong id="drawerLastLogin">Never</strong>
+                    </div>
+                    <div class="form-group" id="drawerAutoDisableRow" hidden>
+                        <label id="drawerAutoDisableLabel">Automatic deactivation</label>
+                        <strong id="drawerAutoDisableDate"></strong>
+                    </div>
+                    <p class="field-help" id="drawerPolicyDisabledLine" hidden></p>
+                    <small class="field-help"><?= htmlspecialchars(\App\Authorization\DormancyStatusTab::HELP_LINE) ?></small>
                 </div>
                 <div class="user-drawer-panel" data-user-drawer-panel="security" hidden>
                     <div class="form-group">

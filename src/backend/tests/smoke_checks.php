@@ -138,6 +138,15 @@ $checks = [
         'needles' => ['data-user-drawer-tab="security"', 'Revoke Sessions'],
         'forbidden' => ['drawerBranch', 'privilege_ids[]', 'manage_privileges', 'Delete User'],
     ],
+    'Manage Account Status tab shows dormancy visibility' => [
+        'file' => 'src/frontend/components/user_manager/modals/manage_user_modal.php',
+        'needles' => ['data-user-drawer-panel="status"', 'DormancyStatusTab::HELP_LINE', 'drawerLastLogin', 'drawerAutoDisableDate', 'drawerPolicyDisabledLine'],
+        'forbidden' => ['value="dormant"', 'value="inactive"'],
+    ],
+    'Manage Account Status tab wires per-account dormancy data' => [
+        'file' => 'src/frontend/components/user_manager/user_manager.php',
+        'needles' => ['DormancyStatusTab', 'data-last-login', 'data-auto-disable-date', 'data-policy-disabled'],
+    ],
     'Manage Users modal form remains scrollable' => [
         'file' => 'src/frontend/assets/css/modals.css',
         'needles' => ['max-height: calc(100dvh - 2rem);', '.user-modal > .user-form {', 'overflow-y: auto;', '-webkit-overflow-scrolling: touch;'],
