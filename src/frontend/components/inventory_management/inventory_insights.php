@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'ABC cycle-count schedule generated for active products.';
         }
     } catch (Throwable $e) {
-        $error = $e->getMessage();
+        $error = \App\Support\OperatorAlert::message($e, 'The cycle-count schedule could not be generated. Refresh the page and try again. Tell your Administrator if this keeps happening.');
     }
 }
 

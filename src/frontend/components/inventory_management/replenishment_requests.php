@@ -123,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $error = $e->getMessage();
+        $error = \App\Support\OperatorAlert::message($e, 'The replenishment request could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
     }
 }
 

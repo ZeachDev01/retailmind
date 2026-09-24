@@ -33,7 +33,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             if(!$stmt->rowCount())throw new RuntimeException('Promotion was not updated.');
             log_activity($pdo,(int)$_SESSION['user_id'],ucfirst($action).' promotion','Promotions',$id);$message='Promotion updated.';
         }
-    }catch(Throwable $e){$error=$e->getMessage();}
+    } catch (Throwable $e) {$error=\App\Support\OperatorAlert::message($e,'The promotion could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');}
 }
 $products=$pdo->query("SELECT product_id,sku,product_name,variant_label FROM products WHERE status='active' ORDER BY product_name")->fetchAll(PDO::FETCH_ASSOC);
 $categories=$pdo->query('SELECT category_id,category_name FROM categories ORDER BY category_name')->fetchAll(PDO::FETCH_ASSOC);

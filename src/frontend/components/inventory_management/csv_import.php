@@ -27,11 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     $import_store_id = csv_import_store_id($pdo);
 
     if (!in_array($import_type, ['products', 'inventory'])) {
-        $error = 'Invalid import type';
+        $error = 'Choose a valid import type.';
     } elseif ($file['error'] !== UPLOAD_ERR_OK) {
-        $error = 'File upload error';
+        $error = 'The file could not be uploaded. Choose a CSV file and try again.';
     } elseif ($file['type'] !== 'text/csv' && pathinfo($file['name'], PATHINFO_EXTENSION) !== 'csv') {
-        $error = 'Only CSV files are allowed';
+        $error = 'Choose a CSV file to import.';
     } else {
         // Process the file
         $fp = fopen($file['tmp_name'], 'r');
@@ -178,9 +178,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     }
 
                     $successful++;
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     $failed++;
-                    $errors[] = "Row " . ($successful + $failed) . ": " . $e->getMessage();
+                    $errors[] = 'Row ' . ($successful + $failed) . ': ' . \App\Support\OperatorAlert::message($e, 'This row could not be imported. Check the row values and try again. Tell your Administrator if this keeps happening.');
                 }
             }
 
@@ -255,9 +255,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     );
 
                     $successful++;
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     $failed++;
-                    $errors[] = "Row " . ($successful + $failed) . ": " . $e->getMessage();
+                    $errors[] = 'Row ' . ($successful + $failed) . ': ' . \App\Support\OperatorAlert::message($e, 'This row could not be imported. Check the row values and try again. Tell your Administrator if this keeps happening.');
                 }
             }
 

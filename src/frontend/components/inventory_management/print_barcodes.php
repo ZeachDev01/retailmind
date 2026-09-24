@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
         header('Location: print_barcodes.php?product_id=' . $targetId . '&quantity=' . $quantity . '&size=' . urlencode($sizeKey) . '&autoprint=1');
         exit;
     } catch (Throwable $e) {
-        header('Location: print_barcodes.php?product_id=' . $productId . '&quantity=' . $quantity . '&size=' . urlencode($sizeKey) . '&error=' . urlencode($e->getMessage()));
+        header('Location: print_barcodes.php?product_id=' . $productId . '&quantity=' . $quantity . '&size=' . urlencode($sizeKey) . '&error=' . urlencode(\App\Support\OperatorAlert::message($e, 'The barcode could not be generated. Try again. Tell your Administrator if this keeps happening.')));
         exit;
     }
 }
@@ -63,7 +63,7 @@ foreach ($selectedProducts as $item) {
         $item['_barcode_svg'] = code128_svg($barcode, 58, 2);
         $printableProducts[] = $item;
     } catch (Throwable $e) {
-        $barcodeErrors[] = $item['product_name'] . ': ' . $e->getMessage();
+        $barcodeErrors[] = $item['product_name'] . ': ' . \App\Support\OperatorAlert::message($e, 'The barcode label could not be rendered. Try again. Tell your Administrator if this keeps happening.');
     }
 }
 $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
@@ -90,9 +90,9 @@ $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
         </form>
         <div class="toolbar-actions"><a class="btn u-button-slate" href="products.php"><i class="bi bi-arrow-left"></i>Back to Products</a><?php if ($printableProducts): ?><button class="btn u-button-orange" type="button" onclick="window.print()"><i class="bi bi-printer"></i>Print <?= count($printableProducts) * $quantity ?> Label(s)</button><?php endif; ?></div>
         <?php if (count($selectedProducts) > 1): ?><div class="selection-summary"><strong><?= count($selectedProducts) ?> products selected.</strong> Each printable product will receive <?= $quantity ?> label(s).</div><?php endif; ?>
-        <?php if (!empty($_GET['error'])): ?><div class="message"><?= htmlspecialchars($_GET['error']) ?></div><?php endif; ?>
+        <?php if (!empty($_GET['error'])): ?><div class="message error"><?= htmlspecialchars($_GET['error']) ?></div><?php endif; ?>
         <?php if ($missingBarcodeProducts): ?><div class="message"><strong><?= count($missingBarcodeProducts) ?> product(s) were skipped because they have no barcode:</strong> <?= htmlspecialchars(implode(', ', array_column($missingBarcodeProducts, 'product_name'))) ?>. Generate their internal barcodes from Products &amp; Stock.</div><?php endif; ?>
-        <?php if ($barcodeErrors): ?><div class="message"><?= htmlspecialchars(implode(' | ', $barcodeErrors)) ?></div><?php endif; ?>
+        <?php if ($barcodeErrors): ?><div class="message error"><?= htmlspecialchars(implode(' | ', $barcodeErrors)) ?></div><?php endif; ?>
         <?php if (count($selectedProducts) === 1 && !$printableProducts && $missingBarcodeProducts): $missing = $missingBarcodeProducts[0]; ?><form class="u-mt-065" method="POST"><?= csrf_field() ?><input type="hidden" name="action" value="generate_barcode"><input type="hidden" name="product_id" value="<?= (int)$missing['product_id'] ?>"><input type="hidden" name="quantity" value="<?= $quantity ?>"><input type="hidden" name="size" value="<?= htmlspecialchars($sizeKey) ?>"><button class="btn u-button-green" type="submit">Generate Barcode and Print</button></form><?php endif; ?>
     </section>
 

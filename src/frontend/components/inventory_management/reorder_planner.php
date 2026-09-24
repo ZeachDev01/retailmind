@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $error = $e->getMessage();
+            $error = \App\Support\OperatorAlert::message($e, 'The replenishment requests could not be saved. Check your selection and try again. Tell your Administrator if this keeps happening.');
         }
     }
 }

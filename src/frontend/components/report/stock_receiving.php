@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $productId = $_POST['product_id'] ?? 0;
         $receivedQty = $_POST['received_qty'] ?? 0;
         log_activity($pdo, $_SESSION['user_id'], 'Received stock: Product #' . $productId . ', Qty: ' . $receivedQty);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         $error = \App\Support\OperatorAlert::message($e, 'The receiving record could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.');
     }
 }

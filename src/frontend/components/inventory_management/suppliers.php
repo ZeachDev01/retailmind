@@ -20,7 +20,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             if($preferred){$nameStmt=$pdo->prepare('SELECT supplier_name FROM suppliers WHERE supplier_id=?');$nameStmt->execute([$supplierId]);$name=$nameStmt->fetchColumn();$pdo->prepare('UPDATE products SET preferred_supplier=?,supplier_lead_time_days=? WHERE product_id=?')->execute([$name,max(0,(int)($_POST['lead_time_days']??7)),$productId]);}
             $message='Supplier-product terms saved.';
         }
-    }catch(Throwable $e){$error=$e->getMessage();}
+    } catch (Throwable $e) {$error=\App\Support\OperatorAlert::message($e,'The supplier details could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');}
 }
 $suppliers=$pdo->query("SELECT s.*,COUNT(sp.supplier_product_id) product_count FROM suppliers s LEFT JOIN supplier_products sp ON sp.supplier_id=s.supplier_id GROUP BY s.supplier_id ORDER BY s.supplier_name")->fetchAll(PDO::FETCH_ASSOC);
 $products=$pdo->query("SELECT product_id,sku,product_name FROM products WHERE status='active' ORDER BY product_name")->fetchAll(PDO::FETCH_ASSOC);

@@ -21,6 +21,13 @@ function redirect_products(string $type, string $message): void
     exit;
 }
 
+// Aligned product photo Operator Alert sentences (ticket #56): one plain
+// sentence states the size and type limit, retryable photo failures redirect
+// as the yellow Attention warning kind.
+const PRODUCT_PHOTO_LIMIT_MESSAGE = 'Choose a product photo that is a JPEG, PNG, GIF, or WebP image no larger than 5MB, then try again.';
+const PRODUCT_PHOTO_UPLOAD_MESSAGE = 'The product photo could not be uploaded. Choose another file and try again.';
+const PRODUCT_PHOTO_SAVE_MESSAGE = 'The product photo could not be saved. Try again. Tell your Administrator if this keeps happening.';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
 
@@ -50,13 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Validate file
                 if (!in_array($file['type'], $allowedTypes, true)) {
-                    throw new RuntimeException('Only image files (JPEG, PNG, GIF, WebP) are allowed.');
+                    throw new RuntimeException(PRODUCT_PHOTO_LIMIT_MESSAGE);
                 }
                 if ($file['size'] > $maxSize) {
-                    throw new RuntimeException('Image file must not exceed 5MB.');
+                    throw new RuntimeException(PRODUCT_PHOTO_LIMIT_MESSAGE);
                 }
                 if ($file['error'] !== UPLOAD_ERR_OK) {
-                    throw new RuntimeException('Image upload failed: ' . $file['error']);
+                    throw new RuntimeException(PRODUCT_PHOTO_UPLOAD_MESSAGE);
                 }
 
                 // Generate unique filename
@@ -72,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Move uploaded file
                 if (!move_uploaded_file($file['tmp_name'], $uploadPath)) {
-                    throw new RuntimeException('Failed to save the uploaded image.');
+                    throw new RuntimeException(PRODUCT_PHOTO_SAVE_MESSAGE);
                 }
 
                 $productImage = 'storage/images/' . $filename;
@@ -123,7 +130,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            redirect_products('error', \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.'));
+            $alert = \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
+            if (in_array($e->getMessage(), [PRODUCT_PHOTO_LIMIT_MESSAGE, PRODUCT_PHOTO_UPLOAD_MESSAGE, PRODUCT_PHOTO_SAVE_MESSAGE], true)) {
+                redirect_products('warning', $alert);
+            }
+            redirect_products('error', $alert);
         }
     }
 
@@ -883,6 +894,7 @@ foreach ($products as $product) {
 
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
+        const PRODUCT_PHOTO_LIMIT_MESSAGE = <?= json_encode(PRODUCT_PHOTO_LIMIT_MESSAGE) ?>;
         const productData = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const canDirectAdjust = <?= $canDirectAdjust ? 'true' : 'false' ?>;
         const productsById = Object.fromEntries(productData.map(product => [Number(product.product_id), product]));
@@ -1349,7 +1361,7 @@ foreach ($products as $product) {
                     category.closest('.form-group').classList.add('invalid');
                     valid = false;
                 }
-                if (existingProductNames.has(name.value.trim().toLowerCase())) RetailMindUI.toast('A product with the same name already exists. Add a variant label when appropriate.', 'warning', 'Possible duplicate');
+                if (existingProductNames.has(name.value.trim().toLowerCase())) RetailMindUI.toast('A product with the same name already exists. Add a variant label when appropriate.', 'warning');
             }
             if (step === 2) {
                 const barcode = document.getElementById('create-barcode-input');
@@ -1593,13 +1605,13 @@ foreach ($products as $product) {
         imageInput.addEventListener('change', function() {
             const file = this.files[0];
             if (file) {
-                if (!file.type.startsWith('image/')) {
-                    RetailMindUI.toast('Please select a valid image file.', 'warning');
+                if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+                    RetailMindUI.toast(PRODUCT_PHOTO_LIMIT_MESSAGE, 'warning');
                     this.value = '';
                     return;
                 }
                 if (file.size > 5 * 1024 * 1024) {
-                    RetailMindUI.toast('Image file must not exceed 5MB.', 'warning');
+                    RetailMindUI.toast(PRODUCT_PHOTO_LIMIT_MESSAGE, 'warning');
                     this.value = '';
                     return;
                 }
