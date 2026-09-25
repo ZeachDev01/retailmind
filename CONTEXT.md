@@ -17,8 +17,16 @@ A sealed privileged identity used only when the primary Super Administrator cann
 _Avoid_: Backup administrator, shared admin account, routine login
 
 **Administrator**:
-The operational owner responsible for Store performance, staff, approvals, compliance, Fiscal Periods, Store Settings, and operational exceptions. It has delegated authority to create, edit, disable, reset passwords for, and revoke sessions from Cashiers and Inventory Managers. It assigns only fixed operational role templates defined by the Super Administrator; it cannot create privileged administrators or arbitrary privilege combinations. Routine inventory execution belongs to the Inventory Manager; platform security, recovery, and technical model controls belong to the Super Administrator.
+The operational owner responsible for Store performance, staff, approvals, compliance, Fiscal Periods, Store Settings, and operational exceptions. It has delegated authority to create, edit, disable, reset passwords for, and revoke sessions from Cashiers and Inventory Managers. It assigns only fixed operational role templates defined by the Super Administrator; it cannot create privileged administrators or arbitrary privilege combinations. It may create a Database Backup alongside the Super Administrator. Routine inventory execution belongs to the Inventory Manager; platform security, recovery, and technical model controls belong to the Super Administrator.
 _Avoid_: System administrator, global administrator, inventory manager
+
+**Database Backup**:
+A recoverable, encrypted copy of the Store's database representing a consistent point in time, which either the Administrator or Super Administrator may create and download. It supports recovery from database corruption or loss of the application server.
+_Avoid_: Parallel backup, report export
+
+**Database Restore**:
+The replacement of the active Store database with the state captured in a Database Backup. Only the Super Administrator may perform it; the Administrator requests recovery through the Super Administrator.
+_Avoid_: Import report, undo backup
 
 **Disabled Account**:
 A retained user identity that cannot authenticate and whose active sessions have been revoked. Its historical sales, approvals, and Protected Audit Records remain attributed to it.
