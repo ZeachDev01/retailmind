@@ -92,7 +92,7 @@ unset($_SESSION['_login_username']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RetailMind — Store inventory, sales, and forecasting</title>
+    <title>RetailMind - Store inventory, sales, and forecasting</title>
     <meta name="description" content="RetailMind keeps Shalom Store inventory, barcode sales, purchasing, cashier shifts, and demand forecasting in one operational workspace.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

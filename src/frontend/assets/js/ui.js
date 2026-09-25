@@ -500,8 +500,8 @@
   function initSidebarState() {
     const collapse = qs("#sidebarCollapse");
     const sidebar = qs("#appSidebar");
-    const profile = qs("#sidebarProfile");
-    const profileMenu = qs("#sidebarProfileMenu");
+    const accountMenu = qs("#sidebarAccountMenu");
+    const accountMenuTriggers = qsa("[data-account-menu-open]");
     if (collapse && sidebar) {
       const stored =
         localStorage.getItem("retailmind_sidebar_collapsed") === "1";
@@ -527,13 +527,24 @@
               : "bi-layout-sidebar-inset-reverse");
       });
     }
-    if (profile && profileMenu) {
-      profile.addEventListener("click", () => {
-        profileMenu.classList.toggle("open");
-        profile.setAttribute(
-          "aria-expanded",
-          profileMenu.classList.contains("open") ? "true" : "false",
-        );
+    if (accountMenu && accountMenuTriggers.length) {
+      const setAccountMenuOpen = function (isOpen) {
+        accountMenu.classList.toggle("open", isOpen);
+        accountMenu.setAttribute("aria-hidden", isOpen ? "false" : "true");
+        accountMenuTriggers.forEach((trigger) => {
+          trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        });
+      };
+      accountMenuTriggers.forEach((trigger) => {
+        trigger.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setAccountMenuOpen(!accountMenu.classList.contains("open"));
+        });
+      });
+      accountMenu.addEventListener("click", (event) => event.stopPropagation());
+      document.addEventListener("click", () => setAccountMenuOpen(false));
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") setAccountMenuOpen(false);
       });
     }
   }

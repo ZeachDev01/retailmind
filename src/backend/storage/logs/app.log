@@ -397,3 +397,41 @@ Stack trace:
 #0 C:\xampp\htdocs\retailmind\src\backend\app\Services\StockIssueService.php(914): PDO->prepare('SELECT ia.adjus...')
 #1 C:\xampp\htdocs\retailmind\src\frontend\components\inventory_management\stock_issues.php(80): StockIssueService->getPendingReports()
 #2 {main}
+[25-Sep-2026 14:02:19 Asia/Manila] PHP Warning:  Undefined variable $targetRoles in C:\xampp\htdocs\inventory_system\src\backend\app\Services\UserLifecycleService.php on line 113
+[25-Sep-2026 14:02:35 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:02:35 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:02:35 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:02:35 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:02:36 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:02:36 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:02:36 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:07:32 Asia/Manila] TypeError: Cannot access offset of type string on string in C:\xampp\htdocs\inventory_system\src\frontend\components\user_manager\modals\manage_user_modal.php:34
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\frontend\components\user_manager\user_manager.php(292): include()
+#1 {main}
+[25-Sep-2026 14:08:23 Asia/Manila] TypeError: Cannot access offset of type string on string in C:\xampp\htdocs\inventory_system\src\frontend\components\user_manager\modals\manage_user_modal.php:34
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\frontend\components\user_manager\user_manager.php(292): include()
+#1 {main}
+[25-Sep-2026 14:08:32 Asia/Manila] TypeError: Cannot access offset of type string on string in C:\xampp\htdocs\inventory_system\src\frontend\components\user_manager\modals\manage_user_modal.php:34
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\frontend\components\user_manager\user_manager.php(292): include()
+#1 {main}
+[25-Sep-2026 14:08:38 Asia/Manila] TypeError: Cannot access offset of type string on string in C:\xampp\htdocs\inventory_system\src\frontend\components\user_manager\modals\manage_user_modal.php:34
+Stack trace:
+#0 C:\xampp\htdocs\inventory_system\src\frontend\components\user_manager\user_manager.php(292): include()
+#1 {main}
+[25-Sep-2026 14:12:33 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:33 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:33 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:33 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:34 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:34 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:34 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:52 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:52 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:52 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:52 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:52 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:52 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles
+[25-Sep-2026 14:12:52 Asia/Manila] User role mapping sync skipped: SQLSTATE[HY000]: General error: 1 no such table: user_roles

@@ -1,6 +1,6 @@
 <?php
 // components/sidebar.php
-// Include after auth.php has run. Uses current_role() to show relevant links.
+// Include after auth.php has run. Uses the active workspace for navigation.
 $role = current_role();
 $notificationCount = 0;
 try {
@@ -13,6 +13,16 @@ try {
 $sidebarUserName = trim((string)($_SESSION['full_name'] ?? 'RetailMind User'));
 $sidebarProfileImage = isset($_SESSION['profile_image']) ? (string)$_SESSION['profile_image'] : null;
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
+$workspaceChoices = [
+    'super_admin' => ['label' => 'Super Administrator', 'icon' => 'bi-shield-lock'],
+    'admin' => ['label' => 'Administrator', 'icon' => 'bi-shop'],
+    'inventory_manager' => ['label' => 'Inventory', 'icon' => 'bi-boxes'],
+    'cashier' => ['label' => 'Cashier', 'icon' => 'bi-cart-check'],
+];
+$assignedWorkspaceRoles = array_values(array_filter(
+    function_exists('current_workspace_roles') ? current_workspace_roles() : ($role === null ? [] : [$role]),
+    static fn(string $assignedRole): bool => isset($workspaceChoices[$assignedRole])
+));
 $avatarStylesheetPath = __DIR__ . '/../assets/css/avatars.css';
 $avatarStylesheetVersion = is_file($avatarStylesheetPath) ? (string)filemtime($avatarStylesheetPath) : '1';
 $avatarStylesheetUrl = app_url('assets/css/avatars.css') . '?v=' . rawurlencode($avatarStylesheetVersion);
@@ -261,9 +271,9 @@ $sections = $roleSections[$role] ?? [];
         <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
             <i class="bi bi-search" aria-hidden="true"></i>
         </button>
-        <a class="admin-mobile-avatar" href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>" aria-label="Open user information">
+        <button type="button" class="admin-mobile-avatar" data-account-menu-open aria-label="Open account menu" aria-expanded="false" aria-controls="sidebarAccountMenu">
             <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage) ?>
-        </a>
+        </button>
     </div>
 </div>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -283,7 +293,7 @@ $sections = $roleSections[$role] ?? [];
     </nav>
 
     <div class="sidebar-footer">
-        <button type="button" class="sidebar-profile" id="sidebarProfile" aria-expanded="false" aria-controls="sidebarProfileMenu">
+        <button type="button" class="sidebar-profile" id="sidebarProfile" data-account-menu-open aria-expanded="false" aria-controls="sidebarAccountMenu">
             <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage, 'sidebar-avatar') ?>
             <span class="sidebar-profile-copy">
                 <strong><?= sidebar_e($sidebarUserName) ?></strong>
@@ -291,15 +301,59 @@ $sections = $roleSections[$role] ?? [];
             </span>
             <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
         </button>
-        <div class="sidebar-profile-menu" id="sidebarProfileMenu">
-            <a href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>"><i class="bi bi-person-circle" aria-hidden="true"></i><span>User Info</span></a>
-            <?php if ($role !== 'cashier'): ?>
-                <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>"><i class="bi bi-sliders" aria-hidden="true"></i><span>Preferences</span></a>
-            <?php endif; ?>
-            <a href="<?= sidebar_e(app_url('components/auth/logout.php')) ?>" class="sidebar-logout"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>Logout</span></a>
-        </div>
     </div>
 </div>
+
+<nav class="sidebar-account-menu" id="sidebarAccountMenu" aria-label="Account options" aria-hidden="true">
+        <div class="sidebar-account-actions">
+            <a href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>">
+                <i class="bi bi-person-circle" aria-hidden="true"></i>
+                <span>User</span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </a>
+            <details class="sidebar-workspace-switcher">
+                <summary class="sidebar-account-workspace">
+                    <i class="bi bi-grid" aria-hidden="true"></i>
+                    <span>Change workspace</span>
+                    <i class="bi bi-chevron-down sidebar-workspace-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="sidebar-workspace-options">
+                    <?php foreach ($assignedWorkspaceRoles as $assignedRole): ?>
+                        <?php $workspaceChoice = $workspaceChoices[$assignedRole]; ?>
+                        <?php if ($assignedRole === $role): ?>
+                            <div class="sidebar-workspace-option is-current" aria-current="page">
+                                <i class="bi <?= sidebar_e($workspaceChoice['icon']) ?>" aria-hidden="true"></i>
+                                <span><?= sidebar_e($workspaceChoice['label']) ?></span>
+                                <small>Current</small>
+                            </div>
+                        <?php else: ?>
+                            <form method="post" action="<?= sidebar_e(app_url('components/auth/workspace.php')) ?>">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="workspace" value="<?= sidebar_e($assignedRole) ?>">
+                                <button type="submit" class="sidebar-workspace-option">
+                                    <i class="bi <?= sidebar_e($workspaceChoice['icon']) ?>" aria-hidden="true"></i>
+                                    <span><?= sidebar_e($workspaceChoice['label']) ?></span>
+                                    <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            </details>
+            <?php if ($role !== 'cashier'): ?>
+                <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>">
+                    <i class="bi bi-sliders" aria-hidden="true"></i>
+                    <span>Preferences</span>
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </a>
+            <?php endif; ?>
+            <a href="<?= sidebar_e(app_url('components/auth/logout.php')) ?>" class="sidebar-account-logout">
+                <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                <span>Logout</span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </a>
+        </div>
+</nav>
 
 <div class="global-topbar" aria-label="Global tools">
     <button type="button" class="global-search-trigger" data-command-open aria-label="Search products, reports, settings, and pages">

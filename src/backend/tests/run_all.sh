@@ -19,6 +19,7 @@ php src/backend/tests/dormancy_status_tab_contract.php
 php src/backend/tests/super_administrator_dashboard_workspace_test.php
 php src/backend/tests/super_administrator_dashboard_route_test.php
 php src/backend/tests/workspace_routing_contract.php
+php src/backend/tests/workspace_switching_contract.php
 php src/backend/tests/store_scope_contract.php
 php src/backend/tests/user_lifecycle_contract.php
 php src/backend/tests/store_staff_availability_contract.php
