@@ -193,6 +193,19 @@ textarea {
 .form-grid .full { grid-column: 1 / -1; }
 .field-help { display: block; color: var(--muted); font-size: .76rem; margin-top: .3rem; }
 .field-error { display: none; color: var(--danger); font-size: .76rem; margin-top: .28rem; }
+.role-check-list { display: grid; gap: .45rem; }
+.role-check {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    padding: .62rem .75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    background: #fff;
+}
+.role-check input { width: auto; margin: 0; padding: 0; }
+.role-check span { font-size: .9rem; font-weight: 700; }
 .form-group.invalid input,
 .form-group.invalid select { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,.1); }
 .form-group.invalid .field-error { display: block; }

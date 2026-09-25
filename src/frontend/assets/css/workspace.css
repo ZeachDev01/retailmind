@@ -1,0 +1,80 @@
+.workspace-selector-page {
+    max-width: 920px;
+}
+
+.workspace-options {
+    display: grid;
+    gap: .75rem;
+    margin-top: 1.25rem;
+}
+
+.workspace-option {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    min-height: 88px;
+    padding: 1rem 1.1rem;
+    border: 1px solid #dbe3ec;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.workspace-option.is-active {
+    border-color: #2563eb;
+    box-shadow: inset 3px 0 #2563eb;
+}
+
+.workspace-option-icon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border-radius: 8px;
+    background: #eef4ff;
+    color: #1d4ed8;
+    font-size: 1.3rem;
+}
+
+.workspace-option-copy {
+    min-width: 0;
+}
+
+.workspace-option-copy strong,
+.workspace-option-copy small {
+    display: block;
+}
+
+.workspace-option-copy strong {
+    color: #172033;
+    font-size: 1rem;
+}
+
+.workspace-option-copy small {
+    margin-top: .25rem;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.workspace-current {
+    color: #1d4ed8;
+    font-size: .82rem;
+    font-weight: 700;
+}
+
+@media (max-width: 640px) {
+    .workspace-option {
+        grid-template-columns: 42px minmax(0, 1fr);
+    }
+
+    .workspace-option-icon {
+        width: 42px;
+        height: 42px;
+    }
+
+    .workspace-option .btn,
+    .workspace-current {
+        grid-column: 2;
+        justify-self: start;
+    }
+}

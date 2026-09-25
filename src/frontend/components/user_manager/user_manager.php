@@ -16,7 +16,7 @@ $actorRole = (string)current_role();
 $message = '';
 $messageClass = '';
 $createFormSubmitted = false;
-$createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_id' => ''];
+$createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
 
 function display_label(string $value): string
 {
@@ -54,9 +54,27 @@ function role_name_for_id(PDO $pdo, int $roleId): ?string
     return $role === false ? null : (string)$role;
 }
 
+function role_names_for_ids(PDO $pdo, array $roleIds): array
+{
+    $roles = [];
+    foreach (array_values(array_unique(array_map('intval', $roleIds))) as $roleId) {
+        $role = role_name_for_id($pdo, $roleId);
+        if ($role !== null) {
+            $roles[] = $role;
+        }
+    }
+    return $roles;
+}
+
 function can_manage_user(array $user): bool
 {
-    return has_capability(RoleCapabilityPolicy::MANAGE_USERS, (string)($user['role_name'] ?? ''));
+    $roles = array_filter(explode(',', (string)($user['assigned_roles'] ?? $user['role_name'] ?? '')));
+    foreach ($roles as $role) {
+        if (!has_capability(RoleCapabilityPolicy::MANAGE_USERS, $role)) {
+            return false;
+        }
+    }
+    return $roles !== [];
 }
 
 $action = (string)($_POST['action'] ?? '');
@@ -84,15 +102,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'last_name' => $lastName,
                 'username' => trim((string)($_POST['username'] ?? '')),
                 'email' => trim((string)($_POST['email'] ?? '')),
-                'role_id' => (string)($_POST['role_id'] ?? ''),
+                'role_ids' => array_map('strval', (array)($_POST['role_ids'] ?? [])),
             ];
             $password = (string)($_POST['password'] ?? '');
             if ($passwordError = password_policy_error($password)) {
                 throw new InvalidArgumentException($passwordError);
             }
-            $role = role_name_for_id($pdo, (int)($_POST['role_id'] ?? 0));
-            if ($role === null) {
-                throw new InvalidArgumentException('Please choose a valid role template.');
+            $selectedRoles = role_names_for_ids($pdo, (array)($_POST['role_ids'] ?? []));
+            if ($selectedRoles === []) {
+                throw new InvalidArgumentException('Please choose at least one valid role template.');
             }
             $profileImage = profile_image_storage()->store($_FILES['profile_image'] ?? null);
             try {
@@ -102,7 +120,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     'email' => $createFormValues['email'],
                     'profile_image' => $profileImage,
                     'password_hash' => password_hash($password, PASSWORD_DEFAULT),
-                    'role' => $role,
+                    'roles' => $selectedRoles,
                 ]);
             } catch (Throwable $exception) {
                 if ($profileImage !== null) profile_image_storage()->delete($profileImage);
@@ -110,18 +128,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
             $message = 'User created successfully in the Store.';
             $messageClass = 'tag-success';
-            $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_id' => ''];
+            $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
         } elseif ($action === 'update') {
             $userId = (int)($_POST['user_id'] ?? 0);
             $before = $lifecycle->get($userId);
             $firstName = trim((string)($_POST['first_name'] ?? ''));
             $lastName = trim((string)($_POST['last_name'] ?? ''));
-            $role = role_name_for_id($pdo, (int)($_POST['role_id'] ?? 0)) ?? (string)$before['role_name'];
+            $selectedRoles = role_names_for_ids($pdo, (array)($_POST['role_ids'] ?? []));
+            if ($selectedRoles === []) {
+                $selectedRoles = (array)($before['roles'] ?? [$before['role_name']]);
+            }
             $account = [
                 'full_name' => trim($firstName . ' ' . $lastName),
                 'username' => trim((string)($_POST['username'] ?? '')),
                 'email' => trim((string)($_POST['email'] ?? '')),
-                'role' => $role,
+                'roles' => $selectedRoles,
             ];
             $newPassword = (string)($_POST['new_password'] ?? '');
             if ($newPassword !== '' && ($passwordError = password_policy_error($newPassword))) {
@@ -182,11 +203,16 @@ $roles = array_values(array_filter(
         && $role['role_name'] !== 'super_admin'
 ));
 $users = $pdo->query(
-    'SELECT u.*, r.role_name
+    "SELECT u.*, r.role_name,
+            COALESCE(GROUP_CONCAT(DISTINCT ar.role_name ORDER BY ur.is_primary DESC, ar.role_id SEPARATOR ','), r.role_name) AS assigned_roles,
+            COALESCE(GROUP_CONCAT(DISTINCT ar.role_id ORDER BY ur.is_primary DESC, ar.role_id SEPARATOR ','), u.role_id) AS assigned_role_ids
      FROM users u
      JOIN roles r ON r.role_id = u.role_id
+     LEFT JOIN user_roles ur ON ur.user_id = u.user_id
+     LEFT JOIN roles ar ON ar.role_id = ur.role_id AND ar.role_name <> 'seller'
      WHERE u.is_recovery_account = 0
-     ORDER BY u.created_at DESC, u.user_id DESC'
+     GROUP BY u.user_id
+     ORDER BY u.created_at DESC, u.user_id DESC"
 )->fetchAll(PDO::FETCH_ASSOC);
 $activeCount = count(array_filter($users, static fn(array $user): bool => $user['status'] === 'active'));
 $disabledCount = count($users) - $activeCount;
@@ -231,7 +257,7 @@ $disabledCount = count($users) - $activeCount;
                         <tr>
                             <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['full_name'], $user['profile_image'] ?? null, 'user-avatar') ?><strong><?= htmlspecialchars(display_person_name((string)$user['full_name'])) ?></strong></div></td>
                             <td><?= htmlspecialchars((string)($user['email'] ?: $user['username'])) ?></td>
-                            <td><?= htmlspecialchars(display_label((string)$user['role_name'])) ?></td>
+                            <td><?= htmlspecialchars(implode(', ', array_map('display_label', array_filter(explode(',', (string)($user['assigned_roles'] ?? $user['role_name'])))))) ?></td>
                             <td><?= htmlspecialchars(display_label((string)$user['status'])) ?></td>
                             <td><?= ((int)($user['must_change_password'] ?? 0) === 1) ? '<span class="tag-warning">Change required</span>' : '<span class="tag-success">Current</span>' ?></td>
                             <td class="action-cell">
@@ -243,7 +269,9 @@ $disabledCount = count($users) - $activeCount;
                                         data-full-name="<?= htmlspecialchars((string)$user['full_name'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-username="<?= htmlspecialchars((string)$user['username'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-email="<?= htmlspecialchars((string)($user['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                        data-role-id="<?= (int)$user['role_id'] ?>" data-status="<?= htmlspecialchars((string)$user['status']) ?>"
+                                        data-role-id="<?= (int)$user['role_id'] ?>"
+                                        data-role-ids="<?= htmlspecialchars((string)($user['assigned_role_ids'] ?? $user['role_id']), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-status="<?= htmlspecialchars((string)$user['status']) ?>"
                                         data-last-login="<?= htmlspecialchars($statusView['last_login'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-auto-disable-date="<?= htmlspecialchars((string)($statusView['auto_disable_date'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-policy-disabled="<?= htmlspecialchars((string)($statusView['policy_disabled_line'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
@@ -290,7 +318,10 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('drawerFirstName').value = parts.shift() || '';
         document.getElementById('drawerLastName').value = parts.join(' ');
         document.getElementById('drawerEmail').value = button.dataset.email || '';
-        document.getElementById('drawerRole').value = button.dataset.roleId || '';
+        const selectedRoleIds = (button.dataset.roleIds || button.dataset.roleId || '').split(',').filter(Boolean);
+        document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => {
+            input.checked = selectedRoleIds.includes(input.value);
+        });
         document.getElementById('drawerStatus').value = button.dataset.status || 'active';
         document.getElementById('drawerLastLogin').textContent = button.dataset.lastLogin || 'Never';
         const autoDisableDate = button.dataset.autoDisableDate || '';
@@ -302,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('userDrawerMeta').textContent = '@' + (button.dataset.username || '');
         const isSelf = button.dataset.isSelf === '1';
         const isSuper = button.dataset.isSuperAdmin === '1';
-        document.getElementById('drawerRole').disabled = isSelf || isSuper;
+        document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => { input.disabled = isSelf || isSuper; });
         document.getElementById('drawerStatus').disabled = isSelf || isSuper;
         document.getElementById('drawerStatusButton').disabled = isSelf || isSuper;
         document.getElementById('drawerRevokeButton').disabled = isSelf || isSuper;

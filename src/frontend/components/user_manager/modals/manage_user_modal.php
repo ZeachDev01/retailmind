@@ -28,13 +28,13 @@
                         <label class="profile-image-remove"><input type="checkbox" name="remove_profile_image" value="1" id="drawerRemoveProfileImage"> Remove current picture</label>
                     </div>
                     <div class="form-group">
-                        <label for="drawerRole">Role template</label>
-                        <select id="drawerRole" name="role_id" required>
+                        <label>Role access</label>
+                        <div class="role-check-list" id="drawerRoles">
                             <?php foreach ($roles as $role): ?>
-                                <option value="<?= (int)$role['role_id'] ?>"><?= htmlspecialchars(display_label((string)$role['role_name'])) ?></option>
+                                <label class="role-check"><input type="checkbox" name="role_ids[]" value="<?= (int)$role['role_id'] ?>"> <span><?= htmlspecialchars(display_label((string)$role['role_name'])) ?></span></label>
                             <?php endforeach; ?>
-                        </select>
-                        <small class="field-help">Roles use fixed access templates; individual privilege combinations are not available.</small>
+                        </div>
+                        <small class="field-help">Selected role templates grant access across those workspaces.</small>
                     </div>
                 </div>
                 <div class="user-drawer-panel" data-user-drawer-panel="status" hidden>

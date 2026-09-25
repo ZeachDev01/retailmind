@@ -36,6 +36,7 @@ final class UserLifecycleService
         if (!$user) {
             throw new InvalidArgumentException('User not found.');
         }
+        $user['roles'] = $this->roleNamesForUser($userId, (string)$user['role_name']);
         return $user;
     }
 
@@ -80,7 +81,8 @@ final class UserLifecycleService
 
     public function create(int $actorId, string $actorRole, array $account): int
     {
-        $targetRole = $this->requireAssignableRole($actorRole, (string)($account['role'] ?? ''));
+        $targetRoles = $this->requireAssignableRoles($actorRole, $account['roles'] ?? ($account['role'] ?? ''));
+        $targetRole = $targetRoles[0];
         $fullName = trim((string)($account['full_name'] ?? ''));
         $username = trim((string)($account['username'] ?? ''));
         $passwordHash = (string)($account['password_hash'] ?? '');
@@ -91,7 +93,7 @@ final class UserLifecycleService
             throw new InvalidArgumentException($shapeError);
         }
 
-        return $this->transaction(function () use ($actorId, $actorRole, $account, $targetRole, $fullName, $username, $passwordHash): int {
+        return $this->transaction(function () use ($actorId, $actorRole, $account, $targetRoles, $targetRole, $fullName, $username, $passwordHash): int {
             $roleId = $this->roleId($targetRole);
             $storeId = $this->storeScope->id();
             $statement = $this->pdo->prepare(
@@ -108,6 +110,7 @@ final class UserLifecycleService
                 $storeId,
             ]);
             $userId = (int)$this->pdo->lastInsertId();
+            $this->syncUserRoles($userId, $targetRoles, $targetRole);
             $this->audit($actorId, $actorRole, 'User created', $userId, null, $this->auditSnapshot($this->get($userId)));
             return $userId;
         });
@@ -119,11 +122,13 @@ final class UserLifecycleService
             $before = $this->get($userId);
             $this->requireManageable($actorId, $actorRole, $before, true);
 
-            $targetRole = (string)($account['role'] ?? $before['role_name']);
+            $targetRoles = $account['roles'] ?? ($account['role'] ?? [$before['role_name']]);
             if ($before['role_name'] === 'super_admin') {
                 $targetRole = 'super_admin';
+                $targetRoles = ['super_admin'];
             } else {
-                $targetRole = $this->requireAssignableRole($actorRole, $targetRole);
+                $targetRoles = $this->requireAssignableRoles($actorRole, $targetRoles);
+                $targetRole = $targetRoles[0];
             }
             $fullName = trim((string)($account['full_name'] ?? ''));
             $username = trim((string)($account['username'] ?? ''));
@@ -152,6 +157,7 @@ final class UserLifecycleService
             $params[] = $userId;
             $statement = $this->pdo->prepare('UPDATE users SET ' . implode(', ', $parts) . ' WHERE user_id = ?');
             $statement->execute($params);
+            $this->syncUserRoles($userId, $targetRoles, $targetRole);
 
             $after = $this->get($userId);
             $this->audit($actorId, $actorRole, 'User updated', $userId, $this->auditSnapshot($before), $this->auditSnapshot($after));
@@ -239,15 +245,31 @@ final class UserLifecycleService
         return $targetRole;
     }
 
+    private function requireAssignableRoles(string $actorRole, mixed $targetRoles): array
+    {
+        $roles = is_array($targetRoles) ? $targetRoles : [$targetRoles];
+        $roles = array_values(array_unique(array_filter(array_map(static fn($role): string => trim((string)$role), $roles))));
+        if ($roles === []) {
+            throw new DomainException('Please choose at least one role.');
+        }
+        foreach ($roles as $role) {
+            $this->requireAssignableRole($actorRole, $role);
+        }
+        return $roles;
+    }
+
     private function requireManageable(int $actorId, string $actorRole, array $target, bool $allowProtectedSelf): void
     {
         if ((bool)($target['is_recovery_account'] ?? false)) {
             throw new DomainException('The Recovery Account can be managed only through the offline recovery procedure.');
         }
-        $targetRole = (string)$target['role_name'];
-        if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_USERS, $targetRole)) {
-            throw new DomainException('Your account cannot manage this privileged user.');
+        $targetRoles = array_values(array_unique(array_map('strval', $target['roles'] ?? [$target['role_name']])));
+        foreach ($targetRoles as $targetRole) {
+            if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_USERS, $targetRole)) {
+                throw new DomainException('Your account cannot manage this privileged user.');
+            }
         }
+        $targetRole = (string)$target['role_name'];
         if ($targetRole === 'super_admin' && (!$allowProtectedSelf || $actorId !== (int)$target['user_id'])) {
             throw new DomainException('The Super Administrator account is protected.');
         }
@@ -267,6 +289,41 @@ final class UserLifecycleService
         return $roleId;
     }
 
+    private function roleNamesForUser(int $userId, string $fallbackRole): array
+    {
+        try {
+            $statement = $this->pdo->prepare(
+                "SELECT r.role_name
+                 FROM user_roles ur
+                 JOIN roles r ON r.role_id = ur.role_id
+                 WHERE ur.user_id = ? AND r.role_name <> 'seller'
+                 ORDER BY ur.is_primary DESC, r.role_id"
+            );
+            $statement->execute([$userId]);
+            $roles = array_values(array_unique(array_map('strval', $statement->fetchAll(PDO::FETCH_COLUMN))));
+            if ($roles !== []) {
+                return $roles;
+            }
+        } catch (Throwable) {
+        }
+        return [$fallbackRole];
+    }
+
+    private function syncUserRoles(int $userId, array $roles, string $primaryRole): void
+    {
+        try {
+            $this->pdo->prepare('DELETE FROM user_roles WHERE user_id = ?')->execute([$userId]);
+            $statement = $this->pdo->prepare(
+                'INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, ?)'
+            );
+            foreach ($roles as $role) {
+                $statement->execute([$userId, $this->roleId($role), $role === $primaryRole ? 1 : 0]);
+            }
+        } catch (Throwable $exception) {
+            error_log('User role mapping sync skipped: ' . $exception->getMessage());
+        }
+    }
+
     private function audit(int $actorId, string $actorRole, string $action, int $recordId, ?array $before, ?array $after): void
     {
         $statement = $this->pdo->prepare(
@@ -275,10 +332,12 @@ final class UserLifecycleService
         );
         $payload = $after ?? [];
         $payload['actor_role'] = $actorRole;
-        $roles = [
-            (string)($before['role'] ?? $before['target_role'] ?? ''),
-            (string)($payload['role'] ?? $payload['target_role'] ?? ''),
-        ];
+        $roles = array_merge(
+            (array)($before['roles'] ?? []),
+            [(string)($before['role'] ?? $before['target_role'] ?? '')],
+            (array)($payload['roles'] ?? []),
+            [(string)($payload['role'] ?? $payload['target_role'] ?? '')]
+        );
         $category = array_intersect($roles, ['super_admin', 'admin']) !== []
             ? AuditRecordCategory::SECURITY
             : AuditRecordCategory::STORE_OPERATION;
@@ -300,6 +359,7 @@ final class UserLifecycleService
             'user_id' => (int)$user['user_id'],
             'username' => (string)$user['username'],
             'role' => (string)$user['role_name'],
+            'roles' => array_values(array_map('strval', $user['roles'] ?? [$user['role_name']])),
             'status' => (string)$user['status'],
             'store_id' => $user['branch_id'] !== null ? (int)$user['branch_id'] : null,
         ];

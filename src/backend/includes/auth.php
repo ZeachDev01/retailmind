@@ -45,6 +45,41 @@ function current_role(): ?string
     return $_SESSION['role'] ?? null;
 }
 
+function current_roles(): array
+{
+    $roles = $_SESSION['roles'] ?? null;
+    if (is_array($roles)) {
+        $roles = array_values(array_unique(array_filter(array_map('strval', $roles))));
+        if ($roles !== []) {
+            return $roles;
+        }
+    }
+    $role = current_role();
+    return $role === null ? [] : [$role];
+}
+
+function current_workspace_roles(?string $primaryRole = null): array
+{
+    $roles = current_roles();
+    $primaryRole ??= in_array('super_admin', $roles, true) ? 'super_admin' : null;
+    if ($primaryRole === 'super_admin') {
+        return ['super_admin', 'admin', 'inventory_manager', 'cashier'];
+    }
+
+    return $roles;
+}
+
+function switch_current_workspace(string $role): bool
+{
+    $role = trim($role);
+    if ($role === '' || !in_array($role, current_workspace_roles(), true)) {
+        return false;
+    }
+
+    $_SESSION['role'] = $role;
+    return true;
+}
+
 // Unified password policy lives in password_policy.php (required above):
 // password_policy_error(), recovery_password_policy_error(),
 // password_minimum_length(), and password_meets_complexity() are shared so
@@ -142,6 +177,28 @@ function resolve_login_user(PDO $pdo, string $identifier): array
     return ['user' => null, 'identifier_type' => 'unknown'];
 }
 
+function user_role_names(PDO $pdo, int $userId, ?string $fallbackRole = null): array
+{
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT r.role_name
+             FROM user_roles ur
+             JOIN roles r ON r.role_id = ur.role_id
+             WHERE ur.user_id = ? AND r.role_name <> 'seller'
+             ORDER BY ur.is_primary DESC, r.role_id"
+        );
+        $stmt->execute([$userId]);
+        $roles = array_values(array_unique(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN))));
+        if ($roles !== []) {
+            return $roles;
+        }
+    } catch (PDOException $exception) {
+        error_log('User role mapping unavailable: ' . $exception->getMessage());
+    }
+
+    return $fallbackRole === null || $fallbackRole === '' ? [] : [$fallbackRole];
+}
+
 function login_user(PDO $pdo, string $identifier, string $password): bool
 {
     $identifier = trim($identifier);
@@ -183,6 +240,9 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
         $_SESSION['user_id'] = (int)$user['user_id'];
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['role'] = $user['role_name'];
+        $_SESSION['roles'] = function_exists('user_role_names')
+            ? user_role_names($pdo, (int)$user['user_id'], (string)$user['role_name'])
+            : [(string)$user['role_name']];
         $_SESSION['profile_image'] = $user['profile_image'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
@@ -251,7 +311,12 @@ function validate_current_session(PDO $pdo): void
         exit;
     }
     $_SESSION['full_name'] = $user['full_name'];
-    $_SESSION['role'] = $user['role_name'];
+    $selectedWorkspace = current_role();
+    $_SESSION['roles'] = user_role_names($pdo, (int)$_SESSION['user_id'], (string)$user['role_name']);
+    $_SESSION['role'] = $selectedWorkspace !== null
+        && in_array($selectedWorkspace, current_workspace_roles((string)$user['role_name']), true)
+        ? $selectedWorkspace
+        : $user['role_name'];
     $_SESSION['profile_image'] = $user['profile_image'];
     $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
     $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
@@ -273,7 +338,7 @@ function require_role(array $allowed_roles): void
         exit;
     }
     validate_current_session($pdo);
-    if (!in_array(current_role(), $allowed_roles, true)) {
+    if (array_intersect(current_workspace_roles(), $allowed_roles) === []) {
         http_response_code(403);
         die('Access denied: your role does not have permission to view this page.');
     }
@@ -314,8 +379,14 @@ function has_capability(
 ): bool {
     global $pdo;
     $role = current_role();
+    $roles = current_roles();
     $actorUserId = (int)($_SESSION['user_id'] ?? 0);
     $context ??= current_authorization_context($pdo);
+    foreach ($roles as $assignedRole) {
+        if (role_capability_policy()->allows($assignedRole, $capability, $targetRole, $context, $actorUserId)) {
+            return true;
+        }
+    }
     return $role !== null
         && role_capability_policy()->allows($role, $capability, $targetRole, $context, $actorUserId);
 }

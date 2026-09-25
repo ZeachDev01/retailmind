@@ -23,15 +23,15 @@
                 <small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
             </div>
             <div class="form-group">
-                <label>Role template</label>
-                <select name="role_id" required>
+                <label>Role access</label>
+                <div class="role-check-list">
                     <?php foreach ($roles as $r): ?>
                         <?php if (!in_array($r['role_name'], ['super_admin', 'seller'], true)): ?>
-                            <option value="<?= (int)$r['role_id'] ?>" <?= $createFormValues['role_id'] === (string)$r['role_id'] ? ' selected' : '' ?>><?= htmlspecialchars(display_label((string)$r['role_name'])) ?></option>
+                            <label class="role-check"><input type="checkbox" name="role_ids[]" value="<?= (int)$r['role_id'] ?>" <?= in_array((string)$r['role_id'], $createFormValues['role_ids'], true) ? ' checked' : '' ?>> <span><?= htmlspecialchars(display_label((string)$r['role_name'])) ?></span></label>
                         <?php endif; ?>
                     <?php endforeach; ?>
-                </select>
-                <small class="field-help">Store scope is assigned securely by the server.</small>
+                </div>
+                <small class="field-help">Select every workspace this user can access. The first selected role becomes the default workspace.</small>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="cancelUserModal">Cancel</button>

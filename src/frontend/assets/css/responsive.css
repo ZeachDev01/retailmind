@@ -2,6 +2,13 @@
    Responsive layout (tablet & mobile)
    ============================ */
 @media (max-width: 900px) {
+    .sidebar-account-menu {
+        top: 64px;
+        right: .75rem;
+        bottom: auto;
+        left: auto;
+        width: min(260px, calc(100vw - 1.5rem));
+    }
     .admin-mobile-topbar {
         display: flex;
         position: fixed;
@@ -86,9 +93,11 @@
         height: 34px;
         flex: 0 0 34px;
         place-items: center;
+        border: 0;
         border-radius: 999px;
         background: #3b82f6;
         color: #ffffff;
+        cursor: pointer;
         font-size: .67rem;
         font-weight: 700;
         text-decoration: none;
@@ -809,9 +818,11 @@ body.admin-dashboard-page .mobile-role-label {
         flex: 0 0 34px;
         display: grid;
         place-items: center;
+        border: 0;
         border-radius: 999px;
         background: #3b82f6;
         color: #fff;
+        cursor: pointer;
         font-size: .67rem;
         font-weight: 700;
         text-decoration: none;
