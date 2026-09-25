@@ -45,6 +45,7 @@ php src/backend/tests/stock_issue_contract.php
 php src/backend/tests/stock_issue_correction_contract.php
 php src/backend/tests/stock_issue_oversight_contract.php
 php src/backend/tests/database_integration.php
+php src/backend/tests/user_password_reset_integration.php
 php src/backend/tests/audit_visibility_integration.php
 php src/backend/tests/receipt_table_contract.php
 php src/backend/tests/sales_trend_integration.php

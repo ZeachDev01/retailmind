@@ -387,3 +387,13 @@ Stack trace:
 [24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
 [24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_id as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 461
 [24-Sep-2026 15:12:15 Asia/Manila] PHP Deprecated:  create_notification(): Implicitly marking parameter $reference_type as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\src\backend\includes\functions.php on line 462
+[25-Sep-2026 08:37:10 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'ia.shift_id' in 'field list' in C:\xampp\htdocs\retailmind\src\backend\app\Services\StockIssueService.php:914
+Stack trace:
+#0 C:\xampp\htdocs\retailmind\src\backend\app\Services\StockIssueService.php(914): PDO->prepare('SELECT ia.adjus...')
+#1 C:\xampp\htdocs\retailmind\src\frontend\components\inventory_management\stock_issues.php(80): StockIssueService->getPendingReports()
+#2 {main}
+[25-Sep-2026 08:37:13 Asia/Manila] PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'ia.shift_id' in 'field list' in C:\xampp\htdocs\retailmind\src\backend\app\Services\StockIssueService.php:914
+Stack trace:
+#0 C:\xampp\htdocs\retailmind\src\backend\app\Services\StockIssueService.php(914): PDO->prepare('SELECT ia.adjus...')
+#1 C:\xampp\htdocs\retailmind\src\frontend\components\inventory_management\stock_issues.php(80): StockIssueService->getPendingReports()
+#2 {main}
