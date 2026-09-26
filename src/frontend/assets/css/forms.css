@@ -9,6 +9,8 @@
     --auth-surface: rgba(255, 255, 255, 0.96);
     --auth-border: rgba(var(--auth-accent-rgb), 0.16);
     --auth-shadow: rgba(7, 45, 43, 0.14);
+    --auth-panel-muted: #c9d8d5;
+    --auth-signal: #f2c94c;
     --auth-control-soft: #eef5f3;
     --auth-control-soft-hover: #dce8e5;
 }
@@ -86,6 +88,162 @@ textarea {
     min-height: 44px;
     padding: 0 0.5rem;
     color: var(--auth-accent);
+}
+
+.auth-page .login-card--split {
+    display: grid;
+    grid-template-columns: 34% minmax(0, 1fr);
+    width: min(760px, 100%);
+    padding: 0;
+    overflow: hidden;
+    border-radius: 18px;
+    box-shadow: 0 18px 48px var(--auth-shadow);
+}
+
+.login-card__identity-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 390px;
+    padding: 2rem;
+    background: var(--auth-ink);
+    color: var(--auth-surface);
+}
+
+.login-card__identity-panel .brand-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--auth-accent);
+    color: #fff;
+    font-weight: 700;
+}
+
+.login-card__identity-panel strong {
+    display: block;
+    margin-top: 1rem;
+    font-size: 1.05rem;
+}
+
+.login-card__identity-panel p {
+    max-width: 22ch;
+    color: var(--auth-panel-muted);
+    font-size: 0.85rem;
+}
+
+.login-card__identity-panel--steps {
+    justify-content: flex-start;
+    gap: 2rem;
+}
+
+.login-card__identity-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.login-card__identity-brand strong {
+    margin: 0;
+}
+
+.login-card__recovery-steps {
+    display: grid;
+    gap: 1rem;
+    margin: auto 0;
+}
+
+.login-card__recovery-step {
+    display: grid;
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.login-card__recovery-step span {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    place-items: center;
+    border: 1px solid var(--auth-panel-muted);
+    border-radius: 6px;
+    color: var(--auth-panel-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.login-card__recovery-step:first-child span {
+    border-color: var(--auth-signal);
+    background: var(--auth-signal);
+    color: var(--auth-ink);
+}
+
+.login-card__recovery-step p {
+    margin: 0;
+}
+
+.login-card__form-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 2.5rem;
+}
+
+.login-card__form-panel h1 {
+    font-size: 1.8rem;
+    line-height: 1.15;
+    margin-bottom: 0.45rem;
+}
+
+.login-card__form-panel .subtitle {
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 680px) {
+    .auth-page .login-card--split {
+        grid-template-columns: 1fr;
+        width: min(380px, 92vw);
+    }
+
+    .login-card__identity-panel {
+        display: block;
+        min-height: 0;
+        padding: 1.5rem;
+    }
+
+    .login-card__identity-panel p {
+        margin-top: 0.5rem;
+        max-width: none;
+    }
+
+    .login-card__identity-panel--steps {
+        display: flex;
+        gap: 1.25rem;
+    }
+
+    .login-card__recovery-steps {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin: 0;
+    }
+
+    .login-card__recovery-step {
+        grid-template-columns: 1.5rem minmax(0, 1fr);
+        gap: 0.6rem;
+    }
+
+    .login-card__recovery-step span {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+
+    .login-card__recovery-step p {
+        margin: 0;
+    }
+
+    .login-card__form-panel {
+        padding: 1.75rem 1.5rem;
+    }
 }
 
 .login-card__brand {

@@ -1,0 +1,6 @@
+{
+  "files": ["src/frontend/components/auth/forgot_password.php"],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}
