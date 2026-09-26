@@ -101,7 +101,7 @@ try {
         $guard = new FiscalPeriodGuardService($pdo);
         $guard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
         $guard->assertOpenNow('stock_movements', 'stock movement');
-        $pdo->beginTransaction();
+        App\Store\StoreWriteGate::begin($pdo);
         $pdo->prepare('UPDATE inventory SET quantity_on_hand = ? WHERE product_id = ?')->execute([$newQuantity, $product['product_id']]);
         $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, 'adjustment', ?)")
             ->execute([$product['product_id'], $newQuantity - (int)$product['quantity_on_hand'], (int)$_SESSION['user_id']]);

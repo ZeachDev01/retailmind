@@ -118,17 +118,36 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         return $this->result('Forecast model artifact', 'healthy', basename($latest) . ' — updated ' . date('M d, Y g:i A', filemtime($latest)), 'Forecasting');
     }
 
+    /**
+     * Backup readiness follows the durable backup history rather than a file
+     * left on the server: a completed manual Database Backup is downloaded and
+     * removed, so a missing file is normal and must not read as "no backup".
+     */
     private function backupCheck(): array
     {
-        $files = glob($this->backendPath . '/storage/backups/*') ?: [];
-        $files = array_values(array_filter($files, static fn(string $file): bool => is_file($file) && basename($file) !== '.gitkeep'));
-        if (!$files) {
-            return $this->result('Database backup', 'warning', 'No completed backup file was found.', 'Recovery');
+        try {
+            $row = $this->pdo->query(
+                "SELECT filename, created_at FROM backup_history
+                  WHERE status = 'completed' AND backup_type <> 'restore'
+                  ORDER BY created_at DESC LIMIT 1"
+            )->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            return $this->result('Database backup', 'warning', 'Backup history is unavailable: ' . $e->getMessage(), 'Recovery');
         }
-        usort($files, static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a));
-        $latest = $files[0];
-        $ageDays = (int)floor((time() - filemtime($latest)) / 86400);
-        return $this->result('Database backup', $ageDays <= 7 ? 'healthy' : 'warning', basename($latest) . " — {$ageDays} day(s) old.", 'Recovery');
+
+        if (!is_array($row) || $row === []) {
+            return $this->result('Database backup', 'warning', 'No completed backup is recorded.', 'Recovery');
+        }
+
+        $ageDays = (int)floor((time() - (int)strtotime((string)$row['created_at'])) / 86400);
+        $detail = (string)$row['filename'] . " — {$ageDays} day(s) old.";
+
+        $keys = new \App\Backup\BackupKeyProvider();
+        if (!$keys->isConfigured()) {
+            return $this->result('Database backup', 'critical', $keys->statusLine(), 'Recovery');
+        }
+
+        return $this->result('Database backup', $ageDays <= 7 ? 'healthy' : 'warning', $detail, 'Recovery');
     }
 
     private function mailCheck(): array

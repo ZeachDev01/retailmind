@@ -28,13 +28,17 @@ $capabilities = [
     RoleCapabilityPolicy::VIEW_SALES_HISTORY,
     RoleCapabilityPolicy::VIEW_STORE_REPORTS,
     RoleCapabilityPolicy::MANAGE_SALE_REVERSALS,
+    RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP,
 ];
 
+// Shared preservation authority only: both administrator roles may create and
+// download a Database Backup, while Database Restore stays exclusive to the
+// Super Administrator (ADR-0003).
 $expected = [
-    'super_admin' => [true, false, true, false, false, true, true, true, true, true, true, true, true, false],
-    'admin' => [false, true, true, false, false, true, false, true, true, false, false, true, true, true],
-    'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, false, true, true, true],
-    'cashier' => [false, false, true, false, true, false, false, false, false, false, false, true, false, false],
+    'super_admin' => [true, false, true, false, false, true, true, true, true, true, true, true, true, false, true],
+    'admin' => [false, true, true, false, false, true, false, true, true, false, false, true, true, true, true],
+    'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, false, true, true, true, false],
+    'cashier' => [false, false, true, false, true, false, false, false, false, false, false, true, false, false, false],
 ];
 
 foreach ($expected as $role => $decisions) {
@@ -58,6 +62,16 @@ foreach (['admin', 'super_admin'] as $targetRole) {
 $assert(!$policy->allows('admin', RoleCapabilityPolicy::ASSIGN_PRIVILEGES, 'cashier'), 'Administrator must not assign arbitrary privileges');
 $assert($policy->allows('super_admin', RoleCapabilityPolicy::MANAGE_USERS, 'admin'), 'Super Administrator should manage Administrator accounts');
 $assert($policy->allows('super_admin', RoleCapabilityPolicy::ASSIGN_ROLES, 'super_admin'), 'Super Administrator should govern privileged roles');
+
+// Shared Database Backup creation/download is deliberately not platform
+// governance: the Administrator keeps the backup capability without gaining any
+// restoration or platform authority.
+$assert($policy->allows('admin', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP), 'Administrator should create and download a Database Backup');
+$assert($policy->allows('super_admin', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP), 'Super Administrator should create and download a Database Backup');
+$assert(!$policy->allows('admin', RoleCapabilityPolicy::PLATFORM_GOVERNANCE), 'Administrator backup access must not grant platform governance');
+$assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP), 'Inventory Manager must not reach Database Backup');
+$assert(!$policy->allows('cashier', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP), 'Cashier must not reach Database Backup');
+$assert(!$policy->allows('admin', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP, null, $emergency, 41) || $policy->allows('admin', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP), 'Emergency Access must not change backup authority');
 
 $emergency = AuthorizationContext::emergencyAccess(101, 41, 'Restore Store operations during an incident');
 $assert($policy->allows('super_admin', RoleCapabilityPolicy::STORE_OPERATIONS, null, $emergency, 41), 'Emergency Access should permit isolated Store operations');

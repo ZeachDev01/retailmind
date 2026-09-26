@@ -18,6 +18,7 @@ final class RoleCapabilityPolicy
     public const ASSIGN_ROLES = 'assign_roles';
     public const ASSIGN_PRIVILEGES = 'assign_privileges';
     public const ACTIVATE_EMERGENCY_ACCESS = 'activate_emergency_access';
+    public const MANAGE_DATABASE_BACKUP = 'manage_database_backup';
 
     private const BASE_CAPABILITIES = [
         'super_admin' => [
@@ -31,7 +32,11 @@ final class RoleCapabilityPolicy
             self::ASSIGN_ROLES,
             self::ASSIGN_PRIVILEGES,
             self::ACTIVATE_EMERGENCY_ACCESS,
+            self::MANAGE_DATABASE_BACKUP,
         ],
+        // Shared preservation authority: the Administrator may create and
+        // download a Database Backup but never restoration authority, which
+        // stays exclusive to the Super Administrator (see ADR-0003).
         'admin' => [
             self::STORE_OPERATIONS,
             self::VIEW_INVENTORY,
@@ -41,6 +46,7 @@ final class RoleCapabilityPolicy
             self::MANAGE_SALE_REVERSALS,
             self::MANAGE_USERS,
             self::ASSIGN_ROLES,
+            self::MANAGE_DATABASE_BACKUP,
         ],
         'inventory_manager' => [
             self::VIEW_INVENTORY,

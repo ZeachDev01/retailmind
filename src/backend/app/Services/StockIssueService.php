@@ -13,6 +13,8 @@
 // returned/approved/rejected reports.
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/../Store/StoreWriteGate.php';
+use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
@@ -60,7 +62,7 @@ class StockIssueService
 
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue report');
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $productStmt = $this->pdo->prepare(
@@ -140,7 +142,7 @@ class StockIssueService
         $this->assertRole($cashierId, 'cashier');
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue correction');
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(
@@ -236,7 +238,7 @@ class StockIssueService
         $this->assertRole($cashierId, 'cashier');
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue cancellation');
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(
@@ -324,7 +326,7 @@ class StockIssueService
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue return');
 
         $report = null;
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(
@@ -413,7 +415,7 @@ class StockIssueService
         $this->assertRole($cashierId, 'cashier');
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue resubmission');
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(
@@ -488,7 +490,7 @@ class StockIssueService
         $this->assertRole($approverId, 'inventory_manager');
 
         $cashierId = 0;
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(
@@ -630,7 +632,7 @@ class StockIssueService
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue rejection');
 
         $cashierId = 0;
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(

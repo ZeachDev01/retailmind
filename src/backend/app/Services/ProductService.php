@@ -2,6 +2,8 @@
 // app/Services/ProductService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/../Store/StoreWriteGate.php';
+use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
@@ -122,7 +124,7 @@ class ProductService
 
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
-            $this->pdo->beginTransaction();
+            StoreWriteGate::begin($this->pdo);
         }
         try {
             $stmt = $this->pdo->prepare(
@@ -239,7 +241,7 @@ class ProductService
 
         $existingProduct = $this->findProductBySearchTerm($searchTerm);
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             if ($existingProduct) {
                 $previousProduct = $existingProduct;
@@ -408,7 +410,7 @@ class ProductService
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
         $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
             $beforeStmt = $this->pdo->prepare(
@@ -471,7 +473,7 @@ class ProductService
             throw new RuntimeException('Invalid product selected.');
         }
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
             $stmt = $this->pdo->prepare(

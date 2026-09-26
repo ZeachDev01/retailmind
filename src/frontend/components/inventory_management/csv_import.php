@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $cat = $cat_stmt->fetch();
                         if (!$cat) {
                             $ins_cat = $pdo->prepare("INSERT INTO categories (category_name) VALUES (?)");
-                            $ins_cat->execute([$category_name]);
+                            App\Store\StoreWriteGate::execute($pdo, $ins_cat, [$category_name]);
                             $category_id = $pdo->lastInsertId();
                         } else {
                             $category_id = $cat['category_id'];
@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                                             unit_price = ?, cost_price = ?, reorder_level = ?, supplier = ?, preferred_supplier = ?,
                                             supplier_lead_time_days = ?, safety_stock = ?, minimum_order_quantity = ?,
                                             units_per_package = ? WHERE sku = ? AND branch_id = ?");
-                        $upd->execute([
+                        App\Store\StoreWriteGate::execute($pdo, $upd, [
                             $barcode,
                             $product_name,
                             $brand,
@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                                             supplier_lead_time_days, safety_stock, minimum_order_quantity,
                                             units_per_package, created_by, branch_id)
                                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $ins->execute([
+                        App\Store\StoreWriteGate::execute($pdo, $ins, [
                             $sku,
                             $barcode,
                             $product_name,
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
                         // Create inventory record
                         $inv_ins = $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, 0)");
-                        $inv_ins->execute([$product_id]);
+                        App\Store\StoreWriteGate::execute($pdo, $inv_ins, [$product_id]);
 
                         $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
                         $afterStmt->execute([(int)$product_id, $import_store_id]);
@@ -234,12 +234,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                          SET i.quantity_on_hand = i.quantity_on_hand + ?
                          WHERE i.product_id = ? AND p.branch_id = ?"
                     );
-                    $inv_upd->execute([$qty, $product_id, $import_store_id]);
+                    App\Store\StoreWriteGate::execute($pdo, $inv_upd, [$qty, $product_id, $import_store_id]);
 
                     // Log stock movement
                     $mov_ins = $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
                                              VALUES (?, ?, 'purchase', ?)");
-                    $mov_ins->execute([$product_id, $qty, $_SESSION['user_id']]);
+                    App\Store\StoreWriteGate::execute($pdo, $mov_ins, [$product_id, $qty, $_SESSION['user_id']]);
 
                     $afterInventory = $beforeInventory ?: ['product_id' => (int)$product_id, 'quantity_on_hand' => 0];
                     $afterInventory['quantity_on_hand'] = (int)($afterInventory['quantity_on_hand'] ?? 0) + $qty;

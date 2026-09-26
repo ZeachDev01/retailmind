@@ -8,6 +8,7 @@ mkdir -p "$TMP/inventory_system"
 EXCLUDES=(
   '.git/' '.env' '.kilo/worktrees/' 'vendor/'
   'src/backend/storage/logs/*' 'src/backend/storage/backups/*'
+  'src/backend/storage/backups/**'
   'src/backend/storage/sessions/*' 'src/backend/storage/imports/*'
   'src/backend/storage/profile-images/*' 'src/backend/storage/exports/*'
   'src/backend/storage/receipts/*'

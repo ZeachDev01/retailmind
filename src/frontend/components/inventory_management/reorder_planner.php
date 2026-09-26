@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Select at least one recommended product.';
     } else {
         try {
-            $pdo->beginTransaction();
+            App\Store\StoreWriteGate::begin($pdo);
             $placeholders = implode(',', array_fill(0, count($productIds), '?'));
             $stmt = $pdo->prepare(
                 "SELECT p.product_id, p.product_name, p.reorder_level, p.safety_stock,

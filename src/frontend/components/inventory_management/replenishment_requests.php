@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($requestId <= 0) {
                 throw new RuntimeException('Invalid request ID.');
             }
-            $pdo->beginTransaction();
+            App\Store\StoreWriteGate::begin($pdo);
             [$scopeSql, $scopeParams] = store_product_scope('p');
             $beforeStmt = $pdo->prepare("SELECT rr.* FROM replenishment_requests rr JOIN products p ON p.product_id = rr.product_id WHERE rr.request_id = ?{$scopeSql} FOR UPDATE");
             $beforeStmt->execute(array_merge([$requestId], $scopeParams));

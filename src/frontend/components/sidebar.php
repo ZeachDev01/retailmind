@@ -157,6 +157,7 @@ $administratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Store Staff'],
     ['path' => 'components/administrator/store_settings.php', 'icon' => 'bi-sliders', 'label' => 'Store Settings'],
     ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
+    ['path' => 'components/administrator/database_backup.php', 'icon' => 'bi-database-check', 'label' => 'Database Backup'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Operational Audit'],
 ];
 
@@ -385,6 +386,15 @@ $sections = $roleSections[$role] ?? [];
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
 <script src="<?= sidebar_e(app_url('assets/js/ui.js')) ?>"></script>
+<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/backup.css')) ?>">
+<script>
+    // Shared Database Backup status (ticket #69): every signed-in session is
+    // told when saving is briefly paused, including sessions that open or
+    // reconnect while a snapshot is being captured.
+    document.body.setAttribute('data-rm-authenticated', 'true');
+    document.body.setAttribute('data-rm-backup-status', <?= json_encode(app_url('components/backup/backup_status.php'), JSON_UNESCAPED_SLASHES) ?>);
+</script>
+<script src="<?= sidebar_e(app_url('assets/js/backup_status.js')) ?>"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var menuToggle = document.getElementById('menuToggle');

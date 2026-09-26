@@ -10,6 +10,7 @@ python src/backend/tests/forecast_regression.py
 php src/backend/tests/smoke_checks.php
 php src/backend/tests/fresh_schema_contract.php
 php src/backend/tests/role_capability_policy_contract.php
+php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/emergency_access_lifecycle_test.php
 php src/backend/tests/recovery_account_lifecycle_test.php
 php src/backend/tests/attention_rules_contract.php
@@ -36,6 +37,7 @@ php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/operator_alert_test.php
 php src/backend/tests/operator_alert_ui_contract.php
 node src/backend/tests/operator_alert_wrapper_behavior_test.js
+node src/backend/tests/backup_status_alert_behavior_test.js
 php src/backend/tests/operator_alert_fallback_contract.php
 php src/backend/tests/cashier_alert_contract.php
 php src/backend/tests/inventory_alert_contract.php
@@ -48,6 +50,7 @@ php src/backend/tests/stock_issue_oversight_contract.php
 php src/backend/tests/database_integration.php
 php src/backend/tests/user_password_reset_integration.php
 php src/backend/tests/audit_visibility_integration.php
+php src/backend/tests/database_backup_workflow_integration.php
 php src/backend/tests/receipt_table_contract.php
 php src/backend/tests/sales_trend_integration.php
 if [[ -n "${WHITESPACE_BASE:-}" ]] && git cat-file -e "${WHITESPACE_BASE}^{commit}" 2>/dev/null; then

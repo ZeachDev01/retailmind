@@ -2,6 +2,8 @@
 // app/Services/ReceivingService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/../Store/StoreWriteGate.php';
+use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 
 class ReceivingService
@@ -54,7 +56,7 @@ class ReceivingService
 
         $this->fiscalPeriodGuard->assertOpenNow('stock_receiving', 'stock receiving');
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             $remainingBefore = null;
             $requestStatus = null;

@@ -46,7 +46,7 @@ try {
     }
     if (in_array($action,['resume','cancel'],true)) {
         $id=(int)($input['id']??0);$newStatus=$action==='resume'?'resumed':'cancelled';
-        $pdo->beginTransaction();
+        App\Store\StoreWriteGate::begin($pdo);
         $stmt=$pdo->prepare("SELECT cart_json FROM held_sales WHERE held_sale_id=? AND cashier_id=? AND status='held' FOR UPDATE");$stmt->execute([$id,$userId]);$json=$stmt->fetchColumn();
         if($json===false)throw new RuntimeException('Held sale not found or already resolved.');
         $pdo->prepare("UPDATE held_sales SET status=?,resolved_at=NOW() WHERE held_sale_id=?")->execute([$newStatus,$id]);$pdo->commit();

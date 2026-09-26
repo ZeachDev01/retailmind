@@ -2,6 +2,8 @@
 // app/Services/InventoryCountService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/../Store/StoreWriteGate.php';
+use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
@@ -44,7 +46,7 @@ class InventoryCountService
 
         $this->fiscalPeriodGuard->assertOpenNow('inventory_counts', 'inventory count');
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $stmt = $this->pdo->prepare(
@@ -96,7 +98,7 @@ class InventoryCountService
             throw new RuntimeException('Invalid count selected.');
         }
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
             $stmt = $this->pdo->prepare(

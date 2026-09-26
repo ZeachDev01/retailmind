@@ -2,6 +2,8 @@
 // app/Services/SalesWorkflowService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/../Store/StoreWriteGate.php';
+use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 
 class SalesWorkflowService
@@ -26,7 +28,7 @@ class SalesWorkflowService
 
         $this->assertCheckoutFiscalPeriodsOpen();
 
-        $this->pdo->beginTransaction();
+        StoreWriteGate::begin($this->pdo);
         try {
             $sale = $this->buildSalePayload($cleanCart);
             $shiftId = $this->resolveOpenShift($userId);

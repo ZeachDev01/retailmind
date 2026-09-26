@@ -24,6 +24,7 @@ final class StoreOperationsDashboardWorkspace
         ['label' => 'Fiscal Periods', 'description' => 'Govern Store accounting windows', 'icon' => 'bi-calendar-check', 'destination' => 'components/system_administrator/fiscal_periods.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_STORE_REPORTS],
         ['label' => 'Store Settings', 'description' => 'Set operational attention thresholds', 'icon' => 'bi-sliders', 'destination' => 'components/administrator/store_settings.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
+        ['label' => 'Database Backup', 'description' => 'Create and download an encrypted Store copy', 'icon' => 'bi-database-check', 'destination' => 'components/administrator/database_backup.php', 'capability' => RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP],
     ];
 
     public function __construct(

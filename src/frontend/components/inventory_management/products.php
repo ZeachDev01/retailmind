@@ -181,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Choose a valid product status.');
                 }
                 $stmt = $pdo->prepare("UPDATE products SET status = ? WHERE product_id IN ($placeholders){$bulkScopeSql}");
-                $stmt->execute(array_merge([$status], $productIds, $bulkScopeParams));
+                App\Store\StoreWriteGate::execute($pdo,$stmt, array_merge([$status], $productIds, $bulkScopeParams));
                 log_activity($pdo, (int)$_SESSION['user_id'], 'Bulk product status updated to ' . $status . ' for ' . count($productIds) . ' products');
                 redirect_products('success', count($productIds) . ' product(s) updated to ' . $status . '.');
             }
@@ -191,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Choose a category.');
             }
             $stmt = $pdo->prepare("UPDATE products SET category_id = ? WHERE product_id IN ($placeholders){$bulkScopeSql}");
-            $stmt->execute(array_merge([$categoryId], $productIds, $bulkScopeParams));
+            App\Store\StoreWriteGate::execute($pdo,$stmt, array_merge([$categoryId], $productIds, $bulkScopeParams));
             log_activity($pdo, (int)$_SESSION['user_id'], 'Bulk product category updated for ' . count($productIds) . ' products');
             redirect_products('success', 'Category updated for ' . count($productIds) . ' product(s).');
         } catch (Throwable $e) {

@@ -74,6 +74,33 @@ set_exception_handler(static function (Throwable $exception): void {
         return;
     }
 
+    // A Database Backup capture is pausing Store writes (#69). That is a
+    // retryable condition, not a failure, so it answers with a clear
+    // "saving is paused" result and never with a technical error page.
+    if ($exception instanceof App\Store\StoreWritePausedException) {
+        if (!headers_sent()) {
+            http_response_code(409);
+        }
+        if (App\Support\ErrorFallback::expectsJson()) {
+            if (!headers_sent()) {
+                header('Content-Type: application/json');
+            }
+            echo json_encode([
+                'success' => false,
+                'paused' => true,
+                'message' => $exception->getMessage(),
+                'errors' => [],
+            ]);
+            return;
+        }
+        echo App\Support\ErrorFallback::page(
+            $exception,
+            App\Support\OperatorAlert::isDebug(),
+            $exception->getMessage()
+        );
+        return;
+    }
+
     if (!headers_sent()) {
         http_response_code(500);
     }

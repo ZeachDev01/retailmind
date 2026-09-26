@@ -25,11 +25,12 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             if($scope==='product'&&!$productId)throw new RuntimeException('Select a product.');
             if($scope==='category'&&!$categoryId)throw new RuntimeException('Select a category.');
             $stmt=$pdo->prepare("INSERT INTO promotions(promotion_name,discount_type,discount_value,scope,product_id,category_id,minimum_quantity,starts_at,ends_at,status,created_by) VALUES(?,?,?,?,?,?,?,?,?,'active',?)");
-            $stmt->execute([$name,$type,$value,$scope,$productId?:null,$categoryId?:null,$minimum,date('Y-m-d H:i:s',strtotime($starts)),date('Y-m-d H:i:s',strtotime($ends)),(int)$_SESSION['user_id']]);
+            App\Store\StoreWriteGate::execute($pdo,$stmt,[$name,$type,$value,$scope,$productId?:null,$categoryId?:null,$minimum,date('Y-m-d H:i:s',strtotime($starts)),date('Y-m-d H:i:s',strtotime($ends)),(int)$_SESSION['user_id']]);
             $id=(int)$pdo->lastInsertId();log_activity($pdo,(int)$_SESSION['user_id'],'Created promotion','Promotions',$id,null,['name'=>$name,'type'=>$type,'value'=>$value,'scope'=>$scope]);$message='Promotion created.';
         }elseif(in_array($action,['activate','deactivate'],true)){
             $id=(int)($_POST['promotion_id']??0);$status=$action==='activate'?'active':'inactive';
-            $stmt=$pdo->prepare('UPDATE promotions SET status=? WHERE promotion_id=?');$stmt->execute([$status,$id]);
+            $stmt=$pdo->prepare('UPDATE promotions SET status=? WHERE promotion_id=?');
+            App\Store\StoreWriteGate::execute($pdo,$stmt,[$status,$id]);
             if(!$stmt->rowCount())throw new RuntimeException('Promotion was not updated.');
             log_activity($pdo,(int)$_SESSION['user_id'],ucfirst($action).' promotion','Promotions',$id);$message='Promotion updated.';
         }
