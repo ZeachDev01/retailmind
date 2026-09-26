@@ -38,23 +38,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Forgot Password</title>
+    <title>Reset password | RetailMind</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 </head>
 
 <body class="auth-page">
-    <div class="login-wrapper">
-        <div class="login-card">
-            <h1>Reset password</h1>
+    <main class="login-wrapper">
+        <section class="login-card" aria-labelledby="reset-password-title">
+            <div class="login-card__brand">
+                <span class="brand-icon" aria-hidden="true">RM</span>
+                <span class="login-card__brand-copy">
+                    <strong>RetailMind</strong>
+                    <small>Shalom Store staff access</small>
+                </span>
+            </div>
+            <h1 id="reset-password-title">Reset password</h1>
             <p class="subtitle">Enter your username or email address.</p>
-            <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-            <form method="post"><?= csrf_field() ?><div class="form-group"><label>Username or email</label><input name="identity" required></div><button class="btn btn-block">Send reset link</button></form>
+            <?php if ($message): ?>
+                <div
+                    class="alert <?= htmlspecialchars($messageClass) ?>"
+                    role="<?= $messageClass === 'tag-warning' ? 'alert' : 'status' ?>"
+                    aria-live="<?= $messageClass === 'tag-warning' ? 'assertive' : 'polite' ?>"
+                    aria-atomic="true"
+                ><?= htmlspecialchars($message) ?></div>
+            <?php endif; ?>
+            <form method="post">
+                <?= csrf_field() ?>
+                <div class="form-group">
+                    <label for="identity">Username or email</label>
+                    <input id="identity" name="identity" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+                </div>
+                <button class="btn btn-block" type="submit">Send reset link</button>
+            </form>
             <p class="u-back-link"><a href="<?= htmlspecialchars(app_url('?login=1')) ?>">Back to login</a></p>
-        </div>
-    </div>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="<?= htmlspecialchars(app_url('assets/js/ui.js')) ?>"></script>
+        </section>
+    </main>
+<!-- impeccable-live-start -->
+<script src="http://localhost:8400/live.js?token=9d673aff-16bf-4b27-a8df-dbe423e3e255"></script>
+<!-- impeccable-live-end -->
 </body>
 
 </html>
