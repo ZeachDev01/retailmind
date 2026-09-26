@@ -1,10 +1,8 @@
 <?php
 // Administrator Database Backup (ticket #69).
 //
-// The Administrator may create and download an encrypted Database Backup and
-// see limited backup history. Restoration authority, platform governance, and
-// the recovery key stay with the Super Administrator, so this page exposes no
-// restore control and no restricted recovery audit detail.
+// The Administrator may download the complete readable database. In-app history
+// stays limited; restoration and platform governance remain Super Administrator-only.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
@@ -37,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'size' => (int)$result['size'],
                     'snapshot_at' => (string)$result['snapshot_at'],
                 ]);
-                $message = 'Your encrypted backup is ready. Download it and keep it somewhere other than the application server.';
+                $message = 'Your SQL backup is ready. Download it and keep it somewhere other than the application server.';
                 $messageClass = 'tag-success';
                 $download = [
                     'filename' => (string)$result['filename'],
@@ -55,7 +53,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 ensure_backup_schema($pdo);
 $history = $service->history($actorRole);
-$keyStatus = $service->keyStatus();
 $restoreCapability = role_capability_policy()->allows($actorRole, RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
@@ -76,7 +73,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             <div class="topbar">
                 <div>
                     <h1>Database Backup</h1>
-                    <p class="page-subtitle">Create an encrypted copy of the Store database and download it to your own device.</p>
+                    <p class="page-subtitle">Create an unencrypted SQL copy of the Store database and download it to your own device.</p>
                 </div>
             </div>
 
@@ -94,15 +91,14 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 <section class="dashboard-section">
                     <h3>Create backup</h3>
                     <p class="section-description">Saving changes pauses briefly while a consistent point-in-time copy is captured, then resumes automatically. You can keep browsing and your unsaved work is not lost.</p>
-                    <p class="section-description"><?= $escape($keyStatus->statusLine()) ?></p>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button class="btn" data-backup-create>Create backup</button></form>
                 </section>
                 <section class="dashboard-section">
                     <h3>Keeping your copy safe</h3>
                     <ul class="backup-guidance">
-                        <li>The file is encrypted, so opening it on your computer does not reveal the database.</li>
+                        <li>The file is not encrypted. It exposes all records, including password hashes and restricted audit history. Keep it private.</li>
                         <li>Store it somewhere other than the application server, such as removable storage or your own cloud folder.</li>
-                        <li>Your Super Administrator holds the recovery key separately, and performs the restore when you ask.</li>
+                        <li>No encryption key is needed. Only your Super Administrator may restore the database.</li>
                     </ul>
                     <?php if (!$restoreCapability): ?>
                         <p class="backup-hint">Ask your Super Administrator to restore a backup. Restoration is a technical recovery action.</p>

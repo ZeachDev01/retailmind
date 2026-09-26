@@ -43,6 +43,9 @@ final class StoreWriteGate
      */
     public static function begin(PDO $pdo): void
     {
+        if (\App\Backup\RecoveryStore::isPaused()) {
+            throw new StoreWritePausedException('Database recovery is in progress. Store access is paused.');
+        }
         if ($pdo->inTransaction()) {
             // Never nest: an already-open transaction is the caller's own scope.
             return;
@@ -133,6 +136,9 @@ final class StoreWriteGate
      */
     public static function status(PDO $pdo): array
     {
+        if (\App\Backup\RecoveryStore::isPaused()) {
+            return ['paused' => true, 'state' => 'restoring', 'message' => 'Database recovery is in progress. Store access is paused.', 'started_at' => null];
+        }
         $idle = [
             'paused' => false,
             'state' => 'idle',

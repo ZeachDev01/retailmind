@@ -5,9 +5,9 @@ namespace App\Services;
 use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\BackupCoordinator;
-use App\Backup\BackupKeyProvider;
 use App\Backup\DatabaseSnapshotWriter;
-use App\Backup\EncryptedBackupEnvelope;
+use App\Backup\SqlBackupFormat;
+use App\Backup\RecoveryStore;
 use App\Store\StoreWriteGate;
 use DomainException;
 use PDO;
@@ -39,22 +39,8 @@ final class DatabaseBackupService
         return new BackupCoordinator($this->pdo, $this->artifactDirectory, $this->coordinationConnection);
     }
 
-    public function envelope(): EncryptedBackupEnvelope
-    {
-        return new EncryptedBackupEnvelope(new BackupKeyProvider());
-    }
-
     /**
-     * Encryption is the only supported download format. Missing key material
-     * fails closed instead of offering a readable SQL copy.
-     */
-    public function keyStatus(): BackupKeyProvider
-    {
-        return new BackupKeyProvider();
-    }
-
-    /**
-     * Create one consistent, encrypted Database Backup and leave a private
+     * Create one consistent, unencrypted SQL Database Backup and leave a private
      * temporary artifact ready for the requester's download.
      */
     public function create(int $actorUserId, string $actorRole): array
@@ -65,7 +51,7 @@ final class DatabaseBackupService
 
     /**
      * The existing scheduled script shares the same capture, coordination, and
-     * encryption instead of keeping a second plaintext exporter.
+     * SQL format instead of keeping a second exporter.
      */
     public function createForSystem(): array
     {
@@ -74,11 +60,10 @@ final class DatabaseBackupService
 
     private function capture(?int $actorUserId, ?string $actorRole): array
     {
-        $envelope = $this->envelope();
+        if (RecoveryStore::isPaused()) {
+            throw new DomainException('Database recovery is in progress. Finish recovery before creating another backup.');
+        }
         $coordinator = $this->coordinator();
-
-        // Fail closed before anything is written when no recovery key exists.
-        $envelope->requireConfiguredKey();
 
         $operationKey = $coordinator->claim((int)$actorUserId, (string)($actorRole ?? 'scheduled'));
         if ($operationKey === null) {
@@ -90,27 +75,21 @@ final class DatabaseBackupService
 
         $token = bin2hex(random_bytes(24));
         $filename = self::downloadFilename();
-        $artifactPath = $coordinator->artifactDirectory() . '/' . $token . '.' . EncryptedBackupEnvelope::EXTENSION;
-        $plaintextPath = $coordinator->artifactDirectory() . '/' . $token . '.capture.tmp';
+        $artifactPath = $coordinator->artifactDirectory() . '/' . $token . '.sql';
         $snapshotAt = gmdate('Y-m-d H:i:s');
 
         try {
             $coordinator->beginCapture((int)$actorUserId);
             $capture = (new DatabaseSnapshotWriter($this->pdo, static function () use ($coordinator, $operationKey): void {
                 $coordinator->heartbeat($operationKey);
-            }))->write($plaintextPath);
+            }))->write($artifactPath);
             $snapshotAt = gmdate('Y-m-d H:i:s');
-            $sealed = $envelope->sealFile($plaintextPath, $artifactPath);
             $coordinator->releaseCapture();
         } catch (Throwable $exception) {
             $coordinator->abortCapture();
-            $coordinator->discard($plaintextPath);
             $coordinator->discard($artifactPath);
             $coordinator->fail($operationKey, $exception->getMessage());
             throw $exception;
-        } finally {
-            // The readable intermediate never outlives its use.
-            $coordinator->discard($plaintextPath);
         }
 
         $coordinator->markCaptured(
@@ -118,9 +97,9 @@ final class DatabaseBackupService
             $token,
             $artifactPath,
             $filename,
-            (int)$sealed['size'],
-            $sealed['version'],
-            $sealed['cipher'],
+            (int)$capture['size'],
+            SqlBackupFormat::VERSION,
+            'none',
             $snapshotAt
         );
         $coordinator->complete($operationKey);
@@ -128,32 +107,32 @@ final class DatabaseBackupService
         $backupId = $this->recordHistory(
             $filename,
             $actorUserId === null ? 'scheduled' : 'manual',
-            (int)$sealed['size'],
+            (int)$capture['size'],
             'completed',
             $actorUserId,
             sprintf(
-                'Encrypted Database Backup created. %d table(s), %d record(s).',
+                'SQL Database Backup created. %d table(s), %d record(s).',
                 (int)$capture['tables'],
                 (int)$capture['rows']
             ),
             $snapshotAt,
-            $sealed['version'],
-            $sealed['cipher'],
+            SqlBackupFormat::VERSION,
+            'none',
             $actorRole
         );
 
         return [
             'status' => self::OUTCOME_READY,
-            'message' => 'Your encrypted backup is ready to download.',
+            'message' => 'Your SQL backup is ready to download.',
             'backup_id' => $backupId,
             'filename' => $filename,
             'token' => $token,
             'path' => $artifactPath,
-            'size' => (int)$sealed['size'],
+            'size' => (int)$capture['size'],
             'snapshot_at' => $snapshotAt,
             'tables' => (int)$capture['tables'],
             'rows' => (int)$capture['rows'],
-            'cipher' => $sealed['cipher'],
+            'cipher' => 'none',
         ];
     }
 
@@ -186,7 +165,8 @@ final class DatabaseBackupService
         }
 
         $path = (string)$row['artifact_path'];
-        if (!is_file($path)) {
+        $expectedPath = $this->coordinator()->artifactDirectory() . '/' . $token . '.sql';
+        if (!is_file($path) || realpath($path) !== realpath($expectedPath)) {
             throw new DomainException('That backup download is no longer available. Create a new backup to download it again.');
         }
 
@@ -242,9 +222,9 @@ final class DatabaseBackupService
                 'snapshot_at' => $row['snapshot_at'] === null ? null : (string)$row['snapshot_at'],
                 'requested_by' => (string)($row['full_name'] ?? 'Scheduled task'),
                 'requested_by_role' => (string)($row['requested_by_role'] ?? ''),
-                'format' => $row['envelope_version'] === null
-                    ? 'Plain SQL (legacy)'
-                    : 'Encrypted ' . strtoupper((string)$row['cipher']) . ' v' . (string)$row['envelope_version'],
+                'format' => $row['envelope_version'] === SqlBackupFormat::VERSION
+                    ? 'SQL (unencrypted)'
+                    : ($row['envelope_version'] === null ? 'Plain SQL (legacy)' : 'Encrypted (legacy)'),
                 // Restricted recovery detail stays with the Super Administrator,
                 // and a completed row never claims the file was retained on the
                 // owner's device.
@@ -309,7 +289,7 @@ final class DatabaseBackupService
 
     public static function downloadFilename(): string
     {
-        return 'retailmind-backup-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.' . EncryptedBackupEnvelope::EXTENSION;
+        return 'retailmind-backup-' . date('m-d-Y-His') . '-' . bin2hex(random_bytes(3)) . '.sql';
     }
 
     /**

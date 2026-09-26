@@ -21,11 +21,11 @@ The operational owner responsible for Store performance, staff, approvals, compl
 _Avoid_: System administrator, global administrator, inventory manager
 
 **Database Backup**:
-A recoverable, encrypted copy of the Store's database representing a consistent point in time, which either the Administrator or Super Administrator may create and download. It supports recovery from database corruption or loss of the application server.
+A complete, readable copy of the Store's database representing a consistent point in time, which either the Administrator or Super Administrator may create and download. Possession exposes all captured records, including credentials and restricted audit history.
 _Avoid_: Parallel backup, report export
 
 **Database Restore**:
-The replacement of the active Store database with the state captured in a Database Backup. Only the Super Administrator may perform it; the Administrator requests recovery through the Super Administrator.
+The replacement of the entire active Store database, including accounts, settings, and audit history, with the state captured in a Database Backup. Only the Super Administrator may perform it; newer database records are not retained, while the restoration itself is recorded separately.
 _Avoid_: Import report, undo backup
 
 **Disabled Account**:
@@ -81,7 +81,7 @@ A model-produced estimate of future product demand for the Store. The Super Admi
 _Avoid_: Branch forecast, guaranteed demand
 
 **Protected Audit Record**:
-An immutable record of a security-sensitive or operational action that application users may view or export but never edit or delete. The Administrator may inspect Store-operational records; security, recovery, Platform Setting, and Recovery Account records are visible only to the Super Administrator.
+A record of a security-sensitive or operational action that application users cannot individually edit or delete; Database Restore returns these records to the backup's state. In-app visibility remains role-restricted, but a complete Database Backup exposes all captured records to either administrator role.
 _Avoid_: Editable log, activity note
 
 **Supplier Product Terms**:

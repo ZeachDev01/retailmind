@@ -5,7 +5,7 @@
 // This contract makes sure a service-level permission cannot hide an unguarded
 // page: every create, download, history, and restore route must authorize on
 // its own, keep session validation and CSRF for state-changing requests, and
-// never hand out a readable full-database copy.
+// expose plaintext only through authorized downloads, and verify restore passwords.
 $root = dirname(__DIR__, 3);
 $read = static function (string $path) use ($root): string {
     $contents = @file_get_contents($root . '/' . $path);
@@ -76,20 +76,21 @@ $assert(
 );
 
 // --- state-changing requests keep CSRF protection ---------------------------
-foreach (['Administrator page' => $administratorPage, 'Super Administrator page' => $superAdministratorPage, 'legacy route' => $legacyRoute] as $name => $source) {
+$assert(str_contains($legacyRoute, 'frontend/components/system_administrator/backup_restore.php') && str_contains($legacyRoute, 'frontend/components/administrator/database_backup.php'), 'Legacy route must delegate to the guarded pages');
+foreach (['Administrator page' => $administratorPage, 'Super Administrator page' => $superAdministratorPage] as $name => $source) {
     $assert(str_contains($source, 'csrf_verify()'), ucfirst($name) . ' must verify CSRF on state-changing requests');
     $assert(str_contains($source, 'csrf_field()'), ucfirst($name) . ' must render the CSRF field');
 }
 
-// --- no readable full-database download, and no key material in responses ---
-$backupPages = ['Administrator page' => $administratorPage, 'Super Administrator page' => $superAdministratorPage, 'legacy route' => $legacyRoute];
+// --- plaintext download uses a guarded endpoint, without encryption keys ---
+$backupPages = ['Administrator page' => $administratorPage, 'Super Administrator page' => $superAdministratorPage];
 foreach ($backupPages as $name => $source) {
     $assert(!str_contains($source, 'application/sql'), ucfirst($name) . ' must not offer a plain SQL download');
     $assert(!str_contains($source, 'readfile('), ucfirst($name) . ' must not stream a readable copy directly');
     $assert(!str_contains($source, 'BACKUP_ENCRYPTION_KEY'), ucfirst($name) . ' must never surface key configuration to the operator');
     $assert(
-        str_contains($source, "DatabaseBackupService::downloadFilename()") || str_contains($source, '.rmbak'),
-        ucfirst($name) . ' must hand out the encrypted envelope'
+        str_contains($source, 'SQL') && !str_contains($source, 'keyStatus()'),
+        ucfirst($name) . ' must use SQL without key configuration'
     );
     $assert(
         str_contains($source, 'does not confirm the file') || str_contains($source, 'it does not confirm'),
@@ -97,8 +98,8 @@ foreach ($backupPages as $name => $source) {
     );
 }
 $assert(
-    str_contains($downloadEndpoint, 'application/octet-stream'),
-    'The download must be delivered as an opaque attachment'
+    str_contains($downloadEndpoint, 'application/sql'),
+    'The download must be delivered as SQL'
 );
 $assert(
     str_contains($sharedModule, 'DatabaseSnapshotWriter'),
@@ -106,15 +107,15 @@ $assert(
 );
 $assert(
     str_contains($scheduledScript, 'createForSystem()'),
-    'The scheduled script must share the encrypted workflow instead of a second plaintext exporter'
+    'The scheduled script must share the SQL workflow instead of a second exporter'
 );
 $assert(
     !str_contains($scheduledScript, 'create_database_backup'),
     'The scheduled script must not keep a separate plaintext exporter'
 );
 $assert(
-    str_contains($envExample, 'BACKUP_ENCRYPTION_KEY=') && str_contains($envExample, 'no plaintext'),
-    'The deployment template must document the recovery key and the fail-closed behaviour'
+    str_contains($envExample, 'BACKUP_STORAGE_PATH=') && !str_contains($envExample, 'BACKUP_ENCRYPTION_KEY='),
+    'The deployment template must document private storage, not require encryption keys'
 );
 
 // --- Administrator-facing navigation: backup yes, restoration no -------------
@@ -137,8 +138,8 @@ $assert(
     'The Super Administrator page must keep the Database Restore workflow'
 );
 $assert(
-    str_contains($superAdministratorPage, 'confirm_restore'),
-    'Destructive restore must keep its explicit confirmation'
+    str_contains($superAdministratorPage, 'restore_password') && str_contains($superAdministratorPage, 'type="password"') && str_contains($superAdministratorPage, 'replaces the entire database'),
+    'Destructive restore requires the current password and replacement warning'
 );
 
 // --- active-user notice, and the paused save behaviour ----------------------
@@ -159,6 +160,7 @@ $assert(
 foreach ([
     'php src/backend/tests/database_backup_workflow_integration.php',
     'php src/backend/tests/backup_workflow_route_contract.php',
+    'php src/backend/tests/sql_backup_format_test.php',
     'node src/backend/tests/backup_status_alert_behavior_test.js',
 ] as $command) {
     $assert(str_contains($runAll, $command), "The full suite must run: {$command}");

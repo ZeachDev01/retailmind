@@ -62,6 +62,9 @@ try {
     $stock = $read('src/frontend/components/cashier/stock_issues.php');
     $backupPage = $read('src/frontend/components/system_administrator/backup_restore.php');
     $backupRoute = $read('src/backend/legacy/routes/admin/backup_restore.php');
+    $assert(str_contains($backupRoute, 'frontend/components/system_administrator/backup_restore.php'), 'Legacy restore route must delegate to the guarded page');
+    // Assertions below follow the actual included error boundary.
+    $backupRoute .= $backupPage;
     $auth = $read('src/backend/includes/auth.php');
     $alertSource = $read('src/backend/app/Support/OperatorAlert.php');
     $fallbackSource = $read('src/backend/app/Support/ErrorFallback.php');

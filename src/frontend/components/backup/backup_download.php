@@ -1,5 +1,5 @@
 <?php
-// Private temporary download for an encrypted Database Backup (#69).
+// Private temporary download for an unencrypted SQL Database Backup.
 //
 // The artifact is never reachable as a static storage URL: this endpoint is the
 // only way to obtain it, it re-checks the session and the backup capability on
@@ -33,7 +33,7 @@ $size = (int)$download['size'];
 while (ob_get_level() > 0) {
     ob_end_clean();
 }
-header('Content-Type: application/octet-stream');
+header('Content-Type: application/sql');
 header('Content-Disposition: attachment; filename="' . rawurlencode((string)$download['filename']) . '"');
 header('Content-Length: ' . $size);
 header('Cache-Control: private, no-store');

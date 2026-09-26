@@ -114,7 +114,12 @@ try {
     $assert(str_contains($userManager, 'OperatorAlert'), 'User management must build the friendly message at the boundary');
     $assert(str_contains($backupPage, 'OperatorAlert'), 'Backup page must build the friendly message at the boundary');
     $assert(!str_contains($backupPage, "Backup failed: ' ."), 'Backup page must not concatenate raw exception text');
-    $assert(str_contains($backupRoute, 'OperatorAlert'), 'Backup route must build the friendly message at the boundary');
+    $assert(
+        str_contains($backupRoute, 'frontend/components/system_administrator/backup_restore.php')
+            && str_contains($backupPage, 'OperatorAlert')
+            && str_contains($read('src/frontend/components/administrator/database_backup.php'), 'OperatorAlert'),
+        'Legacy backup route must delegate to pages with friendly failure boundaries'
+    );
     $assert(!str_contains($backupRoute, "Backup failed: ' ."), 'Backup route must not concatenate raw exception text');
     $assert(str_contains($pos, 'OperatorAlert'), 'Checkout must build the friendly message at the boundary');
     $assert(str_contains($inventoryCounts, 'OperatorAlert'), 'Inventory counts must build the friendly message at the boundary');

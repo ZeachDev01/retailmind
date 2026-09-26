@@ -2,39 +2,21 @@
 
 namespace App\Services;
 
-use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
-use App\Backup\BackupKeyProvider;
-use App\Backup\EncryptedBackupEnvelope;
 use App\Backup\DatabaseSnapshotWriter;
+use App\Backup\RecoveryStore;
+use App\Backup\SqlBackupFormat;
 use DomainException;
 use PDO;
 use Throwable;
 
-/**
- * Super Administrator-only Database Restore adapted to the encrypted format
- * this feature produces (#69).
- *
- * Order matters and is deliberate: the file is verified, authenticated, and
- * decrypted to a private short-lived temporary file *before* any database
- * change happens, so a wrong key, a damaged file, or tampered content is
- * rejected while the Store database is still untouched.
- *
- * MySQL DDL is not transactionally rollback-safe. This service therefore does
- * not claim an all-or-nothing restore: it preserves the current Protected
- * Audit Records, reports the statements that actually ran, and relies on the
- * documented recovery procedure in docs/BACKUP_RECOVERY.md if a restore stops
- * part way.
- */
+/** Full replacement, with recovery state that cannot be erased by the import. */
 final class DatabaseRestoreService
 {
-    private const STAGE_TABLE = 'restore_audit_evidence_stage';
-
     public function __construct(
         private PDO $pdo,
         private RoleCapabilityPolicy $policy,
-        private DatabaseBackupService $backups,
-        private ?string $scratchDirectory = null
+        private DatabaseBackupService $backups
     ) {
     }
 
@@ -45,243 +27,167 @@ final class DatabaseRestoreService
         }
     }
 
-    /**
-     * The largest file this deployment can actually accept, derived from the
-     * PHP upload limits rather than assumed, so an unsupported size is
-     * reported before a restore is claimed to be possible.
-     */
     public function supportedUploadBytes(): int
     {
-        $upload = self::iniBytes((string)ini_get('upload_max_filesize'), 2 * 1024 * 1024);
-        $post = self::iniBytes((string)ini_get('post_max_size'), 8 * 1024 * 1024);
-        return (int)min($upload, $post);
+        return min(self::iniBytes((string)ini_get('upload_max_filesize')), self::iniBytes((string)ini_get('post_max_size')));
     }
 
     public function supportedSizeLine(): string
     {
-        $megabytes = (int)floor($this->supportedUploadBytes() / 1048576);
-        return "Encrypted backups up to {$megabytes} MB can be restored with this server's upload limit. "
-            . 'A larger backup needs the upload limit raised before it can be restored.';
+        return 'SQL backups up to ' . (int)floor($this->supportedUploadBytes() / 1048576)
+            . ' MB can be uploaded. Larger backups require the server upload limits to be raised.';
     }
 
-    /**
-     * Decrypt and restore one backup. Returns the honest outcome for the audit
-     * trail; throws before any change when the input cannot be trusted.
-     */
-    public function restore(int $actorUserId, string $actorRole, string $sourcePath, string $originalName): array
+    public function restore(int $actorUserId, string $actorRole, string $sourcePath, string $originalName, string $password): array
+    {
+        return $this->replace($actorUserId, $actorRole, $sourcePath, $originalName, $password, false);
+    }
+
+    /** Recovery remains usable even if the users table was only partly imported. */
+    public function recover(string $sourcePath, string $password): array
+    {
+        if (PHP_SAPI !== 'cli' || !RecoveryStore::isPaused()) {
+            throw new DomainException('Offline recovery is available only for an incomplete restore.');
+        }
+        $state = RecoveryStore::state();
+        return $this->replace((int)$state['actor_id'], 'super_admin', $sourcePath, basename($sourcePath), $password, true);
+    }
+
+    private function replace(int $actorUserId, string $actorRole, string $sourcePath, string $originalName, string $password, bool $recovery): array
     {
         $this->authorize($actorRole);
-
-        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-        $isEncrypted = $extension === EncryptedBackupEnvelope::EXTENSION
-            || EncryptedBackupEnvelope::looksEncrypted($sourcePath);
-        if ($extension !== EncryptedBackupEnvelope::EXTENSION && !$isEncrypted) {
-            throw new DomainException('Select a RetailMind encrypted backup file (.rmbak) to restore.');
-        }
-
-        $scratch = $this->scratchFile();
+        $lock = RecoveryStore::exclusive();
+        $destructive = false;
+        $pausedHere = false;
+        $executed = 0;
+        $oldSqlMode = null;
         try {
-            $plaintext = (new EncryptedBackupEnvelope(new BackupKeyProvider()))->openFile($sourcePath);
-            if ($plaintext === '') {
-                throw new DomainException('The backup file does not contain any recoverable records.');
+            $state = RecoveryStore::state();
+            if ($state && !$recovery) {
+                throw new DomainException('Finish the incomplete restore with the offline recovery command first.');
             }
-            if (file_put_contents($scratch, $plaintext, LOCK_EX) === false) {
-                throw new DomainException('The backup could not be staged for restore.');
+            if ($recovery) {
+                $hash = (string)($state['password_hash'] ?? '');
+                $schema = $state['schema'] ?? [];
+            } else {
+                $stmt = $this->pdo->prepare(
+                    "SELECT u.password_hash, u.status, r.role_name FROM users u JOIN roles r ON r.role_id = u.role_id WHERE u.user_id = ?"
+                );
+                $stmt->execute([$actorUserId]);
+                $actor = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$actor || $actor['status'] !== 'active' || !$this->policy->allows((string)$actor['role_name'], RoleCapabilityPolicy::PLATFORM_GOVERNANCE)) {
+                    throw new DomainException('An active Super Administrator account is required.');
+                }
+                $hash = (string)$actor['password_hash'];
+                $schema = [];
             }
-            unset($plaintext);
-        } catch (DomainException $exception) {
-            @unlink($scratch);
-            throw $exception;
+            if ($password === '' || !password_verify($password, $hash)) {
+                throw new DomainException('The Super Administrator password is incorrect.');
+            }
+            if ($recovery && empty($state['replacement_started'])) {
+                RecoveryStore::log($actorUserId, $originalName, 'cancelled_before_replacement');
+                RecoveryStore::resume();
+                return ['statements' => 0, 'message' => 'The interrupted attempt had not replaced any tables. Store access has resumed.'];
+            }
+            if (strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) !== 'sql') {
+                throw new DomainException('Select a RetailMind SQL backup (.sql). Encrypted backups are no longer accepted.');
+            }
+            if (!$recovery) {
+                $schema = SqlBackupFormat::schema($this->pdo);
+            }
+            $sql = file_get_contents($sourcePath);
+            if ($sql === false) {
+                throw new DomainException('The backup could not be read.');
+            }
+            $statements = SqlBackupFormat::statements($sql, $schema);
+            unset($sql);
+            RecoveryStore::log($actorUserId, $originalName, $recovery ? 'recovery_attempt' : 'attempt');
+            if (!$recovery) {
+                // Fail closed on crashes, including a crash while capturing safety.
+                RecoveryStore::write('restore-state.json', json_encode([
+                    'actor_id' => $actorUserId, 'password_hash' => $hash, 'schema' => $schema, 'replacement_started' => false,
+                ], JSON_THROW_ON_ERROR));
+                $pausedHere = true;
+                $this->captureSafety($actorUserId);
+            }
+            $oldSqlMode = (string)$this->pdo->query('SELECT @@SESSION.sql_mode')->fetchColumn();
+            RecoveryStore::write('session-epoch', bin2hex(random_bytes(32)));
+            // This record is persisted BEFORE DDL. A crash now leaves the Store
+            // blocked and the pre-restore credentials available to offline recovery.
+            RecoveryStore::log($actorUserId, $originalName, 'replacement_started');
+            RecoveryStore::write('restore-state.json', json_encode([
+                'actor_id' => $actorUserId, 'password_hash' => $hash, 'schema' => $schema, 'replacement_started' => true,
+            ], JSON_THROW_ON_ERROR));
+            $destructive = true;
+            $this->pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+            $this->pdo->exec("SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO'");
+            foreach ($statements as $statement) {
+                $this->pdo->exec($statement);
+                $executed++;
+            }
+            // These are transient coordination records, never restored jobs or
+            // download permissions. The external restore log replaces DB history.
+            $this->pdo->exec('DELETE FROM backup_operations');
+            $this->pdo->exec('UPDATE store_write_gate SET paused_at = NULL, paused_by = NULL');
+            $this->pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+            RecoveryStore::log($actorUserId, $originalName, 'completed', $executed);
+            RecoveryStore::resume();
+            return ['statements' => $executed, 'message' => 'Restore completed. Everyone must sign in again using credentials from the restored backup.'];
         } catch (Throwable $exception) {
-            @unlink($scratch);
-            throw new DomainException(
-                'The backup file could not be verified. It may be damaged, altered, or the recovery key does not match.',
-                0,
-                $exception
-            );
-        }
-
-        try {
-            $preserved = $this->preserveAuditRecords();
-            $executed = $this->execute($scratch);
-            $reconciled = $this->reconcileAuditRecords();
-
-            $this->backups->recordHistory(
-                basename($originalName),
-                'restore',
-                (int)filesize($sourcePath),
-                'completed',
-                $actorUserId,
-                sprintf(
-                    'Database Restore completed: %d SQL statement(s). %d Protected Audit Record(s) preserved and %d reconciled.',
-                    $executed,
-                    $preserved,
-                    $reconciled
-                ),
-                gmdate('Y-m-d H:i:s'),
-                (string)EncryptedBackupEnvelope::VERSION,
-                EncryptedBackupEnvelope::CIPHER,
-                $actorRole
-            );
-            $this->audit($actorUserId, 'Database restore', [
-                'filename' => basename($originalName),
-                'statements' => $executed,
-                'preserved_audit_records' => $preserved,
-                'reconciled_audit_records' => $reconciled,
-            ]);
-
-            return [
-                'statements' => $executed,
-                'preserved' => $preserved,
-                'reconciled' => $reconciled,
-                'message' => sprintf(
-                    'Restore completed. %d SQL statement(s) were executed and %d Protected Audit Record(s) that postdate the snapshot were preserved. Sign in again if your session was replaced.',
-                    $executed,
-                    $reconciled
-                ),
-            ];
-        } catch (Throwable $exception) {
-            $this->backups->recordHistory(
-                basename($originalName),
-                'restore',
-                (int)filesize($sourcePath),
-                'failed',
-                $actorUserId,
-                'Database Restore stopped before completion: ' . $exception->getMessage()
-            );
-            $this->audit($actorUserId, 'Database restore', [
-                'filename' => basename($originalName),
-                'outcome' => 'incomplete',
-                'error' => $exception->getMessage(),
-            ]);
+            error_log('Database restore: ' . $exception->getMessage());
+            try {
+                RecoveryStore::log($actorUserId, $originalName, $destructive ? 'incomplete' : 'rejected', $executed);
+            } catch (Throwable $logFailure) {
+                error_log('Restore log failure: ' . $logFailure->getMessage());
+            }
+            if (!$destructive && $pausedHere && !$recovery) {
+                RecoveryStore::resume();
+            }
             throw $exception;
         } finally {
-            // The decrypted intermediate is private and short lived.
-            @unlink($scratch);
-        }
-    }
-
-    /**
-     * Copy the current Protected Audit Records aside before destructive
-     * statements run, so evidence that postdates the snapshot is not silently
-     * erased by restoring older data.
-     *
-     * The copy is staged under a name the snapshot cannot drop, because a
-     * backup taken after an earlier recovery does contain the evidence table
-     * itself and would otherwise overwrite it mid-restore.
-     */
-    private function preserveAuditRecords(): int
-    {
-        $this->pdo->exec('DROP TABLE IF EXISTS ' . self::STAGE_TABLE);
-        $this->pdo->exec('CREATE TABLE ' . self::STAGE_TABLE . ' LIKE activity_log');
-        foreach ($this->foreignKeyNames(self::STAGE_TABLE) as $constraint) {
-            $this->pdo->exec('ALTER TABLE ' . self::STAGE_TABLE . ' DROP FOREIGN KEY ' . DatabaseSnapshotWriter::identifier($constraint));
-        }
-        $this->pdo->exec('INSERT INTO ' . self::STAGE_TABLE . ' SELECT * FROM activity_log');
-        return (int)$this->pdo->query('SELECT COUNT(*) FROM ' . self::STAGE_TABLE)->fetchColumn();
-    }
-
-    /**
-     * Re-apply the preserved evidence that the restored snapshot did not
-     * contain, so the Protected Audit Record invariant survives recovery, then
-     * leave the reconciled evidence in place as the permanent recovery record.
-     */
-    private function reconcileAuditRecords(): int
-    {
-        $columns = [];
-        foreach ($this->pdo->query('SHOW COLUMNS FROM activity_log')->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $columns[] = DatabaseSnapshotWriter::identifier((string)$row['Field']);
-        }
-        $columnList = implode(', ', $columns);
-
-        $restored = 0;
-        foreach ($this->pdo->query('SELECT * FROM ' . self::STAGE_TABLE . ' ORDER BY log_id')->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $logId = (int)($row['log_id'] ?? 0);
-            if ($logId <= 0) {
-                continue;
+            try {
+                $this->pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+                if ($oldSqlMode !== null) {
+                    $this->pdo->exec('SET SQL_MODE=' . $this->pdo->quote($oldSqlMode));
+                }
+            } catch (Throwable $cleanupFailure) {
+                error_log('Restore connection cleanup: ' . $cleanupFailure->getMessage());
             }
-            $exists = (int)$this->pdo->query('SELECT COUNT(*) FROM activity_log WHERE log_id = ' . $logId)->fetchColumn();
-            if ($exists > 0) {
-                continue;
+            fclose($lock);
+        }
+    }
+
+    private function captureSafety(int $actorId): void
+    {
+        $coordinator = $this->backups->coordinator();
+        $temporary = RecoveryStore::path('safety.capture.tmp');
+        try {
+            $coordinator->beginCapture($actorId);
+            (new DatabaseSnapshotWriter($this->pdo))->write($temporary);
+            $coordinator->releaseCapture();
+            // Verify the entire safety copy before publishing it or touching data.
+            SqlBackupFormat::statements((string)file_get_contents($temporary), SqlBackupFormat::schema($this->pdo));
+            if (!rename($temporary, RecoveryStore::path('latest-safety.sql'))) {
+                throw new DomainException('The safety backup could not be retained. Nothing was replaced.');
             }
-            $values = array_values($row);
-            $this->pdo->exec(
-                "INSERT INTO activity_log ({$columnList}) VALUES (" . implode(', ', array_fill(0, count($values), '?')) . ')',
-                $values
-            );
-            $restored++;
+        } catch (Throwable $exception) {
+            $coordinator->abortCapture();
+            throw $exception;
+        } finally {
+            if (is_file($temporary)) {
+                unlink($temporary);
+            }
         }
-
-        $this->pdo->exec('DROP TABLE IF EXISTS restore_preserved_activity');
-        $this->pdo->exec('CREATE TABLE restore_preserved_activity LIKE ' . self::STAGE_TABLE);
-        $this->pdo->exec('INSERT INTO restore_preserved_activity SELECT * FROM ' . self::STAGE_TABLE);
-        $this->pdo->exec('DROP TABLE ' . self::STAGE_TABLE);
-
-        return $restored;
     }
 
-    /** @return list<string> */
-    private function foreignKeyNames(string $table): array
+    private static function iniBytes(string $value): int
     {
-        $names = [];
-        $row = $this->pdo->query('SHOW CREATE TABLE ' . DatabaseSnapshotWriter::identifier($table))->fetch(PDO::FETCH_NUM);
-        if (is_array($row) && isset($row[1])) {
-            preg_match_all('/CONSTRAINT\s+`([^`]+)`\s+FOREIGN KEY/i', (string)$row[1], $matches);
-            $names = $matches[1] ?? [];
+        $number = (int)trim($value);
+        if ($number <= 0) {
+            return PHP_INT_MAX;
         }
-        return $names;
-    }
-
-    private function execute(string $scratch): int
-    {
-        if (!function_exists('restore_database_backup')) {
-            throw new DomainException('The restore module is unavailable on this server.');
-        }
-        return (int)restore_database_backup($this->pdo, $scratch);
-    }
-
-    private function audit(int $actorUserId, string $action, array $metadata): void
-    {
-        if (!function_exists('log_activity')) {
-            return;
-        }
-        log_activity(
-            $this->pdo,
-            $actorUserId,
-            $action,
-            'Backup & Restore',
-            null,
-            null,
-            null,
-            null,
-            AuditRecordCategory::RECOVERY,
-            $metadata
-        );
-    }
-
-    private function scratchFile(): string
-    {
-        $directory = $this->scratchDirectory
-            ?? (($GLOBALS['app']['storage_path'] ?? dirname(__DIR__, 2) . '/storage') . '/backups');
-        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
-            throw new DomainException('The temporary restore directory could not be prepared.');
-        }
-        return $directory . '/restore-' . bin2hex(random_bytes(16)) . '.tmp';
-    }
-
-    private static function iniBytes(string $value, int $fallback): int
-    {
-        $value = trim($value);
-        if ($value === '') {
-            return $fallback;
-        }
-        $unit = strtolower(substr($value, -1));
-        $number = (int)$value;
-        return match ($unit) {
-            'g' => $number * 1024 * 1024 * 1024,
-            'm' => $number * 1024 * 1024,
-            'k' => $number * 1024,
-            default => $number,
+        return $number * match (strtolower(substr(trim($value), -1))) {
+            'g' => 1073741824, 'm' => 1048576, 'k' => 1024, default => 1,
         };
     }
 }

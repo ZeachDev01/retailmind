@@ -45,6 +45,13 @@ try {
     $storeSettings = $read('src/frontend/components/administrator/store_settings.php');
     $backupPage = $read('src/frontend/components/system_administrator/backup_restore.php');
     $backupRoute = $read('src/backend/legacy/routes/admin/backup_restore.php');
+    $assert(
+        str_contains($backupRoute, 'frontend/components/system_administrator/backup_restore.php'),
+        'Legacy restore URL must delegate to the guarded Super Administrator page'
+    );
+    // The legacy entry point has no second error-handling implementation; its
+    // rendered restore boundary is the shared page it includes.
+    $backupRoute .= $backupPage;
     $auth = $read('src/backend/includes/auth.php');
 
     foreach ([

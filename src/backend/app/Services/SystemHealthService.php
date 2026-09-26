@@ -129,6 +129,7 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             $row = $this->pdo->query(
                 "SELECT filename, created_at FROM backup_history
                   WHERE status = 'completed' AND backup_type <> 'restore'
+                    AND envelope_version = '" . \App\Backup\SqlBackupFormat::VERSION . "'
                   ORDER BY created_at DESC LIMIT 1"
             )->fetch(PDO::FETCH_ASSOC);
         } catch (Throwable $e) {
@@ -136,16 +137,11 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         }
 
         if (!is_array($row) || $row === []) {
-            return $this->result('Database backup', 'warning', 'No completed backup is recorded.', 'Recovery');
+            return $this->result('Database backup', 'warning', 'No completed current-format SQL backup is recorded.', 'Recovery');
         }
 
         $ageDays = (int)floor((time() - (int)strtotime((string)$row['created_at'])) / 86400);
         $detail = (string)$row['filename'] . " — {$ageDays} day(s) old.";
-
-        $keys = new \App\Backup\BackupKeyProvider();
-        if (!$keys->isConfigured()) {
-            return $this->result('Database backup', 'critical', $keys->statusLine(), 'Recovery');
-        }
 
         return $this->result('Database backup', $ageDays <= 7 ? 'healthy' : 'warning', $detail, 'Recovery');
     }

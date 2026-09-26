@@ -45,7 +45,7 @@ final class BackupCoordinator
     public function artifactDirectory(): string
     {
         return $this->artifactDirectory
-            ?? (($GLOBALS['app']['storage_path'] ?? dirname(__DIR__, 2) . '/storage') . '/backups');
+            ?? (RecoveryStore::directory() . '/downloads');
     }
 
     public function isOperationActive(): bool
@@ -243,7 +243,7 @@ final class BackupCoordinator
             $name = basename($file);
             return is_file($file)
                 && $name !== '.gitkeep'
-                && (str_ends_with($name, '.' . EncryptedBackupEnvelope::EXTENSION) || str_ends_with($name, '.sql'));
+                && preg_match('/^[a-f0-9]{48}\.sql$/', $name) === 1;
         }));
     }
 
@@ -267,7 +267,7 @@ final class BackupCoordinator
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
 
-        return $this->coordination;
+        return $this->coordinationConnection;
     }
 
     private function isDuplicateKey(PDOException $exception): bool

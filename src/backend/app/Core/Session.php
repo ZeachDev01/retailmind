@@ -81,6 +81,16 @@ final class Session
 
     private static function enforceTimeout(): void
     {
+        // A database restore can replay old session_version values. Keep a
+        // separate generation outside the database so old sessions never revive.
+        $epoch = \App\Backup\RecoveryStore::epoch();
+        if ((string)($_SESSION['_restore_epoch'] ?? 'initial') !== $epoch) {
+            self::destroy();
+            session_start();
+            $_SESSION['_flash_error'] = 'The database was restored. Please sign in again.';
+        }
+        $_SESSION['_restore_epoch'] = $epoch;
+
         $lifetime = (int)Environment::get('SESSION_LIFETIME', 7200);
         if ($lifetime <= 0) {
             return;

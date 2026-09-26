@@ -118,4 +118,18 @@ set_exception_handler(static function (Throwable $exception): void {
     echo ErrorFallback::page($exception, $debug);
 });
 
+// The filesystem lease survives MySQL DDL commits and database replacement.
+// Only the explicit offline recovery command can enter an incomplete restore.
+$offlineRecovery = PHP_SAPI === 'cli'
+    && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === realpath($backendPath . '/scripts/restore_database.php');
+if (!$offlineRecovery && !App\Backup\RecoveryStore::admitRequest()) {
+    if (PHP_SAPI !== 'cli') {
+        http_response_code(503);
+        header('Retry-After: 30');
+        header('Content-Type: text/plain; charset=utf-8');
+    }
+    echo 'Database recovery is in progress. Store access is paused. The Super Administrator can finish recovery using the offline restore command.';
+    exit(1);
+}
+
 return $GLOBALS['app'];

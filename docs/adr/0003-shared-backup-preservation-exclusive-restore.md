@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0004
+---
+
 # Share Database Backup creation while Database Restore stays exclusive
 
 The Administrator and the Super Administrator share one manual Database Backup workflow: either role may create a consistent, encrypted, point-in-time Database Backup and download it to their own device, and the Super Administrator alone holds the recovery key and performs Database Restore. This deliberately revisits ADR-0001's recovery boundary, which previously left backup inside platform governance. We chose it because the Store owner is accountable for preserving their own records and cannot currently do so without the developer team, while a readable full-database copy and destructive restoration would undo the role separation and the Protected Audit Record visibility rules that same ADR established. Authorization is enforced on every create, download, history, and restore entry point, including the legacy reachable route, so hiding the restore control is never the only protection. See ADR-0002 for why owner-facing responses never carry technical or key detail.

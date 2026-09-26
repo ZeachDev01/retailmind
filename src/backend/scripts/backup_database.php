@@ -1,7 +1,6 @@
 <?php
-// Scheduled Database Backup. It shares the encrypted capture, coordination, and
-// history used by the manual Administrator/Super Administrator workflow
-// (#69), so this script no longer writes a readable SQL copy to the server.
+// Scheduled Database Backup uses the same unencrypted SQL capture as both roles.
+// Copy the resulting private temporary file to your own archive before cleanup.
 require_once dirname(__DIR__) . '/bootstrap/app.php';
 require_once dirname(__DIR__) . '/config/db.php';
 require_once dirname(__DIR__) . '/includes/backup.php';
@@ -11,7 +10,7 @@ use App\Authorization\RoleCapabilityPolicy;
 use App\Services\DatabaseBackupService;
 
 $service = new DatabaseBackupService($pdo, new RoleCapabilityPolicy());
-$filename = 'scheduled-' . date('Ymd-His') . '.rmbak';
+$filename = 'scheduled-' . date('m-d-Y-His') . '.sql';
 try {
     $result = $service->createForSystem();
     if (($result['status'] ?? '') !== DatabaseBackupService::OUTCOME_READY) {

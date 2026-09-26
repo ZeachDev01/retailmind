@@ -1,108 +1,123 @@
-# Database Backup and recovery runbook
+# Database Backup and recovery
 
-Covers the manual, encrypted Database Backup shared by the Administrator and the
-Super Administrator, and the Super Administrator-only Database Restore
-(ticket #69, ADR-0003).
+Current policy: ADR-0004 (supersedes ADR-0003).
 
-## What a Database Backup is
+## Create and download
 
-An encrypted, consistent, point-in-time copy of the Store database in a
-versioned envelope (`RMBAK1`, AES-256-GCM). Opening the file reveals nothing;
-only the recovery key can. Either the Administrator or the Super Administrator
-may create one, and the browser downloads it to their own device.
+The Administrator and Super Administrator share one backup workflow. Choose
+**Create backup**, then **Download**. Saving pauses during a consistent capture.
+The result is an **unencrypted `.sql` file** containing all database tables,
+including password hashes and restricted audit records. Values use SQL hex
+literals for lossless binary/text handling; this is encoding, not encryption.
 
-The file on the application server is temporary. It exists only long enough to
-be delivered, then it is removed. **The server copy is not an archive.**
+Keep the file private on separate storage. A completed history entry means the
+server created it, not that the browser saved it. Temporary downloads are bound
+to their requester and removed after delivery; interrupted downloads expire.
+There is no automatic archive or new scheduling feature.
 
-## What the owner must do
+## Private storage
 
-1. Sign in, open **Database Backup** (Administrator) or **Backup & Restore**
-   (Super Administrator), and press **Create backup**.
-2. Wait for the confirmation, then press **Download**.
-3. Confirm in the browser's download list that the file arrived.
-4. Move the file to storage you control — removable media or your own cloud
-   folder. Do not leave the only copy on the application server.
-5. Keep the file. A completed history entry means the server created the backup;
-   it does **not** prove the file reached a safe place.
+Set `BACKUP_STORAGE_PATH` to an absolute, persistent directory outside both the
+project and the web document root. Grant access only to the PHP service account
+and trusted recovery operators (configure NTFS ACLs on Windows). Do not alias or
+serve this directory through the web server, and do not use a temporary directory.
+If unset, the default is `retailmind-private-<project-path-hash>` two directories
+above the project. The application refuses a path inside the project/document root.
+All PHP workers and recovery commands for this installation must share this path.
 
-Saving changes pauses briefly while the snapshot is captured. Everyone signed in
-sees a short notice, can keep browsing, keeps unsaved form input, and can save
-again once the notice clears.
+The directory holds:
 
-## Recovery key handling
+- `downloads/`: short-lived requester-bound SQL artifacts.
+- `latest-safety.sql`: the latest complete pre-restore safety backup. It is never
+  included in temporary-download cleanup. The Super Administrator can download
+  it from Backup & Restore while the application is healthy.
+- `restore-log.jsonl`: append-only initiating user ID, filename, UTC time, outcome,
+  and completed statement count. No passwords or SQL contents are logged.
+- `restore-state.json`: exists only while recovery is pending; retains the initiating
+  Super Administrator's password **hash** and compatible schema for offline recovery
+  if the database is incomplete. Do not manually remove it to reopen a broken Store.
+- `session-epoch` and `requests.lock`: session invalidation and request coordination.
 
-`BACKUP_ENCRYPTION_KEY` in the server `.env` holds 32 random bytes, written as
-64 hex characters or standard base64. Generate one with:
+Deploy this on one application host with reliable filesystem locking. All application
+requests take shared leases; restore takes an exclusive lease, so existing requests
+must finish before replacement. A busy Store returns a retry message, not a queued
+restore. Pause independent database writers (external integrations, Python jobs,
+manual SQL sessions) before restoring; they do not participate in PHP request locks.
 
-```bash
-php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+## Restore (Super Administrator only)
+
+1. Keep a known-good, trusted RetailMind SQL backup. The current `RMSQL2` format
+   accepts a matching base-table schema, including column definitions. Custom views,
+   triggers, routines, events, or generated columns are unsupported: backup creation
+   fails rather than silently losing them. Use a matching application/schema version.
+2. Open **Backup & Restore**, select the `.sql` file, read the replacement warning,
+   and enter your **current Super Administrator password**. No encryption key or
+   additional confirmation phrase is needed; normal sign-in and CSRF checks still apply.
+3. The complete file is checked before replacement. Its checksum detects truncation
+   or accidental edits, not malicious forgery. A strict SQL subset rejects arbitrary
+   commands/expressions and incompatible structures. **Only restore trusted backups**:
+   anyone able to edit a plaintext file can also change its contents and checksum.
+4. A complete safety backup is captured, checked, and retained before any table is
+   replaced. If it cannot be saved, replacement does not begin.
+5. Store access pauses. Restoration replaces every database table, including users,
+   passwords, settings, and audit history; newer records are not merged or reconciled.
+6. Everyone signs in again using credentials from the restored snapshot. Old sessions
+   cannot revive just because their database session-version numbers were restored.
+
+The upload limit is shown on screen from PHP's `upload_max_filesize` and
+`post_max_size`. Increase both for larger backups; `post_max_size` also needs room
+for multipart overhead. Memory must accommodate the SQL file and parsed statements.
+
+## Incomplete restoration
+
+MySQL table replacement is **not transactional rollback**. A crash or error after
+replacement begins leaves Store access blocked, including login. Recovery does not
+rely on the partially restored users table and is intentionally an offline command.
+
+On the application host, a trusted Super Administrator runs:
+
+```text
+php src/backend/scripts/restore_database.php
 ```
 
-Rules:
+The default input is `latest-safety.sql`, returning the Store to its pre-restore state.
+To retry the original compatible file instead:
 
-- The key is server configuration only. It is never stored in the exported
-  database, committed to source control, written to logs, returned in a
-  response, or bundled with a backup file.
-- The key is independent of every login password, so resetting or rotating a
-  staff password never invalidates an existing backup.
-- Without a usable key, encrypted backup creation **fails closed**. There is no
-  plaintext fallback.
-- The developer team acting as Super Administrator keeps **two** copies: one in
-  the server `.env`, one in the team password manager, ideally in a second
-  password-manager vault controlled by a different person.
+```text
+php src/backend/scripts/restore_database.php --file=/private/path/backup.sql
+```
 
-### After server loss
+Temporarily supply `RESTORE_PASSWORD` through the process environment with the
+initiating Super Administrator's password **as it was before the failed restore**.
+Do not save this password in `.env`, command arguments, scripts, or shell history.
+For example, in PowerShell:
 
-Both the encrypted file and the matching key are required. A file alone cannot
-be decrypted. This means an old backup stays usable only while its matching key
-is retained, so do not retire a key while backups made with it are still needed.
+```powershell
+$credential = Get-Credential -UserName 'Super Administrator' -Message 'Pre-restore password'
+try {
+    $env:RESTORE_PASSWORD = $credential.GetNetworkCredential().Password
+    php src/backend/scripts/restore_database.php
+} finally {
+    Remove-Item Env:RESTORE_PASSWORD -ErrorAction SilentlyContinue
+    $credential = $null
+}
+```
 
-## Recovery procedure (Super Administrator only)
+The command is available only during pending recovery, verifies the saved password
+hash, validates the SQL against the saved schema, and does not overwrite the good
+safety copy with the partial database. Success logs the outcome, invalidates sessions,
+and reopens the Store. Failure leaves it blocked. Read the private restore log and
+application error log for diagnosis. If credentials or private recovery state are
+lost, rebuild on a separate server from a trusted backup rather than bypassing the gate.
 
-1. Obtain the encrypted `.rmbak` file from the owner.
-2. Confirm `BACKUP_ENCRYPTION_KEY` on the server matches the key that created
-   the file. A mismatch is rejected before anything changes.
-3. Rebuild the application on a fresh server and load `src/backend/sql/schema.sql`.
-4. Apply migrations:
+## Server loss and old backups
 
-   ```bash
-   php src/backend/scripts/migrate.php
-   ```
+Provision the matching application/schema version on a replacement server, sign in
+as its Super Administrator, and restore a trusted SQL backup. No encryption key is
+required for new SQL backups. SQL does not include uploaded files, application code,
+server configuration, or the private restore log; preserve those separately.
 
-5. Sign in as the Super Administrator, open **Backup & Restore**, confirm the
-   destructive-restore checkbox, and upload the `.rmbak` file.
-
-Restore order is deliberate: the file is verified and decrypted first, so a wrong
-key, a truncated file, or tampered content is rejected while the database is
-still untouched. A safety backup is created before the destructive statements run.
-
-### Supported sizes
-
-The restore page reports the largest file this server can accept, derived from
-PHP's `upload_max_filesize` and `post_max_size`. A larger backup is refused with
-an explicit message rather than failing silently. Raise both PHP settings, and
-`post_max_size` above `upload_max_filesize`, to accept bigger files.
-
-## If a restore stops part way
-
-MySQL DDL is **not** transactionally rollback-safe. RetailMind does not claim
-that a restore is all-or-nothing. A stopped restore is reported as incomplete
-with the number of statements that actually ran.
-
-To finish:
-
-1. Read the incomplete-restore entry in the Super Administrator backup history
-   for the failing statement.
-2. Restore into a scratch database and compare, or re-run the same verified
-   backup against a freshly rebuilt server.
-3. Current Protected Audit Records are preserved in `restore_preserved_activity`
-   before the destructive statements run and reconciled back afterwards, so
-   evidence that postdates the snapshot is re-applied rather than lost. Those
-   records are the authoritative audit trail for what the restore did.
-
-## Bounded cleanup
-
-Temporary artifacts are deleted after delivery or failure. Artifacts left by an
-interrupted request are removed by the bounded sweep that older than an hour, so
-a file that is still being streamed is never deleted. This feature deliberately
-keeps **no** permanent server-side archive and adds **no** schedule.
+Old `.rmbak` uploads are rejected. **Keep existing encrypted backups and their keys**
+until replacement SQL backups have been tested. Temporary cleanup does not delete
+legacy encrypted artifacts. Converting an old backup is an offline migration, not a
+second format supported by the simplified restore screen.
