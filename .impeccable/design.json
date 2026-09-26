@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-26T21:19:03+08:00",
+  "title": "Design System: RetailMind",
+  "extensions": {
+    "colorMeta": {
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "#2563eb",
+        "tonalRamp": ["oklch(15% 0.18 263)", "oklch(27% 0.18 263)", "oklch(39% 0.18 263)", "oklch(51% 0.18 263)", "oklch(63% 0.18 263)", "oklch(75% 0.18 263)", "oklch(87% 0.18 263)", "oklch(95% 0.18 263)"]
+      },
+      "action-blue-deep": {
+        "role": "primary",
+        "displayName": "Action Blue Deep",
+        "canonical": "#1d4ed8",
+        "tonalRamp": ["oklch(15% 0.2 263)", "oklch(27% 0.2 263)", "oklch(39% 0.2 263)", "oklch(51% 0.2 263)", "oklch(63% 0.2 263)", "oklch(75% 0.2 263)", "oklch(87% 0.2 263)", "oklch(95% 0.2 263)"]
+      },
+      "control-navy": {
+        "role": "neutral",
+        "displayName": "Control Navy",
+        "canonical": "#111827",
+        "tonalRamp": ["oklch(15% 0.04 264)", "oklch(27% 0.04 264)", "oklch(39% 0.04 264)", "oklch(51% 0.04 264)", "oklch(63% 0.04 264)", "oklch(75% 0.04 264)", "oklch(87% 0.04 264)", "oklch(95% 0.04 264)"]
+      },
+      "control-navy-deep": {
+        "role": "neutral",
+        "displayName": "Control Navy Deep",
+        "canonical": "#0f172a",
+        "tonalRamp": ["oklch(15% 0.05 264)", "oklch(27% 0.05 264)", "oklch(39% 0.05 264)", "oklch(51% 0.05 264)", "oklch(63% 0.05 264)", "oklch(75% 0.05 264)", "oklch(87% 0.05 264)", "oklch(95% 0.05 264)"]
+      },
+      "worksurface-grey": {
+        "role": "neutral",
+        "displayName": "Worksurface Grey",
+        "canonical": "#f4f6f9",
+        "tonalRamp": ["oklch(15% 0.008 255)", "oklch(27% 0.008 255)", "oklch(39% 0.008 255)", "oklch(51% 0.008 255)", "oklch(63% 0.008 255)", "oklch(75% 0.008 255)", "oklch(87% 0.008 255)", "oklch(95% 0.008 255)"]
+      },
+      "surface-white": {
+        "role": "neutral",
+        "displayName": "Surface White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(27% 0 0)", "oklch(39% 0 0)", "oklch(51% 0 0)", "oklch(63% 0 0)", "oklch(75% 0 0)", "oklch(87% 0 0)", "oklch(95% 0 0)"]
+      },
+      "surface-soft": {
+        "role": "neutral",
+        "displayName": "Surface Soft",
+        "canonical": "#f8fafc",
+        "tonalRamp": ["oklch(15% 0.006 248)", "oklch(27% 0.006 248)", "oklch(39% 0.006 248)", "oklch(51% 0.006 248)", "oklch(63% 0.006 248)", "oklch(75% 0.006 248)", "oklch(87% 0.006 248)", "oklch(95% 0.006 248)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1f2937",
+        "tonalRamp": ["oklch(15% 0.025 255)", "oklch(27% 0.025 255)", "oklch(39% 0.025 255)", "oklch(51% 0.025 255)", "oklch(63% 0.025 255)", "oklch(75% 0.025 255)", "oklch(87% 0.025 255)", "oklch(95% 0.025 255)"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "#6b7280",
+        "tonalRamp": ["oklch(15% 0.02 255)", "oklch(27% 0.02 255)", "oklch(39% 0.02 255)", "oklch(51% 0.02 255)", "oklch(63% 0.02 255)", "oklch(75% 0.02 255)", "oklch(87% 0.02 255)", "oklch(95% 0.02 255)"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Structural Line",
+        "canonical": "#e5e7eb",
+        "tonalRamp": ["oklch(15% 0.007 255)", "oklch(27% 0.007 255)", "oklch(39% 0.007 255)", "oklch(51% 0.007 255)", "oklch(63% 0.007 255)", "oklch(75% 0.007 255)", "oklch(87% 0.007 255)", "oklch(95% 0.007 255)"]
+      },
+      "success": {
+        "role": "semantic",
+        "displayName": "Operational Success",
+        "canonical": "#16a34a",
+        "tonalRamp": ["oklch(15% 0.14 145)", "oklch(27% 0.14 145)", "oklch(39% 0.14 145)", "oklch(51% 0.14 145)", "oklch(63% 0.14 145)", "oklch(75% 0.14 145)", "oklch(87% 0.14 145)", "oklch(95% 0.14 145)"]
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Operational Warning",
+        "canonical": "#d97706",
+        "tonalRamp": ["oklch(15% 0.14 70)", "oklch(27% 0.14 70)", "oklch(39% 0.14 70)", "oklch(51% 0.14 70)", "oklch(63% 0.14 70)", "oklch(75% 0.14 70)", "oklch(87% 0.14 70)", "oklch(95% 0.14 70)"]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Operational Danger",
+        "canonical": "#dc2626",
+        "tonalRamp": ["oklch(15% 0.17 25)", "oklch(27% 0.17 25)", "oklch(39% 0.17 25)", "oklch(51% 0.17 25)", "oklch(63% 0.17 25)", "oklch(75% 0.17 25)", "oklch(87% 0.17 25)", "oklch(95% 0.17 25)"]
+      },
+      "stockroom-green": {
+        "role": "secondary",
+        "displayName": "Stockroom Green",
+        "canonical": "#0d3027",
+        "tonalRamp": ["oklch(15% 0.055 165)", "oklch(27% 0.055 165)", "oklch(39% 0.055 165)", "oklch(51% 0.055 165)", "oklch(63% 0.055 165)", "oklch(75% 0.055 165)", "oklch(87% 0.055 165)", "oklch(95% 0.055 165)"]
+      },
+      "stockroom-green-mid": {
+        "role": "secondary",
+        "displayName": "Stockroom Green Mid",
+        "canonical": "#174c3c",
+        "tonalRamp": ["oklch(15% 0.065 165)", "oklch(27% 0.065 165)", "oklch(39% 0.065 165)", "oklch(51% 0.065 165)", "oklch(63% 0.065 165)", "oklch(75% 0.065 165)", "oklch(87% 0.065 165)", "oklch(95% 0.065 165)"]
+      },
+      "signal-yellow": {
+        "role": "tertiary",
+        "displayName": "Signal Yellow",
+        "canonical": "#f2c94c",
+        "tonalRamp": ["oklch(15% 0.13 95)", "oklch(27% 0.13 95)", "oklch(39% 0.13 95)", "oklch(51% 0.13 95)", "oklch(63% 0.13 95)", "oklch(75% 0.13 95)", "oklch(87% 0.13 95)", "oklch(95% 0.13 95)"]
+      },
+      "stockroom-paper": {
+        "role": "neutral",
+        "displayName": "Stockroom Paper",
+        "canonical": "#f2f0e8",
+        "tonalRamp": ["oklch(15% 0.015 95)", "oklch(27% 0.015 95)", "oklch(39% 0.015 95)", "oklch(51% 0.015 95)", "oklch(63% 0.015 95)", "oklch(75% 0.015 95)", "oklch(87% 0.015 95)", "oklch(95% 0.015 95)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Stockroom Display", "purpose": "Public hero statements only." },
+      "headline": { "displayName": "Workspace Headline", "purpose": "Page-level orientation inside the application." },
+      "title": { "displayName": "Operational Title", "purpose": "Cards, panels, and grouped work." },
+      "body": { "displayName": "Operational Body", "purpose": "Routine interface copy and data context." },
+      "landing-body": { "displayName": "Public Body", "purpose": "Public explanatory copy." },
+      "label": { "displayName": "Structural Label", "purpose": "Navigation groups, compact metadata, and system labels." }
+    },
+    "shadows": [
+      { "name": "quiet-panel", "value": "0 6px 18px rgba(15, 23, 42, 0.04)", "purpose": "Subtle separation for dashboard sections and metric cards." },
+      { "name": "ambient-surface", "value": "0 8px 24px rgba(15, 23, 42, 0.07)", "purpose": "Menus and raised utility surfaces." },
+      { "name": "dialog-lift", "value": "0 24px 64px rgba(15, 23, 42, 0.24)", "purpose": "Dialogs, drawers, and true overlays." },
+      { "name": "public-stamp", "value": "4px 4px 0 #f2c94c", "purpose": "Selected industrial emphasis on the public surface." }
+    ],
+    "motion": [
+      { "name": "state-standard", "value": "200ms ease", "purpose": "Routine border, background, and focus transitions." },
+      { "name": "state-fast", "value": "120ms ease", "purpose": "Public button feedback." },
+      { "name": "overlay-enter", "value": "180ms ease", "purpose": "Dialog and overlay transforms." },
+      { "name": "shell-shift", "value": "240ms ease", "purpose": "Navigation rail and top-bar layout changes." }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "480px" },
+      { "name": "mobile", "value": "640px" },
+      { "name": "dense-mobile", "value": "700px" },
+      { "name": "tablet", "value": "760px" },
+      { "name": "landing-stack", "value": "980px" },
+      { "name": "workspace-condense", "value": "1180px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The routine affirmative action inside operational workspaces.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Save changes</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;background:#2563eb;color:#fff;border:0;border-radius:10px;padding:.8rem 1rem;font:600 .95rem/1.2 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif;cursor:pointer;transition:transform .2s ease,background .2s ease,box-shadow .2s ease}.ds-btn-primary:hover{background:#1d4ed8;transform:translateY(-1px)}.ds-btn-primary:active{transform:translateY(0)}.ds-btn-primary:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(37,99,235,.22)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A quiet alternative action that remains distinct from disabled controls.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\">Cancel</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;justify-content:center;background:#e5e7eb;color:#1f2937;border:0;border-radius:10px;padding:.8rem 1rem;font:600 .95rem/1.2 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif;cursor:pointer;transition:background .2s ease,box-shadow .2s ease}.ds-btn-secondary:hover{background:#d1d5db}.ds-btn-secondary:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(37,99,235,.22)}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "The standard operational field with clear label and visible keyboard focus.",
+      "html": "<label class=\"ds-field\"><span>Product name</span><input type=\"text\" placeholder=\"Enter product name\"></label>",
+      "css": ".ds-field{display:grid;gap:.35rem;color:#6b7280;font:600 .85rem/1.3 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif}.ds-field input{width:100%;box-sizing:border-box;background:#fff;color:#1f2937;border:1px solid #e5e7eb;border-radius:10px;padding:.75rem .9rem;font:400 .95rem/1.4 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif;transition:border-color .2s ease,box-shadow .2s ease}.ds-field input:focus{outline:0;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.14)}.ds-field input::placeholder{color:#9ca3af}"
+    },
+    {
+      "name": "Metric Card",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A quietly layered summary of one operational measure.",
+      "html": "<article class=\"ds-metric-card\"><span class=\"ds-metric-label\">Low stock</span><strong>12</strong><small>Products need review</small></article>",
+      "css": ".ds-metric-card{min-width:180px;background:#fff;color:#1f2937;border:1px solid #e5e7eb;border-radius:14px;padding:1.2rem;box-shadow:0 6px 18px rgba(15,23,42,.04);font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif}.ds-metric-card strong{display:block;margin:.2rem 0;font-size:1.6rem;line-height:1.15}.ds-metric-label,.ds-metric-card small{display:block;color:#6b7280;font-size:.85rem}.ds-metric-card:focus-within{box-shadow:0 0 0 3px rgba(37,99,235,.14),0 6px 18px rgba(15,23,42,.04)}"
+    },
+    {
+      "name": "Warning Status",
+      "kind": "chip",
+      "refersTo": "tag-warning",
+      "description": "A compact semantic label for a state that needs attention.",
+      "html": "<span class=\"ds-status-warning\">Needs review</span>",
+      "css": ".ds-status-warning{display:inline-flex;align-items:center;background:#fef3c7;color:#92400e;border-radius:6px;padding:.15rem .5rem;font:700 .75rem/1.4 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif}.ds-status-warning:focus-visible{outline:2px solid #d97706;outline-offset:2px}"
+    },
+    {
+      "name": "Sidebar Navigation Item",
+      "kind": "nav",
+      "description": "The active state in the role-aware Control Navy navigation rail.",
+      "html": "<nav class=\"ds-sidebar\"><a class=\"ds-nav-item is-active\" href=\"#\"><span class=\"ds-nav-icon\" aria-hidden=\"true\">▦</span><span>Inventory overview</span></a></nav>",
+      "css": ".ds-sidebar{width:270px;background:linear-gradient(180deg,#111827 0%,#0f172a 100%);padding:1rem}.ds-nav-item{display:flex;align-items:center;gap:8px;color:#d1d5db;text-decoration:none;padding:.55rem .65rem;border-radius:8px;font:500 .9rem/1.35 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif;transition:background .2s ease,color .2s ease}.ds-nav-item:hover{background:rgba(255,255,255,.07);color:#fff}.ds-nav-item.is-active{background:rgba(37,99,235,.16);color:#fff;box-shadow:inset 3px 0 0 #60a5fa}.ds-nav-item:focus-visible{outline:0;box-shadow:inset 3px 0 0 #60a5fa,0 0 0 3px rgba(96,165,250,.35)}.ds-nav-icon{width:1.2rem;text-align:center}"
+    },
+    {
+      "name": "Quick Action",
+      "kind": "card",
+      "description": "A reassuring task shortcut that stays within the workspace hierarchy.",
+      "html": "<a class=\"ds-quick-action\" href=\"#\"><strong>Receive stock</strong><span>Record an incoming delivery</span></a>",
+      "css": ".ds-quick-action{display:block;min-width:190px;padding:.95rem 1rem;border:1px solid #e5e7eb;border-radius:12px;background:linear-gradient(135deg,#eff6ff 0%,#fff 100%);color:#1f2937;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}.ds-quick-action strong{display:block;margin-bottom:.2rem}.ds-quick-action span{color:#6b7280;font-size:.85rem}.ds-quick-action:hover{border-color:#93c5fd;transform:translateY(-1px);box-shadow:0 8px 24px rgba(15,23,42,.07)}.ds-quick-action:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(37,99,235,.22)}"
+    },
+    {
+      "name": "Landing Call to Action",
+      "kind": "button",
+      "refersTo": "landing-cta",
+      "description": "The square Signal Yellow action used at the public entrance to RetailMind.",
+      "html": "<a class=\"ds-landing-cta\" href=\"#\">Open staff workspace</a>",
+      "css": ".ds-landing-cta{min-height:50px;display:inline-flex;align-items:center;justify-content:center;background:#f2c94c;color:#17201d;border:1px solid #f2c94c;border-radius:0;padding:.78rem 1.2rem;font:700 .88rem/1.2 \"IBM Plex Sans\",\"Segoe UI\",sans-serif;letter-spacing:.025em;text-decoration:none;transition:background-color 120ms ease,color 120ms ease,transform 120ms ease}.ds-landing-cta:hover,.ds-landing-cta:focus-visible{background:#fff;border-color:#fff;color:#17201d}.ds-landing-cta:focus-visible{outline:3px solid rgba(242,201,76,.5);outline-offset:3px}.ds-landing-cta:active{transform:translateY(1px)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Working Stockroom",
+    "overview": "RetailMind should feel like the well-run back room behind a dependable Store: every tool has a place, labels are unambiguous, and the next action is visible without spectacle. The operational workspace is precise, restrained, trustworthy, and administrative. It favors calm scanability over decorative expression because staff use it to complete consequential work throughout the day.\n\nThe public surface may show more of the physical retail world through condensed display type, documentary imagery, forest green, and Signal Yellow. Inside the product, that confidence becomes quieter: Control Navy establishes authority, Action Blue identifies interaction, and pale worksurfaces keep dense records readable. Both expressions belong to the same working environment rather than separate brands.",
+    "keyCharacteristics": [
+      "Role-aware operational hierarchy",
+      "Restrained color with decisive state signals",
+      "Compact but breathable information density",
+      "Physical retail cues on public surfaces",
+      "Calm, nontechnical presentation of system feedback"
+    ],
+    "rules": [
+      { "name": "The One Action Voice Rule", "body": "Action Blue owns routine interactivity inside the product; do not introduce competing accent hues for equivalent actions.", "section": "colors" },
+      { "name": "The Signal Means Something Rule", "body": "Signal Yellow and semantic status colors are rare because they carry urgency, state, or sequence.", "section": "colors" },
+      { "name": "The Two-Room Rule", "body": "Forest green and warm paper belong to the expressive public room; blue, navy, and cool neutrals dominate the operational room.", "section": "colors" },
+      { "name": "The Condensed-at-the-Door Rule", "body": "Barlow Condensed creates public impact; it does not enter dense forms, tables, or routine workspace copy.", "section": "typography" },
+      { "name": "The Data Before Drama Rule", "body": "Operational typography may be firm, but never so oversized or stylized that it slows scanning.", "section": "typography" },
+      { "name": "The Border Before Shadow Rule", "body": "A surface earns separation with structure first and elevation second.", "section": "elevation" },
+      { "name": "The Height Must Be Real Rule", "body": "Strong shadows appear only when a surface overlays or interrupts another task layer.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Action Blue consistently for ordinary interaction and focus.",
+      "Do combine borders, tonal layers, and quiet shadows to separate operational regions.",
+      "Do preserve the square, condensed, green-and-yellow public expression as a purposeful outer layer.",
+      "Do use exact semantic colors for success, warning, and danger states.",
+      "Do keep dense workflows scannable through alignment, grouping, and predictable control placement.",
+      "Do honor reduced-motion preferences and visible keyboard focus."
+    ],
+    "donts": [
+      "Don't introduce playful consumer-retail styling, novelty illustrations, bubbly controls, or candy-colored status systems.",
+      "Don't introduce glossy, gradient-heavy generic SaaS styling, glass panels, ornamental glows, or decorative dashboard charts.",
+      "Don't spread Signal Yellow across routine workspace controls; its rarity is part of its meaning.",
+      "Don't use Barlow Condensed for tables, forms, long copy, or routine application labels.",
+      "Don't use heavy elevation on static cards or flatten true overlays into the page.",
+      "Don't expose raw technical failures through visually dominant alerts in the live Store."
+    ]
+  }
+}
