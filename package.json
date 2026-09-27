@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "playwright:install": "playwright install chromium",
-    "test:e2e": "cross-env RUN_DB_TESTS=1 node src/backend/tests/inventory_counts_scan_browser_test.js"
+    "test:e2e": "cross-env RUN_DB_TESTS=1 node src/backend/tests/inventory_counts_scan_browser_test.js && cross-env RUN_DB_TESTS=1 node src/backend/tests/stock_receiving_scan_browser_test.js"
   },
   "devDependencies": {
     "cross-env": "^10.1.0",

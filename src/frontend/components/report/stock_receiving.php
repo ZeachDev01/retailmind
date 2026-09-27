@@ -55,6 +55,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $po_items = $receivingService->getReceivablePurchaseOrderItems();
 $pending_requests = $receivingService->getPendingReplenishmentRequests();
+$po_request_ids = array_fill_keys(array_map(
+    'intval',
+    array_filter(array_column($po_items, 'replenishment_request_id'))
+), true);
+$scan_pending_requests = array_values(array_filter(
+    $pending_requests,
+    static fn(array $request): bool => !isset($po_request_ids[(int)$request['request_id']])
+));
 $products = $receivingService->getActiveProducts();
 $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 ?>
@@ -127,6 +135,15 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 
         <div class="receiving-form">
             <h3>Record Stock Receipt</h3>
+            <div class="form-section">
+                <h4>Scan Product</h4>
+                <div class="form-group">
+                    <label for="product_code_scan">Unit barcode or SKU</label>
+                    <input type="text" id="product_code_scan" autocomplete="off" inputmode="text" placeholder="Scan or type a code, then press Enter">
+                    <small id="scan_status" role="status" aria-live="polite">You can also choose a product manually below.</small>
+                </div>
+                <div id="scan_document_review" class="pending-requests" hidden aria-live="polite"></div>
+            </div>
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                 <input type="hidden" id="replenishment_request_id" name="replenishment_request_id" value="">
@@ -288,31 +305,192 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 </div>
 
 <script>
+const productCodeScan = document.getElementById('product_code_scan');
+const scanStatus = document.getElementById('scan_status');
+const scanDocumentReview = document.getElementById('scan_document_review');
+const receivableDocuments = <?= json_encode(array_merge(
+    array_map(static fn(array $item): array => [
+        'type' => 'purchase_order',
+        'product_id' => (int)$item['product_id'],
+        'purchase_order_item_id' => (int)$item['purchase_order_item_id'],
+        'replenishment_request_id' => (int)($item['replenishment_request_id'] ?? 0),
+        'label' => (string)$item['po_number'],
+        'supplier' => (string)($item['supplier_name'] ?? ''),
+        'cost' => (float)$item['unit_cost'],
+        'remaining_qty' => (int)$item['remaining_qty'],
+        'unit' => (string)($item['base_unit'] ?? 'unit'),
+    ], $po_items),
+    array_map(static fn(array $request): array => [
+        'type' => 'replenishment_request',
+        'product_id' => (int)$request['product_id'],
+        'replenishment_request_id' => (int)$request['request_id'],
+        'label' => 'Request #' . (int)$request['request_id'],
+        'supplier' => '',
+        'cost' => 0,
+        'remaining_qty' => (int)$request['remaining_qty'],
+        'unit' => 'unit',
+    ], $scan_pending_requests)
+), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+let activeScanLookup = 0;
+let scanLookupController = null;
+
+function hideScannedDocumentReview() {
+    scanDocumentReview.replaceChildren();
+    scanDocumentReview.hidden = true;
+}
+
+function chooseScannedDocument(documentOption, button) {
+    applyReceivingDocument(documentOption, false);
+    for (const choice of scanDocumentReview.querySelectorAll('.scan-document-choice')) {
+        choice.setAttribute('aria-pressed', choice === button ? 'true' : 'false');
+        choice.textContent = choice === button ? 'Selected' : 'Choose this document';
+    }
+    scanStatus.textContent = `${documentOption.label} selected. Enter the delivered Base units and review every delivery detail before submitting.`;
+    document.getElementById('received_qty').focus();
+}
+
+function showScannedDocumentReview(productId) {
+    const eligible = receivableDocuments.filter((documentOption) => documentOption.product_id === Number(productId));
+    scanDocumentReview.replaceChildren();
+    scanDocumentReview.hidden = false;
+
+    const heading = document.createElement('h4');
+    heading.textContent = 'Choose the receiving document';
+    scanDocumentReview.appendChild(heading);
+
+    if (eligible.length === 0) {
+        const message = document.createElement('p');
+        message.textContent = 'No eligible document is available. An Inventory Manager cannot record a routine receipt for this product; choose a product manually or arrange an approved request or purchase order.';
+        scanDocumentReview.appendChild(message);
+        return;
+    }
+
+    const guidance = document.createElement('p');
+    guidance.textContent = 'Review the remaining quantity, then explicitly choose the document. Delivered units stay empty until you enter them.';
+    scanDocumentReview.appendChild(guidance);
+    for (const documentOption of eligible) {
+        const row = document.createElement('div');
+        row.className = 'request-item';
+        const info = document.createElement('div');
+        info.className = 'info';
+        const title = document.createElement('strong');
+        title.textContent = documentOption.type === 'purchase_order'
+            ? `Purchase order ${documentOption.label}`
+            : documentOption.label;
+        const progress = document.createElement('div');
+        progress.className = 'progress';
+        progress.textContent = `Remaining ${documentOption.remaining_qty} ${documentOption.unit}(s)`;
+        info.append(title, document.createElement('br'), progress);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'request-item btn-link scan-document-choice';
+        button.textContent = 'Choose this document';
+        button.setAttribute('aria-pressed', 'false');
+        button.addEventListener('click', () => chooseScannedDocument(documentOption, button));
+        row.append(info, button);
+        scanDocumentReview.appendChild(row);
+    }
+}
+
+async function identifyReceivingProduct(code) {
+    const lookupId = ++activeScanLookup;
+    if (scanLookupController) scanLookupController.abort();
+    const controller = new AbortController();
+    scanLookupController = controller;
+    scanStatus.textContent = 'Checking product code…';
+    try {
+        const response = await fetch('../barcodeScanner/apiScanner/product_code_lookup.php?code=' + encodeURIComponent(code), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+            signal: controller.signal
+        });
+        const result = await response.json();
+        if (lookupId !== activeScanLookup) return;
+        if (!response.ok || result.success === false) {
+            throw new Error(result.error || 'The product code could not be checked.');
+        }
+        if (result.outcome === 'unknown') {
+            scanStatus.textContent = 'No product matches that code. Try again or choose the product manually.';
+            return;
+        }
+        if (result.outcome === 'ambiguous') {
+            scanStatus.textContent = 'That code matches more than one product. Choose the product manually.';
+            return;
+        }
+        if (result.matched_code_kind === 'case_barcode') {
+            scanStatus.textContent = 'Stock Receiving accepts a unit barcode or SKU for Base units. Choose the product manually for package receiving.';
+            return;
+        }
+
+        const product = result.product;
+        const productSelect = document.getElementById('product_id');
+        productSelect.value = String(product.product_id);
+        resetReferences();
+        fillProductCost();
+        document.getElementById('quantity_mode').value = 'units';
+        document.getElementById('received_qty').value = '0';
+        document.getElementById('received_packages').value = '0';
+        updateQuantityMode();
+        showScannedDocumentReview(product.product_id);
+        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${result.matched_code_kind === 'sku' ? 'SKU' : 'unit barcode'}. Review and choose an eligible document, then enter delivered units.`;
+    } catch (error) {
+        if (error.name === 'AbortError' || lookupId !== activeScanLookup) return;
+        scanStatus.textContent = error.message || 'The product code could not be checked. Choose the product manually.';
+    } finally {
+        if (scanLookupController === controller) scanLookupController = null;
+    }
+}
+
+productCodeScan.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const code = this.value.trim();
+    if (code !== '') identifyReceivingProduct(code);
+});
+
 function resetReferences() {
     document.getElementById('replenishment_request_id').value = '';
     document.getElementById('purchase_order_item_id').value = '';
 }
-function populateForm(productId, qty, requestId) {
+function applyReceivingDocument(documentOption, copyRemainingQuantity) {
     resetReferences();
-    document.getElementById('product_id').value = productId;
+    document.getElementById('product_id').value = documentOption.product_id;
     document.getElementById('quantity_mode').value = 'units';
-    document.getElementById('received_qty').value = qty;
-    document.getElementById('replenishment_request_id').value = requestId;
-    updateQuantityMode(); fillProductCost();
+    document.getElementById('received_qty').value = copyRemainingQuantity ? documentOption.remaining_qty : 0;
+    if (documentOption.type === 'purchase_order') {
+        document.getElementById('purchase_order_item_id').value = documentOption.purchase_order_item_id;
+        document.getElementById('replenishment_request_id').value = documentOption.replenishment_request_id || '';
+        document.getElementById('cost_price').value = Number(documentOption.cost || 0).toFixed(2);
+        document.getElementById('po_number').value = documentOption.label || '';
+        document.getElementById('supplier').value = documentOption.supplier || '';
+    } else {
+        document.getElementById('replenishment_request_id').value = documentOption.replenishment_request_id;
+    }
+    updateQuantityMode();
+    updatePackageConversion();
+}
+function populateForm(productId, qty, requestId) {
+    applyReceivingDocument({
+        type: 'replenishment_request',
+        product_id: productId,
+        replenishment_request_id: requestId,
+        remaining_qty: qty
+    }, true);
+    fillProductCost();
     document.getElementById('received_qty').focus();
     window.scrollTo(0, document.querySelector('.receiving-form').offsetTop - 100);
 }
 function populatePO(item) {
-    resetReferences();
-    document.getElementById('purchase_order_item_id').value = item.item_id;
-    document.getElementById('replenishment_request_id').value = item.request_id || '';
-    document.getElementById('product_id').value = item.product_id;
-    document.getElementById('quantity_mode').value = 'units';
-    document.getElementById('received_qty').value = item.remaining;
-    document.getElementById('cost_price').value = Number(item.cost || 0).toFixed(2);
-    document.getElementById('po_number').value = item.po_number || '';
-    document.getElementById('supplier').value = item.supplier || '';
-    updateQuantityMode(); updatePackageConversion();
+    applyReceivingDocument({
+        type: 'purchase_order',
+        product_id: item.product_id,
+        purchase_order_item_id: item.item_id,
+        replenishment_request_id: item.request_id,
+        remaining_qty: item.remaining,
+        cost: item.cost,
+        label: item.po_number,
+        supplier: item.supplier
+    }, true);
     window.scrollTo(0, document.querySelector('.receiving-form').offsetTop - 100);
 }
 function selectedProductOption() {
@@ -335,7 +513,16 @@ function updateQuantityMode() {
     document.getElementById('received_packages').required=packages;
     updatePackageConversion();
 }
-document.getElementById('product_id').addEventListener('change', ()=>{resetReferences();fillProductCost();});
+document.getElementById('product_id').addEventListener('change', (event)=>{
+    resetReferences();
+    fillProductCost();
+    if (event.isTrusted) {
+        activeScanLookup++;
+        if (scanLookupController) scanLookupController.abort();
+        hideScannedDocumentReview();
+        scanStatus.textContent = 'Product selected manually. Review an eligible document above or choose one from the lists on this page.';
+    }
+});
 document.getElementById('quantity_mode').addEventListener('change', updateQuantityMode);
 document.getElementById('damaged_qty').addEventListener('input', function () {
     const damagedQty=Number(this.value||0); if(damagedQty>0&&document.getElementById('discrepancy_type').value==='none'){document.getElementById('discrepancy_type').value='damaged';document.getElementById('discrepancy_qty').value=damagedQty;}
