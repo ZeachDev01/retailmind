@@ -71,7 +71,7 @@ final class AttentionRuleService
                 $rule['title'],
                 isset($signal['explanation'])
                     ? (string)$signal['explanation']
-                    : $this->explanation($rule['title'], $value, $threshold),
+                    : $this->explanation($rule['signal'], $value, $threshold),
                 $this->date($signal['detected_at'] ?? null),
                 $rule['destination'],
                 array_key_exists('count', $signal) ? max(0, (int)$signal['count']) : null
@@ -100,9 +100,27 @@ final class AttentionRuleService
             : $this->clock->now();
     }
 
-    private function explanation(string $title, float $value, float $threshold): string
+    private function explanation(string $signal, float $value, float $threshold): string
     {
-        return sprintf('%s. Observed %s; configured threshold %s.', $title, $this->number($value), $this->number($threshold));
+        $current = $this->number($value);
+        $limit = $this->number($threshold);
+
+        return match ($signal) {
+            'failed_login_count' => $current . ' failed sign-ins detected. Review threshold: ' . $limit . '.',
+            'locked_account_count' => $current . ' locked ' . ($value === 1.0 ? 'account requires' : 'accounts require') . ' review. Review threshold: ' . $limit . '.',
+            'backup_age_days' => $value >= 9999
+                ? 'No successful Database Backup is recorded. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.')
+                : 'The latest Database Backup is ' . $current . ' ' . ($value === 1.0 ? 'day' : 'days') . ' old. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.'),
+            'recovery_failure_count' => $current . ' Database Restore ' . ($value === 1.0 ? 'failure was' : 'failures were') . ' detected. Review threshold: ' . $limit . '.',
+            'service_unhealthy_count' => $current . ' platform service ' . ($value === 1.0 ? 'check requires' : 'checks require') . ' attention. Review threshold: ' . $limit . '.',
+            'ml_model_age_days' => $value >= 9999
+                ? 'No recent successful Demand Forecast model run is recorded. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.')
+                : 'The Demand Forecast model is ' . $current . ' ' . ($value === 1.0 ? 'day' : 'days') . ' old. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.'),
+            'platform_setting_change_count' => $current . ' recent Platform Setting ' . ($value === 1.0 ? 'change requires' : 'changes require') . ' review. Review threshold: ' . $limit . '.',
+            'emergency_access_count' => $current . ' active Emergency Access ' . ($value === 1.0 ? 'session requires' : 'sessions require') . ' review. Review threshold: ' . $limit . '.',
+            'recovery_account_active_count' => $current . ' unsealed Recovery ' . ($value === 1.0 ? 'Account requires' : 'Accounts require') . ' review. Review threshold: ' . $limit . '.',
+            default => 'Current value: ' . $current . '. Review threshold: ' . $limit . '.',
+        };
     }
 
     private function number(float $value): string

@@ -17,12 +17,12 @@ final class DashboardWorkspace
     private const REFRESH_SECONDS = 300;
 
     private const ACTIONS = [
-        ['label' => 'Users & Access', 'description' => 'Manage ordinary and privileged identities', 'icon' => 'bi-shield-lock', 'destination' => 'components/user_manager/user_manager.php', 'capability' => RoleCapabilityPolicy::MANAGE_USERS],
-        ['label' => 'System Health', 'description' => 'Inspect platform readiness', 'icon' => 'bi-heart-pulse', 'destination' => 'components/system_administrator/system_health.php', 'capability' => RoleCapabilityPolicy::PLATFORM_GOVERNANCE],
-        ['label' => 'Backup & Restore', 'description' => 'Protect platform continuity', 'icon' => 'bi-database-check', 'destination' => 'components/system_administrator/backup_restore.php', 'capability' => RoleCapabilityPolicy::PLATFORM_GOVERNANCE],
-        ['label' => 'ML Operation', 'description' => 'Govern Demand Forecast controls', 'icon' => 'bi-cpu', 'destination' => 'components/system_administrator/ml_settings.php', 'capability' => RoleCapabilityPolicy::PLATFORM_GOVERNANCE],
-        ['label' => 'Platform Settings', 'description' => 'Configure technical safeguards', 'icon' => 'bi-gear', 'destination' => 'components/system_administrator/system_settings.php', 'capability' => RoleCapabilityPolicy::PLATFORM_GOVERNANCE],
-        ['label' => 'Protected Audit Records', 'description' => 'Review security and platform activity', 'icon' => 'bi-clock-history', 'destination' => 'components/system_administrator/audit_logs.php', 'capability' => RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT],
+        ['label' => 'Users & Access', 'description' => 'Manage Staff and privileged accounts', 'icon' => 'bi-shield-lock', 'destination' => 'components/user_manager/user_manager.php', 'capability' => RoleCapabilityPolicy::MANAGE_USERS],
+        ['label' => 'System Health', 'description' => 'Review service checks and failures', 'icon' => 'bi-heart-pulse', 'destination' => 'components/system_administrator/system_health.php', 'capability' => RoleCapabilityPolicy::PLATFORM_GOVERNANCE],
+        ['label' => 'Backup & Restore', 'description' => 'Create a Database Backup or restore the database', 'icon' => 'bi-database-check', 'destination' => 'components/system_administrator/backup_restore.php', 'capability' => RoleCapabilityPolicy::PLATFORM_GOVERNANCE],
+        ['label' => 'Demand Forecast', 'description' => 'Review model status and technical controls', 'icon' => 'bi-cpu', 'destination' => 'components/system_administrator/ml_settings.php', 'capability' => RoleCapabilityPolicy::PLATFORM_GOVERNANCE],
+        ['label' => 'Platform Settings', 'description' => 'Manage security and recovery safeguards', 'icon' => 'bi-gear', 'destination' => 'components/system_administrator/system_settings.php', 'capability' => RoleCapabilityPolicy::PLATFORM_GOVERNANCE],
+        ['label' => 'Protected Audit Records', 'description' => 'Review recorded security and platform actions', 'icon' => 'bi-clock-history', 'destination' => 'components/system_administrator/audit_logs.php', 'capability' => RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT],
     ];
 
     public function __construct(
@@ -69,7 +69,9 @@ final class DashboardWorkspace
                         'label' => 'Critical attention',
                         'value' => $criticalCount,
                         'status' => $criticalCount > 0 ? 'critical' : 'healthy',
-                        'detail' => $criticalCount > 0 ? 'Immediate platform-governance action required.' : 'No critical conditions detected.',
+                        'detail' => $criticalCount > 0
+                            ? $criticalCount . ' critical ' . ($criticalCount === 1 ? 'condition requires' : 'conditions require') . ' review.'
+                            : 'No critical conditions detected.',
                     ],
                     'latest_backup' => $platform['backup'],
                     'platform_health' => $platform['platform_health'],
@@ -81,7 +83,7 @@ final class DashboardWorkspace
                 'continuity' => $this->continuity($now),
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
-                'message' => $attentionItems === [] ? 'No platform-governance conditions currently require action.' : null,
+                'message' => $attentionItems === [] ? 'All monitored platform conditions are below their configured thresholds.' : null,
             ];
         } catch (Throwable $exception) {
             error_log('Dashboard workspace load failed: ' . $exception->getMessage());
@@ -126,27 +128,33 @@ final class DashboardWorkspace
                 'label' => 'Latest successful backup',
                 'value' => $backup === [] ? 'Not available' : (string)$backup['created_at'],
                 'status' => $backupAge > 7 ? 'critical' : 'healthy',
-                'detail' => $backup === [] ? 'No successful backup is recorded.' : $backupAge . ' day(s) old.',
+                'detail' => $backup === []
+                    ? 'No successful Database Backup is recorded.'
+                    : $backupAge . ' ' . ($backupAge === 1 ? 'day' : 'days') . ' old.',
             ],
-            'platform_health' => $this->healthHeadline('Platform/service health', $healthChecks, false),
-            'ml_health' => $this->healthHeadline('ML health', $healthChecks, true, $modelAge),
+            'platform_health' => $this->healthHeadline('Platform health', $healthChecks, false),
+            'ml_health' => $this->healthHeadline('Demand Forecast health', $healthChecks, true, $modelAge),
             'privileged_accounts' => [
-                'label' => 'Privileged-account anomalies',
+                'label' => 'Active access risks',
                 'value' => $privilegedAnomalies,
                 'status' => $privilegedAnomalies > 0 ? 'critical' : 'healthy',
-                'detail' => $privilegedAnomalies > 0 ? 'Locked, elevated, or unsealed privileged access requires review.' : 'No privileged-account anomalies detected.',
+                'detail' => $privilegedAnomalies > 0 ? 'Locked, elevated, or unsealed privileged access requires review.' : 'No active, locked, or unsealed privileged access detected.',
             ],
             'access' => [
                 'emergency' => [
                     'label' => 'Emergency Access',
                     'status' => $emergency > 0 ? 'active' : 'inactive',
-                    'detail' => $emergency > 0 ? $emergency . ' active reason-bound session(s).' : 'No active sessions.',
+                    'detail' => $emergency > 0
+                        ? $emergency . ' active reason-bound ' . ($emergency === 1 ? 'session.' : 'sessions.')
+                        : 'No active Emergency Access sessions.',
                     'destination' => 'components/system_administrator/emergency_access.php',
                 ],
                 'recovery' => [
                     'label' => 'Recovery Account',
                     'status' => $recovery === [] ? 'not_configured' : ($unsealedRecovery > 0 ? 'unsealed' : 'sealed'),
-                    'detail' => $recovery === [] ? 'No Recovery Account is configured.' : ($unsealedRecovery > 0 ? 'Offline recovery identity is currently unsealed.' : 'Offline recovery identity is sealed.'),
+                    'detail' => $recovery === []
+                        ? 'No Recovery Account is configured.'
+                        : ($unsealedRecovery > 0 ? 'The Recovery Account is currently unsealed.' : 'The Recovery Account is sealed.'),
                     'last_used_at' => $recovery['last_used_at'] ?? null,
                     'destination' => 'components/system_administrator/recovery_account.php',
                 ],
@@ -171,10 +179,10 @@ final class DashboardWorkspace
             );
 
         return [
-            'sales_flowing' => ['label' => 'Sales flowing', 'ok' => $sales > 0, 'value' => $sales, 'detail' => $sales > 0 ? 'Sales recorded in the last 24 hours.' : 'No sales recorded in the last 24 hours.'],
-            'active_shifts' => ['label' => 'Cashier shifts active', 'ok' => $shifts > 0, 'value' => $shifts, 'detail' => $shifts > 0 ? 'Cashier coverage is active.' : 'No cashier shift is open.'],
-            'severe_inventory_disruption' => ['label' => 'Severe inventory disruption', 'ok' => $outOfStock === 0, 'value' => $outOfStock, 'detail' => $outOfStock === 0 ? 'No active product is out of stock.' : $outOfStock . ' active product(s) are out of stock.'],
-            'critical_controls' => ['label' => 'Critical operational controls', 'ok' => $unresolvedControls === 0, 'value' => $unresolvedControls, 'detail' => $unresolvedControls === 0 ? 'No critical operational controls remain unresolved.' : $unresolvedControls . ' critical control item(s) remain unresolved.'],
+            'sales_flowing' => ['label' => 'Sales activity', 'ok' => $sales > 0, 'value' => $sales, 'detail' => $sales > 0 ? $sales . ' ' . ($sales === 1 ? 'sale was' : 'sales were') . ' recorded in the last 24 hours.' : 'No sales were recorded in the last 24 hours.'],
+            'active_shifts' => ['label' => 'Cashier coverage', 'ok' => $shifts > 0, 'value' => $shifts, 'detail' => $shifts > 0 ? $shifts . ' Cashier ' . ($shifts === 1 ? 'shift is' : 'shifts are') . ' open.' : 'No Cashier shift is open.'],
+            'severe_inventory_disruption' => ['label' => 'Out-of-stock products', 'ok' => $outOfStock === 0, 'value' => $outOfStock, 'detail' => $outOfStock === 0 ? 'No active products are out of stock.' : $outOfStock . ' active ' . ($outOfStock === 1 ? 'product is' : 'products are') . ' out of stock.'],
+            'critical_controls' => ['label' => 'Pending operational reviews', 'ok' => $unresolvedControls === 0, 'value' => $unresolvedControls, 'detail' => $unresolvedControls === 0 ? 'No operational items are awaiting review.' : $unresolvedControls . ' operational ' . ($unresolvedControls === 1 ? 'item requires' : 'items require') . ' review.'],
         ];
     }
 
@@ -219,7 +227,8 @@ final class DashboardWorkspace
             'label' => $label,
             'value' => $status === 'healthy' ? 'Healthy' : ($status === 'critical' ? 'Critical' : 'Needs attention'),
             'status' => $status,
-            'detail' => count($relevant) . ' check(s); ' . count(array_filter($relevant, static fn(array $check): bool => ($check['status'] ?? 'healthy') !== 'healthy')) . ' require attention.',
+            'detail' => count(array_filter($relevant, static fn(array $check): bool => ($check['status'] ?? 'healthy') !== 'healthy'))
+                . ' of ' . count($relevant) . ' checks require attention.',
         ];
     }
 

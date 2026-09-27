@@ -1,0 +1,1371 @@
+{
+  "tool": "comp-spec",
+  "version": 1,
+  "createdAt": "2026-09-27T15:32:54.833Z",
+  "comp": ".impeccable\\mocks\\decision\\superadmin-radar-resolution.png",
+  "warnings": [
+    "region sidebar: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region global-toolbar: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region risk-horizon: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region issue-queue: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region resolution-workbench: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region readiness-ledger: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)"
+  ],
+  "uncoveredInkCells": [],
+  "compSize": {
+    "width": 1505,
+    "height": 1045
+  },
+  "aspect": 1.4402,
+  "orientation": "landscape",
+  "palette": [
+    {
+      "hex": "#f7f7f8",
+      "coverage": 0.8095
+    },
+    {
+      "hex": "#171829",
+      "coverage": 0.166
+    },
+    {
+      "hex": "#b8bdca",
+      "coverage": 0.0099
+    },
+    {
+      "hex": "#8691a2",
+      "coverage": 0.0084
+    },
+    {
+      "hex": "#172a64",
+      "coverage": 0.0061
+    }
+  ],
+  "bands": [
+    {
+      "y": 0.0337,
+      "strength": 0.2402
+    },
+    {
+      "y": 0.1011,
+      "strength": 0.3027
+    },
+    {
+      "y": 0.3371,
+      "strength": 0.3916
+    },
+    {
+      "y": 0.5281,
+      "strength": 0.2759
+    },
+    {
+      "y": 0.5618,
+      "strength": 0.2256
+    },
+    {
+      "y": 0.8427,
+      "strength": 0.208
+    },
+    {
+      "y": 0.9101,
+      "strength": 0.2253
+    },
+    {
+      "y": 0.9438,
+      "strength": 0.2356
+    }
+  ],
+  "regions": [
+    {
+      "id": "sidebar",
+      "kind": "chrome",
+      "note": "fixed Control Navy role navigation rail",
+      "grid": "A0:B9",
+      "container": true,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "w": 0.2,
+        "h": 1
+      },
+      "px": {
+        "x": 0,
+        "y": 0,
+        "w": 301,
+        "h": 1045
+      },
+      "aspect": 0.288,
+      "palette": [
+        {
+          "hex": "#171828",
+          "coverage": 0.8087
+        },
+        {
+          "hex": "#f7f7f8",
+          "coverage": 0.1416
+        },
+        {
+          "hex": "#162b67",
+          "coverage": 0.0347
+        },
+        {
+          "hex": "#313646",
+          "coverage": 0.0133
+        },
+        {
+          "hex": "#e82831",
+          "coverage": 0.0016
+        }
+      ],
+      "detail": {
+        "energy": 13.0368
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "global-toolbar",
+      "kind": "chrome",
+      "note": "fixed search and notification toolbar",
+      "grid": "C0:J0",
+      "container": true,
+      "box": {
+        "x": 0.2,
+        "y": 0,
+        "w": 0.8,
+        "h": 0.1
+      },
+      "px": {
+        "x": 301,
+        "y": 0,
+        "w": 1204,
+        "h": 105
+      },
+      "aspect": 11.4667,
+      "palette": [
+        {
+          "hex": "#f7f7f8",
+          "coverage": 0.9634
+        },
+        {
+          "hex": "#101832",
+          "coverage": 0.0141
+        },
+        {
+          "hex": "#bcc2cd",
+          "coverage": 0.0131
+        },
+        {
+          "hex": "#7e8798",
+          "coverage": 0.0073
+        },
+        {
+          "hex": "#596474",
+          "coverage": 0.0021
+        }
+      ],
+      "detail": {
+        "energy": 18.0391
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "page-heading",
+      "kind": "text",
+      "note": "Platform Control Center heading and operating instruction",
+      "grid": "C0:F1",
+      "box": {
+        "x": 0.2,
+        "y": 0,
+        "w": 0.4,
+        "h": 0.2
+      },
+      "px": {
+        "x": 301,
+        "y": 0,
+        "w": 602,
+        "h": 209
+      },
+      "aspect": 2.8804,
+      "palette": [
+        {
+          "hex": "#f7f7f8",
+          "coverage": 0.9463
+        },
+        {
+          "hex": "#bcc1cc",
+          "coverage": 0.0157
+        },
+        {
+          "hex": "#101731",
+          "coverage": 0.0155
+        },
+        {
+          "hex": "#616e7e",
+          "coverage": 0.0141
+        },
+        {
+          "hex": "#8f96a8",
+          "coverage": 0.0084
+        }
+      ],
+      "detail": {
+        "energy": 21.4479
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "type": {
+        "comp": {
+          "lines": 2,
+          "glyphs": 32,
+          "capHeightPx": 19.7,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.6559,
+          "advTall": 0.5069,
+          "advX": 0.6612,
+          "gap": 0.0661,
+          "xRatio": 0.6978,
+          "stemW": 0.2362,
+          "contrast": 1.3062,
+          "serif": 0.997,
+          "densTall": 0.5964,
+          "densX": 0.6649,
+          "weight": 0.5964
+        },
+        "widthClass": "normal",
+        "weightClass": "bold",
+        "chosen": {
+          "family": "Epunda Sans",
+          "weight": 700,
+          "fontSizePx": 29,
+          "source": "index",
+          "fp": {
+            "lines": 1,
+            "glyphs": 17,
+            "capHeightPx": 19.8,
+            "inkIsDark": true,
+            "allCaps": false,
+            "advance": 0.6325,
+            "advTall": 0.506,
+            "advX": 0.6325,
+            "gap": 0.0759,
+            "xRatio": 0.7237,
+            "stemW": 0.2147,
+            "contrast": 1.3726,
+            "serif": 1.0915,
+            "densTall": 0.5469,
+            "densX": 0.6673,
+            "weight": 0.5469
+          },
+          "stamp": "749f29812d01"
+        }
+      }
+    },
+    {
+      "id": "freshness-controls",
+      "kind": "control",
+      "note": "updated timestamp and dashboard refresh control",
+      "grid": "H0:J0",
+      "box": {
+        "x": 0.7,
+        "y": 0,
+        "w": 0.3,
+        "h": 0.1
+      },
+      "px": {
+        "x": 1054,
+        "y": 0,
+        "w": 452,
+        "h": 105
+      },
+      "aspect": 4.3048,
+      "palette": [
+        {
+          "hex": "#f7f7f8",
+          "coverage": 0.9683
+        },
+        {
+          "hex": "#c5cad2",
+          "coverage": 0.0104
+        },
+        {
+          "hex": "#e7303d",
+          "coverage": 0.0081
+        },
+        {
+          "hex": "#69768d",
+          "coverage": 0.0073
+        },
+        {
+          "hex": "#9ba5b6",
+          "coverage": 0.006
+        }
+      ],
+      "detail": {
+        "energy": 14.4116
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "risk-horizon",
+      "kind": "chrome",
+      "note": "four-part platform risk horizon ledger",
+      "grid": "C1:J2",
+      "container": true,
+      "box": {
+        "x": 0.2,
+        "y": 0.1,
+        "w": 0.8,
+        "h": 0.2
+      },
+      "px": {
+        "x": 301,
+        "y": 105,
+        "w": 1204,
+        "h": 209
+      },
+      "aspect": 5.7608,
+      "palette": [
+        {
+          "hex": "#f7f7f8",
+          "coverage": 0.9646
+        },
+        {
+          "hex": "#adb2bf",
+          "coverage": 0.0123
+        },
+        {
+          "hex": "#dff7e3",
+          "coverage": 0.0106
+        },
+        {
+          "hex": "#6c7589",
+          "coverage": 0.0102
+        },
+        {
+          "hex": "#1864ef",
+          "coverage": 0.0024
+        }
+      ],
+      "detail": {
+        "energy": 15.8426
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "horizon-critical",
+      "kind": "control",
+      "note": "critical condition count and severity signal",
+      "grid": "C2:D2",
+      "reviewGroup": "horizon-signal",
+      "box": {
+        "x": 0.2,
+        "y": 0.2,
+        "w": 0.2,
+        "h": 0.1
+      },
+      "px": {
+        "x": 301,
+        "y": 209,
+        "w": 301,
+        "h": 105
+      },
+      "aspect": 2.8667,
+      "palette": [
+        {
+          "hex": "#f7f7f7",
+          "coverage": 0.952
+        },
+        {
+          "hex": "#9ba4b2",
+          "coverage": 0.0179
+        },
+        {
+          "hex": "#f6a310",
+          "coverage": 0.0148
+        },
+        {
+          "hex": "#caced3",
+          "coverage": 0.0087
+        },
+        {
+          "hex": "#f8d6d8",
+          "coverage": 0.0067
+        }
+      ],
+      "detail": {
+        "energy": 14.8936
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "horizon-warning",
+      "kind": "control",
+      "note": "warning condition count and severity signal",
+      "grid": "E2:F2",
+      "reviewGroup": "horizon-signal",
+      "box": {
+        "x": 0.4,
+        "y": 0.2,
+        "w": 0.2,
+        "h": 0.1
+      },
+      "px": {
+        "x": 602,
+        "y": 209,
+        "w": 301,
+        "h": 105
+      },
+      "aspect": 2.8667,
+      "palette": [
+        {
+          "hex": "#f7f7f6",
+          "coverage": 0.9429
+        },
+        {
+          "hex": "#f8f6d5",
+          "coverage": 0.0232
+        },
+        {
+          "hex": "#189428",
+          "coverage": 0.0145
+        },
+        {
+          "hex": "#c6c8d3",
+          "coverage": 0.0102
+        },
+        {
+          "hex": "#989dae",
+          "coverage": 0.0093
+        }
+      ],
+      "detail": {
+        "energy": 13.6842
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "horizon-backup",
+      "kind": "control",
+      "note": "latest backup readiness signal",
+      "grid": "G2:H2",
+      "reviewGroup": "horizon-signal",
+      "box": {
+        "x": 0.6,
+        "y": 0.2,
+        "w": 0.2,
+        "h": 0.1
+      },
+      "px": {
+        "x": 903,
+        "y": 209,
+        "w": 301,
+        "h": 105
+      },
+      "aspect": 2.8667,
+      "palette": [
+        {
+          "hex": "#f7f8f8",
+          "coverage": 0.8854
+        },
+        {
+          "hex": "#daf8e7",
+          "coverage": 0.0676
+        },
+        {
+          "hex": "#898ea1",
+          "coverage": 0.0191
+        },
+        {
+          "hex": "#c8d0e8",
+          "coverage": 0.0144
+        },
+        {
+          "hex": "#09091a",
+          "coverage": 0.0135
+        }
+      ],
+      "detail": {
+        "energy": 19.9525
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "horizon-access",
+      "kind": "control",
+      "note": "privileged access setup readiness signal",
+      "grid": "I2:J2",
+      "reviewGroup": "horizon-signal",
+      "box": {
+        "x": 0.8,
+        "y": 0.2,
+        "w": 0.2,
+        "h": 0.1
+      },
+      "px": {
+        "x": 1204,
+        "y": 209,
+        "w": 301,
+        "h": 105
+      },
+      "aspect": 2.8667,
+      "palette": [
+        {
+          "hex": "#f5f7f8",
+          "coverage": 0.9813
+        },
+        {
+          "hex": "#9ea4b4",
+          "coverage": 0.0118
+        },
+        {
+          "hex": "#0d1033",
+          "coverage": 0.0029
+        },
+        {
+          "hex": "#182838",
+          "coverage": 0.002
+        },
+        {
+          "hex": "#78838d",
+          "coverage": 0.002
+        }
+      ],
+      "detail": {
+        "energy": 11.9278
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "issue-queue",
+      "kind": "chrome",
+      "note": "severity-ranked platform issue queue",
+      "grid": "C3:F7",
+      "container": true,
+      "box": {
+        "x": 0.2,
+        "y": 0.3,
+        "w": 0.4,
+        "h": 0.5
+      },
+      "px": {
+        "x": 301,
+        "y": 314,
+        "w": 602,
+        "h": 523
+      },
+      "aspect": 1.1511,
+      "palette": [
+        {
+          "hex": "#f6f7f8",
+          "coverage": 0.9635
+        },
+        {
+          "hex": "#cdced9",
+          "coverage": 0.0169
+        },
+        {
+          "hex": "#9ca6b5",
+          "coverage": 0.0085
+        },
+        {
+          "hex": "#76829a",
+          "coverage": 0.0076
+        },
+        {
+          "hex": "#354560",
+          "coverage": 0.0035
+        }
+      ],
+      "detail": {
+        "energy": 14.2512
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "issue-queue-title",
+      "kind": "text",
+      "note": "platform issue queue heading and count",
+      "grid": "C3:E3",
+      "box": {
+        "x": 0.2,
+        "y": 0.3,
+        "w": 0.3,
+        "h": 0.1
+      },
+      "px": {
+        "x": 301,
+        "y": 314,
+        "w": 452,
+        "h": 105
+      },
+      "aspect": 4.3048,
+      "palette": [
+        {
+          "hex": "#f7f8f8",
+          "coverage": 0.9647
+        },
+        {
+          "hex": "#0a1143",
+          "coverage": 0.0115
+        },
+        {
+          "hex": "#a7b2c0",
+          "coverage": 0.0107
+        },
+        {
+          "hex": "#3f4e6d",
+          "coverage": 0.009
+        },
+        {
+          "hex": "#6d7890",
+          "coverage": 0.004
+        }
+      ],
+      "detail": {
+        "energy": 17.5695
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 18,
+          "capHeightPx": 14,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.6588,
+          "advTall": 0.5164,
+          "advX": 0.6588,
+          "gap": 0.0712,
+          "xRatio": 0.7023,
+          "stemW": 0.2454,
+          "contrast": 1.3073,
+          "serif": 0.6901,
+          "densTall": 0.7101,
+          "densX": 0.7419,
+          "weight": 0.7101
+        },
+        "widthClass": "normal",
+        "weightClass": "black"
+      }
+    },
+    {
+      "id": "issue-row-primary",
+      "kind": "control",
+      "note": "selected highest-severity issue row",
+      "grid": "C4:F4",
+      "reviewGroup": "issue-row",
+      "box": {
+        "x": 0.2,
+        "y": 0.4,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 301,
+        "y": 418,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#eef4f7",
+          "coverage": 0.9257
+        },
+        {
+          "hex": "#7f8ba5",
+          "coverage": 0.0263
+        },
+        {
+          "hex": "#b2bccb",
+          "coverage": 0.0248
+        },
+        {
+          "hex": "#f8d7e2",
+          "coverage": 0.0131
+        },
+        {
+          "hex": "#f8f1d3",
+          "coverage": 0.0102
+        }
+      ],
+      "detail": {
+        "energy": 22.1499
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "issue-row-secondary",
+      "kind": "control",
+      "note": "secondary platform issue row",
+      "grid": "C5:F5",
+      "reviewGroup": "issue-row",
+      "box": {
+        "x": 0.2,
+        "y": 0.5,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 301,
+        "y": 523,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#f7f7f7",
+          "coverage": 0.9461
+        },
+        {
+          "hex": "#b1b7c3",
+          "coverage": 0.0204
+        },
+        {
+          "hex": "#828b9e",
+          "coverage": 0.0175
+        },
+        {
+          "hex": "#f8efcc",
+          "coverage": 0.0119
+        },
+        {
+          "hex": "#1464e8",
+          "coverage": 0.0041
+        }
+      ],
+      "detail": {
+        "energy": 15.9228
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "issue-row-tertiary",
+      "kind": "control",
+      "note": "tertiary platform issue row",
+      "grid": "C6:F6",
+      "reviewGroup": "issue-row",
+      "box": {
+        "x": 0.2,
+        "y": 0.6,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 301,
+        "y": 627,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#f8f8f8",
+          "coverage": 0.9532
+        },
+        {
+          "hex": "#ccd2dc",
+          "coverage": 0.0276
+        },
+        {
+          "hex": "#9ca3b2",
+          "coverage": 0.0151
+        },
+        {
+          "hex": "#777b97",
+          "coverage": 0.0033
+        },
+        {
+          "hex": "#485868",
+          "coverage": 0.0007
+        }
+      ],
+      "detail": {
+        "energy": 13.4772
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "resolution-workbench",
+      "kind": "chrome",
+      "note": "persistent guided resolution workbench",
+      "grid": "G3:J7",
+      "container": true,
+      "box": {
+        "x": 0.6,
+        "y": 0.3,
+        "w": 0.4,
+        "h": 0.5
+      },
+      "px": {
+        "x": 903,
+        "y": 314,
+        "w": 602,
+        "h": 523
+      },
+      "aspect": 1.1511,
+      "palette": [
+        {
+          "hex": "#f6f7f7",
+          "coverage": 0.9471
+        },
+        {
+          "hex": "#b6bcc9",
+          "coverage": 0.0168
+        },
+        {
+          "hex": "#8691a3",
+          "coverage": 0.0167
+        },
+        {
+          "hex": "#1666e9",
+          "coverage": 0.0143
+        },
+        {
+          "hex": "#5d6783",
+          "coverage": 0.0051
+        }
+      ],
+      "detail": {
+        "energy": 18.1025
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "resolution-title",
+      "kind": "text",
+      "note": "selected issue title severity and category",
+      "grid": "G3:J3",
+      "box": {
+        "x": 0.6,
+        "y": 0.3,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 903,
+        "y": 314,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#f8f7f8",
+          "coverage": 0.9614
+        },
+        {
+          "hex": "#8893a2",
+          "coverage": 0.0151
+        },
+        {
+          "hex": "#bec6ce",
+          "coverage": 0.0111
+        },
+        {
+          "hex": "#172749",
+          "coverage": 0.0064
+        },
+        {
+          "hex": "#080c37",
+          "coverage": 0.006
+        }
+      ],
+      "detail": {
+        "energy": 17.7346
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 25,
+          "capHeightPx": 19.5,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.4866,
+          "advTall": 0.6659,
+          "advX": 0.4866,
+          "gap": 0.0384,
+          "xRatio": 0.5248,
+          "stemW": 0.1789,
+          "contrast": 1.2441,
+          "serif": 0.8059,
+          "densTall": 0.8178,
+          "densX": 0.7046,
+          "weight": 0.8178
+        },
+        "widthClass": "condensed",
+        "weightClass": "black"
+      }
+    },
+    {
+      "id": "resolution-description",
+      "kind": "text",
+      "note": "selected issue explanation and context",
+      "grid": "G4:J4",
+      "box": {
+        "x": 0.6,
+        "y": 0.4,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 903,
+        "y": 418,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#f7f7f8",
+          "coverage": 0.9285
+        },
+        {
+          "hex": "#afb5c2",
+          "coverage": 0.0281
+        },
+        {
+          "hex": "#80899b",
+          "coverage": 0.027
+        },
+        {
+          "hex": "#616985",
+          "coverage": 0.0134
+        },
+        {
+          "hex": "#45495d",
+          "coverage": 0.003
+        }
+      ],
+      "detail": {
+        "energy": 17.6231
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "type": {
+        "comp": {
+          "lines": 3,
+          "glyphs": 85,
+          "capHeightPx": 11.3,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.6331,
+          "advTall": 0.3769,
+          "advX": 0.6679,
+          "gap": 0.0904,
+          "xRatio": 0.7163,
+          "stemW": 0.1851,
+          "contrast": 1.0954,
+          "serif": 0.3493,
+          "densTall": 0.6696,
+          "densX": 0.5544,
+          "weight": 0.6696
+        },
+        "widthClass": "normal",
+        "weightClass": "black"
+      }
+    },
+    {
+      "id": "resolution-step-one",
+      "kind": "control",
+      "note": "first inspect-signal runbook step",
+      "grid": "G5:J5",
+      "reviewGroup": "resolution-step",
+      "box": {
+        "x": 0.6,
+        "y": 0.5,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 903,
+        "y": 523,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#f8f8f8",
+          "coverage": 0.8689
+        },
+        {
+          "hex": "#1866e8",
+          "coverage": 0.0752
+        },
+        {
+          "hex": "#bec2cf",
+          "coverage": 0.0241
+        },
+        {
+          "hex": "#838fa5",
+          "coverage": 0.0238
+        },
+        {
+          "hex": "#5694e8",
+          "coverage": 0.008
+        }
+      ],
+      "detail": {
+        "energy": 19.7032
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "resolution-step-two",
+      "kind": "control",
+      "note": "second open-control runbook step",
+      "grid": "G6:J6",
+      "reviewGroup": "resolution-step",
+      "box": {
+        "x": 0.6,
+        "y": 0.6,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 903,
+        "y": 627,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#f5f6f6",
+          "coverage": 0.9321
+        },
+        {
+          "hex": "#c2c8d0",
+          "coverage": 0.0336
+        },
+        {
+          "hex": "#949cad",
+          "coverage": 0.022
+        },
+        {
+          "hex": "#5f6980",
+          "coverage": 0.0076
+        },
+        {
+          "hex": "#2e3b5b",
+          "coverage": 0.0047
+        }
+      ],
+      "detail": {
+        "energy": 21.4817
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "resolution-step-three",
+      "kind": "control",
+      "note": "third verify-recovery runbook step",
+      "grid": "G6:J7",
+      "reviewGroup": "resolution-step",
+      "box": {
+        "x": 0.6,
+        "y": 0.6,
+        "w": 0.4,
+        "h": 0.2
+      },
+      "px": {
+        "x": 903,
+        "y": 627,
+        "w": 602,
+        "h": 209
+      },
+      "aspect": 2.8804,
+      "palette": [
+        {
+          "hex": "#f5f7f7",
+          "coverage": 0.9534
+        },
+        {
+          "hex": "#c1c8d1",
+          "coverage": 0.0232
+        },
+        {
+          "hex": "#9199ab",
+          "coverage": 0.0172
+        },
+        {
+          "hex": "#707b96",
+          "coverage": 0.0034
+        },
+        {
+          "hex": "#283858",
+          "coverage": 0.0028
+        }
+      ],
+      "detail": {
+        "energy": 16.5884
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "readiness-ledger",
+      "kind": "chrome",
+      "note": "platform recovery and continuity readiness ledger",
+      "grid": "C8:J9",
+      "container": true,
+      "box": {
+        "x": 0.2,
+        "y": 0.8,
+        "w": 0.8,
+        "h": 0.2
+      },
+      "px": {
+        "x": 301,
+        "y": 836,
+        "w": 1204,
+        "h": 209
+      },
+      "aspect": 5.7608,
+      "palette": [
+        {
+          "hex": "#f7f8f8",
+          "coverage": 0.9742
+        },
+        {
+          "hex": "#d9f8e4",
+          "coverage": 0.0083
+        },
+        {
+          "hex": "#088c1f",
+          "coverage": 0.0073
+        },
+        {
+          "hex": "#8f9bad",
+          "coverage": 0.0052
+        },
+        {
+          "hex": "#c3c8d6",
+          "coverage": 0.005
+        }
+      ],
+      "detail": {
+        "energy": 13.488
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "readiness-title",
+      "kind": "text",
+      "note": "platform readiness ledger heading and explanation",
+      "grid": "C8:F8",
+      "coverBox": {
+        "x": 0.2,
+        "y": 0.8,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "box": {
+        "x": 0.2,
+        "y": 0.8287,
+        "w": 0.2153,
+        "h": 0.0517
+      },
+      "px": {
+        "x": 301,
+        "y": 866,
+        "w": 324,
+        "h": 54
+      },
+      "aspect": 6,
+      "palette": [
+        {
+          "hex": "#f7f8f8",
+          "coverage": 0.8591
+        },
+        {
+          "hex": "#607290",
+          "coverage": 0.0408
+        },
+        {
+          "hex": "#c0c8d4",
+          "coverage": 0.0403
+        },
+        {
+          "hex": "#090e43",
+          "coverage": 0.0318
+        },
+        {
+          "hex": "#8d9ab1",
+          "coverage": 0.0281
+        }
+      ],
+      "detail": {
+        "energy": 51.3393
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 7,
+          "capHeightPx": 14.1,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 2.027,
+          "advTall": 2.8449,
+          "advX": 1.5647,
+          "gap": 0.0889,
+          "xRatio": 0.6975,
+          "stemW": 0.2546,
+          "contrast": 1.3365,
+          "serif": 0.5448,
+          "densTall": 0.5935,
+          "densX": 0.7003,
+          "weight": 0.5935
+        },
+        "widthClass": "wide",
+        "weightClass": "bold"
+      }
+    },
+    {
+      "id": "readiness-access",
+      "kind": "control",
+      "note": "privileged access readiness destination",
+      "grid": "C9:F9",
+      "reviewGroup": "readiness-row",
+      "box": {
+        "x": 0.2,
+        "y": 0.9,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 301,
+        "y": 941,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#f7f8f8",
+          "coverage": 0.9449
+        },
+        {
+          "hex": "#088a1d",
+          "coverage": 0.0227
+        },
+        {
+          "hex": "#d9f8e5",
+          "coverage": 0.017
+        },
+        {
+          "hex": "#9198aa",
+          "coverage": 0.0089
+        },
+        {
+          "hex": "#c1c6d2",
+          "coverage": 0.0064
+        }
+      ],
+      "detail": {
+        "energy": 14.3594
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    },
+    {
+      "id": "readiness-continuity",
+      "kind": "control",
+      "note": "Store continuity readiness destination",
+      "grid": "G9:J9",
+      "reviewGroup": "readiness-row",
+      "box": {
+        "x": 0.6,
+        "y": 0.9,
+        "w": 0.4,
+        "h": 0.1
+      },
+      "px": {
+        "x": 903,
+        "y": 941,
+        "w": 602,
+        "h": 105
+      },
+      "aspect": 5.7333,
+      "palette": [
+        {
+          "hex": "#f7f8f8",
+          "coverage": 0.9564
+        },
+        {
+          "hex": "#d8f7e2",
+          "coverage": 0.0178
+        },
+        {
+          "hex": "#0a8c20",
+          "coverage": 0.0104
+        },
+        {
+          "hex": "#909aab",
+          "coverage": 0.0077
+        },
+        {
+          "hex": "#c2c9d3",
+          "coverage": 0.0077
+        }
+      ],
+      "detail": {
+        "energy": 12.2425
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null
+    }
+  ],
+  "compSha256": "e1900b28fa6a0e72cf6c40ce9213c640e047a180d6e498c010b064a2f4109001",
+  "regionsSource": {
+    "path": ".impeccable\\build\\regions.json",
+    "sha256": "1917b6a0f21fafc4eedf982789af87c2a48420243978af1e60a9cf4be308c773"
+  }
+}

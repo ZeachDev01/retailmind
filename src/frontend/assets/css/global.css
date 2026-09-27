@@ -36,7 +36,7 @@ video {
     display: inline-grid;
     place-items: center;
     overflow: hidden;
-    background: linear-gradient(135deg, #2563eb, #38bdf8);
+    background: #2563eb;
     color: #fff;
     font-weight: 800;
 }

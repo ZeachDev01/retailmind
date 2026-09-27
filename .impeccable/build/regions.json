@@ -1,0 +1,28 @@
+{
+  "regions": [
+    { "id": "sidebar", "kind": "chrome", "grid": "A0:B9", "note": "fixed Control Navy role navigation rail", "container": true },
+    { "id": "global-toolbar", "kind": "chrome", "grid": "C0:J0", "note": "fixed search and notification toolbar", "container": true },
+    { "id": "page-heading", "kind": "text", "grid": "C0:F1", "note": "Platform Control Center heading and operating instruction" },
+    { "id": "freshness-controls", "kind": "control", "grid": "H0:J0", "note": "updated timestamp and dashboard refresh control" },
+    { "id": "risk-horizon", "kind": "chrome", "grid": "C1:J2", "note": "four-part platform risk horizon ledger", "container": true },
+    { "id": "horizon-critical", "kind": "control", "grid": "C2:D2", "note": "critical condition count and severity signal", "reviewGroup": "horizon-signal" },
+    { "id": "horizon-warning", "kind": "control", "grid": "E2:F2", "note": "warning condition count and severity signal", "reviewGroup": "horizon-signal" },
+    { "id": "horizon-backup", "kind": "control", "grid": "G2:H2", "note": "latest backup readiness signal", "reviewGroup": "horizon-signal" },
+    { "id": "horizon-access", "kind": "control", "grid": "I2:J2", "note": "privileged access setup readiness signal", "reviewGroup": "horizon-signal" },
+    { "id": "issue-queue", "kind": "chrome", "grid": "C3:F7", "note": "severity-ranked platform issue queue", "container": true },
+    { "id": "issue-queue-title", "kind": "text", "grid": "C3:E3", "note": "platform issue queue heading and count" },
+    { "id": "issue-row-primary", "kind": "control", "grid": "C4:F4", "note": "selected highest-severity issue row", "reviewGroup": "issue-row" },
+    { "id": "issue-row-secondary", "kind": "control", "grid": "C5:F5", "note": "secondary platform issue row", "reviewGroup": "issue-row" },
+    { "id": "issue-row-tertiary", "kind": "control", "grid": "C6:F6", "note": "tertiary platform issue row", "reviewGroup": "issue-row" },
+    { "id": "resolution-workbench", "kind": "chrome", "grid": "G3:J7", "note": "persistent guided resolution workbench", "container": true },
+    { "id": "resolution-title", "kind": "text", "grid": "G3:J3", "note": "selected issue title severity and category" },
+    { "id": "resolution-description", "kind": "text", "grid": "G4:J4", "note": "selected issue explanation and context" },
+    { "id": "resolution-step-one", "kind": "control", "grid": "G5:J5", "note": "first inspect-signal runbook step", "reviewGroup": "resolution-step" },
+    { "id": "resolution-step-two", "kind": "control", "grid": "G6:J6", "note": "second open-control runbook step", "reviewGroup": "resolution-step" },
+    { "id": "resolution-step-three", "kind": "control", "grid": "G6:J7", "note": "third verify-recovery runbook step", "reviewGroup": "resolution-step" },
+    { "id": "readiness-ledger", "kind": "chrome", "grid": "C8:J9", "note": "platform recovery and continuity readiness ledger", "container": true },
+    { "id": "readiness-title", "kind": "text", "grid": "C8:F8", "note": "platform readiness ledger heading and explanation" },
+    { "id": "readiness-access", "kind": "control", "grid": "C9:F9", "note": "privileged access readiness destination", "reviewGroup": "readiness-row" },
+    { "id": "readiness-continuity", "kind": "control", "grid": "G9:J9", "note": "Store continuity readiness destination", "reviewGroup": "readiness-row" }
+  ]
+}

@@ -65,7 +65,8 @@ if (isset($_SESSION['user_id']) && ($_GET['login_success'] ?? '') !== '1') {
 $loginUrl = htmlspecialchars(landing_app_url('?login=1'), ENT_QUOTES, 'UTF-8');
 $loginActionUrl = htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8');
 $forgotPasswordUrl = htmlspecialchars(landing_app_url('components/auth/forgot_password.php'), ENT_QUOTES, 'UTF-8');
-$styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
+$styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css?v=20260928c'), ENT_QUOTES, 'UTF-8');
+$landingStyleUrl = htmlspecialchars(landing_app_url('assets/css/landing.css?v=20260928c'), ENT_QUOTES, 'UTF-8');
 $loginError = '';
 $loginSuccess = '';
 $loginSuccessRedirect = '';
@@ -94,34 +95,32 @@ unset($_SESSION['_login_username']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetailMind - Store inventory, sales, and forecasting</title>
     <meta name="description" content="RetailMind keeps Shalom Store inventory, barcode sales, purchasing, cashier shifts, and demand forecasting in one operational workspace.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= $styleUrl ?>">
+    <link rel="stylesheet" href="<?= $landingStyleUrl ?>">
 </head>
 
 <body class="landing-page">
+    <a class="landing-skip-link" href="#main-content">Skip to main content</a>
     <header class="landing-header">
         <nav class="landing-nav" aria-label="Primary">
             <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
                 <span class="landing-brand__mark" aria-hidden="true">RM</span>
                 <span>
                     <strong>RetailMind</strong>
-                    <small>Shalom Store / Operations</small>
+                    <small>Inventory &amp; Forecasting</small>
                 </span>
             </a>
             <div class="landing-nav__links">
-                <a href="#capabilities">System</a>
-                <a href="#workflow">Process</a>
+                <a href="#capabilities">Capabilities</a>
+                <a href="#workflow">Workflow</a>
                 <a class="landing-nav__login" href="<?= $loginUrl ?>" data-login-modal-open>Staff login</a>
             </div>
         </nav>
     </header>
 
-    <main>
+    <main id="main-content">
         <section class="landing-hero" aria-labelledby="landing-title">
             <div class="landing-hero__content">
-                <p class="landing-kicker"><span>01</span> Store operations, kept in order</p>
                 <h1 id="landing-title">Know what is on the shelf. Reorder before it runs out.</h1>
                 <p class="landing-hero__copy">
                     RetailMind gives Shalom Store one working system for product stock, barcode sales,
@@ -133,20 +132,36 @@ unset($_SESSION['_login_username']);
                 </div>
             </div>
             <figure class="landing-hero__visual">
-                <img src="<?= htmlspecialchars(landing_app_url('assets/img/landing-hero.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Barcode scanner and inventory dashboard at a stocked retail counter">
-                <figcaption>
-                    <span>RM / INVENTORY DESK</span>
-                    Live stock, checkout data, and purchasing decisions stay connected.
-                </figcaption>
+                <div class="landing-hero__image">
+                    <img src="<?= htmlspecialchars(landing_app_url('assets/img/landing-hero.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Barcode scanner and inventory dashboard at a stocked retail counter">
+                    <figcaption>Shalom Store inventory desk</figcaption>
+                </div>
+                <div class="landing-preview" aria-label="RetailMind operational flow">
+                    <div class="landing-preview__header">
+                        <div>
+                            <span>Operational flow</span>
+                            <strong>One connected Store record</strong>
+                        </div>
+                        <span class="landing-preview__state">Ready</span>
+                    </div>
+                    <ol>
+                        <li><span>Sale</span><strong>Scan barcode</strong></li>
+                        <li><span>Inventory</span><strong>Update stock</strong></li>
+                        <li><span>Planning</span><strong>Review demand</strong></li>
+                        <li><span>Purchasing</span><strong>Replenish</strong></li>
+                    </ol>
+                </div>
             </figure>
             <div class="landing-hero__index" aria-hidden="true">
-                <span>SCAN</span><span>COUNT</span><span>FORECAST</span><span>ORDER</span>
+                <span><small>01</small><strong>Scan</strong></span>
+                <span><small>02</small><strong>Count</strong></span>
+                <span><small>03</small><strong>Forecast</strong></span>
+                <span><small>04</small><strong>Order</strong></span>
             </div>
         </section>
 
         <section id="capabilities" class="landing-system">
             <header class="landing-section-heading">
-                <p class="landing-kicker"><span>02</span> One operating record</p>
                 <h2>The shelf, the till, and the order book agree.</h2>
                 <p>Store teams move through the day without rebuilding the same information in separate tools.</p>
             </header>
@@ -189,7 +204,6 @@ unset($_SESSION['_login_username']);
 
         <section id="workflow" class="landing-workflow">
             <header class="landing-workflow__content">
-                <p class="landing-kicker"><span>03</span> The operating process</p>
                 <h2>Each sale leaves the next decision better informed.</h2>
                 <p>
                     Sales activity updates stock movement and forecast history. Managers review uncertain items,
@@ -205,7 +219,6 @@ unset($_SESSION['_login_username']);
         </section>
 
         <section class="landing-access" aria-labelledby="access-title">
-            <p class="landing-access__label">STAFF ACCESS / SECURE</p>
             <div>
                 <h2 id="access-title">Your tools are ready at the counter.</h2>
                 <p>Administrators, Inventory Managers, and Cashiers are sent to the workspace assigned to their role.</p>
@@ -215,6 +228,15 @@ unset($_SESSION['_login_username']);
                 <a class="landing-link" href="<?= $forgotPasswordUrl ?>">Reset password</a>
             </div>
         </section>
+
+        <footer class="landing-footer">
+            <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
+                <span class="landing-brand__mark" aria-hidden="true">RM</span>
+                <span><strong>RetailMind</strong><small>Shalom Store operations</small></span>
+            </a>
+            <p>Inventory, sales, purchasing, shifts, reporting, and Demand Forecasts in one operational workspace.</p>
+            <a href="<?= $loginUrl ?>" data-login-modal-open>Staff login</a>
+        </footer>
     </main>
 
     <div class="landing-login-modal<?= $shouldOpenLogin ? ' is-open' : '' ?>" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="login-modal-title" aria-hidden="<?= $shouldOpenLogin ? 'false' : 'true' ?>">
@@ -225,7 +247,6 @@ unset($_SESSION['_login_username']);
                 <aside class="landing-login-modal__aside" aria-label="RetailMind access">
                     <span class="landing-brand__mark" aria-hidden="true">R</span>
                     <div>
-                        <p class="landing-eyebrow">Staff workspace</p>
                         <h2 id="login-modal-title">Welcome back</h2>
                         <p>Access inventory, sales, reports, and system tools from one workspace.</p>
                     </div>
@@ -284,6 +305,9 @@ unset($_SESSION['_login_username']);
             var loginForm = modal.querySelector('.landing-login-form');
             var openers = document.querySelectorAll('[data-login-modal-open]');
             var closers = modal.querySelectorAll('[data-login-modal-close]');
+            var pageRegions = [document.querySelector('.landing-header'), document.getElementById('main-content')].filter(Boolean);
+            var focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+            var activeOpener = null;
             var passwordStateKey = 'retailmind.login.password';
             var hasLoginError = Boolean(modal.querySelector('.error-msg'));
             var loginFormState = {
@@ -317,14 +341,22 @@ unset($_SESSION['_login_username']);
                 }
             }
 
+            function setPageInert(isInert) {
+                pageRegions.forEach(function(region) {
+                    region.inert = isInert;
+                });
+            }
+
             function openModal(event) {
                 if (event) {
                     event.preventDefault();
+                    activeOpener = event.currentTarget;
                 }
                 restoreFormState();
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
                 document.body.classList.add('landing-modal-open');
+                setPageInert(true);
                 window.setTimeout(function() {
                     (username || panel).focus();
                 }, 50);
@@ -335,6 +367,12 @@ unset($_SESSION['_login_username']);
                 modal.classList.remove('is-open');
                 modal.setAttribute('aria-hidden', 'true');
                 document.body.classList.remove('landing-modal-open');
+                setPageInert(false);
+                var returnTarget = activeOpener && document.contains(activeOpener) ? activeOpener : openers[0];
+                activeOpener = null;
+                if (returnTarget) {
+                    returnTarget.focus();
+                }
             }
 
             openers.forEach(function(opener) {
@@ -360,13 +398,38 @@ unset($_SESSION['_login_username']);
                 });
             }
             document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+                if (!modal.classList.contains('is-open')) {
+                    return;
+                }
+                if (event.key === 'Escape') {
+                    event.preventDefault();
                     closeModal();
+                    return;
+                }
+                if (event.key === 'Tab') {
+                    var focusable = Array.prototype.filter.call(modal.querySelectorAll(focusableSelector), function(element) {
+                        return element.offsetParent !== null;
+                    });
+                    if (focusable.length === 0) {
+                        event.preventDefault();
+                        panel.focus();
+                        return;
+                    }
+                    var first = focusable[0];
+                    var last = focusable[focusable.length - 1];
+                    if (event.shiftKey && document.activeElement === first) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && document.activeElement === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
                 }
             });
 
             if (modal.classList.contains('is-open')) {
                 document.body.classList.add('landing-modal-open');
+                setPageInert(true);
                 window.setTimeout(function() {
                     (username || panel).focus();
                 }, 50);

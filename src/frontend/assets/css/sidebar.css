@@ -3,7 +3,7 @@
 .sidebar {
     flex: 0 0 250px;
     width: 250px;
-    background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+    background: #111827;
     color: #f9fafb;
     padding: 1.1rem 0.9rem;
 }
@@ -57,7 +57,7 @@
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #64748b;
+    color: #a8b3c4;
     padding: 0.2rem 0.55rem 0.45rem;
 }
 .sidebar a {
@@ -180,7 +180,7 @@ body.no-scroll { overflow: hidden; }
     height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
-    transition: width .24s ease, flex-basis .24s ease, box-shadow .24s ease, transform .24s ease;
+    transition: box-shadow .24s ease, transform .24s ease;
     display: flex;
     flex-direction: column;
 }
@@ -252,7 +252,7 @@ body.no-scroll { overflow: hidden; }
     height: 36px;
     flex: 0 0 36px;
     border-radius: 10px;
-    background: linear-gradient(135deg, #2563eb, #38bdf8);
+    background: #2563eb;
     color: #fff;
     font-weight: 800;
     overflow: hidden;

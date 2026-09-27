@@ -1,5 +1,11 @@
 {
-  "files": ["src/frontend/components/auth/forgot_password.php"],
+  "files": [
+    "src/frontend/**/*.php",
+    "src/frontend/**/*.html"
+  ],
+  "exclude": [
+    "src/frontend/components/phpmailer/**"
+  ],
   "insertBefore": "</body>",
   "commentSyntax": "html",
   "cspChecked": true
