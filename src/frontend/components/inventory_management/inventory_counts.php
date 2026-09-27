@@ -32,11 +32,11 @@ if ($correctId > 0) {
     }
 }
 
-// The linked-correction pre-fill is a mutation affordance, so it is shown only
-// to viewers holding MUTATE_INVENTORY (Inventory Managers). Administrators get
-// a read-only notice instead: their oversight access never offers a submit path.
+// Count mutation affordances belong only to Inventory Managers. Administrators
+// retain read-only oversight and product lookup without record/decision controls.
+$canMutateInventory = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 $correctionFormActive = $correctReport !== null
-    && has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+    && $canMutateInventory;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
@@ -160,16 +160,21 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         </div>
                     </div>
 
-                    <form method="POST" class="count-form">
-                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
-                        <input type="hidden" name="action" value="record">
-                        <?php if ($correctionFormActive): ?>
-                            <input type="hidden" name="related_adjustment_id" value="<?= (int)$correctReport['adjustment_id'] ?>">
-                        <?php endif; ?>
+                    <?php if ($canMutateInventory): ?>
+                        <form method="POST" class="count-form">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
+                            <input type="hidden" name="action" value="record">
+                            <?php if ($correctionFormActive): ?>
+                                <input type="hidden" name="related_adjustment_id" value="<?= (int)$correctReport['adjustment_id'] ?>">
+                            <?php endif; ?>
+                    <?php else: ?>
+                        <div class="count-form">
+                            <p class="section-description">Administrator access is read-only. Inventory Managers record and decide Inventory Counts.</p>
+                    <?php endif; ?>
 
                         <div class="form-group">
                             <label for="product_id">Product</label>
-                            <select name="product_id" id="product_id" required>
+                            <select name="product_id" id="product_id" required <?= $canMutateInventory ? '' : 'disabled' ?>>
                                 <option value="">Select product</option>
                                 <?php foreach ($products as $product): ?>
                                     <option
@@ -184,7 +189,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
 
                         <div class="form-group">
                             <label for="physical_quantity">Physically Counted Quantity</label>
-                            <input type="number" name="physical_quantity" id="physical_quantity" min="0" required>
+                            <input type="number" name="physical_quantity" id="physical_quantity" min="0" required <?= $canMutateInventory ? '' : 'readonly' ?>>
                         </div>
 
                         <div class="quantity-preview" aria-live="polite">
@@ -208,13 +213,18 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                 name="discrepancy_reason"
                                 id="discrepancy_reason"
                                 required
+                                <?= $canMutateInventory ? '' : 'readonly' ?>
                                 placeholder="<?= $correctionFormActive
                                     ? htmlspecialchars('Correction for approved stock issue report #' . (int)$correctReport['adjustment_id'] . ': describe what the recount found.')
                                     : 'Damaged, missing, expired, incorrect receiving, counting correction, or other details.' ?>"></textarea>
                         </div>
 
-                        <button type="submit" class="btn btn-block">Record Count</button>
-                    </form>
+                        <?php if ($canMutateInventory): ?>
+                            <button type="submit" class="btn btn-block">Record Count</button>
+                        </form>
+                        <?php else: ?>
+                        </div>
+                        <?php endif; ?>
                 </div>
 
                 <div class="count-panel">
@@ -277,7 +287,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                                 </span>
                                             </td>
                                             <td>
-                                                <?php if ($count['status'] === 'pending'): ?>
+                                                <?php if ($count['status'] === 'pending' && $canMutateInventory): ?>
                                                     <div class="count-actions">
                                                         <form method="POST" class="inline-form">
                                                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
@@ -356,6 +366,9 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
         const scanMatchName = document.getElementById('scan_match_name');
         const scanMatchDetail = document.getElementById('scan_match_detail');
         const productCodeLookupUrl = <?= json_encode($productCodeLookupUrl) ?>;
+        const correctionProductId = <?= $correctionFormActive
+            ? json_encode((int)$correctReport['product_id'])
+            : 'null' ?>;
         const kindLabels = {
             sku: 'SKU',
             unit_barcode: 'unit barcode',
@@ -420,6 +433,29 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         return;
                     }
                     if (body.outcome === 'match' && body.product) {
+                        const matchedProductId = Number(body.product.product_id);
+                        const selectedProductId = Number(productSelect.value || 0);
+                        if (correctionProductId !== null && matchedProductId !== correctionProductId) {
+                            setScanStatus(
+                                'This count is linked to an approved Stock Issue. Scan that report\'s product or continue with the selected product.',
+                                'error'
+                            );
+                            scanInput.value = '';
+                            return;
+                        }
+
+                        const reasonInput = document.getElementById('discrepancy_reason');
+                        const hasEnteredWork = physicalInput.value !== '' || reasonInput.value.trim() !== '';
+                        if (correctionProductId === null
+                            && selectedProductId > 0
+                            && matchedProductId !== selectedProductId
+                            && hasEnteredWork
+                            && !window.confirm('Replace the current product with ' + body.product.product_name + '? Your entered count details will stay on the form.')) {
+                            setScanStatus('Product unchanged. Your entered count details were preserved.', 'error');
+                            scanInput.value = '';
+                            return;
+                        }
+
                         applyProductSelection(body.product);
                         showScanMatch(body.product, body.matched_code_kind);
                         setScanStatus('Matched by ' + (kindLabels[body.matched_code_kind] || 'code') + '. Enter the counted total.', 'ok');

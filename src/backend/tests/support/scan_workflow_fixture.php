@@ -119,6 +119,7 @@ $staff = [
 
 $productByName = [];
 $staffByUsername = [];
+$approvedIssue = null;
 
 $cleanup = static function () use ($pdo, $products, $staff, &$productByName, &$staffByUsername): void {
     $productIds = [];
@@ -219,7 +220,7 @@ if (array_key_exists('state', $options)) {
 
     $stmt = $pdo->prepare(
         "SELECT ic.count_id, ic.product_id, p.sku, ic.system_quantity, ic.physical_quantity,
-                ic.difference_qty, ic.status, ic.discrepancy_reason
+                ic.difference_qty, ic.status, ic.discrepancy_reason, ic.related_adjustment_id
          FROM inventory_counts ic JOIN products p ON p.product_id = ic.product_id
          WHERE p.sku IN ({$placeholders})
          ORDER BY ic.count_id"
@@ -292,6 +293,24 @@ try {
             'role' => $member['role'],
         ];
     }
+
+    $insertApprovedIssue = $pdo->prepare(
+        "INSERT INTO inventory_adjustments
+            (product_id, adjustment_qty, adjustment_type, reported_by, approved_by,
+             approved_at, reason, review_notes, status)
+         VALUES (?, -1, 'damaged', ?, ?, CURRENT_TIMESTAMP, ?, ?, 'approved')"
+    );
+    $insertApprovedIssue->execute([
+        $productByName['countable']['product_id'],
+        $staffByUsername['cashier']['user_id'],
+        $staffByUsername['manager']['user_id'],
+        'Disposable approved Stock Issue for scan correction coverage.',
+        'Approved for browser workflow coverage.',
+    ]);
+    $approvedIssue = [
+        'adjustment_id' => (int)$pdo->lastInsertId(),
+        'product_id' => $productByName['countable']['product_id'],
+    ];
 } catch (Throwable $exception) {
     $cleanup();
     fwrite(STDERR, 'Fixture creation failed: ' . $exception->getMessage() . PHP_EOL);
@@ -304,4 +323,5 @@ echo json_encode([
     'token' => $token,
     'products' => $productByName,
     'staff' => $staffByUsername,
+    'approved_issue' => $approvedIssue,
 ]) . PHP_EOL;

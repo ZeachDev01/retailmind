@@ -263,6 +263,7 @@ async function main() {
         fixture = runFixture('--create', '--token', token);
         const products = fixture.products;
         const staff = fixture.staff;
+        const approvedIssue = fixture.approved_issue;
 
         const port = await freePort();
         const baseUrl = 'http://127.0.0.1:' + port;
@@ -385,7 +386,107 @@ async function main() {
         check(await eventually(page, () => document.getElementById('product_code_scan') !== null),
             'Inventory Counts renders the scan field');
 
+        console.log('Partly filled counts protect entered work from conflicting scans');
+        await page.selectOption('#product_id', String(products.countable.product_id));
+        await page.fill('#physical_quantity', '12');
+        await page.fill('#discrepancy_reason', 'Counted shelf and back-room units twice.');
+        const previewBeforeReplacement = await page.locator('.quantity-preview').innerText();
+        let replacementPrompt = '';
+        page.once('dialog', async (dialog) => {
+            replacementPrompt = dialog.message();
+            await dialog.dismiss();
+        });
+        await scan(page, products.zero.barcode);
+        await page.waitForTimeout(250);
+        check(replacementPrompt.includes(products.zero.product_name),
+            'a different matched product asks before replacing a partly filled count');
+        check(await page.inputValue('#product_id') === String(products.countable.product_id),
+            'cancelling the replacement preserves the selected product');
+        check(await page.inputValue('#physical_quantity') === '12',
+            'cancelling the replacement preserves the counted total');
+        check(await page.inputValue('#discrepancy_reason') === 'Counted shelf and back-room units twice.',
+            'cancelling the replacement preserves the discrepancy reason');
+        check(await page.locator('.quantity-preview').innerText() === previewBeforeReplacement,
+            'cancelling the replacement preserves the quantity preview');
+
+        page.once('dialog', (dialog) => dialog.accept());
+        await scan(page, products.zero.barcode);
+        check(await eventually(page, (id) => document.getElementById('product_id').value === String(id),
+            products.zero.product_id),
+            'confirming the replacement selects the newly scanned product');
+
+        console.log('Linked correction counts accept only their Stock Issue product');
+        await page.goto(countsPath + '?correct=' + approvedIssue.adjustment_id);
+        check(await eventually(page, (id) =>
+            document.getElementById('product_id').value === String(id), approvedIssue.product_id),
+            'the linked correction starts on the approved Stock Issue product');
+        await page.fill('#physical_quantity', '11');
+        await page.fill('#discrepancy_reason', 'Separate recount correcting the approved Stock Issue.');
+        const linkedPreview = await page.locator('.quantity-preview').innerText();
+        const linkedAdjustmentId = await page.locator('input[name="related_adjustment_id"]').inputValue();
+        await scan(page, products.zero.barcode);
+        await eventually(page, () => document.getElementById('scan_status').textContent.indexOf('linked Stock Issue') !== -1);
+        check(await page.inputValue('#product_id') === String(approvedIssue.product_id),
+            'a conflicting linked scan does not change the selected product');
+        check(await page.inputValue('#physical_quantity') === '11',
+            'a conflicting linked scan preserves the counted total');
+        check(await page.inputValue('#discrepancy_reason') === 'Separate recount correcting the approved Stock Issue.',
+            'a conflicting linked scan preserves the discrepancy reason');
+        check(await page.locator('.quantity-preview').innerText() === linkedPreview,
+            'a conflicting linked scan preserves the quantity preview');
+        check(await page.locator('input[name="related_adjustment_id"]').inputValue() === linkedAdjustmentId,
+            'a conflicting linked scan preserves the approved Stock Issue association');
+
+        await scan(page, products.countable.sku);
+        check(await eventually(page, () => document.activeElement && document.activeElement.id === 'physical_quantity'),
+            'a matching linked scan may return focus to the counted total');
+        check(await page.inputValue('#physical_quantity') === '11',
+            'a matching linked scan never sets the counted total');
+
+        check(await page.locator('.count-form').evaluate((form) => form.checkValidity()),
+            'the protected linked correction remains valid for submission');
+        const linkedCsrf = await page.locator('.count-form input[name="csrf_token"]').inputValue();
+        response = await context.request.post(countsUrl + '?correct=' + approvedIssue.adjustment_id, {
+            form: {
+                csrf_token: linkedCsrf,
+                action: 'record',
+                related_adjustment_id: String(approvedIssue.adjustment_id),
+                product_id: String(products.zero.product_id),
+                physical_quantity: '11',
+                discrepancy_reason: 'A tampered linked correction must be refused.'
+            }
+        });
+        check(response.status() === 200, 'the mismatched linked submission is handled without an unsafe write');
+        check(state().counts.length === 0, 'server-side mismatch validation refuses the other product');
+
+        await dismissBlockingDialogs(page);
+        const linkedNavigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+        await page.locator('.count-form button[type="submit"]').click();
+        await linkedNavigation;
+        check(await eventually(page, () => document.body.innerText.indexOf('sent for approval') !== -1),
+            'the linked correction records a separate pending count');
+        let linkedSnapshot = state();
+        const linkedCount = linkedSnapshot.counts.find((row) =>
+            Number(row.related_adjustment_id) === approvedIssue.adjustment_id);
+        check(linkedCount && Number(linkedCount.product_id) === approvedIssue.product_id,
+            'the pending correction keeps the approved Stock Issue product and association');
+        check(linkedCount && linkedCount.status === 'pending',
+            'the separate linked correction remains pending');
+
+        response = await context.request.post(countsUrl + '?correct=' + approvedIssue.adjustment_id, {
+            form: {
+                csrf_token: linkedCsrf,
+                action: 'reject',
+                count_id: String(linkedCount.count_id)
+            }
+        });
+        linkedSnapshot = state();
+        check(response.status() === 200
+            && linkedSnapshot.counts.find((row) => row.count_id === linkedCount.count_id).status === 'rejected',
+            'the existing decision lifecycle can reject the separate linked count');
+
         console.log('Enter-terminated scanning on the count form');
+        await page.goto(countsPath);
         await scan(page, products.countable.barcode);
         check(await eventually(page, (id) => document.getElementById('product_id').value === String(id),
             products.countable.product_id),
@@ -417,13 +518,19 @@ async function main() {
         console.log('Unknown and ambiguous codes leave the form alone');
         await page.selectOption('#product_id', String(products.zero.product_id));
         await page.fill('#physical_quantity', '7');
+        await page.fill('#discrepancy_reason', 'Preserve this entered explanation.');
         const beforeUnknown = await page.inputValue('#product_id');
+        const previewBeforeUnknown = await page.locator('.quantity-preview').innerText();
         await scan(page, 'NOPE' + token + 'ZZ');
         await eventually(page, () => document.getElementById('scan_status').textContent.indexOf('No product matches') !== -1);
         const unknownStatus = await page.locator('#scan_status').textContent();
         check(unknownStatus.indexOf('No product matches') !== -1, 'an unknown code shows a clear retry message');
         check(await page.inputValue('#product_id') === beforeUnknown, 'an unknown code does not change the product');
         check(await page.inputValue('#physical_quantity') === '7', 'an unknown code does not change the counted total');
+        check(await page.inputValue('#discrepancy_reason') === 'Preserve this entered explanation.',
+            'an unknown code does not change the discrepancy reason');
+        check(await page.locator('.quantity-preview').innerText() === previewBeforeUnknown,
+            'an unknown code does not change the quantity preview');
 
         await scan(page, sharedCode);
         await eventually(page, () => document.getElementById('scan_status').textContent.indexOf('more than one product') !== -1);
@@ -431,6 +538,10 @@ async function main() {
         check(ambiguousStatus.indexOf('more than one product') !== -1, 'an ambiguous code shows a clear message');
         check(await page.inputValue('#product_id') === beforeUnknown, 'an ambiguous code does not change the product');
         check(await page.inputValue('#physical_quantity') === '7', 'an ambiguous code does not change the counted total');
+        check(await page.inputValue('#discrepancy_reason') === 'Preserve this entered explanation.',
+            'an ambiguous code does not change the discrepancy reason');
+        check(await page.locator('.quantity-preview').innerText() === previewBeforeUnknown,
+            'an ambiguous code does not change the quantity preview');
 
         await scan(page, products.inactive.sku);
         await eventually(page, () => document.getElementById('scan_status').textContent.indexOf('No product matches') !== -1);
@@ -438,6 +549,7 @@ async function main() {
 
         console.log('Repeated scans never touch the counted total');
         await page.selectOption('#product_id', String(products.zero.product_id));
+        page.once('dialog', (dialog) => dialog.accept());
         await scan(page, products.countable.barcode);
         check(await eventually(page, (expected) =>
             document.getElementById('product_id').value === String(expected)
@@ -453,6 +565,7 @@ async function main() {
         // A different product is selected first, so the assertion can only pass
         // when this scan's own answer - not the previous selection - arrives.
         await page.selectOption('#product_id', String(products.zero.product_id));
+        page.once('dialog', (dialog) => dialog.accept());
         await page.keyboard.type(products.countable.barcode, { delay: 6 });
         await page.keyboard.press('Enter');
         check(await eventually(page, (expected) =>
@@ -466,6 +579,7 @@ async function main() {
         // A short code cannot lean on the burst-length threshold: any buffer
         // that is not a plain counted total must still be read as a scan.
         console.log('A short code in the counted total field is still a scan');
+        page.once('dialog', (dialog) => dialog.accept());
         await page.keyboard.type(products.short.sku, { delay: 6 });
         await page.keyboard.press('Enter');
         check(await eventually(page, (expected) =>
@@ -478,6 +592,7 @@ async function main() {
 
         console.log('A short numeric code in the counted total field is still a scan');
         await page.selectOption('#product_id', String(products.zero.product_id));
+        page.once('dialog', (dialog) => dialog.accept());
         await page.keyboard.type(products.short_numeric.sku, { delay: 6 });
         await page.keyboard.press('Enter');
         check(await eventually(page, (expected) =>
@@ -529,7 +644,7 @@ async function main() {
 
         console.log('A scan alone records nothing');
         let snapshot = state();
-        check(snapshot.counts.length === 0, 'no count exists after scanning only');
+        check(snapshot.counts.length === 1, 'scanning alone adds no count beyond the linked correction');
 
         console.log('Count submission and approval');
         await page.selectOption('#product_id', String(products.countable.product_id));
@@ -548,8 +663,8 @@ async function main() {
             'the count is recorded and stays pending');
 
         snapshot = state();
-        check(snapshot.counts.length === 1, 'exactly one count exists after submission');
-        const recorded = snapshot.counts[0];
+        check(snapshot.counts.length === 2, 'the ordinary submission adds exactly one count');
+        const recorded = snapshot.counts.find((row) => !row.related_adjustment_id);
         check(recorded.status === 'pending', 'the submitted count is pending');
         check(Number(recorded.system_quantity) === 10, 'the count captured the system quantity on submission');
         check(Number(recorded.physical_quantity) === 15, 'the count stored the entered physical total');
@@ -575,7 +690,8 @@ async function main() {
             'the existing approval control reconciles the count');
 
         snapshot = state();
-        check(snapshot.counts[0].status === 'approved', 'the approved count is recorded as approved');
+        check(recorded && state().counts.find((row) => row.count_id === recorded.count_id).status === 'approved',
+            'the approved count is recorded as approved');
         const approvedState = snapshot.products.find((row) => row.sku === products.countable.sku);
         check(Number(approvedState.quantity_on_hand) === 15,
             'approval reconciles stock to the counted total');
@@ -599,10 +715,20 @@ async function main() {
             products.zero.product_id),
             'Administrator scanning selects a product without gaining a submit path');
 
-        const adminToken = await adminPage.locator('.count-form input[name="csrf_token"]').inputValue();
+        check(await adminPage.locator('.count-form button[type="submit"]').count() === 0,
+            'Administrator read-only access renders no Record Count control');
+        check(await adminPage.locator('.count-actions button').count() === 0,
+            'Administrator read-only access renders no approval or rejection controls');
+
+        await adminPage.goto(countsPath + '?correct=' + approvedIssue.adjustment_id);
+        check((await adminPage.locator('.message').first().innerText()).includes('read-only'),
+            'the linked correction view explains Administrator read-only access');
+        check(await adminPage.locator('input[name="related_adjustment_id"]').count() === 0,
+            'the Administrator linked view exposes no correction submission association');
+
         response = await adminContext.request.post(countsUrl, {
             form: {
-                csrf_token: adminToken,
+                csrf_token: 'administrator-has-no-mutation-form',
                 action: 'record',
                 product_id: String(products.zero.product_id),
                 physical_quantity: '3',
@@ -611,7 +737,7 @@ async function main() {
         });
         check(response.status() === 403, 'Administrator count submission is refused with 403');
         snapshot = state();
-        check(snapshot.counts.length === 1, 'Administrator access created no count');
+        check(snapshot.counts.length === 2, 'Administrator access created no count');
         await adminContext.close();
     } finally {
         if (browser) {
