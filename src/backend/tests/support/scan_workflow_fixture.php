@@ -1,0 +1,298 @@
+<?php
+// CLI fixture for the Inventory Counts scan browser workflow test (#79).
+// Creates disposable Store data (products, stock, staff accounts) keyed by a
+// run token and removes every row it created, so the suite never depends on
+// whatever happens to be seeded in the development database.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit("CLI only\n");
+}
+
+require_once __DIR__ . '/../../bootstrap/app.php';
+
+use App\Core\Database;
+
+$options = getopt('', ['token:', 'create', 'cleanup', 'state']);
+
+$token = preg_replace('/[^A-Za-z0-9]/', '', (string)($options['token'] ?? ''));
+if (strlen($token) < 4 || strlen($token) > 12) {
+    fwrite(STDERR, "A 4-12 character alphanumeric token is required.\n");
+    exit(1);
+}
+
+$pdo = Database::connection();
+
+$storeId = (int)(new App\Store\StoreScope($pdo))->id();
+
+$roleId = static function (PDO $pdo, string $name): int {
+    $stmt = $pdo->prepare('SELECT role_id FROM roles WHERE role_name = ?');
+    $stmt->execute([$name]);
+    $roleId = (int)$stmt->fetchColumn();
+    if ($roleId <= 0) {
+        throw new RuntimeException("Role {$name} is missing.");
+    }
+    return $roleId;
+};
+
+$products = [
+    'countable' => [
+        'sku' => 'SCN' . $token . 'A',
+        'barcode' => '840' . $token . '00001',
+        'case_barcode' => 'CS' . $token . '0001',
+        'product_name' => 'Scan WF Countable',
+        'status' => 'active',
+        'quantity_on_hand' => 10,
+    ],
+    'zero' => [
+        'sku' => 'SCN' . $token . 'Z',
+        'barcode' => '840' . $token . '00002',
+        'case_barcode' => 'CS' . $token . '0002',
+        'product_name' => 'Scan WF Zero Stock',
+        'status' => 'active',
+        'quantity_on_hand' => 0,
+    ],
+    'ambiguous_a' => [
+        'sku' => 'SCN' . $token . 'P',
+        'barcode' => 'AMBIG' . $token,
+        'case_barcode' => null,
+        'product_name' => 'Scan WF Ambiguous Stocked',
+        'status' => 'active',
+        'quantity_on_hand' => 5,
+    ],
+    'ambiguous_b' => [
+        'sku' => 'AMBIG' . $token,
+        'barcode' => 'SCN' . $token . 'Q',
+        'case_barcode' => null,
+        'product_name' => 'Scan WF Ambiguous Empty',
+        'status' => 'active',
+        'quantity_on_hand' => 0,
+    ],
+    'inactive' => [
+        'sku' => 'SCN' . $token . 'X',
+        'barcode' => '840' . $token . '00005',
+        'case_barcode' => 'CS' . $token . '0005',
+        'product_name' => 'Scan WF Inactive',
+        'status' => 'inactive',
+        'quantity_on_hand' => 3,
+    ],
+    // Seven characters: short enough that a wedge burst of this code cannot
+    // lean on the burst-length threshold alone to be recognised as a scan.
+    'short' => [
+        'sku' => 'W' . substr($token, -5) . 'S',
+        'barcode' => 'W' . substr($token, -5) . 'B',
+        'case_barcode' => null,
+        'product_name' => 'Scan WF Short Code',
+        'status' => 'active',
+        'quantity_on_hand' => 4,
+    ],
+];
+
+$staff = [
+    'manager' => [
+        'username' => 'scnmgr' . $token,
+        'email' => 'scnmgr' . $token . '@example.test',
+        'full_name' => 'Scan WF Manager',
+        'role' => 'inventory_manager',
+    ],
+    'admin' => [
+        'username' => 'scnadm' . $token,
+        'email' => 'scnadm' . $token . '@example.test',
+        'full_name' => 'Scan WF Administrator',
+        'role' => 'admin',
+    ],
+    'cashier' => [
+        'username' => 'scncsh' . $token,
+        'email' => 'scncsh' . $token . '@example.test',
+        'full_name' => 'Scan WF Cashier',
+        'role' => 'cashier',
+    ],
+];
+
+$productByName = [];
+$staffByUsername = [];
+
+$cleanup = static function () use ($pdo, $products, $staff, &$productByName, &$staffByUsername): void {
+    $productIds = [];
+    $userIds = [];
+    foreach ($products as $product) {
+        $stmt = $pdo->prepare('SELECT product_id FROM products WHERE sku = ?');
+        $stmt->execute([$product['sku']]);
+        if ($id = (int)$stmt->fetchColumn()) {
+            $productIds[] = $id;
+        }
+    }
+    foreach ($staff as $member) {
+        $stmt = $pdo->prepare('SELECT user_id FROM users WHERE username = ?');
+        $stmt->execute([$member['username']]);
+        if ($id = (int)$stmt->fetchColumn()) {
+            $userIds[] = $id;
+        }
+    }
+
+    // Remove every row that points at this disposable Store data. The tables
+    // come from the live schema, so a child table added later is cleaned up
+    // without the fixture having to remember it.
+    $deleteReferencing = static function (string $parent, array $ids) use ($pdo): void {
+        if ($ids === []) {
+            return;
+        }
+        $list = implode(',', array_map('intval', $ids));
+        $stmt = $pdo->prepare(
+            'SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = ?'
+        );
+        $stmt->execute([$parent]);
+        $deferred = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $table = $row['TABLE_NAME'];
+            $column = $row['COLUMN_NAME'];
+            try {
+                $pdo->exec("DELETE FROM `{$table}` WHERE `{$column}` IN ({$list})");
+            } catch (PDOException $ignored) {
+                $deferred[] = [$table, $column];
+            }
+        }
+        // A second pass clears rows whose parent row was only reachable after
+        // the first pass emptied another child table.
+        foreach ($deferred as [$table, $column]) {
+            try {
+                $pdo->exec("DELETE FROM `{$table}` WHERE `{$column}` IN ({$list})");
+            } catch (PDOException $errorAgain) {
+                throw new RuntimeException(
+                    "Could not clear {$table}.{$column}: " . $errorAgain->getMessage(),
+                    0,
+                    $errorAgain
+                );
+            }
+        }
+    };
+
+    $in = static function (array $ids): string {
+        return $ids === [] ? 'NULL' : implode(',', array_map('intval', $ids));
+    };
+    $userList = $in($userIds);
+
+    if ($userIds !== []) {
+        $pdo->exec("DELETE FROM login_attempts WHERE username IN (" . implode(
+            ',',
+            array_map(static fn(int $id): string => "'user:{$id}'", $userIds)
+        ) . ")");
+    }
+
+    $deleteReferencing('products', $productIds);
+    $deleteReferencing('users', $userIds);
+
+    if ($productIds !== []) {
+        $pdo->exec('DELETE FROM products WHERE product_id IN (' . $in($productIds) . ')');
+    }
+    if ($userIds !== []) {
+        $pdo->exec("DELETE FROM users WHERE user_id IN ({$userList})");
+    }
+};
+
+if (array_key_exists('cleanup', $options)) {
+    $cleanup();
+    echo json_encode(['ok' => true]) . PHP_EOL;
+    exit(0);
+}
+
+if (array_key_exists('state', $options)) {
+    $skus = array_column($products, 'sku');
+    $placeholders = implode(',', array_fill(0, count($skus), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT p.sku, p.product_id, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
+                p.status
+         FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id
+         WHERE p.sku IN ({$placeholders})"
+    );
+    $stmt->execute($skus);
+    $catalog = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt = $pdo->prepare(
+        "SELECT ic.count_id, ic.product_id, p.sku, ic.system_quantity, ic.physical_quantity,
+                ic.difference_qty, ic.status, ic.discrepancy_reason
+         FROM inventory_counts ic JOIN products p ON p.product_id = ic.product_id
+         WHERE p.sku IN ({$placeholders})
+         ORDER BY ic.count_id"
+    );
+    $stmt->execute($skus);
+    $counts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode([
+        'ok' => true,
+        'products' => $catalog,
+        'counts' => $counts,
+    ]) . PHP_EOL;
+    exit(0);
+}
+
+if (!array_key_exists('create', $options)) {
+    fwrite(STDERR, "Use --create, --state or --cleanup with --token.\n");
+    exit(1);
+}
+
+$cleanup();
+
+try {
+    $insertProduct = $pdo->prepare(
+        'INSERT INTO products (branch_id, sku, barcode, case_barcode, product_name, unit_price, cost_price, status)
+         VALUES (?, ?, ?, ?, ?, 10.00, 5.00, ?)'
+    );
+    $insertInventory = $pdo->prepare(
+        'INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)'
+    );
+    foreach ($products as $key => $product) {
+        $insertProduct->execute([
+            $storeId,
+            $product['sku'],
+            $product['barcode'],
+            $product['case_barcode'],
+            $product['product_name'],
+            $product['status'],
+        ]);
+        $productId = (int)$pdo->lastInsertId();
+        $insertInventory->execute([$productId, $product['quantity_on_hand']]);
+        $productByName[$key] = [
+            'product_id' => $productId,
+            'sku' => $product['sku'],
+            'barcode' => $product['barcode'],
+            'case_barcode' => $product['case_barcode'],
+            'product_name' => $product['product_name'],
+            'status' => $product['status'],
+            'quantity_on_hand' => $product['quantity_on_hand'],
+        ];
+    }
+
+    $insertUser = $pdo->prepare(
+        'INSERT INTO users (full_name, username, email, password_hash, role_id, status, session_version, must_change_password, branch_id)
+         VALUES (?, ?, ?, ?, ?, \'active\', 1, 0, ?)'
+    );
+    foreach ($staff as $key => $member) {
+        $insertUser->execute([
+            $member['full_name'],
+            $member['username'],
+            $member['email'],
+            password_hash('Scanwf-Test-Passw0rd!', PASSWORD_DEFAULT),
+            $roleId($pdo, $member['role']),
+            $storeId,
+        ]);
+        $staffByUsername[$key] = [
+            'user_id' => (int)$pdo->lastInsertId(),
+            'username' => $member['username'],
+            'password' => 'Scanwf-Test-Passw0rd!',
+            'role' => $member['role'],
+        ];
+    }
+} catch (Throwable $exception) {
+    $cleanup();
+    fwrite(STDERR, 'Fixture creation failed: ' . $exception->getMessage() . PHP_EOL);
+    exit(1);
+}
+
+echo json_encode([
+    'ok' => true,
+    'store_id' => $storeId,
+    'token' => $token,
+    'products' => $productByName,
+    'staff' => $staffByUsername,
+]) . PHP_EOL;

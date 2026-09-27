@@ -324,6 +324,39 @@ html.overview-fefo-active::-webkit-scrollbar { display: none; }
         border-radius: 10px;
         margin-bottom: 1rem;
     }
+    .scan-group {
+        margin-top: 1rem;
+    }
+    .scan-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font: inherit;
+    }
+    .scan-input:focus {
+        outline: none;
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+    }
+    .scan-status {
+        min-height: 1.1rem;
+        margin: 0.45rem 0 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+    }
+    .scan-status--ok { color: var(--success); }
+    .scan-status--error { color: var(--danger); }
+    .scan-match {
+        margin-top: 0.5rem;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #f8fafc;
+    }
+    .scan-match[hidden] { display: none; }
+    .scan-match strong { display: block; }
     @media (max-width: 1000px) {
         .count-layout { grid-template-columns: 1fr; }
         .quantity-preview { grid-template-columns: 1fr; }

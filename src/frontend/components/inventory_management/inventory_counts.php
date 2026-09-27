@@ -88,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $products = $countService->getActiveProducts();
 $counts = $countService->getRecentCounts();
 $pendingTotal = $countService->getPendingCountTotal();
+$productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_code_lookup.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -138,6 +139,26 @@ $pendingTotal = $countService->getPendingCountTotal();
                             <a href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php?detail=' . (int)$correctReport['adjustment_id'])) ?>">Back to oversight</a>
                         </div>
                     <?php endif; ?>
+
+                    <div class="form-group scan-group">
+                        <label for="product_code_scan">Scan product</label>
+                        <input
+                            type="text"
+                            id="product_code_scan"
+                            class="scan-input"
+                            placeholder="Scan a barcode or type a SKU, then press Enter"
+                            autocomplete="off"
+                            autocapitalize="off"
+                            autocorrect="off"
+                            spellcheck="false"
+                            autofocus
+                            aria-describedby="scan_status">
+                        <p class="scan-status" id="scan_status" role="status" aria-live="polite"></p>
+                        <div class="scan-match" id="scan_match" hidden>
+                            <strong id="scan_match_name"></strong>
+                            <small class="muted" id="scan_match_detail"></small>
+                        </div>
+                    </div>
 
                     <form method="POST" class="count-form">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
@@ -324,6 +345,169 @@ $pendingTotal = $countService->getPendingCountTotal();
         productSelect.addEventListener('change', updatePreview);
         physicalInput.addEventListener('input', updatePreview);
         updatePreview();
+
+        // --- Barcode / SKU scan (ticket #79) ---------------------------------
+        // Identification only: a scan selects the product and moves focus to
+        // the counted total. It never writes a quantity, never increments one,
+        // and never submits the form.
+        const scanInput = document.getElementById('product_code_scan');
+        const scanStatus = document.getElementById('scan_status');
+        const scanMatch = document.getElementById('scan_match');
+        const scanMatchName = document.getElementById('scan_match_name');
+        const scanMatchDetail = document.getElementById('scan_match_detail');
+        const productCodeLookupUrl = <?= json_encode($productCodeLookupUrl) ?>;
+        const kindLabels = {
+            sku: 'SKU',
+            unit_barcode: 'unit barcode',
+            case_barcode: 'case barcode'
+        };
+
+        function setScanStatus(message, tone) {
+            scanStatus.textContent = message || '';
+            scanStatus.classList.remove('scan-status--ok', 'scan-status--error');
+            if (tone === 'ok') {
+                scanStatus.classList.add('scan-status--ok');
+            } else if (tone === 'error') {
+                scanStatus.classList.add('scan-status--error');
+            }
+        }
+
+        function showScanMatch(product, matchedKind) {
+            scanMatchName.textContent = product.sku + ' - ' + product.product_name;
+            scanMatchDetail.textContent =
+                (kindLabels[matchedKind] ? kindLabels[matchedKind] + ' matched. ' : '') +
+                'System quantity ' + product.quantity_on_hand + '.';
+            scanMatch.hidden = false;
+        }
+
+        function applyProductSelection(product) {
+            let option = productSelect.querySelector('option[value="' + product.product_id + '"]');
+            if (!option) {
+                option = document.createElement('option');
+                option.value = String(product.product_id);
+                option.textContent = product.sku + ' - ' + product.product_name;
+                productSelect.appendChild(option);
+            }
+            option.dataset.systemQty = String(product.quantity_on_hand);
+            productSelect.value = option.value;
+            productSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function runProductLookup(code) {
+            fetch(productCodeLookupUrl + '?code=' + encodeURIComponent(code), {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin'
+            })
+                .then(function (response) {
+                    return response.json().then(
+                        function (body) { return { ok: response.ok, body: body }; },
+                        function () { return { ok: false, body: null }; }
+                    );
+                })
+                .then(function (result) {
+                    const body = result.body || {};
+                    if (!result.ok || body.success === false) {
+                        setScanStatus(
+                            body.error || 'The code could not be checked. Try again or choose the product from the list.',
+                            'error'
+                        );
+                        return;
+                    }
+                    if (body.outcome === 'match' && body.product) {
+                        applyProductSelection(body.product);
+                        showScanMatch(body.product, body.matched_code_kind);
+                        setScanStatus('Matched by ' + (kindLabels[body.matched_code_kind] || 'code') + '. Enter the counted total.', 'ok');
+                        scanInput.value = '';
+                        physicalInput.focus();
+                        updatePreview();
+                        return;
+                    }
+                    if (body.outcome === 'ambiguous') {
+                        setScanStatus(
+                            '"' + body.code + '" matches more than one product. Nothing was changed - check the label or choose the product from the list.',
+                            'error'
+                        );
+                        return;
+                    }
+                    setScanStatus(
+                        'No product matches "' + body.code + '". Check the label or choose the product from the list.',
+                        'error'
+                    );
+                })
+                .catch(function () {
+                    setScanStatus('The code could not be checked. Check your connection and try again.', 'error');
+                });
+        }
+
+        function startLookup(code) {
+            setScanStatus('Checking "' + code + '"...');
+            runProductLookup(code);
+        }
+
+        scanInput.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter') {
+                return;
+            }
+            // Never let Enter in the scan box submit the count form.
+            event.preventDefault();
+            const code = scanInput.value.trim();
+            if (code === '') {
+                setScanStatus('Scan a barcode or type a SKU, then press Enter.', 'error');
+                return;
+            }
+            startLookup(code);
+        });
+
+        // A keyboard wedge types into whatever holds focus. When focus sits on
+        // the counted total, a repeated scan would otherwise rewrite it, so an
+        // Enter-terminated burst of keystrokes is treated as a scan: the total
+        // is restored to what the operator entered and the code is looked up.
+        const SCAN_BURST_MIN_KEYS = 8;
+        const SCAN_BURST_IDLE_MS = 600;
+        const SCAN_BURST_MAX_SPAN_MS = 1500;
+        const SCAN_BURST_ENTER_MS = 300;
+        let burstKeys = [];
+        let burstValue = '';
+
+        physicalInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                const now = Date.now();
+                const last = burstKeys[burstKeys.length - 1];
+                const code = burstKeys.map(function (entry) { return entry.key; }).join('');
+                // A counted total is only ever digits, so a buffer holding any
+                // other character is a code however short or slow it arrived.
+                const notACountedTotal = code !== '' && /[^\d]/.test(code);
+                const isScanBurst = notACountedTotal
+                    || (burstKeys.length >= SCAN_BURST_MIN_KEYS
+                        && last !== undefined
+                        && (now - last.t) <= SCAN_BURST_ENTER_MS
+                        && (last.t - burstKeys[0].t) <= SCAN_BURST_MAX_SPAN_MS);
+                if (!isScanBurst) {
+                    burstKeys = [];
+                    return;
+                }
+                burstKeys = [];
+                event.preventDefault();
+                event.stopPropagation();
+                physicalInput.value = burstValue;
+                physicalInput.dispatchEvent(new Event('input', { bubbles: true }));
+                startLookup(code);
+                return;
+            }
+
+            if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) {
+                burstKeys = [];
+                return;
+            }
+
+            const typedAt = Date.now();
+            if (burstKeys.length === 0 || (typedAt - burstKeys[burstKeys.length - 1].t) > SCAN_BURST_IDLE_MS) {
+                burstKeys = [];
+                burstValue = physicalInput.value;
+            }
+            burstKeys.push({ t: typedAt, key: event.key });
+        });
     </script>
 </body>
 
