@@ -33,11 +33,19 @@ if (process.env.RUN_DB_TESTS !== '1') {
 }
 
 function resolvePlaywright() {
-    const candidates = [];
+    const localCandidates = [];
     if (process.env.PLAYWRIGHT_MODULE) {
-        candidates.push(process.env.PLAYWRIGHT_MODULE);
+        localCandidates.push(process.env.PLAYWRIGHT_MODULE);
     }
-    candidates.push('playwright', 'playwright-core');
+    localCandidates.push('playwright', 'playwright-core');
+    for (const candidate of localCandidates) {
+        try {
+            return require(candidate);
+        } catch (error) {
+            // Fall back to known global installation locations.
+        }
+    }
+
     const globalRoots = [];
     if (process.env.APPDATA) {
         globalRoots.push(path.join(process.env.APPDATA, 'npm', 'node_modules'));
@@ -57,13 +65,14 @@ function resolvePlaywright() {
     } catch (error) {
         // npm is unavailable; the known prefixes above still get a chance.
     }
+    const globalCandidates = [];
     for (const root of globalRoots) {
         for (const name of ['playwright', 'playwright-core']) {
-            candidates.push(path.join(root, name));
-            candidates.push(path.join(root, '@playwright', 'mcp', 'node_modules', name));
+            globalCandidates.push(path.join(root, name));
+            globalCandidates.push(path.join(root, '@playwright', 'mcp', 'node_modules', name));
         }
     }
-    for (const candidate of candidates) {
+    for (const candidate of globalCandidates) {
         try {
             return require(candidate);
         } catch (error) {

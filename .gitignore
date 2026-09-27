@@ -1,5 +1,6 @@
 .env
 /vendor/
+/node_modules/
 /backend/storage/logs/*
 !/backend/storage/logs/.gitkeep
 /backend/storage/backups/*
