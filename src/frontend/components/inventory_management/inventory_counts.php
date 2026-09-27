@@ -361,6 +361,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             unit_barcode: 'unit barcode',
             case_barcode: 'case barcode'
         };
+        let latestLookupRequestId = 0;
 
         function setScanStatus(message, tone) {
             scanStatus.textContent = message || '';
@@ -394,6 +395,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
         }
 
         function runProductLookup(code) {
+            const requestId = ++latestLookupRequestId;
             fetch(productCodeLookupUrl + '?code=' + encodeURIComponent(code), {
                 method: 'GET',
                 headers: { Accept: 'application/json' },
@@ -406,6 +408,9 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     );
                 })
                 .then(function (result) {
+                    if (requestId !== latestLookupRequestId) {
+                        return;
+                    }
                     const body = result.body || {};
                     if (!result.ok || body.success === false) {
                         setScanStatus(
@@ -436,6 +441,9 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     );
                 })
                 .catch(function () {
+                    if (requestId !== latestLookupRequestId) {
+                        return;
+                    }
                     setScanStatus('The code could not be checked. Check your connection and try again.', 'error');
                 });
         }
@@ -463,7 +471,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
         // the counted total, a repeated scan would otherwise rewrite it, so an
         // Enter-terminated burst of keystrokes is treated as a scan: the total
         // is restored to what the operator entered and the code is looked up.
-        const SCAN_BURST_MIN_KEYS = 8;
+        const SCAN_BURST_MIN_KEYS = 2;
         const SCAN_BURST_IDLE_MS = 600;
         const SCAN_BURST_MAX_SPAN_MS = 1500;
         const SCAN_BURST_ENTER_MS = 300;

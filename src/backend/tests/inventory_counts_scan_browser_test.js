@@ -476,6 +476,44 @@ async function main() {
         check(await page.inputValue('#physical_quantity') === '7',
             'a short code still never sets the counted total');
 
+        console.log('A short numeric code in the counted total field is still a scan');
+        await page.selectOption('#product_id', String(products.zero.product_id));
+        await page.keyboard.type(products.short_numeric.sku, { delay: 6 });
+        await page.keyboard.press('Enter');
+        check(await eventually(page, (expected) =>
+            document.getElementById('product_id').value === String(expected)
+                && document.getElementById('scan_status').textContent.indexOf('Matched by') !== -1,
+            products.short_numeric.product_id),
+            'a short numeric code in the counted total field still selects the product');
+        check(await page.inputValue('#physical_quantity') === '7',
+            'a short numeric code never sets the counted total');
+
+        console.log('The newest scan result wins when lookups overlap');
+        const delayedCode = products.countable.sku;
+        const newerUnknownCode = 'LATER' + token + 'NOPE';
+        const delayedLookupPattern = '**/product_code_lookup.php?code=*';
+        await page.route(delayedLookupPattern, async (route) => {
+            const code = new URL(route.request().url()).searchParams.get('code');
+            if (code === delayedCode) {
+                await new Promise((resolve) => setTimeout(resolve, 350));
+            }
+            await route.continue();
+        });
+        await page.selectOption('#product_id', String(products.zero.product_id));
+        const delayedResponse = page.waitForResponse((candidate) =>
+            new URL(candidate.url()).searchParams.get('code') === delayedCode);
+        const newerResponse = page.waitForResponse((candidate) =>
+            new URL(candidate.url()).searchParams.get('code') === newerUnknownCode);
+        await scan(page, delayedCode);
+        await scan(page, newerUnknownCode);
+        await Promise.all([delayedResponse, newerResponse]);
+        await page.waitForTimeout(150);
+        check((await page.locator('#scan_status').textContent()).indexOf('No product matches') !== -1,
+            'a stale earlier match cannot replace the newer unknown result');
+        check(await page.inputValue('#product_id') === String(products.zero.product_id),
+            'a stale earlier match cannot change the newer scan form state');
+        await page.unroute(delayedLookupPattern);
+
         console.log('Manual dropdown selection still works');
         const lookupSettled = await eventually(page,
             () => document.getElementById('scan_status').textContent.indexOf('Checking') === -1);

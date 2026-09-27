@@ -19,6 +19,7 @@ if (strlen($token) < 4 || strlen($token) > 12) {
     fwrite(STDERR, "A 4-12 character alphanumeric token is required.\n");
     exit(1);
 }
+$shortNumericSku = str_pad((string)(crc32($token) % 10000000), 7, '0', STR_PAD_LEFT);
 
 $pdo = Database::connection();
 
@@ -84,6 +85,14 @@ $products = [
         'product_name' => 'Scan WF Short Code',
         'status' => 'active',
         'quantity_on_hand' => 4,
+    ],
+    'short_numeric' => [
+        'sku' => $shortNumericSku,
+        'barcode' => 'N' . substr($token, -5) . 'B',
+        'case_barcode' => null,
+        'product_name' => 'Scan WF Short Numeric Code',
+        'status' => 'active',
+        'quantity_on_hand' => 6,
     ],
 ];
 

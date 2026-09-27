@@ -10,7 +10,7 @@ src/frontend/index.php               Landing page implementation
 src/frontend/components/auth/login.php  Redirect to root login
 src/frontend/cashier/                Cashier-facing screens
 src/frontend/components/                Authenticated back-office modules
-src/frontend/barcodeScanner/apiScanner/ JSON endpoints for browser and scanner workflows
+src/frontend/components/barcodeScanner/apiScanner/ JSON endpoints for authenticated browser and scanner workflows
 src/frontend/barcodeScanner/         Barcode scanner web app assets
 ```
 
