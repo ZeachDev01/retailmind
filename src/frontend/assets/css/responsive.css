@@ -60,25 +60,7 @@
         text-decoration: none;
     }
 
-    .admin-mobile-logo-mark {
-        display: grid;
-        width: 34px;
-        height: 34px;
-        flex: 0 0 34px;
-        place-items: center;
-        border-radius: 5px;
-        color: #ffffff;
-        background: #2563eb;
-        font-size: 1rem;
-    }
-
-    .admin-mobile-logo-text {
-        overflow: hidden;
-        color: #111827;
-        font-size: .95rem;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+    .admin-mobile-logo-image { width: 132px; height: auto; display: block; }
 
     .admin-mobile-tools {
         display: flex;
@@ -689,9 +671,7 @@ body.products-page .products-quick-action strong {
         padding-inline: .7rem;
     }
 
-    .admin-mobile-logo-text {
-        display: none;
-    }
+    .admin-mobile-logo-image { width: 108px; }
 
     .admin-mobile-tools {
         gap: .55rem;
@@ -789,27 +769,6 @@ body.admin-dashboard-page .mobile-role-label {
         color: #020617;
         font-weight: 700;
         text-decoration: none;
-    }
-
-    body.admin-dashboard-page .admin-mobile-logo-mark {
-        width: 34px;
-        height: 34px;
-        flex: 0 0 34px;
-        display: grid;
-        place-items: center;
-        border-radius: 5px;
-        background: #2563eb;
-        color: #fff;
-        font-size: 1rem;
-        box-shadow: 0 4px 10px rgba(37, 99, 235, .18);
-    }
-
-    body.admin-dashboard-page .admin-mobile-logo-text {
-        overflow: hidden;
-        color: #111827;
-        font-size: .95rem;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     body.admin-dashboard-page .admin-mobile-avatar {

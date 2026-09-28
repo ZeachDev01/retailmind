@@ -77,8 +77,36 @@ An operational configuration affecting the Store's day-to-day work, including sa
 _Avoid_: Platform setting, branch setting
 
 **Demand Forecast**:
-A model-produced estimate of future product demand for the Store. The Super Administrator governs model operation, the Administrator reviews performance and operational exceptions, and the Inventory Manager uses the forecast for replenishment work.
+A Random Forest-produced estimate of future units demanded for one product in the Store, reported over 7-, 14-, and 28-day Forecast Horizons. It supports replenishment decisions but never places an order or changes stock. The Super Administrator governs Model Retraining, the Administrator reviews performance and operational exceptions, and the Inventory Manager uses the forecast for replenishment work.
 _Avoid_: Branch forecast, guaranteed demand
+
+**Forecast Horizon**:
+One of the fixed future periods—7, 14, or 28 days—over which daily Demand Forecast values are summed for review and replenishment planning.
+_Avoid_: 30-day forecast, arbitrary horizon
+
+**Forecast Generation**:
+Applying the currently approved forecasting model to Store data after close or through a manual request. The Administrator and Super Administrator may request it; it does not alter the model.
+_Avoid_: Model training, automatic ordering, retraining
+
+**Model Retraining**:
+Replacing the currently approved forecasting model with a newly fitted Random Forest after chronological validation. It runs weekly after close or through a manual Super Administrator request and is recorded as a Protected Audit Record.
+_Avoid_: Forecast generation, live request training, Administrator retraining
+
+**Forecast Readiness**:
+The evidence level attached to a product forecast: Insufficient below 56 history days, Low from 56–179, Medium from 180–364, and High from 365 onward only when validation error is acceptable. The interface marks lower-readiness forecasts instead of hiding them or presenting them as equally reliable.
+_Avoid_: Guaranteed confidence, model probability, accuracy percentage
+
+**Forecast Evaluation**:
+A chronological backtest of the 7-, 14-, and 28-day forecasts, reported with MAE as the primary panel-facing metric, RMSE as the secondary metric, and WAPE as the business comparison metric.
+_Avoid_: Random train/test split, FreshRetailNet accuracy test
+
+**Scheduled Demand Driver**:
+A future price or promotion already recorded for its effective date and therefore safe to use when generating a Demand Forecast. Unscheduled or assumed future changes are never inserted as model inputs.
+_Avoid_: Guessed promotion, planned-but-unrecorded price
+
+**Replenishment Recommendation**:
+A non-binding quantity or attention marker derived from a Demand Forecast, current stock, and supplier lead time. A Store operator reviews it before any purchasing action.
+_Avoid_: Automatic purchase order, guaranteed reorder
 
 **Protected Audit Record**:
 A record of a security-sensitive or operational action that application users cannot individually edit or delete; Database Restore returns these records to the backup's state. In-app visibility remains role-restricted, but a complete Database Backup exposes all captured records to either administrator role.

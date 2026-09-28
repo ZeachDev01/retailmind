@@ -237,12 +237,13 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
             'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = CURRENT_TIMESTAMP WHERE user_id = ?'
         )->execute([(int)$user['user_id']]);
         App\Core\Session::regenerate();
-        $_SESSION['user_id'] = (int)$user['user_id'];
-        $_SESSION['full_name'] = $user['full_name'];
-        $_SESSION['role'] = $user['role_name'];
-        $_SESSION['roles'] = function_exists('user_role_names')
+        $assignedRoles = function_exists('user_role_names')
             ? user_role_names($pdo, (int)$user['user_id'], (string)$user['role_name'])
             : [(string)$user['role_name']];
+        $_SESSION['user_id'] = (int)$user['user_id'];
+        $_SESSION['full_name'] = $user['full_name'];
+        $_SESSION['role'] = $assignedRoles[0] ?? (string)$user['role_name'];
+        $_SESSION['roles'] = $assignedRoles;
         $_SESSION['profile_image'] = $user['profile_image'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
@@ -312,11 +313,12 @@ function validate_current_session(PDO $pdo): void
     }
     $_SESSION['full_name'] = $user['full_name'];
     $selectedWorkspace = current_role();
-    $_SESSION['roles'] = user_role_names($pdo, (int)$_SESSION['user_id'], (string)$user['role_name']);
+    $assignedRoles = user_role_names($pdo, (int)$_SESSION['user_id'], (string)$user['role_name']);
+    $_SESSION['roles'] = $assignedRoles;
     $_SESSION['role'] = $selectedWorkspace !== null
         && in_array($selectedWorkspace, current_workspace_roles((string)$user['role_name']), true)
         ? $selectedWorkspace
-        : $user['role_name'];
+        : ($assignedRoles[0] ?? (string)$user['role_name']);
     $_SESSION['profile_image'] = $user['profile_image'];
     $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
     $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);

@@ -65,8 +65,12 @@ if (isset($_SESSION['user_id']) && ($_GET['login_success'] ?? '') !== '1') {
 $loginUrl = htmlspecialchars(landing_app_url('?login=1'), ENT_QUOTES, 'UTF-8');
 $loginActionUrl = htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8');
 $forgotPasswordUrl = htmlspecialchars(landing_app_url('components/auth/forgot_password.php'), ENT_QUOTES, 'UTF-8');
-$styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css?v=20260928c'), ENT_QUOTES, 'UTF-8');
-$landingStyleUrl = htmlspecialchars(landing_app_url('assets/css/landing.css?v=20260928c'), ENT_QUOTES, 'UTF-8');
+$styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css?v=20260928d'), ENT_QUOTES, 'UTF-8');
+$landingStyleUrl = htmlspecialchars(landing_app_url('assets/css/landing.css?v=20260928e'), ENT_QUOTES, 'UTF-8');
+$faviconUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-favicon-32.png'), ENT_QUOTES, 'UTF-8');
+$brandLogoUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-logo-600x200.png'), ENT_QUOTES, 'UTF-8');
+$heroImageUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-landing-hero.jpg'), ENT_QUOTES, 'UTF-8');
+$brandIconUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-icon-512.png'), ENT_QUOTES, 'UTF-8');
 $loginError = '';
 $loginSuccess = '';
 $loginSuccessRedirect = '';
@@ -95,6 +99,7 @@ unset($_SESSION['_login_username']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetailMind - Store inventory, sales, and forecasting</title>
     <meta name="description" content="RetailMind keeps Shalom Store inventory, barcode sales, purchasing, cashier shifts, and demand forecasting in one operational workspace.">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= $faviconUrl ?>">
     <link rel="stylesheet" href="<?= $styleUrl ?>">
     <link rel="stylesheet" href="<?= $landingStyleUrl ?>">
 </head>
@@ -104,10 +109,9 @@ unset($_SESSION['_login_username']);
     <header class="landing-header">
         <nav class="landing-nav" aria-label="Primary">
             <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
-                <span class="landing-brand__mark" aria-hidden="true">RM</span>
-                <span>
-                    <strong>RetailMind</strong>
-                    <small>Inventory &amp; Forecasting</small>
+                <img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" alt="RetailMind">
+                <span class="landing-brand__compact" aria-hidden="true">
+                    <img src="<?= $brandIconUrl ?>" alt="">
                 </span>
             </a>
             <div class="landing-nav__links">
@@ -119,7 +123,7 @@ unset($_SESSION['_login_username']);
     </header>
 
     <main id="main-content">
-        <section class="landing-hero" aria-labelledby="landing-title">
+        <section class="landing-hero landing-hero--control" aria-labelledby="landing-title">
             <div class="landing-hero__content">
                 <h1 id="landing-title">Know what is on the shelf. Reorder before it runs out.</h1>
                 <p class="landing-hero__copy">
@@ -133,8 +137,8 @@ unset($_SESSION['_login_username']);
             </div>
             <figure class="landing-hero__visual">
                 <div class="landing-hero__image">
-                    <img src="<?= htmlspecialchars(landing_app_url('assets/img/landing-hero.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Barcode scanner and inventory dashboard at a stocked retail counter">
-                    <figcaption>Shalom Store inventory desk</figcaption>
+                    <img src="<?= $heroImageUrl ?>" alt="Stocked Store shelves beside a barcode scanner and incoming inventory">
+                    <figcaption>Stock visibility from shelf to receiving</figcaption>
                 </div>
                 <div class="landing-preview" aria-label="RetailMind operational flow">
                     <div class="landing-preview__header">
@@ -231,8 +235,7 @@ unset($_SESSION['_login_username']);
 
         <footer class="landing-footer">
             <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
-                <span class="landing-brand__mark" aria-hidden="true">RM</span>
-                <span><strong>RetailMind</strong><small>Shalom Store operations</small></span>
+                <img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" alt="RetailMind">
             </a>
             <p>Inventory, sales, purchasing, shifts, reporting, and Demand Forecasts in one operational workspace.</p>
             <a href="<?= $loginUrl ?>" data-login-modal-open>Staff login</a>
@@ -245,7 +248,9 @@ unset($_SESSION['_login_username']);
             <button class="landing-login-modal__close" type="button" aria-label="Close login dialog" data-login-modal-close>&times;</button>
             <div class="landing-login-modal__shell">
                 <aside class="landing-login-modal__aside" aria-label="RetailMind access">
-                    <span class="landing-brand__mark" aria-hidden="true">R</span>
+                    <span class="landing-login-modal__logo" aria-hidden="true">
+                        <img src="<?= $brandIconUrl ?>" alt="">
+                    </span>
                     <div>
                         <h2 id="login-modal-title">Welcome back</h2>
                         <p>Access inventory, sales, reports, and system tools from one workspace.</p>

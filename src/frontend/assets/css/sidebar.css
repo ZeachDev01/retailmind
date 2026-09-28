@@ -27,7 +27,8 @@
 }
 .sidebar-brand:hover .brand-icon,
 .sidebar-brand:focus-visible .brand-icon {
-    background: rgba(37, 99, 235, 0.32);
+    background: #fff;
+    transform: translateY(-1px);
 }
 .sidebar-brand .brand-icon {
     width: 42px;
@@ -35,12 +36,13 @@
     flex: 0 0 42px;
     display: grid;
     place-items: center;
-    border-radius: 12px;
-    background: rgba(37, 99, 235, 0.2);
-    color: #f9fafb;
-    font-size: 1.2rem;
-    transition: background .2s ease, transform .2s ease;
+    overflow: hidden;
+    padding: 3px;
+    border-radius: 10px;
+    background: #fff;
+    transition: transform .2s ease;
 }
+.sidebar-brand .brand-icon img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .sidebar-brand-title {
     display: block;
     font-size: 1rem;

@@ -30,15 +30,18 @@ try {
         return '';
     };
     $resolveCode = $extract('resolve_login_user');
+    $roleNamesCode = $extract('user_role_names');
     $loginCode = $extract('login_user');
     $errorCode = $extract('last_login_error');
     $assert($resolveCode !== '', 'auth.php must own Login Identifier resolution at the unified entry point');
+    $assert($roleNamesCode !== '', 'auth.php must own mapped role resolution at the unified entry point');
     $assert($loginCode !== '', 'auth.php must own login_user at the unified entry point');
     $assert($errorCode !== '', 'auth.php must own last_login_error at the unified entry point');
-    if ($resolveCode === '' || $loginCode === '' || $errorCode === '') {
+    if ($resolveCode === '' || $roleNamesCode === '' || $loginCode === '' || $errorCode === '') {
         throw new RuntimeException('Shipped login entry point could not be loaded.');
     }
     eval($resolveCode);
+    eval($roleNamesCode);
     eval($loginCode);
     eval($errorCode);
 
@@ -52,6 +55,12 @@ try {
     )");
     $pdo->exec('CREATE TABLE products (product_id INTEGER PRIMARY KEY AUTOINCREMENT, branch_id INTEGER NULL)');
     $pdo->exec('CREATE TABLE roles (role_id INTEGER PRIMARY KEY AUTOINCREMENT, role_name TEXT NOT NULL UNIQUE)');
+    $pdo->exec("CREATE TABLE user_roles (
+        user_id INTEGER NOT NULL,
+        role_id INTEGER NOT NULL,
+        is_primary INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, role_id)
+    )");
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         full_name TEXT NOT NULL,
@@ -115,6 +124,10 @@ try {
     $collisionUserId = $insertUser('Collision Owner', 'contact@store.test', null, 'CollisionUserPass123');
     $collisionEmailId = $insertUser('Collision Email Owner', 'contactrow', 'contact@store.test', 'CollisionEmailPass123');
     $legacyId = $insertUser('Legacy Clerk', 'legacyclerk', 'legacycontact', 'LegacyPass123');
+    $mismatchedRoleId = $insertUser('Mapped Cashier', 'mappedcashier', 'mapped@store.test', 'MappedPass123');
+    $inventoryManagerRole = $roleId('inventory_manager');
+    $pdo->prepare('UPDATE users SET role_id = ? WHERE user_id = ?')->execute([$inventoryManagerRole, $mismatchedRoleId]);
+    $pdo->prepare('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, 1)')->execute([$mismatchedRoleId, $cashierRole]);
 
     $recovery = new RecoveryAccountService($pdo);
     $recoveryId = $recovery->provision('sealed_recovery', password_hash('OfflineLoginPassword123', PASSWORD_DEFAULT), 'offline-activation-secret-0001');
@@ -151,6 +164,13 @@ try {
     $emailAudit = $lastAudit();
     $assert($emailAudit['action'] === 'Login success' && (int)$emailAudit['user_id'] === $cashierId, 'Email sign-in must write a success audit for the resolved user');
     $assert($auditPayload($emailAudit)['identifier_type'] === 'email', 'Email sign-in audit must record the email identifier type');
+
+    // The mapped primary role is authoritative when the legacy role column is stale.
+    // This prevents redirecting to a workspace that session validation then denies.
+    $resetSession();
+    $assert(login_user($pdo, 'mapped@store.test', 'MappedPass123') === true, 'Mapped-role account must sign in');
+    $assert(($_SESSION['role'] ?? null) === 'cashier', 'Login must select the mapped primary role instead of a stale legacy role');
+    $assert(($_SESSION['roles'] ?? []) === ['cashier'], 'Login must retain the authoritative mapped roles');
 
     // Bad password shows exactly the generic sentence with no existence leak.
     $resetSession();

@@ -5,6 +5,17 @@ use App\Authorization\RoleCapabilityPolicy;
 
 require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
+$prototypeVariant = strtoupper(trim((string)($_GET['variant'] ?? '')));
+$prototypeEnabled = strtolower((string)env('APP_ENV', 'production')) !== 'production'
+    && in_array($prototypeVariant, ['A', 'B', 'C'], true);
+
+if ($prototypeEnabled) {
+    $forecastRows = get_forecasting_readiness($pdo);
+    $modelMetrics = get_ml_model_metrics();
+    require __DIR__ . '/forecast_dashboard_prototype.php';
+    exit;
+}
+
 $message = '';
 $messageClass = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['retrain'])) {

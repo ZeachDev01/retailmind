@@ -26,6 +26,8 @@ $assignedWorkspaceRoles = array_values(array_filter(
 $avatarStylesheetPath = __DIR__ . '/../assets/css/avatars.css';
 $avatarStylesheetVersion = is_file($avatarStylesheetPath) ? (string)filemtime($avatarStylesheetPath) : '1';
 $avatarStylesheetUrl = app_url('assets/css/avatars.css') . '?v=' . rawurlencode($avatarStylesheetVersion);
+$sidebarBrandLogoUrl = app_url('assets/img/retailmind-logo-600x200.png');
+$sidebarBrandIconUrl = app_url('assets/img/retailmind-icon-512.png');
 $commandProductTarget = match ($role) {
     'super_admin' => app_url('components/inventory_management/inventory_overview.php'),
     'admin', 'inventory_manager' => app_url('components/inventory_management/products.php'),
@@ -208,6 +210,7 @@ $roleSections = [
         [
             'items' => [
                 ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
+                ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecast'],
                 ['icon' => 'bi-boxes', 'label' => 'Inventory', 'items' => $managerInventoryItems],
                 ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Exceptions'],
                 ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
@@ -219,7 +222,6 @@ $roleSections = [
             'title' => 'Reports',
             'items' => [
                 ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
-                ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Forecasts'],
                 ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
                 ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
             ],
@@ -264,8 +266,7 @@ $sections = $roleSections[$role] ?? [];
             <i class="bi bi-list" aria-hidden="true"></i>
         </button>
         <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
-            <span class="admin-mobile-logo-mark"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
-            <span class="admin-mobile-logo-text">RetailMind</span>
+            <img class="admin-mobile-logo-image" src="<?= sidebar_e($sidebarBrandLogoUrl) ?>" alt="">
         </a>
     </div>
     <div class="admin-mobile-tools">
@@ -280,7 +281,7 @@ $sections = $roleSections[$role] ?? [];
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="appSidebar">
     <button type="button" class="sidebar-brand" id="sidebarBrandToggle" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="appSidebar">
-        <span class="brand-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+        <span class="brand-icon" aria-hidden="true"><img src="<?= sidebar_e($sidebarBrandIconUrl) ?>" alt=""></span>
         <span class="sidebar-brand-copy">
             <span class="sidebar-brand-title">RetailMind</span>
             <span>Inventory &amp; Forecasting</span>
