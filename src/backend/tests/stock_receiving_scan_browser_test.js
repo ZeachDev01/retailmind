@@ -1,5 +1,5 @@
 'use strict';
-// Browser-to-HTTP workflow for barcode-assisted Stock Receiving (ticket #81).
+// Browser-to-HTTP workflow for barcode-assisted Stock Receiving (tickets #81-#84).
 
 const { spawn, spawnSync } = require('node:child_process');
 const net = require('node:net');
@@ -157,12 +157,20 @@ async function main() {
         check(await page.inputValue('#received_qty') === '0',
             'choosing a document still does not copy its remaining quantity');
 
-        console.log('Manual fallback preserves entered delivery details');
+        console.log('Linked requests reject conflicting rescans');
         await page.fill('#received_qty', '5');
         await page.fill('#supplier', 'Reviewed supplier detail');
         await page.fill('#invoice_number', 'INV-REVIEW-' + token);
         await page.fill('#batch_number', 'BATCH-REVIEW-' + token);
         await page.fill('#discrepancy_notes', 'Preserve this reviewed discrepancy detail.');
+        await scan(page, fixture.products.countable.barcode);
+        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('linked to a replenishment request'));
+        check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id)
+            && await page.inputValue('#replenishment_request_id') === String(fixture.receiving_documents.approved_request.request_id)
+            && await page.inputValue('#received_qty') === '5',
+            'a conflicting linked-request scan preserves product, link and quantity');
+
+        console.log('Unknown and ambiguous codes preserve entered delivery details');
         await scan(page, 'UNKNOWN-' + token);
         await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('No product matches'));
         check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id),
@@ -176,12 +184,70 @@ async function main() {
         check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id)
             && await page.inputValue('#replenishment_request_id') === String(fixture.receiving_documents.approved_request.request_id),
             'an ambiguous code preserves the product and chosen document');
+
+        console.log('Case scanning and multiple eligible documents');
+        await page.goto(receivingPath);
         await scan(page, fixture.products.countable.case_barcode);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('unit barcode or SKU'));
-        check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id),
-            'a case barcode keeps package receiving on the manual path');
+        check(await eventually(page, (productId) =>
+            document.getElementById('product_id').value === String(productId), fixture.products.countable.product_id),
+            'a case barcode selects its product');
+        check(await page.inputValue('#quantity_mode') === 'packages',
+            'a case barcode selects Packages / cases');
+        check((await page.locator('#package_conversion').innerText()).includes('1 case = 6 piece(s)'),
+            'the product-specific package conversion is visible');
+        check(await page.inputValue('#received_packages') === '0',
+            'a case scan does not infer a package quantity');
+        check(await page.locator('#scan_document_review .scan-document-choice').count() === 3,
+            'all eligible PO lines and the standalone request are offered');
+        const multipleChoiceText = await page.locator('#scan_document_review').innerText();
+        check(multipleChoiceText.includes('Line #' + fixture.receiving_documents.po.purchase_order_item_id)
+            && multipleChoiceText.includes('Line #' + fixture.receiving_documents.alternate_po_line.purchase_order_item_id)
+            && multipleChoiceText.includes('Request #' + fixture.receiving_documents.standalone_request.request_id),
+            'eligible documents expose distinct identities');
+        check(!multipleChoiceText.includes('Line #' + fixture.receiving_documents.fully_received_po_line.purchase_order_item_id),
+            'a fully received PO line is not offered');
+        await scan(page, fixture.products.countable.case_barcode);
+        await page.waitForFunction(() => !document.getElementById('scan_status').textContent.includes('Checking'));
+        check(await page.inputValue('#received_packages') === '0',
+            'repeated case scans do not increment package quantity');
+
+        const firstPoChoice = page.locator(
+            `.scan-document-choice[aria-label*="Line #${fixture.receiving_documents.po.purchase_order_item_id}"]`
+        );
+        await firstPoChoice.click();
+        await page.fill('#received_packages', '2');
+        await scan(page, fixture.products.zero.barcode);
+        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('linked to a purchase-order line'));
+        check(await page.inputValue('#product_id') === String(fixture.products.countable.product_id)
+            && await page.inputValue('#purchase_order_item_id') === String(fixture.receiving_documents.po.purchase_order_item_id)
+            && await page.inputValue('#received_packages') === '2',
+            'a conflicting linked-PO scan preserves product, link and package quantity');
+
+        console.log('Partly filled unlinked receipts require confirmation');
+        await page.goto(receivingPath);
+        await page.selectOption('#product_id', String(fixture.products.zero.product_id));
+        await page.fill('#received_qty', '4');
+        await page.fill('#supplier', 'Rescan supplier ' + token);
+        await page.fill('#invoice_number', 'RESCAN-' + token);
+        page.once('dialog', (dialog) => dialog.dismiss());
+        await scan(page, fixture.products.countable.barcode);
+        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('Product unchanged'));
+        check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id)
+            && await page.inputValue('#received_qty') === '4'
+            && await page.inputValue('#supplier') === 'Rescan supplier ' + token,
+            'cancelling replacement preserves every entered field');
+        page.once('dialog', (dialog) => dialog.accept());
+        await scan(page, fixture.products.countable.barcode);
+        check(await eventually(page, (productId) =>
+            document.getElementById('product_id').value === String(productId), fixture.products.countable.product_id),
+            'confirming replacement selects the scanned product');
+        check(await page.inputValue('#received_qty') === '4'
+            && await page.inputValue('#invoice_number') === 'RESCAN-' + token
+            && await page.inputValue('#purchase_order_item_id') === '',
+            'confirmed replacement preserves details without choosing a document');
 
         console.log('Ineligible documents are not offered');
+        await page.goto(receivingPath);
         await scan(page, fixture.products.short.sku);
         check(await eventually(page, (productId) =>
             document.getElementById('product_id').value === String(productId), fixture.products.short.product_id),
@@ -239,19 +305,24 @@ async function main() {
         await adminContext.close();
 
         console.log('Explicit submission and accepted-stock outcome');
-        await scan(page, fixture.products.countable.barcode);
+        await page.goto(receivingPath);
+        await scan(page, fixture.products.countable.case_barcode);
         check(await eventually(page, (productId) =>
             document.getElementById('product_id').value === String(productId), fixture.products.countable.product_id),
-            'the PO product is selected by unit barcode');
-        check(await page.locator('#scan_document_review .scan-document-choice').count() === 1,
-            'the one eligible purchase-order line is offered');
+            'the PO product is selected by case barcode');
+        check(await page.inputValue('#quantity_mode') === 'packages',
+            'the submission path remains in Packages / cases mode');
+        check(await page.locator('#scan_document_review .scan-document-choice').count() === 3,
+            'all eligible documents remain available for explicit review');
         check(await page.inputValue('#purchase_order_item_id') === '',
             'the scan does not choose the purchase-order line');
-        await page.locator('#scan_document_review .scan-document-choice').click();
+        await page.locator(
+            `.scan-document-choice[aria-label*="Line #${fixture.receiving_documents.po.purchase_order_item_id}"]`
+        ).click();
         check(await page.inputValue('#purchase_order_item_id') === String(fixture.receiving_documents.po.purchase_order_item_id),
             'the operator explicitly chooses the purchase-order line');
-        check(await page.inputValue('#received_qty') === '0',
-            'the PO remaining quantity is not copied into delivered units');
+        check(await page.inputValue('#received_packages') === '0',
+            'the PO remaining quantity is not copied into delivered packages');
 
         console.log('Newest scan outcome wins');
         let releaseDelayedLookup;
@@ -275,17 +346,17 @@ async function main() {
             'an older delayed match cannot clear the chosen PO line');
         await page.unroute('**/product_code_lookup.php?code=*');
 
-        await page.fill('#received_qty', '4');
-        await page.fill('#damaged_qty', '1');
+        await page.fill('#received_packages', '2');
+        await page.fill('#damaged_qty', '2');
         await page.fill('#invoice_number', 'INV-' + token);
         await page.fill('#batch_number', 'BATCH-' + token);
         await page.fill('#expiration_date', '2027-12-31');
-        await page.fill('#discrepancy_notes', 'One delivered unit was damaged.');
+        await page.fill('#discrepancy_notes', 'Two delivered pieces were damaged.');
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
             page.locator('.btn-submit').click()
         ]);
-        check((await page.locator('.message.success').innerText()).includes('3 accepted units'),
+        check((await page.locator('.message.success').innerText()).includes('10 accepted units'),
             'the controlled form reports only accepted units added');
 
         const finalState = runFixture('--state', '--token', token);
@@ -293,16 +364,18 @@ async function main() {
         const receipt = finalState.receipts.find((item) => item.sku === fixture.products.countable.sku);
         const poItem = finalState.purchase_order_items.find((item) =>
             Number(item.purchase_order_item_id) === fixture.receiving_documents.po.purchase_order_item_id);
-        check(Number(finalProduct.quantity_on_hand) === Number(fixture.products.countable.quantity_on_hand) + 3,
+        check(Number(finalProduct.quantity_on_hand) === Number(fixture.products.countable.quantity_on_hand) + 10,
             'submission increments stock by accepted units only');
-        check(receipt && Number(receipt.received_qty) === 4 && Number(receipt.accepted_qty) === 3
-            && Number(receipt.damaged_qty) === 1,
-            'the receipt records delivered, accepted and damaged units');
+        check(receipt && Number(receipt.received_packages) === 2
+            && Number(receipt.units_per_package_used) === 6
+            && Number(receipt.received_qty) === 12 && Number(receipt.accepted_qty) === 10
+            && Number(receipt.damaged_qty) === 2,
+            'the receipt converts explicit packages and records accepted and damaged base units');
         check(receipt && receipt.invoice_number === 'INV-' + token
             && receipt.batch_number === 'BATCH-' + token
             && receipt.expiration_date === '2027-12-31',
             'the receipt retains reviewed invoice, batch and expiry details');
-        check(poItem && Number(poItem.received_qty) === 5,
+        check(poItem && Number(poItem.received_qty) === 12,
             'the existing document validation updates the chosen PO line by accepted units');
 
         await context.close();

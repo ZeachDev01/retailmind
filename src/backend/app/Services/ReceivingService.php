@@ -118,6 +118,9 @@ class ReceivingService
                 if ($supplier === '') $supplier = trim((string)($poItem['supplier_name'] ?? ''));
                 if ($costPrice <= 0) $costPrice = (float)($poItem['unit_cost'] ?? 0);
                 $remainingPo = max(0, (int)$poItem['ordered_qty'] - (int)$poItem['received_qty']);
+                if ($remainingPo <= 0) {
+                    throw new RuntimeException('Only purchase-order lines with remaining quantity can be received.');
+                }
                 if ($acceptedQty > $remainingPo && $discrepancyType === 'none') {
                     $discrepancyType = 'over';
                     $discrepancyQty = $acceptedQty - $remainingPo;

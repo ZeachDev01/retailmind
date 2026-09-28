@@ -138,7 +138,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
             <div class="form-section">
                 <h4>Scan Product</h4>
                 <div class="form-group">
-                    <label for="product_code_scan">Unit barcode or SKU</label>
+                    <label for="product_code_scan">Barcode or SKU</label>
                     <input type="text" id="product_code_scan" autocomplete="off" inputmode="text" placeholder="Scan or type a code, then press Enter">
                     <small id="scan_status" role="status" aria-live="polite">You can also choose a product manually below.</small>
                 </div>
@@ -314,7 +314,8 @@ const receivableDocuments = <?= json_encode(array_merge(
         'product_id' => (int)$item['product_id'],
         'purchase_order_item_id' => (int)$item['purchase_order_item_id'],
         'replenishment_request_id' => (int)($item['replenishment_request_id'] ?? 0),
-        'label' => (string)$item['po_number'],
+        'po_number' => (string)$item['po_number'],
+        'choice_label' => (string)$item['po_number'] . ' · Line #' . (int)$item['purchase_order_item_id'],
         'supplier' => (string)($item['supplier_name'] ?? ''),
         'cost' => (float)$item['unit_cost'],
         'remaining_qty' => (int)$item['remaining_qty'],
@@ -324,7 +325,7 @@ const receivableDocuments = <?= json_encode(array_merge(
         'type' => 'replenishment_request',
         'product_id' => (int)$request['product_id'],
         'replenishment_request_id' => (int)$request['request_id'],
-        'label' => 'Request #' . (int)$request['request_id'],
+        'choice_label' => 'Request #' . (int)$request['request_id'],
         'supplier' => '',
         'cost' => 0,
         'remaining_qty' => (int)$request['remaining_qty'],
@@ -333,6 +334,7 @@ const receivableDocuments = <?= json_encode(array_merge(
 ), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 let activeScanLookup = 0;
 let scanLookupController = null;
+let costPriceWasEdited = false;
 
 function hideScannedDocumentReview() {
     scanDocumentReview.replaceChildren();
@@ -340,13 +342,15 @@ function hideScannedDocumentReview() {
 }
 
 function chooseScannedDocument(documentOption, button) {
-    applyReceivingDocument(documentOption, false);
+    const quantityMode = document.getElementById('quantity_mode').value;
+    applyReceivingDocument(documentOption, false, quantityMode);
     for (const choice of scanDocumentReview.querySelectorAll('.scan-document-choice')) {
         choice.setAttribute('aria-pressed', choice === button ? 'true' : 'false');
         choice.textContent = choice === button ? 'Selected' : 'Choose this document';
     }
-    scanStatus.textContent = `${documentOption.label} selected. Enter the delivered Base units and review every delivery detail before submitting.`;
-    document.getElementById('received_qty').focus();
+    const packages = quantityMode === 'packages';
+    scanStatus.textContent = `${documentOption.choice_label} selected. Enter the delivered ${packages ? 'packages / cases' : 'Base units'} and review every delivery detail before submitting.`;
+    document.getElementById(packages ? 'received_packages' : 'received_qty').focus();
 }
 
 function showScannedDocumentReview(productId) {
@@ -366,7 +370,7 @@ function showScannedDocumentReview(productId) {
     }
 
     const guidance = document.createElement('p');
-    guidance.textContent = 'Review the remaining quantity, then explicitly choose the document. Delivered units stay empty until you enter them.';
+    guidance.textContent = 'Review the remaining quantity, then explicitly choose the document. Delivered quantity stays unchanged until you enter it.';
     scanDocumentReview.appendChild(guidance);
     for (const documentOption of eligible) {
         const row = document.createElement('div');
@@ -375,8 +379,8 @@ function showScannedDocumentReview(productId) {
         info.className = 'info';
         const title = document.createElement('strong');
         title.textContent = documentOption.type === 'purchase_order'
-            ? `Purchase order ${documentOption.label}`
-            : documentOption.label;
+            ? `Purchase order ${documentOption.choice_label}`
+            : documentOption.choice_label;
         const progress = document.createElement('div');
         progress.className = 'progress';
         progress.textContent = `Remaining ${documentOption.remaining_qty} ${documentOption.unit}(s)`;
@@ -385,11 +389,55 @@ function showScannedDocumentReview(productId) {
         button.type = 'button';
         button.className = 'request-item btn-link scan-document-choice';
         button.textContent = 'Choose this document';
+        button.setAttribute('aria-label', `Choose ${documentOption.choice_label}`);
         button.setAttribute('aria-pressed', 'false');
         button.addEventListener('click', () => chooseScannedDocument(documentOption, button));
         row.append(info, button);
         scanDocumentReview.appendChild(row);
     }
+}
+
+function selectedReceivingDocument() {
+    const purchaseOrderItemId = Number(document.getElementById('purchase_order_item_id').value || 0);
+    if (purchaseOrderItemId > 0) {
+        return receivableDocuments.find((documentOption) =>
+            Number(documentOption.purchase_order_item_id || 0) === purchaseOrderItemId
+        ) || null;
+    }
+
+    const requestId = Number(document.getElementById('replenishment_request_id').value || 0);
+    if (requestId > 0) {
+        return receivableDocuments.find((documentOption) =>
+            documentOption.type === 'replenishment_request'
+                && Number(documentOption.replenishment_request_id || 0) === requestId
+        ) || null;
+    }
+
+    return null;
+}
+
+function hasEnteredReceivingDetails() {
+    if (costPriceWasEdited || document.getElementById('quantity_mode').value !== 'units') {
+        return true;
+    }
+
+    const numberFields = ['received_qty', 'received_packages', 'damaged_qty', 'discrepancy_qty'];
+    if (numberFields.some((id) => Number(document.getElementById(id).value || 0) !== 0)) {
+        return true;
+    }
+
+    const textFields = [
+        'supplier', 'po_number', 'invoice_number', 'batch_number', 'expiration_date',
+        'discrepancy_notes', 'notes', 'emergency_reason'
+    ];
+    if (textFields.some((id) => {
+        const field = document.getElementById(id);
+        return field && field.value.trim() !== '';
+    })) {
+        return true;
+    }
+
+    return document.getElementById('discrepancy_type').value !== 'none';
 }
 
 async function identifyReceivingProduct(code) {
@@ -407,7 +455,8 @@ async function identifyReceivingProduct(code) {
         const result = await response.json();
         if (lookupId !== activeScanLookup) return;
         if (!response.ok || result.success === false) {
-            throw new Error(result.error || 'The product code could not be checked.');
+            scanStatus.textContent = result.error || 'The product code could not be checked right now. Try again or choose the product manually.';
+            return;
         }
         if (result.outcome === 'unknown') {
             scanStatus.textContent = 'No product matches that code. Try again or choose the product manually.';
@@ -417,25 +466,57 @@ async function identifyReceivingProduct(code) {
             scanStatus.textContent = 'That code matches more than one product. Choose the product manually.';
             return;
         }
-        if (result.matched_code_kind === 'case_barcode') {
-            scanStatus.textContent = 'Stock Receiving accepts a unit barcode or SKU for Base units. Choose the product manually for package receiving.';
+        const product = result.product;
+        const matchedCase = result.matched_code_kind === 'case_barcode';
+        const quantityMode = matchedCase ? 'packages' : 'units';
+        const productSelect = document.getElementById('product_id');
+        const selectedProductId = Number(productSelect.value || 0);
+        const linkedDocument = selectedReceivingDocument();
+        if (linkedDocument) {
+            const documentName = linkedDocument.type === 'purchase_order'
+                ? 'purchase-order line'
+                : 'replenishment request';
+            if (Number(product.product_id) !== Number(linkedDocument.product_id)) {
+                scanStatus.textContent = `This receipt is linked to a ${documentName}. Scan that document's product or continue with the selected product.`;
+                productCodeScan.value = '';
+                return;
+            }
+
+            document.getElementById('quantity_mode').value = quantityMode;
+            updateQuantityMode();
+            scanStatus.textContent = `${product.product_name} (${product.sku}) is already linked to the selected ${documentName}. Entered delivery quantities and details were preserved.`;
+            productCodeScan.value = '';
+            document.getElementById(matchedCase ? 'received_packages' : 'received_qty').focus();
             return;
         }
 
-        const product = result.product;
-        const productSelect = document.getElementById('product_id');
+        const hasEnteredDetails = selectedProductId > 0 && hasEnteredReceivingDetails();
+        if (hasEnteredDetails
+            && Number(product.product_id) !== selectedProductId
+            && !window.confirm(`Replace the current product with ${product.product_name}? Your entered receiving details will stay on the form.`)) {
+            scanStatus.textContent = 'Product unchanged. Your entered receiving details were preserved.';
+            productCodeScan.value = '';
+            return;
+        }
+
         productSelect.value = String(product.product_id);
         resetReferences();
         fillProductCost();
-        document.getElementById('quantity_mode').value = 'units';
-        document.getElementById('received_qty').value = '0';
-        document.getElementById('received_packages').value = '0';
+        document.getElementById('quantity_mode').value = quantityMode;
+        if (!hasEnteredDetails) {
+            document.getElementById('received_qty').value = '0';
+            document.getElementById('received_packages').value = '0';
+        }
         updateQuantityMode();
         showScannedDocumentReview(product.product_id);
-        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${result.matched_code_kind === 'sku' ? 'SKU' : 'unit barcode'}. Review and choose an eligible document, then enter delivered units.`;
+        const matchedBy = result.matched_code_kind === 'sku'
+            ? 'SKU'
+            : (matchedCase ? 'case barcode' : 'unit barcode');
+        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Review and choose an eligible document, then enter delivered ${matchedCase ? 'packages / cases' : 'Base units'}.`;
+        productCodeScan.value = '';
     } catch (error) {
         if (error.name === 'AbortError' || lookupId !== activeScanLookup) return;
-        scanStatus.textContent = error.message || 'The product code could not be checked. Choose the product manually.';
+        scanStatus.textContent = 'The product code could not be checked right now. Try again or choose the product manually.';
     } finally {
         if (scanLookupController === controller) scanLookupController = null;
     }
@@ -452,19 +533,27 @@ function resetReferences() {
     document.getElementById('replenishment_request_id').value = '';
     document.getElementById('purchase_order_item_id').value = '';
 }
-function applyReceivingDocument(documentOption, copyRemainingQuantity) {
+function applyReceivingDocument(documentOption, copyRemainingQuantity, quantityMode = 'units') {
     resetReferences();
     document.getElementById('product_id').value = documentOption.product_id;
-    document.getElementById('quantity_mode').value = 'units';
-    document.getElementById('received_qty').value = copyRemainingQuantity ? documentOption.remaining_qty : 0;
+    document.getElementById('quantity_mode').value = quantityMode;
+    if (copyRemainingQuantity) {
+        document.getElementById('received_qty').value = documentOption.remaining_qty;
+        document.getElementById('received_packages').value = '0';
+    }
     if (documentOption.type === 'purchase_order') {
         document.getElementById('purchase_order_item_id').value = documentOption.purchase_order_item_id;
         document.getElementById('replenishment_request_id').value = documentOption.replenishment_request_id || '';
         document.getElementById('cost_price').value = Number(documentOption.cost || 0).toFixed(2);
-        document.getElementById('po_number').value = documentOption.label || '';
+        document.getElementById('po_number').value = documentOption.po_number || '';
         document.getElementById('supplier').value = documentOption.supplier || '';
     } else {
         document.getElementById('replenishment_request_id').value = documentOption.replenishment_request_id;
+        document.getElementById('po_number').value = '';
+        document.getElementById('supplier').value = '';
+        document.getElementById('cost_price').value = '';
+        costPriceWasEdited = false;
+        fillProductCost();
     }
     updateQuantityMode();
     updatePackageConversion();
@@ -488,7 +577,7 @@ function populatePO(item) {
         replenishment_request_id: item.request_id,
         remaining_qty: item.remaining,
         cost: item.cost,
-        label: item.po_number,
+        po_number: item.po_number,
         supplier: item.supplier
     }, true);
     window.scrollTo(0, document.querySelector('.receiving-form').offsetTop - 100);
@@ -524,6 +613,9 @@ document.getElementById('product_id').addEventListener('change', (event)=>{
     }
 });
 document.getElementById('quantity_mode').addEventListener('change', updateQuantityMode);
+document.getElementById('cost_price').addEventListener('input', () => {
+    costPriceWasEdited = true;
+});
 document.getElementById('damaged_qty').addEventListener('input', function () {
     const damagedQty=Number(this.value||0); if(damagedQty>0&&document.getElementById('discrepancy_type').value==='none'){document.getElementById('discrepancy_type').value='damaged';document.getElementById('discrepancy_qty').value=damagedQty;}
 });

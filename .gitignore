@@ -3,6 +3,8 @@
 /node_modules/
 /backend/storage/logs/*
 !/backend/storage/logs/.gitkeep
+/src/backend/storage/logs/*
+!/src/backend/storage/logs/.gitkeep
 /backend/storage/backups/*
 !/backend/storage/backups/.gitkeep
 /src/backend/storage/sessions/*

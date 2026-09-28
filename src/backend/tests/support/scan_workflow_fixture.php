@@ -43,6 +43,9 @@ $products = [
         'product_name' => 'Scan WF Countable',
         'status' => 'active',
         'quantity_on_hand' => 10,
+        'units_per_package' => 6,
+        'base_unit' => 'piece',
+        'receiving_unit' => 'case',
     ],
     'zero' => [
         'sku' => 'SCN' . $token . 'Z',
@@ -230,8 +233,9 @@ if (array_key_exists('state', $options)) {
     $counts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $stmt = $pdo->prepare(
-        "SELECT sr.receiving_id, sr.product_id, p.sku, sr.received_qty, sr.accepted_qty,
-                sr.damaged_qty, sr.purchase_order_item_id, sr.replenishment_request_id,
+        "SELECT sr.receiving_id, sr.product_id, p.sku, sr.received_qty, sr.received_packages,
+                sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,
+                sr.purchase_order_item_id, sr.replenishment_request_id,
                 sr.supplier, sr.po_number, sr.invoice_number, sr.batch_number,
                 sr.expiration_date, sr.discrepancy_type, sr.discrepancy_notes
          FROM stock_receiving sr JOIN products p ON p.product_id = sr.product_id
@@ -278,8 +282,9 @@ $cleanup();
 
 try {
     $insertProduct = $pdo->prepare(
-        'INSERT INTO products (branch_id, sku, barcode, case_barcode, product_name, unit_price, cost_price, status)
-         VALUES (?, ?, ?, ?, ?, 10.00, 5.00, ?)'
+        'INSERT INTO products (branch_id, sku, barcode, case_barcode, product_name, unit_price, cost_price,
+                               units_per_package, base_unit, receiving_unit, status)
+         VALUES (?, ?, ?, ?, ?, 10.00, 5.00, ?, ?, ?, ?)'
     );
     $insertInventory = $pdo->prepare(
         'INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)'
@@ -291,6 +296,9 @@ try {
             $product['barcode'],
             $product['case_barcode'],
             $product['product_name'],
+            $product['units_per_package'] ?? 1,
+            $product['base_unit'] ?? 'piece',
+            $product['receiving_unit'] ?? 'package',
             $product['status'],
         ]);
         $productId = (int)$pdo->lastInsertId();
@@ -303,6 +311,9 @@ try {
             'product_name' => $product['product_name'],
             'status' => $product['status'],
             'quantity_on_hand' => $product['quantity_on_hand'],
+            'units_per_package' => $product['units_per_package'] ?? 1,
+            'base_unit' => $product['base_unit'] ?? 'piece',
+            'receiving_unit' => $product['receiving_unit'] ?? 'package',
         ];
     }
 
@@ -352,17 +363,30 @@ try {
     $insertSupplier->execute([$supplierName, 'Receiving Test Contact', $staffByUsername['admin']['user_id']]);
     $supplierId = (int)$pdo->lastInsertId();
 
-    $pdo->prepare(
+    $insertApprovedRequest = $pdo->prepare(
         "INSERT INTO replenishment_requests
             (product_id, request_qty, requested_by, status, approved_by, approved_at, source, notes)
-         VALUES (?, 12, ?, 'approved', ?, CURRENT_TIMESTAMP, 'manual', ?)"
-    )->execute([
+         VALUES (?, ?, ?, 'approved', ?, CURRENT_TIMESTAMP, 'manual', ?)"
+    );
+    $createApprovedRequest = static function (int $productId, int $quantity, string $notes) use (
+        $insertApprovedRequest,
+        $pdo,
+        $staffByUsername
+    ): int {
+        $insertApprovedRequest->execute([
+            $productId,
+            $quantity,
+            $staffByUsername['manager']['user_id'],
+            $staffByUsername['admin']['user_id'],
+            $notes,
+        ]);
+        return (int)$pdo->lastInsertId();
+    };
+    $poRequestId = $createApprovedRequest(
         $productByName['countable']['product_id'],
-        $staffByUsername['manager']['user_id'],
-        $staffByUsername['admin']['user_id'],
-        'Disposable approved request linked to the Stock Receiving PO.',
-    ]);
-    $poRequestId = (int)$pdo->lastInsertId();
+        12,
+        'Disposable approved request linked to the Stock Receiving PO.'
+    );
 
     $poNumber = 'PO-SCAN-' . strtoupper($token);
     $pdo->prepare(
@@ -376,24 +400,48 @@ try {
         $staffByUsername['admin']['user_id'],
     ]);
     $purchaseOrderId = (int)$pdo->lastInsertId();
-    $pdo->prepare(
+    $insertPurchaseOrderItem = $pdo->prepare(
         'INSERT INTO purchase_order_items
             (purchase_order_id, replenishment_request_id, product_id, ordered_qty, received_qty, unit_cost)
-         VALUES (?, ?, ?, 12, 2, 5.50)'
-    )->execute([$purchaseOrderId, $poRequestId, $productByName['countable']['product_id']]);
-    $purchaseOrderItemId = (int)$pdo->lastInsertId();
+         VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    $createPurchaseOrderItem = static function (
+        ?int $requestId,
+        int $orderedQuantity,
+        int $receivedQuantity,
+        float $unitCost
+    ) use ($insertPurchaseOrderItem, $pdo, $purchaseOrderId, $productByName): int {
+        $insertPurchaseOrderItem->execute([
+            $purchaseOrderId,
+            $requestId,
+            $productByName['countable']['product_id'],
+            $orderedQuantity,
+            $receivedQuantity,
+            $unitCost,
+        ]);
+        return (int)$pdo->lastInsertId();
+    };
+    $purchaseOrderItemId = $createPurchaseOrderItem($poRequestId, 12, 2, 5.50);
 
-    $pdo->prepare(
-        "INSERT INTO replenishment_requests
-            (product_id, request_qty, requested_by, status, approved_by, approved_at, source, notes)
-         VALUES (?, 8, ?, 'approved', ?, CURRENT_TIMESTAMP, 'manual', ?)"
-    )->execute([
+    $alternatePoRequestId = $createApprovedRequest(
+        $productByName['countable']['product_id'],
+        7,
+        'Disposable approved request linked to a second line on the same PO.'
+    );
+    $alternatePurchaseOrderItemId = $createPurchaseOrderItem($alternatePoRequestId, 7, 1, 5.75);
+    $fullyReceivedPurchaseOrderItemId = $createPurchaseOrderItem(null, 5, 5, 5.25);
+
+    $standaloneRequestId = $createApprovedRequest(
+        $productByName['countable']['product_id'],
+        9,
+        'Disposable standalone approved request for multiple-choice receiving coverage.'
+    );
+
+    $approvedRequestId = $createApprovedRequest(
         $productByName['zero']['product_id'],
-        $staffByUsername['manager']['user_id'],
-        $staffByUsername['admin']['user_id'],
-        'Disposable approved request for Stock Receiving scan coverage.',
-    ]);
-    $approvedRequestId = (int)$pdo->lastInsertId();
+        8,
+        'Disposable approved request for Stock Receiving scan coverage.'
+    );
 
     // This pending request proves that an ineligible document is not offered.
     $pdo->prepare(
@@ -415,6 +463,23 @@ try {
             'supplier' => $supplierName,
             'remaining_qty' => 10,
             'replenishment_request_id' => $poRequestId,
+        ],
+        'alternate_po_line' => [
+            'purchase_order_id' => $purchaseOrderId,
+            'purchase_order_item_id' => $alternatePurchaseOrderItemId,
+            'po_number' => $poNumber,
+            'supplier' => $supplierName,
+            'remaining_qty' => 6,
+            'replenishment_request_id' => $alternatePoRequestId,
+        ],
+        'standalone_request' => [
+            'request_id' => $standaloneRequestId,
+            'remaining_qty' => 9,
+        ],
+        'fully_received_po_line' => [
+            'purchase_order_id' => $purchaseOrderId,
+            'purchase_order_item_id' => $fullyReceivedPurchaseOrderItemId,
+            'po_number' => $poNumber,
         ],
         'approved_request' => [
             'request_id' => $approvedRequestId,
