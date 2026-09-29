@@ -56,6 +56,18 @@ _Avoid_: Auto-disable rule, inactivity timeout, session timeout
 The Store operator responsible for routine inventory execution, including stock monitoring, replenishment, receiving, and inventory control. It does not own Store-wide staff, compliance, or access oversight.
 _Avoid_: Administrator, stock administrator
 
+**Cashier**:
+An individually authenticated Staff member who operates the point of sale only from the active Cashier workspace. Any number of Staff accounts may hold the Cashier role, including an Administrator who also needs to sell; the active workspace alone decides point-of-sale permission, and a Disabled Account keeps its historical attribution while losing sign-in.
+_Avoid_: Shared cashier account, admin bypass of cashier controls
+
+**Cashier Shift**:
+The single open drawer-ownership session that authorizes a Cashier to sell from the active Cashier workspace. A Cashier holds at most one open shift at a time, an open shift is required before point-of-sale work, and closing reconciles counted cash against expected cash.
+_Avoid_: Shared shift, inferred shift, silent sale without a shift
+
+**Register**:
+The named physical till that anchors drawer accountability for one open Cashier Shift at a time. It is created, renamed, or disabled without deleting its history, and unavailable Registers are excluded from new shifts.
+_Avoid_: Shared drawer, inferred till, deleted register history
+
 **Stock Issue**:
 A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Other, moving through pending, returned, cancelled, approved, or rejected. Inventory Managers decide reports; only an approval deducts stock through a linked stock movement. Approved and rejected reports are immutable, and an erroneous approval is corrected only through a separate Inventory Manager inventory count linked back to the report. Administrators hold read-only oversight.
 _Avoid_: Damage report, damage claim, reopen an approval

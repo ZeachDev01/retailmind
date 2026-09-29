@@ -2,7 +2,8 @@
 // cashier/findProduct.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
-require_role(['admin', 'cashier']);
+// Issue #86: product lookup for selling is part of the Cashier workspace.
+require_role(['cashier']);
 
 $posCategories = $pdo->query("SELECT category_id, category_name FROM categories ORDER BY category_name LIMIT 12")->fetchAll();
 ?>

@@ -3,7 +3,9 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/DashboardService.php';
-require_role(['admin', 'cashier']);
+// Issue #86: the active Cashier workspace is authoritative for the POS
+// dashboard. Multi-role Staff must switch to Cashier before selling.
+require_role(['cashier']);
 
 $dashboardService = new DashboardService($pdo);
 $cashierId = (int)$_SESSION['user_id'];

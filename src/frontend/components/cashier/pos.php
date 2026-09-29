@@ -4,12 +4,18 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/SalesWorkflowService.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierShiftService.php';
-require_role(['admin', 'cashier']);
+// Issue #86: the active Cashier workspace is the authoritative POS context.
+// An Administrator who also holds the Cashier role must switch workspaces;
+// the admin workspace can never bypass Cashier controls.
+require_role(['cashier']);
 
 $salesWorkflowService = new SalesWorkflowService($pdo);
 $shiftService = new CashierShiftService($pdo);
-$openShift = current_role() === 'cashier' ? $shiftService->getOpenShift((int)$_SESSION['user_id']) : null;
-$posShiftOpen = current_role() !== 'cashier' || $openShift !== null;
+// Issue #86: only the Cashier workspace reaches this page, so the open
+// shift gate always applies — including to Administrators selling as Cashiers.
+$openShift = $shiftService->getOpenShift((int)$_SESSION['user_id']);
+$posShiftOpen = $openShift !== null;
+require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
 
 $checkout_error = '';
 $checkout_notice = '';

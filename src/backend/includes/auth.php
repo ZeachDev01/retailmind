@@ -340,7 +340,11 @@ function require_role(array $allowed_roles): void
         exit;
     }
     validate_current_session($pdo);
-    if (array_intersect(current_workspace_roles(), $allowed_roles) === []) {
+    // The active Cashier workspace is authoritative: POS-adjacent pages must
+    // be evaluated from the single selected workspace (current_role()),
+    // never from the union of all assigned roles.
+    $activeRole = current_role();
+    if ($activeRole === null || !in_array($activeRole, $allowed_roles, true)) {
         http_response_code(403);
         die('Access denied: your role does not have permission to view this page.');
     }
@@ -380,15 +384,12 @@ function has_capability(
     ?App\Authorization\AuthorizationContext $context = null
 ): bool {
     global $pdo;
+    // The active Cashier workspace is authoritative: POS capabilities are
+    // evaluated from the single selected workspace (current_role()), never
+    // from the union of all assigned roles.
     $role = current_role();
-    $roles = current_roles();
     $actorUserId = (int)($_SESSION['user_id'] ?? 0);
     $context ??= current_authorization_context($pdo);
-    foreach ($roles as $assignedRole) {
-        if (role_capability_policy()->allows($assignedRole, $capability, $targetRole, $context, $actorUserId)) {
-            return true;
-        }
-    }
     return $role !== null
         && role_capability_policy()->allows($role, $capability, $targetRole, $context, $actorUserId);
 }

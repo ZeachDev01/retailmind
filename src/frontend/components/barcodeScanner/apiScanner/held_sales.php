@@ -1,7 +1,10 @@
 <?php
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../../../backend/includes/auth.php';
-require_role(['admin','super_admin','cashier']);
+// Issue #86: held sales live inside the Cashier workspace; holding,
+// resuming, or cancelling requires the active Cashier workspace even when
+// the account also holds administrative roles.
+require_role(['cashier']);
 
 $userId = (int)$_SESSION['user_id'];
 $pdo->prepare("UPDATE held_sales SET status='expired',resolved_at=NOW() WHERE status='held' AND expires_at IS NOT NULL AND expires_at<NOW()")->execute();
@@ -19,9 +22,10 @@ if ($_SERVER['REQUEST_METHOD']==='GET') {
     echo json_encode(['success'=>true,'held_sales'=>held_sale_rows($pdo,$userId)]);exit;
 }
 if ($_SERVER['REQUEST_METHOD']!=='POST') { http_response_code(405);echo json_encode(['success'=>false,'message'=>'Method not allowed.']);exit; }
-if (current_role() === 'super_admin') {
-    require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
-}
+// Issue #86: POS capability is evaluated from the active Cashier workspace.
+// require_role above already guarantees the workspace; double-check the
+// capability so non-Cashier pages can never drive this endpoint.
+require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
 $input=json_decode((string)file_get_contents('php://input'),true)?:[];
 csrf_verify($_SERVER['HTTP_X_CSRF_TOKEN']??($input['csrf_token']??null));
 $action=(string)($input['action']??'');
@@ -38,7 +42,7 @@ try {
         foreach($cart as $id=>$item){$id=(int)$id;$qty=max(0,(int)($item['qty']??0));if($qty<1||!isset($db[$id]))continue;$p=$db[$id];$qty=min($qty,(int)$p['quantity_on_hand']);if($qty<1)continue;$clean[$id]=['name'=>$p['product_name'],'price'=>(float)$p['unit_price'],'qty'=>$qty,'stock'=>(int)$p['quantity_on_hand'],'reorder_level'=>(int)$p['reorder_level'],'safety_stock'=>(int)$p['safety_stock'],'sku'=>$p['sku'],'barcode'=>$p['barcode']];$count+=$qty;$total+=(float)$p['unit_price']*$qty;}
         if(!$clean)throw new RuntimeException('No active products can be held.');
         $shiftStmt=$pdo->prepare("SELECT shift_id FROM cashier_shifts WHERE cashier_id=? AND status='open' ORDER BY opened_at DESC LIMIT 1");$shiftStmt->execute([$userId]);$shiftId=$shiftStmt->fetchColumn()?:null;
-        if (current_role() === 'cashier' && !$shiftId) throw new RuntimeException('Open a cashier shift before holding a sale.');
+        if (!$shiftId) throw new RuntimeException('Open a cashier shift before holding a sale.');
         $reference='H'.date('ymdHis').str_pad((string)random_int(0,999),3,'0',STR_PAD_LEFT);
         $stmt=$pdo->prepare("INSERT INTO held_sales(cashier_id,shift_id,reference_no,customer_label,cart_json,item_count,total_amount,expires_at) VALUES(?,?,?,?,?,?,?,DATE_ADD(NOW(),INTERVAL 24 HOUR))");
         $stmt->execute([$userId,$shiftId,$reference,trim((string)($input['customer_label']??''))?:null,json_encode($clean,JSON_UNESCAPED_UNICODE),$count,$total]);
