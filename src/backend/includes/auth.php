@@ -340,8 +340,8 @@ function require_role(array $allowed_roles): void
         exit;
     }
     validate_current_session($pdo);
-    // The active Cashier workspace is authoritative: POS-adjacent pages must
-    // be evaluated from the single selected workspace (current_role()),
+    // Issue #86: the active workspace is authoritative. POS-adjacent pages
+    // are evaluated from the single selected workspace (current_role()),
     // never from the union of all assigned roles.
     $activeRole = current_role();
     if ($activeRole === null || !in_array($activeRole, $allowed_roles, true)) {
@@ -384,9 +384,10 @@ function has_capability(
     ?App\Authorization\AuthorizationContext $context = null
 ): bool {
     global $pdo;
-    // The active Cashier workspace is authoritative: POS capabilities are
+    // Issue #86: the active workspace is authoritative. Capabilities are
     // evaluated from the single selected workspace (current_role()), never
-    // from the union of all assigned roles.
+    // from the union of all assigned roles, so POS permission requires the
+    // Cashier workspace even for multi-role accounts.
     $role = current_role();
     $actorUserId = (int)($_SESSION['user_id'] ?? 0);
     $context ??= current_authorization_context($pdo);

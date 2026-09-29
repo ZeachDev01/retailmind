@@ -6,8 +6,8 @@ use App\Authorization\AuthorizationContext;
 use App\Authorization\RoleCapabilityPolicy;
 
 $failures = [];
-$assert = static function (bool $c, string $m) use (&$failures): void {
-    if (!$c) { $failures[] = $m; }
+$assert = static function (bool $condition, string $message) use (&$failures): void {
+    if (!$condition) { $failures[] = $message; }
 };
 
 try {
@@ -15,9 +15,9 @@ try {
     $assert(str_contains($auth, 'function has_capability('), 'auth owns POS capability entry');
     $assert(str_contains($auth, 'function require_role('), 'auth owns workspace gate entry');
     $hasCode = '';
-    if (preg_match('/function has_capability\(.*?^}/ms', $auth, $m)) { $hasCode = $m[0]; }
+    if (preg_match('/function has_capability\(.*?^}/ms', $auth, $matches)) { $hasCode = $matches[0]; }
     $roleCode = '';
-    if (preg_match('/function require_role\(.*?^}/ms', $auth, $m)) { $roleCode = $m[0]; }
+    if (preg_match('/function require_role\(.*?^}/ms', $auth, $matches)) { $roleCode = $matches[0]; }
     $assert(str_contains($hasCode, 'current_role()'), 'POS capability uses active workspace');
     $assert(!str_contains($hasCode, 'foreach ($roles as $assignedRole)'), 'POS capability skips role union');
     $assert(str_contains($roleCode, 'current_role()'), 'workspace gate uses active workspace');
@@ -29,8 +29,8 @@ try {
     $assert($policy->allows('admin', $pos) === false, 'admin workspace lacks POS');
     $assert($policy->allows('super_admin', $pos) === false, 'super_admin workspace lacks POS');
     $assert($policy->allows('inventory_manager', $pos) === false, 'inventory workspace lacks POS');
-    $em = AuthorizationContext::emergencyAccess(701, 42, 'Restore Store operations during an incident');
-    $assert($policy->allows('super_admin', $pos, null, $em, 42) === false, 'emergency never grants POS');
+    $emergency = AuthorizationContext::emergencyAccess(701, 42, 'Restore Store operations during an incident');
+    $assert($policy->allows('super_admin', $pos, null, $emergency, 42) === false, 'emergency never grants POS');
 
     $root = dirname(__DIR__, 3);
     $posPage = (string)@file_get_contents($root . '/src/frontend/components/cashier/pos.php');
@@ -39,6 +39,7 @@ try {
     $held = (string)@file_get_contents($root . '/src/frontend/components/barcodeScanner/apiScanner/held_sales.php');
     $assert(str_contains($held, "require_role(['cashier'])"), 'held sales require cashier workspace');
     $assert(str_contains($held, 'OPERATE_POINT_OF_SALE'), 'held sales check POS capability');
+    $assert(!str_contains($held, "require_role(['admin'"), 'held sales admit no admin workspace');
 
     $glossary = (string)@file_get_contents($root . '/CONTEXT.md');
     foreach (['**Cashier**:', '**Cashier Shift**:', '**Register**:'] as $term) {
