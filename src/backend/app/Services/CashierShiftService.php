@@ -258,6 +258,9 @@ class CashierShiftService
 
     public function calculateShift(int $shiftId): array
     {
+        // The Register travels with the summary on purpose: closeShift() returns
+        // this array and the page writes it into the closing Protected Audit
+        // Record, so the record names the Register the drawer was reconciled on.
         $stmt = $this->pdo->prepare(
             "SELECT cs.*, u.full_name, r.name AS register_name
              FROM cashier_shifts cs

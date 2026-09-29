@@ -428,7 +428,7 @@ $checks = [
             'name="register_id"',
             'name="opening_float"',
             '$service->availableRegisters()',
-            'A Cashier Shift is owned by the Cashier who sells',
+            'A Cashier Shift is opened and owned by the Cashier who sells',
         ],
         // A shift is never opened on somebody's behalf, and the duplicate
         // page-level audit write is gone: the service records the opening.
@@ -457,6 +457,10 @@ $checks = [
             'fk_cashier_shifts_register',
             'Schema::addUniqueKeyIfMissing',
         ],
+        // MigrationRunner::available() loads with `require`, not
+        // `require_once`, so anything declared at file scope would fatal on a
+        // second load in the same process. Migrations declare nothing.
+        'forbidden' => ["\nfunction "],
     ],
     'Fresh schema ships the same exclusive Cashier Shift constraints' => [
         'file' => 'src/backend/sql/schema.sql',

@@ -90,14 +90,14 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </section><?php endif; ?>
             <div class="shift-grid">
                 <section class="dashboard-section">
-                    <h3><?= $openShift ? 'Open shift' : 'Open a shift' ?></h3><?php if (!$isCashier): ?><p>A Cashier Shift is owned by the Cashier who sells. Ask the cashier to open their own shift in the Cashier workspace.</p><?php elseif (!$openShift && !$availableRegisters): ?><p>No Register is free right now. Every Register is either disabled or already on an open shift. Tell your Administrator.</p><?php elseif (!$openShift): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
+                    <h3><?= $openShift ? 'Open shift' : 'Open a shift' ?></h3><?php if (!$isCashier): ?><p>A Cashier Shift is opened and owned by the Cashier who sells. Ask the cashier to open their own shift in the Cashier workspace; you can still review and close it here.</p><?php elseif (!$openShift && !$availableRegisters): ?><p>No Register is free right now. Every Register is either disabled or already on an open shift. Tell your Administrator.</p><?php elseif (!$openShift): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
                             <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($availableRegisters as $register): ?><option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option><?php endforeach; ?></select></div>
                             <div><label for="opening-float">Opening float</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required></div>
                         </div><button class="btn" type="submit">Open shift</button></form><?php else: ?><p><strong>Shift #<?= (int)$openShift['shift_id'] ?></strong><br>Register <?= htmlspecialchars($openShift['register_name'] ?? 'Unassigned') ?><br>Opened <?= htmlspecialchars($openShift['opened_at']) ?></p>
                         <div class="card-grid">
                             <div class="stat-card">
                                 <div class="value">₱<?= number_format((float)$summary['opening_cash'], 2) ?></div>
-                                <div class="label">Opening cash</div>
+                                <div class="label">Opening float</div>
                             </div>
                             <div class="stat-card">
                                 <div class="value">₱<?= number_format((float)$summary['cash_sales'], 2) ?></div>

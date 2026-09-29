@@ -82,6 +82,32 @@ try {
     $pdo->exec("CREATE UNIQUE INDEX uq_cashier_shifts_open_register
         ON cashier_shifts (register_id) WHERE status = 'open'");
     $pdo->exec('CREATE INDEX idx_cashier_shifts_register ON cashier_shifts (register_id)');
+    // calculateShift() carries the Register into the closing Protected Audit
+    // Record, so the summary must be able to name it.
+    $pdo->exec("CREATE TABLE sales (
+        sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cashier_id INTEGER NOT NULL,
+        shift_id INTEGER NULL,
+        total_amount REAL NOT NULL DEFAULT 0.00,
+        payment_method TEXT NOT NULL DEFAULT 'cash',
+        discount_amount REAL NOT NULL DEFAULT 0.00
+    )");
+    $pdo->exec("CREATE TABLE sale_reversals (
+        reversal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id INTEGER NOT NULL,
+        refund_amount REAL NOT NULL DEFAULT 0.00,
+        status TEXT NOT NULL DEFAULT 'approved',
+        settlement_method TEXT NOT NULL DEFAULT 'cash'
+    )");
+    $pdo->exec("CREATE TABLE cash_drawer_movements (
+        drawer_movement_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shift_id INTEGER NOT NULL,
+        movement_type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        reason TEXT NOT NULL,
+        recorded_by INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
     $pdo->exec("CREATE TABLE activity_log (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NULL,
@@ -158,6 +184,17 @@ try {
     $open = $service->getOpenShift($casey);
     $assert($open !== null && (int)$open['register_id'] === 10, 'the open shift reports its Register');
     $assert($open['register_name'] === 'Front Counter', 'the open shift names the Register the Cashier picked');
+
+    // The reconciling summary names the Register too, because the page writes
+    // that summary into the closing Protected Audit Record.
+    $pdo->prepare("INSERT INTO sales (cashier_id, shift_id, total_amount, payment_method) VALUES (?, ?, 40.00, 'cash')")
+        ->execute([$casey, $shiftId]);
+    $summary = $service->calculateShift($shiftId);
+    $assert($summary['register_name'] === 'Front Counter', 'the reconciling summary names the Register');
+    $assert(
+        abs((float)$summary['calculated_expected_cash'] - 290.50) < 0.001,
+        'the reconciling summary still counts the opening float'
+    );
 
     // --- A Cashier owns at most one open shift; a Register joins one (AC 3) ---
     $expectRefusal(

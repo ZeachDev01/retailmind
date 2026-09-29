@@ -22,7 +22,44 @@ return [
         Schema::addColumnIfMissing($pdo, 'cashier_shifts', 'register_id', 'INT NULL AFTER `cashier_id`');
         Schema::addIndexIfMissing($pdo, 'cashier_shifts', 'idx_cashier_shifts_register', '`register_id`');
 
-        requireAbsentOpenShiftConflicts($pdo);
+        // Refuses to install the exclusivity constraints over history that
+        // already breaks them. Closing somebody's live shift is an operational
+        // decision, not a migration side effect, so the upgrade stops and names
+        // the conflicts instead. MigrationRunner leaves the migration pending,
+        // so resolving them and re-running completes the upgrade.
+        //
+        // This is a closure rather than a top-level function on purpose:
+        // MigrationRunner::available() loads migrations with `require`, not
+        // `require_once`, so a second load in the same process would fatal on
+        // a redeclaration. Migrations must not declare anything at file scope.
+        $requireNoOpenShiftConflicts = static function (PDO $pdo): void {
+            $conflicts = [];
+            $duplicatedCashiers = $pdo->query(
+                "SELECT cashier_id, COUNT(*) AS open_count FROM cashier_shifts
+                 WHERE status = 'open' GROUP BY cashier_id HAVING open_count > 1"
+            )->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($duplicatedCashiers as $row) {
+                $conflicts[] = 'cashier_id ' . (int)$row['cashier_id'] . ' holds ' . (int)$row['open_count'] . ' open shifts';
+            }
+
+            $duplicatedRegisters = $pdo->query(
+                "SELECT register_id, COUNT(*) AS open_count FROM cashier_shifts
+                 WHERE status = 'open' AND register_id IS NOT NULL
+                 GROUP BY register_id HAVING open_count > 1"
+            )->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($duplicatedRegisters as $row) {
+                $conflicts[] = 'register_id ' . (int)$row['register_id'] . ' holds ' . (int)$row['open_count'] . ' open shifts';
+            }
+
+            if ($conflicts !== []) {
+                throw new \RuntimeException(
+                    'Cannot enforce exclusive Cashier Shifts until these open shifts are reconciled: '
+                    . implode('; ', $conflicts)
+                    . '. Close the extra shifts, then run the migration again.'
+                );
+            }
+        };
+        $requireNoOpenShiftConflicts($pdo);
 
         Schema::addColumnIfMissing(
             $pdo,
@@ -50,39 +87,3 @@ return [
         );
     },
 ];
-
-/**
- * Refuses to install the exclusivity constraints over history that already
- * breaks them. Closing somebody's live shift is an operational decision, not a
- * migration side effect, so the upgrade stops and names the conflicts instead.
- * MigrationRunner leaves the migration pending, so resolving them and re-running
- * completes the upgrade.
- */
-function requireAbsentOpenShiftConflicts(PDO $pdo): void
-{
-    $conflicts = [];
-    $duplicatedCashiers = $pdo->query(
-        "SELECT cashier_id, COUNT(*) AS open_count FROM cashier_shifts
-         WHERE status = 'open' GROUP BY cashier_id HAVING open_count > 1"
-    )->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($duplicatedCashiers as $row) {
-        $conflicts[] = 'cashier_id ' . (int)$row['cashier_id'] . ' holds ' . (int)$row['open_count'] . ' open shifts';
-    }
-
-    $duplicatedRegisters = $pdo->query(
-        "SELECT register_id, COUNT(*) AS open_count FROM cashier_shifts
-         WHERE status = 'open' AND register_id IS NOT NULL
-         GROUP BY register_id HAVING open_count > 1"
-    )->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($duplicatedRegisters as $row) {
-        $conflicts[] = 'register_id ' . (int)$row['register_id'] . ' holds ' . (int)$row['open_count'] . ' open shifts';
-    }
-
-    if ($conflicts !== []) {
-        throw new \RuntimeException(
-            'Cannot enforce exclusive Cashier Shifts until these open shifts are reconciled: '
-            . implode('; ', $conflicts)
-            . '. Close the extra shifts, then run the migration again.'
-        );
-    }
-}
