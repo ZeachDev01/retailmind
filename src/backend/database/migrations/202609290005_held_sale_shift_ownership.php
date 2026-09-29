@@ -23,21 +23,28 @@ return [
         // 'discarded' and 'completed' are the two ways a held sale leaves the
         // unresolved set, and they are distinct on purpose: a discard is an
         // explained abandonment with no cash effect, a completion is the sale
-        // that cart became. 'cancelled' is how the same abandonment was spelled
-        // before a reason was required, so those rows are re-spelled rather than
-        // deleted — their reason stays NULL, which is the honest record of a
-        // cart abandoned before the requirement existed.
+        // that finished the cart. 'cancelled' is how the same abandonment was
+        // spelled before a reason was required, so those rows are re-spelled
+        // rather than dropped — their reason stays NULL, which is the honest
+        // record of a cart abandoned before the requirement existed.
+        //
+        // The order of the three statements is the whole trick, and it is the
+        // reverse of the one that looks natural. Narrowing the enum first would
+        // destroy every 'cancelled' row on the spot: a value the new enum does
+        // not contain becomes the empty string, not an error, so the rewrite
+        // below would then find nothing to rewrite. So the enum is widened to
+        // hold both spellings, the rows are re-spelled, and only then is it
+        // narrowed — at which point nothing left in the column is dropped.
+        $targetStatus = "enum('held','resumed','discarded','completed','expired') NOT NULL DEFAULT 'held'";
+        $widenedStatus = "enum('held','resumed','cancelled','discarded','completed','expired') NOT NULL DEFAULT 'held'";
         $statusColumn = $pdo->query(
             "SELECT COLUMN_TYPE FROM information_schema.columns
              WHERE table_schema = DATABASE() AND table_name = 'held_sales' AND column_name = 'status'"
         )->fetchColumn();
-        if (is_string($statusColumn) && !str_contains($statusColumn, "'discarded'")) {
-            $pdo->exec(
-                "ALTER TABLE `held_sales`
-                 MODIFY COLUMN `status`
-                 enum('held','resumed','discarded','completed','expired') NOT NULL DEFAULT 'held'"
-            );
+        if (is_string($statusColumn) && strtolower($statusColumn) !== trim($targetStatus, "enum() \n\r\t")) {
+            $pdo->exec("ALTER TABLE `held_sales` MODIFY COLUMN `status` {$widenedStatus}");
             $pdo->exec("UPDATE `held_sales` SET `status` = 'discarded' WHERE `status` = 'cancelled'");
+            $pdo->exec("ALTER TABLE `held_sales` MODIFY COLUMN `status` {$targetStatus}");
         }
 
         // --- the explained discard -------------------------------------------
@@ -102,12 +109,18 @@ return [
         );
 
         // One index serves both questions the flow asks: "what is this Cashier
-        // looking at" and "what is blocking this shift from closing".
+        // looking at" and "what is blocking this shift from closing". The
+        // single-column index the Cashier Shift foreign key used to bring along
+        // is dropped, because the composite one leads with the same column and
+        // leaves a redundant second copy on every write otherwise.
         Schema::addIndexIfMissing(
             $pdo,
             'held_sales',
             'idx_held_sales_shift_status',
             '`shift_id`, `status`'
         );
+        if (Schema::indexExists($pdo, 'held_sales', 'shift_id')) {
+            $pdo->exec('ALTER TABLE `held_sales` DROP INDEX `shift_id`');
+        }
     },
 ];

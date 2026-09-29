@@ -16,21 +16,21 @@ require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
 /**
  * Held Sales (ticket #91).
  *
- * A held sale is a cart the Cashier parked, and it is suspended work rather than
- * a floating one: it belongs to the Cashier who parked it and to the Cashier
+ * A held sale is a suspended cart, and suspended work rather than floating
+ * work: it belongs to the Cashier who held it and to the Cashier
  * Shift that was open at the time. Three consequences follow, and they are the
  * whole of this service.
  *
  * Holding requires the authenticated Cashier's own open shift, and the shift is
  * derived from that Cashier rather than read from the request, so there is no
- * way to park a cart against somebody else's drawer. The same derivation makes
+ * way to hold a cart against somebody else's drawer. The same derivation makes
  * listing and resuming safe by construction: a Cashier only ever sees the rows
  * their own user id matches.
  *
  * A held sale stays unresolved from the moment it is held until it becomes one of
  * two things — a sale, or an explained abandonment. Resuming does not resolve it,
  * because a Cashier who resumes a cart and then walks away has not finished
- * anything, and a shift must not close over a cart that is still parked at the
+ * anything, and a shift must not close over a cart that is still held at the
  * till. That is why the closure invariant in CashierShiftService counts 'held'
  * and 'resumed' alike.
  *
@@ -45,12 +45,15 @@ class HeldSaleService
     public const AUDIT_ACTION_DISCARDED = 'Held sale discarded';
 
     /**
-     * The statuses that mean "this cart is still parked".
+     * The statuses that mean "this held sale is still owed a decision".
      *
      * 'resumed' is in here on purpose. Resuming hands the cart back to the till,
      * it does not finish it; only a completed sale or an explained discard does.
      */
     public const UNRESOLVED_STATUSES = ['held', 'resumed'];
+
+    /** The one unresolved status a checkout may settle. See assertCompletable(). */
+    public const RESUMED_STATUS = 'resumed';
 
     /**
      * The fixed initial set of reasons a cart can be discarded for.
@@ -79,36 +82,8 @@ class HeldSaleService
         $this->policy = $policy ?? new RoleCapabilityPolicy();
     }
 
-    /** The discard reasons a Cashier is offered, for the dialog that collects one. */
-    public function discardReasons(): array
-    {
-        return self::DISCARD_REASONS;
-    }
-
     /**
-     * The unresolved carts parked on one Cashier Shift.
-     *
-     * This is what the closure invariant reads, and what the closing form shows so
-     * a Cashier is told which carts are in their way rather than just that there
-     * are some. Ordered oldest first, because the cart they parked before the
-     * shift went quiet is the one they are most likely to have forgotten.
-     */
-    public function unresolvedForShift(int $shiftId): array
-    {
-        $placeholders = implode(',', array_fill(0, count(self::UNRESOLVED_STATUSES), '?'));
-        $stmt = $this->pdo->prepare(
-            "SELECT held_sale_id, reference_no, customer_label, status, item_count, total_amount, created_at, expires_at
-             FROM held_sales
-             WHERE shift_id = ? AND status IN ({$placeholders})
-             ORDER BY created_at, held_sale_id"
-        );
-        $stmt->execute(array_merge([$shiftId], self::UNRESOLVED_STATUSES));
-
-        return array_map([$this, 'shapeRow'], $stmt->fetchAll(PDO::FETCH_ASSOC));
-    }
-
-    /**
-     * The unresolved carts one Cashier owns, newest first.
+     * The unresolved held sales one Cashier owns, newest first.
      *
      * Scoped by user id rather than by anything the request says, which is the
      * whole of the visibility rule: a Cashier sees their own suspended work and
@@ -129,11 +104,11 @@ class HeldSaleService
     }
 
     /**
-     * Parks a cart under the authenticated Cashier's own open Cashier Shift.
+     * Holds a cart under the authenticated Cashier's own open Cashier Shift.
      *
      * The cart is re-derived from the database rather than trusted: prices,
      * names, and stock come from the products table, and a quantity is clamped to
-     * what is actually on hand. A client that posts a fabricated price parks a
+     * what is actually on hand. A client that posts a fabricated price holds a
      * cart that will not be the one it is charged at.
      *
      * @return array{held_sale_id: int, reference_no: string}
@@ -142,7 +117,7 @@ class HeldSaleService
     {
         $this->requireCashierWorkspace($actorRole, 'hold a sale');
         // The shift is read from the Cashier, never from the request, so a cart
-        // cannot be parked against a drawer this Cashier does not own.
+        // cannot be held against a drawer this Cashier does not own.
         $shift = $this->requireHoldingShift($cashierId);
 
         $rehydrated = $this->rehydrateCart($cart);
@@ -180,7 +155,7 @@ class HeldSaleService
     }
 
     /**
-     * Hands a parked cart back to the till, keeping the Cashier Shift it belongs to.
+     * Hands a held cart back to the till, keeping the Cashier Shift it belongs to.
      *
      * Resuming is repeatable on purpose. A Cashier who reloads the page, or whose
      * browser drops the cart, needs the same cart back rather than an error —
@@ -208,7 +183,7 @@ class HeldSaleService
     }
 
     /**
-     * Abandons a parked cart, with a reason, for good.
+     * Abandons a held cart, with a reason, for good.
      *
      * A discard is a sensitive non-sale action, so it is recorded: a Cashier
      * silently dropping a cart is exactly the kind of thing a Store owner asks
@@ -253,19 +228,25 @@ class HeldSaleService
     }
 
     /**
-     * Settles that a parked cart may be completed by this checkout.
+     * Settles that a resumed held sale may be completed by this checkout.
      *
-     * $shiftId is the shift checkout already resolved for the sale, and the cart
-     * must belong to that same shift. Checking it here — row-locked, inside the
-     * sale's own transaction — is what makes a resumed cart keep its attribution
-     * all the way through: the cart is completed on the drawer it was parked on,
-     * or not at all.
+     * $shiftId is the shift checkout already resolved for the sale, and the held
+     * sale must belong to that same shift. Checking it here — row-locked, inside
+     * the sale's own transaction — is what makes a resumed held sale keep its
+     * attribution all the way through: it is completed on the drawer it was held
+     * under, or not at all.
+     *
+     * Only a *resumed* held sale qualifies. A cart that is still merely 'held' is
+     * not on the till, and there is no honest checkout that settles it: a Cashier
+     * who pays for a cart has resumed it first, so accepting the other status
+     * would only ever let a hand-crafted request mark a cart finished without its
+     * contents ever being sold.
      *
      * @return array The locked held sale row.
      */
     public function assertCompletable(int $cashierId, int $heldSaleId, int $shiftId): array
     {
-        $heldSale = $this->requireOwnUnresolved($cashierId, $heldSaleId, true);
+        $heldSale = $this->requireOwnUnresolved($cashierId, $heldSaleId, true, [self::RESUMED_STATUS]);
         if ((int)$heldSale['shift_id'] !== $shiftId) {
             throw new DomainException('That held sale belongs to a different Cashier Shift and cannot be completed here.');
         }
@@ -274,12 +255,14 @@ class HeldSaleService
     }
 
     /**
-     * Records that a parked cart became a sale.
+     * Records that a resumed held sale has been settled by a sale.
      *
-     * Called inside the checkout transaction, so the cart and the sale it became
-     * commit or roll back together. The cart keeps its original Cashier and Cashier
-     * Shift, which is the point: a sale completed hours later is still legible as
-     * the sale of the cart that shift parked.
+     * Called inside the checkout transaction, so the held sale and the sale that
+     * settles it commit or roll back together. The link records that this sale is
+     * the one that finished the held sale, on this Cashier Shift — it is not a
+     * claim that the two carts match item for item, because a Cashier is free to
+     * change a cart at the till and the sale is built from the cart they actually
+     * paid for.
      */
     public function markCompleted(int $heldSaleId, int $saleId): void
     {
@@ -289,16 +272,17 @@ class HeldSaleService
     }
 
     /**
-     * Expires parked carts that belong to no open Cashier Shift.
+     * Expires held sales that belong to no open Cashier Shift.
      *
-     * A cart whose shift is still open is not expired by the passage of time. It
-     * is the Cashier's to resolve, and the shift is held open until they do, so
-     * quietly retiring a cart would be the one path around both the discard reason
-     * and the closure invariant. What this does clear is the residue that has
-     * nobody waiting on it: carts held before this deployment, which carry no
-     * shift, and carts whose shift closed before the invariant existed.
+     * A held sale whose shift is still open is not expired by the passage of time.
+     * It is the Cashier's to resolve, and the shift is held open until they do, so
+     * quietly retiring one would be the single path around both the discard reason
+     * and the closure invariant. What this does clear is the residue nobody is
+     * waiting on: held sales recorded before this deployment, which carry no shift,
+     * and those whose shift closed before the invariant existed. Those are orphans
+     * in the only sense the word is used for here — it belongs to no drawer.
      *
-     * @return int How many were retired.
+     * @return int How many were expired.
      */
     public function sweepExpiredOrphans(): int
     {
@@ -320,11 +304,11 @@ class HeldSaleService
     }
 
     /**
-     * The open shift a cart may be parked on, with the lock settled.
+     * The open shift a cart may be held on, with the lock settled.
      *
      * Both refusals live in the service rather than on the page, because the
      * point of sale is not the only thing that can reach this: a locked Register
-     * is a break, and parking a cart on a Register its owner locked is exactly
+     * is a break, and holding a cart on a Register its owner locked is exactly
      * the act the lock forbids.
      */
     private function requireHoldingShift(int $cashierId): array
@@ -339,22 +323,26 @@ class HeldSaleService
     }
 
     /**
-     * Loads a parked cart that is this Cashier's and still unresolved.
+     * Loads a held sale that is this Cashier's and in one of $statuses.
      *
-     * One query carries both halves of the rule, so there is no window in which a
-     * cart could be read as the Cashier's and then act as somebody else's. The
-     * refusal deliberately does not say which half failed: a Cashier learns that
-     * the cart is not theirs to act on, not whether it exists at all.
+     * One query carries every half of the rule, so there is no window in which a
+     * held sale could be read as the Cashier's and then act as somebody else's.
+     * The refusal deliberately does not say which half failed: a Cashier learns
+     * that the held sale is not theirs to act on, not whether it exists at all.
      */
-    private function requireOwnUnresolved(int $cashierId, int $heldSaleId, bool $lock = false): array
-    {
-        $placeholders = implode(',', array_fill(0, count(self::UNRESOLVED_STATUSES), '?'));
+    private function requireOwnUnresolved(
+        int $cashierId,
+        int $heldSaleId,
+        bool $lock = false,
+        array $statuses = self::UNRESOLVED_STATUSES
+    ): array {
+        $placeholders = implode(',', array_fill(0, count($statuses), '?'));
         $stmt = $this->pdo->prepare(
             "SELECT * FROM held_sales
              WHERE held_sale_id = ? AND cashier_id = ? AND status IN ({$placeholders})"
             . ($lock ? $this->rowLock() : '')
         );
-        $stmt->execute(array_merge([$heldSaleId, $cashierId], self::UNRESOLVED_STATUSES));
+        $stmt->execute(array_merge([$heldSaleId, $cashierId], $statuses));
         $heldSale = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$heldSale) {
@@ -365,7 +353,7 @@ class HeldSaleService
     }
 
     /**
-     * When a parked cart stops being worth listing by age, a day after it is held.
+     * When a held sale stops being worth listing by age: a day after it is held.
      *
      * The expiry is measured from the database's own clock rather than PHP's, so
      * the sweep and the insert can never disagree about what "yesterday" means.
@@ -374,13 +362,13 @@ class HeldSaleService
      * not all MySQL — the same dialect split SalesWorkflowService::rowLock()
      * makes.
      */
-    private function expiry(int $hours = 24): string
+    private function expiry(): string
     {
         $now = $this->pdo
             ->query($this->isMysql() ? 'SELECT NOW()' : "SELECT datetime('now')")
             ->fetchColumn();
 
-        return date('Y-m-d H:i:s', strtotime((string)$now . ' +' . $hours . ' hours'));
+        return date('Y-m-d H:i:s', strtotime((string)$now . ' +24 hours'));
     }
 
     private function isMysql(): bool
@@ -389,7 +377,7 @@ class HeldSaleService
     }
 
     /**
-     * The row lock that holds a parked cart for the rest of the transaction.
+     * The row lock that holds a cart for the rest of the transaction.
      *
      * Dialect-aware for the same reason SalesWorkflowService::rowLock() is: MySQL
      * takes a real row lock, which is what stops two requests completing the same
@@ -508,7 +496,7 @@ class HeldSaleService
      *
      * Both halves an auditor needs are in the payload: who acted and what they
      * acted on. The Cashier Shift is included so the discard is readable next to
-     * the drawer it was parked on, and the reason is stored with its label so a
+     * the drawer it was held under, and the reason is stored with its label so a
      * later reader sees "Customer cancelled the purchase" rather than a code they
      * would have to look up in code that may since have changed.
      */

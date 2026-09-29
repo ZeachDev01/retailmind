@@ -109,11 +109,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     }
 }
 
-// Ticket #91: the fixed set of reasons a parked cart can be discarded for. The
+// Ticket #91: the fixed set of reasons a held sale can be discarded for. The
 // dialog offers exactly these, and the service accepts exactly these, so the
-// page cannot drift into offering a reason the audit record would not understand.
-$heldSaleService = new \App\Services\HeldSaleService($pdo, $shiftService);
-$heldSaleDiscardReasons = $heldSaleService->discardReasons();
+// page cannot drift into offering a reason the audit record would not
+// understand. Read straight off the service the way this page already reads
+// CashierShiftService::LOCKED_MESSAGE — no second instance is built to read it.
+$heldSaleDiscardReasons = \App\Services\HeldSaleService::DISCARD_REASONS;
 
 [$quickProductScope, $quickProductParams] = store_product_scope('p');
 $quickProductStmt = $pdo->prepare(
@@ -517,8 +518,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
 <script>
 let cart = {};
 let heldSales = [];
-// Ticket #91: the parked cart this one came from, if any. Checkout sends it so
-// the sale completes that cart on the shift it was parked under; the service
+// Ticket #91: the held sale this cart came from, if any. Checkout sends it so
+// the sale settles that held sale on the shift it was held under; the service
 // settles it against the Cashier and the shift, so this is a hint, not a claim.
 let resumedHeldSaleId = 0;
 let scanCooldown = false;
@@ -1184,14 +1185,14 @@ async function resumeHeldSale(id) {
         cart = data.cart || {}; heldSales = data.held_sales || [];
         resetPaymentState();
         // Ticket #91: the cart is back on the till, so the next checkout is the
-        // completion of this parked cart rather than an ordinary new sale.
+        // settlement of this held sale rather than an ordinary new sale.
         resumedHeldSaleId = Number(data.id || id) || 0;
         resumedHeldSaleInput.value = String(resumedHeldSaleId);
         renderCart(); renderHeldSales(); showCartMessage('Held sale resumed. Complete the checkout to finish it.', 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); }
 }
 
-// Ticket #91: a parked cart cannot be dropped from the list. It has to be either
+// Ticket #91: a held sale cannot be dropped from the list. It has to be either
 // paid for — which completes it — or discarded with a reason, which is recorded.
 // The note is only demanded for the one reason that genuinely needs words, and
 // the service refuses an empty one there, so this is a courtesy rather than the
@@ -1246,7 +1247,7 @@ function renderHeldSales() {
         const id = Number(held.id);
         // A resumed cart is already on the till but is not finished: it still has
         // to be paid for, and it still holds this shift open. Saying so is the
-        // difference between "parked" and "done".
+        // difference between "held" and "done".
         const state = held.status === 'resumed' ? ' &middot; on the till' : '';
         return `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}${state}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" onclick="resumeHeldSale(${id})">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="openDiscardModal(${id})">Discard</button></div></div>`;
     }).join('');
@@ -1298,7 +1299,7 @@ function restoreState() {
     } catch (error) { cart = {}; }
     // Ticket #91: a cart restored out of session storage is deliberately not
     // re-linked to the held sale it may have come from. The link is not
-    // something the browser gets to assert, and the parked cart stays listed as
+    // something the browser gets to assert, and the held sale stays listed as
     // unresolved either way, so the shift still cannot close over it.
     renderCart();
     loadHeldSales();

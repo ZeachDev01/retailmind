@@ -64,6 +64,19 @@ $assert(
         && str_contains($migration, '`shift_id`, `status`'),
     'the migration adds the same shift-and-status index'
 );
+// ...and it has to drop the single-column index the Cashier Shift foreign key
+// brought along, or an upgraded database keeps a second, redundant copy that a
+// fresh install never has. Presence-only assertions cannot see this, so the
+// absence is asserted.
+$assert(
+    !preg_match('/KEY `shift_id` \(`shift_id`\)/i', $heldTable),
+    'schema.sql does not keep the single-column index the composite one replaces'
+);
+$assert(
+    str_contains($migration, 'DROP INDEX `shift_id`')
+        && str_contains($migration, "Schema::indexExists(\$pdo, 'held_sales', 'shift_id')"),
+    'the migration drops the redundant single-column index it replaces'
+);
 
 // The shift a cart is parked on must not be deletable out from under it. With
 // ON DELETE SET NULL, deleting a shift would silently release its unresolved
@@ -95,8 +108,25 @@ $assertMatches(
     'schema.sql states the resolution vocabulary, with a discard and a completion as the two ways out'
 );
 $assert(
-    preg_match("/MODIFY COLUMN `status`\s*\n\s*enum\\('held','resumed','discarded','completed','expired'\\)/i", $migration) === 1,
+    preg_match("/\\\$targetStatus\s*=\s*\"enum\('held','resumed','discarded','completed','expired'\) NOT NULL DEFAULT 'held'\"/", $migration) === 1,
     'the migration reaches the same resolution vocabulary'
+);
+$assert(
+    preg_match('/MODIFY COLUMN `status` \{\$targetStatus\}/', $migration) === 1,
+    'the migration applies the whole status definition, so a database holding one member but not the rest is still corrected'
+);
+// The statement order here is a correctness property, not a style choice, so it
+// is worth pinning. Narrowing the enum first would destroy every 'cancelled'
+// row on the spot — a value the new enum does not contain becomes the empty
+// string, not an error — and the rewrite would then find nothing to rewrite.
+// Widening, rewriting, narrowing is the only order that preserves the rows.
+$widenPos = strpos($migration, '$widenedStatus}');
+$rewritePos = strpos($migration, "SET `status` = 'discarded' WHERE `status` = 'cancelled'");
+$narrowPos = strpos($migration, 'MODIFY COLUMN `status` {$targetStatus}');
+$assert(
+    $widenPos !== false && $rewritePos !== false && $narrowPos !== false
+        && $widenPos < $rewritePos && $rewritePos < $narrowPos,
+    "the migration widens the status enum, re-spells legacy 'cancelled' rows, and only then narrows it"
 );
 $assert(
     preg_match("/SET `status` = 'discarded' WHERE `status` = 'cancelled'/", $migration) === 1,
@@ -142,18 +172,10 @@ $assert(
     'held_sales is declared before the tables it references'
 );
 
-// The service that reads all of this is one file, and the endpoint holds no
-// rules of its own — a rule in the page is a rule the closing form cannot see.
-$service = (string)@file_get_contents($root . '/src/backend/app/Services/HeldSaleService.php');
-$assert($service !== '', 'the held sale service source must be readable');
-$assert(
-    str_contains($service, "const UNRESOLVED_STATUSES = ['held', 'resumed']"),
-    "a resumed cart stays unresolved, so 'held' and 'resumed' are the statuses a closure counts"
-);
-$assert(
-    str_contains($service, 'cs.status = \'open\''),
-    'the expiry sweep only clears a cart that belongs to no open Cashier Shift'
-);
+// This contract is about the two schema lineages and nothing else. The rules the
+// service reads them for are proven as behaviour, not as source text, in
+// held_sale_shift_contract.php — a renamed private constant there should break
+// no test here, because nothing about the schema changed.
 
 if ($failures) {
     fwrite(STDERR, "Held Sale Cashier Shift ownership schema parity contract failed:\n- " . implode("\n- ", $failures) . "\n");

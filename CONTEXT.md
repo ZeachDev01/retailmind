@@ -69,8 +69,8 @@ The named physical till that anchors drawer accountability for one open Cashier 
 _Avoid_: Shared drawer, inferred till, deleted register history
 
 **Held Sale**:
-A cart a Cashier suspended at the till. It belongs to that Cashier and to the Cashier Shift that was open when it was parked, is listed and resumed only by its owner, and stays unresolved — owed a decision — from the moment it is held until it either becomes a sale or is discarded with a structured reason. Resuming does not resolve it, and no Cashier Shift closes while one is unresolved. Discarding moves no cash and is recorded as a Protected Audit Record. Time alone never resolves a Held Sale; only a cart that belongs to no open Cashier Shift expires on its own.
-_Avoid_: Parked cart, orphan cart, silent cancel, self-expiring cart
+A cart a Cashier suspended at the till. It belongs to that Cashier and to the Cashier Shift that was open when it was held, is listed and resumed only by its owner, and stays unresolved — owed a decision — from the moment it is held until it either becomes a sale or is discarded with a structured reason. Resuming does not resolve it, and no Cashier Shift closes while one is unresolved. Discarding moves no cash and is recorded as a Protected Audit Record. Time alone never resolves a Held Sale; an orphan — a Held Sale belonging to no open Cashier Shift — is the only one that expires on its own.
+_Avoid_: Floating cart, silent cancel, self-expiring cart, cancel button on a held sale
 
 **Register Lock**:
 The break-time state of an open Cashier Shift that leaves the drawer owned and the Register claimed while the point of sale refuses to transact. Only the owning Cashier resumes it, with their own account password; a separate PIN or unlock code is never introduced. Locking and logging out both leave the shift open and unreconciled, and the lock is held by the shift rather than the session so a Register never reopens itself.

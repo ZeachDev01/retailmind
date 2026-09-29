@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $openShift = $targetCashierId > 0 ? $service->getOpenShift($targetCashierId) : null;
 $summary = $openShift ? $service->calculateShift((int)$openShift['shift_id']) : null;
 $movements = $openShift ? $service->drawerMovements((int)$openShift['shift_id']) : [];
-// Ticket #91: the shift cannot close while any of these is parked on it, so the
+// Ticket #91: the shift cannot close while any of these is unresolved, so the
 // closing form names them rather than the cashier being told only that there are
 // some. The refusal itself lives in CashierShiftService::closeShift(), because
 // this form can be posted directly.
@@ -139,8 +139,8 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         <h3>Close and reconcile</h3>
                         <?php if ($unresolvedHeldSales): ?><div class="message error">
                             This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
-                            <ul><?php foreach ($unresolvedHeldSales as $parked): ?>
-                                    <li><?= htmlspecialchars($parked['reference_no']) ?> &middot; <?= (int)$parked['item_count'] ?> item(s) &middot; &#8369;<?= number_format((float)$parked['total_amount'], 2) ?> &middot; <?= $parked['status'] === 'resumed' ? 'resumed' : 'held' ?> since <?= htmlspecialchars((string)$parked['created_at']) ?></li>
+                            <ul><?php foreach ($unresolvedHeldSales as $unresolved): ?>
+                                    <li><?= htmlspecialchars($unresolved['reference_no']) ?> &middot; <?= (int)$unresolved['item_count'] ?> item(s) &middot; &#8369;<?= number_format((float)$unresolved['total_amount'], 2) ?> &middot; <?= $unresolved['status'] === 'resumed' ? 'resumed' : 'held' ?> since <?= htmlspecialchars((string)$unresolved['created_at']) ?></li>
                                 <?php endforeach; ?></ul>
                         </div><?php endif; ?>
                         <form method="POST" data-confirm="Close and reconcile this cashier shift using the counted cash amount?" data-confirm-title="Close cashier shift" data-confirm-button="Close shift"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="close"><label>Actual cash counted</label><input type="number" name="actual_cash" min="0" step="0.01" required><label>Closing notes</label><textarea name="closing_notes"></textarea><button class="btn" type="submit" <?= $unresolvedHeldSales ? 'disabled' : '' ?>>Close shift</button></form>

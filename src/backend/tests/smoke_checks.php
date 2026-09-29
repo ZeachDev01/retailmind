@@ -653,7 +653,7 @@ $checks = [
     'The point of sale discards a held sale with a reason, not a bare cancel' => [
         'file' => 'src/frontend/components/cashier/pos.php',
         'needles' => [
-            'discardReasons()',
+            'HeldSaleService::DISCARD_REASONS',
             'id="discard-modal"',
             'id="discard-reason"',
             'discard_reason: reason',

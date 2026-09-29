@@ -38,7 +38,7 @@ try {
     exit;
 }
 
-// Ticket #91: parked carts are swept by the service, and only where no open
+// Ticket #91: held sales are swept by the service, and only where no open
 // Cashier Shift is waiting on them. A cart that belongs to an open shift is never
 // retired by the passage of time — that is the Cashier's to complete or discard,
 // and the shift cannot close until they do.
@@ -90,7 +90,7 @@ try {
     }
 
     // Ticket #91: the discard replaced the bare cancel. There is no way to drop a
-    // parked cart without saying why, and a cart with no shift behind it cannot
+    // held sale without saying why, and one with no shift behind it cannot
     // be dropped this way at all — that residue is the sweep's, not the Cashier's.
     if ($action === 'discard') {
         $heldService->discard(

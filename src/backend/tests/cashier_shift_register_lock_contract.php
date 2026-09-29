@@ -117,10 +117,12 @@ try {
         cashier_id INTEGER NOT NULL,
         shift_id INTEGER NULL,
         reference_no TEXT NOT NULL,
+        customer_label TEXT NULL,
         status TEXT NOT NULL DEFAULT 'held',
         item_count INTEGER NOT NULL DEFAULT 0,
         total_amount REAL NOT NULL DEFAULT 0.00,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NULL
     )");
     $pdo->exec('CREATE TABLE activity_log (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,

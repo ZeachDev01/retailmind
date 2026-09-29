@@ -517,6 +517,30 @@ try {
         'a refused completion leaves the held sale unresolved'
     );
 
+    // A cart that is still merely held is not on the till. Completing one would
+    // mean marking it sold without its contents ever being sold, and there is no
+    // honest flow that needs it: a Cashier who pays for a cart resumes it first.
+    $neverResumed = $held->hold($casey, 'cashier', [1 => ['qty' => 1]]);
+    $neverResumedId = (int)$neverResumed['held_sale_id'];
+    $expectRefusal(
+        static fn() => $held->assertCompletable($casey, $neverResumedId, $resumedShiftId),
+        'a held sale that was never resumed cannot be completed'
+    );
+    $expectRefusal(
+        static fn() => $sales->checkout(
+            [['product_id' => 1, 'qty' => 1]],
+            $casey,
+            'cashier',
+            'cash',
+            ['cash_received' => 50, 'held_sale_id' => $neverResumedId]
+        ),
+        'a checkout cannot complete a held sale that was never resumed'
+    );
+    $assert(
+        (string)$pdo->query("SELECT status FROM held_sales WHERE held_sale_id = {$neverResumedId}")->fetchColumn() === 'held',
+        'a refused completion of a never-resumed held sale leaves it held'
+    );
+
     $salesBeforeCompletion = (int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn();
     $expectRefusal(
         static fn() => $sales->checkout([2 => ['product_id' => 2, 'qty' => 2]], $dana, 'cashier', 'cash', ['cash_received' => 100, 'held_sale_id' => $pendingId]),
@@ -549,7 +573,7 @@ try {
         'a completed held sale leaves the unresolved list'
     );
     $assert(
-        $shifts->unresolvedHeldSales($resumedShiftId) === [],
+        !in_array($pendingId, $idsOf($shifts->unresolvedHeldSales($resumedShiftId)), true),
         'a completed held sale no longer blocks closure'
     );
     $expectRefusal(
@@ -583,16 +607,21 @@ try {
         (string)$pdo->query("SELECT status FROM held_sales WHERE held_sale_id = {$danaHeldId}")->fetchColumn() === 'held',
         "another Cashier's held sale is not expired out from under them either"
     );
-    $assert(
-        $idsOf($shifts->unresolvedHeldSales($resumedShiftId)) === [$stillHeldId],
-        'a held sale that has outlived its expiry still blocks its shift from closing'
-    );
     $expectRefusal(
         static fn() => $shifts->closeShift($casey, 500.00, 'Trying to walk away from a cart'),
         'an expired held sale still refuses closure until it is resolved'
     );
+    $blocking = $idsOf($shifts->unresolvedHeldSales($resumedShiftId));
+    $expectedBlocking = [$stillHeldId, $neverResumedId];
+    sort($blocking);
+    sort($expectedBlocking);
+    $assert(
+        $blocking === $expectedBlocking,
+        'both held sales past their expiry still block their shift from closing'
+    );
 
     $held->discard($casey, 'cashier', $stillHeldId, 'customer_cancelled', 'Nobody came back for it');
+    $held->discard($casey, 'cashier', $neverResumedId, 'entered_in_error');
     $shifts->closeShift($casey, 500.00, 'Expired cart discarded with a reason');
     $assert(
         (int)$pdo->query("SELECT COUNT(*) FROM cashier_shifts WHERE shift_id = {$resumedShiftId} AND status = 'closed'")->fetchColumn() === 1,
@@ -630,8 +659,8 @@ try {
         'only discards are audited as held-sale events, and holding, resuming, completing, and expiring are not'
     );
     $assert(
-        (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module = 'Held Sales'")->fetchColumn() === 3,
-        'each of the three discards is recorded exactly once'
+        (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module = 'Held Sales'")->fetchColumn() === 4,
+        'each of the four discards is recorded exactly once'
     );
     $assert(
         (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module = 'Sales'")->fetchColumn() === 0,
