@@ -361,6 +361,54 @@ $checks = [
         'file' => 'src/frontend/components/inventory_management/stock_issues.php',
         'needles' => ['Correct via inventory count', 'inventory_counts.php?correct='],
     ],
+    // Register administration (ticket #87).
+    'Register administration stays with the Administrator workspace' => [
+        'file' => 'src/frontend/components/administrator/registers.php',
+        'needles' => [
+            'require_capability(RoleCapabilityPolicy::MANAGE_REGISTERS)',
+            'RegisterService',
+            'csrf_verify',
+            'Create Register',
+            'Rename',
+            'Disable',
+            'Delete',
+        ],
+    ],
+    'Register service keeps identity stable and guards referenced deletes' => [
+        'file' => 'src/backend/app/Services/RegisterService.php',
+        'needles' => [
+            'MANAGE_REGISTERS',
+            'Register name is required.',
+            'Another Register already uses that name.',
+            'This Register is still used by operational records',
+            "'Register created'",
+            "'Register renamed'",
+            "'Register disabled'",
+            "'Register enabled'",
+            "'Register deleted'",
+        ],
+    ],
+    'Register capability is a Store operation, not platform governance' => [
+        'file' => 'src/backend/app/Authorization/RoleCapabilityPolicy.php',
+        'needles' => ['MANAGE_REGISTERS'],
+    ],
+    'Administrator navigation offers Register administration' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ["'path' => 'components/administrator/registers.php'", "'label' => 'Registers'"],
+    ],
+    'Register structure ships in an upgrade migration' => [
+        'file' => 'src/backend/database/migrations/202609290001_store_registers.php',
+        'needles' => [
+            'CREATE TABLE registers',
+            'UNIQUE KEY register_name',
+            'disabled_at',
+            "Schema::tableExists(\$pdo, 'registers')",
+        ],
+    ],
+    'Fresh schema ships the same Register structure' => [
+        'file' => 'src/backend/sql/schema.sql',
+        'needles' => ['CREATE TABLE `registers`', 'UNIQUE KEY `register_name`', 'fk_registers_created_by'],
+    ],
 ];
 $failures = [];
 foreach ($checks as $label => $check) {

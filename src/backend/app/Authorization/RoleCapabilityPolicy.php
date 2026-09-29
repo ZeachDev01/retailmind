@@ -19,6 +19,7 @@ final class RoleCapabilityPolicy
     public const ASSIGN_PRIVILEGES = 'assign_privileges';
     public const ACTIVATE_EMERGENCY_ACCESS = 'activate_emergency_access';
     public const MANAGE_DATABASE_BACKUP = 'manage_database_backup';
+    public const MANAGE_REGISTERS = 'manage_registers';
 
     private const BASE_CAPABILITIES = [
         'super_admin' => [
@@ -47,6 +48,10 @@ final class RoleCapabilityPolicy
             self::MANAGE_USERS,
             self::ASSIGN_ROLES,
             self::MANAGE_DATABASE_BACKUP,
+            // Register administration is routine Store operational work, so it
+            // sits with the Administrator and never with the Super
+            // Administrator (ADR-0001).
+            self::MANAGE_REGISTERS,
         ],
         'inventory_manager' => [
             self::VIEW_INVENTORY,

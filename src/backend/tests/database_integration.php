@@ -26,6 +26,19 @@ $assert(Schema::tableExists($pdo, 'attention_settings'), 'attention_settings tab
 $assert(Schema::tableExists($pdo, 'attention_states'), 'attention_states table is missing');
 $assert(Schema::columnExists($pdo, 'notifications', 'attention_key'), 'notifications.attention_key is missing');
 $assert(Schema::tableExists($pdo, 'purchase_orders'), 'purchase_orders table is missing');
+// Register administration (ticket #87). A fresh install and an upgraded install
+// must expose the same Register structure to RegisterService.
+foreach (['register_id', 'name', 'status', 'disabled_at', 'created_by'] as $registerColumn) {
+    $assert(
+        Schema::columnExists($pdo, 'registers', $registerColumn),
+        "registers.{$registerColumn} is missing"
+    );
+}
+$assert(Schema::indexExists($pdo, 'registers', 'register_name'), 'registers display names are not unique');
+$assert(
+    Schema::foreignKeyRelationExists($pdo, 'registers', 'created_by', 'users', 'user_id'),
+    'registers.created_by is not protected by a foreign key'
+);
 $assert(
     Schema::indexExists($pdo, 'notifications', 'idx_notifications_attention'),
     'notifications attention index is missing'

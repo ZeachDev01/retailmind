@@ -990,6 +990,29 @@ CREATE TABLE `recovery_accounts` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `registers`
+--
+
+DROP TABLE IF EXISTS `registers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `registers` (
+  `register_id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `status` enum('active','disabled') NOT NULL DEFAULT 'active',
+  `disabled_at` datetime DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`register_id`),
+  UNIQUE KEY `register_name` (`name`),
+  KEY `idx_registers_status` (`status`),
+  KEY `fk_registers_created_by` (`created_by`),
+  CONSTRAINT `fk_registers_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `replenishment_requests`
 --
 
