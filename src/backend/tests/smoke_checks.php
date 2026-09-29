@@ -4,11 +4,43 @@ $root = dirname(__DIR__, 3);
 $checks = [
     'Inactive products blocked at checkout' => [
         'file' => 'src/backend/app/Services/SalesWorkflowService.php',
-        'needles' => ["p.status = 'active'", "AND p.status = 'active' FOR UPDATE"],
+        // The row lock is dialect-aware (see rowLock()), so the rule is asserted
+        // by the locked read itself rather than a hard-coded clause.
+        'needles' => ["p.status = 'active'", '$this->rowLock()'],
     ],
-    'Cashier shift required' => [
+    'Sale requires the Cashier workspace and an open Cashier Shift' => [
         'file' => 'src/backend/app/Services/SalesWorkflowService.php',
-        'needles' => ['resolveOpenShift', 'Open a cashier shift before processing sales'],
+        'needles' => [
+            'resolveSaleAttribution',
+            'requireCashierWorkspace',
+            'Only the Cashier workspace can sell.',
+            'Open a Cashier Shift before processing sales.',
+            'OPERATE_POINT_OF_SALE',
+            'cs.cashier_id = ? AND cs.status = \'open\'',
+        ],
+        // Whether the Register can be supplied by the client is proved by
+        // behaviour in sale_shift_attribution_contract.php, not by a needle.
+    ],
+    'Sale attribution ships in an upgrade migration' => [
+        'file' => 'src/backend/database/migrations/202609290003_sale_shift_attribution.php',
+        'needles' => [
+            "'shift_id', 'INT NULL AFTER `cashier_id`'",
+            'idx_sales_shift',
+            'fk_sales_shift',
+            'Schema::addForeignKeyIfMissing',
+            "'RESTRICT'",
+        ],
+    ],
+    'Fresh schema ships the same sale attribution relationship' => [
+        'file' => 'src/backend/sql/schema.sql',
+        'needles' => [
+            'KEY `idx_sales_shift`',
+            'CONSTRAINT `fk_sales_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE RESTRICT',
+        ],
+    ],
+    'Unlinked sales are presented as Legacy / Unassigned' => [
+        'file' => 'src/frontend/components/invoice/sales.php',
+        'needles' => ['Legacy / Unassigned', 'attribution_shift.register_id AS register_id'],
     ],
     'Discount authorization recorded' => [
         'file' => 'src/backend/app/Services/SalesWorkflowService.php',

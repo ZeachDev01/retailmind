@@ -1209,7 +1209,9 @@ CREATE TABLE `sales` (
   PRIMARY KEY (`sale_id`),
   KEY `idx_sales_sale_date` (`sale_date`),
   KEY `cashier_id` (`cashier_id`),
-  CONSTRAINT `sales_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`)
+  KEY `idx_sales_shift` (`shift_id`),
+  CONSTRAINT `sales_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_sales_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB AUTO_INCREMENT=9545 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

@@ -10,6 +10,9 @@ final class ReceiptTableService
 {
     private const DEFAULT_PAGE_LENGTH = 25;
     private const ALLOWED_PAGE_LENGTHS = [10, 25, 50, 100];
+    // Column indices match the receipts table order. Ticket #89 appended
+    // "Cashier Shift" after "Reversals" rather than inserting it beside
+    // "Cashier", so the pre-existing indices (and their contract) are unchanged.
     private const ORDER_COLUMNS = [
         0 => 's.sale_id',
         1 => 's.sale_date',
@@ -18,6 +21,7 @@ final class ReceiptTableService
         4 => 's.total_amount',
         5 => 's.payment_method',
         6 => 'reversal_count',
+        7 => 's.shift_id',
     ];
     private const REVERSAL_STATUSES = ['pending', 'approved', 'rejected', 'none'];
 
@@ -58,7 +62,16 @@ final class ReceiptTableService
                     COALESCE(reversal_summary.pending_count, 0) AS pending_reversals,
                     COALESCE(reversal_summary.approved_count, 0) AS approved_reversals,
                     COALESCE(reversal_summary.rejected_count, 0) AS rejected_reversals,
-                    COALESCE(reversal_summary.reversal_count, 0) AS reversal_count
+                    COALESCE(reversal_summary.reversal_count, 0) AS reversal_count,
+                    -- Ticket #89: the Cashier Shift a sale ran under and the
+                    -- Register that shift anchors, both read by joining the sale
+                    -- to its shift. A sale with no shift predates the deployment
+                    -- cutoff and is reported as Legacy / Unassigned rather than
+                    -- linked to a shift that may not be the one that took the
+                    -- money, so neither value is ever inferred.
+                    s.shift_id AS shift_id,
+                    attribution_shift.register_id AS register_id,
+                    attribution_register.name AS register_name
                 FROM sales s
                 JOIN users u ON u.user_id = s.cashier_id
                 LEFT JOIN (
@@ -70,6 +83,8 @@ final class ReceiptTableService
                     FROM sale_reversals
                     GROUP BY sale_id
                 ) reversal_summary ON reversal_summary.sale_id = s.sale_id
+                LEFT JOIN cashier_shifts attribution_shift ON attribution_shift.shift_id = s.shift_id
+                LEFT JOIN registers attribution_register ON attribution_register.register_id = attribution_shift.register_id
                 {$whereSql}
                 ORDER BY {$orderSql}
                 LIMIT :limit OFFSET :offset";
@@ -239,6 +254,16 @@ final class ReceiptTableService
             $row[$key] = (int)$row[$key];
         }
         $row['total_amount'] = (float)$row['total_amount'];
+
+        // Ticket #89: a sale with no Cashier Shift is shown as Legacy /
+        // Unassigned. It is never given a shift or a Register it did not run
+        // under, so the label states the absence rather than hiding it.
+        $legacy = $row['shift_id'] === null;
+        $row['shift_id'] = $legacy ? null : (int)$row['shift_id'];
+        $row['register_id'] = $row['register_id'] === null ? null : (int)$row['register_id'];
+        $row['register_name'] = $row['register_name'] === null ? null : (string)$row['register_name'];
+        $row['attribution_label'] = $legacy ? 'Legacy / Unassigned' : 'Shift #' . $row['shift_id'];
+
         return $row;
     }
 }

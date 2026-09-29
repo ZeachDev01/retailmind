@@ -42,7 +42,7 @@ try {
         foreach($cart as $id=>$item){$id=(int)$id;$qty=max(0,(int)($item['qty']??0));if($qty<1||!isset($db[$id]))continue;$p=$db[$id];$qty=min($qty,(int)$p['quantity_on_hand']);if($qty<1)continue;$clean[$id]=['name'=>$p['product_name'],'price'=>(float)$p['unit_price'],'qty'=>$qty,'stock'=>(int)$p['quantity_on_hand'],'reorder_level'=>(int)$p['reorder_level'],'safety_stock'=>(int)$p['safety_stock'],'sku'=>$p['sku'],'barcode'=>$p['barcode']];$count+=$qty;$total+=(float)$p['unit_price']*$qty;}
         if(!$clean)throw new RuntimeException('No active products can be held.');
         $shiftStmt=$pdo->prepare("SELECT shift_id FROM cashier_shifts WHERE cashier_id=? AND status='open' ORDER BY opened_at DESC LIMIT 1");$shiftStmt->execute([$userId]);$shiftId=$shiftStmt->fetchColumn()?:null;
-        if (!$shiftId) throw new RuntimeException('Open a cashier shift before holding a sale.');
+        if (!$shiftId) throw new RuntimeException('Open a Cashier Shift before holding a sale.');
         $reference='H'.date('ymdHis').str_pad((string)random_int(0,999),3,'0',STR_PAD_LEFT);
         $stmt=$pdo->prepare("INSERT INTO held_sales(cashier_id,shift_id,reference_no,customer_label,cart_json,item_count,total_amount,expires_at) VALUES(?,?,?,?,?,?,?,DATE_ADD(NOW(),INTERVAL 24 HOUR))");
         $stmt->execute([$userId,$shiftId,$reference,trim((string)($input['customer_label']??''))?:null,json_encode($clean,JSON_UNESCAPED_UNICODE),$count,$total]);

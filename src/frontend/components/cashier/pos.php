@@ -19,6 +19,9 @@ $shiftService = new CashierShiftService($pdo);
 $openShift = $shiftService->getOpenShift((int)$_SESSION['user_id']);
 $posShiftOpen = $openShift !== null;
 require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
+// Ticket #89: checkout is attributed to the workspace that is active now, so
+// the service judges the same context this page did.
+$actorRole = (string)current_role();
 
 $checkout_error = '';
 $checkout_notice = '';
@@ -52,7 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
     ];
 
     try {
-        $result = $salesWorkflowService->checkout($cart, (int)$_SESSION['user_id'], $payment_method, $paymentDetails);
+        // Ticket #89: the active workspace is passed explicitly so the service,
+        // not the account's stored role, decides who may sell.
+        $result = $salesWorkflowService->checkout($cart, (int)$_SESSION['user_id'], $actorRole, $payment_method, $paymentDetails);
         header('Location: ' . app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $result['sale_id'] . '&checkout=complete'));
         exit;
     } catch (Throwable $e) {
@@ -143,7 +148,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
             <div class="pos-alert success" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_notice) ?></div>
         <?php endif; ?>
         <?php if (!$posShiftOpen): ?>
-            <div class="pos-alert error" role="alert"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a cashier shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
+            <div class="pos-alert error" role="alert"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a Cashier Shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
         <?php endif; ?>
 
         <div class="pos-grid">
@@ -945,7 +950,7 @@ function validateCheckout() {
         return false;
     }
 
-    if (!posShiftOpen) { showCartMessage('Open a cashier shift before checkout.', 'error'); return false; }
+    if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before checkout.', 'error'); return false; }
     if (getDiscountAmount() > 0 && discountReason.value.trim() === '') { showCartMessage('Enter a discount reason.', 'error'); discountReason.focus(); return false; }
     cartInput.value = JSON.stringify(payload);
     return true;
@@ -1022,7 +1027,7 @@ async function loadHeldSales() {
 
 async function holdCurrentSale() {
     if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
-    if (!posShiftOpen) { showCartMessage('Open a cashier shift before holding a sale.', 'error'); return; }
+    if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before holding a sale.', 'error'); return; }
     try {
         const data = await apiHeldSale('hold', {cart});
         heldSales = data.held_sales || [];

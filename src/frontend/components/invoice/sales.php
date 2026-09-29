@@ -82,9 +82,14 @@ function receipt_fetch_sale(PDO $pdo, int $sale_id, int $storeId): ?array {
                 {$discountSql} AS discount_amount,
                 {$promotionNameSql} AS promotion_name,
                 {$discountReasonSql} AS discount_reason,
+                s.shift_id AS shift_id,
+                attribution_shift.register_id AS register_id,
+                attribution_register.name AS register_name,
                 u.full_name AS cashier_name
          FROM sales s
          JOIN users u ON s.cashier_id = u.user_id
+         LEFT JOIN cashier_shifts attribution_shift ON attribution_shift.shift_id = s.shift_id
+         LEFT JOIN registers attribution_register ON attribution_register.register_id = attribution_shift.register_id
          WHERE s.sale_id = ? AND (
              u.branch_id = ? OR EXISTS (
                  SELECT 1 FROM sale_items scope_si
@@ -146,6 +151,13 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale): 
                     <div>Receipt #<?= (int)$sale['sale_id'] ?></div>
                     <div>Date/Time: <?= htmlspecialchars($sale['sale_date']) ?></div>
                     <div>Cashier: <?= htmlspecialchars($sale['cashier_name']) ?></div>
+                    <?php if (!empty($sale['shift_id'])): ?>
+                    <div>Cashier Shift: #<?= (int)$sale['shift_id'] ?><?php if (!empty($sale['register_name'])): ?> (<?= htmlspecialchars($sale['register_name']) ?>)<?php endif; ?></div>
+                    <?php else: ?>
+                    <?php // Ticket #89: a sale with no shift predates the deployment
+                          // cutoff. It is labelled, never linked to a guess. ?>
+                    <div>Cashier Shift: Legacy / Unassigned</div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -304,8 +316,10 @@ if ($can_manage_all) {
 
 // Handle AJAX view request
 if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
+    // Authorization guard only: the rendered receipt is re-fetched through
+    // receipt_fetch_sale() below so both paths render identically.
     $saleStmt = $pdo->prepare(
-        "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date, u.full_name AS cashier_name
+        "SELECT s.sale_id, s.cashier_id
          FROM sales s
          JOIN users u ON s.cashier_id = u.user_id
          WHERE s.sale_id = ? AND (
@@ -510,6 +524,7 @@ if ($sale_id > 0) {
                                 <th>Total</th>
                                 <th>Payment</th>
                                 <th>Reversals</th>
+                                <th>Cashier Shift</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -812,6 +827,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (Number(row.approved_reversals) > 0) badges.push('<span class="tag-success">' + Number(row.approved_reversals) + ' approved</span>');
                     if (Number(row.rejected_reversals) > 0) badges.push('<span class="receipt-tag-neutral">' + Number(row.rejected_reversals) + ' rejected</span>');
                     return badges.length ? badges.join(' ') : '<span class="u-text-muted">None</span>';
+                }
+            },
+            {
+                // Ticket #89: the Cashier Shift a sale ran under, or an explicit
+                // Legacy / Unassigned label for sales predating the cutoff.
+                data: 'attribution_label',
+                render: function(value, type) {
+                    const label = String(value || '');
+                    return type === 'display'
+                        ? '<span class="' + (label.indexOf('Legacy') === 0 ? 'receipt-tag-neutral' : '') + '">' + label + '</span>'
+                        : label;
                 }
             },
             {

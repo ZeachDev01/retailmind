@@ -85,6 +85,31 @@ $assert(
     Schema::indexExists($pdo, 'notifications', 'idx_notifications_attention'),
     'notifications attention index is missing'
 );
+// Sale Cashier Shift attribution (ticket #89). A fresh install and an upgraded
+// install must both record which Cashier Shift authorized a sale, and must both
+// protect that shift from being deleted out from under the sales ledger.
+$assert(
+    Schema::columnExists($pdo, 'sales', 'shift_id'),
+    'sales.shift_id is missing'
+);
+$assert(
+    Schema::indexExists($pdo, 'sales', 'idx_sales_shift'),
+    'sales has no Cashier Shift lookup index'
+);
+$assert(
+    Schema::foreignKeyRelationExists($pdo, 'sales', 'shift_id', 'cashier_shifts', 'shift_id'),
+    'sales.shift_id is not protected by a foreign key'
+);
+// The deployment cutoff: sales recorded before the upgrade were never attributed
+// to a shift, so the column must still accept them unlinked.
+$salesShiftColumn = $pdo->query(
+    "SELECT is_nullable FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'sales' AND column_name = 'shift_id'"
+)->fetchColumn();
+$assert(
+    $salesShiftColumn === 'YES',
+    'sales.shift_id must stay nullable so pre-cutoff sales remain unlinked'
+);
 $assert(
     Schema::foreignKeyRelationExists($pdo, 'supplier_products', 'supplier_id', 'suppliers', 'supplier_id'),
     'supplier_products.supplier_id is not protected by a foreign key'

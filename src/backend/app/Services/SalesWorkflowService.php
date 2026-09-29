@@ -5,39 +5,72 @@ require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
 
+use App\Authorization\RoleCapabilityPolicy;
+
+/**
+ * Sale creation, and the Cashier Shift attribution every sale carries (#89).
+ *
+ * A sale is written by a Cashier, in the active Cashier workspace, under that
+ * Cashier's own open Cashier Shift. The workspace — not the account's stored
+ * role — decides who may sell, so an Administrator who also holds the Cashier
+ * role must switch workspaces (#86). The shift is resolved and locked inside
+ * the same transaction that writes the sale, so a Cashier Shift cannot be closed
+ * or reassigned between attribution and commit.
+ *
+ * The Register is never accepted from the caller and is not stored on the sale.
+ * It is determinable by joining the sale to the Cashier Shift the Cashier
+ * opened, which is what makes it determinable rather than supplied.
+ *
+ * An ordinary sale is recorded once, as the sale itself. It is deliberately not
+ * mirrored into Protected Audit Records: the sales ledger is already
+ * authoritative, and a second copy of every sale would be a redundant record
+ * that drifts from the one operators actually reconcile.
+ */
 class SalesWorkflowService
 {
     private PDO $pdo;
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
+    private RoleCapabilityPolicy $policy;
 
-    public function __construct(PDO $pdo)
+    public function __construct(PDO $pdo, ?RoleCapabilityPolicy $policy = null)
     {
         $this->pdo = $pdo;
         $this->notificationService = new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
+        $this->policy = $policy ?? new RoleCapabilityPolicy();
     }
 
-    public function checkout(array $cart, int $userId, string $paymentMethod, array $paymentDetails = []): array
+    /**
+     * @param string $actorRole The active workspace, never the account's stored role.
+     */
+    public function checkout(array $cart, int $userId, string $actorRole, string $paymentMethod, array $paymentDetails = []): array
     {
         $cleanCart = $this->sanitizeCart($cart);
         if (!$cleanCart) {
             throw new RuntimeException('Your cart is empty or invalid.');
         }
 
+        // Settle the workspace before touching the database: a Cashier who
+        // cannot sell is refused without beginning any Store write.
+        $this->requireCashierWorkspace($actorRole);
+
         $this->assertCheckoutFiscalPeriodsOpen();
 
         StoreWriteGate::begin($this->pdo);
         try {
+            // Resolved and locked inside the transaction so the shift that
+            // authorizes this sale is the shift that is still open at commit.
+            $attribution = $this->resolveSaleAttribution($userId);
             $sale = $this->buildSalePayload($cleanCart);
-            $shiftId = $this->resolveOpenShift($userId);
             $manualDiscount = $this->resolveDiscount($userId, $sale['total'], $paymentDetails);
             $automaticPromotion = $this->resolveAutomaticPromotion($sale['items'], $sale['total']);
             $discount = $automaticPromotion['discount_amount'] > $manualDiscount['discount_amount'] ? $automaticPromotion : $manualDiscount;
             $netTotal = max(0, $sale['total'] - $discount['discount_amount']);
             $payment = $this->resolvePayment($paymentMethod, $paymentDetails, $netTotal);
-            $saleId = $this->insertSale($userId, $shiftId, $sale['total'], $netTotal, $paymentMethod, $payment, $discount);
+            $saleId = $this->insertSale($userId, $attribution, $sale['total'], $netTotal, $paymentMethod, $payment, $discount);
 
             foreach ($sale['items'] as $item) {
                 $this->recordSaleItem($saleId, $item, $userId);
@@ -139,7 +172,7 @@ class SalesWorkflowService
         $stmt = $this->pdo->prepare(
             "SELECT p.unit_price, p.category_id, p.status, i.quantity_on_hand
              FROM products p JOIN inventory i ON p.product_id = i.product_id
-             WHERE p.product_id = ? AND p.status = 'active' FOR UPDATE"
+             WHERE p.product_id = ? AND p.status = 'active'" . $this->rowLock()
         );
         $stmt->execute([$productId]);
         $product = $stmt->fetch();
@@ -148,26 +181,64 @@ class SalesWorkflowService
     }
 
 
-    private function resolveOpenShift(int $userId): ?int
+    /**
+     * Refuses a checkout made outside the active Cashier workspace.
+     *
+     * The active workspace is the authority (#86), so an Administrator who also
+     * holds the Cashier role must switch to the Cashier workspace to sell. An
+     * administrative workspace never borrows the Cashier's drawer authority.
+     */
+    private function requireCashierWorkspace(string $actorRole): void
     {
-        $roleStmt = $this->pdo->prepare(
-            "SELECT r.role_name FROM users u JOIN roles r ON r.role_id = u.role_id WHERE u.user_id = ?"
-        );
-        $roleStmt->execute([$userId]);
-        $role = (string)($roleStmt->fetchColumn() ?: '');
-        if ($role !== 'cashier') {
-            return null;
+        if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::OPERATE_POINT_OF_SALE)) {
+            throw new DomainException(
+                'Only the Cashier workspace can sell. Switch to your Cashier workspace to check out.'
+            );
         }
+    }
 
+    /**
+     * The Cashier Shift this sale is attributed to.
+     *
+     * Read from the database and never taken from the request, so a client
+     * cannot sell against somebody else's drawer. The Register is deliberately
+     * not returned: it is determinable by joining the sale to this shift, so
+     * there is no second copy to drift and no value a client could supply.
+     *
+     * The row is locked for the rest of the transaction, so a Cashier Shift that
+     * is closed or replaced by a competing request cannot slip between
+     * attribution and commit.
+     */
+    private function resolveSaleAttribution(int $userId): int
+    {
         $stmt = $this->pdo->prepare(
-            "SELECT shift_id FROM cashier_shifts WHERE cashier_id = ? AND status = 'open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE"
+            "SELECT cs.shift_id
+             FROM cashier_shifts cs
+             WHERE cs.cashier_id = ? AND cs.status = 'open'
+             ORDER BY cs.opened_at DESC LIMIT 1" . $this->rowLock()
         );
         $stmt->execute([$userId]);
         $shiftId = $stmt->fetchColumn();
+
         if (!$shiftId) {
-            throw new RuntimeException('Open a cashier shift before processing sales.');
+            throw new DomainException('Open a Cashier Shift before processing sales.');
         }
+
         return (int)$shiftId;
+    }
+
+    /**
+     * The row lock that holds the shift for the rest of the transaction.
+     *
+     * MySQL takes a real row lock, which is what stops a Cashier Shift being
+     * closed or replaced between attribution and commit. A driver without row
+     * locking serialises writers with the transaction itself, so the clause is
+     * omitted there rather than failing the query — the same dialect split
+     * StoreWriteGate makes for the Store write gate.
+     */
+    private function rowLock(): string
+    {
+        return $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
     }
 
     private function resolveDiscount(int $userId, float $grossTotal, array $details): array
@@ -312,9 +383,16 @@ class SalesWorkflowService
         ];
     }
 
+    /**
+     * Writes the sale with the Cashier and Cashier Shift it ran under.
+     *
+     * The Register is not stored on the sale at all: it is determinable by
+     * joining the sale to its shift, so there is no second copy to drift and no
+     * column a client could populate.
+     */
     private function insertSale(
         int $userId,
-        ?int $shiftId,
+        int $shiftId,
         float $grossTotal,
         float $netTotal,
         string $paymentMethod,
@@ -440,8 +518,16 @@ class SalesWorkflowService
         }
 
         $columns = [];
-        foreach ($this->pdo->query('SHOW COLUMNS FROM sales')->fetchAll(PDO::FETCH_ASSOC) as $column) {
-            $columns[$column['Field']] = true;
+        if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            foreach ($this->pdo->query('SHOW COLUMNS FROM sales')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                $columns[$column['Field']] = true;
+            }
+
+            return $columns;
+        }
+
+        foreach ($this->pdo->query('PRAGMA table_info(sales)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+            $columns[$column['name']] = true;
         }
 
         return $columns;
@@ -468,7 +554,7 @@ class SalesWorkflowService
                expiration_date ASC,
                date_received ASC,
                batch_id ASC
-             FOR UPDATE"
+             " . $this->rowLock()
         );
         $stmt->execute([$productId]);
 
