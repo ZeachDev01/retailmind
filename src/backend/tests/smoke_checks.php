@@ -419,6 +419,53 @@ $checks = [
         'file' => 'src/backend/sql/schema.sql',
         'needles' => ['CREATE TABLE `registers`', 'UNIQUE KEY `register_name`', 'fk_registers_created_by'],
     ],
+    // Exclusive Cashier Shift opening (ticket #88).
+    'Cashier Shift opening is owned by the Cashier workspace' => [
+        'file' => 'src/frontend/components/cashier/shifts.php',
+        'needles' => [
+            'use App\Services\CashierShiftService;',
+            '$service->openShift($actorId, $actorRole, $registerId',
+            'name="register_id"',
+            'name="opening_float"',
+            '$service->availableRegisters()',
+            'A Cashier Shift is owned by the Cashier who sells',
+        ],
+        // A shift is never opened on somebody's behalf, and the duplicate
+        // page-level audit write is gone: the service records the opening.
+        'forbidden' => ['openShift($targetCashierId', "'Opened cashier shift'"],
+    ],
+    'Cashier Shift service binds a shift to one exclusively owned Register' => [
+        'file' => 'src/backend/app/Services/CashierShiftService.php',
+        'needles' => [
+            'OPERATE_POINT_OF_SALE',
+            'Choose a Register to open this Cashier Shift on.',
+            'That Register already has an open Cashier Shift.',
+            'You already have an open Cashier Shift.',
+            'That Register is disabled and cannot start a new Cashier Shift.',
+            'uq_cashier_shifts_open_register',
+            'uq_cashier_shifts_open_cashier',
+            "'Cashier Shift opened'",
+            'AuditRecordCategory::STORE_OPERATION',
+        ],
+    ],
+    'Cashier Shift structure ships in an upgrade migration' => [
+        'file' => 'src/backend/database/migrations/202609290002_cashier_shift_registers.php',
+        'needles' => [
+            "'register_id', 'INT NULL AFTER `cashier_id`'",
+            'uq_cashier_shifts_open_cashier',
+            'uq_cashier_shifts_open_register',
+            'fk_cashier_shifts_register',
+            'Schema::addUniqueKeyIfMissing',
+        ],
+    ],
+    'Fresh schema ships the same exclusive Cashier Shift constraints' => [
+        'file' => 'src/backend/sql/schema.sql',
+        'needles' => [
+            'UNIQUE KEY `uq_cashier_shifts_open_cashier`',
+            'UNIQUE KEY `uq_cashier_shifts_open_register`',
+            'CONSTRAINT `fk_cashier_shifts_register`',
+        ],
+    ],
 ];
 $failures = [];
 foreach ($checks as $label => $check) {

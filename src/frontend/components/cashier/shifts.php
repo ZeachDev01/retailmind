@@ -1,15 +1,29 @@
 <?php
+// cashier/shifts.php — Cashier Shift opening and drawer reconciliation (#88).
+//
+// Opening binds the signed-in Cashier, in the Cashier workspace, to one
+// available Register and a confirmed opening float. A shift is never shared or
+// opened on somebody's behalf: the Cashier who sells owns the drawer. The
+// Administrator and Super Administrator workspaces keep oversight of shifts but
+// never open one.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierShiftService.php';
+
+use App\Services\CashierShiftService;
+
 require_role(['admin', 'super_admin', 'cashier']);
 
 $service = new CashierShiftService($pdo);
-$isCashier = current_role() === 'cashier';
+$actorId = (int)$_SESSION['user_id'];
+$actorRole = (string)current_role();
+// Issue #86/#88: the active workspace decides who may open a shift. An
+// Administrator who also holds the Cashier role must switch workspaces first.
+$isCashier = $actorRole === 'cashier';
 $cashiers = [];
 if (!$isCashier) {
     $cashiers = $pdo->query("SELECT u.user_id,u.full_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE r.role_name='cashier' AND u.status='active' ORDER BY u.full_name")->fetchAll(PDO::FETCH_ASSOC);
 }
-$targetCashierId = $isCashier ? (int)$_SESSION['user_id'] : (int)($_GET['cashier_id'] ?? ($cashiers[0]['user_id'] ?? 0));
+$targetCashierId = $isCashier ? $actorId : (int)($_GET['cashier_id'] ?? ($cashiers[0]['user_id'] ?? 0));
 if (!$isCashier && $targetCashierId > 0 && !in_array($targetCashierId, array_map(static fn(array $c): int => (int)$c['user_id'], $cashiers), true)) {
     $targetCashierId = (int)($cashiers[0]['user_id'] ?? 0);
 }
@@ -24,9 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     try {
         if ($action === 'open') {
-            $shiftId = $service->openShift($targetCashierId, (float)($_POST['opening_cash'] ?? 0));
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Opened cashier shift', 'Cashier Shifts', $shiftId);
-            $message = "Shift #{$shiftId} opened successfully.";
+            // Ticket #88: the Cashier opens their own shift on a Register they
+            // choose. The service records the Protected Audit Record.
+            $registerId = (int)($_POST['register_id'] ?? 0);
+            $shiftId = $service->openShift($actorId, $actorRole, $registerId, (float)($_POST['opening_float'] ?? 0));
+            $message = "Shift #{$shiftId} opened on " . ($service->registerName($registerId) ?? 'your register') . '.';
         } elseif ($action === 'movement') {
             $movementId = $service->addDrawerMovement($targetCashierId, (string)($_POST['movement_type'] ?? ''), (float)($_POST['amount'] ?? 0), (string)($_POST['reason'] ?? ''), (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Recorded cash drawer movement', 'Cashier Shifts', $movementId);
@@ -45,6 +61,9 @@ $openShift = $targetCashierId > 0 ? $service->getOpenShift($targetCashierId) : n
 $summary = $openShift ? $service->calculateShift((int)$openShift['shift_id']) : null;
 $movements = $openShift ? $service->drawerMovements((int)$openShift['shift_id']) : [];
 $recent = $service->recentShifts($isCashier ? $targetCashierId : null);
+// Only the Cashier workspace offers a Register to open on, and only Registers
+// that are enabled and not already anchoring somebody else's open shift.
+$availableRegisters = $isCashier && !$openShift ? $service->availableRegisters() : [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -71,7 +90,10 @@ $recent = $service->recentShifts($isCashier ? $targetCashierId : null);
                 </section><?php endif; ?>
             <div class="shift-grid">
                 <section class="dashboard-section">
-                    <h3><?= $openShift ? 'Open shift' : 'Open a shift' ?></h3><?php if (!$isCashier && $targetCashierId <= 0): ?><p>No active cashier account is available. Create or activate a cashier first.</p><?php elseif (!$openShift): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><label>Opening cash</label><input type="number" name="opening_cash" min="0" step="0.01" value="0" required><button class="btn" type="submit">Open shift</button></form><?php else: ?><p><strong>Shift #<?= (int)$openShift['shift_id'] ?></strong><br>Opened <?= htmlspecialchars($openShift['opened_at']) ?></p>
+                    <h3><?= $openShift ? 'Open shift' : 'Open a shift' ?></h3><?php if (!$isCashier): ?><p>A Cashier Shift is owned by the Cashier who sells. Ask the cashier to open their own shift in the Cashier workspace.</p><?php elseif (!$openShift && !$availableRegisters): ?><p>No Register is free right now. Every Register is either disabled or already on an open shift. Tell your Administrator.</p><?php elseif (!$openShift): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
+                            <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($availableRegisters as $register): ?><option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option><?php endforeach; ?></select></div>
+                            <div><label for="opening-float">Opening float</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required></div>
+                        </div><button class="btn" type="submit">Open shift</button></form><?php else: ?><p><strong>Shift #<?= (int)$openShift['shift_id'] ?></strong><br>Register <?= htmlspecialchars($openShift['register_name'] ?? 'Unassigned') ?><br>Opened <?= htmlspecialchars($openShift['opened_at']) ?></p>
                         <div class="card-grid">
                             <div class="stat-card">
                                 <div class="value">₱<?= number_format((float)$summary['opening_cash'], 2) ?></div>
@@ -132,6 +154,7 @@ $recent = $service->recentShifts($isCashier ? $targetCashierId : null);
                     <table>
                         <tr>
                             <th>Cashier</th>
+                            <th>Register</th>
                             <th>Opened</th>
                             <th>Closed</th>
                             <th>Status</th>
@@ -140,6 +163,7 @@ $recent = $service->recentShifts($isCashier ? $targetCashierId : null);
                             <th>Variance</th>
                         </tr><?php foreach ($recent as $r): ?><tr>
                                 <td><?= htmlspecialchars($r['full_name']) ?></td>
+                                <td><?= htmlspecialchars($r['register_name'] ?? 'Unassigned') ?></td>
                                 <td><?= htmlspecialchars($r['opened_at']) ?></td>
                                 <td><?= htmlspecialchars($r['closed_at'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($r['status']) ?></td>

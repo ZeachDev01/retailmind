@@ -4,6 +4,9 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/SalesWorkflowService.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierShiftService.php';
+
+use App\Services\CashierShiftService;
+
 // Issue #86: the active Cashier workspace is the authoritative POS context.
 // An Administrator who also holds the Cashier role must switch workspaces;
 // the admin workspace can never bypass Cashier controls.

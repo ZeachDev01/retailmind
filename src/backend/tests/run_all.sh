@@ -27,6 +27,8 @@ php src/backend/tests/store_scope_contract.php
 php src/backend/tests/user_lifecycle_contract.php
 php src/backend/tests/register_administration_contract.php
 php src/backend/tests/register_schema_parity_contract.php
+php src/backend/tests/cashier_shift_opening_contract.php
+php src/backend/tests/cashier_shift_schema_parity_contract.php
 php src/backend/tests/store_staff_availability_contract.php
 php src/backend/tests/store_staff_username_notice_contract.php
 php src/backend/tests/store_staff_email_notice_contract.php

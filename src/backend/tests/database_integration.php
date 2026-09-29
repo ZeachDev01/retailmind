@@ -39,6 +39,48 @@ $assert(
     Schema::foreignKeyRelationExists($pdo, 'registers', 'created_by', 'users', 'user_id'),
     'registers.created_by is not protected by a foreign key'
 );
+// Exclusive Cashier Shift opening (ticket #88). A fresh install and an upgraded
+// install must both enforce one open shift per Cashier and one per Register,
+// and must both bind an open shift to a Register that cannot be deleted.
+$assert(
+    Schema::columnExists($pdo, 'cashier_shifts', 'register_id'),
+    'cashier_shifts.register_id is missing'
+);
+foreach (['open_cashier_id', 'open_register_id'] as $exclusivityColumn) {
+    $assert(
+        Schema::columnExists($pdo, 'cashier_shifts', $exclusivityColumn),
+        "cashier_shifts.{$exclusivityColumn} is missing"
+    );
+}
+$assert(
+    Schema::indexExists($pdo, 'cashier_shifts', 'uq_cashier_shifts_open_cashier'),
+    'cashier_shifts does not enforce one open shift per Cashier'
+);
+$assert(
+    Schema::indexExists($pdo, 'cashier_shifts', 'uq_cashier_shifts_open_register'),
+    'cashier_shifts does not enforce one open shift per Register'
+);
+$assert(
+    Schema::indexExists($pdo, 'cashier_shifts', 'idx_cashier_shifts_register'),
+    'cashier_shifts has no Register lookup index'
+);
+$assert(
+    Schema::foreignKeyRelationExists($pdo, 'cashier_shifts', 'register_id', 'registers', 'register_id'),
+    'cashier_shifts.register_id is not protected by a foreign key'
+);
+// The uniqueness must be a real UNIQUE index, not a plain one, or a race would
+// quietly create two open shifts on the same Register.
+$exclusivityKeys = $pdo->query(
+    "SELECT index_name, non_unique FROM information_schema.statistics
+     WHERE table_schema = DATABASE() AND table_name = 'cashier_shifts'
+       AND index_name IN ('uq_cashier_shifts_open_cashier','uq_cashier_shifts_open_register')"
+)->fetchAll(PDO::FETCH_KEY_PAIR);
+foreach (['uq_cashier_shifts_open_cashier', 'uq_cashier_shifts_open_register'] as $exclusivityKey) {
+    $assert(
+        isset($exclusivityKeys[$exclusivityKey]) && (int)$exclusivityKeys[$exclusivityKey] === 0,
+        "cashier_shifts.{$exclusivityKey} must be a UNIQUE index"
+    );
+}
 $assert(
     Schema::indexExists($pdo, 'notifications', 'idx_notifications_attention'),
     'notifications attention index is missing'

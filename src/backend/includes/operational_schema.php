@@ -93,9 +93,16 @@ function ensure_operational_updates_schema(PDO $pdo): void
         INDEX idx_po_items_request (replenishment_request_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    // Ticket #88. An open Cashier Shift belongs to exactly one Cashier and
+    // exactly one Register. MySQL has no filtered unique index, so each rule is
+    // a generated column that is non-NULL only while the shift is open, carried
+    // by a UNIQUE key; closed history is therefore never constrained. The
+    // Register foreign key is added by migration 202609290002 rather than here,
+    // because `registers` may not exist yet when this idempotent upgrade runs.
     $pdo->exec("CREATE TABLE IF NOT EXISTS cashier_shifts (
         shift_id INT AUTO_INCREMENT PRIMARY KEY,
         cashier_id INT NOT NULL,
+        register_id INT NULL,
         opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         opening_cash DECIMAL(12,2) NOT NULL DEFAULT 0.00,
         status ENUM('open','closed') NOT NULL DEFAULT 'open',
@@ -106,7 +113,12 @@ function ensure_operational_updates_schema(PDO $pdo): void
         closing_notes TEXT NULL,
         reviewed_by INT NULL,
         reviewed_at TIMESTAMP NULL,
+        open_cashier_id INT GENERATED ALWAYS AS (IF(status = 'open', cashier_id, NULL)) STORED,
+        open_register_id INT GENERATED ALWAYS AS (IF(status = 'open', register_id, NULL)) STORED,
+        UNIQUE KEY uq_cashier_shifts_open_cashier (open_cashier_id),
+        UNIQUE KEY uq_cashier_shifts_open_register (open_register_id),
         INDEX idx_cashier_shifts_cashier_status (cashier_id, status),
+        INDEX idx_cashier_shifts_register (register_id),
         INDEX idx_cashier_shifts_opened_at (opened_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 

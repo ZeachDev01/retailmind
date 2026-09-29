@@ -60,6 +60,18 @@ final class Schema
         }
     }
 
+    /**
+     * Adds a UNIQUE key that makes a rule true in the database rather than
+     * only in application validation, so two concurrent requests cannot both
+     * win. Re-running is a no-op, so an upgrade is safe on either lineage.
+     */
+    public static function addUniqueKeyIfMissing(PDO $pdo, string $table, string $key, string $columns): void
+    {
+        if (!self::indexExists($pdo, $table, $key)) {
+            $pdo->exec("ALTER TABLE `{$table}` ADD UNIQUE KEY `{$key}` ({$columns})");
+        }
+    }
+
     public static function foreignKeyRelationExists(PDO $pdo, string $table, string $column, string $referencedTable, string $referencedColumn): bool
     {
         $stmt = $pdo->prepare(

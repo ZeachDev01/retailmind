@@ -210,6 +210,7 @@ DROP TABLE IF EXISTS `cashier_shifts`;
 CREATE TABLE `cashier_shifts` (
   `shift_id` int(11) NOT NULL AUTO_INCREMENT,
   `cashier_id` int(11) NOT NULL,
+  `register_id` int(11) DEFAULT NULL,
   `opened_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `opening_cash` decimal(12,2) NOT NULL DEFAULT 0.00,
   `status` enum('open','closed') NOT NULL DEFAULT 'open',
@@ -220,11 +221,17 @@ CREATE TABLE `cashier_shifts` (
   `closing_notes` text DEFAULT NULL,
   `reviewed_by` int(11) DEFAULT NULL,
   `reviewed_at` timestamp NULL DEFAULT NULL,
+  `open_cashier_id` int(11) GENERATED ALWAYS AS (IF(status = 'open', cashier_id, NULL)) STORED,
+  `open_register_id` int(11) GENERATED ALWAYS AS (IF(status = 'open', register_id, NULL)) STORED,
   PRIMARY KEY (`shift_id`),
   KEY `idx_cashier_shifts_cashier_status` (`cashier_id`,`status`),
+  KEY `idx_cashier_shifts_register` (`register_id`),
+  UNIQUE KEY `uq_cashier_shifts_open_cashier` (`open_cashier_id`),
+  UNIQUE KEY `uq_cashier_shifts_open_register` (`open_register_id`),
   KEY `reviewed_by` (`reviewed_by`),
   CONSTRAINT `cashier_shifts_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+  CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB AUTO_INCREMENT=3078 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
