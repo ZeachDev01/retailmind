@@ -372,6 +372,28 @@ try {
         'the Cashier Shift stays open across a lock'
     );
 
+    // AC5: another Cashier cannot transact on a locked Register either. The
+    // strongest form of that is an attempt to name the locked Register directly:
+    // the sale must still land on the requesting Cashier's own shift, because
+    // the attribution is read from the database and never from the request.
+    $danaOpenShift = (int)$pdo->query("SELECT shift_id FROM cashier_shifts WHERE cashier_id = {$dana} AND status = 'open'")->fetchColumn();
+    $assert($danaOpenShift > 0, 'the other Cashier holds an open shift of their own to sell against');
+    $pdo->exec("UPDATE cashier_shifts SET locked_at = '2026-09-29 11:00:00' WHERE shift_id = {$shiftId}");
+    $danaSalesBefore = (int)$pdo->query("SELECT COUNT(*) FROM sales WHERE shift_id = {$shiftId}")->fetchColumn();
+    $danaSale = $service->checkout($cart, $dana, 'cashier', 'cash', [
+        'cash_received' => 100,
+        'register_id' => 10,
+        'shift_id' => $shiftId,
+    ]);
+    $assert(
+        (int)$pdo->query('SELECT shift_id FROM sales WHERE sale_id = ' . (int)$danaSale['sale_id'])->fetchColumn() === $danaOpenShift,
+        'a sale naming a locked Register is attributed to the requesting Cashier, never to the locked shift'
+    );
+    $assert(
+        (int)$pdo->query("SELECT COUNT(*) FROM sales WHERE shift_id = {$shiftId}")->fetchColumn() === $danaSalesBefore,
+        'a locked Register gains no sale, whoever is asking'
+    );
+
     // Resuming the same shift authorizes the same sale again, on the same
     // Register, without a second shift ever being opened.
     $pdo->exec("UPDATE cashier_shifts SET locked_at = NULL WHERE shift_id = {$shiftId}");

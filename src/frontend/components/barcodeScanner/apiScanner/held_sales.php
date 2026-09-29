@@ -8,6 +8,20 @@ require_once __DIR__ . '/../../../../backend/app/Services/CashierShiftService.ph
 require_role(['cashier']);
 
 $userId = (int)$_SESSION['user_id'];
+// Ticket #90: a locked Register is on a break. Holding, resuming, cancelling, and
+// even listing a held sale are point-of-sale work on that Register, so the lock
+// refuses the whole endpoint rather than only the writes — a half-guarded
+// endpoint would still hand a locked till the Cartiers it can resume. The page
+// hides these controls; this is the seam that cannot be bypassed. The refusal is
+// raised in its own try so every method gets the same JSON error shape.
+$shiftService=new App\Services\CashierShiftService($pdo);
+try {
+    $shiftService->requireUnlockedRegister($userId);
+} catch (Throwable $e) {
+    http_response_code(403);
+    echo json_encode(['success'=>false,'message'=>\App\Support\OperatorAlert::message($e, 'The register is locked. Unlock it to keep selling.')]);
+    exit;
+}
 $pdo->prepare("UPDATE held_sales SET status='expired',resolved_at=NOW() WHERE status='held' AND expires_at IS NOT NULL AND expires_at<NOW()")->execute();
 
 function held_sale_rows(PDO $pdo, int $userId): array {
@@ -31,12 +45,6 @@ $input=json_decode((string)file_get_contents('php://input'),true)?:[];
 csrf_verify($_SERVER['HTTP_X_CSRF_TOKEN']??($input['csrf_token']??null));
 $action=(string)($input['action']??'');
 try {
-    // Ticket #90: a locked Register is on a break. Holding, resuming, or cancelling
-    // a sale is point-of-sale work, so the lock refuses it here too — the page hides
-    // the buttons, but this endpoint is reachable directly. The refusal is raised
-    // inside the try so the Cashier gets the same JSON error shape as any other.
-    $shiftService=new App\Services\CashierShiftService($pdo);
-    $shiftService->requireUnlockedRegister($userId);
     if ($action==='hold') {
         $cart=$input['cart']??[];
         if (!is_array($cart)||!$cart) throw new RuntimeException('Cart is empty.');

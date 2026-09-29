@@ -60,6 +60,8 @@ $posRegisterLocked = $shiftService->isRegisterLocked($cashierId);
 // Record, so it must be refused here or a locked till could be made to author
 // one on somebody else's behalf.
 if ($posRegisterLocked && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    // The one message a locked Register produces, in the page's own refusal
+    // channel — the same channel the void and checkout refusals below use.
     $checkout_error = CashierShiftService::LOCKED_MESSAGE;
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'void_cart') {
     csrf_verify();
@@ -102,10 +104,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
     }
 }
-
-// The lock screen is the only thing a locked Register shows, so it also carries
-// the refusal for a point-of-sale POST that arrived while it was locked.
-$lockScreenError = $lock_error !== '' ? $lock_error : $checkout_error;
 
 [$quickProductScope, $quickProductParams] = store_product_scope('p');
 $quickProductStmt = $pdo->prepare(
@@ -194,8 +192,11 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         &middot; Shift #<?= (int)$openShift['shift_id'] ?>
                         &middot; locked <?= htmlspecialchars(format_display_datetime((string)$openShift['locked_at'])) ?>
                     </p>
-                    <?php if ($lockScreenError !== ''): ?>
-                        <div class="pos-lock-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($lockScreenError) ?></div>
+                    <?php if ($lock_error !== ''): ?>
+                        <div class="pos-lock-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($lock_error) ?></div>
+                    <?php endif; ?>
+                    <?php if ($checkout_error !== ''): ?>
+                        <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_error) ?></div>
                     <?php endif; ?>
                     <form method="post" class="pos-lock-form" autocomplete="off">
                         <?= csrf_field() ?>
@@ -211,6 +212,10 @@ $quickCategoryIcon = static function (string $categoryName): string {
         <?php else: ?>
         <?php if ($checkout_error): ?>
             <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_error) ?></div>
+        <?php endif; ?>
+        <?php // A refused lock renders here, on the unlocked page it left us on: the Cashier clicked "Lock register" and must be told why, not shown a POS that silently ignored them. ?>
+        <?php if ($lock_error !== ''): ?>
+            <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($lock_error) ?></div>
         <?php endif; ?>
         <?php if ($checkout_notice): ?>
             <div class="pos-alert success" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_notice) ?></div>

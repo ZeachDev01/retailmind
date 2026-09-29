@@ -554,6 +554,14 @@ $checks = [
         'forbidden' => ['name="pos_pin"', 'name="pin"'],
     ],
     'A locked Register pauses the drawer, not just the sale screen' => [
+        'file' => 'src/backend/app/Services/CashierShiftService.php',
+        'needles' => [
+            'requireUnlockedRegister(',
+            'SET locked_at = ',
+            'password_verify(',
+        ],
+    ],
+    'The Cashier Shift page explains the pause and defers to the lock screen' => [
         'file' => 'src/frontend/components/cashier/shifts.php',
         'needles' => ['isRegisterLocked(', 'CashierShiftService::LOCKED_MESSAGE'],
     ],

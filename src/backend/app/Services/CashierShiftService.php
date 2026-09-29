@@ -395,24 +395,27 @@ class CashierShiftService
     /**
      * Writes a Protected Audit Record for one Cashier Shift event.
      *
-     * Every event carries the Register as the operator knows it, so a record can
-     * be read on its own months later without re-deriving which till it concerns.
-     * $details carries whatever else that particular event knows and an opening
+     * $registerIdentity is whatever already names the Register for this event:
+     * a shift row, which getOpenShift() joins with r.name AS register_name, or a
+     * bare [register_id, register_name] pair for an opening that has no row yet.
+     * Every event records the Register as the operator knows it, so a record can
+     * be read on its own months later without re-deriving which till it
+     * concerns. $details carries whatever else that event knows and an opening
      * does not, so a record never claims a lock time it did not have.
      */
     private function auditShiftEvent(
         int $actorId,
         string $action,
         int $shiftId,
-        array $register,
+        array $registerIdentity,
         array $details = [],
         string $category = AuditRecordCategory::STORE_OPERATION
     ): void {
         $payload = array_merge($details, [
             'shift_id' => $shiftId,
             'cashier_id' => $actorId,
-            'register_id' => isset($register['register_id']) ? (int)$register['register_id'] : null,
-            'register_name' => $register['register_name'] ?? null,
+            'register_id' => isset($registerIdentity['register_id']) ? (int)$registerIdentity['register_id'] : null,
+            'register_name' => $registerIdentity['register_name'] ?? null,
         ]);
 
         $this->pdo->prepare(
@@ -449,6 +452,15 @@ class CashierShiftService
         }
     }
 
+    /**
+     * Records a pay-in or pay-out against an open Cashier Shift's drawer.
+     *
+     * The lock is enforced here rather than on the page (#90): a drawer movement
+     * is a financial record written under the Cashier's name, so posting one on
+     * a Register its owner locked would be exactly the act the lock forbids. An
+     * Administrator acting deliberately on somebody else's drawer is not the
+     * threat the lock addresses, so their movement is not refused.
+     */
     public function addDrawerMovement(int $cashierId, string $type, float $amount, string $reason, ?int $recordedBy = null): int
     {
         if (!in_array($type, ['pay_in', 'pay_out'], true)) {
@@ -456,6 +468,10 @@ class CashierShiftService
         }
         if ($amount <= 0 || trim($reason) === '') {
             throw new RuntimeException('Amount and reason are required.');
+        }
+        $actorId = $recordedBy ?? $cashierId;
+        if ($actorId === $cashierId) {
+            $this->requireUnlockedRegister($cashierId);
         }
         $shift = $this->getOpenShift($cashierId);
         if (!$shift) {
@@ -465,7 +481,7 @@ class CashierShiftService
             "INSERT INTO cash_drawer_movements (shift_id, movement_type, amount, reason, recorded_by)
              VALUES (?, ?, ?, ?, ?)"
         );
-        $stmt->execute([(int)$shift['shift_id'], $type, $amount, trim($reason), $recordedBy ?? $cashierId]);
+        $stmt->execute([(int)$shift['shift_id'], $type, $amount, trim($reason), $actorId]);
         return (int)$this->pdo->lastInsertId();
     }
 
@@ -524,8 +540,21 @@ class CashierShiftService
         ]);
     }
 
+    /**
+     * Closes a Cashier Shift and reconciles the counted cash against it.
+     *
+     * $reviewedBy is non-null when an Administrator closes somebody else's
+     * abandoned shift, and null when the owner closes their own. That
+     * distinction is also the lock boundary (#90): a Register locked on a break
+     * must not be reconciled by whoever is standing at the till, but an
+     * Administrator deliberately intervening on an abandoned shift is exactly
+     * how a locked Register is ever released, so it is never refused.
+     */
     public function closeShift(int $cashierId, float $actualCash, string $notes, ?int $reviewedBy = null): array
     {
+        if ($reviewedBy === null) {
+            $this->requireUnlockedRegister($cashierId);
+        }
         $shift = $this->getOpenShift($cashierId);
         if (!$shift) {
             throw new RuntimeException('No open shift was found.');

@@ -81,6 +81,32 @@ try {
         ON cashier_shifts (cashier_id) WHERE status = 'open'");
     $pdo->exec("CREATE UNIQUE INDEX uq_cashier_shifts_open_register
         ON cashier_shifts (register_id) WHERE status = 'open'");
+    // The drawer a locked Register has to protect: a pay-in, a pay-out, and the
+    // reconciliation all write against it.
+    $pdo->exec('CREATE TABLE cash_drawer_movements (
+        drawer_movement_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shift_id INTEGER NOT NULL,
+        movement_type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        reason TEXT NOT NULL,
+        recorded_by INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )');
+    $pdo->exec("CREATE TABLE sales (
+        sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cashier_id INTEGER NOT NULL,
+        shift_id INTEGER NULL,
+        total_amount REAL NOT NULL DEFAULT 0.00,
+        payment_method TEXT NOT NULL DEFAULT 'cash',
+        discount_amount REAL NOT NULL DEFAULT 0.00
+    )");
+    $pdo->exec("CREATE TABLE sale_reversals (
+        reversal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id INTEGER NOT NULL,
+        refund_amount REAL NOT NULL DEFAULT 0.00,
+        status TEXT NOT NULL DEFAULT 'approved',
+        settlement_method TEXT NOT NULL DEFAULT 'cash'
+    )");
     $pdo->exec('CREATE TABLE activity_log (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NULL,
@@ -312,7 +338,45 @@ try {
         (int)$service->getOpenShift($dana)['register_id'] === 11,
         'the other Cashier works their own Register, never the locked one'
     );
-    $pdo->exec("UPDATE cashier_shifts SET status = 'closed' WHERE shift_id = {$shiftId}");
+
+    // --- A locked Register pauses the drawer, at the service seam -----------
+    // A pay-in and a reconciliation are both financial records written under the
+    // Cashier's name. Page-level gating would be advisory, so the refusal has to
+    // live where a direct call to the service still meets it.
+    $expectRefusal(
+        fn() => $service->addDrawerMovement($casey, 'pay_in', 200.00, 'Float top-up'),
+        'a locked Register refuses a pay-in from its own Cashier'
+    );
+    $expectRefusal(
+        fn() => $service->addDrawerMovement($casey, 'pay_out', 50.00, 'Petty cash'),
+        'a locked Register refuses a pay-out from its own Cashier'
+    );
+    $expectRefusal(
+        fn() => $service->closeShift($casey, 500.00, 'Closing while on a break'),
+        'a locked Register refuses reconciliation by its own Cashier'
+    );
+    $assert(
+        (int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn() === 0,
+        'a locked Register records no drawer movement'
+    );
+    $assert(
+        (int)$pdo->query("SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed'")->fetchColumn() === 0,
+        'a refused reconciliation closes nothing'
+    );
+
+    // An Administrator intervening on the abandoned shift is the one way a locked
+    // Register is ever released, so the lock must not refuse it. A Cashier who
+    // has forgotten their password is therefore never stranded by it.
+    $adminSummary = $service->closeShift($casey, 500.00, 'Cashier did not return', $alex);
+    $assert((int)$adminSummary['shift_id'] === $shiftId, 'an Administrator can still close an abandoned locked shift');
+    $assert((int)$adminSummary['reviewed_by'] === $alex, 'the closing Administrator is recorded as the actor');
+    $assert($adminSummary['status'] === 'closed', 'an Administrator close really does end the shift');
+    $releasedIds = array_map('intval', array_column($service->availableRegisters(), 'register_id'));
+    sort($releasedIds);
+    $assert(
+        $releasedIds === [10],
+        'closing an abandoned locked shift releases the Register for the next Cashier'
+    );
 
     // --- Locking and unlocking are Protected Audit Records ------------------
     $root = dirname(__DIR__, 3);
@@ -369,53 +433,38 @@ try {
         'register lock events are not mirrored into the sales audit module'
     );
 
-    // --- The point of sale and the held-sales endpoint honour the lock ------
+    // --- The lock is wired into every point-of-sale surface -----------------
+    // The services above are proven behaviourally. What is left is the wiring:
+    // which page and endpoint call them. There is no HTTP harness in this repo,
+    // so these are read from source, and they are kept to the wiring claim alone
+    // rather than restating rules already proven above.
     $pos = (string)@file_get_contents($root . '/src/frontend/components/cashier/pos.php');
-    $sales = (string)@file_get_contents($root . '/src/backend/app/Services/SalesWorkflowService.php');
     $held = (string)@file_get_contents($root . '/src/frontend/components/barcodeScanner/apiScanner/held_sales.php');
-    $assert($pos !== '' && $sales !== '' && $held !== '', 'the point-of-sale sources must be readable');
-    // The page branches on the lock rather than throwing: a locked Register is a
-    // screen the Cashier unlocks from, not an error page.
+    $assert($pos !== '' && $held !== '', 'the point-of-sale sources must be readable');
     $assert(
-        preg_match('/\$posRegisterLocked\s*=/', $pos) === 1,
-        'the point of sale resolves the lock state from the open shift'
-    );
-    $assert(
-        preg_match('/if \(\$posRegisterLocked\): \?>/', $pos) === 1,
-        'a locked Register renders the lock screen instead of the point of sale'
+        preg_match('/if \(\$posRegisterLocked\): \?>/', $pos) === 1
+        && preg_match('/\$posRegisterLocked\s*=/', $pos) === 1,
+        'the point of sale branches on the lock rather than throwing: a locked Register is a screen the Cashier unlocks from, not an error page'
     );
     $assert(
         str_contains($pos, 'lockRegister(') && str_contains($pos, 'unlockRegister('),
         'the point of sale offers both locking and unlocking'
     );
     $assert(
-        str_contains($pos, 'name="pos_unlock_password"'),
-        'the unlock form asks for a password'
+        str_contains($pos, '$lock_error') && substr_count($pos, '$lock_error') > 2,
+        'a refused lock is reported on the page the Cashier is left on, not only on the lock screen'
     );
     $assert(
-        !preg_match('/name="(pos_)?(pin|unlock_code)"/i', $pos),
-        'the unlock form introduces no PIN field'
-    );
-    // A void writes a Protected Audit Record, so it has to be refused with the
-    // rest of the point of sale or a locked till could author one.
-    $assert(
-        preg_match('/if \(\$posRegisterLocked && \$_SERVER\[.REQUEST_METHOD.\] === .POST.\) \{/', $pos) === 1,
-        'a locked Register refuses every point-of-sale POST, including the cart void'
-    );
-    // The checkout path must settle the lock from the same row-locked read that
-    // decides the attribution, so a shift cannot be locked between the guard and
-    // the sale. Consulting the lock from a separate query would leave that window.
-    $assert(
-        preg_match('/SELECT cs\.shift_id,\s*cs\.locked_at/is', $sales) === 1,
-        'checkout reads the lock and the attribution from the same locked read'
+        str_contains($pos, 'isRegisterLocked('),
+        'the point of sale asks the service whether the Register is locked'
     );
     $assert(
-        str_contains($sales, 'CashierShiftService::LOCKED_MESSAGE'),
-        'checkout refuses a locked Register with the one message the Cashier is shown'
-    );
-    $assert(
-        preg_match('/requireUnlockedRegister\(/', $held) === 1,
+        preg_match('/requireUnlockedRegister\(\$userId\)/', $held) === 1,
         'held sales are refused while the Register is locked'
+    );
+    $assert(
+        strpos($held, "requireUnlockedRegister(\$userId)") < strpos($held, "REQUEST_METHOD']==='GET'"),
+        'the held-sales lock covers listing as well as holding, so a locked till is not handed the carts it can resume'
     );
 } catch (Throwable $exception) {
     $failures[] = 'Cashier Shift register lock contract threw: ' . $exception->getMessage();
