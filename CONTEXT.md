@@ -68,6 +68,10 @@ _Avoid_: Shared shift, inferred shift, silent sale without a shift
 The named physical till that anchors drawer accountability for one open Cashier Shift at a time. It is created, renamed, or disabled without deleting its history, and unavailable Registers are excluded from new shifts.
 _Avoid_: Shared drawer, inferred till, deleted register history
 
+**Register Lock**:
+The break-time state of an open Cashier Shift that leaves the drawer owned and the Register claimed while the point of sale refuses to transact. Only the owning Cashier resumes it, with their own account password; a separate PIN or unlock code is never introduced. Locking and logging out both leave the shift open and unreconciled, and the lock is held by the shift rather than the session so a Register never reopens itself.
+_Avoid_: Closed shift, break mode, shared PIN, session logout
+
 **Stock Issue**:
 A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Other, moving through pending, returned, cancelled, approved, or rejected. Inventory Managers decide reports; only an approval deducts stock through a linked stock movement. Approved and rejected reports are immutable, and an erroneous approval is corrected only through a separate Inventory Manager inventory count linked back to the report. Administrators hold read-only oversight.
 _Avoid_: Damage report, damage claim, reopen an approval

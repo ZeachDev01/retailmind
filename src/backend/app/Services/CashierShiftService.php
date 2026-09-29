@@ -28,11 +28,33 @@ require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
  * carries the same two rules as unique constraints, so two requests that pass
  * validation at the same moment cannot both win. Closed history is never
  * constrained.
+ *
+ * A shift can also be locked (#90). Locking is a break, not an ending: the
+ * shift stays open, the Register stays claimed, and the drawer is not
+ * reconciled. The lock is a column on the shift rather than a session flag,
+ * because the session can end without the Cashier choosing to and a Register
+ * must not reopen itself because a cookie expired. Resuming takes the owning
+ * Cashier's own account password — the credential they already have — so no
+ * separate PIN is introduced and a different Cashier can neither unlock nor
+ * claim the Register.
  */
 class CashierShiftService
 {
     public const AUDIT_MODULE = 'Cashier Shifts';
     public const AUDIT_ACTION = 'Cashier Shift opened';
+    public const AUDIT_ACTION_LOCKED = 'Cashier Shift locked';
+    public const AUDIT_ACTION_UNLOCKED = 'Cashier Shift unlocked';
+    public const AUDIT_ACTION_UNLOCK_REFUSED = 'Register unlock refused';
+
+    /**
+     * The one message a locked Register produces (#90).
+     *
+     * It is a constant so the point of sale, checkout, and held sales all refuse
+     * with the same words: a Cashier should never be told the Register is merely
+     * unavailable when the real answer is that they locked it and can unlock it
+     * again with their own password.
+     */
+    public const LOCKED_MESSAGE = 'This Register is locked. Unlock it with your account password to resume your Cashier Shift.';
 
     private RoleCapabilityPolicy $policy;
 
@@ -133,13 +155,175 @@ class CashierShiftService
         });
     }
 
-    private function requireCashierWorkspace(string $actorRole): void
+    /**
+     * Refuses anything the Cashier workspace alone may do.
+     *
+     * $refusal carries the wording for the specific action, because telling a
+     * Cashier who is trying to lock a Register that only the Cashier workspace
+     * can "open a Cashier Shift" sends them to the wrong page.
+     */
+    private function requireCashierWorkspace(string $actorRole, ?string $refusal = null): void
     {
         if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::OPERATE_POINT_OF_SALE)) {
-            throw new DomainException(
-                'Only the Cashier workspace can open a Cashier Shift. Switch to your Cashier workspace to open your register.'
-            );
+            throw new DomainException($refusal ?? 'Only the Cashier workspace can open a Cashier Shift. Switch to your Cashier workspace to open your register.');
         }
+    }
+
+    /**
+     * Whether the Cashier's open Register is currently locked (#90).
+     *
+     * A Cashier with no open shift is not locked. The missing-shift gate is the
+     * one that has to speak for that case, so this must not report a lock the
+     * Cashier can do nothing about.
+     */
+    public function isRegisterLocked(int $cashierId): bool
+    {
+        $shift = $this->getOpenShift($cashierId);
+
+        return $shift !== null && !empty($shift['locked_at']);
+    }
+
+    /**
+     * Locks the point of sale for a break without closing the Cashier Shift.
+     *
+     * The drawer stays the Cashier's, the Register stays claimed, and nothing is
+     * reconciled: a break is not an end of shift. The lock is stored on the shift
+     * so it survives the session that set it.
+     *
+     * @return int The secured Cashier Shift.
+     */
+    public function lockRegister(int $actorId, string $actorRole): int
+    {
+        $this->requireCashierWorkspace(
+            $actorRole,
+            'Only the Cashier workspace can lock a Register. Switch to your Cashier workspace to secure your register.'
+        );
+        $shift = $this->requireOpenShift($actorId, 'lock this Register');
+        if (!empty($shift['locked_at'])) {
+            throw new DomainException('This Register is already locked.');
+        }
+
+        $this->setRegisterLock((int)$shift['shift_id'], true);
+        // Re-read so the Protected Audit Record carries the time the lock was
+        // actually taken, not the moment before it.
+        $shift = $this->getOpenShift($actorId) ?? $shift;
+        $this->auditShiftEvent($actorId, self::AUDIT_ACTION_LOCKED, (int)$shift['shift_id'], $shift, [
+            'locked_at' => $shift['locked_at'],
+        ]);
+
+        return (int)$shift['shift_id'];
+    }
+
+    /**
+     * Resumes the locked Register with the owning Cashier's normal password.
+     *
+     * The account password is the credential, exactly as at sign-in, so no
+     * separate PIN or second credential is introduced: there is no weaker secret
+     * to talk somebody into at the till. Only the Cashier who owns the shift is
+     * ever asked, so another Cashier can neither unlock nor claim it.
+     *
+     * @return int The resumed Cashier Shift.
+     */
+    public function unlockRegister(int $actorId, string $actorRole, string $password): int
+    {
+        $this->requireCashierWorkspace(
+            $actorRole,
+            'Only the Cashier workspace can unlock a Register. Switch to your Cashier workspace to resume your shift.'
+        );
+        $shift = $this->requireOpenShift($actorId, 'unlock this Register');
+        if (empty($shift['locked_at'])) {
+            throw new DomainException('This Register is not locked.');
+        }
+
+        if (!$this->verifyCashierPassword($actorId, $password)) {
+            $this->auditShiftEvent(
+                $actorId,
+                self::AUDIT_ACTION_UNLOCK_REFUSED,
+                (int)$shift['shift_id'],
+                $shift,
+                [],
+                AuditRecordCategory::SECURITY
+            );
+            // Deliberately the same refusal for an unknown account, a wrong
+            // password, and a blank one, so unlocking reveals nothing about
+            // which credential was close.
+            throw new DomainException('That password is not correct.');
+        }
+
+        $this->setRegisterLock((int)$shift['shift_id'], false);
+        // The record keeps when the Register was locked, which is the only moment
+        // an unlock happens, so a reader can see how long the break was.
+        $this->auditShiftEvent($actorId, self::AUDIT_ACTION_UNLOCKED, (int)$shift['shift_id'], $shift, [
+            'locked_at' => $shift['locked_at'],
+        ]);
+
+        return (int)$shift['shift_id'];
+    }
+
+    /**
+     * Refuses point-of-sale work on a locked Register.
+     *
+     * This is the page-level guard. Checkout settles the same rule from the
+     * row-locked read that decides its attribution, because a shift locked
+     * between a check and the sale would otherwise slip a transaction through.
+     */
+    public function requireUnlockedRegister(int $cashierId): void
+    {
+        if ($this->isRegisterLocked($cashierId)) {
+            throw new DomainException(self::LOCKED_MESSAGE);
+        }
+    }
+
+    private function requireOpenShift(int $cashierId, string $action): array
+    {
+        $shift = $this->getOpenShift($cashierId);
+        if ($shift === null) {
+            throw new DomainException('Open a Cashier Shift before you can ' . $action . '.');
+        }
+
+        return $shift;
+    }
+
+    /**
+     * Stamps or clears the lock on an open Cashier Shift.
+     *
+     * NOW() is the database's clock rather than a bound value so the lock time
+     * is the same clock the rest of the shift is written on, and NULL is the
+     * only two states the column has.
+     */
+    private function setRegisterLock(int $shiftId, bool $locked): void
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE cashier_shifts
+             SET locked_at = " . ($locked ? 'NOW()' : 'NULL') . "
+             WHERE shift_id = ? AND status = 'open'"
+        );
+        $stmt->execute([$shiftId]);
+        if ($stmt->rowCount() === 0) {
+            throw new DomainException('That Cashier Shift is no longer open.');
+        }
+    }
+
+    /**
+     * Checks the Cashier's own account password, the same credential and the
+     * same active-account rule that sign-in accepts.
+     *
+     * The Store has no account lockout policy to honour here — `locked_until`
+     * and the login-attempt counters are not wired into sign-in either — so the
+     * lock's protection is the same thing sign-in's is: the Cashier's own
+     * password, and a Protected Audit Record of every attempt against it.
+     */
+    private function verifyCashierPassword(int $cashierId, string $password): bool
+    {
+        if ($password === '') {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare("SELECT password_hash FROM users WHERE user_id = ? AND status = 'active'");
+        $stmt->execute([$cashierId]);
+        $hash = $stmt->fetchColumn();
+
+        return is_string($hash) && $hash !== '' && password_verify($password, $hash);
     }
 
     private function requireAvailableRegister(int $registerId): array
@@ -193,22 +377,51 @@ class CashierShiftService
         array $register,
         float $openingFloat
     ): void {
-        $payload = [
+        $this->auditShiftEvent(
+            $actorId,
+            self::AUDIT_ACTION,
+            $shiftId,
+            [
+                'register_id' => (int)$register['register_id'],
+                'register_name' => (string)$register['name'],
+            ],
+            [
+                'opening_float' => round($openingFloat, 2),
+                'actor_role' => $actorRole,
+            ]
+        );
+    }
+
+    /**
+     * Writes a Protected Audit Record for one Cashier Shift event.
+     *
+     * Every event carries the Register as the operator knows it, so a record can
+     * be read on its own months later without re-deriving which till it concerns.
+     * $details carries whatever else that particular event knows and an opening
+     * does not, so a record never claims a lock time it did not have.
+     */
+    private function auditShiftEvent(
+        int $actorId,
+        string $action,
+        int $shiftId,
+        array $register,
+        array $details = [],
+        string $category = AuditRecordCategory::STORE_OPERATION
+    ): void {
+        $payload = array_merge($details, [
             'shift_id' => $shiftId,
             'cashier_id' => $actorId,
-            'register_id' => (int)$register['register_id'],
-            'register_name' => (string)$register['name'],
-            'opening_float' => round($openingFloat, 2),
-            'actor_role' => $actorRole,
-        ];
+            'register_id' => isset($register['register_id']) ? (int)$register['register_id'] : null,
+            'register_name' => $register['register_name'] ?? null,
+        ]);
 
         $this->pdo->prepare(
             'INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
              VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
         )->execute([
             $actorId,
-            self::AUDIT_ACTION,
-            AuditRecordCategory::STORE_OPERATION,
+            $action,
+            $category,
             self::AUDIT_MODULE,
             $shiftId,
             json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),

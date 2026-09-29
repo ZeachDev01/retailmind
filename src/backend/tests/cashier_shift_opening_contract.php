@@ -72,7 +72,8 @@ try {
         cash_variance REAL NULL,
         closing_notes TEXT NULL,
         reviewed_by INTEGER NULL,
-        reviewed_at TEXT NULL
+        reviewed_at TEXT NULL,
+        locked_at TEXT NULL
     )");
     // Exclusivity as MySQL expresses it through generated columns: only rows
     // whose status is 'open' are constrained, so a Cashier and a Register each

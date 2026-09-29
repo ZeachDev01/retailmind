@@ -502,6 +502,66 @@ $checks = [
             'CONSTRAINT `fk_cashier_shifts_register`',
         ],
     ],
+    'A break is recorded on the Cashier Shift, never in the session' => [
+        'file' => 'src/backend/app/Services/CashierShiftService.php',
+        'needles' => [
+            'lockRegister(',
+            'unlockRegister(',
+            'requireUnlockedRegister(',
+            'password_verify(',
+            'SET locked_at = ',
+            "'Cashier Shift locked'",
+            "'Cashier Shift unlocked'",
+            "'Register unlock refused'",
+            'AuditRecordCategory::SECURITY',
+        ],
+        // The lock belongs to the shift, so the session is never consulted for
+        // it: a session flag would let a Register reopen itself when a cookie
+        // expired or a logout happened.
+        'forbidden' => ['$_SESSION'],
+    ],
+    'A locked Register ships in an upgrade migration' => [
+        'file' => 'src/backend/database/migrations/202609290004_cashier_shift_register_lock.php',
+        'needles' => [
+            "'cashier_shifts', 'locked_at', 'TIMESTAMP NULL DEFAULT NULL",
+            'Schema::addColumnIfMissing',
+        ],
+        'forbidden' => ["\nfunction "],
+    ],
+    'Fresh schema records the lock on the Cashier Shift' => [
+        'file' => 'src/backend/sql/schema.sql',
+        'needles' => ['`locked_at` timestamp NULL DEFAULT NULL'],
+    ],
+    'Checkout refuses a locked Register from the row that authorizes it' => [
+        'file' => 'src/backend/app/Services/SalesWorkflowService.php',
+        'needles' => [
+            'SELECT cs.shift_id, cs.locked_at',
+            'CashierShiftService::LOCKED_MESSAGE',
+        ],
+    ],
+    'The point of sale locks, resumes, and withholds itself while locked' => [
+        'file' => 'src/frontend/components/cashier/pos.php',
+        'needles' => [
+            'lockRegister(',
+            'unlockRegister(',
+            '$posRegisterLocked',
+            'name="pos_unlock_password"',
+            'name="action" value="lock_register"',
+            'name="action" value="unlock_register"',
+        ],
+        // Resumption reuses the Cashier's account password. A PIN field would be
+        // a second, weaker credential to talk somebody into at the till.
+        'forbidden' => ['name="pos_pin"', 'name="pin"'],
+    ],
+    'A locked Register pauses the drawer, not just the sale screen' => [
+        'file' => 'src/frontend/components/cashier/shifts.php',
+        'needles' => ['isRegisterLocked(', 'CashierShiftService::LOCKED_MESSAGE'],
+    ],
+    'Logging out leaves the Cashier Shift open' => [
+        'file' => 'src/frontend/components/auth/logout.php',
+        'needles' => ['logout_user()'],
+        'forbidden' => ['cashier_shifts'],
+    ],
 ];
 $failures = [];
 foreach ($checks as $label => $check) {

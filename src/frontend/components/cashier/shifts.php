@@ -29,6 +29,11 @@ if (!$isCashier && $targetCashierId > 0 && !in_array($targetCashierId, array_map
 }
 $message = '';
 $error = '';
+// Ticket #90: a locked Register is on a break, and a drawer movement or a
+// reconciliation posted under the Cashier's name while they are away is exactly
+// what the lock is meant to prevent. The guard is the Cashier's own, so an
+// Administrator reviewing or closing an abandoned shift is unaffected.
+$ownRegisterLocked = $isCashier && $service->isRegisterLocked($actorId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (current_role() === 'super_admin') {
@@ -37,6 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $action = $_POST['action'] ?? '';
     try {
+        if ($ownRegisterLocked && in_array($action, ['movement', 'close'], true)) {
+            throw new DomainException(CashierShiftService::LOCKED_MESSAGE);
+        }
         if ($action === 'open') {
             // Ticket #88: the Cashier opens their own shift on a Register they
             // choose. The service records the Protected Audit Record.
@@ -85,6 +93,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
             </div>
             <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?><?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($ownRegisterLocked): ?><div class="message error">This Register is locked, so pay-ins, pay-outs, and reconciliation are paused. <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock it at the point of sale</a> to carry on with this same shift.</div><?php endif; ?>
             <?php if (!$isCashier): ?><section class="dashboard-section">
                     <form method="get"><label>View cashier</label><select name="cashier_id" onchange="this.form.submit()"><?php foreach ($cashiers as $c): ?><option value="<?= (int)$c['user_id'] ?>" <?= $targetCashierId === (int)$c['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['full_name']) ?></option><?php endforeach; ?></select></form>
                 </section><?php endif; ?>

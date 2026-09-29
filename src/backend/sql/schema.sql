@@ -221,6 +221,7 @@ CREATE TABLE `cashier_shifts` (
   `closing_notes` text DEFAULT NULL,
   `reviewed_by` int(11) DEFAULT NULL,
   `reviewed_at` timestamp NULL DEFAULT NULL,
+  `locked_at` timestamp NULL DEFAULT NULL,
   `open_cashier_id` int(11) GENERATED ALWAYS AS (IF(status = 'open', cashier_id, NULL)) STORED,
   `open_register_id` int(11) GENERATED ALWAYS AS (IF(status = 'open', register_id, NULL)) STORED,
   PRIMARY KEY (`shift_id`),

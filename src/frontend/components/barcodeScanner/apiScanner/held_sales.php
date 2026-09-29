@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../../../backend/includes/auth.php';
+require_once __DIR__ . '/../../../../backend/app/Services/CashierShiftService.php';
 // Issue #86: held sales live inside the Cashier workspace; holding,
 // resuming, or cancelling requires the active Cashier workspace even when
 // the account also holds administrative roles.
@@ -30,6 +31,12 @@ $input=json_decode((string)file_get_contents('php://input'),true)?:[];
 csrf_verify($_SERVER['HTTP_X_CSRF_TOKEN']??($input['csrf_token']??null));
 $action=(string)($input['action']??'');
 try {
+    // Ticket #90: a locked Register is on a break. Holding, resuming, or cancelling
+    // a sale is point-of-sale work, so the lock refuses it here too — the page hides
+    // the buttons, but this endpoint is reachable directly. The refusal is raised
+    // inside the try so the Cashier gets the same JSON error shape as any other.
+    $shiftService=new App\Services\CashierShiftService($pdo);
+    $shiftService->requireUnlockedRegister($userId);
     if ($action==='hold') {
         $cart=$input['cart']??[];
         if (!is_array($cart)||!$cart) throw new RuntimeException('Cart is empty.');

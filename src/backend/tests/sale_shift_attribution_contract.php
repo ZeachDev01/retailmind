@@ -86,7 +86,8 @@ try {
         cash_variance REAL NULL,
         closing_notes TEXT NULL,
         reviewed_by INTEGER NULL,
-        reviewed_at TEXT NULL
+        reviewed_at TEXT NULL,
+        locked_at TEXT NULL
     )");
     // The open-shift exclusivity of ticket #88, expressed as partial indexes.
     $pdo->exec("CREATE UNIQUE INDEX uq_cashier_shifts_open_cashier
@@ -337,6 +338,51 @@ try {
     $assert(
         $attributed === $shiftId,
         'a client-supplied Cashier Shift and Register never redirect a sale'
+    );
+
+    // --- Ticket #90: a locked Register authorizes nothing --------------------
+    // A Cashier who locks the till for a break is not at the till. The lock has
+    // to be settled from the same row-locked read that picks the attribution,
+    // otherwise a shift locked between the check and the sale lets one
+    // transaction through. The lock is set directly here so this contract stays
+    // about the sale seam; CashierShiftService's own behaviour is covered by
+    // cashier_shift_register_lock_contract.php.
+    $salesBeforeLock = (int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn();
+    $stockBeforeLock = (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn();
+    $closedBeforeLock = (int)$pdo->query("SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed'")->fetchColumn();
+    $pdo->exec("UPDATE cashier_shifts SET locked_at = '2026-09-29 10:15:00' WHERE shift_id = {$shiftId}");
+    $expectRefusal(
+        static fn() => $service->checkout($cart, $casey, 'cashier', 'cash', ['cash_received' => 100]),
+        'checkout is refused while the Register is locked'
+    );
+    $assert(
+        (int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === $salesBeforeLock,
+        'a refused checkout on a locked Register writes no sale'
+    );
+    $assert(
+        (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn() === $stockBeforeLock,
+        'a refused checkout on a locked Register leaves stock untouched'
+    );
+    $assert(
+        (int)$pdo->query("SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed'")->fetchColumn() === $closedBeforeLock,
+        'locking the Register for a break closes nothing and reconciles nothing'
+    );
+    $assert(
+        (int)$pdo->query("SELECT COUNT(*) FROM cashier_shifts WHERE shift_id = {$shiftId} AND status = 'open'")->fetchColumn() === 1,
+        'the Cashier Shift stays open across a lock'
+    );
+
+    // Resuming the same shift authorizes the same sale again, on the same
+    // Register, without a second shift ever being opened.
+    $pdo->exec("UPDATE cashier_shifts SET locked_at = NULL WHERE shift_id = {$shiftId}");
+    $resumed = $service->checkout($cart, $casey, 'cashier', 'cash', ['cash_received' => 100]);
+    $assert(
+        (int)$pdo->query('SELECT shift_id FROM sales WHERE sale_id = ' . (int)$resumed['sale_id'])->fetchColumn() === $shiftId,
+        'the resumed Cashier Shift authorizes sales again'
+    );
+    $assert(
+        (int)$pdo->query('SELECT COUNT(*) FROM cashier_shifts WHERE cashier_id = ' . $casey)->fetchColumn() === 1,
+        'resuming never opens a second Cashier Shift'
     );
 
     // --- AC 4: an ordinary sale is not duplicated as an audit record ------

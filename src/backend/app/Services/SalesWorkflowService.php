@@ -6,8 +6,13 @@ require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
+// Ticket #90: the locked-Register message is shared with the page, with the
+// Cashier Shift page, and with held sales, so a Cashier is never told a Register
+// is merely unavailable when the real answer is that they locked it.
+require_once __DIR__ . '/CashierShiftService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Services\CashierShiftService;
 
 /**
  * Sale creation, and the Cashier Shift attribution every sale carries (#89).
@@ -22,6 +27,10 @@ use App\Authorization\RoleCapabilityPolicy;
  * The Register is never accepted from the caller and is not stored on the sale.
  * It is determinable by joining the sale to the Cashier Shift the Cashier
  * opened, which is what makes it determinable rather than supplied.
+ *
+ * A shift that is locked for a break authorizes nothing (#90): the lock is
+ * settled from the same row-locked read that picks the attribution, so a
+ * Register cannot be locked between the check and the sale.
  *
  * An ordinary sale is recorded once, as the sale itself. It is deliberately not
  * mirrored into Protected Audit Records: the sales ledger is already
@@ -207,24 +216,33 @@ class SalesWorkflowService
      *
      * The row is locked for the rest of the transaction, so a Cashier Shift that
      * is closed or replaced by a competing request cannot slip between
-     * attribution and commit.
+     * attribution and commit. The lock state is read from that same locked row
+     * rather than from a separate guard query: a Register locked between a
+     * check and the sale would otherwise let one transaction through.
      */
     private function resolveSaleAttribution(int $userId): int
     {
         $stmt = $this->pdo->prepare(
-            "SELECT cs.shift_id
+            "SELECT cs.shift_id, cs.locked_at
              FROM cashier_shifts cs
              WHERE cs.cashier_id = ? AND cs.status = 'open'
              ORDER BY cs.opened_at DESC LIMIT 1" . $this->rowLock()
         );
         $stmt->execute([$userId]);
-        $shiftId = $stmt->fetchColumn();
+        $shift = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$shiftId) {
+        if (!$shift) {
             throw new DomainException('Open a Cashier Shift before processing sales.');
         }
 
-        return (int)$shiftId;
+        // Ticket #90: a locked Register is on a break, not finished. Selling
+        // through it would put a transaction under a Cashier who is not at the
+        // till, so the lock is settled here rather than only on the page.
+        if (!empty($shift['locked_at'])) {
+            throw new DomainException(CashierShiftService::LOCKED_MESSAGE);
+        }
+
+        return (int)$shift['shift_id'];
     }
 
     /**

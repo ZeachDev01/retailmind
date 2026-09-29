@@ -100,6 +100,22 @@ $assert(
     Schema::foreignKeyRelationExists($pdo, 'sales', 'shift_id', 'cashier_shifts', 'shift_id'),
     'sales.shift_id is not protected by a foreign key'
 );
+// Register lock and resume (ticket #90). A fresh install and an upgraded install
+// must both record a break on the shift itself, so the lock survives the session
+// that set it, and both must leave it nullable so an unlocked shift — which is
+// every shift that has not been locked — needs no extra write.
+$assert(
+    Schema::columnExists($pdo, 'cashier_shifts', 'locked_at'),
+    'cashier_shifts.locked_at is missing'
+);
+$lockedAtColumn = $pdo->query(
+    "SELECT is_nullable FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'cashier_shifts' AND column_name = 'locked_at'"
+)->fetchColumn();
+$assert(
+    $lockedAtColumn === 'YES',
+    'cashier_shifts.locked_at must stay nullable so an unlocked shift is the default'
+);
 // The deployment cutoff: sales recorded before the upgrade were never attributed
 // to a shift, so the column must still accept them unlinked.
 $salesShiftColumn = $pdo->query(

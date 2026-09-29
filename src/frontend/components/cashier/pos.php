@@ -14,10 +14,7 @@ require_role(['cashier']);
 
 $salesWorkflowService = new SalesWorkflowService($pdo);
 $shiftService = new CashierShiftService($pdo);
-// Issue #86: only the Cashier workspace reaches this page, so the open
-// shift gate always applies — including to Administrators selling as Cashiers.
-$openShift = $shiftService->getOpenShift((int)$_SESSION['user_id']);
-$posShiftOpen = $openShift !== null;
+$cashierId = (int)$_SESSION['user_id'];
 require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
 // Ticket #89: checkout is attributed to the workspace that is active now, so
 // the service judges the same context this page did.
@@ -25,20 +22,61 @@ $actorRole = (string)current_role();
 
 $checkout_error = '';
 $checkout_notice = '';
+$lock_error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'void_cart') {
+// Ticket #90: locking and unlocking are a break, never an ending. Neither one
+// touches the shift's status, opening float, or closing figures — only
+// cashier_shifts.locked_at — so a Cashier who walks away mid-shift comes back to
+// the same shift on the same Register. Logging out does the same, because
+// logout destroys the session and nothing else.
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array($_POST['action'] ?? '', ['lock_register', 'unlock_register'], true)) {
+    csrf_verify();
+    try {
+        if (($_POST['action'] ?? '') === 'lock_register') {
+            $shiftService->lockRegister($cashierId, $actorRole);
+        } else {
+            $shiftService->unlockRegister($cashierId, $actorRole, (string)($_POST['pos_unlock_password'] ?? ''));
+        }
+        // Post/Redirect/Get: reloading a lock or unlock must not repeat it.
+        header('Location: ' . app_url('components/cashier/pos.php'));
+        exit;
+    } catch (Throwable $e) {
+        $lock_error = \App\Support\OperatorAlert::message($e, 'The register could not be locked or unlocked. Try again and tell your Administrator if it keeps happening.');
+    }
+}
+
+// The open shift and its lock are resolved after the POST above, so a lock or
+// unlock in this request is what this page reflects. Issue #86: only the Cashier
+// workspace reaches this page, so the open shift gate always applies — including
+// to Administrators selling as Cashiers.
+$openShift = $shiftService->getOpenShift($cashierId);
+$posShiftOpen = $openShift !== null;
+$posRegisterLocked = $shiftService->isRegisterLocked($cashierId);
+
+// Ticket #90: the lock screen replaces the point of sale, so nothing below may
+// act on a request that arrives while the Register is locked. Checkout already
+// refuses at the service seam; voiding a cart also writes a Protected Audit
+// Record, so it must be refused here or a locked till could be made to author
+// one on somebody else's behalf.
+if ($posRegisterLocked && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $checkout_error = CashierShiftService::LOCKED_MESSAGE;
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'void_cart') {
     csrf_verify();
 
     $reason = trim($_POST['void_reason'] ?? '');
     if ($reason === '') {
         $checkout_error = 'A reason is required to void the current sale.';
     } else {
-        log_activity($pdo, (int)$_SESSION['user_id'], 'Voided sale before final checkout: ' . $reason);
+        log_activity($pdo, $cashierId, 'Voided sale before final checkout: ' . $reason);
         $checkout_notice = 'Sale voided before checkout and audit log was recorded.';
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['action'] ?? '') !== 'void_cart') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['cart'])
+    && ($_POST['action'] ?? '') !== 'void_cart'
+    && !$posRegisterLocked) {
     csrf_verify();
 
     $cart = json_decode($_POST['cart'], true) ?: [];
@@ -57,13 +95,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart']) && ($_POST['a
     try {
         // Ticket #89: the active workspace is passed explicitly so the service,
         // not the account's stored role, decides who may sell.
-        $result = $salesWorkflowService->checkout($cart, (int)$_SESSION['user_id'], $actorRole, $payment_method, $paymentDetails);
+        $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
         header('Location: ' . app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $result['sale_id'] . '&checkout=complete'));
         exit;
     } catch (Throwable $e) {
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
     }
 }
+
+// The lock screen is the only thing a locked Register shows, so it also carries
+// the refusal for a point-of-sale POST that arrived while it was locked.
+$lockScreenError = $lock_error !== '' ? $lock_error : $checkout_error;
 
 [$quickProductScope, $quickProductParams] = store_product_scope('p');
 $quickProductStmt = $pdo->prepare(
@@ -141,11 +183,51 @@ $quickCategoryIcon = static function (string $categoryName): string {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
+        <?php if ($posRegisterLocked): ?>
+            <?php // Ticket #90: a locked Register shows a lock screen instead of the point of sale. The sidebar stays, so the Cashier can still log out — logging out leaves the shift open. ?>
+            <section class="pos-lock" aria-labelledby="pos-lock-title">
+                <div class="pos-lock-card">
+                    <div class="pos-lock-icon"><i class="bi bi-lock-fill" aria-hidden="true"></i></div>
+                    <h2 id="pos-lock-title">Register locked</h2>
+                    <p class="pos-lock-lede">
+                        <strong><?= htmlspecialchars((string)($openShift['register_name'] ?? 'Unassigned')) ?></strong>
+                        &middot; Shift #<?= (int)$openShift['shift_id'] ?>
+                        &middot; locked <?= htmlspecialchars(format_display_datetime((string)$openShift['locked_at'])) ?>
+                    </p>
+                    <?php if ($lockScreenError !== ''): ?>
+                        <div class="pos-lock-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($lockScreenError) ?></div>
+                    <?php endif; ?>
+                    <form method="post" class="pos-lock-form" autocomplete="off">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="unlock_register">
+                        <label class="pos-field-label" for="pos-unlock-password">Your account password</label>
+                        <input class="pos-input" type="password" id="pos-unlock-password" name="pos_unlock_password" autocomplete="current-password" required autofocus>
+                        <p class="pos-lock-note">Your Cashier Shift is still open on this Register. No sale can be recorded until you unlock it.</p>
+                        <button class="btn btn-block" type="submit"><i class="bi bi-unlock" aria-hidden="true"></i>Unlock and resume</button>
+                    </form>
+                    <p class="pos-lock-note">Logging out keeps the shift open too, so you can unlock and resume this same shift whenever you are back.</p>
+                </div>
+            </section>
+        <?php else: ?>
         <?php if ($checkout_error): ?>
             <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_error) ?></div>
         <?php endif; ?>
         <?php if ($checkout_notice): ?>
             <div class="pos-alert success" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_notice) ?></div>
+        <?php endif; ?>
+        <?php if ($posShiftOpen): ?>
+            <div class="pos-register-bar">
+                <p class="pos-register-identity">
+                    <i class="bi bi-upc-scan" aria-hidden="true"></i>
+                    <span>Register <strong><?= htmlspecialchars((string)($openShift['register_name'] ?? 'Unassigned')) ?></strong></span>
+                    <span class="pos-register-shift">Shift #<?= (int)$openShift['shift_id'] ?></span>
+                </p>
+                <form method="post" data-confirm="Lock this register for a break? Your Cashier Shift stays open and your Register stays yours. Nobody else can use it until you unlock it with your password." data-confirm-title="Lock register" data-confirm-button="Lock register">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="lock_register">
+                    <button class="btn btn-secondary" type="submit"><i class="bi bi-lock" aria-hidden="true"></i>Lock register</button>
+                </form>
+            </div>
         <?php endif; ?>
         <?php if (!$posShiftOpen): ?>
             <div class="pos-alert error" role="alert"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a Cashier Shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
@@ -1335,5 +1417,7 @@ if (cashierClock) {
 }
 setTimeout(() => skuInput.focus(), 100);
 </script>
+        <?php // Ticket #90: the point of sale and its scripts are withheld entirely while the Register is locked, so a locked till has no cart, no scanner, and no checkout to drive. ?>
+        <?php endif; ?>
 </body>
 </html>
