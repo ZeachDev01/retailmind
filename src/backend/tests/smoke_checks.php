@@ -55,8 +55,11 @@ $checks = [
         'needles' => ['SUM(accepted_qty)', 'LEAST(ordered_qty, received_qty + ?)'],
     ],
     'Server-held sales enabled' => [
-        'file' => 'src/frontend/components/barcodeScanner/apiScanner/held_sales.php',
-        'needles' => ['INSERT INTO held_sales', "status='held'"],
+        // Ticket #91 moved the rules out of the endpoint and into
+        // HeldSaleService, so the parking INSERT and the unresolved statuses now
+        // live there. The endpoint's own wiring is checked further down.
+        'file' => 'src/backend/app/Services/HeldSaleService.php',
+        'needles' => ['INSERT INTO held_sales', "status IN ({", 'openForCashier('],
     ],
     'Server product search enabled' => [
         'file' => 'src/frontend/components/barcodeScanner/apiScanner/products.php',
@@ -569,6 +572,102 @@ $checks = [
         'file' => 'src/frontend/components/auth/logout.php',
         'needles' => ['logout_user()'],
         'forbidden' => ['cashier_shifts'],
+    ],
+    // Held sales belong to the Cashier Shift that authorized them (ticket #91).
+    'A held sale is parked under the Cashier and shift that own it' => [
+        'file' => 'src/backend/app/Services/HeldSaleService.php',
+        'needles' => [
+            'requireHoldingShift',
+            'requireOwnUnresolved',
+            'requireCashierWorkspace',
+            'Open a Cashier Shift before holding a sale.',
+            "const UNRESOLVED_STATUSES = ['held', 'resumed']",
+            'Held sale not found or already resolved.',
+        ],
+        // The shift is derived from the authenticated Cashier, so no request can
+        // park a cart on somebody else's drawer. Proved by behaviour in
+        // held_sale_shift_contract.php; asserted here so a reintroduction is loud.
+        'forbidden' => ["\$_SESSION", "\$_POST['shift_id']", "\$_GET['shift_id']"],
+    ],
+    'A held sale is discarded with a reason, and only for a reason' => [
+        'file' => 'src/backend/app/Services/HeldSaleService.php',
+        'needles' => [
+            'const DISCARD_REASONS',
+            "'other'",
+            'Add a note explaining why this held sale was discarded.',
+            "'discarded'",
+            "'discard_reason'",
+            "'discard_note'",
+            "'Held sale discarded'",
+            'AuditRecordCategory::STORE_OPERATION',
+        ],
+        // A discard has no cash effect at all, so it must not reach the drawer.
+        'forbidden' => ['cash_drawer_movements'],
+    ],
+    'A Cashier Shift cannot close over an unresolved held sale' => [
+        'file' => 'src/backend/app/Services/CashierShiftService.php',
+        'needles' => [
+            'unresolvedHeldSales',
+            'requireNoUnresolvedHeldSales',
+            'Complete or discard',
+        ],
+    ],
+    'A resumed held sale is completed by the checkout that pays for it' => [
+        'file' => 'src/backend/app/Services/SalesWorkflowService.php',
+        'needles' => [
+            'resolveResumedHeldSale',
+            'assertCompletable',
+            'markCompleted',
+        ],
+    ],
+    'Only a held sale on no open Cashier Shift expires on its own' => [
+        'file' => 'src/backend/app/Services/HeldSaleService.php',
+        'needles' => ['sweepExpiredOrphans', "cs.status = 'open'"],
+        // Expiry is the one path around both the discard reason and the closure
+        // invariant, so it must never touch a cart an open shift is waiting on.
+        'forbidden' => ['DROP TABLE', 'DELETE FROM held_sales'],
+    ],
+    'Held sale ownership ships in an upgrade migration' => [
+        'file' => 'src/backend/database/migrations/202609290005_held_sale_shift_ownership.php',
+        'needles' => [
+            'Schema::addColumnIfMissing',
+            "'discard_reason'",
+            "'discarded_by'",
+            'idx_held_sales_shift_status',
+            'fk_held_sales_shift',
+            'DROP FOREIGN KEY',
+            'referential_constraints',
+            "'RESTRICT'",
+        ],
+        'forbidden' => ["\nfunction "],
+    ],
+    'Fresh schema ships the same held sale ownership structure' => [
+        'file' => 'src/backend/sql/schema.sql',
+        'needles' => [
+            "enum('held','resumed','discarded','completed','expired')",
+            'KEY `idx_held_sales_shift_status` (`shift_id`,`status`)',
+            'CONSTRAINT `fk_held_sales_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE RESTRICT',
+            'CONSTRAINT `fk_held_sales_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE SET NULL',
+        ],
+    ],
+    'The point of sale discards a held sale with a reason, not a bare cancel' => [
+        'file' => 'src/frontend/components/cashier/pos.php',
+        'needles' => [
+            'discardReasons()',
+            'id="discard-modal"',
+            'id="discard-reason"',
+            'discard_reason: reason',
+            'confirmDiscardHeldSale()',
+            'id="held-sale-id-input"',
+            'resumedHeldSaleId',
+        ],
+        // There is no way to drop a parked cart without saying why, and no free
+        // text standing in for the fixed set of reasons.
+        'forbidden' => ["apiHeldSale('cancel'", 'removeHeldSale('],
+    ],
+    'The closing form names the held sales that are in the way' => [
+        'file' => 'src/frontend/components/cashier/shifts.php',
+        'needles' => ['unresolvedHeldSales', 'before closing.'],
     ],
 ];
 $failures = [];

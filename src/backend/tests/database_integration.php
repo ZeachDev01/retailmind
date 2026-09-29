@@ -100,6 +100,47 @@ $assert(
     Schema::foreignKeyRelationExists($pdo, 'sales', 'shift_id', 'cashier_shifts', 'shift_id'),
     'sales.shift_id is not protected by a foreign key'
 );
+// Held sales inside their Cashier Shift (ticket #91). A fresh install and an
+// upgraded install must both record the explained discard and the completed
+// sale, both index the pair the closure invariant reads, and both refuse to let
+// a shift holding an unresolved cart be deleted out from under it.
+foreach (['sale_id', 'discard_reason', 'discard_note', 'discarded_by'] as $heldSaleColumn) {
+    $assert(
+        Schema::columnExists($pdo, 'held_sales', $heldSaleColumn),
+        "held_sales.{$heldSaleColumn} is missing"
+    );
+}
+$assert(
+    Schema::indexExists($pdo, 'held_sales', 'idx_held_sales_shift_status'),
+    'held sales have no Cashier Shift and status index for the closure invariant to read'
+);
+$assert(
+    Schema::foreignKeyRelationExists($pdo, 'held_sales', 'shift_id', 'cashier_shifts', 'shift_id'),
+    'held_sales.shift_id is not protected by a foreign key'
+);
+$heldShiftDeleteRule = $pdo->query(
+    "SELECT rc.DELETE_RULE
+     FROM information_schema.referential_constraints rc
+     WHERE rc.CONSTRAINT_SCHEMA = DATABASE()
+       AND rc.TABLE_NAME = 'held_sales'
+       AND rc.REFERENCED_TABLE_NAME = 'cashier_shifts'"
+)->fetchColumn();
+$assert(
+    strtoupper((string)$heldShiftDeleteRule) === 'RESTRICT',
+    'a Cashier Shift holding an unresolved held sale must not be deletable out from under it'
+);
+// The two ways a held sale leaves the unresolved set have to exist as statuses,
+// or the closure invariant and the discard reason have nothing to read.
+$heldSaleStatusEnum = (string)$pdo->query(
+    "SELECT COLUMN_TYPE FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'held_sales' AND column_name = 'status'"
+)->fetchColumn();
+foreach (['held', 'resumed', 'discarded', 'completed', 'expired'] as $heldSaleStatus) {
+    $assert(
+        str_contains($heldSaleStatusEnum, "'{$heldSaleStatus}'"),
+        "held_sales.status is missing the '{$heldSaleStatus}' resolution"
+    );
+}
 // Register lock and resume (ticket #90). A fresh install and an upgraded install
 // must both record a break on the shift itself, so the lock survives the session
 // that set it, and both must leave it nullable so an unlocked shift — which is

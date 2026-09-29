@@ -541,6 +541,44 @@ class CashierShiftService
     }
 
     /**
+     * The carts still parked on one shift, and so still owed a decision (#91).
+     *
+     * The shift is the drawer, so a cart that belongs to one has to be settled
+     * before the drawer is handed back — otherwise a cart is left parked on a till
+     * that no longer belongs to anybody. 'resumed' counts as parked, because a
+     * Cashier who resumed a cart and walked away has not settled anything.
+     *
+     * Exposed so the closing form can name the carts in the Cashier's way rather
+     * than refusing without saying which ones.
+     */
+    public function unresolvedHeldSales(int $shiftId): array
+    {
+        $placeholders = implode(',', array_fill(0, count(HeldSaleService::UNRESOLVED_STATUSES), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT held_sale_id, reference_no, customer_label, status, item_count, total_amount, created_at, expires_at
+             FROM held_sales
+             WHERE shift_id = ? AND status IN ({$placeholders})
+             ORDER BY created_at, held_sale_id"
+        );
+        $stmt->execute(array_merge([$shiftId], HeldSaleService::UNRESOLVED_STATUSES));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(static function (array $row): array {
+            return [
+                'id' => (int)$row['held_sale_id'],
+                'held_sale_id' => (int)$row['held_sale_id'],
+                'reference_no' => (string)$row['reference_no'],
+                'customer_label' => $row['customer_label'],
+                'status' => (string)$row['status'],
+                'item_count' => (int)$row['item_count'],
+                'total_amount' => (float)$row['total_amount'],
+                'created_at' => $row['created_at'],
+                'expires_at' => $row['expires_at'],
+            ];
+        }, $rows);
+    }
+
+    /**
      * Closes a Cashier Shift and reconciles the counted cash against it.
      *
      * $reviewedBy is non-null when an Administrator closes somebody else's
@@ -562,6 +600,7 @@ class CashierShiftService
         if ($actualCash < 0) {
             throw new RuntimeException('Actual cash cannot be negative.');
         }
+        $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
         $summary = $this->calculateShift((int)$shift['shift_id']);
         $expected = (float)$summary['calculated_expected_cash'];
         $variance = round($actualCash - $expected, 2);
@@ -576,6 +615,50 @@ class CashierShiftService
             throw new RuntimeException('The shift was already closed.');
         }
         return $this->calculateShift((int)$shift['shift_id']);
+    }
+
+    /**
+     * Refuses a closure while the drawer still has a cart parked on it (#91).
+     *
+     * The refusal is settled here rather than on the closing form, because the
+     * form can be posted directly and because an Administrator closing somebody
+     * else's abandoned shift is exactly the moment an orphaned cart would
+     * otherwise be waved through. A parked cart is not an exception to the
+     * closure: it is the last piece of that shift's work.
+     */
+    private function requireNoUnresolvedHeldSales(int $shiftId): void
+    {
+        $placeholders = implode(',', array_fill(0, count(HeldSaleService::UNRESOLVED_STATUSES), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT reference_no, item_count, total_amount
+             FROM held_sales
+             WHERE shift_id = ? AND status IN ({$placeholders})
+             ORDER BY created_at, held_sale_id"
+        );
+        $stmt->execute(array_merge([$shiftId], HeldSaleService::UNRESOLVED_STATUSES));
+        $parked = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($parked === []) {
+            return;
+        }
+
+        $named = array_map(
+            static fn(array $row): string => trim(
+                sprintf('%s (%d item(s), ₱%s)', $row['reference_no'], (int)$row['item_count'], number_format((float)$row['total_amount'], 2))
+            ),
+            $parked
+        );
+        $count = count($named);
+
+        throw new DomainException(
+            sprintf(
+                'This shift still has %d held sale%s: %s. Complete or discard %s before closing the shift.',
+                $count,
+                $count === 1 ? '' : 's',
+                implode(', ', $named),
+                $count === 1 ? 'it' : 'them'
+            )
+        );
     }
 
     public function recentShifts(?int $cashierId = null, int $limit = 30): array

@@ -92,6 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         'discount_reason' => $_POST['discount_reason'] ?? '',
         'discount_approver_username' => $_POST['discount_approver_username'] ?? '',
         'discount_approver_password' => $_POST['discount_approver_password'] ?? '',
+        // Ticket #91: the cart the Cashier resumed, if any. The service settles it
+        // against this Cashier and against the shift it already resolved for the
+        // sale, so a value tampered with here completes nothing.
+        'held_sale_id' => (int)($_POST['held_sale_id'] ?? 0),
     ];
 
     try {
@@ -104,6 +108,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
     }
 }
+
+// Ticket #91: the fixed set of reasons a parked cart can be discarded for. The
+// dialog offers exactly these, and the service accepts exactly these, so the
+// page cannot drift into offering a reason the audit record would not understand.
+$heldSaleService = new \App\Services\HeldSaleService($pdo, $shiftService);
+$heldSaleDiscardReasons = $heldSaleService->discardReasons();
 
 [$quickProductScope, $quickProductParams] = store_product_scope('p');
 $quickProductStmt = $pdo->prepare(
@@ -356,6 +366,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="checkout">
                     <input type="hidden" name="cart" id="cart-input">
+                    <input type="hidden" name="held_sale_id" id="held-sale-id-input" value="">
 
                     <div class="payment-field">
                         <label class="pos-field-label" for="payment-method">Payment method</label>
@@ -475,10 +486,41 @@ $quickCategoryIcon = static function (string $categoryName): string {
     </div>
 </div>
 
+<div id="discard-modal" class="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="discard-title">
+    <div class="checkout-dialog">
+        <div class="checkout-dialog-header">
+            <div>
+                <h3 id="discard-title">Discard held sale</h3>
+                <p>The reason is recorded in the audit log. Discarding moves no cash.</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeDiscardModal()" aria-label="Close discard dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+        <div class="checkout-dialog-body">
+            <label class="pos-field-label" for="discard-reason">Reason for discarding</label>
+            <select id="discard-reason" class="pos-select">
+                <?php foreach ($heldSaleDiscardReasons as $discardReasonKey => $discardReasonLabel): ?>
+                    <option value="<?= htmlspecialchars($discardReasonKey) ?>"><?= htmlspecialchars($discardReasonLabel) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <label class="pos-field-label" for="discard-note">Note (required when the reason is Other)</label>
+            <textarea class="void-reason" id="discard-note" placeholder="Example: Customer collected their items another way"></textarea>
+            <div id="discard-error" class="cart-message error" role="alert"></div>
+        </div>
+        <div class="checkout-dialog-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeDiscardModal()">Keep held sale</button>
+            <button type="button" class="btn btn-danger" onclick="confirmDiscardHeldSale()"><i class="bi bi-trash3" aria-hidden="true"></i>Discard held sale</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 let cart = {};
 let heldSales = [];
+// Ticket #91: the parked cart this one came from, if any. Checkout sends it so
+// the sale completes that cart on the shift it was parked under; the service
+// settles it against the Cashier and the shift, so this is a hint, not a claim.
+let resumedHeldSaleId = 0;
 let scanCooldown = false;
 let scannerActive = false;
 let checkoutConfirmed = false;
@@ -505,6 +547,7 @@ const stopBtn = document.getElementById('stop-scanner');
 const addCodeBtn = document.getElementById('add-code-btn');
 const checkoutForm = document.getElementById('checkout-form');
 const cartInput = document.getElementById('cart-input');
+const resumedHeldSaleInput = document.getElementById('held-sale-id-input');
 const paymentMethod = document.getElementById('payment-method');
 const cashReceived = document.getElementById('cash-received');
 const changeDue = document.getElementById('change-due');
@@ -516,6 +559,11 @@ const checkoutSummary = document.getElementById('checkout-summary');
 const voidModal = document.getElementById('void-modal');
 const voidReason = document.getElementById('void-reason');
 const voidError = document.getElementById('void-error');
+const discardModal = document.getElementById('discard-modal');
+const discardReason = document.getElementById('discard-reason');
+const discardNote = document.getElementById('discard-note');
+const discardError = document.getElementById('discard-error');
+let discardingHeldSaleId = 0;
 const checkoutButton = document.getElementById('checkout-button');
 const confirmCheckoutButton = document.getElementById('confirm-checkout-button');
 const holdSaleButton = document.getElementById('hold-sale-btn');
@@ -913,6 +961,11 @@ function resetPaymentState() {
     discountType.value = 'none';
     discountValue.value = '0';
     discountReason.value = '';
+    // Ticket #91: a cart that has been emptied or replaced is no longer a
+    // resumed held sale, so the next checkout must not claim to complete one.
+    // resumeHeldSale() sets this again once the cart is in place.
+    resumedHeldSaleId = 0;
+    resumedHeldSaleInput.value = '';
     const approverUsername = document.getElementById('discount-approver-username');
     const approverPassword = document.getElementById('discount-approver-password');
     if (approverUsername) approverUsername.value = '';
@@ -1130,20 +1183,73 @@ async function resumeHeldSale(id) {
         const data = await apiHeldSale('resume', {id});
         cart = data.cart || {}; heldSales = data.held_sales || [];
         resetPaymentState();
-        renderCart(); renderHeldSales(); showCartMessage('Held sale resumed.', 'success'); skuInput.focus();
+        // Ticket #91: the cart is back on the till, so the next checkout is the
+        // completion of this parked cart rather than an ordinary new sale.
+        resumedHeldSaleId = Number(data.id || id) || 0;
+        resumedHeldSaleInput.value = String(resumedHeldSaleId);
+        renderCart(); renderHeldSales(); showCartMessage('Held sale resumed. Complete the checkout to finish it.', 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); }
 }
 
-async function removeHeldSale(id) {
-    if (!await RetailMindUI.confirm({title:'Cancel held sale',message:'Remove this held sale from the server?',confirmText:'Cancel held sale',danger:true})) return;
-    try { const data = await apiHeldSale('cancel', {id}); heldSales = data.held_sales || []; renderHeldSales(); }
-    catch (error) { showCartMessage(error.message, 'error'); }
+// Ticket #91: a parked cart cannot be dropped from the list. It has to be either
+// paid for — which completes it — or discarded with a reason, which is recorded.
+// The note is only demanded for the one reason that genuinely needs words, and
+// the service refuses an empty one there, so this is a courtesy rather than the
+// rule: posting around it would simply be rejected.
+function openDiscardModal(id) {
+    discardingHeldSaleId = Number(id) || 0;
+    discardReason.value = 'customer_cancelled';
+    discardNote.value = '';
+    discardError.textContent = '';
+    discardError.className = 'cart-message error';
+    discardModal.classList.add('open');
+    setTimeout(() => discardReason.focus(), 50);
+}
+
+function closeDiscardModal() {
+    discardModal.classList.remove('open');
+    discardingHeldSaleId = 0;
+    holdSaleButton.focus();
+}
+
+async function confirmDiscardHeldSale() {
+    const reason = discardReason.value;
+    const note = discardNote.value.trim();
+    if (reason === 'other' && note === '') {
+        discardError.textContent = 'Add a note explaining why this held sale is being discarded.';
+        discardError.className = 'cart-message visible error';
+        discardNote.focus();
+        return;
+    }
+    if (discardingHeldSaleId === 0) { closeDiscardModal(); return; }
+    try {
+        const data = await apiHeldSale('discard', {id: discardingHeldSaleId, discard_reason: reason, discard_note: note});
+        heldSales = data.held_sales || [];
+        // Discarding the cart currently on the till leaves nothing to complete.
+        if (resumedHeldSaleId === discardingHeldSaleId) {
+            resumedHeldSaleId = 0;
+            resumedHeldSaleInput.value = '';
+        }
+        closeDiscardModal();
+        renderHeldSales();
+        showCartMessage('Held sale discarded. The reason is in the audit log.', 'success');
+    } catch (error) {
+        discardError.textContent = error.message;
+        discardError.className = 'cart-message visible error';
+    }
 }
 
 function renderHeldSales() {
     document.getElementById('held-count').textContent = heldSales.length;
     if (heldSales.length === 0) { holdList.innerHTML = '<div class="search-empty u-empty-min-72">No held sales.</div>'; return; }
-    holdList.innerHTML = heldSales.map(held => `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" onclick="resumeHeldSale(${Number(held.id)})">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="removeHeldSale(${Number(held.id)})">Cancel</button></div></div>`).join('');
+    holdList.innerHTML = heldSales.map(held => {
+        const id = Number(held.id);
+        // A resumed cart is already on the till but is not finished: it still has
+        // to be paid for, and it still holds this shift open. Saying so is the
+        // difference between "parked" and "done".
+        const state = held.status === 'resumed' ? ' &middot; on the till' : '';
+        return `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}${state}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" onclick="resumeHeldSale(${id})">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="openDiscardModal(${id})">Discard</button></div></div>`;
+    }).join('');
 }
 
 function voidCurrentSale() {
@@ -1185,13 +1291,15 @@ function persistCart() {
     } catch (error) {}
 }
 
-function persistHeldSales() {}
-
 function restoreState() {
     try {
         const storedCart = sessionStorage.getItem('pos_cart');
         if (storedCart) { const parsedCart=JSON.parse(storedCart); if(parsedCart&&typeof parsedCart==='object'&&!Array.isArray(parsedCart)) cart=parsedCart; }
     } catch (error) { cart = {}; }
+    // Ticket #91: a cart restored out of session storage is deliberately not
+    // re-linked to the held sale it may have come from. The link is not
+    // something the browser gets to assert, and the parked cart stays listed as
+    // unresolved either way, so the shift still cannot close over it.
     renderCart();
     loadHeldSales();
 }
@@ -1375,10 +1483,12 @@ checkoutForm.addEventListener('submit', event => {
     }
 });
 
-[checkoutModal, voidModal].forEach(modal => {
+[checkoutModal, voidModal, discardModal].forEach(modal => {
     modal.addEventListener('mousedown', event => {
         if (event.target === modal) {
-            modal === checkoutModal ? closeCheckoutConfirm() : closeVoidModal();
+            if (modal === checkoutModal) { closeCheckoutConfirm(); }
+            else if (modal === voidModal) { closeVoidModal(); }
+            else { closeDiscardModal(); }
         }
     });
 });

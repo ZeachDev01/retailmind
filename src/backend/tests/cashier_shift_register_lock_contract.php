@@ -107,6 +107,21 @@ try {
         status TEXT NOT NULL DEFAULT 'approved',
         settlement_method TEXT NOT NULL DEFAULT 'cash'
     )");
+    // Ticket #91: a closure reads this table to refuse a shift that still has a
+    // cart parked on it, so it has to exist here even though this contract never
+    // parks one. Held-sale behaviour itself is proven in
+    // held_sale_shift_contract.php; all that is needed here is for the closure
+    // path this contract exercises to have the table it queries.
+    $pdo->exec("CREATE TABLE held_sales (
+        held_sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cashier_id INTEGER NOT NULL,
+        shift_id INTEGER NULL,
+        reference_no TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'held',
+        item_count INTEGER NOT NULL DEFAULT 0,
+        total_amount REAL NOT NULL DEFAULT 0.00,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
     $pdo->exec('CREATE TABLE activity_log (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NULL,
@@ -462,8 +477,11 @@ try {
         preg_match('/requireUnlockedRegister\(\$userId\)/', $held) === 1,
         'held sales are refused while the Register is locked'
     );
+    // The claim is about what the lock covers, not about how the endpoint is
+    // spelled: the refusal has to be settled before the first listing call, or a
+    // locked till is handed the carts it can resume.
     $assert(
-        strpos($held, "requireUnlockedRegister(\$userId)") < strpos($held, "REQUEST_METHOD']==='GET'"),
+        strpos($held, "requireUnlockedRegister(\$userId)") < strpos($held, "openForCashier(\$userId)"),
         'the held-sales lock covers listing as well as holding, so a locked till is not handed the carts it can resume'
     );
 } catch (Throwable $exception) {

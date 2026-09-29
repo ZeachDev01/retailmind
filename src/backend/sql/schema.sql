@@ -487,16 +487,22 @@ CREATE TABLE `held_sales` (
   `cart_json` longtext NOT NULL,
   `item_count` int(11) NOT NULL DEFAULT 0,
   `total_amount` decimal(12,2) NOT NULL DEFAULT 0.00,
-  `status` enum('held','resumed','cancelled','expired') NOT NULL DEFAULT 'held',
+  `status` enum('held','resumed','discarded','completed','expired') NOT NULL DEFAULT 'held',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `expires_at` datetime DEFAULT NULL,
   `resolved_at` datetime DEFAULT NULL,
+  `sale_id` int(11) DEFAULT NULL,
+  `discard_reason` varchar(50) DEFAULT NULL,
+  `discard_note` varchar(255) DEFAULT NULL,
+  `discarded_by` int(11) DEFAULT NULL,
   PRIMARY KEY (`held_sale_id`),
   UNIQUE KEY `reference_no` (`reference_no`),
   KEY `idx_held_sales_cashier_status` (`cashier_id`,`status`),
-  KEY `shift_id` (`shift_id`),
+  KEY `idx_held_sales_shift_status` (`shift_id`,`status`),
   CONSTRAINT `held_sales_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `held_sales_ibfk_2` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_held_sales_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_held_sales_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_held_sales_discarded_by` FOREIGN KEY (`discarded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

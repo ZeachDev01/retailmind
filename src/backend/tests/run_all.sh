@@ -33,6 +33,8 @@ php src/backend/tests/sale_shift_attribution_contract.php
 php src/backend/tests/sale_shift_schema_parity_contract.php
 php src/backend/tests/cashier_shift_register_lock_contract.php
 php src/backend/tests/register_lock_schema_parity_contract.php
+php src/backend/tests/held_sale_shift_contract.php
+php src/backend/tests/held_sale_schema_parity_contract.php
 php src/backend/tests/store_staff_availability_contract.php
 php src/backend/tests/store_staff_username_notice_contract.php
 php src/backend/tests/store_staff_email_notice_contract.php

@@ -10,9 +10,13 @@ require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
 // Cashier Shift page, and with held sales, so a Cashier is never told a Register
 // is merely unavailable when the real answer is that they locked it.
 require_once __DIR__ . '/CashierShiftService.php';
+// Ticket #91: a resumed held sale is completed by the checkout that pays for it,
+// so the cart and the sale it became are settled in one transaction.
+require_once __DIR__ . '/HeldSaleService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\CashierShiftService;
+use App\Services\HeldSaleService;
 
 /**
  * Sale creation, and the Cashier Shift attribution every sale carries (#89).
@@ -32,6 +36,10 @@ use App\Services\CashierShiftService;
  * settled from the same row-locked read that picks the attribution, so a
  * Register cannot be locked between the check and the sale.
  *
+ * A cart the Cashier had parked on this shift and is now paying for is completed
+ * by this same checkout (#91), on the same shift, in the same transaction. A
+ * checkout that names no cart is an ordinary sale and completes none.
+ *
  * An ordinary sale is recorded once, as the sale itself. It is deliberately not
  * mirrored into Protected Audit Records: the sales ledger is already
  * authoritative, and a second copy of every sale would be a redundant record
@@ -43,6 +51,7 @@ class SalesWorkflowService
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
     private RoleCapabilityPolicy $policy;
+    private HeldSaleService $heldSales;
 
     public function __construct(PDO $pdo, ?RoleCapabilityPolicy $policy = null)
     {
@@ -50,6 +59,7 @@ class SalesWorkflowService
         $this->notificationService = new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
         $this->policy = $policy ?? new RoleCapabilityPolicy();
+        $this->heldSales = new HeldSaleService($pdo, new CashierShiftService($pdo, $this->policy));
     }
 
     /**
@@ -73,6 +83,12 @@ class SalesWorkflowService
             // Resolved and locked inside the transaction so the shift that
             // authorizes this sale is the shift that is still open at commit.
             $attribution = $this->resolveSaleAttribution($userId);
+            // Ticket #91: a cart that was parked on this shift and is now being
+            // paid for is completed by this checkout, on the same shift that
+            // authorized both. Settled against the same locked attribution as
+            // the sale, so a cart cannot be completed onto a drawer that is not
+            // the one it was parked on.
+            $resumedHeldSale = $this->resolveResumedHeldSale($userId, $attribution, $paymentDetails);
             $sale = $this->buildSalePayload($cleanCart);
             $manualDiscount = $this->resolveDiscount($userId, $sale['total'], $paymentDetails);
             $automaticPromotion = $this->resolveAutomaticPromotion($sale['items'], $sale['total']);
@@ -83,6 +99,13 @@ class SalesWorkflowService
 
             foreach ($sale['items'] as $item) {
                 $this->recordSaleItem($saleId, $item, $userId);
+            }
+
+            if ($resumedHeldSale !== null) {
+                // Inside the transaction, so the cart and the sale it became
+                // commit or roll back together. A checkout that fails leaves the
+                // cart parked and still owed a decision.
+                $this->heldSales->markCompleted((int)$resumedHeldSale['held_sale_id'], $saleId);
             }
 
             $this->pdo->commit();
@@ -243,6 +266,27 @@ class SalesWorkflowService
         }
 
         return (int)$shift['shift_id'];
+    }
+
+    /**
+     * The parked cart this checkout is completing, if it names one.
+     *
+     * $paymentDetails may carry `held_sale_id` when the Cashier resumed a held
+     * sale and is now paying for it (#91). The id comes from the request, so it
+     * is settled against two things that are not: the authenticated Cashier, and
+     * the Cashier Shift that has already been locked as this sale's attribution.
+     * A checkout that names no cart completes none, which is the normal case.
+     *
+     * @return array|null The locked held sale row, or null for an ordinary sale.
+     */
+    private function resolveResumedHeldSale(int $userId, int $shiftId, array $paymentDetails): ?array
+    {
+        $heldSaleId = (int)($paymentDetails['held_sale_id'] ?? 0);
+        if ($heldSaleId <= 0) {
+            return null;
+        }
+
+        return $this->heldSales->assertCompletable($userId, $heldSaleId, $shiftId);
     }
 
     /**
