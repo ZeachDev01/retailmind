@@ -58,6 +58,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $allRegisters = $registers->all();
+$availableCount = count($registers->available());
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,7 +92,7 @@ $allRegisters = $registers->all();
                     <label for="register-name">Register name</label>
                     <input id="register-name" type="text" name="name" maxlength="100" placeholder="Front Counter" required>
                 </div>
-                <div class="form-group form-group-actions">
+                <div class="form-group">
                     <button class="btn" type="submit">Create Register</button>
                 </div>
             </form>
@@ -106,7 +108,9 @@ $allRegisters = $registers->all();
             <?php if ($allRegisters === []): ?>
                 <p>No Registers yet. Create one above so Cashier Shifts have a till to anchor to.</p>
             <?php else: ?>
-                <table class="data-table">
+                <div class="data-table-shell">
+                    <div class="data-table-scroll">
+                        <table class="data-table">
                     <thead>
                         <tr>
                             <th>Register</th>
@@ -134,12 +138,11 @@ $allRegisters = $registers->all();
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="rename">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
-                                    <label class="visually-hidden" for="rename-<?= (int)$register['register_id'] ?>">Rename <?= htmlspecialchars($register['name']) ?></label>
-                                    <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" value="<?= htmlspecialchars($register['name']) ?>" required>
+                                    <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" value="<?= htmlspecialchars($register['name']) ?>" aria-label="Rename <?= htmlspecialchars($register['name']) ?>" required>
                                     <button class="btn btn-secondary" type="submit">Rename</button>
                                 </form>
                             </td>
-                            <td class="register-actions">
+                            <td>
                                 <form method="post" class="inline-form">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="set_status">
@@ -157,7 +160,9 @@ $allRegisters = $registers->all();
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
-                </table>
+                        </table>
+                    </div>
+                </div>
                 <p class="section-description">A Register that any operational record still references cannot be deleted. Disable it instead so its history stays intact.</p>
             <?php endif; ?>
         </section>

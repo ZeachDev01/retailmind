@@ -373,6 +373,16 @@ $checks = [
             'Disable',
             'Delete',
         ],
+        // Every class the page uses must exist in the stylesheet it loads.
+        'forbidden' => ['visually-hidden', 'form-group-actions', 'register-actions'],
+    ],
+    'Register table stays scrollable on small screens' => [
+        'file' => 'src/frontend/components/administrator/registers.php',
+        'needles' => ['data-table-shell', 'data-table-scroll'],
+    ],
+    'Register rename inputs stay labelled for screen readers' => [
+        'file' => 'src/frontend/components/administrator/registers.php',
+        'needles' => ['aria-label="Rename'],
     ],
     'Register service keeps identity stable and guards referenced deletes' => [
         'file' => 'src/backend/app/Services/RegisterService.php',
