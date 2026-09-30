@@ -235,6 +235,7 @@ $roleSections = [
                 ['path' => 'components/cashier/pos.php', 'icon' => 'bi-cart-check', 'label' => 'Point of Sale'],
                 ['path' => 'components/cashier/shifts.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shift'],
                 ['path' => 'components/cashier/refunds.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Cash Refunds'],
+                ['path' => 'components/cashier/history.php', 'icon' => 'bi-clock-history', 'label' => 'My History'],
                 ['path' => 'components/cashier/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Cashier Dashboard'],
                 ['path' => 'components/cashier/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Report Stock Issue'],
             ],
