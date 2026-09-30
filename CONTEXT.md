@@ -80,6 +80,14 @@ _Avoid_: Closed shift, break mode, shared PIN, session logout
 An append-only record a Cashier issues against one of their own completed sales, in the active Cashier workspace and under their own open Cashier Shift. It never edits, deletes, or voids the sale it reverses, so what is left refundable is a sum over the refunds already issued rather than a column on the sale. It is settled on the sale's original payment method, and only a cash refund reduces expected drawer cash. Full and partial refunds are allowed, capped by each line's remaining quantity and by the amount the customer actually paid, even under concurrent attempts. No supervisor approval is required: individual identity, a predefined reason, a note when the reason is Other, append-only records, Cashier-scoped visibility, and a Protected Audit Record are what make it accountable. Every returned item is classified Restockable or Damaged, and only a Restockable quantity returns to available inventory — a Damaged unit still consumes the refundable balance, because the money left the drawer either way.
 _Avoid_: Sale edit, sale void, stock-only return, supervisor-approved reversal, store credit
 
+**Sale Receipt**:
+The customer-facing record of a completed sale, shown after checkout and available for later reprint. Its transaction-time details remain the same on a reprint even if Store details or the Register name change later.
+_Avoid_: Invoice, live sale summary
+
+**Refund Receipt**:
+The separate customer-facing record of one Cash Refund, identifying the original sale and the items and amount refunded. It is shown when the refund is recorded and remains available for later reprint.
+_Avoid_: Edited Sale Receipt, sale void slip
+
 **Stock Issue**:
 A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Other, moving through pending, returned, cancelled, approved, or rejected. Inventory Managers decide reports; only an approval deducts stock through a linked stock movement. Approved and rejected reports are immutable, and an erroneous approval is corrected only through a separate Inventory Manager inventory count linked back to the report. Administrators hold read-only oversight.
 _Avoid_: Damage report, damage claim, reopen an approval
