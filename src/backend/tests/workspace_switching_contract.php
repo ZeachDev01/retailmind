@@ -26,6 +26,14 @@ eval($workspaceRolesMatch[0]);
 eval($match[0]);
 
 $failures = [];
+$workspacePage = file_get_contents(__DIR__ . '/../../frontend/components/auth/workspace.php');
+$sidebar = file_get_contents(__DIR__ . '/../../frontend/components/sidebar.php');
+if (!str_contains((string)$workspacePage, 'data-rm-backup-bypass="true"')) {
+    $failures[] = 'workspace selector forms must remain usable during a backup pause';
+}
+if (!str_contains((string)$sidebar, 'data-rm-backup-bypass="true"')) {
+    $failures[] = 'sidebar workspace forms must remain usable during a backup pause';
+}
 if (!switch_current_workspace('inventory_manager') || current_role() !== 'inventory_manager') {
     $failures[] = 'an assigned Inventory workspace must be selectable';
 }

@@ -333,7 +333,7 @@ $sections = $roleSections[$role] ?? [];
                                 <small>Current</small>
                             </div>
                         <?php else: ?>
-                            <form method="post" action="<?= sidebar_e(app_url('components/auth/workspace.php')) ?>">
+                            <form method="post" data-rm-backup-bypass="true" action="<?= sidebar_e(app_url('components/auth/workspace.php')) ?>">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="workspace" value="<?= sidebar_e($assignedRole) ?>">
                                 <button type="submit" class="sidebar-workspace-option">

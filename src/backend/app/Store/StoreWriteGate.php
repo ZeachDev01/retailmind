@@ -136,15 +136,18 @@ final class StoreWriteGate
      */
     public static function status(PDO $pdo): array
     {
-        if (\App\Backup\RecoveryStore::isPaused()) {
-            return ['paused' => true, 'state' => 'restoring', 'message' => 'Database recovery is in progress. Store access is paused.', 'started_at' => null];
-        }
         $idle = [
             'paused' => false,
             'state' => 'idle',
             'message' => '',
             'started_at' => null,
         ];
+        if (!\App\Backup\RecoveryStore::isAvailable()) {
+            return $idle;
+        }
+        if (\App\Backup\RecoveryStore::isPaused()) {
+            return ['paused' => true, 'state' => 'restoring', 'message' => 'Database recovery is in progress. Store access is paused.', 'started_at' => null];
+        }
 
         try {
             $table = self::operationTableExists($pdo);

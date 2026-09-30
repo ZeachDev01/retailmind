@@ -14,6 +14,7 @@ php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/backup_unavailable_navigation_test.php
 php src/backend/tests/sql_backup_format_test.php
 php src/backend/tests/recovery_store_restricted_host_contract.php
+php src/backend/tests/backup_unavailable_status_test.php
 php src/backend/tests/emergency_access_lifecycle_test.php
 php src/backend/tests/recovery_account_lifecycle_test.php
 php src/backend/tests/attention_rules_contract.php

@@ -70,7 +70,7 @@ $assignedWorkspaces = array_values(array_filter(
             <div class="workspace-options">
                 <?php foreach ($assignedWorkspaces as $assignedRole): ?>
                     <?php $details = $workspaceDetails[$assignedRole]; ?>
-                    <form method="post" class="workspace-option<?= $assignedRole === current_role() ? ' is-active' : '' ?>">
+                    <form method="post" data-rm-backup-bypass="true" class="workspace-option<?= $assignedRole === current_role() ? ' is-active' : '' ?>">
                         <?= csrf_field() ?>
                         <input type="hidden" name="workspace" value="<?= htmlspecialchars($assignedRole) ?>">
                         <span class="workspace-option-icon"><i class="bi <?= htmlspecialchars($details['icon']) ?>" aria-hidden="true"></i></span>
