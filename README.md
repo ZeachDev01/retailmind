@@ -46,3 +46,34 @@ php src/backend/tests/cash_refund_concurrency_integration.php
 ```
 
 The same flag enables this test in `src/backend/tests/run_all.sh`.
+
+## InfinityFree upload pipeline
+
+The GitHub Actions workflow in `.github/workflows/ci.yml` runs checks on pushes and
+pull requests. After a successful push to `main`, it builds a production PHP
+release and uploads it to InfinityFree using explicit FTPS. It does not upload
+the database, `.env`, runtime storage, tests, Python service, or development files.
+
+Before the first deployment, configure these in the GitHub repository under
+**Settings → Secrets and variables → Actions**:
+
+| Type | Name | Value |
+| --- | --- | --- |
+| Secret | `INFINITYFREE_FTP_USERNAME` | The FTP username from the InfinityFree account dashboard |
+| Secret | `INFINITYFREE_FTP_PASSWORD` | The FTP password from that dashboard |
+| Variable | `INFINITYFREE_FTP_SERVER_DIR` | The exact FTP website directory, ending in `/htdocs/` (usually `/htdocs/`, or `/your-domain/htdocs/` for an add-on domain) |
+
+The FTPS server is `ftpupload.net` on port 21. The workflow fails with a clear
+message until these values are configured. It never deletes the remote `.env` or
+runtime storage. Set up the production `.env` directly on the host and import
+the database through phpMyAdmin; those steps are not part of the file upload.
+Change the initial Super Administrator password before exposing the site.
+
+**Hosting compatibility:** InfinityFree free hosting cannot run the Python/Flask
+forecasting service or scheduled CLI tasks. This app also requires
+`BACKUP_STORAGE_PATH` outside the web document root for its recovery lock and
+Database Backup state, while InfinityFree only permits application files under
+`htdocs`. As written, the app will fail at startup on InfinityFree even when the
+upload succeeds. The pipeline automates file delivery, but a working deployment
+requires a host that supports the app's private storage and Python service, or
+an application change that provides equivalent safe facilities.

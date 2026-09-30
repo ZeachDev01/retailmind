@@ -61,3 +61,48 @@ jobs:
         run: php src/backend/scripts/migrate.php
       - name: Run checks
         run: bash src/backend/tests/run_all.sh
+
+  deploy:
+    name: Deploy to InfinityFree
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: infinityfree-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Install production PHP dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+      - name: Build deployment files
+        run: bash scripts/build-infinityfree-release.sh
+      - name: Check FTP configuration
+        env:
+          FTP_USERNAME: ${{ secrets.INFINITYFREE_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.INFINITYFREE_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ vars.INFINITYFREE_FTP_SERVER_DIR }}
+        run: |
+          test -n "$FTP_USERNAME" || { echo 'Missing INFINITYFREE_FTP_USERNAME secret'; exit 1; }
+          test -n "$FTP_PASSWORD" || { echo 'Missing INFINITYFREE_FTP_PASSWORD secret'; exit 1; }
+          test -n "$FTP_SERVER_DIR" || { echo 'Missing INFINITYFREE_FTP_SERVER_DIR variable'; exit 1; }
+          [[ "$FTP_SERVER_DIR" == */htdocs/ ]] || { echo 'FTP server directory must end in /htdocs/'; exit 1; }
+      - name: Upload over explicit FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ftpupload.net
+          username: ${{ secrets.INFINITYFREE_FTP_USERNAME }}
+          password: ${{ secrets.INFINITYFREE_FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: strict
+          local-dir: ./.release/
+          server-dir: ${{ vars.INFINITYFREE_FTP_SERVER_DIR }}
+          exclude: |
+            .env
+            **/.env
+            **/storage/**

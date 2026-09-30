@@ -1,6 +1,6 @@
 Options -Indexes
 
-<FilesMatch "^(\.env|composer\.(json|lock)|.*\.(joblib|pyc|log|sql))$">
+<FilesMatch "^(\.env|\.ftp-deploy-sync-state\.json|composer\.(json|lock)|.*\.(joblib|pyc|log|sql))$">
     Require all denied
 </FilesMatch>
 
@@ -8,6 +8,7 @@ Options -Indexes
     RewriteEngine On
     RewriteRule (^|/)\.(?:git|svn|hg)(?:/|$) - [F,L]
     RewriteRule ^backend(?:/|$) - [F,L]
+    RewriteRule ^src/(?:backend|vendor)(?:/|$) - [F,L]
     RewriteRule ^assets/bootstrap(?:/|$) - [F,L]
     RewriteRule ^(?:app|config|database|includes|demandForcasting|legacy|scripts|sql|storage|tests|vendor)(?:/|$) - [F,L]
     RewriteRule ^Sidebar/(.*)$ frontend/modules/$1 [L,QSA]

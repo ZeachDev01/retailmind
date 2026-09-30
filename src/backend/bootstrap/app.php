@@ -8,7 +8,10 @@ $rootPath = dirname(__DIR__, 2);
 $backendPath = dirname(__DIR__);
 $frontendPath = $rootPath . '/frontend';
 
-$composerAutoload = $rootPath . '/vendor/autoload.php';
+$composerAutoload = dirname($rootPath) . '/vendor/autoload.php';
+if (!is_file($composerAutoload)) {
+    $composerAutoload = $rootPath . '/vendor/autoload.php';
+}
 if (is_file($composerAutoload)) {
     require_once $composerAutoload;
 }
