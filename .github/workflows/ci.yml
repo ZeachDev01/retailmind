@@ -109,3 +109,18 @@ jobs:
             .env
             **/.env
             **/storage/**
+      # FTP-Deploy-Action compares against its saved sync state. If the host
+      # removes an unchanged file, that state alone will not put it back.
+      - name: Restore root entry and access rules
+        env:
+          FTP_USERNAME: ${{ secrets.INFINITYFREE_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.INFINITYFREE_FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ vars.INFINITYFREE_FTP_SERVER_DIR }}
+        run: |
+          for file in index.php .htaccess; do
+            curl --fail --show-error --silent --ssl-reqd --ftp-pasv \
+              --retry 3 --retry-delay 2 \
+              --user "$FTP_USERNAME:$FTP_PASSWORD" \
+              --upload-file ".release/$file" \
+              "ftp://ftpupload.net${FTP_SERVER_DIR}${file}"
+          done
