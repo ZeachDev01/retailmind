@@ -79,6 +79,7 @@ class CashRefundService
 
     /** The only payment method that is settled out of the drawer. */
     public const CASH = 'cash';
+    public const SUPPORTED_PAYMENT_METHODS = ['cash', 'card', 'ewallet'];
 
     public const RESTOCKABLE = 'restockable';
     public const DAMAGED = 'damaged';
@@ -169,6 +170,9 @@ class CashRefundService
             // unlocked at commit.
             $shiftId = $this->requireOpenShiftId($cashierId);
             $sale = $this->lockOwnSale($cashierId, $saleId);
+            if (!in_array((string)$sale['payment_method'], self::SUPPORTED_PAYMENT_METHODS, true)) {
+                throw new DomainException('This sale uses a payment method that cannot be refunded here. Ask your Administrator for help.');
+            }
             $legacy = $this->pdo->prepare("SELECT reversal_id FROM sale_reversals
                 WHERE sale_id = ? AND status IN ('pending', 'approved') LIMIT 1" . $this->rowLock());
             $legacy->execute([$saleId]);

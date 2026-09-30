@@ -92,7 +92,7 @@ $refunds = $refundService->recentForCashier($actorId);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Cash Refunds</title>
+    <title>Refunds</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css')) ?>">
 </head>
@@ -101,7 +101,7 @@ $refunds = $refundService->recentForCashier($actorId);
     <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
             <div class="topbar">
                 <div>
-                    <h1>Cash Refunds</h1>
+                    <h1>Refunds</h1>
                     <p class="page-subtitle">Refunds are added to the record; the original sale is never changed.</p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
             </div>
@@ -139,8 +139,10 @@ $refunds = $refundService->recentForCashier($actorId);
 
                     <?php if (!array_filter($sale['items'], static fn(array $item): bool => $item['refundable_quantity'] > 0)): ?>
                         <div class="message warning">This sale has already been fully refunded.</div>
+                    <?php elseif (!in_array((string)$sale['payment_method'], CashRefundService::SUPPORTED_PAYMENT_METHODS, true)): ?>
+                        <div class="message warning">This payment method cannot be refunded here. Ask your Administrator for help.</div>
                     <?php else: ?>
-                        <form method="POST" data-confirm="Record this refund? Cash leaves the drawer and only Restockable items return to available inventory." data-confirm-title="Record cash refund" data-confirm-button="Record refund">
+                        <form method="POST" data-confirm="Record this refund on the original payment method? Only Restockable items return to available inventory." data-confirm-title="Record refund" data-confirm-button="Record refund">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                             <input type="hidden" name="sale_id" value="<?= (int)$sale['sale_id'] ?>">
                             <p>Refund amounts include the original discount. Only the amount still refundable is paid back.</p>
@@ -190,7 +192,7 @@ $refunds = $refundService->recentForCashier($actorId);
                                 </div>
                             </div>
 
-                            <p class="section-description">Only <strong>Restockable</strong> units return to available inventory. A <strong>Damaged</strong> unit comes back off the shelf but is not sold again, and either way the money still leaves the drawer.</p>
+                            <p class="section-description">Refund on the original <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?> payment method. Only <strong>Restockable</strong> units return to available inventory. A <strong>Damaged</strong> unit stays off the shelf. Only cash refunds reduce expected drawer cash.</p>
 
                             <button class="btn" type="submit" <?= $canRefund ? '' : 'disabled' ?>>Record refund</button>
                             <?php if (!$canRefund): ?><p class="section-description">A refund needs your own open Cashier Shift.</p><?php endif; ?>

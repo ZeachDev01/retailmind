@@ -662,6 +662,40 @@ try {
         'a Restockable return writes a stock movement attributed to the Cashier'
     );
 
+    // E-wallet returns use the same ledger and rules. An unknown repayment
+    // method is refused before the refund, inventory, or audit is written.
+    $walletSale = $sales->checkout([['product_id' => 2, 'qty' => 1]], $casey, 'cashier', 'ewallet',
+        ['payment_reference' => 'WALLET-123']);
+    $walletSaleId = (int)$walletSale['sale_id'];
+    $walletItemId = $lineIdOf($walletSaleId, 2);
+    $pdo->exec("UPDATE sales SET payment_method = 'unsupported' WHERE sale_id = {$walletSaleId}");
+    $walletRefundsBefore = $refundCount($pdo);
+    $walletStockBefore = (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 2')->fetchColumn();
+    $walletAuditBefore = (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module = 'Cash Refunds'")->fetchColumn();
+    $expectRefusal(static fn() => $refunds->refund($casey, 'cashier', $walletSaleId,
+        $returnOf($walletItemId, 1), 'customer_return'), 'unsupported payment method is refused');
+    $assert($refundCount($pdo) === $walletRefundsBefore, 'unsupported payment method writes no refund');
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 2')->fetchColumn() === $walletStockBefore,
+        'unsupported repayment does not mutate inventory');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module = 'Cash Refunds'")->fetchColumn() === $walletAuditBefore,
+        'unsupported repayment writes no audit record');
+    $pdo->exec("UPDATE sales SET payment_method = 'ewallet' WHERE sale_id = {$walletSaleId}");
+    $walletDrawerBefore = (float)$shifts->calculateShift($caseyShiftId)['calculated_expected_cash'];
+    $walletRefundId = $refunds->refund($casey, 'cashier', $walletSaleId,
+        $returnOf($walletItemId, 1, CashRefundService::DAMAGED), 'other', 'Wallet return');
+    $assert((string)$refundRow($pdo, $walletRefundId)['payment_method'] === 'ewallet',
+        'an e-wallet refund keeps the original payment method');
+    $assert((string)$refundRow($pdo, $walletRefundId)['note'] === 'Wallet return',
+        'an e-wallet refund keeps its required Other note');
+    $assert($refunds->refundableAmount($walletSaleId) === 0.0,
+        'an e-wallet refund consumes the same remaining balance');
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 2')->fetchColumn() === $walletStockBefore,
+        'a Damaged e-wallet return does not restock inventory');
+    $assert((float)$shifts->calculateShift($caseyShiftId)['calculated_expected_cash'] === $walletDrawerBefore,
+        'an e-wallet refund does not reduce expected drawer cash');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module = 'Cash Refunds' AND record_id = {$walletRefundId}")->fetchColumn() === 1,
+        'an e-wallet refund creates a Protected Audit Record');
+
     // A Restockable refund of a unit that was sold out of a batch puts the unit
     // back into that batch, not merely into the inventory total.
     $batchBefore = (int)$pdo->query('SELECT remaining_quantity FROM product_batches WHERE batch_id = 1')->fetchColumn();

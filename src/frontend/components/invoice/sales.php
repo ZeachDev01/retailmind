@@ -713,7 +713,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.Swal.fire({
             icon: 'info',
             title: 'Completed receipts are locked',
-            text: 'Use reversals for cancellations, returns, refunds, and exchanges.',
+            text: 'Use Refunds in the Cashier workspace for completed sales you rang up. Other reversals remain in Sales Reversals.',
             confirmButtonText: 'Understood',
             customClass: {confirmButton: 'btn rm-swal-confirm'}
         });
@@ -826,6 +826,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (Number(row.pending_reversals) > 0) badges.push('<span class="tag-warning">' + Number(row.pending_reversals) + ' pending</span>');
                     if (Number(row.approved_reversals) > 0) badges.push('<span class="tag-success">' + Number(row.approved_reversals) + ' approved</span>');
                     if (Number(row.rejected_reversals) > 0) badges.push('<span class="receipt-tag-neutral">' + Number(row.rejected_reversals) + ' rejected</span>');
+                    if (Number(row.refund_count) > 0) badges.push('<span class="tag-success">₱' + Number(row.refunded_amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' refunded</span>');
                     return badges.length ? badges.join(' ') : '<span class="u-text-muted">None</span>';
                 }
             },

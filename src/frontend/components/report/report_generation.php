@@ -13,6 +13,7 @@ $reportCatalog = [
     'sales_product' => 'Sales by Product',
     'sales_category' => 'Sales by Category',
     'sales_cashier' => 'Sales by Cashier',
+    'refunds' => 'Refund History',
     'fast_moving' => 'Fast-Moving Products',
     'slow_moving' => 'Slow-Moving Products',
     'low_stock' => 'Low-Stock and Out-of-Stock Products',
@@ -89,8 +90,44 @@ function run_report(PDO $pdo, string $report, array $filters): array
     $toEnd = $filters['to'] . ' 23:59:59';
     [$productWhere, $productParams] = product_filters($filters);
     $productSql = $productWhere ? ' AND ' . implode(' AND ', $productWhere) : '';
+    // Aggregate by sale line first so multiple partial refunds do not multiply
+    // the original sold quantity or sales value in grouped sales reports.
+    $refundJoin = 'LEFT JOIN (SELECT sale_item_id, SUM(subtotal) AS refunded_amount
+                    FROM cash_refund_items GROUP BY sale_item_id) refunds
+                   ON refunds.sale_item_id = si.sale_item_id';
 
     switch ($report) {
+        case 'refunds':
+            $stmt = $pdo->prepare(
+                "SELECT cr.refund_id, cr.sale_id, cr.created_at, u.full_name AS cashier,
+                        cr.payment_method, cr.reason, cr.note, cri.quantity, cri.subtotal,
+                        cri.disposition, COALESCE(p.barcode, p.sku) AS sku, p.product_name
+                 FROM cash_refunds cr
+                 JOIN cash_refund_items cri ON cri.refund_id = cr.refund_id
+                 JOIN users u ON u.user_id = cr.cashier_id
+                 JOIN products p ON p.product_id = cri.product_id
+                 WHERE cr.created_at BETWEEN ? AND ? {$productSql}
+                 ORDER BY cr.created_at DESC, cr.refund_id DESC, cri.refund_item_id"
+            );
+            $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
+            return [
+                'headers' => ['Refund', 'Sale', 'Issued At', 'Cashier', 'Method', 'Reason', 'Note', 'SKU', 'Product', 'Quantity', 'Disposition', 'Amount'],
+                'rows' => array_map(static fn($row) => [
+                    'Refund' => (int)$row['refund_id'],
+                    'Sale' => (int)$row['sale_id'],
+                    'Issued At' => $row['created_at'],
+                    'Cashier' => $row['cashier'],
+                    'Method' => strtoupper((string)$row['payment_method']),
+                    'Reason' => \App\Services\CashRefundService::REFUND_REASONS[(string)$row['reason']] ?? $row['reason'],
+                    'Note' => $row['note'] ?? '',
+                    'SKU' => $row['sku'],
+                    'Product' => $row['product_name'],
+                    'Quantity' => (int)$row['quantity'],
+                    'Disposition' => ucfirst((string)$row['disposition']),
+                    'Amount' => money_value($row['subtotal']),
+                ], $stmt->fetchAll()),
+            ];
+
         case 'sales_period':
             $granularity = in_array($filters['granularity'], ['daily', 'weekly', 'monthly'], true) ? $filters['granularity'] : 'daily';
             $periodExpr = [
@@ -100,9 +137,11 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ][$granularity];
             $stmt = $pdo->prepare(
                 "SELECT {$periodExpr} AS period_label, COUNT(DISTINCT s.sale_id) AS receipts,
-                        COALESCE(SUM(si.quantity), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales
+                        COALESCE(SUM(si.quantity), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
                  FROM sales s
                  JOIN sale_items si ON si.sale_id = s.sale_id
+                 {$refundJoin}
                  JOIN products p ON p.product_id = si.product_id
                  WHERE s.sale_date BETWEEN ? AND ? {$productSql}
                  GROUP BY period_label
@@ -110,12 +149,13 @@ function run_report(PDO $pdo, string $report, array $filters): array
             );
             $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
             return [
-                'headers' => ['Period', 'Receipts', 'Units Sold', 'Total Sales'],
+                'headers' => ['Period', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds'],
                 'rows' => array_map(static fn($row) => [
                     'Period' => $row['period_label'],
                     'Receipts' => (int)$row['receipts'],
                     'Units Sold' => (int)$row['units_sold'],
                     'Total Sales' => money_value($row['total_sales']),
+                    'Refunds' => money_value($row['refunds']),
                 ], $stmt->fetchAll()),
             ];
 
@@ -126,8 +166,10 @@ function run_report(PDO $pdo, string $report, array $filters): array
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name, COALESCE(c.category_name, 'Uncategorized') AS category_name,
                         COALESCE(SUM(si.quantity), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        COALESCE(SUM(refunds.refunded_amount), 0) AS refunds,
                         COUNT(DISTINCT s.sale_id) AS receipts
                  FROM sale_items si
+                 {$refundJoin}
                  JOIN sales s ON s.sale_id = si.sale_id
                  JOIN products p ON p.product_id = si.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
@@ -137,7 +179,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             );
             $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
             return [
-                'headers' => ['SKU', 'Product', 'Category', 'Receipts', 'Units Sold', 'Total Sales'],
+                'headers' => ['SKU', 'Product', 'Category', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds'],
                 'rows' => array_map(static fn($row) => [
                     'SKU' => $row['sku'],
                     'Product' => $row['product_name'],
@@ -145,6 +187,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                     'Receipts' => (int)$row['receipts'],
                     'Units Sold' => (int)$row['units_sold'],
                     'Total Sales' => money_value($row['total_sales']),
+                    'Refunds' => money_value($row['refunds']),
                 ], $stmt->fetchAll()),
             ];
 
@@ -153,10 +196,12 @@ function run_report(PDO $pdo, string $report, array $filters): array
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name, COALESCE(c.category_name, 'Uncategorized') AS category_name,
                         COALESCE(SUM(CASE WHEN s.sale_id IS NOT NULL THEN si.quantity ELSE 0 END), 0) AS units_sold,
                         COALESCE(SUM(CASE WHEN s.sale_id IS NOT NULL THEN si.subtotal ELSE 0 END), 0) AS total_sales,
+                        COALESCE(SUM(CASE WHEN s.sale_id IS NOT NULL THEN refunds.refunded_amount ELSE 0 END), 0) AS refunds,
                         COUNT(DISTINCT s.sale_id) AS receipts
                  FROM products p
                  LEFT JOIN categories c ON c.category_id = p.category_id
                  LEFT JOIN sale_items si ON si.product_id = p.product_id
+                 {$refundJoin}
                  LEFT JOIN sales s ON s.sale_id = si.sale_id AND s.sale_date BETWEEN ? AND ?
                  WHERE 1=1 {$productSql}
                  GROUP BY p.product_id, sku, p.product_name, category_name
@@ -165,7 +210,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             );
             $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
             return [
-                'headers' => ['SKU', 'Product', 'Category', 'Receipts', 'Units Sold', 'Total Sales'],
+                'headers' => ['SKU', 'Product', 'Category', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds'],
                 'rows' => array_map(static fn($row) => [
                     'SKU' => $row['sku'],
                     'Product' => $row['product_name'],
@@ -173,6 +218,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                     'Receipts' => (int)$row['receipts'],
                     'Units Sold' => (int)$row['units_sold'],
                     'Total Sales' => money_value($row['total_sales']),
+                    'Refunds' => money_value($row['refunds']),
                 ], $stmt->fetchAll()),
             ];
 
@@ -180,8 +226,10 @@ function run_report(PDO $pdo, string $report, array $filters): array
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(c.category_name, 'Uncategorized') AS category_name, COUNT(DISTINCT p.product_id) AS products_sold,
                         COUNT(DISTINCT s.sale_id) AS receipts, COALESCE(SUM(si.quantity), 0) AS units_sold,
-                        COALESCE(SUM(si.subtotal), 0) AS total_sales
+                        COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
                  FROM sale_items si
+                 {$refundJoin}
                  JOIN sales s ON s.sale_id = si.sale_id
                  JOIN products p ON p.product_id = si.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
@@ -191,23 +239,26 @@ function run_report(PDO $pdo, string $report, array $filters): array
             );
             $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
             return [
-                'headers' => ['Category', 'Products Sold', 'Receipts', 'Units Sold', 'Total Sales'],
+                'headers' => ['Category', 'Products Sold', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds'],
                 'rows' => array_map(static fn($row) => [
                     'Category' => $row['category_name'],
                     'Products Sold' => (int)$row['products_sold'],
                     'Receipts' => (int)$row['receipts'],
                     'Units Sold' => (int)$row['units_sold'],
                     'Total Sales' => money_value($row['total_sales']),
+                    'Refunds' => money_value($row['refunds']),
                 ], $stmt->fetchAll()),
             ];
 
         case 'sales_cashier':
             $stmt = $pdo->prepare(
                 "SELECT u.full_name AS cashier, COUNT(DISTINCT s.sale_id) AS receipts,
-                        COALESCE(SUM(si.quantity), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales
+                        COALESCE(SUM(si.quantity), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
                  FROM sales s
                  JOIN users u ON u.user_id = s.cashier_id
                  LEFT JOIN sale_items si ON si.sale_id = s.sale_id
+                 {$refundJoin}
                  LEFT JOIN products p ON p.product_id = si.product_id
                  WHERE s.sale_date BETWEEN ? AND ? {$productSql}
                  GROUP BY u.user_id, u.full_name
@@ -215,12 +266,13 @@ function run_report(PDO $pdo, string $report, array $filters): array
             );
             $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
             return [
-                'headers' => ['Cashier', 'Receipts', 'Units Sold', 'Total Sales'],
+                'headers' => ['Cashier', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds'],
                 'rows' => array_map(static fn($row) => [
                     'Cashier' => $row['cashier'],
                     'Receipts' => (int)$row['receipts'],
                     'Units Sold' => (int)$row['units_sold'],
                     'Total Sales' => money_value($row['total_sales']),
+                    'Refunds' => money_value($row['refunds']),
                 ], $stmt->fetchAll()),
             ];
 
@@ -697,6 +749,11 @@ $totalRows = count($reportData['rows']);
                 </div>
             </div>
             <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
+            <?php if (in_array($selectedReport, ['sales_period', 'sales_product', 'sales_category', 'sales_cashier', 'fast_moving', 'slow_moving'], true)): ?>
+                <p class="section-description">Refunds are shown separately from original sales and grouped by the sale date.</p>
+            <?php elseif ($selectedReport === 'refunds'): ?>
+                <p class="section-description">Refunds are listed by the date they were issued.</p>
+            <?php endif; ?>
 
             <?php if (!empty($reportData['metrics'])): ?>
                 <div class="card-grid u-my-1">

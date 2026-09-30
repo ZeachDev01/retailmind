@@ -63,6 +63,8 @@ final class ReceiptTableService
                     COALESCE(reversal_summary.approved_count, 0) AS approved_reversals,
                     COALESCE(reversal_summary.rejected_count, 0) AS rejected_reversals,
                     COALESCE(reversal_summary.reversal_count, 0) AS reversal_count,
+                    COALESCE(refund_summary.refunded_amount, 0) AS refunded_amount,
+                    COALESCE(refund_summary.refund_count, 0) AS refund_count,
                     -- Ticket #89: the Cashier Shift a sale ran under and the
                     -- Register that shift anchors, both read by joining the sale
                     -- to its shift. A sale with no shift predates the deployment
@@ -83,6 +85,10 @@ final class ReceiptTableService
                     FROM sale_reversals
                     GROUP BY sale_id
                 ) reversal_summary ON reversal_summary.sale_id = s.sale_id
+                LEFT JOIN (
+                    SELECT sale_id, SUM(refund_amount) AS refunded_amount, COUNT(*) AS refund_count
+                    FROM cash_refunds GROUP BY sale_id
+                ) refund_summary ON refund_summary.sale_id = s.sale_id
                 LEFT JOIN cashier_shifts attribution_shift ON attribution_shift.shift_id = s.shift_id
                 LEFT JOIN registers attribution_register ON attribution_register.register_id = attribution_shift.register_id
                 {$whereSql}
@@ -250,10 +256,11 @@ final class ReceiptTableService
     /** @param array<string, mixed> $row @return array<string, mixed> */
     private function normalizeRow(array $row): array
     {
-        foreach (['sale_id', 'cashier_id', 'item_count', 'pending_reversals', 'approved_reversals', 'rejected_reversals', 'reversal_count'] as $key) {
+        foreach (['sale_id', 'cashier_id', 'item_count', 'pending_reversals', 'approved_reversals', 'rejected_reversals', 'reversal_count', 'refund_count'] as $key) {
             $row[$key] = (int)$row[$key];
         }
         $row['total_amount'] = (float)$row['total_amount'];
+        $row['refunded_amount'] = (float)$row['refunded_amount'];
 
         // Ticket #89: a sale with no Cashier Shift is shown as Legacy /
         // Unassigned. It is never given a shift or a Register it did not run
