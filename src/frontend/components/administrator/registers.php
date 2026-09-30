@@ -29,12 +29,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
     try {
         if ($action === 'create') {
-            $registers->create($actorId, $actorRole, (string)($_POST['name'] ?? ''));
+            $registers->create($actorId, $actorRole, (string)($_POST['name'] ?? ''), (string)($_POST['paper_width_mm'] ?? '80'));
             $message = 'Register created. It is now available for new Cashier Shifts.';
             $messageClass = 'tag-success';
         } elseif ($action === 'rename') {
             $registers->rename($actorId, $actorRole, $registerId, (string)($_POST['name'] ?? ''));
             $message = 'Register renamed. Earlier records keep their original Register identity.';
+            $messageClass = 'tag-success';
+        } elseif ($action === 'set_paper_width') {
+            $registers->setPaperWidth($actorId, $actorRole, $registerId, (string)($_POST['paper_width_mm'] ?? ''));
+            $message = 'Register paper width saved. Receipts use this width when printed from its Cashier Shift.';
             $messageClass = 'tag-success';
         } elseif ($action === 'set_status') {
             $status = (string)($_POST['status'] ?? RegisterService::STATUS_ACTIVE);
@@ -93,6 +97,13 @@ $availableCount = count($registers->available());
                     <input id="register-name" type="text" name="name" maxlength="100" placeholder="Front Counter" required>
                 </div>
                 <div class="form-group">
+                    <label for="register-paper-width">Receipt paper width</label>
+                    <select id="register-paper-width" name="paper_width_mm" required>
+                        <option value="80" selected>80 mm</option>
+                        <option value="58">58 mm</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <button class="btn" type="submit">Create Register</button>
                 </div>
             </form>
@@ -116,6 +127,7 @@ $availableCount = count($registers->available());
                             <th>Register</th>
                             <th>Identity</th>
                             <th>Availability</th>
+                            <th>Receipt paper width</th>
                             <th>Rename</th>
                             <th>Actions</th>
                         </tr>
@@ -132,6 +144,18 @@ $availableCount = count($registers->available());
                                 <?php else: ?>
                                     <span class="tag-warning">Disabled<?= $register['disabled_at'] !== null ? ' since ' . htmlspecialchars(format_display_date($register['disabled_at'])) : '' ?></span>
                                 <?php endif; ?>
+                            </td>
+                            <td>
+                                <form method="post" class="inline-form">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="set_paper_width">
+                                    <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
+                                    <select name="paper_width_mm" aria-label="Receipt paper width for <?= htmlspecialchars($register['name']) ?>" required>
+                                        <option value="80" <?= $register['paper_width_mm'] === 80 ? 'selected' : '' ?>>80 mm</option>
+                                        <option value="58" <?= $register['paper_width_mm'] === 58 ? 'selected' : '' ?>>58 mm</option>
+                                    </select>
+                                    <button class="btn btn-secondary" type="submit">Save width</button>
+                                </form>
                             </td>
                             <td>
                                 <form method="post" class="inline-form">
@@ -170,6 +194,3 @@ $availableCount = count($registers->available());
 </div>
 </body>
 </html>
-
-$availableCount = count($registers->available());
-?>

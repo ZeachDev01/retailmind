@@ -46,6 +46,8 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
 }
 
 function receipt_render_details(array $sale, array $items, bool $canStartSale): void {
+    $paperWidthMm = (new \App\Services\ReceiptPaperService(\App\Core\Database::connection()))
+        ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
     $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
     ?>
@@ -62,7 +64,7 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale): 
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
             <a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>" class="btn btn-secondary"><i class="bi bi-receipt"></i> Receipt History</a>
         </div>
-        <?php \App\Services\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl); ?>
+        <?php \App\Services\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
     </div>
     <?php
 }

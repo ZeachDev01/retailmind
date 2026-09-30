@@ -55,6 +55,17 @@ try {
     $migration = require __DIR__ . '/../database/migrations/202609300004_legacy_register_columns.php';
     ($migration['up'])($pdo);
     ($migration['up'])($pdo);
+    $paperMigration = require __DIR__ . '/../database/migrations/202609300005_register_paper_width.php';
+    ($paperMigration['up'])($pdo);
+    ($paperMigration['up'])($pdo);
+    if ($pdo->query('SELECT DISTINCT paper_width_mm FROM registers')->fetchAll(PDO::FETCH_COLUMN) !== ['80']) {
+        throw new RuntimeException('Legacy Registers must default to 80 mm after upgrade.');
+    }
+    $pdo->exec("UPDATE registers SET paper_width_mm = '58' WHERE register_id = 1");
+    ($paperMigration['up'])($pdo);
+    if ($pdo->query('SELECT paper_width_mm FROM registers WHERE register_id = 1')->fetchColumn() !== '58') {
+        throw new RuntimeException('Re-running upgrade must retain configured width.');
+    }
     $service = new App\Services\CashierShiftService($pdo);
     $shift = $service->getOpenShift(2);
     if (($shift['register_name'] ?? null) !== 'Front Counter') {
@@ -68,7 +79,18 @@ try {
     if ($service->registerName((int)$pdo->lastInsertId()) !== 'New Counter') {
         throw new RuntimeException('New Registers must work after the upgrade.');
     }
-    echo "Legacy Register upgrade probe: passed\n";
+    if ($pdo->query("SELECT paper_width_mm FROM registers WHERE name = 'New Counter'")->fetchColumn() !== '80') {
+        throw new RuntimeException('New upgraded Registers must default to 80 mm.');
+    }
+    $pdo->exec('DROP TABLE registers');
+    $fresh = require __DIR__ . '/../database/migrations/202609290001_store_registers.php';
+    ($fresh['up'])($pdo);
+    $pdo->exec("INSERT INTO registers (name) VALUES ('Fresh Counter')");
+    ($paperMigration['up'])($pdo);
+    if ($pdo->query('SELECT paper_width_mm FROM registers')->fetchColumn() !== '80') {
+        throw new RuntimeException('Fresh Registers must default to 80 mm.');
+    }
+    echo "Legacy and fresh Register paper-width upgrade probe: passed\n";
 } finally {
     $root->exec("DROP DATABASE `{$database}`");
 }

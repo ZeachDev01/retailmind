@@ -1,5 +1,5 @@
 <?php // Shared customer-facing paper; actions belong to the calling workspace. ?>
-        <div class="sale-receipt receipt-print-area" aria-label="Sale Receipt">
+        <div class="sale-receipt receipt-print-area" data-paper-width-mm="<?= $paperWidthMm ?>" aria-label="Sale Receipt">
             <?php if (!empty($sale['receipt_historical_notice'])): ?>
                 <p class="receipt-historical-notice">Historical receipt: original Store and item details were not preserved and may differ from the original.</p>
             <?php endif; ?>

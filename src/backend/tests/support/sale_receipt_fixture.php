@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../app/Services/ReceiptDetailsService.php';
 require_once __DIR__ . '/../../app/Services/SaleReceiptPresentation.php';
 
+$paperWidthMm = (int)($argv[2] ?? 80);
 $long = ($argv[1] ?? 'short') === 'long';
 $store = ['name' => $long ? 'Synthetic Store with a very long customer-facing name' : 'Synthetic Store',
     'tagline' => 'Sale Receipt', 'address' => '123 Example Street, Tangub City',
@@ -26,5 +27,5 @@ $sale = ['sale_id' => 103, 'sale_date' => '2026-09-30 10:11:12',
     'verification_code' => 'SALE-103-EXAMPLE'];
 echo '<div class="receipt-container"><div class="no-print">Payment completed — synthetic example</div><button type="button" class="no-print" onclick="printReceiptSection(this)">Print Receipt</button>';
 App\Services\SaleReceiptPresentation::render($sale, $items, $store,
-    'https://example.test/retailmind/components/invoice/sales.php?tab=transactions&sale_id=103&example=' . str_repeat('1234567890', $long ? 20 : 1));
+    'https://example.test/retailmind/components/invoice/sales.php?tab=transactions&sale_id=103&example=' . str_repeat('1234567890', $long ? 20 : 1), $paperWidthMm);
 echo '</div>';

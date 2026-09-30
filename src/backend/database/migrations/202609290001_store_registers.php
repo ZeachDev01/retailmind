@@ -16,6 +16,7 @@ return [
                 register_id INT NOT NULL AUTO_INCREMENT,
                 name VARCHAR(100) NOT NULL,
                 status ENUM('active','disabled') NOT NULL DEFAULT 'active',
+                paper_width_mm ENUM('80','58') NOT NULL DEFAULT '80',
                 disabled_at DATETIME NULL,
                 created_by INT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

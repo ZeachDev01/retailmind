@@ -41,7 +41,7 @@ final class RegisterService
     public function get(int $registerId): array
     {
         $statement = $this->pdo->prepare(
-            'SELECT register_id, name, status, disabled_at, created_by, created_at, updated_at
+            'SELECT register_id, name, status, paper_width_mm, disabled_at, created_by, created_at, updated_at
              FROM registers
              WHERE register_id = ?'
         );
@@ -55,6 +55,7 @@ final class RegisterService
             'register_id' => (int)$register['register_id'],
             'name' => (string)$register['name'],
             'status' => (string)$register['status'],
+            'paper_width_mm' => (int)$register['paper_width_mm'],
             'disabled_at' => $register['disabled_at'] !== null ? (string)$register['disabled_at'] : null,
             'created_by' => $register['created_by'] !== null ? (int)$register['created_by'] : null,
             'created_at' => (string)$register['created_at'],
@@ -66,7 +67,7 @@ final class RegisterService
     public function all(): array
     {
         return $this->fetch(
-            'SELECT register_id, name, status, disabled_at, created_at FROM registers ORDER BY name, register_id'
+            'SELECT register_id, name, status, paper_width_mm, disabled_at, created_at FROM registers ORDER BY name, register_id'
         );
     }
 
@@ -74,20 +75,21 @@ final class RegisterService
     public function available(): array
     {
         return $this->fetch(
-            "SELECT register_id, name, status, disabled_at, created_at
+            "SELECT register_id, name, status, paper_width_mm, disabled_at, created_at
              FROM registers WHERE status = 'active' ORDER BY name, register_id"
         );
     }
 
-    public function create(int $actorId, string $actorRole, string $name): int
+    public function create(int $actorId, string $actorRole, string $name, mixed $paperWidthMm = 80): int
     {
         $this->requireAuthority($actorRole, 'create Registers');
         $name = $this->requireName($name);
+        $paperWidthMm = $this->requirePaperWidth($paperWidthMm);
 
-        return $this->transaction(function () use ($actorId, $actorRole, $name): int {
+        return $this->transaction(function () use ($actorId, $actorRole, $name, $paperWidthMm): int {
             $this->requireNameAvailable($name);
-            $statement = $this->pdo->prepare('INSERT INTO registers (name, status, created_by) VALUES (?, ?, ?)');
-            $statement->execute([$name, self::STATUS_ACTIVE, $actorId]);
+            $statement = $this->pdo->prepare('INSERT INTO registers (name, status, created_by, paper_width_mm) VALUES (?, ?, ?, ?)');
+            $statement->execute([$name, self::STATUS_ACTIVE, $actorId, $paperWidthMm]);
             $registerId = (int)$this->pdo->lastInsertId();
             $this->audit($actorId, $actorRole, 'Register created', $registerId, null, $this->get($registerId));
             return $registerId;
@@ -190,6 +192,29 @@ final class RegisterService
         }
     }
 
+    public function setPaperWidth(int $actorId, string $actorRole, int $registerId, mixed $paperWidthMm): array
+    {
+        $this->requireAuthority($actorRole, 'change Register paper width');
+        $paperWidthMm = $this->requirePaperWidth($paperWidthMm);
+        return $this->transaction(function () use ($actorId, $actorRole, $registerId, $paperWidthMm): array {
+            $before = $this->get($registerId);
+            $this->pdo->prepare('UPDATE registers SET paper_width_mm = ? WHERE register_id = ?')
+                ->execute([$paperWidthMm, $registerId]);
+            $after = $this->get($registerId);
+            $this->audit($actorId, $actorRole, 'Register paper width changed', $registerId,
+                $this->snapshot($before), $this->snapshot($after));
+            return $after;
+        });
+    }
+
+    private function requirePaperWidth(mixed $paperWidthMm): int
+    {
+        if (!in_array($paperWidthMm, [80, 58, '80', '58'], true)) {
+            throw new InvalidArgumentException('Choose 80 mm or 58 mm paper for this Register.');
+        }
+        return (int)$paperWidthMm;
+    }
+
     private function requireName(string $name): string
     {
         $name = trim($name);
@@ -231,6 +256,7 @@ final class RegisterService
             'register_id' => (int)$row['register_id'],
             'name' => (string)$row['name'],
             'status' => (string)$row['status'],
+            'paper_width_mm' => (int)$row['paper_width_mm'],
             'disabled_at' => $row['disabled_at'] !== null ? (string)$row['disabled_at'] : null,
             'created_at' => (string)$row['created_at'],
         ], $rows);
@@ -242,6 +268,7 @@ final class RegisterService
             'register_id' => (int)$register['register_id'],
             'name' => (string)$register['name'],
             'status' => (string)$register['status'],
+            'paper_width_mm' => (int)$register['paper_width_mm'],
         ];
     }
 

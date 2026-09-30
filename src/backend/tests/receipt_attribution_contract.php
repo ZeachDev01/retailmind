@@ -2,14 +2,15 @@
 
 require_once __DIR__ . '/../app/Services/ReceiptDetailsService.php';
 require_once __DIR__ . '/../app/Services/SaleReceiptPresentation.php';
+require_once __DIR__ . '/../app/Services/ReceiptPaperService.php';
 
 use App\Services\ReceiptDetailsService;
 
 $pdo = new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->exec('CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, username TEXT, email TEXT, branch_id INTEGER)');
-$pdo->exec('CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT)');
-$pdo->exec('CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, register_id INTEGER)');
+$pdo->exec('CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT, paper_width_mm TEXT DEFAULT 80)');
+$pdo->exec('CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, register_id INTEGER, cashier_id INTEGER, status TEXT, opened_at TEXT DEFAULT CURRENT_TIMESTAMP)');
 $pdo->exec('CREATE TABLE products (product_id INTEGER PRIMARY KEY, branch_id INTEGER, sku TEXT, product_name TEXT)');
 $pdo->exec('CREATE TABLE sale_items (sale_item_id INTEGER PRIMARY KEY, sale_id INTEGER, product_id INTEGER,
     quantity INTEGER, unit_price REAL, subtotal REAL)');
@@ -18,8 +19,8 @@ $pdo->exec('CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, cashier_id INTEGER,
     total_amount REAL, payment_method TEXT, sale_date TEXT)');
 $pdo->exec("INSERT INTO users VALUES (7, 'Alice & Co', 'private_username', 'private@example.test', 1)");
 $pdo->exec("INSERT INTO users VALUES (8, 'Other Cashier', 'other_private', 'other@example.test', 2)");
-$pdo->exec("INSERT INTO registers VALUES (12, 'Front <Counter>')");
-$pdo->exec('INSERT INTO cashier_shifts VALUES (23, 12)');
+$pdo->exec("INSERT INTO registers VALUES (12, 'Front <Counter>', '80')");
+$pdo->exec("INSERT INTO cashier_shifts (shift_id, register_id, cashier_id, status) VALUES (23, 12, 7, 'closed')");
 $pdo->exec("INSERT INTO sales VALUES (42, 7, 23, 10, 'cash', '2026-09-30 10:11:12')");
 $pdo->exec("INSERT INTO sales VALUES (43, 7, NULL, 10, 'cash', '2026-09-30 10:12:13')");
 $pdo->exec("INSERT INTO sales VALUES (44, 8, NULL, 10, 'cash', '2026-09-30 10:13:14')");
@@ -78,6 +79,9 @@ function app_url(string $path): string {
     return '/' . $path;
 }
 
+$_SESSION = ['user_id' => 7];
+function current_role(): string { return $GLOBALS['receiptTestRole'] ?? 'cashier'; }
+function receipt_pdo(): PDO { return $GLOBALS['pdo']; }
 $root = dirname(__DIR__, 3);
 $items = [['sku' => 'SKU-1', 'product_name' => 'Test item', 'quantity' => 1,
     'unit_price' => 10, 'subtotal' => 10]];
@@ -99,6 +103,7 @@ foreach ([
     if ($function === 'render_frontend_receipt') {
         $renderer = str_replace('ReceiptDetailsService::', '\\App\\Services\\ReceiptDetailsService::', $renderer);
     }
+    $renderer = str_replace('App\\Core\\Database::connection()', 'receipt_pdo()', $renderer);
     eval($renderer);
     ob_start();
     $function($queriedSale, $items, false);
@@ -142,6 +147,27 @@ foreach (['render_frontend_receipt', 'render_legacy_receipt'] as $function) {
         $assert(!str_contains($receipt, $unexpected), $function . ' excludes later edits or legacy notice: ' . $unexpected);
     }
 }
+$snapshotBefore = $pdo->query('SELECT details_json FROM sale_receipt_details WHERE sale_id = 42')->fetchColumn();
+$pdo->exec("INSERT INTO registers VALUES (13, 'Current printing Register', '58')");
+$pdo->exec("INSERT INTO cashier_shifts (shift_id, register_id, cashier_id, status) VALUES (24, 13, 7, 'open')");
+foreach ([58, 80] as $width) {
+    $pdo->exec("UPDATE registers SET paper_width_mm = '$width' WHERE register_id = 13");
+    foreach (['render_frontend_receipt', 'render_legacy_receipt'] as $function) {
+        ob_start();
+        $function($service->fetchSale(42, 1), $service->fetchItems(42), false);
+        $receipt = ob_get_clean();
+        $assert(str_contains($receipt, 'data-paper-width-mm="' . $width . '"'), 'reprint follows current printing Register');
+        $assert(str_contains($receipt, 'Original Store') && str_contains($receipt, 'Main Till'), 'reprint retains recorded content');
+        $assert(!str_contains($receipt, 'Current printing Register'), 'printing Register never replaces recorded attribution');
+    }
+}
+$paper = new App\Services\ReceiptPaperService($pdo);
+$assert($paper->currentWidth(99, 'cashier') === 80, 'no open shift falls back to 80 mm');
+$assert($paper->currentWidth(7, 'admin') === 80, 'an inactive Cashier workspace falls back to 80 mm');
+$pdo->exec("UPDATE cashier_shifts SET register_id = 999 WHERE shift_id = 24");
+$assert($paper->currentWidth(7, 'cashier') === 80, 'missing Register falls back to 80 mm');
+$assert($pdo->query('SELECT details_json FROM sale_receipt_details WHERE sale_id = 42')->fetchColumn() === $snapshotBefore,
+    'reprinting at either width leaves saved receipt bytes unchanged');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === $financialCount,
     'reopening and rendering receipts creates no financial transaction');
 

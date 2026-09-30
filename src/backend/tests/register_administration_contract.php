@@ -34,6 +34,7 @@ try {
         register_id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'active',
+        paper_width_mm TEXT NOT NULL DEFAULT '80',
         disabled_at TEXT NULL,
         created_by INTEGER NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -81,6 +82,22 @@ try {
         fn() => $service->rename($adminId, 'admin', $frontId, 'Back Counter'),
         'a rename cannot collide with another Register name'
     );
+
+    $assert($service->get($frontId)['paper_width_mm'] === 80, 'new Registers default to 80 mm');
+    $service->setPaperWidth($adminId, 'admin', $frontId, '58');
+    $assert($service->get($frontId)['paper_width_mm'] === 58, 'Administrator can set 58 mm');
+    $assert($service->all()[0]['paper_width_mm'] === 80 || $service->all()[0]['paper_width_mm'] === 58,
+        'Register listing includes paper width');
+    foreach (['57', '80.0', '', '58oops', 58.5, 80.9, null, true] as $invalid) {
+        $expectDenied(fn() => $service->setPaperWidth($adminId, 'admin', $frontId, $invalid), 'unsupported width is rejected');
+        $expectDenied(fn() => $service->create($adminId, 'admin', 'Invalid width', $invalid), 'creation rejects unsupported width');
+    }
+    foreach (['cashier', 'inventory_manager', 'super_admin'] as $role) {
+        $expectDenied(fn() => $service->setPaperWidth($adminId, $role, $frontId, '80'), 'only Administrator can change paper width');
+    }
+    $narrowId = $service->create($adminId, 'admin', 'Narrow Till', '58');
+    $assert($service->get($narrowId)['paper_width_mm'] === 58, 'creation accepts 58 mm');
+    $service->delete($adminId, 'admin', $narrowId);
 
     // --- Rename keeps the stable identity that earlier records hold (AC 2) ---
     $pdo->prepare('INSERT INTO cashier_shifts (register_id) VALUES (?)')->execute([$frontId]);
@@ -163,6 +180,11 @@ try {
         $assert($row['category'] === 'store_operation', 'Register administration is a Store operation record');
         $assert((int)$row['user_id'] === $adminId, 'Protected Audit Records attribute the acting Administrator');
     }
+    $widthChange = array_values(array_filter($rows, static fn(array $row): bool => $row['action'] === 'Register paper width changed'))[0] ?? [];
+    $assert((json_decode($widthChange['previous_value'] ?? '{}', true)['paper_width_mm'] ?? null) === 80,
+        'paper width audit preserves the previous width');
+    $assert((json_decode($widthChange['new_value'] ?? '{}', true)['paper_width_mm'] ?? null) === 58,
+        'paper width audit preserves the new width');
     $created = array_values(array_filter($rows, static fn(array $row): bool => $row['action'] === 'Register created'))[0] ?? [];
     $assert(
         str_contains((string)($created['new_value'] ?? ''), '"actor_role":"admin"'),

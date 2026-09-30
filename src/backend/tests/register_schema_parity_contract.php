@@ -29,6 +29,7 @@ $assertMatches = static function (string $haystack, string $pattern, string $mes
 // tolerate the spelling differences between the dump and the migration
 // (DATETIME NULL vs DEFAULT NULL, current_timestamp vs current_timestamp()).
 $requiredColumns = [
+    'paper_width_mm' => '/`?paper_width_mm`?\s+ENUM\(\'80\',\'58\'\)\s+NOT NULL DEFAULT \'80\'/i',
     'register_id' => '/`?register_id`?\s+INT(?:\(11\))?\s+NOT NULL AUTO_INCREMENT/i',
     'name' => '/`?name`?\s+VARCHAR\(100\)\s+NOT NULL/i',
     'status' => '/`?status`?\s+ENUM\(\'active\',\'disabled\'\)\s+NOT NULL DEFAULT \'active\'/i',

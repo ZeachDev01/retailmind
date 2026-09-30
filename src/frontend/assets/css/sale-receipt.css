@@ -1,7 +1,7 @@
 /* The customer paper is shared by checkout, history, and receipt dialogs. */
 .sale-receipt {
     box-sizing: border-box;
-    width: 80mm;
+    width: var(--receipt-paper-width, 80mm);
     max-width: 100%;
     margin: 1rem auto;
     padding: 4mm;
@@ -41,6 +41,11 @@
     body.sale-receipt-printing { margin: 0 !important; padding: 0 !important; background: #fff !important; }
     body.sale-receipt-printing > :not(.receipt-print-root) { display: none !important; }
     body.sale-receipt-printing > .receipt-print-root { display: block !important; }
-    .receipt-print-root .sale-receipt { width: 80mm; max-width: 100%; margin: 0; border: 0; }
+    .receipt-print-root .sale-receipt { width: var(--receipt-paper-width, 80mm); max-width: 100%; margin: 0; border: 0; }
     .receipt-print-root .no-print { display: none !important; }
 }
+
+.sale-receipt[data-paper-width-mm="58"] { --receipt-paper-width: 58mm; }
+.sale-receipt[data-paper-width-mm="58"] .sale-receipt-line,
+.sale-receipt[data-paper-width-mm="58"] .sale-receipt-totals > div { flex-wrap: wrap; }
+.sale-receipt[data-paper-width-mm="58"] .sale-receipt-money { max-width: 100%; margin-left: auto; }

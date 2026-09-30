@@ -1079,6 +1079,7 @@ CREATE TABLE `registers` (
   `register_id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `status` enum('active','disabled') NOT NULL DEFAULT 'active',
+  `paper_width_mm` enum('80','58') NOT NULL DEFAULT '80',
   `disabled_at` datetime DEFAULT NULL,
   `created_by` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
