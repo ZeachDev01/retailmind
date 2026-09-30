@@ -93,6 +93,8 @@ try {
         variance_review_required INTEGER NOT NULL DEFAULT 0,
         payment_totals TEXT NULL,
         closing_notes TEXT NULL,
+        closed_by INTEGER NULL,
+        intervention_reason TEXT NULL,
         reviewed_by INTEGER NULL,
         reviewed_at TEXT NULL,
         locked_at TEXT NULL
@@ -405,7 +407,7 @@ try {
         'a shift with a held sale is refused closure'
     );
     $expectRefusal(
-        static fn() => $shifts->closeShift($casey, 200.00, '', $alex),
+        static fn() => $shifts->closeAbandonedShift($alex, 'admin', $casey, 200.00, '', 'Cashier did not return'),
         'an Administrator cannot close a shift over an unresolved held sale either'
     );
     $assert(

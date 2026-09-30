@@ -624,27 +624,36 @@ class CashierShiftService
         }, $rows);
     }
 
-    /**
-     * Closes a Cashier Shift and reconciles the counted cash against it.
-     *
-     * $reviewedBy is non-null when an Administrator closes somebody else's
-     * abandoned shift, and null when the owner closes their own. That
-     * distinction is also the lock boundary (#90): a Register locked on a break
-     * must not be reconciled by whoever is standing at the till, but an
-     * Administrator deliberately intervening on an abandoned shift is exactly
-     * how a locked Register is ever released, so it is never refused.
-     */
-    public function closeShift(int $cashierId, float $actualCash, string $notes, ?int $reviewedBy = null): array
+    /** The owning Cashier closes their own unlocked shift. */
+    public function closeShift(int $cashierId, float $actualCash, string $notes): array
+    {
+        return $this->reconcileShift($cashierId, $cashierId, $actualCash, $notes, null);
+    }
+
+    /** An Administrator intervenes without taking ownership of the shift. */
+    public function closeAbandonedShift(int $actorId, string $actorRole, int $cashierId, float $actualCash, string $notes, string $interventionReason): array
+    {
+        if ($actorRole !== 'admin' || $actorId === $cashierId) {
+            throw new DomainException('Only an Administrator can close another Cashier\'s Shift.');
+        }
+        $interventionReason = trim($interventionReason);
+        if ($interventionReason === '') {
+            throw new DomainException('Enter an intervention reason before closing another Cashier\'s Shift.');
+        }
+        return $this->reconcileShift($cashierId, $actorId, $actualCash, $notes, $interventionReason);
+    }
+
+    private function reconcileShift(int $cashierId, int $closingActorId, float $actualCash, string $notes, ?string $interventionReason): array
     {
         $this->validateCountedCash($actualCash);
-        return $this->transaction(function () use ($cashierId, $actualCash, $notes, $reviewedBy): array {
+        return $this->transaction(function () use ($cashierId, $closingActorId, $actualCash, $notes, $interventionReason): array {
             $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $lock = $this->pdo->prepare("SELECT shift_id FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
             $lock->execute([$cashierId]);
             if ($lock->fetchColumn() === false) {
                 throw new RuntimeException('No open shift was found.');
             }
-            if ($reviewedBy === null) {
+            if ($interventionReason === null) {
                 $this->requireUnlockedRegister($cashierId);
             }
             $shift = $this->getOpenShift($cashierId);
@@ -671,25 +680,27 @@ class CashierShiftService
                 "UPDATE cashier_shifts
                  SET status='closed', closed_at=NOW(), expected_cash=?, actual_cash=?, cash_variance=?, closing_notes=?,
                      variance_threshold=?, variance_review_required=?, payment_totals=?,
-                     reviewed_by=?, reviewed_at=CASE WHEN ? IS NULL THEN NULL ELSE NOW() END
+                     closed_by=?, intervention_reason=?
                  WHERE shift_id=? AND status='open'"
             );
             $stmt->execute([
                 $expected, $actualCash, $variance, $reason === '' ? null : $reason,
                 $threshold, $reviewRequired ? 1 : 0,
                 json_encode($paymentTotals, JSON_THROW_ON_ERROR),
-                $reviewedBy, $reviewedBy, (int)$shift['shift_id'],
+                $closingActorId, $interventionReason, (int)$shift['shift_id'],
             ]);
             if ($stmt->rowCount() === 0) {
                 throw new RuntimeException('The shift was already closed.');
             }
             $this->auditShiftEvent(
-                $reviewedBy ?? $cashierId,
+                $closingActorId,
                 self::AUDIT_ACTION_CLOSED,
                 (int)$shift['shift_id'],
                 $shift,
                 [
                     'cashier_id' => $cashierId,
+                    'closing_actor_id' => $closingActorId,
+                    'intervention_reason' => $interventionReason,
                     'opening_cash' => round((float)$summary['opening_cash'], 2),
                     'expected_cash' => $expected,
                     'counted_cash' => $actualCash,
@@ -788,9 +799,10 @@ class CashierShiftService
     public function recentShifts(?int $cashierId = null, int $limit = 30): array
     {
         $limit = max(1, min(100, $limit));
-        $sql = "SELECT cs.*, u.full_name, r.name AS register_name
+        $sql = "SELECT cs.*, u.full_name, closer.full_name AS closing_actor_name, r.name AS register_name
                 FROM cashier_shifts cs
                 JOIN users u ON u.user_id=cs.cashier_id
+                LEFT JOIN users closer ON closer.user_id=cs.closed_by
                 LEFT JOIN registers r ON r.register_id = cs.register_id";
         $params = [];
         if ($cashierId !== null) {

@@ -279,6 +279,8 @@ CREATE TABLE `cashier_shifts` (
   `variance_review_required` tinyint(1) NOT NULL DEFAULT 0,
   `payment_totals` text DEFAULT NULL,
   `closing_notes` text DEFAULT NULL,
+  `closed_by` int(11) DEFAULT NULL,
+  `intervention_reason` text DEFAULT NULL,
   `reviewed_by` int(11) DEFAULT NULL,
   `reviewed_at` timestamp NULL DEFAULT NULL,
   `locked_at` timestamp NULL DEFAULT NULL,
@@ -291,8 +293,10 @@ CREATE TABLE `cashier_shifts` (
   UNIQUE KEY `uq_cashier_shifts_open_cashier` (`open_cashier_id`),
   UNIQUE KEY `uq_cashier_shifts_open_register` (`open_register_id`),
   KEY `reviewed_by` (`reviewed_by`),
+  KEY `idx_cashier_shifts_closed_by` (`closed_by`),
   CONSTRAINT `cashier_shifts_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_cashier_shifts_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB AUTO_INCREMENT=3078 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

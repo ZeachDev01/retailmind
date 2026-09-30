@@ -75,6 +75,8 @@ try {
         variance_review_required INTEGER NOT NULL DEFAULT 0,
         payment_totals TEXT NULL,
         closing_notes TEXT NULL,
+        closed_by INTEGER NULL,
+        intervention_reason TEXT NULL,
         reviewed_by INTEGER NULL,
         reviewed_at TEXT NULL,
         locked_at TEXT NULL
@@ -395,9 +397,9 @@ try {
     // An Administrator intervening on the abandoned shift is the one way a locked
     // Register is ever released, so the lock must not refuse it. A Cashier who
     // has forgotten their password is therefore never stranded by it.
-    $adminSummary = $service->closeShift($casey, 500.00, 'Cashier did not return', $alex);
+    $adminSummary = $service->closeAbandonedShift($alex, 'admin', $casey, 500.00, '', 'Cashier did not return');
     $assert((int)$adminSummary['shift_id'] === $shiftId, 'an Administrator can still close an abandoned locked shift');
-    $assert((int)$adminSummary['reviewed_by'] === $alex, 'the closing Administrator is recorded as the actor');
+    $assert((int)$adminSummary['closed_by'] === $alex, 'the closing Administrator is recorded as the actor');
     $assert($adminSummary['status'] === 'closed', 'an Administrator close really does end the shift');
     $releasedIds = array_map('intval', array_column($service->availableRegisters(), 'register_id'));
     sort($releasedIds);
