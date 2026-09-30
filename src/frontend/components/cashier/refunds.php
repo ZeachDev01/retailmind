@@ -17,11 +17,14 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashRefundService.php';
+require_once __DIR__ . '/../../../backend/app/Services/RefundReceiptPresentation.php';
+require_once __DIR__ . '/../../../backend/app/Services/ReceiptPaperService.php';
 
 use App\Services\CashRefundService;
 use App\Services\CashierShiftService;
 
 require_role(['cashier']);
+$storeId = store_scope_id($pdo);
 
 $shiftService = new CashierShiftService($pdo);
 $refundService = new CashRefundService($pdo, $shiftService);
@@ -71,8 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             (string)($_POST['reason'] ?? ''),
             (string)($_POST['note'] ?? '')
         );
-        $message = "Refund #{$refundId} recorded. The original sale is unchanged.";
-        $saleId = 0;
+        // A refresh or canceled print revisits a GET, never another payout.
+        header('Location: ' . app_url('components/cashier/refunds.php?refund_id=' . $refundId), true, 303);
+        exit;
     } catch (Throwable $e) {
         // ADR-0002: the operator is told what to do, never a database error.
         $error = \App\Support\OperatorAlert::message(
@@ -85,6 +89,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Scoped to this Cashier, so a Cashier can only ever open a sale of their own.
 $sale = $saleId > 0 ? $refundService->refundableSaleForCashier($actorId, $saleId) : null;
 $refunds = $refundService->recentForCashier($actorId);
+$receiptId = (int)($_GET['refund_id'] ?? 0);
+$receipt = $receiptId > 0 ? (new \App\Services\RefundReceiptService($pdo))->forCashier($receiptId, $actorId, $storeId) : null;
+$paperWidthMm = (new \App\Services\ReceiptPaperService($pdo))->currentWidth($actorId, $actorRole);
+if ($receipt !== null) {
+    $message = 'Refund #' . $receiptId . ' recorded. The original sale is unchanged.';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -95,6 +105,8 @@ $refunds = $refundService->recentForCashier($actorId);
     <title>Refunds</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
+    <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 </head>
 
 <body>
@@ -109,6 +121,17 @@ $refunds = $refundService->recentForCashier($actorId);
             <?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
             <?php if (!$openShift): ?><div class="message warning">Open a Cashier Shift before issuing a refund. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Go to Cashier Shift</a></div><?php endif; ?>
             <?php if ($registerLocked): ?><div class="message error"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?></div><?php endif; ?>
+
+            <?php if ($receipt !== null): ?>
+            <section class="dashboard-section receipt-container" aria-label="Completed Refund Receipt">
+                <h2>Refund Receipt</h2>
+                <p class="no-print">Review the receipt, then choose Print to select your printer.</p>
+                <button class="btn no-print" type="button" onclick="printReceiptSection(this)">Print Refund Receipt</button>
+                <?php \App\Services\RefundReceiptPresentation::render($receipt, $paperWidthMm); ?>
+            </section>
+            <?php elseif ($receiptId > 0): ?>
+            <div class="message warning">Refund Receipt not found or unavailable for your account.</div>
+            <?php endif; ?>
 
             <section class="dashboard-section">
                 <h3>Find a sale to refund</h3>

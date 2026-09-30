@@ -78,6 +78,11 @@ try {
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
     $migration = require __DIR__ . '/../database/migrations/202609260001_shared_database_backups.php';
     $migration['up']($pdo);
+    // An upgrade creates the same receipt storage as the fresh schema and is repeatable.
+    $pdo->exec('DROP TABLE refund_receipt_details');
+    $receiptMigration = require __DIR__ . '/../database/migrations/202609300003_refund_receipt_details.php';
+    $receiptMigration['up']($pdo);
+    $receiptMigration['up']($pdo);
     $pdo->exec("INSERT INTO branches (branch_id, branch_name, branch_code) VALUES (1, 'Test Store', 'TEST')");
     $pdo->exec("INSERT INTO roles (role_id, role_name) VALUES (1, 'cashier')");
     $pdo->exec("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id)
@@ -127,8 +132,23 @@ try {
         'The inventory must be restored exactly once.');
     $assert((int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module='Cash Refunds'")->fetchColumn() === 1,
         'Only the successful refund creates an audit record.');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM refund_receipt_details')->fetchColumn() === 1,
+        'Only the successful refund preserves a customer receipt.');
     $assert((float)(new CashierShiftService($pdo))->calculateShift(1)['calculated_expected_cash'] === 100.0,
         'Only one cash payout leaves the drawer.');
+    $receiptService = new \App\Services\RefundReceiptService($pdo);
+    $refundId = (int)$pdo->query('SELECT refund_id FROM cash_refunds')->fetchColumn();
+    $savedReceipt = $receiptService->forCashier($refundId, 1, 1);
+    $assert($savedReceipt !== null, 'The committed refund returns its customer receipt.');
+    $pdo->exec("UPDATE products SET product_name='Edited product', sku='EDITED'");
+    $pdo->exec("UPDATE registers SET name='Edited Register', paper_width_mm='58'");
+    $pdo->exec("UPDATE users SET full_name='Edited Cashier'");
+    $pdo->exec("INSERT INTO store_settings (setting_key, setting_value) VALUES ('store_name', 'Edited Store'), ('receipt_footer', 'Edited footer')
+        ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+    $assert($receiptService->forCashier($refundId, 1, 1) === $savedReceipt,
+        'Committed customer details survive Store, product, Cashier and Register edits.');
+    $assert((new \App\Services\ReceiptPaperService($pdo))->currentWidth(1, 'cashier') === 58,
+        'Printing uses the current Register width without rewriting preserved details.');
 
     $legacy = new SaleReversalService($pdo);
     try {

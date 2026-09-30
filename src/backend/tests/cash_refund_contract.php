@@ -17,6 +17,7 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../app/Services/CashRefundService.php';
 require_once __DIR__ . '/../app/Services/SalesWorkflowService.php';
+require_once __DIR__ . '/../app/Services/RefundReceiptPresentation.php';
 
 use App\Services\CashierShiftService;
 use App\Services\CashRefundService;
@@ -167,6 +168,7 @@ try {
     )");
     $pdo->exec('CREATE TABLE sale_item_batches (sale_item_batch_id INTEGER PRIMARY KEY AUTOINCREMENT, sale_item_id INTEGER NOT NULL, batch_id INTEGER NOT NULL, quantity INTEGER NOT NULL)');
     $pdo->exec('CREATE TABLE sale_receipt_details (sale_id INTEGER PRIMARY KEY, details_json TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE refund_receipt_details (refund_id INTEGER PRIMARY KEY, details_json TEXT NOT NULL)');
     // The append-only refund ledger, mirroring the migration and schema.sql.
     $pdo->exec("CREATE TABLE cash_refunds (
         refund_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -981,6 +983,54 @@ try {
         'audit failure rolls back returned inventory');
     $assert($refunds->refundableAmount($auditSaleId) === 25.0, 'audit failure preserves the refundable balance');
     $pdo->exec('DROP TRIGGER fail_refund_audit');
+
+    // Receipt failure must roll back the payout, inventory, and audit together.
+    $receiptCount = (int)$pdo->query('SELECT COUNT(*) FROM refund_receipt_details')->fetchColumn();
+    $auditCount = (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module = 'Cash Refunds'")->fetchColumn();
+    $pdo->exec("CREATE TRIGGER fail_refund_receipt BEFORE INSERT ON refund_receipt_details
+        BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END");
+    $expectRefusal(static fn() => $refunds->refund($casey, 'cashier', $auditSaleId,
+        $returnOf($auditItemId, 1), 'customer_return'), 'a refund without a preserved receipt must fail');
+    $assert($refundCount($pdo) === $refundsBeforeAuditFailure, 'receipt failure rolls back the refund');
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn() === $stockBeforeAuditFailure,
+        'receipt failure rolls back returned inventory');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM refund_receipt_details')->fetchColumn() === $receiptCount,
+        'receipt failure leaves no partial receipt');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE module = 'Cash Refunds'")->fetchColumn() === $auditCount,
+        'receipt failure leaves no audit for a failed refund');
+    $pdo->exec('DROP TRIGGER fail_refund_receipt');
+
+    $receiptService = new \App\Services\RefundReceiptService($pdo);
+    $saved = $receiptService->forCashier($otherRefundId, $casey, 1);
+    $assert($saved !== null && $saved['refund']['reason'] === 'Other', 'successful refund exposes a customer receipt');
+    $assert($receiptService->forCashier($otherRefundId, $dana, 1) === null, 'another Cashier cannot fetch a receipt');
+    $assert($receiptService->forCashier($otherRefundId, $casey, 2) === null, 'another Store cannot fetch a receipt');
+    $assert($receiptService->forCashier(999999, $casey, 1) === null, 'missing refund does not expose receipt data');
+    $customerJson = json_encode($saved);
+    foreach (['note', 'disposition', 'restockable', 'damaged', 'Customer says the bottle', 'shift_id', 'cashier_id', 'register_id'] as $private) {
+        $assert(!str_contains($customerJson, $private), 'customer snapshot excludes ' . $private);
+    }
+    $pdo->exec("CREATE TABLE store_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)");
+    $pdo->exec("INSERT INTO store_settings VALUES ('store_name', 'Edited Store'), ('receipt_footer', 'Edited footer')");
+    $pdo->exec("UPDATE products SET product_name = 'Edited product', sku = 'EDITED-SKU'");
+    $pdo->exec("UPDATE registers SET name = 'Edited Register ' || register_id");
+    $pdo->exec("UPDATE users SET full_name = 'Edited Cashier'");
+    $assert($receiptService->forCashier($otherRefundId, $casey, 1) === $saved,
+        'later Store, footer, product, Register, and Cashier edits cannot rewrite the receipt');
+    foreach ([58, 80, 123] as $width) {
+        ob_start();
+        \App\Services\RefundReceiptPresentation::render($saved, $width);
+        $customerHtml = ob_get_clean();
+        foreach (['Refund #' . $otherRefundId, 'Original Sale Receipt #' . $saleId, 'Date/Time:', 'Cashier:', 'Register:', 'Other', 'Total refunded', 'Original payment method',
+            $saved['store']['footer'], $saved['items'][0]['product_name']] as $required) {
+            $assert(str_contains($customerHtml, htmlspecialchars($required, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')), 'customer copy includes ' . $required);
+        }
+        $assert(str_contains($customerHtml, 'data-paper-width-mm="' . ($width === 58 ? 58 : 80) . '"'), 'thermal width has an 80 mm fallback');
+        foreach (['Customer says the bottle', 'Restockable', 'Damaged', 'Edited Store', 'Edited product', 'Edited Register', 'Edited Cashier'] as $private) {
+            $assert(!str_contains($customerHtml, $private), 'customer copy excludes later edit or private detail ' . $private);
+        }
+    }
+    $assert($refundCount($pdo) === $refundsBeforeAuditFailure, 'retrieval and re-rendering never create a second refund');
 
     // The page is the only surface a browser reaches, and it holds no rules of
     // its own: the caps and the classification live in the service, where a

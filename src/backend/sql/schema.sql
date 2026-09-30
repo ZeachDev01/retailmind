@@ -1300,6 +1300,15 @@ CREATE TABLE `sale_receipt_details` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table structure for table `schema_migrations`
+-- Customer-facing Refund Receipt details share the refund transaction.
+DROP TABLE IF EXISTS `refund_receipt_details`;
+CREATE TABLE `refund_receipt_details` (
+  `refund_id` int(11) NOT NULL,
+  `details_json` longtext NOT NULL,
+  PRIMARY KEY (`refund_id`),
+  CONSTRAINT `fk_refund_receipt_details_refund` FOREIGN KEY (`refund_id`) REFERENCES `cash_refunds` (`refund_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 --
 
 DROP TABLE IF EXISTS `schema_migrations`;
