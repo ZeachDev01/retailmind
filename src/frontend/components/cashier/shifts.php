@@ -48,8 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $shiftId = $service->openShift($actorId, $actorRole, $registerId, (float)($_POST['opening_float'] ?? 0));
             $message = "Shift #{$shiftId} opened on " . ($service->registerName($registerId) ?? 'your register') . '.';
         } elseif ($action === 'movement') {
-            $movementId = $service->addDrawerMovement($targetCashierId, (string)($_POST['movement_type'] ?? ''), (float)($_POST['amount'] ?? 0), (string)($_POST['reason'] ?? ''), (int)$_SESSION['user_id']);
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Recorded cash drawer movement', 'Cashier Shifts', $movementId);
+            $movementId = $service->addDrawerMovement($actorId, $actorRole, (string)($_POST['movement_type'] ?? ''), (float)($_POST['amount'] ?? 0), (string)($_POST['reason'] ?? ''), (string)($_POST['note'] ?? ''));
             $message = 'Cash drawer movement recorded.';
         } elseif ($action === 'close') {
             $summary = $service->closeShift($targetCashierId, (float)($_POST['actual_cash'] ?? 0), (string)($_POST['closing_notes'] ?? ''), $isCashier ? null : (int)$_SESSION['user_id']);
@@ -90,7 +89,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <div class="topbar">
                 <div>
                     <h1>Cashier Shifts</h1>
-                    <p class="page-subtitle">Open the register, record pay-ins or pay-outs, and reconcile cash at closing.</p>
+                    <p class="page-subtitle">Open the register, record drawer cash changes, and reconcile cash at closing.</p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
             </div>
             <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?><?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -123,19 +122,26 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                             </div>
                         </div><?php endif; ?>
                 </section>
-                <?php if ($openShift): ?><section class="dashboard-section">
+                <?php if ($openShift && $isCashier && !$ownRegisterLocked): ?><section class="dashboard-section">
                         <h3>Drawer movement</h3>
                         <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="movement">
                             <div class="form-row">
-                                <div><label>Type</label><select name="movement_type">
-                                        <option value="pay_in">Pay in</option>
-                                        <option value="pay_out">Pay out</option>
+                                <div><label for="movement-type">Type</label><select id="movement-type" name="movement_type">
+                                        <?php foreach (CashierShiftService::DRAWER_REASONS as $type => $reasons): ?>
+                                            <option value="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $type))) ?></option>
+                                        <?php endforeach; ?>
                                     </select></div>
                                 <div><label>Amount</label><input type="number" name="amount" min="0.01" step="0.01" required></div>
-                            </div><label>Reason</label><input type="text" name="reason" maxlength="255" required><button class="btn" type="submit">Record movement</button>
+                            </div><label for="movement-reason">Reason</label><select id="movement-reason" name="reason" required>
+                                <?php foreach (CashierShiftService::DRAWER_REASONS as $type => $reasons): ?>
+                                    <?php foreach ($reasons as $value => $label): ?>
+                                        <option value="<?= htmlspecialchars($value) ?>" data-types="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars($label) ?></option>
+                                    <?php endforeach; ?>
+                                <?php endforeach; ?>
+                            </select><label for="movement-note">Note (optional)</label><textarea id="movement-note" name="note" maxlength="255"></textarea><button class="btn" type="submit">Record movement</button>
                         </form>
-                    </section>
-                    <section class="dashboard-section">
+                    </section><?php endif; ?>
+                <?php if ($openShift): ?><section class="dashboard-section">
                         <h3>Close and reconcile</h3>
                         <?php if ($unresolvedHeldSales): ?><div class="message error">
                             This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
@@ -154,12 +160,14 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <th>Time</th>
                                 <th>Type</th>
                                 <th>Amount</th>
-                                <th>Reason</th>
+                                <th>Reason</th><th>Note</th><th>Cashier</th>
                             </tr><?php foreach ($movements as $m): ?><tr>
                                     <td><?= htmlspecialchars(format_display_datetime($m['created_at'])) ?></td>
                                     <td><?= htmlspecialchars(str_replace('_', ' ', ucfirst($m['movement_type']))) ?></td>
                                     <td>₱<?= number_format((float)$m['amount'], 2) ?></td>
-                                    <td><?= htmlspecialchars($m['reason']) ?></td>
+                                    <td><?= htmlspecialchars(str_replace('_', ' ', ucfirst($m['reason']))) ?></td>
+                                    <td><?= htmlspecialchars($m['note'] ?? '') ?></td>
+                                    <td><?= htmlspecialchars($m['full_name']) ?></td>
                                 </tr><?php endforeach; ?>
                         </table>
                     </div>
@@ -192,6 +200,23 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             </section>
         </main>
     </div>
+    <script>
+        const movementType = document.getElementById('movement-type');
+        const movementReason = document.getElementById('movement-reason');
+        if (movementType && movementReason) {
+            const syncReasons = () => {
+                for (const option of movementReason.options) {
+                    option.hidden = !option.dataset.types.split(' ').includes(movementType.value);
+                    option.disabled = option.hidden;
+                }
+                if (movementReason.selectedOptions[0]?.disabled) {
+                    movementReason.selectedIndex = [...movementReason.options].findIndex(option => !option.disabled);
+                }
+            };
+            movementType.addEventListener('change', syncReasons);
+            syncReasons();
+        }
+    </script>
 </body>
 
 </html>

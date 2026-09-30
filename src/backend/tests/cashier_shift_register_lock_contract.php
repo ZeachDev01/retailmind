@@ -368,11 +368,11 @@ try {
     // Cashier's name. Page-level gating would be advisory, so the refusal has to
     // live where a direct call to the service still meets it.
     $expectRefusal(
-        fn() => $service->addDrawerMovement($casey, 'pay_in', 200.00, 'Float top-up'),
+        fn() => $service->addDrawerMovement($casey, 'cashier', 'cash_in', 200.00, 'additional_float'),
         'a locked Register refuses a pay-in from its own Cashier'
     );
     $expectRefusal(
-        fn() => $service->addDrawerMovement($casey, 'pay_out', 50.00, 'Petty cash'),
+        fn() => $service->addDrawerMovement($casey, 'cashier', 'cash_out', 50.00, 'petty_cash'),
         'a locked Register refuses a pay-out from its own Cashier'
     );
     $expectRefusal(

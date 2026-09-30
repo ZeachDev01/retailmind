@@ -45,6 +45,11 @@ class CashierShiftService
     public const AUDIT_ACTION_LOCKED = 'Cashier Shift locked';
     public const AUDIT_ACTION_UNLOCKED = 'Cashier Shift unlocked';
     public const AUDIT_ACTION_UNLOCK_REFUSED = 'Register unlock refused';
+    public const DRAWER_REASONS = [
+        'cash_in' => ['additional_float' => 'Additional float', 'cash_return' => 'Cash returned', 'other' => 'Other'],
+        'cash_out' => ['petty_cash' => 'Petty cash', 'supplier_payment' => 'Supplier payment', 'other' => 'Other'],
+        'safe_drop' => ['excess_cash' => 'Excess cash', 'bank_deposit' => 'Bank deposit', 'other' => 'Other'],
+    ];
 
     /**
      * The one message a locked Register produces (#90).
@@ -452,37 +457,53 @@ class CashierShiftService
         }
     }
 
-    /**
-     * Records a pay-in or pay-out against an open Cashier Shift's drawer.
-     *
-     * The lock is enforced here rather than on the page (#90): a drawer movement
-     * is a financial record written under the Cashier's name, so posting one on
-     * a Register its owner locked would be exactly the act the lock forbids. An
-     * Administrator acting deliberately on somebody else's drawer is not the
-     * threat the lock addresses, so their movement is not refused.
-     */
-    public function addDrawerMovement(int $cashierId, string $type, float $amount, string $reason, ?int $recordedBy = null): int
+    /** Record an accountable movement in the signed-in Cashier's open drawer. */
+    public function addDrawerMovement(int $actorId, string $actorRole, string $type, float $amount, string $reason, ?string $note = null): int
     {
-        if (!in_array($type, ['pay_in', 'pay_out'], true)) {
-            throw new RuntimeException('Invalid drawer movement type.');
+        $this->requireCashierWorkspace($actorRole, 'Only the Cashier workspace can record a drawer movement.');
+        if (!isset(self::DRAWER_REASONS[$type][$reason])) {
+            throw new InvalidArgumentException('Choose a valid movement type and reason.');
         }
-        if ($amount <= 0 || trim($reason) === '') {
-            throw new RuntimeException('Amount and reason are required.');
+        if (!is_finite($amount) || $amount <= 0 || round($amount, 2) <= 0 || round($amount, 2) !== $amount) {
+            throw new InvalidArgumentException('Enter a positive amount in pesos and centavos.');
         }
-        $actorId = $recordedBy ?? $cashierId;
-        if ($actorId === $cashierId) {
-            $this->requireUnlockedRegister($cashierId);
+        $note = trim((string)$note);
+        if (strlen($note) > 255) {
+            throw new InvalidArgumentException('The note must be 255 characters or fewer.');
         }
-        $shift = $this->getOpenShift($cashierId);
-        if (!$shift) {
-            throw new RuntimeException('No open shift was found.');
-        }
-        $stmt = $this->pdo->prepare(
-            "INSERT INTO cash_drawer_movements (shift_id, movement_type, amount, reason, recorded_by)
-             VALUES (?, ?, ?, ?, ?)"
-        );
-        $stmt->execute([(int)$shift['shift_id'], $type, $amount, trim($reason), $actorId]);
-        return (int)$this->pdo->lastInsertId();
+
+        return $this->transaction(function () use ($actorId, $type, $amount, $reason, $note): int {
+            // Serialize with shift closure so a movement cannot enter a drawer
+            // after its closing balance has been calculated.
+            $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $stmt = $this->pdo->prepare("SELECT shift_id, cashier_id, status, locked_at FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
+            $stmt->execute([$actorId]);
+            $shift = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$shift) {
+                throw new DomainException('Open your Cashier Shift before recording a drawer movement.');
+            }
+            if (!empty($shift['locked_at'])) {
+                throw new DomainException(self::LOCKED_MESSAGE);
+            }
+            $shiftId = (int)$shift['shift_id'];
+            $this->pdo->prepare(
+                'INSERT INTO cash_drawer_movements (shift_id, cashier_id, movement_type, amount, reason, note, recorded_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$shiftId, $actorId, $type, $amount, $reason, $note === '' ? null : $note, $actorId]);
+            $movementId = (int)$this->pdo->lastInsertId();
+            $this->pdo->prepare(
+                'INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
+                 VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
+            )->execute([
+                $actorId, 'Drawer movement recorded', AuditRecordCategory::STORE_OPERATION,
+                'Cashier Shifts', $movementId,
+                json_encode(['drawer_movement_id' => $movementId, 'shift_id' => $shiftId, 'cashier_id' => $actorId,
+                    'actor_id' => $actorId, 'type' => $type, 'amount' => $amount, 'reason' => $reason,
+                    'note' => $note === '' ? null : $note], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                'system',
+            ]);
+            return $movementId;
+        });
     }
 
     public function calculateShift(int $shiftId): array
@@ -516,8 +537,9 @@ class CashierShiftService
         $sales = $salesStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
         $moveStmt = $this->pdo->prepare(
-            "SELECT COALESCE(SUM(CASE WHEN movement_type='pay_in' THEN amount ELSE 0 END),0) AS pay_in,
-                    COALESCE(SUM(CASE WHEN movement_type='pay_out' THEN amount ELSE 0 END),0) AS pay_out
+            "SELECT COALESCE(SUM(CASE WHEN movement_type IN ('cash_in','pay_in') THEN amount ELSE 0 END),0) AS cash_in,
+                    COALESCE(SUM(CASE WHEN movement_type IN ('cash_out','pay_out') THEN amount ELSE 0 END),0) AS cash_out,
+                    COALESCE(SUM(CASE WHEN movement_type='safe_drop' THEN amount ELSE 0 END),0) AS safe_drop
              FROM cash_drawer_movements WHERE shift_id = ?"
         );
         $moveStmt->execute([$shiftId]);
@@ -549,7 +571,8 @@ class CashierShiftService
         $cashRefunds = (float)$cashRefundStmt->fetchColumn();
 
         $expected = (float)$shift['opening_cash'] + (float)($sales['cash_sales'] ?? 0)
-            + (float)($movements['pay_in'] ?? 0) - (float)($movements['pay_out'] ?? 0)
+            + (float)($movements['cash_in'] ?? 0) - (float)($movements['cash_out'] ?? 0)
+            - (float)($movements['safe_drop'] ?? 0)
             - $cashRefunds - $approvedReversalCash;
 
         return array_merge($shift, $sales, $movements, [
@@ -610,31 +633,39 @@ class CashierShiftService
      */
     public function closeShift(int $cashierId, float $actualCash, string $notes, ?int $reviewedBy = null): array
     {
-        if ($reviewedBy === null) {
-            $this->requireUnlockedRegister($cashierId);
-        }
-        $shift = $this->getOpenShift($cashierId);
-        if (!$shift) {
-            throw new RuntimeException('No open shift was found.');
-        }
-        if ($actualCash < 0) {
-            throw new RuntimeException('Actual cash cannot be negative.');
-        }
-        $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
-        $summary = $this->calculateShift((int)$shift['shift_id']);
-        $expected = (float)$summary['calculated_expected_cash'];
-        $variance = round($actualCash - $expected, 2);
-        $stmt = $this->pdo->prepare(
-            "UPDATE cashier_shifts
-             SET status='closed', closed_at=NOW(), expected_cash=?, actual_cash=?, cash_variance=?, closing_notes=?,
-                 reviewed_by=?, reviewed_at=CASE WHEN ? IS NULL THEN NULL ELSE NOW() END
-             WHERE shift_id=? AND status='open'"
-        );
-        $stmt->execute([$expected, $actualCash, $variance, trim($notes) ?: null, $reviewedBy, $reviewedBy, (int)$shift['shift_id']]);
-        if ($stmt->rowCount() === 0) {
-            throw new RuntimeException('The shift was already closed.');
-        }
-        return $this->calculateShift((int)$shift['shift_id']);
+        return $this->transaction(function () use ($cashierId, $actualCash, $notes, $reviewedBy): array {
+            $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $lock = $this->pdo->prepare("SELECT shift_id FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
+            $lock->execute([$cashierId]);
+            if ($lock->fetchColumn() === false) {
+                throw new RuntimeException('No open shift was found.');
+            }
+            if ($reviewedBy === null) {
+                $this->requireUnlockedRegister($cashierId);
+            }
+            $shift = $this->getOpenShift($cashierId);
+            if (!$shift) {
+                throw new RuntimeException('No open shift was found.');
+            }
+            if ($actualCash < 0) {
+                throw new RuntimeException('Actual cash cannot be negative.');
+            }
+            $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
+            $summary = $this->calculateShift((int)$shift['shift_id']);
+            $expected = (float)$summary['calculated_expected_cash'];
+            $variance = round($actualCash - $expected, 2);
+            $stmt = $this->pdo->prepare(
+                "UPDATE cashier_shifts
+                 SET status='closed', closed_at=NOW(), expected_cash=?, actual_cash=?, cash_variance=?, closing_notes=?,
+                     reviewed_by=?, reviewed_at=CASE WHEN ? IS NULL THEN NULL ELSE NOW() END
+                 WHERE shift_id=? AND status='open'"
+            );
+            $stmt->execute([$expected, $actualCash, $variance, trim($notes) ?: null, $reviewedBy, $reviewedBy, (int)$shift['shift_id']]);
+            if ($stmt->rowCount() === 0) {
+                throw new RuntimeException('The shift was already closed.');
+            }
+            return $this->calculateShift((int)$shift['shift_id']);
+        });
     }
 
     /**

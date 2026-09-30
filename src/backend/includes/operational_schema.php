@@ -125,9 +125,11 @@ function ensure_operational_updates_schema(PDO $pdo): void
     $pdo->exec("CREATE TABLE IF NOT EXISTS cash_drawer_movements (
         drawer_movement_id INT AUTO_INCREMENT PRIMARY KEY,
         shift_id INT NOT NULL,
-        movement_type ENUM('pay_in','pay_out') NOT NULL,
+        movement_type ENUM('pay_in','pay_out','cash_in','cash_out','safe_drop') NOT NULL,
         amount DECIMAL(12,2) NOT NULL,
         reason VARCHAR(255) NOT NULL,
+        note VARCHAR(255) NULL,
+        cashier_id INT NOT NULL,
         recorded_by INT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_drawer_movements_shift (shift_id)

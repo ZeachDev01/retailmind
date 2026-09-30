@@ -187,16 +187,20 @@ DROP TABLE IF EXISTS `cash_drawer_movements`;
 CREATE TABLE `cash_drawer_movements` (
   `drawer_movement_id` int(11) NOT NULL AUTO_INCREMENT,
   `shift_id` int(11) NOT NULL,
-  `movement_type` enum('pay_in','pay_out') NOT NULL,
+  `movement_type` enum('pay_in','pay_out','cash_in','cash_out','safe_drop') NOT NULL,
   `amount` decimal(12,2) NOT NULL,
   `reason` varchar(255) NOT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `cashier_id` int(11) NOT NULL,
   `recorded_by` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`drawer_movement_id`),
   KEY `idx_drawer_movements_shift` (`shift_id`),
+  KEY `idx_drawer_movements_cashier` (`cashier_id`),
   KEY `recorded_by` (`recorded_by`),
   CONSTRAINT `cash_drawer_movements_ibfk_1` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`),
-  CONSTRAINT `cash_drawer_movements_ibfk_2` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `cash_drawer_movements_ibfk_2` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_drawer_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
