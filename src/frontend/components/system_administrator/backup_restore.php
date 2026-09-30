@@ -16,7 +16,21 @@ use App\Services\DatabaseRestoreService;
 
 if (!RecoveryStore::isAvailable()) {
     http_response_code(503);
-    echo 'Database Backup and Restore are unavailable on this hosting plan.';
+    header('Content-Type: text/html; charset=utf-8');
+    $workspaceUrl = htmlspecialchars(app_url('components/auth/workspace.php'), ENT_QUOTES, 'UTF-8');
+    $dashboardUrl = htmlspecialchars(app_url('components/super_administrator/dashboard.php'), ENT_QUOTES, 'UTF-8');
+    $logoutUrl = htmlspecialchars(app_url('components/auth/logout.php'), ENT_QUOTES, 'UTF-8');
+    $stylesheetUrl = htmlspecialchars(app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
+    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<title>Backup &amp; Restore unavailable</title><link rel="stylesheet" href="' . $stylesheetUrl . '"></head>'
+        . '<body><main style="max-width:44rem;margin:4rem auto;padding:1.5rem">'
+        . '<h1>Backup &amp; Restore</h1>'
+        . '<p role="alert">Database Backup and Restore are unavailable on this hosting plan.</p>'
+        . '<p>You can continue using your other workspaces.</p>'
+        . '<p><a class="btn" href="' . $workspaceUrl . '">Change workspace</a> '
+        . '<a href="' . $dashboardUrl . '">Return to dashboard</a></p>'
+        . '<p><a href="' . $logoutUrl . '">Log out</a></p>'
+        . '</main></body></html>';
     return;
 }
 
