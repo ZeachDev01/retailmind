@@ -1169,6 +1169,7 @@ async function loadHeldSales() {
 async function holdCurrentSale() {
     if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
     if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before holding a sale.', 'error'); return; }
+    if (resumedHeldSaleId) { showCartMessage('This sale is already held. Complete checkout or discard it from Held sales before holding another sale.', 'error'); return; }
     try {
         const data = await apiHeldSale('hold', {cart});
         heldSales = data.held_sales || [];
@@ -1230,6 +1231,7 @@ async function confirmDiscardHeldSale() {
         if (resumedHeldSaleId === discardingHeldSaleId) {
             resumedHeldSaleId = 0;
             resumedHeldSaleInput.value = '';
+            persistCart();
         }
         closeDiscardModal();
         renderHeldSales();
@@ -1288,19 +1290,27 @@ function confirmVoidSale() {
 
 function persistCart() {
     try {
-        sessionStorage.setItem('pos_cart', JSON.stringify(cart));
+        sessionStorage.setItem('pos_cart', JSON.stringify({cart, heldSaleId: resumedHeldSaleId}));
     } catch (error) {}
 }
 
 function restoreState() {
     try {
         const storedCart = sessionStorage.getItem('pos_cart');
-        if (storedCart) { const parsedCart=JSON.parse(storedCart); if(parsedCart&&typeof parsedCart==='object'&&!Array.isArray(parsedCart)) cart=parsedCart; }
-    } catch (error) { cart = {}; }
-    // Ticket #91: a cart restored out of session storage is deliberately not
-    // re-linked to the held sale it may have come from. The link is not
-    // something the browser gets to assert, and the held sale stays listed as
-    // unresolved either way, so the shift still cannot close over it.
+        if (storedCart) {
+            const saved = JSON.parse(storedCart);
+            // Older sessions stored the cart directly, without held-sale metadata.
+            const savedCart = saved?.cart ?? saved;
+            if (savedCart && typeof savedCart === 'object' && !Array.isArray(savedCart)) {
+                cart = savedCart;
+                const heldSaleId = Number(saved.heldSaleId);
+                resumedHeldSaleId = Number.isSafeInteger(heldSaleId) && heldSaleId > 0 ? heldSaleId : 0;
+            }
+        }
+    } catch (error) { cart = {}; resumedHeldSaleId = 0; }
+    // Keep the cart and its identity together across reloads and failed checkout.
+    // Checkout still validates ownership, unresolved status, and the owning shift.
+    resumedHeldSaleInput.value = resumedHeldSaleId ? String(resumedHeldSaleId) : '';
     renderCart();
     loadHeldSales();
 }
