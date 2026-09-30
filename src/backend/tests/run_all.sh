@@ -77,6 +77,7 @@ php src/backend/tests/audit_visibility_integration.php
 php src/backend/tests/database_backup_workflow_integration.php
 php src/backend/tests/receipt_table_contract.php
 php src/backend/tests/receipt_attribution_contract.php
+node src/backend/tests/sale_receipt_browser_test.js
 php src/backend/tests/cashier_operational_history_contract.php
 php src/backend/tests/sales_trend_integration.php
 if [[ -n "${WHITESPACE_BASE:-}" ]] && git cat-file -e "${WHITESPACE_BASE}^{commit}" 2>/dev/null; then

@@ -535,31 +535,7 @@
         .checkout-complete-change strong { font-size:1.45rem; }
         .receipt-actions .btn { display:inline-flex;align-items:center;gap:.4rem; }
         @media(max-width:640px){.checkout-complete-banner{grid-template-columns:auto 1fr}.checkout-complete-change{grid-column:1/-1;text-align:left;padding-top:.65rem;border-top:1px solid #bbf7d0}.receipt-actions{align-items:stretch;flex-direction:column}.receipt-actions .btn{justify-content:center}}
-    @media print {
-        body {
-            background: #fff;
-        }
 
-        body * {
-            visibility: hidden;
-        }
-
-        .receipt-print-target,
-        .receipt-print-target * {
-            visibility: visible;
-        }
-
-        .receipt-print-target {
-            position: absolute;
-            inset: 0 auto auto 0;
-            width: 100%;
-            padding: 0;
-        }
-
-        .no-print {
-            display: none !important;
-        }
-    }
 
     @media (max-width: 980px) {
         .receipts-page .receipt-filters {

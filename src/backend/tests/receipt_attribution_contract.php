@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../app/Services/ReceiptDetailsService.php';
+require_once __DIR__ . '/../app/Services/SaleReceiptPresentation.php';
 
 use App\Services\ReceiptDetailsService;
 
@@ -80,6 +81,7 @@ function app_url(string $path): string {
 $root = dirname(__DIR__, 3);
 $items = [['sku' => 'SKU-1', 'product_name' => 'Test item', 'quantity' => 1,
     'unit_price' => 10, 'subtotal' => 10]];
+$paperReceipts = [];
 foreach ([
     ['src/frontend/components/invoice/sales.php', 'render_frontend_receipt', $service->fetchSale(42, 1)],
     ['src/backend/legacy/routes/invoice/receipt.php', 'render_legacy_receipt', $service->fetchSale(42)],
@@ -101,6 +103,8 @@ foreach ([
     ob_start();
     $function($queriedSale, $items, false);
     $receipt = ob_get_clean();
+    preg_match('/<div class="sale-receipt receipt-print-area".*$/s', $receipt, $paper);
+    $paperReceipts[] = $paper[0] ?? '';
     $assert(str_contains($receipt, 'Historical receipt: original Store and item details were not preserved'),
         $route . ' visibly marks pre-feature receipt details as reconstructed');
     foreach (['Transaction #42', 'Receipt #42', '2026-09-30 10:11:12',
@@ -112,6 +116,9 @@ foreach ([
         $assert(!str_contains($receipt, $private), $route . ' hides ' . $private);
     }
 }
+
+$assert($paperReceipts[0] !== '' && $paperReceipts[0] === $paperReceipts[1],
+    'checkout/history and legacy modal render identical customer-facing paper');
 
 $pdo->exec('CREATE TABLE store_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)');
 $pdo->exec("INSERT INTO store_settings VALUES ('store_name', 'Original Store'), ('receipt_footer', 'Original footer')");

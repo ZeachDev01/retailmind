@@ -47,10 +47,6 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
 
 function receipt_render_details(array $sale, array $items, bool $canStartSale): void {
     $store = $sale['receipt_store'] ?? receipt_store_info();
-    $itemSubtotal = array_reduce($items, fn($total, $item) => $total + (float)$item['subtotal'], 0.0);
-    $quantityTotal = array_reduce($items, fn($total, $item) => $total + (int)$item['quantity'], 0);
-    $discount = max((float)($sale['discount_amount'] ?? 0), $itemSubtotal - (float)$sale['total_amount']);
-    $verificationCode = receipt_verification_code($sale);
     $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
     ?>
     <div class="receipt-container">
@@ -66,71 +62,7 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale): 
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
             <a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>" class="btn btn-secondary"><i class="bi bi-receipt"></i> Receipt History</a>
         </div>
-        <div class="receipt-card receipt-print-area">
-            <?php if (!empty($sale['receipt_historical_notice'])): ?>
-                <p class="receipt-historical-notice">Historical receipt: original Store and item details were not preserved and may differ from the original.</p>
-            <?php endif; ?>
-            <div class="receipt-header">
-                <div class="receipt-brand">
-                    <h1><?= htmlspecialchars($store['name']) ?></h1>
-                    <div class="receipt-store-line"><?= htmlspecialchars($store['tagline']) ?></div>
-                    <div><?= htmlspecialchars($store['address']) ?></div>
-                    <div><?= htmlspecialchars($store['contact']) ?></div>
-                    <div><?= htmlspecialchars($store['tin']) ?></div>
-                </div>
-                <?php // Legacy / Unassigned attribution is rendered without exposing the Cashier Shift identifier. ?>
-                <?= ReceiptDetailsService::renderMetadata($sale) ?>
-            </div>
-
-            <div class="receipt-summary">
-                <div><span>Payment Method</span><strong><?= htmlspecialchars(strtoupper($sale['payment_method'])) ?></strong></div>
-                <div><span>Total Quantity</span><strong><?= (int)$quantityTotal ?></strong></div>
-                <div><span>Total Amount</span><strong><?= receipt_money($sale['total_amount'], $store) ?></strong></div>
-            </div>
-
-            <table class="receipt-table">
-                <thead>
-                    <tr>
-                        <th>SKU</th>
-                        <th>Item</th>
-                        <th>Qty</th>
-                        <th>Unit Price</th>
-                        <th>Line Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($items as $item): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($item['sku']) ?></td>
-                        <td><?= htmlspecialchars($item['product_name']) ?></td>
-                        <td><?= (int)$item['quantity'] ?></td>
-                        <td><?= receipt_money($item['unit_price'], $store) ?></td>
-                        <td><?= receipt_money($item['subtotal'], $store) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-
-            <div class="receipt-bottom">
-                <div class="receipt-verification">
-                    <div class="verification-box" aria-label="Receipt verification code"><?= htmlspecialchars($verificationCode) ?></div>
-                    <div class="receipt-store-line">Verification Code</div>
-                    <div class="receipt-url"><?= htmlspecialchars($receiptUrl) ?></div>
-                </div>
-                <div class="receipt-totals">
-                    <div><span>Subtotal</span><strong><?= receipt_money($itemSubtotal, $store) ?></strong></div>
-                    <div><span>Discount</span><strong><?= receipt_money($discount, $store) ?></strong></div>
-                    <?php if (!empty($sale['promotion_name'])): ?><div><span>Promotion</span><strong><?= htmlspecialchars($sale['promotion_name']) ?></strong></div><?php elseif (!empty($sale['discount_reason'])): ?><div><span>Discount reason</span><strong><?= htmlspecialchars($sale['discount_reason']) ?></strong></div><?php endif; ?>
-                    <div><span>Total Amount</span><strong><?= receipt_money($sale['total_amount'], $store) ?></strong></div>
-                    <div><span>Cash Received</span><strong><?= $sale['cash_received'] !== null ? receipt_money($sale['cash_received'], $store) : '-' ?></strong></div>
-                    <div><span>Change</span><strong><?= $sale['change_due'] !== null ? receipt_money($sale['change_due'], $store) : '-' ?></strong></div>
-                    <?php if (!empty($sale['payment_reference'])): ?>
-                    <div><span>Payment Reference</span><strong><?= htmlspecialchars($sale['payment_reference']) ?></strong></div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <div class="receipt-store-line" style="text-align:center;margin-top:1rem"><?= htmlspecialchars($store['footer']) ?></div>
-        </div>
+        <?php \App\Services\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl); ?>
     </div>
     <?php
 }
@@ -253,60 +185,6 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
 
     receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale);
     exit;
-
-    $itemsStmt = $pdo->prepare(
-        "SELECT si.quantity, si.unit_price, si.subtotal, p.sku, p.product_name
-         FROM sale_items si
-         JOIN products p ON si.product_id = p.product_id
-         WHERE si.sale_id = ?
-         ORDER BY si.sale_item_id"
-    );
-    $itemsStmt->execute([$sale_id]);
-    $items = $itemsStmt->fetchAll();
-
-    ?>
-    <div class="receipt-container">
-        <div class="receipt-card">
-            <div class="receipt-header">
-                <div class="receipt-brand">
-                    <h1>Inventory System Receipt</h1>
-                    <div class="u-text-muted">Official sales invoice</div>
-                </div>
-                <div class="receipt-meta">
-                    <div><strong>Receipt #<?= $sale_id ?></strong></div>
-                    <div>Date: <?= htmlspecialchars($sale['sale_date']) ?></div>
-                    <div>Cashier: <?= htmlspecialchars($sale['cashier_name']) ?></div>
-                </div>
-            </div>
-
-            <div class="receipt-summary">
-                <div><span>Payment Method</span><strong><?= htmlspecialchars(strtoupper($sale['payment_method'])) ?></strong></div>
-                <div><span>Items</span><strong><?= count($items) ?></strong></div>
-                <div><span>Total</span><strong>₱<?= number_format($sale['total_amount'], 2) ?></strong></div>
-            </div>
-
-            <table class="receipt-table">
-                <thead>
-                    <tr><th>SKU</th><th>Product</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($items as $item): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($item['sku']) ?></td>
-                        <td><?= htmlspecialchars($item['product_name']) ?></td>
-                        <td><?= (int)$item['quantity'] ?></td>
-                        <td>₱<?= number_format($item['unit_price'], 2) ?></td>
-                        <td>₱<?= number_format($item['subtotal'], 2) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-
-            <div class="receipt-total">Grand Total: ₱<?= number_format($sale['total_amount'], 2) ?></div>
-        </div>
-    </div>
-    <?php
-    exit;
 }
 
 $selected_sale = null;
@@ -336,6 +214,8 @@ if ($sale_id > 0) {
 <?php if ($checkoutCompleted): ?>
 <script>sessionStorage.removeItem('pos_cart');</script>
 <?php endif; ?>
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
+<script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 </head>
 <body class="receipts-page">
 <div class="app-shell">
@@ -820,21 +700,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function printReceiptSection(trigger) {
-    const currentTarget = trigger
-        ? trigger.closest('.receipt-container')?.querySelector('.receipt-print-area')
-        : document.querySelector('.receipt-print-area');
-    if (!currentTarget) return;
-
-    document.querySelectorAll('.receipt-print-target').forEach(el => el.classList.remove('receipt-print-target'));
-    currentTarget.classList.add('receipt-print-target');
-    window.print();
-    setTimeout(() => currentTarget.classList.remove('receipt-print-target'), 500);
-}
-
-function exportReceiptPdf(trigger) {
-    printReceiptSection(trigger);
-}
 
 function viewReceipt(saleId) {
     const url = '<?= htmlspecialchars(app_url('components/invoice/sales.php')) ?>?action=view&sale_id=' + saleId + '&ajax=1';

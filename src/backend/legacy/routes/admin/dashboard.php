@@ -27,6 +27,8 @@ $closedPeriodWidth = min(100, round(($adminMetrics['closed_periods'] / $periodTo
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
+<script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 </head>
 <body>
 <div class="app-shell">
