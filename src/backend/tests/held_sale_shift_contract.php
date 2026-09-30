@@ -189,6 +189,7 @@ try {
         subtotal REAL NOT NULL
     )");
     $pdo->exec('CREATE TABLE sale_item_batches (sale_item_id INTEGER NOT NULL, batch_id INTEGER NOT NULL, quantity INTEGER NOT NULL)');
+    $pdo->exec('CREATE TABLE sale_receipt_details (sale_id INTEGER PRIMARY KEY, details_json TEXT NOT NULL)');
     $pdo->exec("CREATE TABLE sale_reversals (
         reversal_id INTEGER PRIMARY KEY AUTOINCREMENT,
         sale_id INTEGER NOT NULL,

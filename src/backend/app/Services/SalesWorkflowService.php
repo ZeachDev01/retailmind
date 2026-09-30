@@ -13,10 +13,12 @@ require_once __DIR__ . '/CashierShiftService.php';
 // Ticket #91: a resumed held sale is completed by the checkout that pays for it,
 // so the cart and the sale it became are settled in one transaction.
 require_once __DIR__ . '/HeldSaleService.php';
+require_once __DIR__ . '/ReceiptDetailsService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\CashierShiftService;
 use App\Services\HeldSaleService;
+use App\Services\ReceiptDetailsService;
 
 /**
  * Sale creation, and the Cashier Shift attribution every sale carries (#89).
@@ -100,6 +102,9 @@ class SalesWorkflowService
             foreach ($sale['items'] as $item) {
                 $this->recordSaleItem($saleId, $item, $userId);
             }
+
+            // The customer copy is committed with the sale and inventory work.
+            (new ReceiptDetailsService($this->pdo))->preserveSale($saleId);
 
             if ($resumedHeldSale !== null) {
                 // Inside the transaction, so the held sale and the sale that

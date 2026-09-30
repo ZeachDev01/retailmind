@@ -1288,6 +1288,16 @@ CREATE TABLE `sales` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `sale_receipt_details`
+-- Customer-facing Sale Receipt details are immutable transaction-time data.
+DROP TABLE IF EXISTS `sale_receipt_details`;
+CREATE TABLE `sale_receipt_details` (
+  `sale_id` int(11) NOT NULL,
+  `details_json` longtext NOT NULL,
+  PRIMARY KEY (`sale_id`),
+  CONSTRAINT `fk_sale_receipt_details_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Table structure for table `schema_migrations`
 --
 

@@ -17,31 +17,16 @@ $can_manage_all = in_array(current_role(), ['admin', 'super_admin', 'inventory_m
 function receipt_store_info(): array {
     static $cached = null;
     if ($cached !== null) { return $cached; }
-    $settings = get_store_settings(App\Core\Database::connection());
-    $contactParts = array_filter([$settings['store_phone'] ?? '', $settings['store_email'] ?? '']);
-    return $cached = [
-        'name' => $settings['store_name'] ?: 'Shalom Store',
-        'tagline' => 'Official sales receipt',
-        'address' => $settings['store_address'] ?: 'Address not configured',
-        'contact' => $contactParts ? implode(' / ', $contactParts) : 'Contact not configured',
-        'tin' => $settings['business_identifier'] ?: 'Business ID not configured',
-        'currency_symbol' => $settings['currency_symbol'] ?: '₱',
-        'footer' => $settings['receipt_footer'] ?: 'Thank you for shopping with us.',
-    ];
+    return $cached = (new App\Services\ReceiptDetailsService(App\Core\Database::connection()))->storeInfo();
 }
 
-function receipt_money($value): string {
-    $store = receipt_store_info();
+function receipt_money($value, ?array $store = null): string {
+    $store = $store ?? receipt_store_info();
     return htmlspecialchars((string)$store['currency_symbol']) . number_format((float)$value, 2);
 }
 
 function receipt_verification_code(array $sale): string {
-    $raw = implode('|', [
-        $sale['sale_id'] ?? '',
-        $sale['sale_date'] ?? '',
-        number_format((float)($sale['total_amount'] ?? 0), 2, '.', ''),
-    ]);
-    return implode('-', str_split(substr(strtoupper(hash('sha256', $raw)), 0, 12), 4));
+    return $sale['verification_code'] ?? App\Services\ReceiptDetailsService::verificationCode($sale);
 }
 
 function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
@@ -49,24 +34,16 @@ function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
 }
 
 function receipt_fetch_items(PDO $pdo, int $sale_id): array {
-    $itemsStmt = $pdo->prepare(
-        "SELECT si.quantity, si.unit_price, si.subtotal, p.sku, p.product_name
-         FROM sale_items si
-         JOIN products p ON si.product_id = p.product_id
-         WHERE si.sale_id = ?
-         ORDER BY si.sale_item_id"
-    );
-    $itemsStmt->execute([$sale_id]);
-    return $itemsStmt->fetchAll();
+    return (new App\Services\ReceiptDetailsService($pdo))->fetchItems($sale_id);
 }
 
 function receipt_render_details(array $sale, array $items): void {
-    $store = receipt_store_info();
+    $store = $sale['receipt_store'] ?? receipt_store_info();
     $itemSubtotal = array_reduce($items, fn($total, $item) => $total + (float)$item['subtotal'], 0.0);
     $quantityTotal = array_reduce($items, fn($total, $item) => $total + (int)$item['quantity'], 0);
     $discount = max((float)($sale['discount_amount'] ?? 0), $itemSubtotal - (float)$sale['total_amount']);
     $verificationCode = receipt_verification_code($sale);
-    $receiptUrl = app_url('invoice/receipt.php?sale_id=' . (int)$sale['sale_id']);
+    $receiptUrl = app_url($sale['verification_url'] ?? 'invoice/receipt.php?sale_id=' . (int)$sale['sale_id']);
     ?>
     <div class="receipt-container">
         <div class="receipt-actions no-print">
@@ -74,6 +51,9 @@ function receipt_render_details(array $sale, array $items): void {
             <button type="button" class="btn" onclick="exportReceiptPdf(this)">PDF</button>
         </div>
         <div class="receipt-card receipt-print-area">
+            <?php if (!empty($sale['receipt_historical_notice'])): ?>
+                <p class="receipt-historical-notice">Historical receipt: original Store and item details were not preserved and may differ from the original.</p>
+            <?php endif; ?>
             <div class="receipt-header">
                 <div class="receipt-brand">
                     <h1><?= htmlspecialchars($store['name']) ?></h1>
@@ -88,7 +68,7 @@ function receipt_render_details(array $sale, array $items): void {
             <div class="receipt-summary">
                 <div><span>Payment Method</span><strong><?= htmlspecialchars(strtoupper($sale['payment_method'])) ?></strong></div>
                 <div><span>Total Quantity</span><strong><?= (int)$quantityTotal ?></strong></div>
-                <div><span>Total Amount</span><strong><?= receipt_money($sale['total_amount']) ?></strong></div>
+                <div><span>Total Amount</span><strong><?= receipt_money($sale['total_amount'], $store) ?></strong></div>
             </div>
 
             <table class="receipt-table">
@@ -107,8 +87,8 @@ function receipt_render_details(array $sale, array $items): void {
                         <td><?= htmlspecialchars($item['sku']) ?></td>
                         <td><?= htmlspecialchars($item['product_name']) ?></td>
                         <td><?= (int)$item['quantity'] ?></td>
-                        <td><?= receipt_money($item['unit_price']) ?></td>
-                        <td><?= receipt_money($item['subtotal']) ?></td>
+                        <td><?= receipt_money($item['unit_price'], $store) ?></td>
+                        <td><?= receipt_money($item['subtotal'], $store) ?></td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -121,11 +101,12 @@ function receipt_render_details(array $sale, array $items): void {
                     <div class="receipt-url"><?= htmlspecialchars($receiptUrl) ?></div>
                 </div>
                 <div class="receipt-totals">
-                    <div><span>Subtotal</span><strong><?= receipt_money($itemSubtotal) ?></strong></div>
-                    <div><span>Discount</span><strong><?= receipt_money($discount) ?></strong></div>
-                    <div><span>Total Amount</span><strong><?= receipt_money($sale['total_amount']) ?></strong></div>
-                    <div><span>Cash Received</span><strong><?= $sale['cash_received'] !== null ? receipt_money($sale['cash_received']) : '-' ?></strong></div>
-                    <div><span>Change</span><strong><?= $sale['change_due'] !== null ? receipt_money($sale['change_due']) : '-' ?></strong></div>
+                    <div><span>Subtotal</span><strong><?= receipt_money($itemSubtotal, $store) ?></strong></div>
+                    <div><span>Discount</span><strong><?= receipt_money($discount, $store) ?></strong></div>
+                    <?php if (!empty($sale['promotion_name'])): ?><div><span>Promotion</span><strong><?= htmlspecialchars($sale['promotion_name']) ?></strong></div><?php elseif (!empty($sale['discount_reason'])): ?><div><span>Discount reason</span><strong><?= htmlspecialchars($sale['discount_reason']) ?></strong></div><?php endif; ?>
+                    <div><span>Total Amount</span><strong><?= receipt_money($sale['total_amount'], $store) ?></strong></div>
+                    <div><span>Cash Received</span><strong><?= $sale['cash_received'] !== null ? receipt_money($sale['cash_received'], $store) : '-' ?></strong></div>
+                    <div><span>Change</span><strong><?= $sale['change_due'] !== null ? receipt_money($sale['change_due'], $store) : '-' ?></strong></div>
                     <?php if (!empty($sale['payment_reference'])): ?>
                     <div><span>Payment Reference</span><strong><?= htmlspecialchars($sale['payment_reference']) ?></strong></div>
                     <?php endif; ?>

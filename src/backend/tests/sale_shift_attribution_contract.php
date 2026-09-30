@@ -148,6 +148,12 @@ try {
         subtotal REAL NOT NULL
     )');
     $pdo->exec('CREATE TABLE sale_item_batches (sale_item_id INTEGER NOT NULL, batch_id INTEGER NOT NULL, quantity INTEGER NOT NULL)');
+    $pdo->exec('CREATE TABLE sale_receipt_details (sale_id INTEGER PRIMARY KEY, details_json TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE store_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)');
+    $pdo->exec("INSERT INTO store_settings VALUES ('store_name', 'Original Store'),
+        ('store_address', 'Original Street'), ('store_phone', '555-0100'),
+        ('business_identifier', 'TAX-123'), ('receipt_footer', 'Original thanks'),
+        ('currency_symbol', '$')");
     $pdo->exec("CREATE TABLE cash_refunds (
         refund_id INTEGER PRIMARY KEY AUTOINCREMENT,
         sale_id INTEGER NOT NULL,
@@ -305,6 +311,49 @@ try {
     $assert((int)$sale['shift_id'] === $shiftId, 'the sale records the open Cashier Shift it ran under');
     $assert(abs((float)$sale['total_amount'] - 50.00) < 0.001, 'the sale total is the cart total');
     $assert(abs((float)$sale['change_due'] - 50.00) < 0.001, 'the payment is recorded with the sale');
+    $receiptService = new \App\Services\ReceiptDetailsService($pdo);
+    $recordedReceipt = $receiptService->fetchSale($saleId, 1);
+    $assert(($recordedReceipt['receipt_store']['name'] ?? null) === 'Original Store',
+        'checkout preserves Store details with the sale');
+    $assert(($recordedReceipt['receipt_items'][0]['product_name'] ?? null) === 'Bottled Water',
+        'checkout preserves item details with the sale');
+    $assert(($recordedReceipt['receipt_store']['address'] ?? null) === 'Original Street'
+        && ($recordedReceipt['receipt_store']['contact'] ?? null) === '555-0100'
+        && ($recordedReceipt['receipt_store']['tin'] ?? null) === 'TAX-123'
+        && ($recordedReceipt['receipt_store']['footer'] ?? null) === 'Original thanks'
+        && ($recordedReceipt['receipt_store']['currency_symbol'] ?? null) === '$',
+        'checkout preserves Store contact, identifier, footer, and currency');
+    $assert(($recordedReceipt['receipt_items'][0]['sku'] ?? null) === 'SKU-1'
+        && (int)($recordedReceipt['receipt_items'][0]['quantity'] ?? 0) === 2
+        && (float)($recordedReceipt['receipt_items'][0]['unit_price'] ?? 0) === 25.0
+        && (float)($recordedReceipt['receipt_items'][0]['subtotal'] ?? 0) === 50.0,
+        'checkout preserves SKU, quantity, unit price, and line total');
+    $assert(($recordedReceipt['cashier_name'] ?? null) !== null
+        && ($recordedReceipt['sale_date'] ?? null) === $sale['sale_date']
+        && ($recordedReceipt['payment_method'] ?? null) === 'cash'
+        && (float)($recordedReceipt['cash_received'] ?? 0) === 100.0
+        && (float)($recordedReceipt['change_due'] ?? 0) === 50.0,
+        'checkout preserves Cashier, time, and cash settlement');
+    $assert(!empty($recordedReceipt['verification_code']), 'checkout preserves verification details');
+    $assert(($recordedReceipt['verification_url'] ?? null) === 'components/invoice/sales.php?tab=transactions&sale_id=' . $saleId,
+        'checkout preserves the customer verification URL');
+    $assert($recordedReceipt['verification_code'] === \App\Services\ReceiptDetailsService::verificationCode($sale),
+        'checkout preserves the exact transaction verification code');
+    $assert(($recordedReceipt['verification_url'] ?? null) === 'components/invoice/sales.php?tab=transactions&sale_id=' . $saleId,
+        'checkout preserves the customer verification URL');
+    $pdo->exec("UPDATE store_settings SET setting_value = 'Renamed Store' WHERE setting_key = 'store_name'");
+    $pdo->exec("UPDATE products SET product_name = 'Renamed Item' WHERE product_id = 1");
+    $pdo->exec("UPDATE registers SET name = 'Renamed Register' WHERE register_id = 10");
+    $reopenedReceipt = $receiptService->fetchSale($saleId, 1);
+    $assert($receiptService->fetchSale($saleId, 2) === null,
+        'preserved receipt details never bypass Store scope');
+    $assert((int)$reopenedReceipt['cashier_id'] === $casey,
+        'receipt retrieval retains live Cashier ownership for authorization');
+    $assert(($reopenedReceipt['receipt_store']['name'] ?? null) === 'Original Store'
+        && ($reopenedReceipt['register_name'] ?? null) === 'Front Counter'
+        && ($receiptService->fetchItems($saleId)[0]['product_name'] ?? null) === 'Bottled Water',
+        'reopening an authorized receipt retains transaction-time details');
+    $pdo->exec("UPDATE registers SET name = 'Front Counter' WHERE register_id = 10");
     $assert(
         (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn() === 48,
         'the stock mutation lands with the sale'
@@ -431,6 +480,7 @@ try {
     // written but not yet committed.
     $pdo->exec('UPDATE inventory SET quantity_on_hand = 1 WHERE product_id = 1');
     $salesBefore = (int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn();
+    $receiptsBefore = (int)$pdo->query('SELECT COUNT(*) FROM sale_receipt_details')->fetchColumn();
     $expectRefusal(
         static fn() => $service->checkout([['product_id' => 1, 'qty' => 2]], $casey, 'cashier', 'cash', ['cash_received' => 100]),
         'a checkout that fails part-way is refused'
@@ -439,16 +489,34 @@ try {
         (int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === $salesBefore,
         'a failed checkout leaves no half-written sale'
     );
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM sale_receipt_details')->fetchColumn() === $receiptsBefore,
+        'a failed checkout leaves no partial Sale Receipt');
     $assert(
         (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn() === 1,
         'a failed checkout leaves stock unchanged'
     );
     $pdo->exec('UPDATE inventory SET quantity_on_hand = 50 WHERE product_id = 1');
 
+    // Receipt storage is part of checkout, so its failure must undo inventory
+    // and sale writes even though the entire cart has already been recorded.
+    $pdo->exec("CREATE TRIGGER refuse_receipt BEFORE INSERT ON sale_receipt_details
+        BEGIN SELECT RAISE(ABORT, 'receipt storage failed'); END");
+    $expectRefusal(
+        static fn() => $service->checkout($cart, $casey, 'cashier', 'cash', ['cash_received' => 100]),
+        'checkout fails if its receipt cannot be preserved'
+    );
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === $salesBefore
+        && (int)$pdo->query('SELECT COUNT(*) FROM sale_receipt_details')->fetchColumn() === $receiptsBefore
+        && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn() === 50,
+        'receipt storage failure rolls back the sale, receipt, and inventory together');
+    $pdo->exec('DROP TRIGGER refuse_receipt');
+
     // --- AC 5: an unlinked sale is left alone and labelled ------------------
     $pdo->prepare('INSERT INTO sales (cashier_id, total_amount, payment_method) VALUES (?, ?, ?)')
         ->execute([$dana, 12.00, 'cash']);
     $legacySaleId = (int)$pdo->lastInsertId();
+    $assert(($receiptService->fetchSale($legacySaleId, 1)['receipt_historical_notice'] ?? false) === true,
+        'pre-feature sales carry a historical notice');
     $legacyBefore = $pdo->query("SELECT * FROM sales WHERE sale_id = {$legacySaleId}")->fetch(PDO::FETCH_ASSOC);
     $assert($legacyBefore['shift_id'] === null, 'a sale with no shift stays unlinked');
 
@@ -486,6 +554,18 @@ try {
         (int)$legacyAfter['cashier_id'] === $dana && abs((float)$legacyAfter['total_amount'] - 12.00) < 0.001,
         'reading the ledger leaves an unlinked sale unchanged'
     );
+
+    $discounted = $service->checkout($cart, $casey, 'cashier', 'ewallet', [
+        'payment_reference' => 'EW-102', 'discount_type' => 'fixed',
+        'discount_value' => 5, 'discount_reason' => 'Loyalty',
+    ]);
+    $discountedReceipt = $receiptService->fetchSale((int)$discounted['sale_id'], 1);
+    $assert((float)($discountedReceipt['discount_amount'] ?? 0) === 5.0
+        && ($discountedReceipt['discount_reason'] ?? null) === 'Loyalty'
+        && (float)($discountedReceipt['total_amount'] ?? 0) === 45.0
+        && ($discountedReceipt['payment_method'] ?? null) === 'ewallet'
+        && ($discountedReceipt['payment_reference'] ?? null) === 'EW-102',
+        'discount and non-cash payment details survive checkout-to-retrieval');
 
     // The Cashier Shift column is appended, not inserted: DataTables order
     // indices are positional, and receipt_table_contract.php sorts on the

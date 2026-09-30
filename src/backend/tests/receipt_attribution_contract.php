@@ -98,6 +98,8 @@ foreach ([
     ob_start();
     $function($queriedSale, $items, false);
     $receipt = ob_get_clean();
+    $assert(str_contains($receipt, 'Historical receipt: original Store and item details were not preserved'),
+        $route . ' visibly marks pre-feature receipt details as reconstructed');
     foreach (['Transaction #42', 'Receipt #42', '2026-09-30 10:11:12',
         'Cashier: Alice &amp; Co', 'Register: Main Till', 'Test item', 'Total Amount'] as $required) {
         $assert(str_contains($receipt, $required), $route . ' renders ' . $required);
