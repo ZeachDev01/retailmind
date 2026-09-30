@@ -41,7 +41,7 @@ if (!function_exists('env')) {
     }
 }
 
-$appEnv = (string)env('APP_ENV', 'development');
+$appEnv = (string)env('APP_ENV', 'production');
 $debugDefault = $appEnv !== 'production' ? 'true' : 'false';
 $debug = filter_var(env('APP_DEBUG', $debugDefault), FILTER_VALIDATE_BOOLEAN);
 $timezone = (string)env('APP_TIMEZONE', 'Asia/Manila');

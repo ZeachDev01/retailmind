@@ -71,11 +71,10 @@ runtime storage. Set up the production `.env` directly on the host and import
 the database through phpMyAdmin; those steps are not part of the file upload.
 Change the initial Super Administrator password before exposing the site.
 
-**Hosting compatibility:** InfinityFree free hosting cannot run the Python/Flask
-forecasting service or scheduled CLI tasks. This app also requires
-`BACKUP_STORAGE_PATH` outside the web document root for its recovery lock and
-Database Backup state, while InfinityFree only permits application files under
-`htdocs`. As written, the app will fail at startup on InfinityFree even when the
-upload succeeds. The pipeline automates file delivery, but a working deployment
-requires a host that supports the app's private storage and Python service, or
-an application change that provides equivalent safe facilities.
+**Hosting compatibility:** InfinityFree only permits application files under
+`htdocs`, so the app starts in web-only mode when its default private recovery
+directory is inaccessible. Database Backup and Restore are unavailable in that
+mode; they require private storage outside the web root under ADR-0004. The
+Python/Flask forecasting service and scheduled CLI tasks also cannot run on
+InfinityFree free hosting. Set `APP_ENV=production` and `APP_DEBUG=false` in the
+server's `.env` before using the site.

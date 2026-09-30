@@ -10,8 +10,37 @@ final class RecoveryStore
 {
     private static $requestLock = null;
 
+    /** Shared hosts can serve the Store while disabling recovery operations. */
+    public static function isAvailable(): bool
+    {
+        if (trim((string)Environment::get('BACKUP_STORAGE_PATH', '')) !== '') {
+            return true;
+        }
+        $restricted = (string)ini_get('open_basedir');
+        if ($restricted === '') {
+            return true;
+        }
+        $project = dirname(__DIR__, 4);
+        $default = dirname($project, 2) . '/retailmind-private-' . substr(hash('sha256', $project), 0, 16);
+        $candidate = str_replace('\\', '/', $default);
+        foreach (explode(PATH_SEPARATOR, $restricted) as $allowed) {
+            $allowed = trim($allowed);
+            if ($allowed === '.') {
+                $allowed = getcwd();
+            }
+            $allowed = rtrim(str_replace('\\', '/', (string)$allowed), '/');
+            if ($allowed !== '' && ($candidate === $allowed || str_starts_with($candidate, $allowed . '/'))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static function directory(): string
     {
+        if (!self::isAvailable()) {
+            throw new RuntimeException('Database Backup and Restore are unavailable on this hosting plan.');
+        }
         $project = dirname(__DIR__, 4);
         $configured = trim((string)Environment::get('BACKUP_STORAGE_PATH', ''));
         $path = $configured !== '' ? $configured : dirname($project, 2) . '/retailmind-private-' . substr(hash('sha256', $project), 0, 16);
@@ -43,6 +72,9 @@ final class RecoveryStore
     /** Hold a shared lease for the entire request, including existing writers. */
     public static function admitRequest(): bool
     {
+        if (!self::isAvailable()) {
+            return true;
+        }
         if (is_resource(self::$requestLock)) {
             return true;
         }
@@ -82,6 +114,9 @@ final class RecoveryStore
 
     public static function isPaused(): bool
     {
+        if (!self::isAvailable()) {
+            return false;
+        }
         clearstatcache(true, self::path('restore-state.json'));
         return is_file(self::path('restore-state.json'));
     }
@@ -142,6 +177,9 @@ final class RecoveryStore
 
     public static function epoch(): string
     {
+        if (!self::isAvailable()) {
+            return 'initial';
+        }
         $path = self::path('session-epoch');
         if (!is_file($path)) {
             return 'initial';

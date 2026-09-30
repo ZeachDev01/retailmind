@@ -14,6 +14,12 @@ use App\Backup\RecoveryStore;
 use App\Services\DatabaseBackupService;
 use App\Services\DatabaseRestoreService;
 
+if (!RecoveryStore::isAvailable()) {
+    http_response_code(503);
+    echo 'Database Backup and Restore are unavailable on this hosting plan.';
+    return;
+}
+
 $message = '';
 $messageClass = '';
 // Operator Alert boundary lines. The full exception text always goes to the log and the

@@ -78,6 +78,8 @@ jobs:
           php-version: '8.3'
       - name: Install production PHP dependencies
         run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+      - name: Check restricted-host startup
+        run: php src/backend/tests/recovery_store_restricted_host_contract.php
       - name: Build deployment files
         run: bash scripts/build-infinityfree-release.sh
       - name: Check PHP syntax in deployment files
