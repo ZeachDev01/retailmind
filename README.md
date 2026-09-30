@@ -49,9 +49,11 @@ The same flag enables this test in `src/backend/tests/run_all.sh`.
 
 ## InfinityFree upload pipeline
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` runs checks on pushes and
-pull requests. After a successful push to `main`, it builds a production PHP
-release and uploads it to InfinityFree using explicit FTPS. It does not upload
+The GitHub Actions workflow in `.github/workflows/ci.yml` runs the full checks on
+pushes and pull requests. On a push to `main`, a separate deployment job builds
+the production PHP release, checks its PHP syntax and file sizes, then uploads
+it to InfinityFree using explicit FTPS. The upload can proceed when an unrelated
+full-suite test fails. It does not upload
 the database, `.env`, runtime storage, tests, Python service, or development files.
 
 Before the first deployment, configure these in the GitHub repository under
