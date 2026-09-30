@@ -40,10 +40,25 @@ function landing_redirect_by_role(): void
     exit;
 }
 
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && isset($_GET['csrf_refresh'])) {
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: no-store');
+    echo json_encode(['csrf_token' => csrf_token()]);
+    exit;
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    if (!csrf_token_is_valid()) {
+        $_SESSION['_login_error'] = 'Your login page expired. Please try again.';
+        $_SESSION['_login_username'] = is_string($_POST['username'] ?? null)
+            ? trim($_POST['username']) : '';
+        csrf_token();
+        header('Location: ' . landing_app_url('?login=1'), true, 303);
+        exit;
+    }
+
     require_once dirname(__DIR__) . '/backend/includes/auth.php';
 
-    csrf_verify();
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $_SESSION['_login_username'] = $username;
@@ -443,11 +458,27 @@ unset($_SESSION['_login_username']);
             closers.forEach(function(closer) {
                 closer.addEventListener('click', closeModal);
             });
-            if (loginForm && window.sessionStorage) {
-                loginForm.addEventListener('submit', function() {
+            if (loginForm) {
+                loginForm.addEventListener('submit', async function(event) {
+                    event.preventDefault();
                     try {
-                        window.sessionStorage.setItem(passwordStateKey, password ? password.value : '');
+                        if (window.sessionStorage) {
+                            window.sessionStorage.setItem(passwordStateKey, password ? password.value : '');
+                        }
                     } catch (error) {}
+                    try {
+                        var response = await fetch(loginForm.action + '?csrf_refresh=1', {
+                            credentials: 'same-origin',
+                            cache: 'no-store'
+                        });
+                        if (response.ok) {
+                            var data = await response.json();
+                            if (typeof data.csrf_token === 'string') {
+                                loginForm.elements.csrf_token.value = data.csrf_token;
+                            }
+                        }
+                    } catch (error) {}
+                    HTMLFormElement.prototype.submit.call(loginForm);
                 });
             }
             if (password && passwordToggle) {

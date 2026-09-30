@@ -27,14 +27,22 @@ if (!function_exists('csrf_field')) {
     }
 }
 
+if (!function_exists('csrf_token_is_valid')) {
+    function csrf_token_is_valid($submittedToken = null): bool {
+        $submitted = $submittedToken ?? ($_POST['csrf_token'] ?? '');
+        $expected = $_SESSION['csrf_token'] ?? '';
+
+        return is_string($submitted) && is_string($expected)
+            && $submitted !== '' && $expected !== ''
+            && hash_equals($expected, $submitted);
+    }
+}
+
 if (!function_exists('csrf_verify')) {
     // Call at the top of every POST handler, before touching the database.
     // Aborts the request with 403 if the token is missing or does not match.
     function csrf_verify(?string $submittedToken = null): void {
-        $submitted = $submittedToken ?? ($_POST['csrf_token'] ?? '');
-        $expected = $_SESSION['csrf_token'] ?? '';
-
-        if ($submitted === '' || $expected === '' || !hash_equals($expected, $submitted)) {
+        if (!csrf_token_is_valid($submittedToken)) {
             http_response_code(403);
             die('Security check failed. Please go back and try again.');
         }
