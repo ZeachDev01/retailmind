@@ -1074,7 +1074,8 @@ try {
     $assert($receipt === null && http_response_code() === 404, 'direct GET refuses another Store');
     $storeId = 1;
     $actorId = $casey;
-    $historyStart = strrpos($page, '<section class="dashboard-section">');
+    preg_match('/<section\b[^>]*\bid="refund-history"[^>]*>/', $page, $historyMatch, PREG_OFFSET_CAPTURE);
+    $historyStart = $historyMatch[0][1] ?? throw new RuntimeException('Refund history section is missing.');
     $historyEnd = strpos($page, '</section>', $historyStart) + strlen('</section>');
     $historyTemplate = substr($page, $historyStart, $historyEnd - $historyStart);
     if (!function_exists('app_url')) {

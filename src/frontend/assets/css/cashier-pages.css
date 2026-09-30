@@ -2,3 +2,283 @@
 
 /* Source: frontend\cashier\shifts.php */
 .shift-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.metric{font-size:1.35rem;font-weight:700}.positive{color:#15803d}.negative{color:#b91c1c}
+
+/* Shift workspace: scoped so other Cashier pages keep their own layouts. */
+.cashier-shifts-page .shift-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    margin-bottom: 1.5rem;
+}
+
+.cashier-shifts-page .dashboard-section {
+    padding: 1.5rem;
+    box-shadow: none;
+    margin-bottom: 1.5rem;
+}
+
+.cashier-shifts-page .shift-grid > .dashboard-section {
+    margin-bottom: 0;
+}
+
+.cashier-shifts-page .shift-overview {
+    grid-column: 1 / -1;
+}
+
+.cashier-shifts-page h2 {
+    margin-bottom: 1.25rem;
+    font-size: 1.05rem;
+    line-height: 1.3;
+    font-weight: 700;
+}
+
+.cashier-shifts-page .shift-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.cashier-shifts-page .shift-section-heading h2 {
+    margin: 0;
+}
+
+.cashier-shifts-page .shift-overview-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1.5rem 2rem;
+}
+
+.cashier-shifts-page .shift-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2.5rem;
+}
+
+.cashier-shifts-page .shift-details dt,
+.cashier-shifts-page .shift-history-count,
+.cashier-shifts-page .shift-optional {
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+.cashier-shifts-page .shift-details dd {
+    margin-top: 0.25rem;
+    font-weight: 600;
+}
+
+.cashier-shifts-page .shift-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+    margin: 0;
+}
+
+.cashier-shifts-page .stat-card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+.cashier-shifts-page .stat-card .value {
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.cashier-shifts-page .dashboard-section > .card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.cashier-shifts-page .shift-help {
+    color: var(--muted);
+    max-width: 65ch;
+    margin-bottom: 1.25rem;
+    font-size: 0.9rem;
+}
+
+.cashier-shifts-page .dashboard-section form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.cashier-shifts-page .form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.cashier-shifts-page .dashboard-section label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.cashier-shifts-page .dashboard-section :is(input:not([type="hidden"]), select, textarea) {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.65rem 0.85rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card-bg);
+    color: var(--text);
+    caret-color: var(--primary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.cashier-shifts-page .dashboard-section textarea {
+    min-height: 88px;
+    resize: vertical;
+}
+
+.cashier-shifts-page input::placeholder {
+    color: var(--muted);
+    opacity: 1;
+}
+
+.cashier-shifts-page .dashboard-section :is(input, select, textarea):focus-visible {
+    border-color: var(--primary);
+    box-shadow: var(--focus-ring);
+}
+
+.cashier-shifts-page .dashboard-section .btn {
+    align-self: flex-start;
+    min-height: 44px;
+    padding: 0.7rem 1.1rem;
+    font-size: 0.9rem;
+}
+
+.cashier-shifts-page .btn:disabled,
+.cashier-shifts-page select:disabled {
+    background: var(--surface-soft);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.cashier-shifts-page .shift-selector form {
+    max-width: 420px;
+}
+
+.cashier-shifts-page .shift-selector select {
+    margin-bottom: 0;
+}
+
+.cashier-shifts-page .shift-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.cashier-shifts-page .shift-status--open {
+    color: #166534;
+    background: #dcfce7;
+}
+
+.cashier-shifts-page .shift-status--closed {
+    color: var(--text);
+    background: var(--bg);
+}
+
+.cashier-shifts-page .table-wrap {
+    overflow-x: auto;
+    scrollbar-color: var(--muted) var(--surface-soft);
+}
+
+.cashier-shifts-page .shift-history-table {
+    min-width: 1260px;
+    font-size: 0.875rem;
+}
+
+.cashier-shifts-page .shift-history-table :is(th, td) {
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+.cashier-shifts-page .shift-history-table th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.cashier-shifts-page .shift-history-table td:first-child {
+    min-width: 155px;
+    font-weight: 600;
+}
+
+.cashier-shifts-page .shift-date {
+    min-width: 160px;
+    font-variant-numeric: tabular-nums;
+}
+
+.cashier-shifts-page .shift-history-table :is(th, td):nth-last-child(-n+3) {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.cashier-shifts-page .shift-empty {
+    padding: 1rem 0;
+    color: var(--muted);
+    font-weight: 400;
+    white-space: normal;
+}
+
+.cashier-shifts-page .message ul {
+    padding-left: 1.25rem;
+    margin-top: 0.75rem;
+}
+
+.cashier-shifts-page ::selection {
+    background: #dbeafe;
+    color: #1e3a8a;
+}
+
+@media (max-width: 900px) {
+    .cashier-shifts-page .shift-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .cashier-shifts-page .dashboard-section {
+        padding: 1rem;
+    }
+
+    .cashier-shifts-page .form-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .cashier-shifts-page .dashboard-section .btn {
+        align-self: stretch;
+    }
+
+    .cashier-shifts-page .shift-details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .cashier-shifts-page .shift-details > :last-child {
+        grid-column: 1 / -1;
+    }
+}

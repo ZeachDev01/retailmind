@@ -1,0 +1,273 @@
+/* Refund workspace styles do not affect printed customer receipts. */
+@media screen {
+    .cashier-refunds-page .dashboard-section {
+        margin-bottom: 1.5rem;
+        padding: 1.5rem;
+        box-shadow: none;
+    }
+
+    .cashier-refunds-page h2,
+    .cashier-refunds-page h3 {
+        font-size: 1.05rem;
+        line-height: 1.3;
+        margin-bottom: 0.75rem;
+    }
+
+    .cashier-refunds-page .refund-help {
+        color: var(--muted);
+        font-size: 0.9rem;
+        max-width: 70ch;
+        margin-bottom: 1.25rem;
+    }
+
+    .cashier-refunds-page .refund-search-form {
+        display: flex;
+        align-items: flex-end;
+        gap: 0.75rem;
+        max-width: 560px;
+    }
+
+    .cashier-refunds-page .refund-search-form > div {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .cashier-refunds-page :is(.refund-search, .refund-form) label:not(.refund-sr-only) {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .cashier-refunds-page :is(.refund-search, .refund-form) :is(input:not([type="hidden"]), select) {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.65rem 0.85rem;
+        background: var(--card-bg);
+        color: var(--text);
+        caret-color: var(--primary);
+        font-size: 0.95rem;
+    }
+
+    .cashier-refunds-page input::placeholder {
+        color: var(--muted);
+        opacity: 1;
+    }
+
+    .cashier-refunds-page :is(input, select):focus-visible {
+        border-color: var(--primary);
+        box-shadow: var(--focus-ring);
+    }
+
+    .cashier-refunds-page .btn {
+        min-height: 44px;
+        padding: 0.7rem 1.1rem;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .cashier-refunds-page :is(input, select, button):disabled {
+        background: var(--surface-soft);
+        color: var(--muted);
+        border: 1px solid var(--border);
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .cashier-refunds-page .refund-sale-heading .refund-help {
+        margin-bottom: 0;
+    }
+
+    .cashier-refunds-page .refund-sale-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem 3rem;
+        margin: 1.5rem 0;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .cashier-refunds-page .refund-sale-details dt {
+        color: var(--muted);
+        font-size: 0.85rem;
+    }
+
+    .cashier-refunds-page .refund-sale-details dd {
+        margin-top: 0.25rem;
+        font-weight: 700;
+        font-size: 1.05rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .cashier-refunds-page .refund-reason-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 1.25rem;
+        margin: 1.5rem 0;
+    }
+
+    .cashier-refunds-page .refund-policy {
+        background: var(--surface-soft);
+        padding: 1rem;
+        border-radius: 10px;
+        max-width: none;
+    }
+
+    .cashier-refunds-page .table-wrap {
+        position: relative;
+        overflow-x: auto;
+        scrollbar-color: var(--muted) var(--surface-soft);
+    }
+
+    .cashier-refunds-page table {
+        font-size: 0.875rem;
+    }
+
+    .cashier-refunds-page table :is(th, td) {
+        padding: 1rem;
+        vertical-align: middle;
+    }
+
+    .cashier-refunds-page th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .cashier-refunds-page small {
+        color: var(--muted);
+        font-size: 0.8rem;
+        overflow-wrap: anywhere;
+    }
+
+    .cashier-refunds-page #refund-note-help {
+        display: block;
+        margin-top: 0.5rem;
+    }
+
+    .cashier-refunds-page .refund-items-table {
+        min-width: 680px;
+    }
+
+    .cashier-refunds-page .refund-items-table td:first-child {
+        min-width: 200px;
+    }
+
+    .cashier-refunds-page .refund-form .refund-items-table input {
+        width: 6rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .cashier-refunds-page .refund-items-table select {
+        min-width: 155px;
+    }
+
+    .cashier-refunds-page .refund-history-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .cashier-refunds-page .refund-history-heading h2 {
+        margin: 0;
+    }
+
+    .cashier-refunds-page .refund-history-heading span {
+        color: var(--muted);
+        font-size: 0.85rem;
+    }
+
+    .cashier-refunds-page .refund-history-table {
+        min-width: 850px;
+    }
+
+    .cashier-refunds-page .refund-history-table :is(th, td):nth-child(7) {
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .cashier-refunds-page .refund-money {
+        font-weight: 600;
+    }
+
+    .cashier-refunds-page .refund-history-table :is(td:nth-child(4), td:last-child) {
+        white-space: nowrap;
+    }
+
+    .cashier-refunds-page .refund-method {
+        display: inline-block;
+        background: var(--bg);
+        color: var(--text);
+        border-radius: 6px;
+        padding: 0.2rem 0.5rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .cashier-refunds-page .refund-history a {
+        color: var(--primary-dark);
+        text-underline-offset: 3px;
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+
+    .cashier-refunds-page .refund-history a:hover {
+        text-decoration: underline;
+    }
+
+    .cashier-refunds-page .refund-empty {
+        margin: 0;
+    }
+
+    .cashier-refunds-page ::selection {
+        background: #dbeafe;
+        color: var(--text);
+    }
+
+    @media (max-width: 640px) {
+        .cashier-refunds-page .dashboard-section {
+            padding: 1rem;
+        }
+
+        .cashier-refunds-page .refund-reason-row {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    @media (max-width: 480px) {
+        .cashier-refunds-page .refund-search-form {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 1rem;
+        }
+
+        .cashier-refunds-page .refund-form > .btn {
+            width: 100%;
+        }
+
+        .cashier-refunds-page .refund-sale-details {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+    }
+}
+
+.refund-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}

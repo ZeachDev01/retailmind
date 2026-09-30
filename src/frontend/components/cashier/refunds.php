@@ -105,11 +105,12 @@ if ($receiptId > 0 && $receipt === null) {
     <title>Refunds</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/refunds.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/refunds.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
     <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 </head>
 
-<body>
+<body class="cashier-refunds-page">
     <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
             <div class="topbar">
                 <div>
@@ -132,73 +133,72 @@ if ($receiptId > 0 && $receipt === null) {
             <div class="message warning">Refund Receipt not found or unavailable for your account.</div>
             <?php endif; ?>
 
-            <section class="dashboard-section">
-                <h3>Find a sale to refund</h3>
-                <p>Enter your receipt number. Only sales you rang up yourself can be refunded.</p>
-                <form method="GET" class="form-row">
-                    <div><label for="sale_id">Receipt number</label><input type="number" min="1" name="sale_id" id="sale_id" value="<?= $saleId ?: '' ?>" required></div>
-                    <div><button class="btn" type="submit">Load sale</button></div>
+            <section class="dashboard-section refund-search">
+                <h2>Find a sale to refund</h2>
+                <p class="refund-help" id="receipt-help">Enter your receipt number. Only sales you rang up yourself can be refunded.</p>
+                <form method="GET" class="refund-search-form">
+                    <div><label for="sale_id">Receipt number</label><input type="number" min="1" name="sale_id" id="sale_id" value="<?= $saleId ?: '' ?>" placeholder="Enter receipt number" aria-describedby="receipt-help" required></div>
+                    <button class="btn" type="submit">Load sale</button>
                 </form>
             </section>
 
             <?php if ($sale): ?>
-                <section class="dashboard-section">
-                    <div class="section-header">
+                <section class="dashboard-section refund-sale">
+                    <div class="refund-sale-heading">
                         <div>
-                            <h3>Refund sale #<?= (int)$sale['sale_id'] ?></h3>
-                            <p class="section-description">
-                                <?= htmlspecialchars((string)$sale['sale_date']) ?> &middot;
-                                paid <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?> &middot;
-                                &#8369;<?= number_format((float)$sale['total_amount'], 2) ?> charged &middot;
-                                &#8369;<?= number_format((float)$sale['refunded_amount'], 2) ?> already refunded
-                            </p>
-                        </div>
-                        <div class="stat-card">
-                            <div class="value">&#8369;<?= number_format((float)$sale['refundable_amount'], 2) ?></div>
-                            <div class="label">Still refundable</div>
+                            <h2>Refund sale #<?= (int)$sale['sale_id'] ?></h2>
+                            <p class="refund-help"><?= htmlspecialchars(format_display_datetime((string)$sale['sale_date'])) ?> &middot; <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?></p>
                         </div>
                     </div>
+                    <dl class="refund-sale-details">
+                        <div><dt>Original charge</dt><dd>&#8369;<?= number_format((float)$sale['total_amount'], 2) ?></dd></div>
+                        <div><dt>Already refunded</dt><dd>&#8369;<?= number_format((float)$sale['refunded_amount'], 2) ?></dd></div>
+                        <div><dt>Still refundable</dt><dd>&#8369;<?= number_format((float)$sale['refundable_amount'], 2) ?></dd></div>
+                    </dl>
 
                     <?php if (!array_filter($sale['items'], static fn(array $item): bool => $item['refundable_quantity'] > 0)): ?>
                         <div class="message warning">This sale has already been fully refunded.</div>
                     <?php elseif (!in_array((string)$sale['payment_method'], CashRefundService::SUPPORTED_PAYMENT_METHODS, true)): ?>
                         <div class="message warning">This payment method cannot be refunded here. Ask your Administrator for help.</div>
                     <?php else: ?>
-                        <form method="POST" data-confirm="Record this refund on the original payment method? Only Restockable items return to available inventory." data-confirm-title="Record refund" data-confirm-button="Record refund">
+                        <form method="POST" class="refund-form" data-confirm="Record this refund on the original payment method? Only Restockable items return to available inventory." data-confirm-title="Record refund" data-confirm-button="Record refund">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                             <input type="hidden" name="sale_id" value="<?= (int)$sale['sale_id'] ?>">
-                            <p>Refund amounts include the original discount. Only the amount still refundable is paid back.</p>
-                            <div class="table-wrap">
-                                <table>
-                                    <tr>
+                            <h3 id="return-items-heading">Items to return</h3>
+                            <p class="refund-help">Refund amounts include the original discount. Only the amount still refundable is paid back.</p>
+                            <div class="table-wrap" role="region" aria-labelledby="return-items-heading" tabindex="0">
+                                <table class="refund-items-table">
+                                    <thead><tr>
                                         <th>Product</th>
                                         <th>Sold</th>
                                         <th>Still refundable</th>
                                         <th>Returning</th>
                                         <th>Condition</th>
-                                    </tr>
+                                    </tr></thead><tbody>
                                     <?php foreach ($sale['items'] as $line): ?>
                                         <?php $remaining = (int)$line['refundable_quantity']; ?>
                                         <tr>
-                                            <td><?= htmlspecialchars($line['sku'] . ' — ' . $line['product_name']) ?><br><small>&#8369;<?= number_format((float)$line['unit_price'], 2) ?> each</small></td>
+                                            <td><strong><?= htmlspecialchars($line['product_name']) ?></strong><br><small><?= htmlspecialchars($line['sku']) ?> &middot; &#8369;<?= number_format((float)$line['unit_price'], 2) ?> each</small></td>
                                             <td><?= (int)$line['quantity'] ?></td>
                                             <td><?= $remaining ?></td>
                                             <td>
-                                                <input type="number" name="quantity[<?= (int)$line['sale_item_id'] ?>]" min="0" max="<?= $remaining ?>" value="0" <?= $remaining <= 0 ? 'disabled' : '' ?> style="width:6rem;">
+                                                <label class="refund-sr-only" for="return-quantity-<?= (int)$line['sale_item_id'] ?>">Returning quantity for <?= htmlspecialchars($line['product_name']) ?></label>
+                                                <input id="return-quantity-<?= (int)$line['sale_item_id'] ?>" type="number" name="quantity[<?= (int)$line['sale_item_id'] ?>]" min="0" max="<?= $remaining ?>" value="0" <?= $remaining <= 0 ? 'disabled' : '' ?>>
                                             </td>
                                             <td>
-                                                <select name="disposition[<?= (int)$line['sale_item_id'] ?>]" <?= $remaining <= 0 ? 'disabled' : '' ?>>
+                                                <label class="refund-sr-only" for="return-condition-<?= (int)$line['sale_item_id'] ?>">Condition for <?= htmlspecialchars($line['product_name']) ?></label>
+                                                <select id="return-condition-<?= (int)$line['sale_item_id'] ?>" name="disposition[<?= (int)$line['sale_item_id'] ?>]" <?= $remaining <= 0 ? 'disabled' : '' ?>>
                                                     <?php foreach (CashRefundService::DISPOSITIONS as $value => $label): ?>
                                                         <option value="<?= htmlspecialchars($value) ?>"><?= htmlspecialchars($label) ?></option>
                                                     <?php endforeach; ?>
                                                 </select>
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php endforeach; ?></tbody>
                                 </table>
                             </div>
 
-                            <div class="form-row">
+                            <div class="form-row refund-reason-row">
                                 <div>
                                     <label for="reason">Reason <span class="required">(required)</span></label>
                                     <select name="reason" id="reason" required>
@@ -210,11 +210,12 @@ if ($receiptId > 0 && $receipt === null) {
                                 </div>
                                 <div>
                                     <label for="note">Note</label>
-                                    <input type="text" name="note" id="note" maxlength="255" placeholder="Required when the reason is Other">
+                                    <input type="text" name="note" id="note" maxlength="255" aria-describedby="refund-note-help">
+                                    <small id="refund-note-help">Required when the reason is Other.</small>
                                 </div>
                             </div>
 
-                            <p class="section-description">Refund on the original <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?> payment method. Only <strong>Restockable</strong> units return to available inventory. A <strong>Damaged</strong> unit stays off the shelf. Only cash refunds reduce expected drawer cash.</p>
+                            <p class="refund-help refund-policy">Refund on the original <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?> payment method. Only <strong>Restockable</strong> units return to available inventory. A <strong>Damaged</strong> unit stays off the shelf. Only cash refunds reduce expected drawer cash.</p>
 
                             <button class="btn" type="submit" <?= $canRefund ? '' : 'disabled' ?>>Record refund</button>
                             <?php if (!$canRefund): ?><p class="section-description">A refund needs your own open Cashier Shift.</p><?php endif; ?>
@@ -225,14 +226,14 @@ if ($receiptId > 0 && $receipt === null) {
                 <section class="dashboard-section"><p>Sale #<?= (int)$saleId ?> was not found, or it was not one of your sales.</p></section>
             <?php endif; ?>
 
-            <section class="dashboard-section">
-                <h3>My refunds</h3>
+            <section class="dashboard-section refund-history" id="refund-history">
+                <div class="refund-history-heading"><h2 id="refund-history-heading">My refunds</h2><span><?= count($refunds) ?> refund<?= count($refunds) === 1 ? '' : 's' ?></span></div>
                 <?php if (!$refunds): ?>
-                    <p>You have not issued any refunds yet.</p>
+                    <p class="refund-help refund-empty">You have not issued any refunds yet.</p>
                 <?php else: ?>
-                    <div class="table-wrap">
-                        <table>
-                            <tr>
+                    <div class="table-wrap" role="region" aria-labelledby="refund-history-heading" tabindex="0">
+                        <table class="refund-history-table">
+                            <thead><tr>
                                 <th>Refund</th>
                                 <th>Sale</th>
                                 <th>Shift</th>
@@ -241,7 +242,7 @@ if ($receiptId > 0 && $receipt === null) {
                                 <th>Method</th>
                                 <th>Amount</th>
                                 <th>Receipt</th>
-                            </tr>
+                            </tr></thead><tbody>
                             <?php foreach ($refunds as $refund): ?>
                                 <tr>
                                     <td>#<?= (int)$refund['refund_id'] ?></td>
@@ -252,17 +253,28 @@ if ($receiptId > 0 && $receipt === null) {
                                         <?= htmlspecialchars(CashRefundService::REFUND_REASONS[(string)$refund['reason']] ?? (string)$refund['reason']) ?>
                                         <?php if (!empty($refund['note'])): ?><br><small><?= htmlspecialchars((string)$refund['note']) ?></small><?php endif; ?>
                                     </td>
-                                    <td><?= htmlspecialchars(strtoupper((string)$refund['payment_method'])) ?></td>
-                                    <td>&#8369;<?= number_format((float)$refund['refund_amount'], 2) ?></td>
+                                    <td><span class="refund-method"><?= htmlspecialchars(strtoupper((string)$refund['payment_method'])) ?></span></td>
+                                    <td class="refund-money">&#8369;<?= number_format((float)$refund['refund_amount'], 2) ?></td>
                                     <td><a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php?refund_id=' . (int)$refund['refund_id'])) ?>" aria-label="Preview Refund Receipt #<?= (int)$refund['refund_id'] ?>">Preview receipt</a></td>
                                 </tr>
-                            <?php endforeach; ?>
+                            <?php endforeach; ?></tbody>
                         </table>
                     </div>
                 <?php endif; ?>
             </section>
         </main>
     </div>
+    <script>
+        const refundReason = document.getElementById('reason');
+        const refundNote = document.getElementById('note');
+        if (refundReason && refundNote) {
+            const syncNoteRequirement = () => {
+                refundNote.required = refundReason.value === 'other';
+            };
+            refundReason.addEventListener('change', syncNoteRequirement);
+            syncNoteRequirement();
+        }
+    </script>
 </body>
 
 </html>
