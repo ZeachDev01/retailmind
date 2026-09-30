@@ -22,6 +22,28 @@ if (!fs.existsSync(chromium.executablePath())) {
     const script = fs.readFileSync(path.join(root, 'src/frontend/assets/js/sale-receipt.js'), 'utf8');
     const browser = await chromium.launch({ headless: true });
     try {
+        // Exercise both retained legacy search entry points with the shipped helper.
+        const legacySource = fs.readFileSync(path.join(root, 'src/backend/legacy/routes/invoice/receipt.php'), 'utf8');
+        const searchHelper = legacySource.match(/function performSearch\(\) \{[\s\S]*?\n\}/)?.[0];
+        const enterHandler = legacySource.match(/document.getElementById\('search-input'\).addEventListener\('keypress',[\s\S]*?\n\}\);/)?.[0];
+        assert.ok(searchHelper && enterHandler, 'legacy search helper and Enter handler remain available');
+        const searchPage = await browser.newPage();
+        await searchPage.route('https://example.test/**', route => route.fulfill({
+            contentType: 'text/html', body: '<input id="search-input"><select id="search-field"><option value="cashier">Cashier</option></select><button onclick="performSearch()">Search</button>'
+        }));
+        for (const action of ['button', 'Enter']) {
+            await searchPage.goto('https://example.test/receipt.php?keep=original');
+            await searchPage.addScriptTag({ content: searchHelper + '\n' + enterHandler });
+            await searchPage.locator('#search-input').fill('Alice & Co');
+            const navigation = searchPage.waitForURL(url => url.searchParams.get('search') === 'Alice & Co');
+            if (action === 'button') await searchPage.locator('button').click();
+            else await searchPage.locator('#search-input').press('Enter');
+            await navigation;
+            const destination = new URL(searchPage.url());
+            assert.equal(destination.searchParams.get('field'), 'cashier');
+            assert.equal(destination.searchParams.get('keep'), 'original');
+        }
+        await searchPage.close();
         for (const variant of ['short', 'long']) {
             const html = execFileSync(process.env.PHP_BINARY || 'php',
                 [path.join(__dirname, 'support/sale_receipt_fixture.php'), variant], { encoding: 'utf8' });
