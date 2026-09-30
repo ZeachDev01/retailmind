@@ -174,6 +174,7 @@ $managerInventoryItems = [
 ];
 
 $administratorReportItems = [
+    ['path' => 'components/administrator/shift_report.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shifts'],
     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Forecast Analytics'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
