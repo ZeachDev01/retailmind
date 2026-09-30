@@ -30,20 +30,6 @@ function receipt_store_info(): array {
     ];
 }
 
-function receipt_table_columns(PDO $pdo, string $table): array {
-    static $cache = [];
-    if (isset($cache[$table])) {
-        return $cache[$table];
-    }
-
-    $columns = [];
-    foreach ($pdo->query('SHOW COLUMNS FROM ' . $table)->fetchAll(PDO::FETCH_ASSOC) as $column) {
-        $columns[$column['Field']] = true;
-    }
-    $cache[$table] = $columns;
-    return $columns;
-}
-
 function receipt_money($value): string {
     $store = receipt_store_info();
     return htmlspecialchars((string)$store['currency_symbol']) . number_format((float)$value, 2);
@@ -59,27 +45,7 @@ function receipt_verification_code(array $sale): string {
 }
 
 function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
-    $saleColumns = receipt_table_columns($pdo, 'sales');
-    $cashReceivedSql = isset($saleColumns['cash_received']) ? 's.cash_received' : 'NULL';
-    $changeDueSql = isset($saleColumns['change_due']) ? 's.change_due' : 'NULL';
-    $paymentReferenceSql = isset($saleColumns['payment_reference']) ? 's.payment_reference' : 'NULL';
-    $discountSql = isset($saleColumns['discount_amount']) ? 's.discount_amount' : '0.00';
-
-    $saleStmt = $pdo->prepare(
-        "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date,
-                {$cashReceivedSql} AS cash_received,
-                {$changeDueSql} AS change_due,
-                {$paymentReferenceSql} AS payment_reference,
-                {$discountSql} AS discount_amount,
-                u.full_name AS cashier_name
-         FROM sales s
-         JOIN users u ON s.cashier_id = u.user_id
-         WHERE s.sale_id = ?"
-    );
-    $saleStmt->execute([$sale_id]);
-    $sale = $saleStmt->fetch();
-
-    return $sale ?: null;
+    return (new App\Services\ReceiptDetailsService($pdo))->fetchSale($sale_id);
 }
 
 function receipt_fetch_items(PDO $pdo, int $sale_id): array {
@@ -116,12 +82,7 @@ function receipt_render_details(array $sale, array $items): void {
                     <div><?= htmlspecialchars($store['contact']) ?></div>
                     <div><?= htmlspecialchars($store['tin']) ?></div>
                 </div>
-                <div class="receipt-meta">
-                    <div><strong>Transaction #<?= (int)$sale['sale_id'] ?></strong></div>
-                    <div>Receipt #<?= (int)$sale['sale_id'] ?></div>
-                    <div>Date/Time: <?= htmlspecialchars($sale['sale_date']) ?></div>
-                    <div>Cashier: <?= htmlspecialchars($sale['cashier_name']) ?></div>
-                </div>
+                <?= App\Services\ReceiptDetailsService::renderMetadata($sale) ?>
             </div>
 
             <div class="receipt-summary">
@@ -231,14 +192,7 @@ if ($action === 'list' || $action === 'view') {
 
 // Handle AJAX view request
 if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
-    $saleStmt = $pdo->prepare(
-        "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date, u.full_name AS cashier_name
-         FROM sales s
-         JOIN users u ON s.cashier_id = u.user_id
-         WHERE s.sale_id = ?"
-    );
-    $saleStmt->execute([$sale_id]);
-    $sale = $saleStmt->fetch();
+    $sale = receipt_fetch_sale($pdo, $sale_id);
     
     if (!$sale) {
         http_response_code(404);
@@ -252,7 +206,6 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         exit;
     }
 
-    $sale = receipt_fetch_sale($pdo, $sale_id);
     receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id));
     exit;
     

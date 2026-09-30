@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../../backend/app/Services/SaleReversalService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\ReceiptTableService;
+use App\Services\ReceiptDetailsService;
 
 require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
@@ -37,20 +38,6 @@ function receipt_store_info(): array {
     ];
 }
 
-function receipt_table_columns(PDO $pdo, string $table): array {
-    static $cache = [];
-    if (isset($cache[$table])) {
-        return $cache[$table];
-    }
-
-    $columns = [];
-    foreach ($pdo->query('SHOW COLUMNS FROM ' . $table)->fetchAll(PDO::FETCH_ASSOC) as $column) {
-        $columns[$column['Field']] = true;
-    }
-    $cache[$table] = $columns;
-    return $columns;
-}
-
 function receipt_money($value): string {
     $store = receipt_store_info();
     return htmlspecialchars((string)$store['currency_symbol']) . number_format((float)$value, 2);
@@ -66,42 +53,7 @@ function receipt_verification_code(array $sale): string {
 }
 
 function receipt_fetch_sale(PDO $pdo, int $sale_id, int $storeId): ?array {
-    $saleColumns = receipt_table_columns($pdo, 'sales');
-    $cashReceivedSql = isset($saleColumns['cash_received']) ? 's.cash_received' : 'NULL';
-    $changeDueSql = isset($saleColumns['change_due']) ? 's.change_due' : 'NULL';
-    $paymentReferenceSql = isset($saleColumns['payment_reference']) ? 's.payment_reference' : 'NULL';
-    $discountSql = isset($saleColumns['discount_amount']) ? 's.discount_amount' : '0.00';
-    $promotionNameSql = isset($saleColumns['promotion_name']) ? 's.promotion_name' : 'NULL';
-    $discountReasonSql = isset($saleColumns['discount_reason']) ? 's.discount_reason' : 'NULL';
-
-    $saleStmt = $pdo->prepare(
-        "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date,
-                {$cashReceivedSql} AS cash_received,
-                {$changeDueSql} AS change_due,
-                {$paymentReferenceSql} AS payment_reference,
-                {$discountSql} AS discount_amount,
-                {$promotionNameSql} AS promotion_name,
-                {$discountReasonSql} AS discount_reason,
-                s.shift_id AS shift_id,
-                attribution_shift.register_id AS register_id,
-                attribution_register.name AS register_name,
-                u.full_name AS cashier_name
-         FROM sales s
-         JOIN users u ON s.cashier_id = u.user_id
-         LEFT JOIN cashier_shifts attribution_shift ON attribution_shift.shift_id = s.shift_id
-         LEFT JOIN registers attribution_register ON attribution_register.register_id = attribution_shift.register_id
-         WHERE s.sale_id = ? AND (
-             u.branch_id = ? OR EXISTS (
-                 SELECT 1 FROM sale_items scope_si
-                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-             )
-         )"
-    );
-    $saleStmt->execute([$sale_id, $storeId, $storeId]);
-    $sale = $saleStmt->fetch();
-
-    return $sale ?: null;
+    return (new ReceiptDetailsService($pdo))->fetchSale($sale_id, $storeId);
 }
 
 function receipt_fetch_items(PDO $pdo, int $sale_id): array {
@@ -146,19 +98,8 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale): 
                     <div><?= htmlspecialchars($store['contact']) ?></div>
                     <div><?= htmlspecialchars($store['tin']) ?></div>
                 </div>
-                <div class="receipt-meta">
-                    <div><strong>Transaction #<?= (int)$sale['sale_id'] ?></strong></div>
-                    <div>Receipt #<?= (int)$sale['sale_id'] ?></div>
-                    <div>Date/Time: <?= htmlspecialchars($sale['sale_date']) ?></div>
-                    <div>Cashier: <?= htmlspecialchars($sale['cashier_name']) ?></div>
-                    <?php if (!empty($sale['shift_id'])): ?>
-                    <div>Cashier Shift: #<?= (int)$sale['shift_id'] ?><?php if (!empty($sale['register_name'])): ?> (<?= htmlspecialchars($sale['register_name']) ?>)<?php endif; ?></div>
-                    <?php else: ?>
-                    <?php // Ticket #89: a sale with no shift predates the deployment
-                          // cutoff. It is labelled, never linked to a guess. ?>
-                    <div>Cashier Shift: Legacy / Unassigned</div>
-                    <?php endif; ?>
-                </div>
+                <?php // Legacy / Unassigned attribution is rendered without exposing the Cashier Shift identifier. ?>
+                <?= ReceiptDetailsService::renderMetadata($sale) ?>
             </div>
 
             <div class="receipt-summary">
@@ -316,22 +257,7 @@ if ($can_manage_all) {
 
 // Handle AJAX view request
 if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
-    // Authorization guard only: the rendered receipt is re-fetched through
-    // receipt_fetch_sale() below so both paths render identically.
-    $saleStmt = $pdo->prepare(
-        "SELECT s.sale_id, s.cashier_id
-         FROM sales s
-         JOIN users u ON s.cashier_id = u.user_id
-         WHERE s.sale_id = ? AND (
-             u.branch_id = ? OR EXISTS (
-                 SELECT 1 FROM sale_items scope_si
-                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-             )
-         )"
-    );
-    $saleStmt->execute([$sale_id, $storeId, $storeId]);
-    $sale = $saleStmt->fetch();
+    $sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
 
     if (!$sale) {
         http_response_code(404);
@@ -345,7 +271,6 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         exit;
     }
 
-    $sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
     receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale);
     exit;
 

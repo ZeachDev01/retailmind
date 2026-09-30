@@ -39,8 +39,8 @@ $checks = [
         ],
     ],
     'Unlinked sales are presented as Legacy / Unassigned' => [
-        'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['Legacy / Unassigned', 'attribution_shift.register_id AS register_id'],
+        'file' => 'src/backend/app/Services/ReceiptDetailsService.php',
+        'needles' => ['Legacy / Unassigned', 'LEFT JOIN cashier_shifts cs ON cs.shift_id = s.shift_id', 'r.name AS register_name'],
     ],
     'Discount authorization recorded' => [
         'file' => 'src/backend/app/Services/SalesWorkflowService.php',
