@@ -717,6 +717,15 @@ if ($sale_id > 0) {
 
 <script>
 
+function performSearch() {
+    const search = document.getElementById('search-input').value;
+    const field = document.getElementById('search-field').value;
+    const url = new URL(window.location);
+    url.searchParams.set('search', search);
+    url.searchParams.set('field', field);
+    window.location = url.toString();
+}
+
 function viewReceipt(saleId) {
     const url = '<?= htmlspecialchars(app_url('invoice/receipt.php')) ?>?action=view&sale_id=' + saleId + '&ajax=1';
     
