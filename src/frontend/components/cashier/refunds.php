@@ -137,12 +137,13 @@ $refunds = $refundService->recentForCashier($actorId);
                         </div>
                     </div>
 
-                    <?php if ((float)$sale['refundable_amount'] <= 0): ?>
+                    <?php if (!array_filter($sale['items'], static fn(array $item): bool => $item['refundable_quantity'] > 0)): ?>
                         <div class="message warning">This sale has already been fully refunded.</div>
                     <?php else: ?>
                         <form method="POST" data-confirm="Record this refund? Cash leaves the drawer and only Restockable items return to available inventory." data-confirm-title="Record cash refund" data-confirm-button="Record refund">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                             <input type="hidden" name="sale_id" value="<?= (int)$sale['sale_id'] ?>">
+                            <p>Refund amounts include the original discount. Only the amount still refundable is paid back.</p>
                             <div class="table-wrap">
                                 <table>
                                     <tr>

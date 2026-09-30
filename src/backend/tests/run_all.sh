@@ -36,6 +36,7 @@ php src/backend/tests/register_lock_schema_parity_contract.php
 php src/backend/tests/held_sale_shift_contract.php
 php src/backend/tests/held_sale_schema_parity_contract.php
 php src/backend/tests/cash_refund_contract.php
+php src/backend/tests/cash_refund_concurrency_integration.php
 php src/backend/tests/cash_refund_schema_parity_contract.php
 php src/backend/tests/store_staff_availability_contract.php
 php src/backend/tests/store_staff_username_notice_contract.php

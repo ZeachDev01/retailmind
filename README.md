@@ -31,3 +31,18 @@ npm run test:e2e
 
 The test must only be pointed at a disposable local or CI database. Do not use
 production database credentials in `.env` when running it.
+
+## Cash Refund database testing
+
+The refund race test creates a temporary database from the canonical table
+definitions, runs competing refunds, checks legacy reversal isolation, and drops
+the temporary database. Use a local MySQL/MariaDB account with permission to create
+and drop databases. It reads connection settings from `.env` and does not write
+to the configured Store database.
+
+```powershell
+$env:RUN_REFUND_DB_TESTS = '1'
+php src/backend/tests/cash_refund_concurrency_integration.php
+```
+
+The same flag enables this test in `src/backend/tests/run_all.sh`.

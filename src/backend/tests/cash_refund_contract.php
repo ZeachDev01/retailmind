@@ -501,10 +501,6 @@ try {
         static fn() => $refunds->refund($casey, 'cashier', $saleId, $returnOf(987654, 1), 'customer_return'),
         'refunding a line that does not exist is refused'
     );
-    $expectRefusal(
-        static fn() => $refunds->refund($casey, 'cashier', $discountedSaleId, $returnOf($discountedItemId, 4), 'customer_return'),
-        'refunding a discounted line up to its shelf value is refused, because only the discounted amount was paid'
-    );
     $assert(
         abs((float)$refunds->refundableAmount($discountedSaleId) - 95.00) < 0.001,
         'a discounted sale is refundable only up to the amount the customer paid'
@@ -518,12 +514,12 @@ try {
     );
     $assert($partialDiscountedId > 0, 'a partial refund of a discounted sale within the amount paid is written');
     $assert(
-        abs((float)$refunds->refundableAmount($discountedSaleId) - 20.00) < 0.001,
+        abs((float)$refunds->refundableAmount($discountedSaleId) - 23.75) < 0.001,
         'the remaining refundable amount of a discounted sale falls by the refund'
     );
     $expectRefusal(
-        static fn() => $refunds->refund($casey, 'cashier', $discountedSaleId, $returnOf($discountedItemId, 1), 'customer_return'),
-        'refunding one more unit than the remaining amount of the sale allows is refused'
+        static fn() => $refunds->refund($casey, 'cashier', $discountedSaleId, $returnOf($discountedItemId, 2), 'customer_return'),
+        'refunding more than the remaining discounted quantity is refused'
     );
     $assert(
         $refundCount($pdo) === 1,
@@ -681,11 +677,11 @@ try {
     $itemsBeforeRefund = (int)$pdo->query("SELECT COUNT(*) FROM sale_items WHERE sale_id = {$damagedSaleId}")->fetchColumn();
     $salesBeforeRefund = (int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn();
     $expectedBeforeRefund = (float)$shifts->calculateShift($caseyShiftId)['calculated_expected_cash'];
-    // 200.00 opening float, 300.00 of cash sales, 215.00 of cash refunds issued
+    // 200.00 opening float, 300.00 of cash sales, 211.25 of cash refunds issued
     // so far on this shift. The Card refund is deliberately not in it: only cash
     // handed back out of the drawer moves the drawer.
     $assert(
-        abs($expectedBeforeRefund - 285.00) < 0.001,
+        abs($expectedBeforeRefund - 288.75) < 0.001,
         'expected drawer cash is the opening float plus cash sales minus the cash refunds already issued'
     );
 
@@ -706,7 +702,7 @@ try {
         'a cash refund reduces the expected drawer cash of the Cashier Shift that issued it'
     );
     $assert(
-        abs((float)$shifts->calculateShift($caseyShiftId)['cash_refunds'] - 255.00) < 0.001,
+        abs((float)$shifts->calculateShift($caseyShiftId)['cash_refunds'] - 251.25) < 0.001,
         'the shift summary names every cash refund it issued, and only the cash ones'
     );
     $assert(
@@ -828,6 +824,128 @@ try {
         (int)$pdo->query('SELECT COUNT(*) FROM cash_refunds WHERE sale_id NOT IN (SELECT sale_id FROM sales)')->fetchColumn() === 0,
         'every refund names a sale that exists'
     );
+
+    // Returning the last discounted unit must settle the full amount paid.
+    $lastDiscounted = $refunds->refund($casey, 'cashier', $discountedSaleId,
+        $returnOf($discountedItemId, 1), 'customer_return');
+    $assert((float)$refundRow($pdo, $lastDiscounted)['refund_amount'] === 23.75,
+        'the last discounted unit refunds its share of the amount paid');
+    $assert($refunds->refundableAmount($discountedSaleId) === 0.0,
+        'partial discounted refunds can exhaust the amount paid');
+    $assert($refunds->refundableQuantity($discountedItemId) === 0,
+        'partial discounted refunds can return every sold unit');
+
+    // A full return of multiple units pays back the net sale, including
+    // the last cent. The same sale split into single-unit returns pays equally.
+    foreach ([false, true] as $splitReturn) {
+        $roundedSale = $sales->checkout([['product_id' => 1, 'qty' => 3]], $casey, 'cashier', 'cash',
+            ['cash_received' => 100, 'discount_type' => 'fixed', 'discount_value' => 0.01, 'discount_reason' => 'Goodwill']);
+        $roundedSaleId = (int)$roundedSale['sale_id'];
+        $roundedItemId = $lineIdOf($roundedSaleId, 1);
+        $amounts = [];
+        foreach ($splitReturn ? [1, 1, 1] : [3] as $quantity) {
+            $id = $refunds->refund($casey, 'cashier', $roundedSaleId, $returnOf($roundedItemId, $quantity), 'customer_return');
+            $amounts[] = (float)$refundRow($pdo, $id)['refund_amount'];
+        }
+        $assert($amounts === ($splitReturn ? [25.0, 24.99, 25.0] : [74.99]),
+            'full and split discounted returns preserve the final cent');
+        $assert($refunds->refundableAmount($roundedSaleId) === 0.0,
+            'rounding leaves no money stranded after every unit is returned');
+    }
+
+    $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 30)');
+    foreach ([false, true] as $splitLines) {
+        $mixed = $sales->checkout([['product_id' => 1, 'qty' => 1], ['product_id' => 2, 'qty' => 1]],
+            $casey, 'cashier', 'cash', ['cash_received' => 100, 'discount_type' => 'fixed',
+                'discount_value' => 0.01, 'discount_reason' => 'Goodwill']);
+        $mixedId = (int)$mixed['sale_id'];
+        $beforeReturn = $saleRow($pdo, $mixedId);
+        $waterReturn = $returnOf($lineIdOf($mixedId, 1), 1);
+        $teaReturn = $returnOf($lineIdOf($mixedId, 2), 1);
+        $paidBack = [];
+        foreach ($splitLines ? [$teaReturn, $waterReturn] : [$waterReturn + $teaReturn] as $return) {
+            $id = $refunds->refund($casey, 'cashier', $mixedId, $return, 'customer_return');
+            $paidBack[] = (float)$refundRow($pdo, $id)['refund_amount'];
+        }
+        $assert($paidBack === ($splitLines ? [39.99, 25.0] : [64.99]),
+            'discount cents are allocated across all lines regardless of return order');
+        $assert($saleRow($pdo, $mixedId) === $beforeReturn, 'a full discounted return never rewrites the sale');
+    }
+
+    // Existing refunds retain the actual amount they paid before net pricing.
+    $historical = $sales->checkout([['product_id' => 1, 'qty' => 4]], $casey, 'cashier', 'cash',
+        ['cash_received' => 100, 'discount_type' => 'fixed', 'discount_value' => 5, 'discount_reason' => 'Goodwill']);
+    $historicalId = (int)$historical['sale_id'];
+    $historicalItem = $lineIdOf($historicalId, 1);
+    $pdo->prepare("INSERT INTO cash_refunds (sale_id, shift_id, cashier_id, refund_amount, payment_method, reason)
+        VALUES (?, ?, ?, 75, 'cash', 'customer_return')")->execute([$historicalId, $caseyShiftId, $casey]);
+    $historicalRefund = (int)$pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO cash_refund_items (refund_id, sale_item_id, product_id, quantity, unit_price, subtotal, disposition)
+        VALUES (?, ?, 1, 3, 25, 75, 'damaged')")->execute([$historicalRefund, $historicalItem]);
+    $lastHistorical = $refunds->refund($casey, 'cashier', $historicalId,
+        $returnOf($historicalItem, 1), 'customer_return');
+    $assert((float)$refundRow($pdo, $lastHistorical)['refund_amount'] === 20.0,
+        'an existing shelf-price partial refund leaves only the actual unpaid balance');
+    $assert((float)$refundRow($pdo, $historicalRefund)['refund_amount'] === 75.0,
+        'existing refund history remains immutable');
+
+    $historicalMixed = $sales->checkout([['product_id' => 1, 'qty' => 1], ['product_id' => 2, 'qty' => 1]],
+        $casey, 'cashier', 'cash', ['cash_received' => 100, 'discount_type' => 'fixed',
+            'discount_value' => 5, 'discount_reason' => 'Goodwill']);
+    $historicalMixedId = (int)$historicalMixed['sale_id'];
+    $pdo->prepare("INSERT INTO cash_refunds (sale_id, shift_id, cashier_id, refund_amount, payment_method, reason)
+        VALUES (?, ?, ?, 25, 'cash', 'customer_return')")->execute([$historicalMixedId, $caseyShiftId, $casey]);
+    $oldMixedRefund = (int)$pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO cash_refund_items (refund_id, sale_item_id, product_id, quantity, unit_price, subtotal, disposition)
+        VALUES (?, ?, 1, 1, 25, 25, 'damaged')")->execute([$oldMixedRefund, $lineIdOf($historicalMixedId, 1)]);
+    $mixedRemainder = $refunds->refund($casey, 'cashier', $historicalMixedId,
+        $returnOf($lineIdOf($historicalMixedId, 2), 1), 'customer_return');
+    $assert((float)$refundRow($pdo, $mixedRemainder)['refund_amount'] === 35.0,
+        'historical shelf-price returns on another line cannot overpay the sale');
+    $assert((float)$linesOf($pdo, $mixedRemainder)[0]['subtotal'] === 35.0,
+        'the capped payout is reflected in the recorded line value');
+
+    foreach (['pending', 'approved'] as $legacyStatus) {
+        $legacySale = $sales->checkout([['product_id' => 1, 'qty' => 1]], $casey, 'cashier', 'cash', ['cash_received' => 100]);
+        $legacyId = (int)$legacySale['sale_id'];
+        $legacyItem = $lineIdOf($legacyId, 1);
+        $pdo->prepare('INSERT INTO sale_reversals (sale_id, status, refund_amount) VALUES (?, ?, 25)')
+            ->execute([$legacyId, $legacyStatus]);
+        $expectRefusal(static fn() => $refunds->refund($casey, 'cashier', $legacyId,
+            $returnOf($legacyItem, 1), 'customer_return'),
+            'a sale with a pending or approved legacy reversal cannot be refunded twice');
+    }
+
+    // A steep discount can allocate zero cents to a returned unit. It still
+    // consumes quantity and can be restocked after all cash has been repaid.
+    $pdo->exec("INSERT INTO promotions (promotion_name, scope, discount_type, discount_value, starts_at, ends_at) VALUES ('Tiny remainder', 'all', 'fixed', 74.99, '2000-01-01', '2099-01-01')");
+    $tiny = $sales->checkout([['product_id' => 1, 'qty' => 3]], $casey, 'cashier', 'cash',
+        ['cash_received' => 100]);
+    $pdo->exec("UPDATE promotions SET status = 'inactive'");
+    $tinyId = (int)$tiny['sale_id'];
+    $tinyItem = $lineIdOf($tinyId, 1);
+    foreach ([0.0, 0.01, 0.0] as $expectedAmount) {
+        $tinyRefund = $refunds->refund($casey, 'cashier', $tinyId, $returnOf($tinyItem, 1), 'customer_return');
+        $assert((float)$refundRow($pdo, $tinyRefund)['refund_amount'] === $expectedAmount,
+            'every discounted unit can be returned even when its allocated value rounds to zero');
+    }
+    $assert($refunds->refundableQuantity($tinyItem) === 0, 'zero-cent returns still consume quantity');
+
+    // A failure to write the Protected Audit Record rolls back stock and money.
+    $auditSale = $sales->checkout([['product_id' => 1, 'qty' => 1]], $casey, 'cashier', 'cash', ['cash_received' => 100]);
+    $auditSaleId = (int)$auditSale['sale_id'];
+    $auditItemId = $lineIdOf($auditSaleId, 1);
+    $stockBeforeAuditFailure = (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn();
+    $refundsBeforeAuditFailure = $refundCount($pdo);
+    $pdo->exec("CREATE TRIGGER fail_refund_audit BEFORE INSERT ON activity_log
+        WHEN NEW.module = 'Cash Refunds' BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END");
+    $expectRefusal(static fn() => $refunds->refund($casey, 'cashier', $auditSaleId,
+        $returnOf($auditItemId, 1), 'customer_return'), 'an unauditable refund must fail');
+    $assert($refundCount($pdo) === $refundsBeforeAuditFailure, 'audit failure rolls back the refund');
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn() === $stockBeforeAuditFailure,
+        'audit failure rolls back returned inventory');
+    $assert($refunds->refundableAmount($auditSaleId) === 25.0, 'audit failure preserves the refundable balance');
+    $pdo->exec('DROP TRIGGER fail_refund_audit');
 
     // The page is the only surface a browser reaches, and it holds no rules of
     // its own: the caps and the classification live in the service, where a

@@ -69,8 +69,8 @@ require_once __DIR__ . '/FiscalPeriodGuardService.php';
  * card and e-wallet money never entered the drawer, so it never leaves it.
  *
  * This ledger is distinct from the pre-existing supervisor-approved sale
- * reversal flow, which is left exactly as it is. The remaining-balance caps here
- * are computed from these refunds, so the two paths do not share a balance.
+ * reversal flow. A sale uses only one return ledger: pending or approved legacy
+ * reversals exclude Cash Refunds, and Cash Refunds exclude legacy reversals.
  */
 class CashRefundService
 {
@@ -169,6 +169,12 @@ class CashRefundService
             // unlocked at commit.
             $shiftId = $this->requireOpenShiftId($cashierId);
             $sale = $this->lockOwnSale($cashierId, $saleId);
+            $legacy = $this->pdo->prepare("SELECT reversal_id FROM sale_reversals
+                WHERE sale_id = ? AND status IN ('pending', 'approved') LIMIT 1" . $this->rowLock());
+            $legacy->execute([$saleId]);
+            if ($legacy->fetchColumn() !== false) {
+                throw new DomainException('This sale has a pending or approved reversal. Resolve it through the original return record.');
+            }
             $lines = $this->settleLines($sale, $requested);
             $amount = $this->settleAmount($sale, $lines);
 
@@ -530,25 +536,34 @@ class CashRefundService
      */
     private function settleLines(array $sale, array $requested): array
     {
-        $saleItemIds = array_keys($requested);
-        $placeholders = implode(',', array_fill(0, count($saleItemIds), '?'));
+        // Allocate the amount actually paid across all sold lines in cents.
+        // Cumulative rounding assigns the final cent deterministically, regardless
+        // of the order in which items are returned.
         $stmt = $this->pdo->prepare(
-            "SELECT si.sale_item_id, si.product_id, si.quantity AS sold_quantity, si.unit_price,
-                    COALESCE(refunded.refunded_quantity, 0) AS refunded_quantity
-             FROM sale_items si
-             LEFT JOIN (
-                 SELECT cri.sale_item_id, SUM(cri.quantity) AS refunded_quantity
-                 FROM cash_refund_items cri
-                 JOIN cash_refunds cr ON cr.refund_id = cri.refund_id
-                 WHERE cri.sale_item_id IN ({$placeholders})
-                 GROUP BY cri.sale_item_id
-             ) refunded ON refunded.sale_item_id = si.sale_item_id
-             WHERE si.sale_id = ? AND si.sale_item_id IN ({$placeholders})"
+            'SELECT si.sale_item_id, si.product_id, si.quantity AS sold_quantity,
+                    si.unit_price, si.subtotal,
+                    COALESCE((SELECT SUM(cri.quantity) FROM cash_refund_items cri
+                              WHERE cri.sale_item_id = si.sale_item_id), 0) AS refunded_quantity,
+                    COALESCE((SELECT SUM(cri.subtotal) FROM cash_refund_items cri
+                              WHERE cri.sale_item_id = si.sale_item_id), 0) AS refunded_subtotal
+             FROM sale_items si WHERE si.sale_id = ? ORDER BY si.sale_item_id'
             . $this->rowLock()
         );
-        $stmt->execute(array_merge($saleItemIds, [(int)$sale['sale_id']], $saleItemIds));
+        $stmt->execute([(int)$sale['sale_id']]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $grossCents = array_sum(array_map(
+            static fn(array $line): int => (int)round((float)$line['subtotal'] * 100), $rows
+        ));
+        $paidCents = (int)round((float)$sale['total_amount'] * 100);
+        $cumulativeGross = 0;
+        $allocatedCents = 0;
         $soldLines = [];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $line) {
+        foreach ($rows as $line) {
+            $cumulativeGross += (int)round((float)$line['subtotal'] * 100);
+            $cumulativeNet = $grossCents > 0
+                ? (int)round($paidCents * $cumulativeGross / $grossCents) : 0;
+            $line['net_cents'] = $cumulativeNet - $allocatedCents;
+            $allocatedCents = $cumulativeNet;
             $soldLines[(int)$line['sale_item_id']] = $line;
         }
 
@@ -568,12 +583,14 @@ class CashRefundService
             }
 
             $unitPrice = (float)$sold['unit_price'];
+            $previousCents = (int)round((float)$sold['refunded_subtotal'] * 100);
+            $returnedCents = (int)round($sold['net_cents'] * ((int)$sold['refunded_quantity'] + $line['quantity']) / (int)$sold['sold_quantity']);
             $settled[] = [
                 'sale_item_id' => $saleItemId,
                 'product_id' => (int)$sold['product_id'],
                 'quantity' => $line['quantity'],
                 'unit_price' => $unitPrice,
-                'subtotal' => round($unitPrice * $line['quantity'], 2),
+                'subtotal' => max(0, $returnedCents - $previousCents) / 100,
                 'disposition' => $line['disposition'],
                 'already_refunded' => (int)$sold['refunded_quantity'],
             ];
@@ -590,7 +607,7 @@ class CashRefundService
      * before the comparison, because the balance is money and a fraction of a
      * cent is not a smaller amount of it.
      */
-    private function settleAmount(array $sale, array $settled): float
+    private function settleAmount(array $sale, array &$settled): float
     {
         $amount = 0.0;
         foreach ($settled as $line) {
@@ -602,13 +619,23 @@ class CashRefundService
         $refunded->execute([(int)$sale['sale_id']]);
         $remaining = round((float)$sale['total_amount'] - (float)$refunded->fetchColumn(), 2);
 
-        if ($remaining <= 0.0) {
+        if ($remaining < 0.0) {
             throw new DomainException('This sale has already been fully refunded.');
         }
-        if ($amount > $remaining + 0.001) {
-            throw new DomainException(
-                sprintf('This refund of %s is more than the %s still refundable on this sale.', number_format($amount, 2), number_format($remaining, 2))
-            );
+        if ($amount > $remaining) {
+            // Older refunds paid shelf prices. Preserve those records and cap
+            // this return at the actual money left, allocating cents to lines.
+            $remainingCents = (int)round($remaining * 100);
+            $cumulativeAmount = 0.0;
+            $allocatedCents = 0;
+            foreach ($settled as &$line) {
+                $cumulativeAmount += (float)$line['subtotal'];
+                $cumulativeCents = (int)round($remainingCents * $cumulativeAmount / $amount);
+                $line['subtotal'] = ($cumulativeCents - $allocatedCents) / 100;
+                $allocatedCents = $cumulativeCents;
+            }
+            unset($line);
+            $amount = $remaining;
         }
 
         return $amount;

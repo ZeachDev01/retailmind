@@ -107,6 +107,13 @@ try {
         status TEXT NOT NULL DEFAULT 'approved',
         settlement_method TEXT NOT NULL DEFAULT 'cash'
     )");
+    // Reconciliation includes refunds issued under this shift (#92).
+    $pdo->exec("CREATE TABLE cash_refunds (
+        refund_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shift_id INTEGER NOT NULL,
+        refund_amount REAL NOT NULL DEFAULT 0.00,
+        payment_method TEXT NOT NULL DEFAULT 'cash'
+    )");
     // Ticket #91: a closure reads this table to refuse a shift that still has a
     // cart parked on it, so it has to exist here even though this contract never
     // parks one. Held-sale behaviour itself is proven in

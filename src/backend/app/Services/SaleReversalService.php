@@ -140,6 +140,7 @@ class SaleReversalService
 
         StoreWriteGate::begin($this->pdo);
         try {
+            $this->requireNoCashRefunds($saleId);
             $stmt = $this->pdo->prepare(
                 "INSERT INTO sale_reversals
                     (sale_id, reversal_type, status, reason, settlement_method, refund_amount, exchange_details, requested_by)
@@ -227,6 +228,7 @@ class SaleReversalService
                 throw new RuntimeException('Only pending reversal requests can be approved.');
             }
 
+            $this->requireNoCashRefunds((int)$reversal['sale_id']);
             $saleStmt = $this->pdo->prepare("SELECT sale_date FROM sales WHERE sale_id = ?");
             $saleStmt->execute([(int)$reversal['sale_id']]);
             $saleDate = $saleStmt->fetchColumn();
@@ -354,6 +356,18 @@ class SaleReversalService
             ['status' => 'pending'],
             ['status' => 'rejected', 'rejection_reason' => $reason]
         );
+    }
+
+    private function requireNoCashRefunds(int $saleId): void
+    {
+        // Share the sale lock with CashRefundService before choosing a ledger.
+        $sale = $this->pdo->prepare('SELECT sale_id FROM sales WHERE sale_id = ? FOR UPDATE');
+        $sale->execute([$saleId]);
+        $refund = $this->pdo->prepare('SELECT refund_id FROM cash_refunds WHERE sale_id = ? LIMIT 1 FOR UPDATE');
+        $refund->execute([$saleId]);
+        if ($refund->fetchColumn() !== false) {
+            throw new RuntimeException('This sale already has a Cash Refund. Use Cash Refunds for any remaining returned items.');
+        }
     }
 
     private function buildItemPayload(array $sale, string $type, array $requestedItems): array
