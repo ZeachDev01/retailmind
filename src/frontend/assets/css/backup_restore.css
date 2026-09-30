@@ -1,0 +1,97 @@
+/* Super Administrator recovery workspace; shared backup pages keep their styles. */
+.database-restore-page .main-content {
+    --recovery-ink: #172338;
+    --recovery-muted: #536176;
+    --recovery-line: #dde3ec;
+}
+.database-restore-page .recovery-heading { align-items: flex-end; margin: .5rem 0 1.8rem; gap: .8rem; }
+.database-restore-page .recovery-heading h1 { color: var(--recovery-ink); font-size: clamp(1.6rem, 2.4vw, 2rem); letter-spacing: -.04em; }
+.database-restore-page .recovery-heading .page-subtitle { color: var(--recovery-muted); }
+.database-restore-page .recovery-history-link { color: var(--primary-dark); font-size: .86rem; font-weight: 600; text-underline-offset: 4px; padding: .4rem 0; }
+.database-restore-page .recovery-workspace { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 1.5rem; align-items: start; margin-bottom: 2rem; }
+.database-restore-page .main-content .dashboard-section { padding: 1.5rem; border: 1px solid var(--recovery-line); border-radius: 10px; box-shadow: none; }
+.database-restore-page .recovery-panel-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; }
+.database-restore-page .main-content h2 { color: var(--recovery-ink); font-size: 1.15rem; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.database-restore-page .recovery-intro { color: var(--recovery-muted); font-size: .9rem; line-height: 1.6; margin: .65rem 0 1.5rem; max-width: 44ch; }
+.database-restore-page .recovery-format { font: 600 .9rem Consolas, "Courier New", monospace; color: var(--primary-dark); }
+.database-restore-page .restore-access { color: var(--recovery-muted); font-size: .72rem; }
+.database-restore-page .backup-specification { border-top: 1px solid var(--recovery-line); }
+.database-restore-page .backup-specification > div { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: .8rem; padding: .85rem 0; border-bottom: 1px solid var(--recovery-line); font-size: .84rem; line-height: 1.5; }
+.database-restore-page .backup-specification dt { color: var(--recovery-muted); }
+.database-restore-page .backup-specification dd { color: var(--recovery-ink); }
+.database-restore-page .backup-create-form { margin: 1.5rem 0; }
+.database-restore-page .main-content .btn { min-height: 44px; border-radius: 6px; font-size: .88rem; font-weight: 600; padding: .7rem 1.15rem; transition: background-color .15s ease, border-color .15s ease; }
+.database-restore-page .main-content .btn:active { transform: translateY(1px); }
+.database-restore-page .main-content :where(a, button, input, select, summary, [tabindex]):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; box-shadow: none; }
+.database-restore-page .backup-storage-note { background: #f4f7fc; padding: 1rem; border-radius: 6px; color: var(--recovery-muted); font-size: .8rem; line-height: 1.65; }
+.database-restore-page .backup-storage-note strong { color: var(--recovery-ink); }
+.database-restore-page .backup-storage-note p { margin-top: .25rem; }
+.database-restore-page .backup-safety { padding-top: 1.25rem; margin-top: 1.25rem; border-top: 1px solid var(--recovery-line); font-size: .8rem; }
+.database-restore-page .backup-safety strong { font-weight: 600; }
+.database-restore-page .backup-safety p { color: var(--recovery-muted); margin: .2rem 0 .65rem; }
+.database-restore-page .backup-safety a { color: var(--primary-dark); text-underline-offset: 3px; }
+.database-restore-page .restore-warning { padding: 1rem; background: #fff4f2; border: 1px solid #f0d4ce; border-radius: 6px; color: #854136; font-size: .8rem; line-height: 1.6; }
+.database-restore-page .restore-warning strong { display: block; color: #92362c; margin-bottom: .3rem; font-size: .86rem; }
+.database-restore-page .backup-restore-panel form { margin-top: 1.25rem; }
+.database-restore-page .form-group { margin-bottom: 1.1rem; }
+.database-restore-page .form-group label { display: flex; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; font-size: .84rem; font-weight: 600; }
+.database-restore-page .field-required { color: var(--recovery-muted); font-size: .72rem; font-weight: 400; }
+.database-restore-page .restore-file-field { padding: .85rem; border: 1px dashed #aebdd2; background: #f8faff; border-radius: 6px; }
+.database-restore-page .restore-file-field input { display: block; width: 100%; border: none; border-radius: 0; background: transparent; padding: 0; font-size: .8rem; color: var(--recovery-ink); }
+.database-restore-page input[type="file"]::file-selector-button { margin-right: .75rem; padding: .5rem .75rem; border: 1px solid #c7d2e2; border-radius: 4px; background: #fff; color: var(--recovery-ink); cursor: pointer; font: inherit; transition: background-color .15s ease; }
+.database-restore-page input[type="file"]::file-selector-button:hover { background: #eaf0fb; }
+.database-restore-page .restore-file-field p { color: var(--recovery-muted); font-size: .75rem; line-height: 1.5; margin-top: .65rem; }
+.database-restore-page #restore-password { width: 100%; min-height: 44px; border: 1px solid #bdc9d9; border-radius: 6px; background: #fff; }
+.database-restore-page .main-content .backup-hint { font-size: .75rem; color: var(--recovery-muted); margin-top: .4rem; }
+.database-restore-page .main-content .btn-danger { background: #b73b32; border: 1px solid #b73b32; color: #fff; }
+.database-restore-page .main-content .btn-danger:hover { background: #962e27; border-color: #962e27; }
+.database-restore-page .restore-details { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--recovery-line); font-size: .8rem; }
+.database-restore-page summary { cursor: pointer; color: var(--recovery-muted); }
+.database-restore-page summary:hover { color: var(--recovery-ink); }
+.database-restore-page .restore-details .backup-guidance { margin-top: .8rem; font-size: .8rem; }
+.database-restore-page .main-content .backup-history { padding: 0; overflow: hidden; scroll-margin-top: 5rem; }
+.database-restore-page .backup-history > .recovery-panel-heading { padding: 1.5rem 1.5rem 1.1rem; }
+.database-restore-page .backup-history .section-description { color: var(--recovery-muted); font-size: .8rem; margin-top: .4rem; }
+.database-restore-page .history-total { font-size: .8rem; color: var(--recovery-muted); font-variant-numeric: tabular-nums; }
+.database-restore-page .history-tools { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .8rem; padding: 0 1.5rem 1.25rem; }
+.database-restore-page .history-tools[hidden], .database-restore-page tr[hidden] { display: none; }
+.database-restore-page .history-search { flex: 1 1 220px; }
+.database-restore-page .history-filter { flex: 0 1 160px; }
+.database-restore-page .history-tools label { display: block; color: var(--recovery-muted); font-size: .75rem; margin-bottom: .35rem; }
+.database-restore-page .history-tools input, .database-restore-page .history-tools select { width: 100%; min-height: 42px; padding: .55rem .75rem; border: 1px solid #c7d2e2; background: #fff; color: var(--recovery-ink); border-radius: 5px; font-size: .8rem; }
+.database-restore-page .history-count { font-size: .75rem; color: var(--recovery-muted); padding-bottom: .7rem; }
+.database-restore-page .backup-history .table-wrap { border: none; border-top: 1px solid var(--recovery-line); border-radius: 0; overflow-x: auto; }
+.database-restore-page .backup-history table { min-width: 840px; table-layout: auto; }
+.database-restore-page .backup-history th { font-size: .73rem; font-weight: 600; color: var(--recovery-muted); padding: .75rem 1.25rem; background: #f7f9fc; white-space: nowrap; }
+.database-restore-page .backup-history td { padding: 1rem 1.25rem; vertical-align: top; font-size: .8rem; border-bottom: 1px solid #e9edf3; }
+.database-restore-page .backup-history tbody tr:hover { background: #f9fbfe; }
+.database-restore-page .backup-history td.history-file { min-width: 290px; max-width: 400px; overflow-wrap: anywhere; }
+.database-restore-page .history-filename { display: block; color: var(--recovery-ink); font: .78rem/1.55 Consolas, "Courier New", monospace; }
+.database-restore-page .history-type { display: inline-block; margin-top: .35rem; color: var(--recovery-muted); font-size: .72rem; }
+.database-restore-page .history-date, .database-restore-page .history-size { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--recovery-muted); }
+.database-restore-page .history-user { min-width: 150px; max-width: 200px; }
+.database-restore-page .history-status { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; white-space: nowrap; color: var(--recovery-muted); }
+.database-restore-page .history-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.database-restore-page .history-status.is-completed { color: #207144; }
+.database-restore-page .history-status.is-failed { color: #b42318; }
+.database-restore-page .history-notes { margin-top: .4rem; font-size: .74rem; }
+.database-restore-page .history-notes summary { color: var(--primary-dark); }
+.database-restore-page .history-notes p { padding-top: .5rem; color: var(--recovery-muted); line-height: 1.6; white-space: pre-wrap; }
+.database-restore-page .history-footnote { color: var(--recovery-muted); font-size: .74rem; padding: .85rem 1.5rem; border-top: 1px solid var(--recovery-line); }
+.database-restore-page .recovery-empty { padding: 2rem 0; text-align: center; }
+.database-restore-page .recovery-empty p { margin-top: .3rem; color: var(--recovery-muted); }
+.database-restore-page .main-content .backup-ready { margin-bottom: 1.5rem; background: #f0fdf4; }
+.database-restore-page .backup-ready > p { margin-top: .6rem; overflow-wrap: anywhere; }
+@media (max-width: 1180px) {
+    .database-restore-page .recovery-workspace { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+    .database-restore-page .main-content .dashboard-section { padding: 1.1rem; }
+    .database-restore-page .main-content .backup-history { padding: 0; }
+    .database-restore-page .backup-history > .recovery-panel-heading { padding: 1.1rem; }
+    .database-restore-page .history-tools { padding: 0 1.1rem 1.1rem; }
+    .database-restore-page .backup-specification > div { grid-template-columns: 6.5rem minmax(0, 1fr); }
+    .database-restore-page .backup-create-form .btn, .database-restore-page .backup-restore-panel .btn { width: 100%; }
+    .database-restore-page .recovery-workspace { gap: 1rem; }
+    .database-restore-page .history-footnote { padding: .85rem 1.1rem; }
+}

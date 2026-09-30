@@ -529,13 +529,31 @@ class CashierShiftService
              WHERE s.shift_id = ? AND sr.status='approved' AND sr.settlement_method='cash'"
         );
         $refundStmt->execute([$shiftId]);
-        $cashRefunds = (float)$refundStmt->fetchColumn();
+        $approvedReversalCash = (float)$refundStmt->fetchColumn();
+
+        // Ticket #92. An append-only Cash Refund takes cash out of the drawer of
+        // the Cashier Shift that *issued* it, which is not necessarily the shift
+        // the sale ran under: a refund is paid out of the drawer in front of the
+        // Cashier holding the money now, and that is the drawer whose expected
+        // cash has to fall. Joining through the refunded sale's own shift would
+        // charge the refund to a drawer that was already handed back.
+        //
+        // Only cash is subtracted. A refund settled on the original card or
+        // e-wallet method never entered a drawer, so it cannot come out of one.
+        $cashRefundStmt = $this->pdo->prepare(
+            "SELECT COALESCE(SUM(cr.refund_amount),0)
+             FROM cash_refunds cr
+             WHERE cr.shift_id = ? AND cr.payment_method = 'cash'"
+        );
+        $cashRefundStmt->execute([$shiftId]);
+        $cashRefunds = (float)$cashRefundStmt->fetchColumn();
 
         $expected = (float)$shift['opening_cash'] + (float)($sales['cash_sales'] ?? 0)
-            + (float)($movements['pay_in'] ?? 0) - (float)($movements['pay_out'] ?? 0) - $cashRefunds;
+            + (float)($movements['pay_in'] ?? 0) - (float)($movements['pay_out'] ?? 0)
+            - $cashRefunds - $approvedReversalCash;
 
         return array_merge($shift, $sales, $movements, [
-            'cash_refunds' => $cashRefunds,
+            'cash_refunds' => round($cashRefunds, 2),
             'calculated_expected_cash' => round($expected, 2),
         ]);
     }

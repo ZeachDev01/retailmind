@@ -171,17 +171,16 @@
         }
         .adjustment-card {
             background: white;
-            border-left: 4px solid #ffc107;
             border: 1px solid #ddd;
             border-radius: 4px;
             padding: 1rem;
             margin-bottom: 1rem;
         }
         .adjustment-card.approved {
-            border-left-color: #28a745;
+            border-color: #86efac;
         }
         .adjustment-card.rejected {
-            border-left-color: #dc3545;
+            border-color: #fca5a5;
         }
         .adjustment-card.approved {
             background: #f0fdf4;

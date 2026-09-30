@@ -1468,7 +1468,6 @@ body.system-health-open {
   align-items: start;
   padding: 0.85rem 0.9rem;
   border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
   border-radius: 12px;
   background: #fff;
   box-shadow: var(--shadow-sm);
@@ -1483,13 +1482,13 @@ body.system-health-open {
   opacity: 1;
 }
 .rm-toast.success {
-  border-left-color: var(--success);
+  border-color: var(--success);
 }
 .rm-toast.error {
-  border-left-color: var(--danger);
+  border-color: var(--danger);
 }
 .rm-toast.warning {
-  border-left-color: #d97706;
+  border-color: #d97706;
 }
 .rm-toast-icon {
   font-size: 1.05rem;

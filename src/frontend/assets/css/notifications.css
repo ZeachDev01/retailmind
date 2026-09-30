@@ -41,7 +41,7 @@
         }
         .notification-item.unread {
             background: #f0f7ff;
-            border-left: 4px solid #007bff;
+            border-color: #93c5fd;
         }
         .notification-icon {
             width: 40px;

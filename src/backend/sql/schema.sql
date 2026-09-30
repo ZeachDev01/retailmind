@@ -201,6 +201,59 @@ CREATE TABLE `cash_drawer_movements` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `cash_refund_items`
+--
+
+DROP TABLE IF EXISTS `cash_refund_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cash_refund_items` (
+  `refund_item_id` int(11) NOT NULL AUTO_INCREMENT,
+  `refund_id` int(11) NOT NULL,
+  `sale_item_id` int(11) NOT NULL,
+  `product_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `unit_price` decimal(10,2) NOT NULL,
+  `subtotal` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `disposition` enum('restockable','damaged') NOT NULL DEFAULT 'restockable',
+  PRIMARY KEY (`refund_item_id`),
+  UNIQUE KEY `uq_cash_refund_items_refund_line` (`refund_id`,`sale_item_id`),
+  KEY `idx_cash_refund_items_sale_item` (`sale_item_id`),
+  KEY `idx_cash_refund_items_product` (`product_id`),
+  CONSTRAINT `fk_cash_refund_items_refund` FOREIGN KEY (`refund_id`) REFERENCES `cash_refunds` (`refund_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_cash_refund_items_sale_item` FOREIGN KEY (`sale_item_id`) REFERENCES `sale_items` (`sale_item_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_cash_refund_items_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `cash_refunds`
+--
+
+DROP TABLE IF EXISTS `cash_refunds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cash_refunds` (
+  `refund_id` int(11) NOT NULL AUTO_INCREMENT,
+  `sale_id` int(11) NOT NULL,
+  `shift_id` int(11) NOT NULL,
+  `cashier_id` int(11) NOT NULL,
+  `refund_amount` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `payment_method` enum('cash','card','ewallet') NOT NULL DEFAULT 'cash',
+  `reason` varchar(50) NOT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`refund_id`),
+  KEY `idx_cash_refunds_sale` (`sale_id`),
+  KEY `idx_cash_refunds_shift` (`shift_id`),
+  KEY `idx_cash_refunds_cashier` (`cashier_id`),
+  CONSTRAINT `fk_cash_refunds_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_cash_refunds_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_cash_refunds_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `cashier_shifts`
 --
 

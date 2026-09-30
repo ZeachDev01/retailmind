@@ -25,7 +25,7 @@
 }
 
 .backup-ready {
-    border-left: 4px solid #16a34a;
+    background: #f0fdf4;
 }
 
 .backup-hint {
@@ -47,3 +47,22 @@
 .database-backup-page [data-backup-create] {
     min-width: 12rem;
 }
+
+
+ .database-restore-page .dashboard-section { box-shadow:none; padding:1.25rem; }
+ .database-restore-page h3 { font-size:1.1rem; font-weight:650; }
+ .database-restore-page .backup-guidance { padding-left:1.1rem; font-size:.9rem; line-height:1.6; color:#475569; }
+ .database-restore-page .backup-guidance li + li { margin-top:.4rem; }
+ .database-restore-page .section-description, .database-restore-page .backup-hint { color:#475569; }
+ .database-restore-page .btn { min-height:44px; }
+
+
+
+ .database-restore-page .card-grid { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); gap:1.25rem; align-items:start; margin-bottom:1.75rem; }
+ .database-restore-page .dashboard-section { min-width:0; padding:1.25rem; }
+ .database-restore-page .backup-history .table-wrap { overflow-x:auto; }
+ .database-restore-page .backup-history table { min-width:760px; width:100%; }
+ .database-restore-page .backup-history td:nth-child(2) { overflow-wrap:anywhere; max-width:240px; }
+ .database-restore-page .backup-restore-panel form { margin-top:1rem; }
+ .database-restore-page .form-group { margin-bottom:1rem; }
+ @media(max-width:1000px) { .database-restore-page .card-grid { grid-template-columns:1fr; } }

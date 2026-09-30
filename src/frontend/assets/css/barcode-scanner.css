@@ -2,8 +2,7 @@
 
 /* Source: frontend\barcodeScanner\index.html */
 :root {
-    --accent-a: #7c3aed;
-    --accent-b: #2563eb;
+    --accent-a: #2563eb;
     --bg: #0b0b14;
     --panel: #16161f;
     --panel-2: #1e1e2b;
@@ -14,7 +13,7 @@
     --success-bg: #0f2f1c;
     --warn: #f59e0b;
     --warn-bg: #362509;
-    --danger: #ef4444;
+    --danger: #b91c1c;
     --danger-bg: #3a1116;
     --radius: 16px;
   }
@@ -22,9 +21,7 @@
   html, body { height: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background:
-      radial-gradient(1200px 600px at 50% -10%, rgba(124,58,237,0.35), transparent 60%),
-      var(--bg);
+    background: var(--bg);
     color: var(--text);
     min-height: 100dvh;
     display: flex;
@@ -38,7 +35,7 @@
 
   .topbar { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; }
   .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; }
-  .brand .logo { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--accent-a), var(--accent-b)); display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+  .brand .logo { width: 30px; height: 30px; border-radius: 9px; background: var(--accent-a); display: flex; align-items: center; justify-content: center; font-size: 1rem; }
   .icon-btn {
     width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line);
     background: var(--panel); color: var(--text); font-size: 1.05rem;
@@ -127,7 +124,7 @@
   button.action {
     padding: 14px; font-size: 0.95rem; font-weight: 600; border: none; border-radius: 12px;
     color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
-    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    background: var(--accent-a);
   }
   button.action:active { transform: scale(0.97); }
   button.action:disabled { opacity: 0.4; }
@@ -162,7 +159,7 @@
   @media (min-width: 520px) { .modal { align-items: center; } .modal-content { border-radius: 18px; } }
   @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
-  .modal-header h3 { font-size: 1.05rem; }
+  .modal-header h3 { font-size: 1.4rem; }
   .modal-body { padding: 18px; overflow-y: auto; }
   .modal-footer { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); }
   .close-btn { background: none; border: none; color: var(--muted); font-size: 1.4rem; cursor: pointer; line-height: 1; }

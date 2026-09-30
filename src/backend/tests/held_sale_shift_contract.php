@@ -195,6 +195,20 @@ try {
         requested_by INTEGER NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
+    // Ticket #92: calculateShift() also subtracts the append-only Cash Refunds
+    // the shift issued. It is empty here because a discard has no cash effect
+    // and a held sale is not a refund, which is what this contract proves.
+    $pdo->exec("CREATE TABLE cash_refunds (
+        refund_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id INTEGER NOT NULL,
+        shift_id INTEGER NOT NULL,
+        cashier_id INTEGER NOT NULL,
+        refund_amount REAL NOT NULL DEFAULT 0.00,
+        payment_method TEXT NOT NULL DEFAULT 'cash',
+        reason TEXT NOT NULL,
+        note TEXT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
     $pdo->exec("CREATE TABLE stock_movements (
         stock_movement_id INTEGER PRIMARY KEY AUTOINCREMENT,
         product_id INTEGER NOT NULL,

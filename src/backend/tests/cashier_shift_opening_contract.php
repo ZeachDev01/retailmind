@@ -100,6 +100,20 @@ try {
         status TEXT NOT NULL DEFAULT 'approved',
         settlement_method TEXT NOT NULL DEFAULT 'cash'
     )");
+    // Ticket #92: calculateShift() also subtracts the append-only Cash Refunds
+    // the shift issued, so this fixture carries that ledger too. It is empty
+    // here because this contract is about the Register, not about refunds.
+    $pdo->exec("CREATE TABLE cash_refunds (
+        refund_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id INTEGER NOT NULL,
+        shift_id INTEGER NOT NULL,
+        cashier_id INTEGER NOT NULL,
+        refund_amount REAL NOT NULL DEFAULT 0.00,
+        payment_method TEXT NOT NULL DEFAULT 'cash',
+        reason TEXT NOT NULL,
+        note TEXT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
     $pdo->exec("CREATE TABLE cash_drawer_movements (
         drawer_movement_id INTEGER PRIMARY KEY AUTOINCREMENT,
         shift_id INTEGER NOT NULL,
