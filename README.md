@@ -71,6 +71,13 @@ runtime storage. Set up the production `.env` directly on the host and import
 the database through phpMyAdmin; those steps are not part of the file upload.
 Change the initial Super Administrator password before exposing the site.
 
+After importing `src/backend/sql/schema.sql` into a new hosted database, sign in
+as Super Administrator and open
+`/src/frontend/components/system_administrator/database_updates.php`. Apply the
+pending database updates before using the workspaces. This uses the same
+idempotent migrations as `php src/backend/scripts/migrate.php` on local or CI
+installations and does not replace existing users or their passwords.
+
 **Hosting compatibility:** InfinityFree only permits application files under
 `htdocs`, so the app starts in web-only mode when its default private recovery
 directory is inaccessible. Database Backup and Restore are unavailable in that
