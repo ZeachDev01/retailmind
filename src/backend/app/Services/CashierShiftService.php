@@ -3,6 +3,8 @@
 
 namespace App\Services;
 
+use App\Attention\AttentionSettingsService;
+use App\Attention\SystemClock;
 use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
 use DomainException;
@@ -45,6 +47,7 @@ class CashierShiftService
     public const AUDIT_ACTION_LOCKED = 'Cashier Shift locked';
     public const AUDIT_ACTION_UNLOCKED = 'Cashier Shift unlocked';
     public const AUDIT_ACTION_UNLOCK_REFUSED = 'Register unlock refused';
+    public const AUDIT_ACTION_CLOSED = 'Cashier Shift closed';
     public const DRAWER_REASONS = [
         'cash_in' => ['additional_float' => 'Additional float', 'cash_return' => 'Cash returned', 'other' => 'Other'],
         'cash_out' => ['petty_cash' => 'Petty cash', 'supplier_payment' => 'Supplier payment', 'other' => 'Other'],
@@ -416,12 +419,12 @@ class CashierShiftService
         array $details = [],
         string $category = AuditRecordCategory::STORE_OPERATION
     ): void {
-        $payload = array_merge($details, [
+        $payload = array_merge([
             'shift_id' => $shiftId,
             'cashier_id' => $actorId,
             'register_id' => isset($registerIdentity['register_id']) ? (int)$registerIdentity['register_id'] : null,
             'register_name' => $registerIdentity['register_name'] ?? null,
-        ]);
+        ], $details);
 
         $this->pdo->prepare(
             'INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
@@ -633,6 +636,7 @@ class CashierShiftService
      */
     public function closeShift(int $cashierId, float $actualCash, string $notes, ?int $reviewedBy = null): array
     {
+        $this->validateCountedCash($actualCash);
         return $this->transaction(function () use ($cashierId, $actualCash, $notes, $reviewedBy): array {
             $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $lock = $this->pdo->prepare("SELECT shift_id FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
@@ -647,25 +651,98 @@ class CashierShiftService
             if (!$shift) {
                 throw new RuntimeException('No open shift was found.');
             }
-            if ($actualCash < 0) {
-                throw new RuntimeException('Actual cash cannot be negative.');
-            }
             $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
             $summary = $this->calculateShift((int)$shift['shift_id']);
-            $expected = (float)$summary['calculated_expected_cash'];
-            $variance = round($actualCash - $expected, 2);
+            $reconciliation = $this->reconciliationResult($summary, $actualCash);
+            $expected = $reconciliation['expected_cash'];
+            $variance = $reconciliation['cash_variance'];
+            $threshold = $reconciliation['variance_threshold'];
+            $reviewRequired = $reconciliation['variance_review_required'];
+            $reason = trim($notes);
+            if ($reviewRequired && $reason === '') {
+                throw new DomainException('Enter a reason for the cash variance before closing your Cashier Shift.');
+            }
+            $paymentTotals = [
+                'cash' => round((float)$summary['cash_sales'], 2),
+                'card' => round((float)$summary['card_sales'], 2),
+                'ewallet' => round((float)$summary['ewallet_sales'], 2),
+            ];
             $stmt = $this->pdo->prepare(
                 "UPDATE cashier_shifts
                  SET status='closed', closed_at=NOW(), expected_cash=?, actual_cash=?, cash_variance=?, closing_notes=?,
+                     variance_threshold=?, variance_review_required=?, payment_totals=?,
                      reviewed_by=?, reviewed_at=CASE WHEN ? IS NULL THEN NULL ELSE NOW() END
                  WHERE shift_id=? AND status='open'"
             );
-            $stmt->execute([$expected, $actualCash, $variance, trim($notes) ?: null, $reviewedBy, $reviewedBy, (int)$shift['shift_id']]);
+            $stmt->execute([
+                $expected, $actualCash, $variance, $reason === '' ? null : $reason,
+                $threshold, $reviewRequired ? 1 : 0,
+                json_encode($paymentTotals, JSON_THROW_ON_ERROR),
+                $reviewedBy, $reviewedBy, (int)$shift['shift_id'],
+            ]);
             if ($stmt->rowCount() === 0) {
                 throw new RuntimeException('The shift was already closed.');
             }
+            $this->auditShiftEvent(
+                $reviewedBy ?? $cashierId,
+                self::AUDIT_ACTION_CLOSED,
+                (int)$shift['shift_id'],
+                $shift,
+                [
+                    'cashier_id' => $cashierId,
+                    'opening_cash' => round((float)$summary['opening_cash'], 2),
+                    'expected_cash' => $expected,
+                    'counted_cash' => $actualCash,
+                    'cash_variance' => $variance,
+                    'variance_threshold' => $threshold,
+                    'variance_review_required' => $reviewRequired,
+                    'reason' => $reason === '' ? null : $reason,
+                    'payment_totals' => $paymentTotals,
+                ]
+            );
             return $this->calculateShift((int)$shift['shift_id']);
         });
+    }
+
+    /** Reveals the drawer balance only after a count has been submitted. */
+    public function previewReconciliation(int $cashierId, float $countedCash): array
+    {
+        $this->validateCountedCash($countedCash);
+        $shift = $this->getOpenShift($cashierId);
+        if ($shift === null) {
+            throw new DomainException('No open Cashier Shift was found.');
+        }
+        $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
+        $summary = $this->calculateShift((int)$shift['shift_id']);
+        return ['shift_id' => (int)$shift['shift_id']]
+            + $this->reconciliationResult($summary, $countedCash);
+    }
+
+    private function reconciliationResult(array $summary, float $countedCash): array
+    {
+        $expected = (float)$summary['calculated_expected_cash'];
+        $variance = round($countedCash - $expected, 2);
+        $threshold = $this->materialVarianceThreshold();
+        return [
+            'counted_cash' => $countedCash,
+            'expected_cash' => $expected,
+            'cash_variance' => $variance,
+            'variance_threshold' => $threshold,
+            'variance_review_required' => abs($variance) > $threshold,
+        ];
+    }
+
+    private function validateCountedCash(float $countedCash): void
+    {
+        if (!is_finite($countedCash) || $countedCash < 0 || round($countedCash, 2) !== $countedCash) {
+            throw new InvalidArgumentException('Enter counted cash in pesos and centavos.');
+        }
+    }
+
+    private function materialVarianceThreshold(): float
+    {
+        $settings = new AttentionSettingsService($this->pdo, new SystemClock());
+        return (float)$settings->thresholdsFor('admin')['cash_variance_amount'];
     }
 
     /**

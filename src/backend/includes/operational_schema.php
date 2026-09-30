@@ -110,6 +110,9 @@ function ensure_operational_updates_schema(PDO $pdo): void
         expected_cash DECIMAL(12,2) NULL,
         actual_cash DECIMAL(12,2) NULL,
         cash_variance DECIMAL(12,2) NULL,
+        variance_threshold DECIMAL(12,2) NULL,
+        variance_review_required TINYINT(1) NOT NULL DEFAULT 0,
+        payment_totals TEXT NULL,
         closing_notes TEXT NULL,
         reviewed_by INT NULL,
         reviewed_at TIMESTAMP NULL,
@@ -119,7 +122,8 @@ function ensure_operational_updates_schema(PDO $pdo): void
         UNIQUE KEY uq_cashier_shifts_open_register (open_register_id),
         INDEX idx_cashier_shifts_cashier_status (cashier_id, status),
         INDEX idx_cashier_shifts_register (register_id),
-        INDEX idx_cashier_shifts_opened_at (opened_at)
+        INDEX idx_cashier_shifts_opened_at (opened_at),
+        INDEX idx_cashier_shifts_variance_review (variance_review_required, status, closed_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS cash_drawer_movements (

@@ -71,6 +71,9 @@ try {
         expected_cash REAL NULL,
         actual_cash REAL NULL,
         cash_variance REAL NULL,
+        variance_threshold REAL NULL,
+        variance_review_required INTEGER NOT NULL DEFAULT 0,
+        payment_totals TEXT NULL,
         closing_notes TEXT NULL,
         reviewed_by INTEGER NULL,
         reviewed_at TEXT NULL,
@@ -160,6 +163,7 @@ try {
         (10, 'Front Counter', 'active'),
         (11, 'Back Counter', 'active')");
 
+    $pdo->exec('CREATE TABLE attention_settings (setting_scope TEXT, setting_key TEXT, setting_value TEXT)');
     $service = new CashierShiftService($pdo, new RoleCapabilityPolicy());
 
     // --- Locking needs an open shift, the Cashier workspace, and once only ---

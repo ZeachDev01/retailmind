@@ -89,6 +89,9 @@ try {
         expected_cash REAL NULL,
         actual_cash REAL NULL,
         cash_variance REAL NULL,
+        variance_threshold REAL NULL,
+        variance_review_required INTEGER NOT NULL DEFAULT 0,
+        payment_totals TEXT NULL,
         closing_notes TEXT NULL,
         reviewed_by INTEGER NULL,
         reviewed_at TEXT NULL,
@@ -276,6 +279,7 @@ try {
         ->execute([2, 'SKU-2', 'Bottled Tea', 40.00]);
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50), (2, 30)');
 
+    $pdo->exec('CREATE TABLE attention_settings (setting_scope TEXT, setting_key TEXT, setting_value TEXT)');
     $shifts = new CashierShiftService($pdo);
     $held = new HeldSaleService($pdo, $shifts);
     $sales = new SalesWorkflowService($pdo);

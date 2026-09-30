@@ -28,6 +28,7 @@ try {
     $pos = $read('src/frontend/components/cashier/pos.php');
     $stock = $read('src/frontend/components/cashier/stock_issues.php');
     $shifts = $read('src/frontend/components/cashier/shifts.php');
+    $shiftService = $read('src/backend/app/Services/CashierShiftService.php');
     $sales = $read('src/frontend/components/invoice/sales.php');
     $ui = $read('src/frontend/assets/js/ui.js');
     $held = $read('src/frontend/components/barcodeScanner/apiScanner/held_sales.php');
@@ -165,8 +166,10 @@ try {
             ucfirst($name) . ' must catch every failure at the boundary'
         );
         $assert(
-            str_contains($source, 'log_activity'),
-            ucfirst($name) . ' must keep its existing Protected Audit Record trail'
+            $name === 'shift'
+                ? str_contains($shiftService, 'AUDIT_ACTION_CLOSED') && str_contains($shiftService, 'auditShiftEvent(')
+                : str_contains($source, 'log_activity'),
+            ucfirst($name) . ' must keep its Protected Audit Record trail'
         );
     }
 
