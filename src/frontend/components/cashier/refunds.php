@@ -40,7 +40,6 @@ $registerLocked = $shiftService->isRegisterLocked($actorId);
 // explained here while the refusal itself lives in the service.
 $canRefund = $openShift !== null && !$registerLocked;
 
-$message = '';
 $error = '';
 $saleId = (int)($_REQUEST['sale_id'] ?? 0);
 
@@ -92,8 +91,9 @@ $refunds = $refundService->recentForCashier($actorId);
 $receiptId = (int)($_GET['refund_id'] ?? 0);
 $receipt = $receiptId > 0 ? (new \App\Services\RefundReceiptService($pdo))->forCashier($receiptId, $actorId, $storeId) : null;
 $paperWidthMm = (new \App\Services\ReceiptPaperService($pdo))->currentWidth($actorId, $actorRole);
-if ($receipt !== null) {
-    $message = 'Refund #' . $receiptId . ' recorded. The original sale is unchanged.';
+if ($receiptId > 0 && $receipt === null) {
+    // Missing and unauthorized receipts share one response, without exposing ownership.
+    http_response_code(404);
 }
 ?>
 <!DOCTYPE html>
@@ -117,7 +117,6 @@ if ($receipt !== null) {
                     <p class="page-subtitle">Refunds are added to the record; the original sale is never changed.</p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
             </div>
-            <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
             <?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
             <?php if (!$openShift): ?><div class="message warning">Open a Cashier Shift before issuing a refund. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Go to Cashier Shift</a></div><?php endif; ?>
             <?php if ($registerLocked): ?><div class="message error"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?></div><?php endif; ?>
@@ -241,6 +240,7 @@ if ($receipt !== null) {
                                 <th>Reason</th>
                                 <th>Method</th>
                                 <th>Amount</th>
+                                <th>Receipt</th>
                             </tr>
                             <?php foreach ($refunds as $refund): ?>
                                 <tr>
@@ -254,6 +254,7 @@ if ($receipt !== null) {
                                     </td>
                                     <td><?= htmlspecialchars(strtoupper((string)$refund['payment_method'])) ?></td>
                                     <td>&#8369;<?= number_format((float)$refund['refund_amount'], 2) ?></td>
+                                    <td><a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php?refund_id=' . (int)$refund['refund_id'])) ?>" aria-label="Preview Refund Receipt #<?= (int)$refund['refund_id'] ?>">Preview receipt</a></td>
                                 </tr>
                             <?php endforeach; ?>
                         </table>

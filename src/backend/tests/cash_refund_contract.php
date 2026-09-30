@@ -18,6 +18,7 @@ require_once __DIR__ . '/../app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../app/Services/CashRefundService.php';
 require_once __DIR__ . '/../app/Services/SalesWorkflowService.php';
 require_once __DIR__ . '/../app/Services/RefundReceiptPresentation.php';
+require_once __DIR__ . '/../app/Services/ReceiptPaperService.php';
 
 use App\Services\CashierShiftService;
 use App\Services\CashRefundService;
@@ -1001,6 +1002,17 @@ try {
     $pdo->exec('DROP TRIGGER fail_refund_receipt');
 
     $receiptService = new \App\Services\RefundReceiptService($pdo);
+    // A multi-item partial refund remains available without issuing another payout.
+    $reprintSale = $sales->checkout([['product_id' => 1, 'qty' => 2], ['product_id' => 2, 'qty' => 2]],
+        $casey, 'cashier', 'cash', ['cash_received' => 200]);
+    $reprintSaleId = (int)$reprintSale['sale_id'];
+    $reprintId = $refunds->refund($casey, 'cashier', $reprintSaleId,
+        $returnOf($lineIdOf($reprintSaleId, 1), 1) + $returnOf($lineIdOf($reprintSaleId, 2), 1), 'customer_return');
+    $reprintSaved = $receiptService->forCashier($reprintId, $casey, 1);
+    $assert(count($reprintSaved['items']) === 2 && $refunds->refundableAmount($reprintSaleId) > 0,
+        'reprint fixture is a saved multi-item partial refund');
+    $saleReceiptBeforeReprint = $pdo->query('SELECT * FROM sale_receipt_details')->fetchAll(PDO::FETCH_ASSOC);
+    $refundsBeforeReprint = $refundCount($pdo);
     $saved = $receiptService->forCashier($otherRefundId, $casey, 1);
     $assert($saved !== null && $saved['refund']['reason'] === 'Other', 'successful refund exposes a customer receipt');
     $assert($receiptService->forCashier($otherRefundId, $dana, 1) === null, 'another Cashier cannot fetch a receipt');
@@ -1030,7 +1042,7 @@ try {
             $assert(!str_contains($customerHtml, $private), 'customer copy excludes later edit or private detail ' . $private);
         }
     }
-    $assert($refundCount($pdo) === $refundsBeforeAuditFailure, 'retrieval and re-rendering never create a second refund');
+    $assert($refundCount($pdo) === $refundsBeforeReprint, 'retrieval and re-rendering never create a second refund');
 
     // The page is the only surface a browser reaches, and it holds no rules of
     // its own: the caps and the classification live in the service, where a
@@ -1038,6 +1050,63 @@ try {
     $root = dirname(__DIR__, 3);
     $page = (string)@file_get_contents($root . '/src/frontend/components/cashier/refunds.php');
     $assert($page !== '', 'the Cash Refund page source must be readable');
+    // Execute the production GET controller against the same fixture, including
+    // a handcrafted other-Cashier request; only bootstrap and shell are excluded.
+    $getStart = strpos($page, '// Scoped to this Cashier');
+    $getEnd = strpos($page, '?>', $getStart);
+    $getController = substr($page, $getStart, $getEnd - $getStart);
+    $pdo->exec('ALTER TABLE registers ADD COLUMN paper_width_mm INTEGER NOT NULL DEFAULT 80');
+    $refundService = $refunds;
+    $actorRole = 'cashier';
+    $storeId = 1;
+    $saleId = 0;
+    $_GET = ['refund_id' => $reprintId];
+    foreach ([$dana, $casey] as $actorId) {
+        http_response_code(200);
+        eval($getController);
+        $assert($actorId === $casey ? $receipt === $reprintSaved && http_response_code() === 200
+            : $receipt === null && http_response_code() === 404,
+            'direct GET retrieves only the owning Cashier receipt');
+    }
+    $storeId = 2;
+    http_response_code(200);
+    eval($getController);
+    $assert($receipt === null && http_response_code() === 404, 'direct GET refuses another Store');
+    $storeId = 1;
+    $actorId = $casey;
+    $historyStart = strrpos($page, '<section class="dashboard-section">');
+    $historyEnd = strpos($page, '</section>', $historyStart) + strlen('</section>');
+    $historyTemplate = substr($page, $historyStart, $historyEnd - $historyStart);
+    if (!function_exists('app_url')) {
+        function app_url(string $path): string { return '/' . $path; }
+    }
+    if (!function_exists('format_display_datetime')) {
+        function format_display_datetime(string $value): string { return $value; }
+    }
+    $browserFixtures = [];
+    foreach ([80, 58] as $width) {
+        $pdo->exec('UPDATE registers SET paper_width_mm = ' . $width);
+        http_response_code(200);
+        eval($getController);
+        $assert($paperWidthMm === $width && $receipt === $reprintSaved,
+            'reopened receipt retains all recorded content with the current Register width');
+        ob_start();
+        eval('?>' . str_replace('CashRefundService::', '\\App\\Services\\CashRefundService::', $historyTemplate));
+        $historyHtml = ob_get_clean();
+        foreach ($refunds as $entry) {
+            $assert(str_contains($historyHtml, 'href="/components/cashier/refunds.php?refund_id=' . (int)$entry['refund_id'] . '"'),
+                'each My refunds row opens its corresponding receipt');
+        }
+        ob_start();
+        \App\Services\RefundReceiptPresentation::render($receipt, $paperWidthMm);
+        $browserFixtures[$width] = ['history' => $historyHtml, 'receipt' => ob_get_clean(), 'id' => $reprintId];
+    }
+    $assert($refundCount($pdo) === $refundsBeforeReprint, 'direct GET and reprint leave refund count unchanged');
+    $assert($pdo->query('SELECT * FROM sale_receipt_details')->fetchAll(PDO::FETCH_ASSOC) === $saleReceiptBeforeReprint,
+        'reopening leaves every original Sale Receipt unchanged');
+    if ($fixturePath = getenv('REFUND_REPRINT_FIXTURE')) {
+        file_put_contents($fixturePath, json_encode($browserFixtures, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+    }
     $assert(
         str_contains($page, 'new CashRefundService($pdo'),
         'the Cash Refund page delegates to CashRefundService rather than holding the rules in the page'
