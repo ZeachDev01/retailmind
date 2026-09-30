@@ -9,8 +9,10 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->exec('CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, username TEXT, email TEXT, branch_id INTEGER)');
 $pdo->exec('CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT)');
 $pdo->exec('CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, register_id INTEGER)');
-$pdo->exec('CREATE TABLE products (product_id INTEGER PRIMARY KEY, branch_id INTEGER)');
-$pdo->exec('CREATE TABLE sale_items (sale_item_id INTEGER PRIMARY KEY, sale_id INTEGER, product_id INTEGER)');
+$pdo->exec('CREATE TABLE products (product_id INTEGER PRIMARY KEY, branch_id INTEGER, sku TEXT, product_name TEXT)');
+$pdo->exec('CREATE TABLE sale_items (sale_item_id INTEGER PRIMARY KEY, sale_id INTEGER, product_id INTEGER,
+    quantity INTEGER, unit_price REAL, subtotal REAL)');
+$pdo->exec('CREATE TABLE sale_receipt_details (sale_id INTEGER PRIMARY KEY, details_json TEXT NOT NULL)');
 $pdo->exec('CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, cashier_id INTEGER, shift_id INTEGER,
     total_amount REAL, payment_method TEXT, sale_date TEXT)');
 $pdo->exec("INSERT INTO users VALUES (7, 'Alice & Co', 'private_username', 'private@example.test', 1)");
@@ -20,8 +22,9 @@ $pdo->exec('INSERT INTO cashier_shifts VALUES (23, 12)');
 $pdo->exec("INSERT INTO sales VALUES (42, 7, 23, 10, 'cash', '2026-09-30 10:11:12')");
 $pdo->exec("INSERT INTO sales VALUES (43, 7, NULL, 10, 'cash', '2026-09-30 10:12:13')");
 $pdo->exec("INSERT INTO sales VALUES (44, 8, NULL, 10, 'cash', '2026-09-30 10:13:14')");
-$pdo->exec('INSERT INTO products VALUES (5, 1)');
-$pdo->exec('INSERT INTO sale_items VALUES (6, 43, 5)');
+$pdo->exec("INSERT INTO products VALUES (5, 1, 'ORIGINAL-SKU', 'Original product')");
+$pdo->exec('INSERT INTO sale_items VALUES (6, 43, 5, 1, 10, 10)');
+$pdo->exec('INSERT INTO sale_items VALUES (7, 42, 5, 1, 10, 10)');
 
 $service = new ReceiptDetailsService($pdo);
 $sale = $service->fetchSale(42);
@@ -109,5 +112,30 @@ foreach ([
         $assert(!str_contains($receipt, $private), $route . ' hides ' . $private);
     }
 }
+
+$pdo->exec('CREATE TABLE store_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)');
+$pdo->exec("INSERT INTO store_settings VALUES ('store_name', 'Original Store'), ('receipt_footer', 'Original footer')");
+$pdo->beginTransaction();
+$service->preserveSale(42);
+$pdo->commit();
+$pdo->exec("UPDATE store_settings SET setting_value = 'Changed setting'");
+$pdo->exec("UPDATE products SET product_name = 'Changed product', sku = 'CHANGED-SKU'");
+$pdo->exec("UPDATE registers SET name = 'Changed Register'");
+$pdo->exec("UPDATE users SET full_name = 'Changed Cashier' WHERE user_id = 7");
+$financialCount = (int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn();
+foreach (['render_frontend_receipt', 'render_legacy_receipt'] as $function) {
+    $saved = $service->fetchSale(42, 1);
+    ob_start();
+    $function($saved, $service->fetchItems(42), false);
+    $receipt = ob_get_clean();
+    foreach (['Original Store', 'Original footer', 'Original product', 'ORIGINAL-SKU', 'Main Till', 'Alice &amp; Co'] as $required) {
+        $assert(str_contains($receipt, $required), $function . ' renders preserved ' . $required);
+    }
+    foreach (['Changed setting', 'Changed product', 'CHANGED-SKU', 'Changed Register', 'Changed Cashier', 'Historical receipt:'] as $unexpected) {
+        $assert(!str_contains($receipt, $unexpected), $function . ' excludes later edits or legacy notice: ' . $unexpected);
+    }
+}
+$assert((int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === $financialCount,
+    'reopening and rendering receipts creates no financial transaction');
 
 echo "Receipt attribution contract: passed\n";
