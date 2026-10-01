@@ -1183,6 +1183,18 @@ CREATE TABLE `sale_item_batches` (
 DROP TABLE IF EXISTS `sale_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `checkout_attempts` (
+  `cashier_id` int(11) NOT NULL,
+  `attempt_id` char(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `request_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `sale_id` int(11) NOT NULL,
+  `result_json` longtext NOT NULL,
+  PRIMARY KEY (`cashier_id`,`attempt_id`),
+  UNIQUE KEY `uq_checkout_attempt_sale` (`sale_id`),
+  CONSTRAINT `fk_checkout_attempt_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_checkout_attempt_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `sale_items` (
   `sale_item_id` int(11) NOT NULL AUTO_INCREMENT,
   `sale_id` int(11) NOT NULL,

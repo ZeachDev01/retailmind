@@ -17,6 +17,12 @@ if (!in_array($action, ['list', 'view', 'data'], true)) {
 }
 $sale_id = (int)($_GET['sale_id'] ?? $_GET['id'] ?? $_GET['receipt_id'] ?? 0);
 $checkoutCompleted = ($_GET['checkout'] ?? '') === 'complete' && $sale_id > 0;
+$completedAttempt = null;
+if ($checkoutCompleted) {
+    $attemptQuery = $pdo->prepare('SELECT attempt_id FROM checkout_attempts WHERE cashier_id = ? AND sale_id = ?');
+    $attemptQuery->execute([(int)$_SESSION['user_id'], $sale_id]);
+    $completedAttempt = $attemptQuery->fetchColumn() ?: null;
+}
 $storeId = store_scope_id($pdo);
 $can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 $canStartSale = current_role() !== 'inventory_manager';
@@ -214,7 +220,14 @@ if ($sale_id > 0) {
 <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css')) ?>">
 <?php if ($checkoutCompleted): ?>
-<script>sessionStorage.removeItem('pos_cart');</script>
+<script>
+sessionStorage.removeItem('pos_cart');
+try {
+    const key = <?= json_encode('retailmind.checkout.' . (int)$_SESSION['user_id']) ?>;
+    const pending = JSON.parse(localStorage.getItem(key) || 'null');
+    if (pending && pending.id === <?= json_encode($completedAttempt) ?>) localStorage.removeItem(key);
+} catch (error) { /* Returning to POS retries recovery if browser storage is unavailable. */ }
+</script>
 <?php endif; ?>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>

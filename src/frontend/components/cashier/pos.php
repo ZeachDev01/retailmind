@@ -20,6 +20,20 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SAL
 // the service judges the same context this page did.
 $actorRole = (string)current_role();
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['recover_checkout'])) {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+    try {
+        $saved = $salesWorkflowService->recoverAttempt((string)$_GET['recover_checkout'], $cashierId, $actorRole);
+        echo json_encode(['sale' => $saved, 'receipt_url' => $saved === null ? null : app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $saved['sale_id'] . '&checkout=complete')], JSON_THROW_ON_ERROR);
+    } catch (Throwable $e) {
+        http_response_code(409);
+        echo json_encode(['message' => 'Checkout recovery is unavailable. Retry recovery before collecting another payment.']);
+        error_log('Checkout recovery failed: ' . (string)$e);
+    }
+    exit;
+}
+
 $checkout_error = '';
 $checkout_notice = '';
 $lock_error = '';
@@ -85,6 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     $payment_method = in_array($_POST['payment_method'] ?? '', ['cash', 'card', 'ewallet'], true)
         ? $_POST['payment_method'] : 'cash';
     $paymentDetails = [
+        'checkout_attempt' => (string)($_POST['checkout_attempt'] ?? ''),
         'cash_received' => $_POST['cash_received'] ?? 0,
         'payment_reference' => $_POST['payment_reference'] ?? '',
         'discount_type' => $_POST['discount_type'] ?? 'none',
@@ -366,6 +381,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                 <form method="POST" id="checkout-form" class="payment-section">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="checkout">
+                    <input type="hidden" name="checkout_attempt" id="checkout-attempt-input">
                     <input type="hidden" name="cart" id="cart-input">
                     <input type="hidden" name="held_sale_id" id="held-sale-id-input" value="">
 
@@ -515,6 +531,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="<?= app_url('assets/js/checkout-attempt.js') ?>"></script>
 <script>
 let cart = {};
 let heldSales = [];
@@ -1124,8 +1141,12 @@ function closeCheckoutConfirm() {
     checkoutButton.focus();
 }
 
-function submitConfirmedCheckout() {
+async function submitConfirmedCheckout() {
     if (checkoutSubmitting) return;
+    if (!checkoutAttempt.ready) {
+        showCartMessage('Recover the previous checkout before collecting another payment.', 'error');
+        return;
+    }
     if (!validateCheckout()) {
         closeCheckoutConfirm();
         return;
@@ -1134,7 +1155,16 @@ function submitConfirmedCheckout() {
     checkoutConfirmed = true;
     confirmCheckoutButton.disabled = true;
     confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
-    checkoutForm.submit();
+    try {
+        await checkoutAttempt.save(cart);
+        checkoutForm.submit();
+    } catch (error) {
+        checkoutSubmitting = false;
+        checkoutConfirmed = false;
+        confirmCheckoutButton.disabled = false;
+        confirmCheckoutButton.textContent = 'Confirm payment';
+        showCartMessage('Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.', 'error');
+    }
 }
 
 async function apiHeldSale(action, payload = {}) {
@@ -1541,6 +1571,12 @@ if (cashierClock) {
     updateClock();
     setInterval(updateClock, 30000);
 }
+const checkoutAttempt = new CheckoutAttempt(checkoutForm, <?= json_encode((string)$cashierId) ?>, {
+    recoverUrl: <?= json_encode(app_url('components/cashier/pos.php')) ?>,
+    restore(savedCart) { cart = savedCart; resumedHeldSaleId = Number(resumedHeldSaleInput.value) || null; renderCart(); },
+    message(text) { showCartMessage(text, 'error'); }
+});
+checkoutAttempt.recover();
 setTimeout(() => skuInput.focus(), 100);
 </script>
         <?php // Ticket #90: the point of sale and its scripts are withheld entirely while the Register is locked, so a locked till has no cart, no scanner, and no checkout to drive. ?>

@@ -55,10 +55,10 @@ class SalesWorkflowService
     private RoleCapabilityPolicy $policy;
     private HeldSaleService $heldSales;
 
-    public function __construct(PDO $pdo, ?RoleCapabilityPolicy $policy = null)
+    public function __construct(PDO $pdo, ?RoleCapabilityPolicy $policy = null, ?NotificationService $notifications = null)
     {
         $this->pdo = $pdo;
-        $this->notificationService = new NotificationService($pdo);
+        $this->notificationService = $notifications ?? new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
         $this->policy = $policy ?? new RoleCapabilityPolicy();
         $this->heldSales = new HeldSaleService($pdo, new CashierShiftService($pdo, $this->policy));
@@ -69,6 +69,22 @@ class SalesWorkflowService
      */
     public function checkout(array $cart, int $userId, string $actorRole, string $paymentMethod, array $paymentDetails = []): array
     {
+        // A competing Store writer may fail fast at the write gate. Retry that
+        // race with the same identity; a backup pause remains an explicit refusal.
+        for ($retry = 0; ; $retry++) {
+            try {
+                return $this->checkoutOnce($cart, $userId, $actorRole, $paymentMethod, $paymentDetails);
+            } catch (PDOException $e) {
+                if ($retry >= 20 || !in_array((int)($e->errorInfo[1] ?? 0), [1205, 1213], true)) {
+                    throw $e;
+                }
+                usleep(100000);
+            }
+        }
+    }
+
+    private function checkoutOnce(array $cart, int $userId, string $actorRole, string $paymentMethod, array $paymentDetails): array
+    {
         $cleanCart = $this->sanitizeCart($cart);
         if (!$cleanCart) {
             throw new RuntimeException('Your cart is empty or invalid.');
@@ -78,10 +94,22 @@ class SalesWorkflowService
         // cannot sell is refused without beginning any Store write.
         $this->requireCashierWorkspace($actorRole);
 
-        $this->assertCheckoutFiscalPeriodsOpen();
+        $attempt = $this->attemptIdentity($paymentDetails);
+        $fingerprint = $this->attemptFingerprint($cleanCart, $paymentMethod, $paymentDetails);
+        // Recovery remains available after a shift or fiscal period closes.
+        $saved = $attempt === null ? null : $this->recoverAttempt($attempt, $userId, $actorRole, $fingerprint);
+        if ($saved !== null) {
+            return $saved;
+        }
 
         StoreWriteGate::begin($this->pdo);
         try {
+            $saved = $attempt === null ? null : $this->recoverAttempt($attempt, $userId, $actorRole, $fingerprint);
+            if ($saved !== null) {
+                $this->pdo->commit();
+                return $saved;
+            }
+            $this->assertCheckoutFiscalPeriodsOpen();
             // Resolved and locked inside the transaction so the shift that
             // authorizes this sale is the shift that is still open at commit.
             $attribution = $this->resolveSaleAttribution($userId);
@@ -113,16 +141,75 @@ class SalesWorkflowService
                 $this->heldSales->markCompleted((int)$resumedHeldSale['held_sale_id'], $saleId);
             }
 
+            $result = ['sale_id' => $saleId, 'total' => $netTotal, 'discount_amount' => $discount['discount_amount']];
+            if ($attempt !== null) {
+                $this->pdo->prepare('INSERT INTO checkout_attempts (cashier_id, attempt_id, request_hash, sale_id, result_json) VALUES (?, ?, ?, ?, ?)')
+                    ->execute([$userId, $attempt, $fingerprint, $saleId, json_encode($result, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION)]);
+            }
             $this->pdo->commit();
-            $this->notificationService->checkAndNotifyLowStock();
-            $this->notificationService->checkAndNotifyExpiringStock();
-            return ['sale_id' => $saleId, 'total' => $netTotal, 'discount_amount' => $discount['discount_amount']];
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e;
         }
+        foreach (['checkAndNotifyLowStock', 'checkAndNotifyExpiringStock'] as $notification) {
+            try {
+                $this->notificationService->$notification();
+            } catch (Throwable $e) {
+                error_log("Sale {$saleId} committed; {$notification} notification failed: " . $e->getMessage());
+            }
+        }
+        return $result;
+    }
+
+    public function recoverAttempt(string $attempt, int $userId, string $actorRole, ?string $fingerprint = null): ?array
+    {
+        $this->requireCashierWorkspace($actorRole);
+        $this->attemptIdentity(['checkout_attempt' => $attempt]);
+        $statement = $this->pdo->prepare('SELECT request_hash, result_json FROM checkout_attempts WHERE cashier_id = ? AND attempt_id = ?');
+        $statement->execute([$userId, $attempt]);
+        $saved = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!$saved) {
+            return null;
+        }
+        if ($fingerprint !== null && !hash_equals($saved['request_hash'], $fingerprint)) {
+            throw new DomainException('This checkout attempt belongs to a different cart or payment. Recover its saved receipt before starting another sale.');
+        }
+        return json_decode($saved['result_json'], true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    private function attemptIdentity(array $details): ?string
+    {
+        // Non-browser service callers retain their existing checkout interface.
+        if (!array_key_exists('checkout_attempt', $details)) {
+            return null;
+        }
+        $attempt = (string)$details['checkout_attempt'];
+        if (!preg_match('/^[a-f0-9]{32}$/D', $attempt)) {
+            throw new DomainException('A valid checkout attempt is required. Reload the point of sale.');
+        }
+        return $attempt;
+    }
+
+    private function attemptFingerprint(array $cart, string $method, array $details): string
+    {
+        $quantities = [];
+        foreach ($cart as $item) {
+            $quantities[$item['product_id']] = ($quantities[$item['product_id']] ?? 0) + $item['qty'];
+        }
+        ksort($quantities);
+        // Authorization passwords are never persisted or fingerprinted.
+        $payment = [
+            'cash_received' => $method === 'cash' ? (float)($details['cash_received'] ?? 0) : null,
+            'payment_reference' => $method === 'cash' ? null : trim((string)($details['payment_reference'] ?? '')),
+            'discount_type' => (string)($details['discount_type'] ?? 'none'),
+            'discount_value' => (float)($details['discount_value'] ?? 0),
+            'discount_reason' => trim((string)($details['discount_reason'] ?? '')),
+            'discount_approver_username' => trim((string)($details['discount_approver_username'] ?? '')),
+            'held_sale_id' => (int)($details['held_sale_id'] ?? 0),
+        ];
+        return hash('sha256', json_encode([$quantities, $method, $payment], JSON_THROW_ON_ERROR));
     }
 
     public function getActiveProducts(): array

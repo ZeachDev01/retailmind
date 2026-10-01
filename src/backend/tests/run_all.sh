@@ -35,6 +35,9 @@ php src/backend/tests/cashier_shift_opening_contract.php
 php src/backend/tests/drawer_movement_contract.php
 php src/backend/tests/cashier_shift_schema_parity_contract.php
 php src/backend/tests/sale_shift_attribution_contract.php
+php src/backend/tests/checkout_attempt_integration.php
+node src/backend/tests/checkout_attempt_behavior_test.js
+node src/backend/tests/checkout_attempt_browser_test.js
 php src/backend/tests/sale_shift_schema_parity_contract.php
 php src/backend/tests/cashier_shift_register_lock_contract.php
 php src/backend/tests/register_lock_schema_parity_contract.php
