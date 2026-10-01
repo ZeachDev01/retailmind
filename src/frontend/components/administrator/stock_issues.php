@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 require_role(['admin']);
 
-$stockIssueService = new StockIssueService($pdo);
+$stockIssueService = new StockIssueService($pdo, null, (string)current_role());
 $viewerId = (int)$_SESSION['user_id'];
 
 $categoryLabels = [

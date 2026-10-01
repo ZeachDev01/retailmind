@@ -85,6 +85,7 @@ $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES ({$produ
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES ({$productB}, 40)");
 
 $pdo->exec('CREATE TABLE cashier_shifts (
+    locked_at TEXT NULL,
     shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
     cashier_id INTEGER NOT NULL,
     opened_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

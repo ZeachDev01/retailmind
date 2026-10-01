@@ -84,8 +84,16 @@ if ($posRegisterLocked && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($reason === '') {
         $checkout_error = 'A reason is required to void the current sale.';
     } else {
-        log_activity($pdo, $cashierId, 'Voided sale before final checkout: ' . $reason);
-        $checkout_notice = 'Sale voided before checkout and audit log was recorded.';
+        try {
+            App\Store\StoreWriteGate::begin($pdo);
+            $shiftService->lockOpenShift($cashierId, true);
+            log_activity($pdo, $cashierId, 'Voided sale before final checkout: ' . $reason);
+            $pdo->commit();
+            $checkout_notice = 'Sale voided before checkout and audit log was recorded.';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $checkout_error = \App\Support\OperatorAlert::message($e, 'The current sale could not be voided.');
+        }
     }
 }
 

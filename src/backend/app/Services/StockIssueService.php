@@ -13,6 +13,7 @@
 // returned/approved/rejected reports.
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/CashierShiftService.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
@@ -32,7 +33,7 @@ class StockIssueService
     private FiscalPeriodGuardService $fiscalPeriodGuard;
     private ?bool $correctionLinkColumn = null;
 
-    public function __construct(PDO $pdo, ?NotificationService $notificationService = null)
+    public function __construct(PDO $pdo, ?NotificationService $notificationService = null, private ?string $activeWorkspace = null)
     {
         $this->pdo = $pdo;
         $this->notificationService = $notificationService ?? new NotificationService($pdo);
@@ -55,15 +56,12 @@ class StockIssueService
 
         $this->validateReportFields($productId, $category, $quantity, $explanation);
 
-        $shift = $this->getOpenShift($cashierId);
-        if ($shift === null) {
-            throw new RuntimeException('An active cashier shift is required to submit a stock issue report.');
-        }
-
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue report');
 
+        $this->ensureRevisionsTable();
         StoreWriteGate::begin($this->pdo);
         try {
+            $shift = (new \App\Services\CashierShiftService($this->pdo))->lockOpenShift($cashierId, true);
             [$scopeSql, $scopeParams] = $this->productScope();
             $productStmt = $this->pdo->prepare(
                 "SELECT p.product_id FROM products p WHERE p.product_id = ? AND p.status = 'active'{$scopeSql}{$this->forUpdate()}"
@@ -83,7 +81,6 @@ class StockIssueService
             $stmt->execute([$productId, -$quantity, $category, $cashierId, (int)$shift['shift_id'], $explanation]);
             $adjustmentId = (int)$this->pdo->lastInsertId();
 
-            $this->ensureRevisionsTable();
             $this->insertRevision(
                 $adjustmentId,
                 $cashierId,
@@ -142,8 +139,10 @@ class StockIssueService
         $this->assertRole($cashierId, 'cashier');
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue correction');
 
+        $this->ensureRevisionsTable();
         StoreWriteGate::begin($this->pdo);
         try {
+            $shift = (new \App\Services\CashierShiftService($this->pdo))->lockOpenShift($cashierId, true);
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(
                 "SELECT ia.* FROM inventory_adjustments ia
@@ -205,7 +204,6 @@ class StockIssueService
                 throw new RuntimeException('This report changed while editing. Refresh and try again.');
             }
 
-            $this->ensureRevisionsTable();
             $this->insertRevision($adjustmentId, $cashierId, 'edited', (string)$report['status'], (string)$report['status'], $oldValues, $newValues);
 
             log_activity(
@@ -238,8 +236,10 @@ class StockIssueService
         $this->assertRole($cashierId, 'cashier');
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue cancellation');
 
+        $this->ensureRevisionsTable();
         StoreWriteGate::begin($this->pdo);
         try {
+            $shift = (new \App\Services\CashierShiftService($this->pdo))->lockOpenShift($cashierId, true);
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(
                 "SELECT ia.* FROM inventory_adjustments ia
@@ -268,7 +268,6 @@ class StockIssueService
                 throw new RuntimeException('This report changed while cancelling. Refresh and try again.');
             }
 
-            $this->ensureRevisionsTable();
             $this->insertRevision(
                 $adjustmentId,
                 $cashierId,
@@ -326,6 +325,7 @@ class StockIssueService
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue return');
 
         $report = null;
+        $this->ensureRevisionsTable();
         StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
@@ -372,7 +372,6 @@ class StockIssueService
 
             $oldValues = ['status' => 'pending', 'adjustment_type' => (string)$report['adjustment_type']];
             $newValues = ['status' => 'returned', 'adjustment_type' => $recategorize ?? (string)$report['adjustment_type'], 'review_notes' => $reason];
-            $this->ensureRevisionsTable();
             $this->insertRevision($adjustmentId, $managerId, 'returned', 'pending', 'returned', $oldValues, $newValues);
 
             log_activity(
@@ -415,8 +414,10 @@ class StockIssueService
         $this->assertRole($cashierId, 'cashier');
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue resubmission');
 
+        $this->ensureRevisionsTable();
         StoreWriteGate::begin($this->pdo);
         try {
+            $shift = (new \App\Services\CashierShiftService($this->pdo))->lockOpenShift($cashierId, true);
             [$scopeSql, $scopeParams] = $this->productScope();
             $reportStmt = $this->pdo->prepare(
                 "SELECT ia.* FROM inventory_adjustments ia
@@ -445,7 +446,6 @@ class StockIssueService
                 throw new RuntimeException('This report changed while resubmitting. Refresh and try again.');
             }
 
-            $this->ensureRevisionsTable();
             $this->insertRevision(
                 $adjustmentId,
                 $cashierId,
@@ -490,6 +490,7 @@ class StockIssueService
         $this->assertRole($approverId, 'inventory_manager');
 
         $cashierId = 0;
+        $this->ensureRevisionsTable();
         StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
@@ -565,7 +566,6 @@ class StockIssueService
                 throw new RuntimeException('This report was already reviewed.');
             }
 
-            $this->ensureRevisionsTable();
             $this->insertRevision(
                 $adjustmentId,
                 $approverId,
@@ -632,6 +632,7 @@ class StockIssueService
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'stock issue rejection');
 
         $cashierId = 0;
+        $this->ensureRevisionsTable();
         StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
@@ -660,7 +661,6 @@ class StockIssueService
                 throw new RuntimeException('Only pending reports can be rejected.');
             }
 
-            $this->ensureRevisionsTable();
             $this->insertRevision(
                 $adjustmentId,
                 $approverId,
@@ -1131,7 +1131,7 @@ class StockIssueService
 
     private function assertRole(int $userId, string $expectedRole): void
     {
-        $role = $this->roleOf($userId);
+        $role = $this->activeWorkspace ?? $this->roleOf($userId);
         if ($role !== $expectedRole) {
             $label = $expectedRole === 'cashier' ? 'Cashiers' : 'Inventory Managers';
             throw new RuntimeException("{$label} only: this action requires the {$expectedRole} role.");

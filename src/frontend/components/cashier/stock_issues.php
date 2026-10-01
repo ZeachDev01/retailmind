@@ -13,7 +13,7 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/StockIssueService.php';
 require_role(['cashier']);
 
-$stockIssueService = new StockIssueService($pdo);
+$stockIssueService = new StockIssueService($pdo, null, (string)current_role());
 $message = '';
 $error = '';
 

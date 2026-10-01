@@ -16,6 +16,7 @@ use Throwable;
 
 require_once __DIR__ . '/../Audit/AuditRecordCategory.php';
 require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
+require_once __DIR__ . '/../Store/StoreWriteGate.php';
 
 /**
  * Cashier Shifts (ticket #88).
@@ -206,20 +207,22 @@ class CashierShiftService
             $actorRole,
             'Only the Cashier workspace can lock a Register. Switch to your Cashier workspace to secure your register.'
         );
-        $shift = $this->requireOpenShift($actorId, 'lock this Register');
-        if (!empty($shift['locked_at'])) {
-            throw new DomainException('This Register is already locked.');
-        }
+        return $this->transaction(function () use ($actorId): int {
+            $shift = $this->lockOpenShift($actorId);
+            if (!empty($shift['locked_at'])) {
+                throw new DomainException('This Register is already locked.');
+            }
 
-        $this->setRegisterLock((int)$shift['shift_id'], true);
-        // Re-read so the Protected Audit Record carries the time the lock was
-        // actually taken, not the moment before it.
-        $shift = $this->getOpenShift($actorId) ?? $shift;
-        $this->auditShiftEvent($actorId, self::AUDIT_ACTION_LOCKED, (int)$shift['shift_id'], $shift, [
-            'locked_at' => $shift['locked_at'],
-        ]);
+            $this->setRegisterLock((int)$shift['shift_id'], true);
+            // Re-read so the Protected Audit Record carries the time the lock was
+            // actually taken, not the moment before it.
+            $shift = $this->getOpenShift($actorId) ?? $shift;
+            $this->auditShiftEvent($actorId, self::AUDIT_ACTION_LOCKED, (int)$shift['shift_id'], $shift, [
+                'locked_at' => $shift['locked_at'],
+            ]);
 
-        return (int)$shift['shift_id'];
+            return (int)$shift['shift_id'];
+        });
     }
 
     /**
@@ -258,14 +261,20 @@ class CashierShiftService
             throw new DomainException('That password is not correct.');
         }
 
-        $this->setRegisterLock((int)$shift['shift_id'], false);
-        // The record keeps when the Register was locked, which is the only moment
-        // an unlock happens, so a reader can see how long the break was.
-        $this->auditShiftEvent($actorId, self::AUDIT_ACTION_UNLOCKED, (int)$shift['shift_id'], $shift, [
-            'locked_at' => $shift['locked_at'],
-        ]);
+        return $this->transaction(function () use ($actorId): int {
+            $shift = $this->lockOpenShift($actorId);
+            if (empty($shift['locked_at'])) {
+                throw new DomainException('This Register is not locked.');
+            }
+            $this->setRegisterLock((int)$shift['shift_id'], false);
+            // The record keeps when the Register was locked, which is the only moment
+            // an unlock happens, so a reader can see how long the break was.
+            $this->auditShiftEvent($actorId, self::AUDIT_ACTION_UNLOCKED, (int)$shift['shift_id'], $shift, [
+                'locked_at' => $shift['locked_at'],
+            ]);
 
-        return (int)$shift['shift_id'];
+            return (int)$shift['shift_id'];
+        });
     }
 
     /**
@@ -280,6 +289,25 @@ class CashierShiftService
         if ($this->isRegisterLocked($cashierId)) {
             throw new DomainException(self::LOCKED_MESSAGE);
         }
+    }
+
+    /** Take the ownership lock before reading or changing any operational state. */
+    public function lockOpenShift(int $cashierId, bool $requireUnlocked = false): array
+    {
+        if (!$this->pdo->inTransaction()) {
+            throw new RuntimeException('Shift authorization requires an active transaction.');
+        }
+        $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+        $stmt = $this->pdo->prepare("SELECT * FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
+        $stmt->execute([$cashierId]);
+        $shift = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$shift) {
+            throw new DomainException('Open your Cashier Shift before continuing.');
+        }
+        if ($requireUnlocked && !empty($shift['locked_at'])) {
+            throw new DomainException(self::LOCKED_MESSAGE);
+        }
+        return $shift;
     }
 
     private function requireOpenShift(int $cashierId, string $action): array
@@ -444,7 +472,7 @@ class CashierShiftService
     {
         $started = !$this->pdo->inTransaction();
         if ($started) {
-            $this->pdo->beginTransaction();
+            \App\Store\StoreWriteGate::begin($this->pdo);
         }
         try {
             $result = $operation();

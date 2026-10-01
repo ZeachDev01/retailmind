@@ -580,7 +580,7 @@ $checks = [
             'requireHoldingShift',
             'requireOwnUnresolved',
             'requireCashierWorkspace',
-            'Open a Cashier Shift before holding a sale.',
+            'lockOpenShift($cashierId, true)',
             "const UNRESOLVED_STATUSES = ['held', 'resumed']",
             'Held sale not found or already resolved.',
         ],
