@@ -1,13 +1,13 @@
 <?php
 // invoice/reversals.php
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../app/Services/SaleReversalService.php';
+require_once __DIR__ . '/../../../includes/auth.php';
+require_once __DIR__ . '/../../../includes/functions.php';
+require_once __DIR__ . '/../../../app/Services/SaleReversalService.php';
 require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
 
 $service = new SaleReversalService($pdo);
 $sale_id = (int)($_GET['sale_id'] ?? $_POST['sale_id'] ?? 0);
-$can_approve = in_array(current_role(), ['admin', 'super_admin', 'inventory_manager'], true);
+$can_approve = in_array(current_role(), ['admin', 'super_admin'], true) && has_capability(App\Authorization\RoleCapabilityPolicy::MANAGE_SALE_REVERSALS);
 $message = '';
 $error = '';
 
@@ -17,35 +17,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if ($postAction === 'request') {
-            $requestedSale = $service->getSaleWithItems((int)$_POST['sale_id']);
-            if (!$requestedSale) {
-                throw new RuntimeException('Sale not found.');
-            }
-            if (!$can_approve && (int)$requestedSale['cashier_id'] !== (int)$_SESSION['user_id']) {
-                throw new RuntimeException('You can only request reversals for your own sales.');
-            }
-
-            $reversalId = $service->requestReversal(
-                (int)$_POST['sale_id'],
-                $_POST['reversal_type'] ?? '',
-                $_POST['reason'] ?? '',
-                $_POST['items'] ?? [],
-                (int)$_SESSION['user_id'],
-                $_POST['settlement_method'] ?? 'none',
-                (float)($_POST['refund_amount'] ?? 0),
-                $_POST['exchange_details'] ?? ''
-            );
-            $message = "Reversal request #{$reversalId} was submitted for supervisor approval.";
-            $sale_id = (int)$_POST['sale_id'];
-        } elseif ($postAction === 'approve' && $can_approve) {
-            $service->approveReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id']);
-            $message = 'Reversal approved and returned stock was restored.';
-        } elseif ($postAction === 'reject' && $can_approve) {
-            $service->rejectReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id'], $_POST['rejection_reason'] ?? '');
-            $message = 'Reversal request rejected.';
+            throw new RuntimeException('New Legacy Reversals are disabled. Use Cash Refunds; exchanges require a refund plus a new sale.');
         }
-    } catch (RuntimeException $e) {
-        $error = $e->getMessage();
+        require_capability(App\Authorization\RoleCapabilityPolicy::MANAGE_SALE_REVERSALS);
+        $evidence = [
+            'no_prior_effects' => isset($_POST['no_prior_effects']),
+            'restockable' => isset($_POST['restockable']),
+            'refund_ineligibility_acknowledged' => isset($_POST['refund_ineligibility_acknowledged']),
+            'paying_shift_id' => (int)($_POST['paying_shift_id'] ?? 0),
+            'single_payout_confirmed' => isset($_POST['single_payout_confirmed']),
+            'external_completed' => isset($_POST['external_completed']),
+            'payment_reference' => trim($_POST['payment_reference'] ?? ''),
+        ];
+        if ($postAction === 'approve') {
+            $service->approveReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id'], $_POST['decision_reason'] ?? '', $evidence);
+            $message = 'Legacy Reversal approved once. Follow the committed record; retries do not require another payout.';
+        } elseif ($postAction === 'reject') {
+            $service->rejectReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id'], $_POST['decision_reason'] ?? '', $evidence);
+            $message = 'Legacy Reversal rejected without financial effects. Use a separate Cash Refund only after every pending request is resolved and no approved record exists.';
+        } else {
+            throw new RuntimeException('Choose an explicit Administrator decision.');
+        }
+    } catch (RuntimeException | DomainException $e) {
+        $error = App\Support\OperatorAlert::message($e, 'The Legacy Reversal could not be decided. Ask your Administrator to investigate.');
     } catch (PDOException $e) {
         $error = 'The reversal could not be saved because of a database error.';
     }
@@ -65,7 +59,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sales Reversals</title>
+<title>Legacy Reversals</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
 <style>
     .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem; margin-bottom: 1rem; }
@@ -86,8 +80,8 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
     <div class="main-content">
         <div class="topbar">
             <div>
-                <h1>Sales Reversals</h1>
-                <p class="page-subtitle">Corrections create separate approved records; completed sales stay unchanged.</p>
+                <h1>Legacy Reversals</h1>
+                <p class="page-subtitle">Historical records remain readable. New corrections use Cash Refunds.</p>
             </div>
             <span class="badge-role"><?= htmlspecialchars(ucfirst((string)current_role())) ?></span>
         </div>
@@ -102,7 +96,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                     <input type="number" min="1" name="sale_id" id="sale_id" value="<?= $sale_id ?: '' ?>" placeholder="Enter receipt number">
                 </div>
                 <button class="btn" type="submit">Load Sale</button>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('invoice/receipt.php')) ?>">Back to Receipts</a>
+                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/invoice/sales.php')) ?>">Back to Receipts</a>
             </form>
         </div>
 
@@ -124,79 +118,8 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                             <?php endif; ?>
                         </div>
 
-                        <form method="POST">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="request">
-                            <input type="hidden" name="sale_id" value="<?= (int)$sale['sale_id'] ?>">
-
-                            <div class="form-group">
-                                <label for="reversal_type">Correction Type</label>
-                                <select name="reversal_type" id="reversal_type">
-                                    <option value="return">Product Return</option>
-                                    <option value="refund">Refund</option>
-                                    <option value="exchange">Exchange</option>
-                                    <option value="cancel">Cancel Entire Transaction</option>
-                                </select>
-                            </div>
-
-                            <div style="overflow-x:auto;margin-bottom:1rem;">
-                                <table>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Sold</th>
-                                        <th>Already Reversed</th>
-                                        <th>Return Qty</th>
-                                        <th>Unit Price</th>
-                                    </tr>
-                                    <?php foreach ($sale['items'] as $item): ?>
-                                        <?php $remaining = (int)$item['quantity'] - (int)$item['reversed_qty']; ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($item['sku'] . ' - ' . $item['product_name']) ?></td>
-                                            <td><?= (int)$item['quantity'] ?></td>
-                                            <td><?= (int)$item['reversed_qty'] ?></td>
-                                            <td>
-                                                <input type="number"
-                                                       name="items[<?= (int)$item['sale_item_id'] ?>]"
-                                                       min="0"
-                                                       max="<?= max(0, $remaining) ?>"
-                                                       value="0"
-                                                       style="width:5.5rem;padding:0.35rem;border:1px solid var(--border);border-radius:8px;"
-                                                       <?= $remaining <= 0 ? 'disabled' : '' ?>>
-                                            </td>
-                                            <td>&#8369;<?= number_format((float)$item['unit_price'], 2) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </table>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="settlement_method">Refund / Exchange Handling</label>
-                                <select name="settlement_method" id="settlement_method">
-                                    <option value="none">No money movement</option>
-                                    <option value="cash">Cash Refund</option>
-                                    <option value="card">Card Refund</option>
-                                    <option value="ewallet">E-Wallet Refund</option>
-                                    <option value="exchange">Exchange / Store Credit</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="refund_amount">Refund Amount</label>
-                                <input type="number" step="0.01" min="0" name="refund_amount" id="refund_amount" value="0.00">
-                            </div>
-
-                            <div class="form-group">
-                                <label for="exchange_details">Exchange Details</label>
-                                <textarea name="exchange_details" id="exchange_details" placeholder="Replacement item, store credit reference, or exchange notes"></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="reason">Reason</label>
-                                <textarea name="reason" id="reason" required placeholder="Reason required for audit and supervisor approval"></textarea>
-                            </div>
-
-                            <button class="btn" type="submit">Submit for Supervisor Approval</button>
-                        </form>
+                        <p>New corrections use full or partial Cash Refunds. Exchanges require a refund plus a separately paid new sale.</p>
+                        <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a>
                     </div>
                 <?php elseif ($sale_id > 0): ?>
                     <div class="panel">Sale #<?= $sale_id ?> was not found.</div>
@@ -206,26 +129,41 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
             <div>
                 <?php if ($can_approve && $pendingReversals): ?>
                     <div class="panel">
-                        <h3>Pending Supervisor Approval</h3>
-                        <p class="section-description">Approving restores returned stock and records the audit entry.</p>
+                        <h3>Pending Administrator review</h3>
+                        <p class="section-description">Review financial and inventory evidence before an explicit decision.</p>
                         <?php foreach ($pendingReversals as $row): ?>
                             <div style="border-top:1px solid var(--border);padding-top:0.9rem;margin-top:0.9rem;">
                                 <strong>#<?= (int)$row['reversal_id'] ?> <?= htmlspecialchars(strtoupper($row['reversal_type'])) ?></strong>
                                 <p class="muted">Sale #<?= (int)$row['sale_id'] ?> requested by <?= htmlspecialchars($row['requested_by_name'] ?? 'Unknown') ?></p>
                                 <p><?= htmlspecialchars($row['reason']) ?></p>
                                 <div class="actions-row" style="margin-top:0.75rem;">
-                                    <form method="POST" class="inline-form">
+                                    <?php $preview = $service->reviewBalances((int)$row['reversal_id']); ?>
+                                    <?php if (isset($preview['limitation'])): ?>
+                                        <p><?= htmlspecialchars($preview['limitation']) ?></p>
+                                    <?php else: ?>
+                                        <p>Preview only; checked again at decision. Nominal paid balance: &#8369;<?= number_format($preview['paid_before'],2) ?> to &#8369;<?= number_format($preview['paid_after'],2) ?>.
+                                        Original shift #<?= (int)$preview['shift_id'] ?>: <?= htmlspecialchars($preview['shift_status'] ?? 'unassigned') ?><?= $preview['locked_at'] ? ', locked' : '' ?>.
+                                        <?php if (isset($preview['cash_before'])): ?>Expected drawer cash: &#8369;<?= number_format($preview['cash_before'],2) ?> to &#8369;<?= number_format($preview['cash_after'],2) ?>.<?php endif; ?></p>
+                                        <table><tr><th>Item</th><th>Stock before / after approval</th><th>Legacy quantity before / after</th></tr>
+                                        <?php foreach ($preview['items'] as $item): ?>
+                                            <tr><td><?= htmlspecialchars($item['product_name'] ?? 'Missing product') ?></td><td><?= (int)$item['quantity_on_hand'] ?> / <?= (int)$item['quantity_on_hand']+(int)$item['quantity'] ?></td><td><?= (int)$item['sold_quantity']-(int)$item['approved_quantity'] ?> / <?= (int)$item['sold_quantity']-(int)$item['approved_quantity']-(int)$item['quantity'] ?></td></tr>
+                                        <?php endforeach; ?></table>
+                                        <p>Rejection keeps all cash, stock, and consumed balances unchanged. Approval is refused for missing batches, damaged returns, inconsistent values, exchange credit, closed original Fiscal Periods or a different/closed paying shift. Zero-money returns require a reason and still block future Cash Refunds.</p>
+                                    <?php endif; ?>
+                                    <p>Settlement <?= htmlspecialchars($row['settlement_method']) ?>  -  amount &#8369;<?= number_format((float)$row['refund_amount'],2) ?>. Approval restores verified Restockable units, consumes remaining quantity/value, and permanently blocks Cash Refunds for this sale. Cash reduces the original open paying shift once; saved closed-shift reconciliation and approval-day report attribution remain historical. Unsupported or externally altered requests must stay pending for investigation.</p>
+                                    <form method="POST">
                                         <?= csrf_field() ?>
-                                        <input type="hidden" name="action" value="approve">
                                         <input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>">
-                                        <button class="btn btn-small" type="submit">Approve</button>
-                                    </form>
-                                    <form method="POST" class="actions-row" style="margin:0;">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="action" value="reject">
-                                        <input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>">
-                                        <input type="text" name="rejection_reason" placeholder="Rejection reason" required style="padding:0.45rem;border:1px solid var(--border);border-radius:8px;">
-                                        <button class="btn btn-small btn-danger" type="submit">Reject</button>
+                                        <label>Decision reason <input name="decision_reason" maxlength="255" required></label>
+                                        <label><input type="checkbox" name="no_prior_effects" required> Verified no prior payout or stock restoration outside this pending record</label>
+                                        <label><input type="checkbox" name="restockable"> All returned units verified Restockable</label>
+                                        <label><input type="checkbox" name="refund_ineligibility_acknowledged"> Acknowledge whole-sale Cash Refund ineligibility after approval</label>
+                                        <label>Original physical paying shift ID <input type="number" name="paying_shift_id" min="1"></label>
+                                        <label><input type="checkbox" name="single_payout_confirmed"> Confirm exactly one cash payout from this drawer</label>
+                                        <label><input type="checkbox" name="external_completed"> External original-method settlement verified</label>
+                                        <label>External Payment Reference <input name="payment_reference" maxlength="100"></label>
+                                        <button class="btn" name="action" value="approve">Approve verified request</button>
+                                        <button class="btn btn-danger" name="action" value="reject">Reject without effects</button>
                                     </form>
                                 </div>
                             </div>
@@ -234,7 +172,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                 <?php endif; ?>
 
                 <div class="panel">
-                    <h3><?= $sale_id > 0 ? 'Sale Reversal History' : 'Recent Reversals' ?></h3>
+                    <h3><?= $sale_id > 0 ? 'Legacy Reversal History' : 'Recent Legacy Reversals' ?></h3>
                     <div style="overflow-x:auto;margin-top:0.75rem;">
                         <table>
                             <tr>
@@ -247,14 +185,14 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                             <?php foreach ($reversals as $row): ?>
                                 <tr>
                                     <td>#<?= (int)$row['reversal_id'] ?></td>
-                                    <td><a href="<?= htmlspecialchars(app_url('invoice/reversals.php?sale_id=' . $row['sale_id'])) ?>">#<?= (int)$row['sale_id'] ?></a></td>
+                                    <td><a href="<?= htmlspecialchars(app_url('components/invoice/legacy_reversals.php?sale_id=' . $row['sale_id'])) ?>">#<?= (int)$row['sale_id'] ?></a></td>
                                     <td><?= htmlspecialchars(ucfirst($row['reversal_type'])) ?></td>
                                     <td><span class="status-pill status-<?= htmlspecialchars($row['status']) ?>"><?= htmlspecialchars($row['status']) ?></span></td>
                                     <td><?= htmlspecialchars($row['created_at']) ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (!$reversals): ?>
-                                <tr><td colspan="5" style="text-align:center;color:var(--muted);">No reversal records yet.</td></tr>
+                                <tr><td colspan="5" style="text-align:center;color:var(--muted);">No Legacy Reversal records. No pending transition is required.</td></tr>
                             <?php endif; ?>
                         </table>
                     </div>

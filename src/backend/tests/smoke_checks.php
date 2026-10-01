@@ -262,7 +262,7 @@ $checks = [
     ],
     'Sales workspace exposes transaction filters and reversal actions' => [
         'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['sales-tabs', 'Sales Transactions', 'Sales Reversals', 'id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'tab=reversals&sale_id=', 'SaleReversalService', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
+        'needles' => ['sales-tabs', 'Sales Transactions', 'Legacy Reversals', 'id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'tab=reversals&sale_id=', 'SaleReversalService', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
     ],
     'Sales transaction server contract is isolated and safe' => [
         'file' => 'src/backend/app/Services/ReceiptTableService.php',

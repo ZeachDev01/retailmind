@@ -110,34 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postAction = $_POST['action'] ?? '';
 
     try {
-        if ($postAction === 'request') {
-            $requestedSale = $reversalService->getSaleWithItems((int)$_POST['sale_id']);
-            if (!$requestedSale) {
-                throw new RuntimeException('Sale not found.');
-            }
-            if (!$reversalCanApprove && (int)$requestedSale['cashier_id'] !== (int)$_SESSION['user_id']) {
-                throw new RuntimeException('You can only request reversals for your own sales.');
-            }
-
-            $reversalId = $reversalService->requestReversal(
-                (int)$_POST['sale_id'],
-                $_POST['reversal_type'] ?? '',
-                $_POST['reason'] ?? '',
-                $_POST['items'] ?? [],
-                (int)$_SESSION['user_id'],
-                $_POST['settlement_method'] ?? 'none',
-                (float)($_POST['refund_amount'] ?? 0),
-                $_POST['exchange_details'] ?? ''
-            );
-            $reversalMessage = "Reversal request #{$reversalId} was submitted for supervisor approval.";
-            $sale_id = (int)$_POST['sale_id'];
-        } elseif ($postAction === 'approve' && $reversalCanApprove) {
-            $reversalService->approveReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id']);
-            $reversalMessage = 'Reversal approved and returned stock was restored.';
-        } elseif ($postAction === 'reject' && $reversalCanApprove) {
-            $reversalService->rejectReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id'], $_POST['rejection_reason'] ?? '');
-            $reversalMessage = 'Reversal request rejected.';
-        }
+        throw new RuntimeException('New Legacy Reversals are disabled. Use Cash Refunds. Administrator decisions use the Legacy Reversal review page.');
     } catch (RuntimeException $exception) {
         $reversalError = \App\Support\OperatorAlert::message($exception, 'The reversal could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
     } catch (PDOException $exception) {
@@ -243,7 +216,7 @@ try {
                     <i class="bi bi-receipt" aria-hidden="true"></i> Sales Transactions
                 </a>
                 <a class="sales-tab<?= $activeTab === 'reversals' ? ' is-active' : '' ?>" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>">
-                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Sales Reversals
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Legacy Reversals
                 </a>
             </nav>
 
@@ -338,8 +311,8 @@ try {
 
                 <div class="section-header reversal-heading">
                     <div>
-                        <h2>Sales reversals</h2>
-                        <p class="section-description">Corrections create separate approved records; completed sales stay unchanged.</p>
+                        <h2>Legacy Reversals</h2>
+                        <p class="section-description">Historical records remain readable. New corrections use Cash Refunds.</p>
                     </div>
                     <form method="GET" class="actions-row reversal-search">
                         <input type="hidden" name="tab" value="reversals">
@@ -361,61 +334,22 @@ try {
                                     <?php if (!empty($reversalSale['approved_full_reversal'])): ?><span class="status-pill status-approved">Cancelled</span><?php endif; ?>
                                 </div>
 
-                                <form method="POST" action="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="request">
-                                    <input type="hidden" name="sale_id" value="<?= (int)$reversalSale['sale_id'] ?>">
-                                    <div class="form-group">
-                                        <label for="reversal_type">Correction Type</label>
-                                        <select name="reversal_type" id="reversal_type">
-                                            <option value="return">Product Return</option><option value="refund">Refund</option><option value="exchange">Exchange</option><option value="cancel">Cancel Entire Transaction</option>
-                                        </select>
-                                    </div>
-                                    <div class="u-table-scroll-spaced">
-                                        <table>
-                                            <tr><th>Product</th><th>Sold</th><th>Reversed</th><th>Return Qty</th><th>Unit Price</th></tr>
-                                            <?php foreach ($reversalSale['items'] as $item): $remaining = (int)$item['quantity'] - (int)$item['reversed_qty']; ?>
-                                                <tr>
-                                                    <td><?= htmlspecialchars($item['sku'] . ' - ' . $item['product_name']) ?></td><td><?= (int)$item['quantity'] ?></td><td><?= (int)$item['reversed_qty'] ?></td>
-                                                    <td><input class="reversal-quantity" type="number" name="items[<?= (int)$item['sale_item_id'] ?>]" min="0" max="<?= max(0, $remaining) ?>" value="0" <?= $remaining <= 0 ? 'disabled' : '' ?>></td>
-                                                    <td>&#8369;<?= number_format((float)$item['unit_price'], 2) ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        </table>
-                                    </div>
-                                    <div class="form-group"><label for="settlement_method">Refund / Exchange Handling</label><select name="settlement_method" id="settlement_method"><option value="none">No money movement</option><option value="cash">Cash Refund</option><option value="card">Card Refund</option><option value="ewallet">E-Wallet Refund</option><option value="exchange">Exchange / Store Credit</option></select></div>
-                                    <div class="form-group"><label for="refund_amount">Refund Amount</label><input type="number" step="0.01" min="0" name="refund_amount" id="refund_amount" value="0.00"></div>
-                                    <div class="form-group"><label for="exchange_details">Exchange Details</label><textarea name="exchange_details" id="exchange_details" placeholder="Replacement item, store credit reference, or exchange notes"></textarea></div>
-                                    <div class="form-group"><label for="reason">Reason</label><textarea name="reason" id="reason" required placeholder="Reason required for audit and supervisor approval"></textarea></div>
-                                    <button class="btn" type="submit">Submit for Supervisor Approval</button>
-                                </form>
+                                <p>New corrections use full or partial Cash Refunds in the Cashier workspace. Exchanges require a refund plus a separately paid new sale.</p>
+                                <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a>
                             </div>
                         <?php elseif ($sale_id > 0): ?>
                             <div class="panel">Sale #<?= $sale_id ?> was not found.</div>
                         <?php else: ?>
-                            <div class="empty-state reversal-empty"><i class="bi bi-receipt"></i><strong>Load a sale to request a reversal</strong><span>Enter a receipt number above to review eligible items.</span></div>
+                            <div class="empty-state reversal-empty"><i class="bi bi-receipt"></i><strong>Load a sale to read Legacy Reversals</strong><span>Enter a receipt number above to review eligible items.</span></div>
                         <?php endif; ?>
                     </div>
 
                     <div>
-                        <?php if ($reversalCanApprove && $pendingReversals): ?>
-                            <div class="panel">
-                                <h3>Pending Supervisor Approval</h3>
-                                <p class="section-description">Approving restores returned stock and records the audit entry.</p>
-                                <?php foreach ($pendingReversals as $row): ?>
-                                    <div class="u-section-divider">
-                                        <strong>#<?= (int)$row['reversal_id'] ?> <?= htmlspecialchars(strtoupper($row['reversal_type'])) ?></strong>
-                                        <p class="muted">Sale #<?= (int)$row['sale_id'] ?> requested by <?= htmlspecialchars($row['requested_by_name'] ?? 'Unknown') ?></p><p><?= htmlspecialchars($row['reason']) ?></p>
-                                        <div class="actions-row u-mt-075">
-                                            <form method="POST" action="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>" class="inline-form"><?= csrf_field() ?><input type="hidden" name="action" value="approve"><input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>"><button class="btn btn-small" type="submit">Approve</button></form>
-                                            <form method="POST" action="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>" class="actions-row u-m-0"><?= csrf_field() ?><input type="hidden" name="action" value="reject"><input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>"><input class="u-field-basic" type="text" name="rejection_reason" placeholder="Rejection reason" required><button class="btn btn-small btn-danger" type="submit">Reject</button></form>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
+                        <?php if ($reversalCanApprove): ?>
+                            <p><a href="<?= htmlspecialchars(app_url('components/invoice/legacy_reversals.php')) ?>">Administrator Legacy Reversal review</a></p>
                         <?php endif; ?>
                         <div class="panel">
-                            <h3><?= $sale_id > 0 ? 'Sale Reversal History' : 'Recent Reversals' ?></h3>
+                            <h3><?= $sale_id > 0 ? 'Legacy Reversal History' : 'Recent Legacy Reversals' ?></h3>
                             <div class="u-table-scroll u-mt-075"><table><tr><th>ID</th><th>Sale</th><th>Type</th><th>Status</th><th>Requested</th></tr>
                                 <?php foreach ($reversals as $row): ?><tr><td>#<?= (int)$row['reversal_id'] ?></td><td><a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals&sale_id=' . $row['sale_id'])) ?>">#<?= (int)$row['sale_id'] ?></a></td><td><?= htmlspecialchars(ucfirst($row['reversal_type'])) ?></td><td><span class="status-pill status-<?= htmlspecialchars($row['status']) ?>"><?= htmlspecialchars($row['status']) ?></span></td><td><?= htmlspecialchars(format_display_datetime($row['created_at'])) ?></td></tr><?php endforeach; ?>
                                 <?php if (!$reversals): ?><tr><td class="u-empty-cell" colspan="5">No reversal records yet.</td></tr><?php endif; ?>
@@ -514,7 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.Swal.fire({
             icon: 'info',
             title: 'Completed receipts are locked',
-            text: 'Use Refunds in the Cashier workspace for completed sales you rang up. Other reversals remain in Sales Reversals.',
+            text: 'Use Refunds in the Cashier workspace for completed sales you rang up. Existing Legacy Reversals remain available for Administrator review.',
             confirmButtonText: 'Understood',
             customClass: {confirmButton: 'btn rm-swal-confirm'}
         });

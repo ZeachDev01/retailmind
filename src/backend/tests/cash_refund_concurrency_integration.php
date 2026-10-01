@@ -216,9 +216,10 @@ try {
     $pdo->exec("INSERT INTO sale_reversals (reversal_id, sale_id, reversal_type, reason, requested_by)
         VALUES (1, 1, 'refund', 'Older request', 1)");
     try {
-        $legacy->approveReversal(1, 1);
+        $_SESSION=['user_id'=>2,'role'=>'admin'];
+        $legacy->approveReversal(1, 2, 'Checked old request', ['no_prior_effects'=>true,'restockable'=>true,'refund_ineligibility_acknowledged'=>true]);
         throw new LogicException('Legacy approval must not refund a Cash Refund again.');
-    } catch (RuntimeException $e) {
+    } catch (DomainException $e) {
         $assert(str_contains($e->getMessage(), 'Cash Refund'), 'Legacy approval must identify the existing Cash Refund.');
     }
     echo "Cash Refund concurrency and legacy reversal isolation: passed\n";
