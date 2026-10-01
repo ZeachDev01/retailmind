@@ -83,6 +83,16 @@ try {
     $seed(6,'cash','exchange',200);$refuse(fn()=>$legacy->approveReversal(6,2,'Review',$evidence),'Exchange credit unsupported');
     $seed(7,'cash','cash',201);$refuse(fn()=>$legacy->approveReversal(7,2,'Review',$evidence),'Arbitrary amount unsupported');
     $seed(8);$pdo->exec('DELETE FROM sale_item_batches WHERE sale_item_id=8');$refuse(fn()=>$legacy->approveReversal(8,2,'Review',$evidence),'Missing batch evidence');
+    $seed(14,'cash','none',0);$pdo->exec("UPDATE sale_reversals SET reversal_type='exchange' WHERE reversal_id=14");
+    $refuse(fn()=>$legacy->approveReversal(14,2,'Exchange zero-money',$evidence),'Zero-money exchange unsupported');
+    $pdo->exec("UPDATE sale_reversals SET settlement_method='cash',refund_amount=200 WHERE reversal_id=14");
+    $refuse(fn()=>$legacy->approveReversal(14,2,'Exchange missing separate sale',$evidence),'Exchange separate sale must be acknowledged');
+    $exchangeEvidence=$evidence+['separate_replacement_sale_acknowledged'=>true];
+    $legacy->approveReversal(14,2,'Ordinary refund, replacement sale separately paid',$exchangeEvidence);
+    $seed(13);$pdo->exec('DELETE FROM sale_item_batches WHERE sale_item_id=13');
+    $pdo->exec('UPDATE product_batches SET quantity=3 WHERE batch_id=13');
+    $pdo->exec('INSERT INTO sale_item_batches(sale_item_id,batch_id,quantity) VALUES(13,13,2),(13,13,3)');
+    $refuse(fn()=>$legacy->approveReversal(13,2,'Duplicate batch',$evidence),'Duplicate allocation cannot exceed batch capacity');
     $seed(9);$bad=$evidence;$bad['no_prior_effects']=false;$refuse(fn()=>$legacy->rejectReversal(9,2,'Review',$bad),'Outside effects investigation');
     $bad=$evidence;$bad['restockable']=false;$refuse(fn()=>$legacy->approveReversal(9,2,'Review',$bad),'Damaged not representable');
     $pdo->exec("UPDATE cashier_shifts SET status='closed',closed_at=NOW(),expected_cash=999,actual_cash=999,cash_variance=0 WHERE shift_id=1");

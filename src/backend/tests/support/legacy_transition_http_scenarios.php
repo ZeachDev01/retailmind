@@ -38,6 +38,7 @@ try {
     [$status,$body]=$request(['csrf_token'=>'fixture-csrf','action'=>'approve','reversal_id'=>9,'decision_reason'=>'Missing evidence'],2,'admin');
     $assert(!str_contains($status,'500') && str_contains($body,'Verify no payout') && $snapshot()===$before,'Unsupported HTTP decision explains refusal without effects');
     [$status,$body]=$request(['sale_id'=>9],2,'admin',false);
+    $fixturePath=getenv('LEGACY_REVIEW_FIXTURE_PATH');if($fixturePath)file_put_contents($fixturePath,$body);
     $assert(str_contains($status,'200') && str_contains($body,'Nominal paid balance') && str_contains($body,'Stock before / after'),'Administrator numerical preview accessible');
     [$status]=$request(['csrf_token'=>'fixture-csrf','action'=>'reject','reversal_id'=>9,'decision_reason'=>'Verified no effects, replaced by separate Cash Refund','no_prior_effects'=>'1','approved_by'=>1],2,'admin');
     $assert(str_contains($status,'200'),'Administrator explicit rejection works over HTTP');

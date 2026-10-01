@@ -7,6 +7,7 @@ require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
 
 $service = new SaleReversalService($pdo);
 $sale_id = (int)($_GET['sale_id'] ?? $_POST['sale_id'] ?? 0);
+$can_view_all = has_capability(App\Authorization\RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 $can_approve = in_array(current_role(), ['admin', 'super_admin'], true) && has_capability(App\Authorization\RoleCapabilityPolicy::MANAGE_SALE_REVERSALS);
 $message = '';
 $error = '';
@@ -28,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'single_payout_confirmed' => isset($_POST['single_payout_confirmed']),
             'external_completed' => isset($_POST['external_completed']),
             'payment_reference' => trim($_POST['payment_reference'] ?? ''),
+            'separate_replacement_sale_acknowledged' => isset($_POST['separate_replacement_sale_acknowledged']),
         ];
         if ($postAction === 'approve') {
             $service->approveReversal((int)$_POST['reversal_id'], (int)$_SESSION['user_id'], $_POST['decision_reason'] ?? '', $evidence);
@@ -46,12 +48,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $sale = $sale_id > 0 ? $service->getSaleWithItems($sale_id) : null;
-if ($sale && !$can_approve && (int)$sale['cashier_id'] !== (int)$_SESSION['user_id']) {
+if ($sale && !$can_view_all && (int)$sale['cashier_id'] !== (int)$_SESSION['user_id']) {
     $error = 'You can only view reversals for your own sales.';
     $sale = null;
 }
 
-$reversals = $sale_id > 0 && $sale ? $service->getReversals($sale_id) : ($can_approve ? $service->getReversals() : []);
+$reversals = $sale_id > 0 && $sale ? $service->getReversals($sale_id) : ($can_view_all ? $service->getReversals() : []);
 $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['status'] === 'pending'));
 ?>
 <!DOCTYPE html>
@@ -64,6 +66,11 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
 <style>
     .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem; margin-bottom: 1rem; }
     .grid-two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr); gap: 1rem; align-items: start; }
+    .grid-two > div { min-width: 0; }
+    .decision-form { display: grid; gap: 0.75rem; width: 100%; }
+    .decision-form label { display: block; overflow-wrap: anywhere; }
+    .decision-form input:not([type="checkbox"]) { display: block; width: 100%; max-width: 100%; padding: 0.6rem; }
+    .balance-preview { overflow-x: auto; max-width: 100%; }
     .status-pill { display: inline-flex; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; }
     .status-pending { background: #fef3c7; color: #92400e; }
     .status-approved { background: #dcfce7; color: #166534; }
@@ -144,14 +151,14 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                                         <p>Preview only; checked again at decision. Nominal paid balance: &#8369;<?= number_format($preview['paid_before'],2) ?> to &#8369;<?= number_format($preview['paid_after'],2) ?>.
                                         Original shift #<?= (int)$preview['shift_id'] ?>: <?= htmlspecialchars($preview['shift_status'] ?? 'unassigned') ?><?= $preview['locked_at'] ? ', locked' : '' ?>.
                                         <?php if (isset($preview['cash_before'])): ?>Expected drawer cash: &#8369;<?= number_format($preview['cash_before'],2) ?> to &#8369;<?= number_format($preview['cash_after'],2) ?>.<?php endif; ?></p>
-                                        <table><tr><th>Item</th><th>Stock before / after approval</th><th>Legacy quantity before / after</th></tr>
+                                        <div class="balance-preview"><table><tr><th>Item</th><th>Stock before / after approval</th><th>Legacy quantity before / after</th></tr>
                                         <?php foreach ($preview['items'] as $item): ?>
                                             <tr><td><?= htmlspecialchars($item['product_name'] ?? 'Missing product') ?></td><td><?= (int)$item['quantity_on_hand'] ?> / <?= (int)$item['quantity_on_hand']+(int)$item['quantity'] ?></td><td><?= (int)$item['sold_quantity']-(int)$item['approved_quantity'] ?> / <?= (int)$item['sold_quantity']-(int)$item['approved_quantity']-(int)$item['quantity'] ?></td></tr>
-                                        <?php endforeach; ?></table>
+                                        <?php endforeach; ?></table></div>
                                         <p>Rejection keeps all cash, stock, and consumed balances unchanged. Approval is refused for missing batches, damaged returns, inconsistent values, exchange credit, closed original Fiscal Periods or a different/closed paying shift. Zero-money returns require a reason and still block future Cash Refunds.</p>
                                     <?php endif; ?>
                                     <p>Settlement <?= htmlspecialchars($row['settlement_method']) ?>  -  amount &#8369;<?= number_format((float)$row['refund_amount'],2) ?>. Approval restores verified Restockable units, consumes remaining quantity/value, and permanently blocks Cash Refunds for this sale. Cash reduces the original open paying shift once; saved closed-shift reconciliation and approval-day report attribution remain historical. Unsupported or externally altered requests must stay pending for investigation.</p>
-                                    <form method="POST">
+                                    <form method="POST" class="decision-form">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="reversal_id" value="<?= (int)$row['reversal_id'] ?>">
                                         <label>Decision reason <input name="decision_reason" maxlength="255" required></label>
@@ -162,6 +169,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                                         <label><input type="checkbox" name="single_payout_confirmed"> Confirm exactly one cash payout from this drawer</label>
                                         <label><input type="checkbox" name="external_completed"> External original-method settlement verified</label>
                                         <label>External Payment Reference <input name="payment_reference" maxlength="100"></label>
+                                        <label><input type="checkbox" name="separate_replacement_sale_acknowledged"> Exchange uses an ordinary refund and a separately paid replacement sale</label>
                                         <button class="btn" name="action" value="approve">Approve verified request</button>
                                         <button class="btn btn-danger" name="action" value="reject">Reject without effects</button>
                                     </form>

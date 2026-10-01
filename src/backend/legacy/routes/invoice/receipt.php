@@ -630,7 +630,7 @@ if ($sale_id > 0) {
                             <td>
                                 <div class="actions-cell">
                                     <button class="btn-small btn-view" onclick="viewReceipt(<?= $receipt['sale_id'] ?>)">👁️ View</button>
-                                    <a href="<?= htmlspecialchars(app_url('invoice/reversals.php?sale_id=' . $receipt['sale_id'])) ?>" class="btn-small btn-edit">Legacy Reversals</a>
+                                    <a href="<?= htmlspecialchars(app_url('components/invoice/legacy_reversals.php?sale_id=' . $receipt['sale_id'])) ?>" class="btn-small btn-edit">Legacy Reversals</a>
                                 </div>
                             </td>
                         </tr>

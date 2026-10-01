@@ -91,6 +91,11 @@ final class LegacyReversalTransitionService
             if ($record['status'] === $outcome) { $this->pdo->commit(); return; }
             if ($record['status'] !== 'pending') throw new DomainException('Terminal Legacy Reversals are immutable; investigate unknown states.');
             $checks = $outcome === 'approved' ? $this->approve($record, $sale, $shift, $actor, $evidence) : ['cash_change' => 0, 'stock_change' => 0];
+            if ($outcome === 'rejected') {
+                $stmt = $this->pdo->prepare('SELECT * FROM sale_reversal_items WHERE reversal_id=? ORDER BY sale_item_id FOR UPDATE');
+                $stmt->execute([$id]);
+                $checks += ['retained_items'=>$stmt->fetchAll(),'requested_amount'=>$record['refund_amount'],'original_shift_id'=>$sale['shift_id'],'sale_id'=>$sale['sale_id'],'consumed_quantity_change'=>0,'consumed_value_change'=>0];
+            }
             $this->pdo->prepare('UPDATE sale_reversals SET status=?,approved_by=?,approved_at=CURRENT_TIMESTAMP,rejection_reason=? WHERE reversal_id=?')
                 ->execute([$outcome,$actor,$outcome === 'rejected' ? $reason : $record['rejection_reason'],$id]);
             if ($outcome === 'approved' && $record['settlement_method'] === 'cash') {
@@ -122,6 +127,9 @@ final class LegacyReversalTransitionService
         $guard->assertOpenNow('stock_movements','legacy approval');
         $method = $record['settlement_method'];
         $amount = (int)round((float)$record['refund_amount'] * 100);
+        if ($record['reversal_type'] === 'exchange' && ($method === 'none' || empty($evidence['separate_replacement_sale_acknowledged']))) {
+            throw new DomainException('A Legacy exchange requires a verified ordinary cash/card/e-wallet refund and a separately paid replacement sale. No store credit or replacement inventory is created.');
+        }
         if (!in_array($method,['none','cash','card','ewallet'],true) || ($method !== 'none' && $method !== $sale['payment_method']) || ($method === 'none' ? $amount !== 0 : $amount <= 0)) {
             throw new DomainException('Unsupported settlement or amount; investigate without editing the request. Exchanges require a refund and a separate new sale.');
         }
@@ -151,7 +159,7 @@ final class LegacyReversalTransitionService
             if ($item['product_id'] != $line['product_id'] || (float)$item['unit_price'] != (float)$line['unit_price'] || (int)round((float)$item['subtotal']*100) !== (int)round((float)$line['unit_price']*$q*100)) throw new DomainException('Historical return does not match the original sale.');
             $stmt = $this->pdo->prepare("SELECT COALESCE(SUM(i.quantity),0) FROM sale_reversal_items i JOIN sale_reversals r ON r.reversal_id=i.reversal_id WHERE i.sale_item_id=? AND r.status='approved'");
             $stmt->execute([$id]); $previous=(int)$stmt->fetchColumn();
-            if ($q+$previous>(int)$line['quantity']) throw new DomainException('Return exceeds remaining sold quantity.');
+            if ((int)$line['quantity'] <= 0 || $previous < 0 || $q+$previous>(int)$line['quantity']) throw new DomainException('Return exceeds or cannot reconcile to remaining sold quantity.');
             $expectedAmount += (int)round($lineNet*($previous+$q)/(int)$line['quantity'])-(int)round($lineNet*$previous/(int)$line['quantity']);
             $this->restoreBatches($line,$q,$previous);
             $stmt = $this->pdo->prepare('SELECT quantity_on_hand FROM inventory WHERE product_id=? FOR UPDATE');
@@ -186,7 +194,10 @@ final class LegacyReversalTransitionService
         $stmt=$this->pdo->prepare('SELECT a.quantity AS allocated_quantity,b.* FROM sale_item_batches a LEFT JOIN product_batches b ON b.batch_id=a.batch_id WHERE a.sale_item_id=? ORDER BY a.sale_item_batch_id FOR UPDATE');
         $stmt->execute([$line['sale_item_id']]); $rows=$stmt->fetchAll();
         if (array_sum(array_column($rows,'allocated_quantity'))!=(int)$line['quantity']) throw new DomainException('Missing or inconsistent batch allocation evidence.');
+        $seenBatches = [];
         foreach ($rows as $batch) {
+            if (isset($seenBatches[$batch['batch_id']])) throw new DomainException('Duplicate historical batch allocation: leave pending for investigation.');
+            $seenBatches[$batch['batch_id']] = true;
             $allocated=(int)$batch['allocated_quantity'];
             if ($allocated <= 0) throw new DomainException('Invalid historical batch allocation.');
             $skip=min($previous,$allocated); $previous-=$skip;
