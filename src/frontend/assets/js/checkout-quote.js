@@ -18,10 +18,16 @@ class CheckoutQuote {
         const inputs = this.inputSnapshot();
         const data = new FormData(this.form);
         data.set('action', 'review_quote');
-        const response = await fetch(this.form.action || window.location.href, {
-            method: 'POST', body: data, cache: 'no-store'
-        });
-        const outcome = await response.json();
+        let response;
+        let outcome;
+        try {
+            response = await fetch(this.form.action || window.location.href, {
+                method: 'POST', body: data, cache: 'no-store'
+            });
+            outcome = await response.json();
+        } catch {
+            throw new Error('The final quote is unavailable. Check your connection and try again before collecting payment.');
+        }
         if (!response.ok) throw new Error(outcome.message || 'The final quote is unavailable. Try again.');
         if (inputs !== this.inputSnapshot()) throw new Error('The cart or discount changed. Review the final quote again.');
         this.inputs = inputs;

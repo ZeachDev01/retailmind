@@ -77,6 +77,14 @@ if ($posRegisterLocked && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // The one message a locked Register produces, in the page's own refusal
     // channel — the same channel the void and checkout refusals below use.
     $checkout_error = CashierShiftService::LOCKED_MESSAGE;
+    if (($_POST['action'] ?? '') === 'review_quote') {
+        csrf_verify();
+        header('Content-Type: application/json');
+        header('Cache-Control: no-store');
+        http_response_code(409);
+        echo json_encode(['message' => $checkout_error], JSON_THROW_ON_ERROR);
+        exit;
+    }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'void_cart') {
     csrf_verify();
 

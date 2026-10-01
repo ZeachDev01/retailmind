@@ -21,6 +21,7 @@ if (!fs.existsSync(chromium.executablePath())) {
     let committed = null;
     let submissions = 0;
     let stale = true;
+    let unavailable = false;
     const server = http.createServer((request, response) => {
         if (request.url === '/lost-response') { request.socket.destroy(); return; }
         if (request.url === '/receipt') { response.end('<p>Saved Receipt #42</p>'); return; }
@@ -33,6 +34,7 @@ if (!fs.existsSync(chromium.executablePath())) {
             request.on('data', chunk => { body += chunk; });
             request.on('end', () => {
                 if (body.includes('review_quote')) {
+                    if (unavailable) { response.end('<p>Sign in again.</p>'); return; }
                     response.setHeader('Content-Type', 'application/json');
                     response.end(JSON.stringify({token: 'server-quote', quote: {total: quoteTotal,
                         sale: {total: 100, items: [{product_name: 'Current Item', quantity: 4, unit_price: 25, subtotal: 100}]},
@@ -78,6 +80,12 @@ if (!fs.existsSync(chromium.executablePath())) {
         const page = await browser.newPage();
         await page.goto(origin + '/pos'); await page.evaluate(() => loaded);
         assert(await page.locator('#cash-received').evaluate(input => input.readOnly), 'Cash collection awaits server review');
+        unavailable = true;
+        await page.click('#checkout-button');
+        await page.waitForFunction(() => document.getElementById('message').textContent.includes('final quote is unavailable'));
+        assert.equal(await page.locator('#quote-token-input').inputValue(), '', 'Unavailable review grants no token');
+        assert.equal(await page.locator('#review-cash').count(), 0, 'Unavailable review never opens tender collection');
+        unavailable = false;
         await page.click('#checkout-button');
         await page.waitForSelector('#review-cash');
         assert.match(await page.locator('#checkout-summary').textContent(), /Current Item.*4 × ₱25.00/);
