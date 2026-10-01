@@ -39,6 +39,8 @@ if (($argv[1] ?? '') === '--worker') {
             (new CashierShiftService($pdo))->addDrawerMovement(1, 'cashier', 'safe_drop', 25, 'excess_cash');
         } elseif (($argv[3] ?? '') === 'withdraw') {
             (new CashierShiftService($pdo))->addDrawerMovement(1, 'cashier', 'cash_out', 25, 'other', 'Cash collected');
+        } elseif (($argv[3] ?? '') === 'discount') {
+            $service->refund(1,'cashier',14,[14=>['quantity'=>2,'disposition'=>'damaged']],'customer_return',null,'EXTERNAL-RACE',true);
         } else {
             $service->refund(1, 'cashier', (int)($argv[3] ?? 1), (isset($argv[3]) ? [2 => ['quantity'=>1,'disposition'=>'damaged']] : $items), 'customer_return');
         }
@@ -199,9 +201,10 @@ try {
     catch (DomainException $e) { $assert(str_contains($e->getMessage(),'Insufficient expected'),'Unfunded refund requires top-up'); }
     $shifts->addDrawerMovement(1,'cashier','cash_in',25,'additional_float');
     $service->refund(1,'cashier',3,[3=>['quantity'=>1,'disposition'=>'damaged']],'customer_return');
-    foreach ([4,5] as $saleId) $service->refund(1,'cashier',$saleId,[$saleId=>['quantity'=>1,'disposition'=>'damaged']],'customer_return');
+    foreach ([4,5] as $saleId) $service->refund(1,'cashier',$saleId,[$saleId=>['quantity'=>1,'disposition'=>'damaged']],'customer_return',null,'EXTERNAL-REFUND-'.$saleId,true);
     $assert((float)$shifts->calculateShift(1)['calculated_expected_cash']===0.0,'Card and e-wallet refunds permitted with empty drawer and do not deduct cash');
 
+    require __DIR__ . '/support/safe_refund_scenarios.php';
     $legacy = new SaleReversalService($pdo);
     try {
         $legacy->requestReversal(1, 'refund', 'Duplicate return', [1 => 1], 1, 'cash', 25);

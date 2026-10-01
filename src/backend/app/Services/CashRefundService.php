@@ -21,6 +21,7 @@ require_once __DIR__ . '/../Store/StoreWriteGate.php';
 require_once __DIR__ . '/CashierShiftService.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/RefundReceiptService.php';
+require_once __DIR__ . '/RefundExceptionService.php';
 
 /**
  * Cash Refunds (ticket #92).
@@ -146,7 +147,10 @@ class CashRefundService
         int $saleId,
         array $items,
         string $reason,
-        ?string $note = null
+        ?string $note = null,
+        ?string $paymentReference = null,
+        bool $externalCompleted = false,
+        ?array $exception = null
     ): int {
         $this->requireCashierWorkspace($actorRole);
         $reason = $this->requireReason($reason);
@@ -159,10 +163,7 @@ class CashRefundService
         }
         $requested = $this->requireItems($items);
         // Read before the write gate so a refusal never begins a Store write.
-        $this->requireOwnSale($cashierId, $saleId);
-        $this->fiscalPeriodGuard->assertOpenForDate($this->saleDate($saleId), 'sales', 'cash refund');
-        $this->fiscalPeriodGuard->assertOpenNow('cash_refunds', 'cash refund');
-        $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
+        if ($exception === null) $this->requireOwnSale($cashierId, $saleId);
 
         StoreWriteGate::begin($this->pdo);
         try {
@@ -170,7 +171,20 @@ class CashRefundService
             // authorizes this refund is the drawer that is still open and
             // unlocked at commit.
             $shiftId = $this->requireOpenShiftId($cashierId);
-            $sale = $this->lockOwnSale($cashierId, $saleId);
+            $exceptionService = new RefundExceptionService($this->pdo);
+            $access = null;
+            $approval = null;
+            if ($exception !== null) {
+                $access = $exceptionService->access((string)($exception['token'] ?? ''), $cashierId, $saleId, $shiftId);
+                $approval = $exceptionService->authorize((string)($exception['username'] ?? ''), (string)($exception['password'] ?? ''));
+                if ($approval['approved_by'] !== (int)$access['approved_by']) throw new DomainException('The Administrator who opened this sale must approve this specific refund.');
+            }
+            $sale = $this->lockOwnSale($cashierId, $saleId, $access !== null);
+            // Historical sales remain immutable: only today's affected ledgers must be open.
+            $this->fiscalPeriodGuard->assertOpenNow('cash_refunds', 'cash refund');
+            if (array_filter($requested, static fn(array $line): bool => $line['disposition'] === self::RESTOCKABLE)) {
+                $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
+            }
             if (!in_array((string)$sale['payment_method'], self::SUPPORTED_PAYMENT_METHODS, true)) {
                 throw new DomainException('This sale uses a payment method that cannot be refunded here. Ask your Administrator for help.');
             }
@@ -182,14 +196,20 @@ class CashRefundService
             }
             $lines = $this->settleLines($sale, $requested);
             $amount = $this->settleAmount($sale, $lines);
+            $paymentReference = trim($paymentReference ?? '');
+            if ($sale['payment_method'] !== self::CASH && (!$externalCompleted || $paymentReference === '' || mb_strlen($paymentReference) > 100)) {
+                throw new DomainException('Confirm the refund was completed externally and enter its Payment Reference (up to 100 characters). RetailMind only records it.');
+            }
+            if ($sale['payment_method'] === self::CASH) $paymentReference = '';
             if ($sale['payment_method'] === 'cash') {
                 $this->shifts->assertCashPayoutAvailable($shiftId, $amount);
             }
 
             $this->pdo->prepare(
                 'INSERT INTO cash_refunds
-                    (sale_id, shift_id, cashier_id, refund_amount, payment_method, reason, note)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+                    (sale_id, shift_id, cashier_id, refund_amount, payment_method, reason, note,
+                     original_cashier_id, approved_by, exception_reason, payment_reference)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             )->execute([
                 $saleId,
                 $shiftId,
@@ -198,8 +218,13 @@ class CashRefundService
                 (string)$sale['payment_method'],
                 $reason,
                 $note !== '' ? $note : null,
+                (int)$sale['cashier_id'],
+                $approval['approved_by'] ?? null,
+                $access['exception_reason'] ?? null,
+                $paymentReference !== '' ? $paymentReference : null,
             ]);
             $refundId = (int)$this->pdo->lastInsertId();
+            if ($access !== null) $exceptionService->consume($access, $refundId);
 
             foreach ($lines as $line) {
                 $this->insertRefundLine($refundId, $line);
@@ -219,7 +244,10 @@ class CashRefundService
                 $amount,
                 $reason,
                 $note,
-                $lines
+                $lines,
+                ['original_cashier_id'=>(int)$sale['cashier_id'], 'authorization'=>$approval,
+                 'exception_reason'=>$access['exception_reason'] ?? null, 'payment_reference'=>$paymentReference ?: null,
+                 'external_completed'=>$sale['payment_method'] !== self::CASH]
             );
 
             $this->pdo->commit();
@@ -308,14 +336,15 @@ class CashRefundService
      *
      * @return array<string, mixed>|null
      */
-    public function refundableSaleForCashier(int $cashierId, int $saleId): ?array
+    public function refundableSaleForCashier(int $cashierId, int $saleId, ?string $exceptionToken = null): ?array
     {
+        if ($exceptionToken !== null) (new RefundExceptionService($this->pdo))->access($exceptionToken, $cashierId, $saleId);
         $stmt = $this->pdo->prepare(
             "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date
              FROM sales s
-             WHERE s.sale_id = ? AND s.cashier_id = ?"
+             WHERE s.sale_id = ?" . ($exceptionToken === null ? ' AND s.cashier_id = ?' : '')
         );
-        $stmt->execute([$saleId, $cashierId]);
+        $stmt->execute($exceptionToken === null ? [$saleId, $cashierId] : [$saleId]);
         $sale = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$sale) {
             return null;
@@ -439,14 +468,14 @@ class CashRefundService
      * makes the remaining-balance caps safe under concurrency, because every
      * remaining quantity and the remaining amount are read while it is held.
      */
-    private function lockOwnSale(int $cashierId, int $saleId): array
+    private function lockOwnSale(int $cashierId, int $saleId, bool $exception = false): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT sale_id, cashier_id, total_amount, payment_method, sale_date
              FROM sales
-             WHERE sale_id = ? AND cashier_id = ?' . $this->rowLock()
+             WHERE sale_id = ?' . ($exception ? '' : ' AND cashier_id = ?') . $this->rowLock()
         );
-        $stmt->execute([$saleId, $cashierId]);
+        $stmt->execute($exception ? [$saleId] : [$saleId, $cashierId]);
         $sale = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$sale) {
@@ -782,9 +811,10 @@ class CashRefundService
         float $amount,
         string $reason,
         string $note,
-        array $lines
+        array $lines,
+        array $settlement
     ): void {
-        $payload = [
+        $payload = $settlement + [
             'refund_id' => $refundId,
             'sale_id' => $saleId,
             'shift_id' => $shiftId,

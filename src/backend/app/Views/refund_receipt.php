@@ -30,5 +30,9 @@
         <div><span>Original payment method</span><strong><?= $escape(strtoupper($refund['payment_method'])) ?></strong></div>
         <div class="sale-receipt-grand-total"><span>Total refunded</span><strong class="sale-receipt-money"><?= $money($refund['refund_amount']) ?></strong></div>
     </div>
+    <?php if ($refund['payment_method'] !== 'cash'): ?>
+    <p>Refund completed externally and recorded in RetailMind.</p>
+    <?php if (!empty($refund['payment_reference'])): ?><p>Payment Reference: <?= $escape($refund['payment_reference']) ?></p><?php endif; ?>
+    <?php endif; ?>
     <div class="sale-receipt-footer"><?= $escape($store['footer']) ?></div>
 </div>

@@ -18,7 +18,7 @@ final class RefundReceiptService
             throw new RuntimeException('Refund receipt details require the refund transaction.');
         }
         $statement = $this->pdo->prepare('SELECT cr.refund_id, cr.sale_id, cr.refund_amount,
-            cr.payment_method, cr.reason, cr.created_at, u.full_name AS cashier_name, r.name AS register_name
+            cr.payment_method, cr.payment_reference, cr.reason, cr.created_at, u.full_name AS cashier_name, r.name AS register_name
             FROM cash_refunds cr JOIN users u ON u.user_id = cr.cashier_id
             JOIN cashier_shifts cs ON cs.shift_id = cr.shift_id
             LEFT JOIN registers r ON r.register_id = cs.register_id WHERE cr.refund_id = ?');

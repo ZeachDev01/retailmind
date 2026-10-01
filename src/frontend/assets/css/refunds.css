@@ -115,6 +115,38 @@
         max-width: none;
     }
 
+    .cashier-refunds-page .refund-form fieldset {
+        min-width: 0;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+
+    .cashier-refunds-page .refund-form fieldset input {
+        margin-bottom: 1rem;
+    }
+
+    .cashier-refunds-page .refund-form input[type="checkbox"] {
+        width: auto;
+        min-height: auto;
+        margin: 0 0.5rem 0 0;
+    }
+
+    .cashier-refunds-page .refund-search summary {
+        min-height: 44px;
+        cursor: pointer;
+        padding: 0.75rem 0;
+    }
+
+    .cashier-refunds-page .refund-search details .refund-form {
+        max-width: 560px;
+    }
+
+    .cashier-refunds-page .refund-search details input {
+        margin-bottom: 1rem;
+    }
+
     .cashier-refunds-page .table-wrap {
         position: relative;
         overflow-x: auto;

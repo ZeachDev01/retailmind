@@ -42,12 +42,17 @@ $canRefund = $openShift !== null && !$registerLocked;
 
 $error = '';
 $saleId = (int)($_REQUEST['sale_id'] ?? 0);
+$exceptionToken = trim((string)($_POST['exception_token'] ?? ''));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $saleId = (int)($_POST['sale_id'] ?? 0);
 
     try {
+        if (($_POST['action'] ?? '') === 'exception_lookup') {
+            $exceptionToken = (new \App\Services\RefundExceptionService($pdo))->openSale($actorId, $actorRole, $saleId,
+                (string)($_POST['approver_username'] ?? ''), (string)($_POST['approver_password'] ?? ''), (string)($_POST['exception_reason'] ?? ''));
+        } else {
         // The form posts one row per line: quantity[line_id] and
         // disposition[line_id]. Only the rows with a quantity are returned, so
         // the page can render every line of the sale and let the Cashier leave
@@ -71,11 +76,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $saleId,
             $items,
             (string)($_POST['reason'] ?? ''),
-            (string)($_POST['note'] ?? '')
+            (string)($_POST['note'] ?? ''),
+            (string)($_POST['payment_reference'] ?? ''),
+            ($_POST['external_completed'] ?? '') === '1',
+            $exceptionToken === '' ? null : ['token'=>$exceptionToken,
+                'username'=>(string)($_POST['approver_username'] ?? ''), 'password'=>(string)($_POST['approver_password'] ?? '')]
         );
         // A refresh or canceled print revisits a GET, never another payout.
         header('Location: ' . app_url('components/cashier/refunds.php?refund_id=' . $refundId), true, 303);
         exit;
+        }
     } catch (Throwable $e) {
         // ADR-0002: the operator is told what to do, never a database error.
         $error = \App\Support\OperatorAlert::message(
@@ -86,7 +96,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Scoped to this Cashier, so a Cashier can only ever open a sale of their own.
-$sale = $saleId > 0 ? $refundService->refundableSaleForCashier($actorId, $saleId) : null;
+try {
+    $sale = $saleId > 0 ? $refundService->refundableSaleForCashier($actorId, $saleId, $exceptionToken ?: null) : null;
+} catch (DomainException $e) {
+    $sale = null;
+    $error = $e->getMessage();
+    $exceptionToken = '';
+}
 $refunds = $refundService->recentForCashier($actorId);
 $receiptId = (int)($_GET['refund_id'] ?? 0);
 $receipt = $receiptId > 0 ? (new \App\Services\RefundReceiptService($pdo))->forCashier($receiptId, $actorId, $storeId) : null;
@@ -140,6 +156,19 @@ if ($receiptId > 0 && $receipt === null) {
                     <div><label for="sale_id">Receipt number</label><input type="number" min="1" name="sale_id" id="sale_id" value="<?= $saleId ?: '' ?>" placeholder="Enter receipt number" aria-describedby="receipt-help" required></div>
                     <button class="btn" type="submit">Load sale</button>
                 </form>
+                <details>
+                    <summary>Original Cashier absent or disabled?</summary>
+                    <p class="refund-help">An Administrator may open this one sale for your refund. The same Administrator must approve the chosen items and amount when you record it. This access expires after 15 minutes and is used once.</p>
+                    <form method="POST" class="refund-form" autocomplete="off">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                        <input type="hidden" name="action" value="exception_lookup">
+                        <label for="exception-sale">Receipt number</label><input id="exception-sale" name="sale_id" type="number" min="1" required>
+                        <label for="exception-reason">Why is the original Cashier absent or disabled?</label><input id="exception-reason" name="exception_reason" maxlength="255" required>
+                        <label for="lookup-approver">Administrator username</label><input id="lookup-approver" name="approver_username" autocomplete="off" required>
+                        <label for="lookup-password">Administrator password</label><input id="lookup-password" name="approver_password" type="password" autocomplete="new-password" required>
+                        <button class="btn" type="submit" <?= $canRefund ? '' : 'disabled' ?>>Authorize this sale lookup</button>
+                    </form>
+                </details>
             </section>
 
             <?php if ($sale): ?>
@@ -164,6 +193,10 @@ if ($receiptId > 0 && $receipt === null) {
                         <form method="POST" class="refund-form" data-confirm="Record this refund on the original payment method? Only Restockable items return to available inventory." data-confirm-title="Record refund" data-confirm-button="Record refund">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                             <input type="hidden" name="sale_id" value="<?= (int)$sale['sale_id'] ?>">
+                            <?php if ($exceptionToken !== ''): ?>
+                            <input type="hidden" name="exception_token" value="<?= htmlspecialchars($exceptionToken) ?>">
+                            <p class="refund-help">Administrator exception for this sale only. Review quantities and conditions, then ask the authorizing Administrator to approve this refund below.</p>
+                            <?php endif; ?>
                             <h3 id="return-items-heading">Items to return</h3>
                             <p class="refund-help">Refund amounts include the original discount. Only the amount still refundable is paid back.</p>
                             <div class="table-wrap" role="region" aria-labelledby="return-items-heading" tabindex="0">
@@ -188,6 +221,7 @@ if ($receiptId > 0 && $receipt === null) {
                                             <td>
                                                 <label class="refund-sr-only" for="return-condition-<?= (int)$line['sale_item_id'] ?>">Condition for <?= htmlspecialchars($line['product_name']) ?></label>
                                                 <select id="return-condition-<?= (int)$line['sale_item_id'] ?>" name="disposition[<?= (int)$line['sale_item_id'] ?>]" <?= $remaining <= 0 ? 'disabled' : '' ?>>
+                                                    <option value="">Choose condition</option>
                                                     <?php foreach (CashRefundService::DISPOSITIONS as $value => $label): ?>
                                                         <option value="<?= htmlspecialchars($value) ?>"><?= htmlspecialchars($label) ?></option>
                                                     <?php endforeach; ?>
@@ -216,6 +250,20 @@ if ($receiptId > 0 && $receipt === null) {
                             </div>
 
                             <p class="refund-help refund-policy">Refund on the original <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?> payment method. Only <strong>Restockable</strong> units return to available inventory. A <strong>Damaged</strong> unit stays off the shelf. Only cash refunds reduce expected drawer cash.</p>
+                            <p class="refund-help">Do not report these Damaged returned units as a Stock Issue: they were already removed from available inventory at sale. An exchange needs this refund and a separate paid new sale.</p>
+                            <?php if ($sale['payment_method'] !== 'cash'): ?>
+                            <fieldset><legend>External refund settlement</legend>
+                                <p>Complete and verify the refund outside RetailMind before recording it here. RetailMind does not transfer money.</p>
+                                <label for="refund-reference">Payment Reference</label><input id="refund-reference" name="payment_reference" maxlength="100" required>
+                                <label><input type="checkbox" name="external_completed" value="1" required> I verified that this refund was completed externally.</label>
+                            </fieldset>
+                            <?php endif; ?>
+                            <?php if ($exceptionToken !== ''): ?>
+                            <fieldset><legend>Approve this specific refund</legend>
+                                <label for="refund-approver">Administrator username</label><input id="refund-approver" name="approver_username" autocomplete="off" required>
+                                <label for="refund-password">Administrator password</label><input id="refund-password" name="approver_password" type="password" autocomplete="new-password" required>
+                            </fieldset>
+                            <?php endif; ?>
 
                             <button class="btn" type="submit" <?= $canRefund ? '' : 'disabled' ?>>Record refund</button>
                             <?php if (!$canRefund): ?><p class="section-description">A refund needs your own open Cashier Shift.</p><?php endif; ?>
