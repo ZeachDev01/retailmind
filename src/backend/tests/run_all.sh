@@ -85,9 +85,13 @@ php src/backend/tests/database_integration.php
 php src/backend/tests/user_password_reset_integration.php
 php src/backend/tests/audit_visibility_integration.php
 php src/backend/tests/database_backup_workflow_integration.php
+php src/backend/tests/philippine_time_contract.php
+php src/backend/tests/philippine_time_mysql_integration.php
+php src/backend/tests/receipt_history_integration.php
 php src/backend/tests/receipt_table_contract.php
 php src/backend/tests/receipt_attribution_contract.php
 node src/backend/tests/sale_receipt_browser_test.js
+node src/backend/tests/sale_receipt_dialog_browser_test.js
 node src/backend/tests/refund_receipt_browser_test.js
 node src/backend/tests/refund_reprint_browser_test.js
 php src/backend/tests/cashier_operational_history_contract.php

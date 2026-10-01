@@ -23,6 +23,9 @@ if ($checkoutCompleted) {
     $attemptQuery->execute([(int)$_SESSION['user_id'], $sale_id]);
     $completedAttempt = $attemptQuery->fetchColumn() ?: null;
 }
+$checkoutCompleted = $checkoutCompleted && $completedAttempt !== null;
+$announcePayment = $checkoutCompleted && (int)($_SESSION['completed_checkout_sale'] ?? 0) === $sale_id;
+if ($announcePayment) unset($_SESSION['completed_checkout_sale']);
 $storeId = store_scope_id($pdo);
 $can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 $canStartSale = current_role() !== 'inventory_manager';
@@ -51,24 +54,25 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
     return (new ReceiptDetailsService($pdo))->fetchItems($sale_id);
 }
 
-function receipt_render_details(array $sale, array $items, bool $canStartSale): void {
+function receipt_render_details(array $sale, array $items, bool $canStartSale, bool $announcePayment = false): void {
     $paperWidthMm = (new \App\Services\ReceiptPaperService(\App\Core\Database::connection()))
         ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
     $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
     ?>
     <div class="receipt-container">
-        <div class="checkout-complete-banner no-print">
+        <?php if ($announcePayment): ?>
+        <div class="checkout-complete-banner no-print" role="status">
             <div class="checkout-complete-icon"><i class="bi bi-check2-circle" aria-hidden="true"></i></div>
             <div class="checkout-complete-copy"><strong>Payment completed</strong><span>Receipt #<?= (int)$sale['sale_id'] ?> was saved successfully.</span></div>
-            <div class="checkout-complete-change"><span>Change due</span><strong><?= $sale['change_due'] !== null ? receipt_money($sale['change_due'], $store) : '-' ?></strong></div>
+            <?php if ($sale['change_due'] !== null): ?><div class="checkout-complete-change"><span>Change due</span><strong><?= receipt_money($sale['change_due'], $store) ?></strong></div><?php endif; ?>
         </div>
+        <?php endif; ?>
         <div class="receipt-actions no-print">
             <?php if ($canStartSale): ?>
-                <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>" class="btn"><i class="bi bi-plus-lg"></i> New Sale</a>
+                <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg"></i> New Sale</a>
             <?php endif; ?>
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
-            <a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>" class="btn btn-secondary"><i class="bi bi-receipt"></i> Receipt History</a>
         </div>
         <?php \App\Services\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
     </div>
@@ -194,17 +198,21 @@ if ($sale_id > 0) {
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css')) ?>">
 <?php if ($checkoutCompleted): ?>
 <script>
-sessionStorage.removeItem('pos_cart');
-sessionStorage.removeItem('retailmind.cart-workspace');
 try {
     const key = <?= json_encode('retailmind.checkout.' . (int)$_SESSION['user_id']) ?>;
     const pending = JSON.parse(localStorage.getItem(key) || 'null');
-    if (pending && pending.id === <?= json_encode($completedAttempt) ?>) localStorage.removeItem(key);
+    const matchesAttempt = pending && pending.id === <?= json_encode($completedAttempt) ?>;
+    if (matchesAttempt || (!pending && <?= json_encode($announcePayment) ?>)) {
+        sessionStorage.removeItem('pos_cart');
+        sessionStorage.removeItem('retailmind.cart-workspace');
+        if (matchesAttempt) localStorage.removeItem(key);
+    }
 } catch (error) { /* Returning to POS retries recovery if browser storage is unavailable. */ }
 </script>
 <?php endif; ?>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>" defer></script>
 </head>
 <body class="receipts-page">
 <div class="app-shell">
@@ -222,21 +230,18 @@ try {
 
             <?php if ($activeTab === 'transactions'): ?>
             <?php if ($selected_error): ?>
-                <div class="alert alert-success"><?= htmlspecialchars($selected_error) ?></div>
+                <div class="alert tag-warning" role="alert"><?= htmlspecialchars($selected_error) ?></div>
             <?php endif; ?>
 
-            <?php if ($selected_sale): ?>
-                <?php receipt_render_details($selected_sale, $selected_items, $canStartSale); ?>
-            <?php endif; ?>
 
             <div class="section-header receipt-table-heading">
                     <div>
-                        <h2 id="receipt-table-title">Receipt history</h2>
-                        <p class="section-description">Search by receipt number or payment method, then narrow the permitted history with the filters.</p>
+                        <h2 id="receipt-table-title" tabindex="-1">Receipt History</h2>
+                        <p class="section-description">Customer lookup and reprint within your permitted history. Dates use Philippine time (Asia/Manila). Completed receipts are immutable; new corrections use the authorized Cash Refund workflow.</p>
                     </div>
                     <div class="receipt-heading-actions">
                         <?php if ($canStartSale): ?>
-                            <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
+                            <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -251,7 +256,7 @@ try {
                         <input type="date" id="receiptDateTo">
                     </label>
                     <label>
-                        <span>Reversal status</span>
+                        <span>Legacy Reversal status</span>
                         <select id="receiptReversalStatus">
                             <option value="">All statuses</option>
                             <option value="none">No reversal</option>
@@ -260,6 +265,7 @@ try {
                             <option value="rejected">Rejected</option>
                         </select>
                     </label>
+                    <label><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
                     <?php if ($can_manage_all): ?>
                         <label>
                             <span>Cashier</span>
@@ -283,7 +289,7 @@ try {
                     <p>Complete a sale to create the first receipt.</p>
                     <?php if ($canStartSale): ?>
                         <div class="empty-actions">
-                            <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Start a Sale</a>
+                            <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>">Start a Sale</a>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -295,11 +301,11 @@ try {
                                 <th>Date</th>
                                 <th>Cashier</th>
                                 <th>Items</th>
-                                <th>Total</th>
+                                <th>Original paid</th>
                                 <th>Payment</th>
-                                <th>Reversals</th>
+                                <th>Legacy Reversals</th>
                                 <th>Cashier Shift</th>
-                                <th>Actions</th>
+                                <th>Cash Refunds</th><th>Refunded</th><th>Remaining net</th><th>Actions</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -329,7 +335,7 @@ try {
                                 <div class="section-header">
                                     <div>
                                         <h3>Sale #<?= (int)$reversalSale['sale_id'] ?></h3>
-                                        <p class="section-description"><?= htmlspecialchars($reversalSale['sale_date']) ?> by <?= htmlspecialchars($reversalSale['cashier_name']) ?>, <?= htmlspecialchars(strtoupper($reversalSale['payment_method'])) ?>, &#8369;<?= number_format((float)$reversalSale['total_amount'], 2) ?></p>
+                                        <p class="section-description"><?= htmlspecialchars(format_display_datetime($reversalSale['sale_date'])) ?> by <?= htmlspecialchars($reversalSale['cashier_name']) ?>, <?= htmlspecialchars(strtoupper($reversalSale['payment_method'])) ?>, &#8369;<?= number_format((float)$reversalSale['total_amount'], 2) ?></p>
                                     </div>
                                     <?php if (!empty($reversalSale['approved_full_reversal'])): ?><span class="status-pill status-approved">Cancelled</span><?php endif; ?>
                                 </div>
@@ -362,16 +368,7 @@ try {
     </div>
 </div>
 
-<!-- View Receipt Modal -->
-<div id="receiptModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Receipt Details</h2>
-            <button type="button" class="modal-close" title="Close">&times;</button>
-        </div>
-        <div id="receiptContent"></div>
-    </div>
-</div>
+<?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
 
 <!-- Legacy edit modal is disabled; completed receipts must use reversal records. -->
 <?php if (false && $action === 'update' && $sale_id > 0): ?>
@@ -444,16 +441,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    if (window.Swal && typeof window.Swal.fire === 'function') {
-        window.Swal.fire({
-            icon: 'info',
-            title: 'Completed receipts are locked',
-            text: 'Use Refunds in the Cashier workspace for completed sales you rang up. Existing Legacy Reversals remain available for Administrator review.',
-            confirmButtonText: 'Understood',
-            customClass: {confirmButton: 'btn rm-swal-confirm'}
-        });
-    }
-
     if (typeof DataTable === 'undefined') {
         return;
     }
@@ -461,6 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateFrom = document.getElementById('receiptDateFrom');
     const dateTo = document.getElementById('receiptDateTo');
     const reversalStatus = document.getElementById('receiptReversalStatus');
+    const refundStatus = document.getElementById('receiptRefundStatus');
     const cashier = document.getElementById('receiptCashier');
     const clearFilters = document.getElementById('clearReceiptFilters');
     const status = document.getElementById('receiptTableStatus');
@@ -482,6 +470,7 @@ document.addEventListener('DOMContentLoaded', function() {
             date_from: dateFrom.value,
             date_to: dateTo.value,
             reversal_status: reversalStatus.value,
+            refund_status: refundStatus.value,
             cashier_id: cashier ? cashier.value : ''
         };
     }
@@ -491,6 +480,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dateFrom.value = filters.date_from || '';
         dateTo.value = filters.date_to || '';
         reversalStatus.value = filters.reversal_status || '';
+        refundStatus.value = filters.refund_status || '';
         if (cashier) cashier.value = filters.cashier_id || '';
     }
 
@@ -534,7 +524,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return type === 'display' ? '<strong class="receipt-id">#' + Number(value) + '</strong>' : Number(value);
                 }
             },
-            { data: 'sale_date' },
+            { data: 'sale_date', render: function(value, type, row) { return type === 'display' ? textRenderer.display(row.sale_date_display) : value; } },
             { data: 'cashier_name', render: textRenderer },
             { data: 'item_count' },
             {
@@ -561,7 +551,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (Number(row.pending_reversals) > 0) badges.push('<span class="tag-warning">' + Number(row.pending_reversals) + ' pending</span>');
                     if (Number(row.approved_reversals) > 0) badges.push('<span class="tag-success">' + Number(row.approved_reversals) + ' approved</span>');
                     if (Number(row.rejected_reversals) > 0) badges.push('<span class="receipt-tag-neutral">' + Number(row.rejected_reversals) + ' rejected</span>');
-                    if (Number(row.refund_count) > 0) badges.push('<span class="tag-success">₱' + Number(row.refunded_amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' refunded</span>');
                     return badges.length ? badges.join(' ') : '<span class="u-text-muted">None</span>';
                 }
             },
@@ -576,6 +565,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         : label;
                 }
             },
+            { data: 'refund_status', orderable: false, render: textRenderer },
+            { data: 'refunded_amount', render: function(value, type) { return type === 'display' ? '₱' + Number(value).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : value; } },
+            { data: 'remaining_net_amount', render: function(value, type) { return type === 'display' ? '₱' + Number(value).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : value; } },
             {
                 data: 'sale_id',
                 orderable: false,
@@ -584,8 +576,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (type !== 'display') return value;
                     const saleId = Number(value);
                     return '<div class="actions-cell">' +
-                        '<button type="button" class="btn-small btn-view" onclick="viewReceipt(' + saleId + ')"><i class="bi bi-eye" aria-hidden="true"></i> View</button>' +
-                        '<a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals&sale_id=')) ?>' + saleId + '" class="btn-small btn-edit">Reverse</a>' +
+                        '<button type="button" class="btn-small btn-view" onclick="viewReceipt(' + saleId + ', this)"><i class="bi bi-eye" aria-hidden="true"></i> View</button>' +
+                        <?= current_role() === 'cashier' ? json_encode('<a class="btn-small" href="' . app_url('components/cashier/refunds.php?sale_id=')) : json_encode('<a class="btn-small" href="' . app_url('components/invoice/sales.php?tab=reversals&sale_id=')) ?> + saleId + '"><?= current_role() === 'cashier' ? 'Refund' : 'Legacy history' ?></a>' +
                         '</div>';
                 }
             }
@@ -633,7 +625,7 @@ document.addEventListener('DOMContentLoaded', function() {
     retryButton.addEventListener('click', function() {
         table.ajax.reload(null, false);
     });
-    [dateFrom, dateTo, reversalStatus, cashier].filter(Boolean).forEach(function(control) {
+    [dateFrom, dateTo, reversalStatus, refundStatus, cashier].filter(Boolean).forEach(function(control) {
         control.addEventListener('change', function() {
             table.ajax.reload(null, true);
         });
@@ -642,6 +634,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dateFrom.value = '';
         dateTo.value = '';
         reversalStatus.value = '';
+        refundStatus.value = '';
         if (cashier) cashier.value = '';
         table.search('');
         table.order([[1, 'desc'], [0, 'desc']]);
@@ -650,48 +643,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-
-function viewReceipt(saleId) {
-    const url = '<?= htmlspecialchars(app_url('components/invoice/sales.php')) ?>?action=view&sale_id=' + saleId + '&ajax=1';
-
-    fetch(url)
-        .then(r => {
-            if (!r.ok) throw new Error('Network response was not ok: ' + r.status);
-            return r.text();
-        })
-        .then(html => {
-            document.getElementById('receiptContent').innerHTML = html;
-            document.getElementById('receiptModal').classList.add('active');
-        })
-        .catch(error => {
-            console.error('Error fetching receipt:', error);
-            const easy = 'The receipt could not be shown. Please try again. Tell your Administrator if this keeps happening.';
-            const detail = window.RetailMindUI && window.RetailMindUI.isDebug() ? '\n' + String(error) : '';
-            RetailMindUI.toast(easy + detail, 'error');
-        });
-}
-
-function closeReceiptModal() {
-    document.getElementById('receiptModal').classList.remove('active');
-}
-
-// Close modal when clicking outside the modal-content
-document.addEventListener('click', function(event) {
-    const modal = document.getElementById('receiptModal');
-    const modalContent = document.querySelector('#receiptModal .modal-content');
-    if (event.target === modal) {
-        closeReceiptModal();
-    }
-});
-
-// Close button handler
-document.addEventListener('click', function(event) {
-    if (event.target.classList && event.target.classList.contains('modal-close')) {
-        event.preventDefault();
-        event.stopPropagation();
-        closeReceiptModal();
-    }
-});
 
 async function legacyDeleteReceiptDisabled(saleId) {
     const approved = await RetailMindUI.confirm({title:'Delete receipt',message:'This action cannot be undone.',confirmText:'Delete receipt',danger:true});

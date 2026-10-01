@@ -11,7 +11,7 @@
         <div class="receipt-meta">
             <div><strong>Refund #<?= (int)$refund['refund_id'] ?></strong></div>
             <div>Original Sale Receipt #<?= (int)$refund['sale_id'] ?></div>
-            <div>Date/Time: <?= $escape($refund['created_at']) ?></div>
+            <div>Date/Time: <?= $escape(\App\Services\PhilippineTime::format($refund['created_at'])) ?> Philippine time</div>
             <div>Cashier: <?= $escape($refund['cashier_name']) ?></div>
             <div>Register: <?= $escape($refund['register_name'] ?: 'Legacy / Unassigned') ?></div>
             <div>Reason: <?= $escape($refund['reason']) ?></div>

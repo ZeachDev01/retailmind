@@ -29,7 +29,7 @@ try {
     $stock = $read('src/frontend/components/cashier/stock_issues.php');
     $shifts = $read('src/frontend/components/cashier/shifts.php');
     $shiftService = $read('src/backend/app/Services/CashierShiftService.php');
-    $sales = $read('src/frontend/components/invoice/sales.php');
+    $sales = $read('src/frontend/components/invoice/sales.php') . $read('src/frontend/assets/js/sale-receipt-dialog.js');
     $ui = $read('src/frontend/assets/js/ui.js');
     $held = $read('src/frontend/components/barcodeScanner/apiScanner/held_sales.php');
     $cartWorkspace = $read('src/frontend/assets/js/cart-workspace.js');

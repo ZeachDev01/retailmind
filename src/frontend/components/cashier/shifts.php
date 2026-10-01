@@ -139,7 +139,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <div class="topbar">
                 <div>
                     <h1>Cashier Shifts</h1>
-                    <p class="page-subtitle">Open the register, record drawer cash changes, and reconcile cash at closing.</p>
+                    <p class="page-subtitle">Open the register, record drawer cash changes, and reconcile cash at closing. Dates use Philippine time (Asia/Manila).</p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
             </div>
             <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?><?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -210,7 +210,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         <?php if ($unresolvedHeldSales): ?><div class="message error">
                             This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
                             <ul><?php foreach ($unresolvedHeldSales as $unresolved): ?>
-                                    <li><?= htmlspecialchars($unresolved['reference_no']) ?> &middot; <?= (int)$unresolved['item_count'] ?> item(s) &middot; &#8369;<?= number_format((float)$unresolved['total_amount'], 2) ?> &middot; <?= $unresolved['status'] === 'resumed' ? 'resumed' : 'held' ?> since <?= htmlspecialchars((string)$unresolved['created_at']) ?></li>
+                                    <li><?= htmlspecialchars($unresolved['reference_no']) ?> &middot; <?= (int)$unresolved['item_count'] ?> item(s) &middot; &#8369;<?= number_format((float)$unresolved['total_amount'], 2) ?> &middot; <?= $unresolved['status'] === 'resumed' ? 'resumed' : 'held' ?> since <?= htmlspecialchars(format_display_datetime($unresolved['created_at'])) ?> Philippine time</li>
                                 <?php endforeach; ?></ul>
                         </div><?php endif; ?>
                         <?php if ($countPreview): ?>

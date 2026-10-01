@@ -131,7 +131,7 @@ if ($receiptId > 0 && $receipt === null) {
             <div class="topbar">
                 <div>
                     <h1>Refunds</h1>
-                    <p class="page-subtitle">Refunds are added to the record; the original sale is never changed.</p>
+                    <p class="page-subtitle">Refunds are added to the record; the original sale is never changed. Dates use Philippine time (Asia/Manila).</p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
             </div>
             <?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>

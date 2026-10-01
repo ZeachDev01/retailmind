@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['recover_checkout'])) {
     header('Cache-Control: no-store');
     try {
         $saved = $salesWorkflowService->recoverAttempt((string)$_GET['recover_checkout'], $cashierId, $actorRole);
+        if ($saved !== null) $_SESSION['completed_checkout_sale'] = (int)$saved['sale_id'];
         echo json_encode(['sale' => $saved, 'receipt_url' => $saved === null ? null : app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $saved['sale_id'] . '&checkout=complete')], JSON_THROW_ON_ERROR);
     } catch (Throwable $e) {
         http_response_code(409);
@@ -147,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         // Ticket #89: the active workspace is passed explicitly so the service,
         // not the account's stored role, decides who may sell.
         $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
+        $_SESSION['completed_checkout_sale'] = (int)$result['sale_id'];
         header('Location: ' . app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $result['sale_id'] . '&checkout=complete'));
         exit;
     } catch (Throwable $e) {
@@ -1508,7 +1510,7 @@ function updateClock() {
         return;
     }
     const now = new Date();
-    cashierClock.innerHTML = `<i class="bi bi-clock" aria-hidden="true"></i>${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    cashierClock.innerHTML = `<i class="bi bi-clock" aria-hidden="true"></i>${now.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })} Philippine time`;
 }
 
 startBtn.addEventListener('click', startScanner);
@@ -1648,7 +1650,22 @@ const checkoutAttempt = new CheckoutAttempt(checkoutForm, <?= json_encode((strin
     message(text) { showCartMessage(text, 'error'); }
 });
 const checkoutQuote = new CheckoutQuote(checkoutForm);
-checkoutAttempt.recover();
+checkoutAttempt.recover().then(async () => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('new_sale')) return;
+    url.searchParams.delete('new_sale');
+    history.replaceState(null, '', url);
+    if (!checkoutAttempt.ready || checkoutAttempt.pending) return;
+    try {
+        if (!await cartWorkspace.resolveWork()) return;
+        cart = {};
+        cartWorkspace.clear();
+        cartReviewUnresolved = false;
+        resetPaymentState();
+        renderCart();
+        await loadHeldSales();
+    } catch (error) { showCartMessage('Unfinished work is preserved. ' + error.message, 'error'); }
+});
 setTimeout(() => skuInput.focus(), 100);
 </script>
         <?php // Ticket #90: the point of sale and its scripts are withheld entirely while the Register is locked, so a locked till has no cart, no scanner, and no checkout to drive. ?>

@@ -40,6 +40,7 @@ $expectRefusal = static function (callable $operation, string $message) use (&$f
 try {
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->sqliteCreateFunction('GREATEST', static fn(...$values) => max($values));
     // MySQL date functions the checkout path uses, expressed in SQLite terms so
     // only the dialect differs and the rule under test is identical.
     $pdo->sqliteCreateFunction('CURDATE', static fn(): string => date('Y-m-d'), 0);
@@ -586,8 +587,8 @@ try {
         $headerOrder = $headers[1];
     }
     $assert(
-        $headerOrder === ['Date', 'Cashier', 'Items', 'Total', 'Payment', 'Reversals', 'Cashier Shift'],
-        'the Cashier Shift header sits after Reversals so the rendered columns match ORDER_COLUMNS'
+        $headerOrder === ['Date', 'Cashier', 'Items', 'Original paid', 'Payment', 'Legacy Reversals', 'Cashier Shift', 'Cash Refunds', 'Refunded', 'Remaining net'],
+        'the Cashier Shift header sits after Legacy Reversals so the rendered columns match ORDER_COLUMNS'
     );
 } catch (Throwable $exception) {
     $failures[] = 'Sale Cashier Shift attribution contract threw: ' . $exception->getMessage();

@@ -90,7 +90,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <div class="main-content">
             <div class="topbar">
-                <h1>Report Stock Issue</h1>
+                <h1>Report Stock Issue</h1><p class="page-subtitle">Your Stock Issue report history remains separate. Dates use Philippine time (Asia/Manila).</p>
             </div>
 
             <?php if ($message): ?>
