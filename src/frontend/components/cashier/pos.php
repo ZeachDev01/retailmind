@@ -110,11 +110,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         'checkout_attempt' => (string)($_POST['checkout_attempt'] ?? ''),
         'cash_received' => $_POST['cash_received'] ?? 0,
         'payment_reference' => $_POST['payment_reference'] ?? '',
+        'payment_method' => $payment_method,
+        'payment_verified' => ($_POST['payment_verified'] ?? '') === '1',
         'discount_type' => $_POST['discount_type'] ?? 'none',
         'discount_value' => $_POST['discount_value'] ?? 0,
         'discount_reason' => $_POST['discount_reason'] ?? '',
         'discount_approver_username' => $_POST['discount_approver_username'] ?? '',
         'discount_approver_password' => $_POST['discount_approver_password'] ?? '',
+        'reviewed_quote' => $_SESSION['checkout_quotes'][(string)($_POST['quote_token'] ?? '')]['state_hash'] ?? '',
         // Ticket #91: the cart the Cashier resumed, if any. The service settles it
         // against this Cashier and against the shift it already resolved for the
         // sale, so a value tampered with here completes nothing.
@@ -122,6 +125,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     ];
 
     try {
+        if (($_POST['action'] ?? '') === 'review_quote') {
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            $quote = $salesWorkflowService->reviewQuote($cart, $cashierId, $actorRole, $paymentDetails);
+            $token = bin2hex(random_bytes(24));
+            $_SESSION['checkout_quotes'] = array_slice($_SESSION['checkout_quotes'] ?? [], -19, null, true);
+            $_SESSION['checkout_quotes'][$token] = ['state_hash' => $quote['state_hash']];
+            unset($quote['state_hash'], $quote['discount']['approval_state']);
+            echo json_encode(['quote' => $quote, 'token' => $token], JSON_THROW_ON_ERROR);
+            exit;
+        }
         // Ticket #89: the active workspace is passed explicitly so the service,
         // not the account's stored role, decides who may sell.
         $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
@@ -129,6 +143,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         exit;
     } catch (Throwable $e) {
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
+        if (($_POST['action'] ?? '') === 'review_quote') {
+            http_response_code(409);
+            echo json_encode(['message' => $checkout_error], JSON_THROW_ON_ERROR);
+            exit;
+        }
     }
 }
 
@@ -390,6 +409,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="checkout">
                     <input type="hidden" name="checkout_attempt" id="checkout-attempt-input">
+                    <input type="hidden" name="quote_token" id="quote-token-input">
+                    <input type="hidden" name="payment_verified" value="0">
                     <input type="hidden" name="cart" id="cart-input">
                     <input type="hidden" name="held_sale_id" id="held-sale-id-input" value="">
 
@@ -405,7 +426,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <div class="payment-grid">
                         <div class="payment-field" id="cash-field">
                             <label class="pos-field-label" for="cash-received">Cash received</label>
-                            <input type="text" name="cash_received" id="cash-received" placeholder="0.00" inputmode="decimal" autocomplete="off">
+                            <input type="text" name="cash_received" id="cash-received" placeholder="Enter after quote review" inputmode="decimal" autocomplete="off" readonly>
                         </div>
                         <div class="payment-field" id="change-field">
                             <label class="pos-field-label" for="change-due">Change due</label>
@@ -414,33 +435,30 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     </div>
 
                     <div class="cash-quick" id="cash-quick" aria-label="Quick cash amounts">
-                        <button type="button" data-tender="exact">Exact</button>
-                        <button type="button" data-tender="50">+50</button>
-                        <button type="button" data-tender="100">+100</button>
-                        <button type="button" data-tender="500">+500</button>
+                        <span class="muted">Review the final quote to enter cash and see change.</span>
                     </div>
 
                     <div class="payment-field hidden" id="reference-field">
                         <label class="pos-field-label" for="payment-reference">Payment reference</label>
-                        <input type="text" name="payment_reference" id="payment-reference" placeholder="Card approval or wallet reference">
+                        <input type="text" name="payment_reference" id="payment-reference" placeholder="Enter after quote review" readonly>
                     </div>
 
                     <details class="payment-field" id="discount-panel">
-                        <summary class="pos-field-label">Discount or promotion</summary><p class="muted u-mt-05">Eligible scheduled promotions are checked automatically at checkout. The larger eligible discount is applied.</p>
+                        <summary class="pos-field-label">Discount or promotion</summary><p class="muted u-mt-05">Review the final server quote before collecting payment. Only the best eligible discount applies.</p>
                         <div class="payment-grid u-mt-075">
                             <div><label class="pos-field-label" for="discount-type">Discount type</label><select name="discount_type" id="discount-type" class="pos-select"><option value="none">No discount</option><option value="percentage">Percentage</option><option value="fixed">Fixed amount</option></select></div>
                             <div><label class="pos-field-label" for="discount-value">Value</label><input type="number" min="0" step="0.01" name="discount_value" id="discount-value" value="0"></div>
                         </div>
                         <div class="payment-field"><label class="pos-field-label" for="discount-reason">Reason</label><input type="text" name="discount_reason" id="discount-reason" placeholder="Promotion, customer eligibility, or approved adjustment"></div>
                         <div class="payment-grid hidden" id="supervisor-fields">
-                            <div><label class="pos-field-label" for="discount-approver-username">Supervisor username</label><input type="text" name="discount_approver_username" id="discount-approver-username" autocomplete="off"></div>
-                            <div><label class="pos-field-label" for="discount-approver-password">Supervisor password</label><input type="password" name="discount_approver_password" id="discount-approver-password" autocomplete="new-password"></div>
+                            <div><label class="pos-field-label" for="discount-approver-username">Administrator username</label><input type="text" name="discount_approver_username" id="discount-approver-username" autocomplete="off"></div>
+                            <div><label class="pos-field-label" for="discount-approver-password">Administrator password</label><input type="password" name="discount_approver_password" id="discount-approver-password" autocomplete="new-password"></div>
                         </div>
                         <small id="discount-summary" class="muted">No discount applied.</small>
                     </details>
 
                     <button class="btn btn-block checkout-primary" id="checkout-button" type="button" onclick="checkoutNow()" title="Checkout (Ctrl+Enter)" disabled>
-                        <i class="bi bi-check2-circle" aria-hidden="true"></i>Complete checkout
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>Review final quote
                     </button>
                 </form>
 
@@ -475,7 +493,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <div class="checkout-dialog">
         <div class="checkout-dialog-header">
             <div>
-                <h3 id="checkout-title">Confirm checkout</h3>
+                <h3 id="checkout-title">Review final quote before payment</h3>
                 <p>Verify the payment details before completing the sale.</p>
             </div>
             <button type="button" class="modal-close" onclick="closeCheckoutConfirm()" aria-label="Close checkout confirmation"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
@@ -540,6 +558,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="<?= app_url('assets/js/checkout-attempt.js') ?>"></script>
+<script src="<?= app_url('assets/js/checkout-quote.js') ?>"></script>
 <script>
 let cart = {};
 let heldSales = [];
@@ -1088,7 +1107,7 @@ function setQuickTender(value) {
     updatePaymentFields();
 }
 
-function validateCheckout() {
+function validateCheckout(requirePayment = true) {
     const payload = Object.entries(cart).map(([product_id, item]) => ({ product_id: Number(product_id), qty: Number(item.qty) }));
     if (payload.length === 0) {
         showCartMessage('Cart is empty. Add items before checkout.', 'error');
@@ -1096,8 +1115,8 @@ function validateCheckout() {
         return false;
     }
 
-    const total = getNetTotal();
-    if (paymentMethod.value === 'cash') {
+    const total = checkoutQuote.isCurrent() ? checkoutQuote.reviewed.total : getNetTotal();
+    if (requirePayment && paymentMethod.value === 'cash') {
         const received = Number(cashReceived.value);
         if (!Number.isFinite(received) || received < 0) {
             showCartMessage('Enter a valid cash amount.', 'error');
@@ -1110,7 +1129,7 @@ function validateCheckout() {
             return false;
         }
     }
-    if (paymentMethod.value !== 'cash' && paymentReference.value.trim() === '') {
+    if (requirePayment && paymentMethod.value !== 'cash' && paymentReference.value.trim() === '') {
         showCartMessage('Enter the card or e-wallet payment reference.', 'error');
         paymentReference.focus();
         return false;
@@ -1122,24 +1141,48 @@ function validateCheckout() {
     return true;
 }
 
-function checkoutNow() {
-    if (!validateCheckout()) {
+async function checkoutNow() {
+    if (checkoutSubmitting || !checkoutAttempt.ready) return;
+    if (!validateCheckout(false)) {
         return;
     }
 
-    const itemCount = getCartItemCount();
+    let quote;
+    checkoutButton.disabled = true;
+    try {
+        quote = await checkoutQuote.review();
+    } catch (error) {
+        showCartMessage(error.message, 'error');
+        return;
+    } finally {
+        checkoutButton.disabled = false;
+    }
     const methodLabel = paymentMethod.options[paymentMethod.selectedIndex].text;
     const paymentLine = paymentMethod.value === 'cash'
-        ? `<p><strong>Cash:</strong> &#8369;${money(cashReceived.value)} &nbsp; <strong>Change:</strong> &#8369;${changeDue.value}</p>`
-        : `<p><strong>Reference:</strong> ${escapeHtml(paymentReference.value.trim())}</p>`;
+        ? `<label>Cash received <input id="review-cash" type="number" min="0" step="0.01" value="${escapeHtml(cashReceived.value)}" oninput="updateReviewedPayment()"></label><p>Change: ₱<span id="review-change">0.00</span></p>`
+        : `<p>Complete and verify the ${escapeHtml(methodLabel)} payment externally for ₱${money(quote.total)}.</p><label>Payment Reference <input id="review-reference" value="${escapeHtml(paymentReference.value)}" oninput="updateReviewedPayment()"></label><label><input type="checkbox" id="review-verified"> I verified this payment externally.</label>`;
 
     checkoutSummary.innerHTML = `
-        <p><strong>${itemCount}</strong> item(s) totaling <strong>&#8369;${money(getNetTotal())}</strong></p><p><strong>Gross:</strong> &#8369;${money(getCartTotal())} &nbsp; <strong>Discount:</strong> &#8369;${money(getDiscountAmount())}</p>
+        ${quote.sale.items.map(item => `<p>${escapeHtml(item.product_name)} · ${item.quantity} × ₱${money(item.unit_price)} = ₱${money(item.subtotal)}</p>`).join('')}
+        <p><strong>Eligible promotions:</strong> ${quote.eligible_promotions.map(p => escapeHtml(p.promotion_name)).join(', ') || 'None'}</p>
+        <p><strong>Selected discount:</strong> ${escapeHtml(quote.discount.promotion_name || quote.discount.discount_reason || 'None')} · ₱${money(quote.discount.discount_amount)}</p>
+        <p><strong>Gross:</strong> ₱${money(quote.sale.total)} · <strong>Total due:</strong> ₱${money(quote.total)}</p>
         <p><strong>Payment method:</strong> ${escapeHtml(methodLabel)}</p>
         ${paymentLine}
     `;
     checkoutModal.classList.add('open');
+    updateReviewedPayment();
     checkoutModal.querySelector('.btn:last-child').focus();
+}
+
+function updateReviewedPayment() {
+    const cash = document.getElementById('review-cash');
+    const reference = document.getElementById('review-reference');
+    if (cash) {
+        cashReceived.value = cash.value;
+        document.getElementById('review-change').textContent = money(Math.max(0, Number(cash.value) - checkoutQuote.reviewed.total));
+    }
+    if (reference) paymentReference.value = reference.value;
 }
 
 function closeCheckoutConfirm() {
@@ -1159,7 +1202,17 @@ async function submitConfirmedCheckout() {
         closeCheckoutConfirm();
         return;
     }
+    if (!checkoutQuote.isCurrent()) {
+        showCartMessage('The cart or discount changed. Review the final quote again.', 'error');
+        closeCheckoutConfirm();
+        return;
+    }
+    if (paymentMethod.value !== 'cash' && !document.getElementById('review-verified')?.checked) {
+        showCartMessage('Verify the external payment before recording it.', 'error');
+        return;
+    }
     checkoutSubmitting = true;
+    checkoutForm.elements.payment_verified.value = paymentMethod.value === 'cash' || document.getElementById('review-verified')?.checked ? '1' : '0';
     checkoutConfirmed = true;
     confirmCheckoutButton.disabled = true;
     confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
@@ -1584,6 +1637,7 @@ const checkoutAttempt = new CheckoutAttempt(checkoutForm, <?= json_encode((strin
     restore(savedCart) { cart = savedCart; resumedHeldSaleId = Number(resumedHeldSaleInput.value) || null; renderCart(); },
     message(text) { showCartMessage(text, 'error'); }
 });
+const checkoutQuote = new CheckoutQuote(checkoutForm);
 checkoutAttempt.recover();
 setTimeout(() => skuInput.focus(), 100);
 </script>
