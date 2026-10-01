@@ -79,6 +79,7 @@ try {
     };
     $quote = $review();
     $assert($quote['total'] === 100.0 && $quote['sale']['items'][0]['unit_price'] === 25.0, 'Server quote uses current price and quantities');
+    $refuse(static fn() => $service->checkout($cart, 1, 'cashier', 'cash', $details + ['checkout_attempt' => bin2hex(random_bytes(16))]), 'Review the final quote again');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === 0, 'Review records no sale');
     $pdo->exec('UPDATE products SET unit_price=26 WHERE product_id=1');
     $refuse(static fn() => $save($quote), 'Review the final quote again');
@@ -146,6 +147,8 @@ try {
         $quote = $review($inputs);
         $refuse(static fn() => $save($quote, array_replace($inputs, ['payment_reference' => '']), $method), 'Payment reference is required');
         $refuse(static fn() => $save($quote, array_replace($inputs, ['payment_verified' => false]), $method), 'Verify the external payment');
+        $withoutVerification = $inputs; unset($withoutVerification['payment_verified']);
+        $refuse(static fn() => $save($quote, $withoutVerification, $method), 'Verify the external payment');
         $save($quote, $inputs, $method);
     }
     // Reviewed state changes retain the attempt identity without saving a sale.

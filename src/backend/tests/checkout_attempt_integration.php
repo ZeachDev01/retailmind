@@ -23,6 +23,7 @@ if (($argv[1] ?? '') === '--worker') {
         $database = $argv[2] ?? '';
         $assert((bool)preg_match('/^retailmind_checkout_test_[a-f0-9]{12}$/D', $database), 'Invalid fixture database');
         $service = new SalesWorkflowService($connect($database));
+        $details['reviewed_quote'] = $service->reviewQuote($cart, 1, 'cashier', $details)['state_hash'];
         echo "ready\n"; flush();
         $assert(trim((string)fgets(STDIN)) === 'go', 'Worker barrier');
         echo json_encode($service->checkout($cart, 1, 'cashier', 'cash', $details), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION) . "\n";
@@ -98,6 +99,7 @@ try {
     $pdo->exec("INSERT INTO held_sales (held_sale_id, cashier_id, shift_id, reference_no, cart_json, status) VALUES (2, 1, 1, 'ATOMIC-HELD', '[]', 'resumed')");
     $pdo->exec("CREATE TRIGGER fail_receipt BEFORE INSERT ON sale_receipt_details FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Injected receipt failure'");
     $atomic = ['checkout_attempt' => str_repeat('b', 32), 'cash_received' => 50, 'held_sale_id' => 2];
+    $atomic['reviewed_quote'] = $service->reviewQuote($cart, 1, 'cashier', $atomic)['state_hash'];
     try { $service->checkout($cart, 1, 'cashier', 'cash', $atomic); throw new LogicException('Injected failure succeeded'); }
     catch (PDOException $e) { $assert(str_contains($e->getMessage(), 'Injected receipt failure'), 'Receipt failure injected'); }
     $assert((int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === 1, 'Partial sale rolled back');

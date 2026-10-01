@@ -123,8 +123,8 @@ class SalesWorkflowService
             $quote = $this->buildQuote($cleanCart, $userId, $attribution, $paymentDetails);
             // Browser requests always carry the server-held reviewed hash. Legacy
             // internal callers keep their interface, while reviewed callers fail closed.
-            if (array_key_exists('reviewed_quote', $paymentDetails)
-                && !hash_equals($quote['state_hash'], (string)$paymentDetails['reviewed_quote'])) {
+            if (($attempt !== null || array_key_exists('reviewed_quote', $paymentDetails))
+                && !hash_equals($quote['state_hash'], (string)($paymentDetails['reviewed_quote'] ?? ''))) {
                 throw new DomainException(self::QUOTE_CHANGED);
             }
             $sale = $quote['sale'];
@@ -613,7 +613,9 @@ class SalesWorkflowService
         if ($paymentMethod !== 'cash' && $paymentReference === '') {
             throw new RuntimeException('Payment reference is required for card or e-wallet payments.');
         }
-        if ($paymentMethod !== 'cash' && array_key_exists('payment_verified', $paymentDetails) && $paymentDetails['payment_verified'] !== true) {
+        if ($paymentMethod !== 'cash'
+            && (array_key_exists('checkout_attempt', $paymentDetails) || array_key_exists('reviewed_quote', $paymentDetails) || array_key_exists('payment_verified', $paymentDetails))
+            && ($paymentDetails['payment_verified'] ?? false) !== true) {
             throw new DomainException('Verify the external payment before recording it.');
         }
 
