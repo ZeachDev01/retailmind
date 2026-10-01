@@ -103,6 +103,32 @@ try {
     $assert((int)$pdo->query('SELECT reported_by FROM inventory_adjustments')->fetchColumn() === 1, 'Assigned Administrator reports under own attribution');
     $refused(fn() => (new StockIssueService($pdo,null,'admin'))->submitReport(['product_id'=>1,'category'=>'damaged','quantity'=>1,'explanation'=>'Broken packaging'],1));
     $refused(fn() => (new StockIssueService($pdo,null,'cashier'))->approveReport($reportId,1));
+    // Holds retain shortages and removed products; only explicit review produces
+    // a proposal, and neither hold nor resume moves inventory.
+    App\Store\StoreWriteGate::begin($pdo);
+    $held->assertCartContext(1, 1, $shiftId);
+    $refused(fn()=>$held->assertCartContext(1, 2, $shiftId));
+    $refused(fn()=>$held->assertCartContext(1, 1, $shiftId + 1));
+    $pdo->rollBack();
+    $requested = [1 => ['qty'=>20,'price'=>10,'name'=>'Old name'], 999 => ['qty'=>3,'price'=>5,'name'=>'Removed item']];
+    $review = $held->review(1, 'cashier', $requested);
+    $assert(count($review['changes']) === 4, 'Review reports quantity, price, name and removed product changes');
+    $assert($review['requested_cart'][1]['qty'] === 20 && isset($review['requested_cart'][999]), 'Review retains every requested line');
+    $assert($review['cart'][1]['qty'] === 10 && !isset($review['cart'][999]), 'Proposal is separate from requested work');
+    $changed = $held->hold(1, 'cashier', $requested);
+    $resumed = $held->resume(1, 'cashier', $changed['held_sale_id']);
+    $assert($resumed['cart'][1]['qty'] === 20 && isset($resumed['cart'][999]), 'Hold and resume never silently clip or drop requested lines');
+    $pdo->exec('UPDATE products SET unit_price=30 WHERE product_id=1');
+    $pdo->exec('UPDATE inventory SET quantity_on_hand=2 WHERE product_id=1');
+    $resumed = $held->resume(1, 'cashier', $changed['held_sale_id']);
+    $assert($resumed['review']['cart'][1]['price'] === 30.0 && $resumed['review']['cart'][1]['qty'] === 2, 'Resume revalidates current price and availability');
+    $refused(fn()=>$shifts->closeShift(1,100,''));
+    $held->discard(1,'cashier',$changed['held_sale_id'],'items_unavailable');
+    $refused(fn()=>$held->discardCart(1,'cashier',$requested,'other',''));
+    $held->discardCart(1,'cashier',$requested,'other','Customer left');
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory')->fetchColumn() === 2, 'Hold, resume and reasoned ordinary discard move no stock');
+    $pdo->exec('UPDATE products SET unit_price=25 WHERE product_id=1');
+    $pdo->exec('UPDATE inventory SET quantity_on_hand=10 WHERE product_id=1');
     $cart = $held->hold(1,'cashier',[1=>['qty'=>1]]);
     $shifts->lockRegister(1,'cashier');
     $request(1,'cashier',$void,'/pos');
@@ -111,7 +137,7 @@ try {
     $assert((int)$pdo->query('SELECT COUNT(*) FROM inventory_adjustments')->fetchColumn()===$before,'Locked direct HTTP submit writes nothing');
     $request(1,'cashier',['csrf_token'=>'fixture-csrf','correction_action'=>'cancel','adjustment_id'=>$httpReport]);
     $assert($pdo->query("SELECT status FROM inventory_adjustments WHERE adjustment_id={$httpReport}")->fetchColumn()==='pending','Locked direct HTTP correction writes nothing');
-    foreach ([fn()=>$held->hold(1,'cashier',[1=>['qty'=>1]]),fn()=>$held->resume(1,'cashier',$cart['held_sale_id']),fn()=>$held->discard(1,'cashier',$cart['held_sale_id'],'wrong_item'),fn()=>$reporter->editReport($reportId,1,['quantity'=>2]),fn()=>$reporter->cancelReport($reportId,1),fn()=>$shifts->addDrawerMovement(1,'cashier','cash_in',10,'other','Test')] as $operation) $refused($operation);
+    foreach ([fn()=>$held->review(1,'cashier',[1=>['qty'=>1]]),fn()=>$held->discardCart(1,'cashier',[1=>['qty'=>1]],'wrong_item'),fn()=>$held->hold(1,'cashier',[1=>['qty'=>1]]),fn()=>$held->resume(1,'cashier',$cart['held_sale_id']),fn()=>$held->discard(1,'cashier',$cart['held_sale_id'],'wrong_item'),fn()=>$reporter->editReport($reportId,1,['quantity'=>2]),fn()=>$reporter->cancelReport($reportId,1),fn()=>$shifts->addDrawerMovement(1,'cashier','cash_in',10,'other','Test')] as $operation) $refused($operation);
     $assert(count($reporter->getReportsByCashier(1)) === 2, 'Own history remains readable while locked');
     $refused(fn()=>$shifts->unlockRegister(2,'cashier','fixture-password'));
     $refused(fn()=>$shifts->unlockRegister(1,'cashier','wrong-password'));

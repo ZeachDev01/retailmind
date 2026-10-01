@@ -541,7 +541,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <div class="checkout-dialog">
         <div class="checkout-dialog-header">
             <div>
-                <h3 id="discard-title">Discard held sale</h3>
+                <h3 id="discard-title">Discard unfinished sale</h3>
                 <p>The reason is recorded in the audit log. Discarding moves no cash.</p>
             </div>
             <button type="button" class="modal-close" onclick="closeDiscardModal()" aria-label="Close discard dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
@@ -558,8 +558,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
             <div id="discard-error" class="cart-message error" role="alert"></div>
         </div>
         <div class="checkout-dialog-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeDiscardModal()">Keep held sale</button>
-            <button type="button" class="btn btn-danger" onclick="confirmDiscardHeldSale()"><i class="bi bi-trash3" aria-hidden="true"></i>Discard held sale</button>
+            <button type="button" class="btn btn-secondary" onclick="closeDiscardModal()">Keep working</button>
+            <button type="button" class="btn btn-danger" onclick="confirmDiscardHeldSale()"><i class="bi bi-trash3" aria-hidden="true"></i>Discard sale</button>
         </div>
     </div>
 </div>
@@ -574,6 +574,7 @@ let heldSales = [];
 // the sale settles that held sale on the shift it was held under; the service
 // settles it against the Cashier and the shift, so this is a hint, not a claim.
 let resumedHeldSaleId = 0;
+let cartReviewUnresolved = false;
 let scanCooldown = false;
 let scannerActive = false;
 let checkoutConfirmed = false;
@@ -928,7 +929,15 @@ async function addCodeFromInput() {
     scannerResult.innerHTML = `<strong>Item added</strong><span>${escapeHtml(product.name)}</span>`;
 }
 
+function cartChangesAllowed() {
+    if (!posShiftOpen || cartWorkspace.context.locked || cartWorkspace.busy || checkoutSubmitting || (typeof checkoutAttempt !== 'undefined' && checkoutAttempt.pending)) {
+        showCartMessage('Finish checkout recovery or unlock your Register before changing the cart.', 'error'); return false;
+    }
+    return true;
+}
+
 function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '') {
+    if (!cartChangesAllowed()) return;
     const productId = Number(id);
     const currentQty = cart[productId]?.qty || 0;
     const availableStock = Number(stock);
@@ -958,6 +967,7 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
 }
 
 function updateCartQty(id, newQty) {
+    if (!cartChangesAllowed()) return;
     const item = cart[id];
     if (!item) {
         return;
@@ -970,7 +980,7 @@ function updateCartQty(id, newQty) {
     }
 
     if (item.stock !== undefined && qty > item.stock) {
-        cart[id].qty = item.stock;
+        showCartMessage('Requested quantity exceeds available stock. Choose a quantity explicitly.', 'error'); return;
         showCartMessage(`Only ${item.stock} units of ${item.name} are available.`, 'error');
     } else {
         cart[id].qty = qty;
@@ -986,6 +996,7 @@ function changeCartQty(id, delta) {
 }
 
 function removeFromCart(id) {
+    if (!cartChangesAllowed()) return;
     if (!cart[id]) {
         return;
     }
@@ -996,15 +1007,8 @@ function removeFromCart(id) {
 }
 
 async function clearCart() {
-    if (Object.keys(cart).length === 0) {
-        return;
-    }
-    if (!await RetailMindUI.confirm({title:'Clear current sale',message:'Remove every item from the cart?',confirmText:'Clear cart',danger:true})) return;
-    cart = {};
-    resetPaymentState();
-    renderCart();
-    showCartMessage('Cart cleared.', 'info');
-    skuInput.focus();
+    if (!cartChangesAllowed() || (!Object.keys(cart).length && !resumedHeldSaleId)) return;
+    openDiscardModal(resumedHeldSaleId);
 }
 
 function resetPaymentState() {
@@ -1150,19 +1154,23 @@ function validateCheckout(requirePayment = true) {
 }
 
 async function checkoutNow() {
-    if (checkoutSubmitting || !checkoutAttempt.ready) return;
+    if (checkoutSubmitting || !checkoutAttempt.ready || window.cartWorkspace?.busy) return;
     if (!validateCheckout(false)) {
         return;
     }
 
     let quote;
     checkoutButton.disabled = true;
+    if (window.cartWorkspace) cartWorkspace.busy = true;
     try {
+        if (window.cartWorkspace && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
+        if (!validateCheckout(false)) return;
         quote = await checkoutQuote.review();
     } catch (error) {
         showCartMessage(error.message, 'error');
         return;
     } finally {
+        if (window.cartWorkspace) cartWorkspace.busy = false;
         checkoutButton.disabled = false;
     }
     const methodLabel = paymentMethod.options[paymentMethod.selectedIndex].text;
@@ -1237,23 +1245,7 @@ async function submitConfirmedCheckout() {
 }
 
 async function apiHeldSale(action, payload = {}) {
-    const heldSaleFallback = 'The held sale could not be completed. Check your connection and try again. Tell your Administrator if this keeps happening.';
-    let response;
-    try {
-        response = await fetch(heldSalesApiUrl, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({action,...payload})});
-    } catch (networkError) {
-        console.error('Held sale request failed:', networkError);
-        throw new Error(heldSaleFallback);
-    }
-    let data;
-    try {
-        data = await response.json();
-    } catch (parseError) {
-        console.error('Held sale response could not be read:', parseError);
-        throw new Error(heldSaleFallback);
-    }
-    if (!response.ok || !data.success) throw new Error(data.message || heldSaleFallback);
-    return data;
+    return cartWorkspace.request(action, payload);
 }
 
 async function loadHeldSales() {
@@ -1266,11 +1258,13 @@ async function loadHeldSales() {
 }
 
 async function holdCurrentSale() {
+    if (!cartChangesAllowed()) return;
     if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
     if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before holding a sale.', 'error'); return; }
     if (resumedHeldSaleId) { showCartMessage('This sale is already held. Complete checkout or discard it from Held sales before holding another sale.', 'error'); return; }
     try {
-        const data = await apiHeldSale('hold', {cart});
+        const data = await cartWorkspace.exclusive(() => cartWorkspace.holdRequested(cart));
+        if (!data) { cartReviewUnresolved = true; persistCart(); showCartMessage('Requested lines preserved. Availability changes remain unresolved.', 'error'); return; }
         heldSales = data.held_sales || [];
         cart = {};
         resetPaymentState();
@@ -1279,8 +1273,12 @@ async function holdCurrentSale() {
 }
 
 async function resumeHeldSale(id) {
-    if (Object.keys(cart).length > 0 && !await RetailMindUI.confirm({title:'Resume held sale',message:'Replace the current cart with this held sale?',confirmText:'Resume sale'})) return;
+    if (!cartChangesAllowed()) return;
+    if (Object.keys(cart).length > 0 || resumedHeldSaleId) {
+        if (!await cartWorkspace.resolveWork()) return;
+    }
     try {
+        cartWorkspace.busy = true;
         const data = await apiHeldSale('resume', {id});
         cart = data.cart || {}; heldSales = data.held_sales || [];
         resetPaymentState();
@@ -1288,8 +1286,12 @@ async function resumeHeldSale(id) {
         // settlement of this held sale rather than an ordinary new sale.
         resumedHeldSaleId = Number(data.id || id) || 0;
         resumedHeldSaleInput.value = String(resumedHeldSaleId);
-        renderCart(); renderHeldSales(); showCartMessage('Held sale resumed. Complete the checkout to finish it.', 'success'); skuInput.focus();
-    } catch (error) { showCartMessage(error.message, 'error'); }
+        renderCart(); renderHeldSales();
+        const reviewed = await cartWorkspace.acceptReview(data.review);
+        if (reviewed === null) { cartReviewUnresolved = true; persistCart(); showCartMessage('Held sale remains unresolved. Requested lines are preserved; review again before checkout.', 'error'); return; }
+        cart = reviewed; cartReviewUnresolved = false; renderCart();
+        showCartMessage('Held sale resumed. Complete checkout or discard it with a reason to finish it.', 'success'); skuInput.focus();
+    } catch (error) { showCartMessage(error.message, 'error'); } finally { cartWorkspace.busy = false; }
 }
 
 // Ticket #91: a held sale cannot be dropped from the list. It has to be either
@@ -1298,6 +1300,7 @@ async function resumeHeldSale(id) {
 // the service refuses an empty one there, so this is a courtesy rather than the
 // rule: posting around it would simply be rejected.
 function openDiscardModal(id) {
+    if (!cartChangesAllowed()) return;
     discardingHeldSaleId = Number(id) || 0;
     discardReason.value = 'customer_cancelled';
     discardNote.value = '';
@@ -1314,6 +1317,7 @@ function closeDiscardModal() {
 }
 
 async function confirmDiscardHeldSale() {
+    if (!cartChangesAllowed()) return;
     const reason = discardReason.value;
     const note = discardNote.value.trim();
     if (reason === 'other' && note === '') {
@@ -1322,23 +1326,25 @@ async function confirmDiscardHeldSale() {
         discardNote.focus();
         return;
     }
-    if (discardingHeldSaleId === 0) { closeDiscardModal(); return; }
+
     try {
-        const data = await apiHeldSale('discard', {id: discardingHeldSaleId, discard_reason: reason, discard_note: note});
+        cartWorkspace.busy = true;
+        const data = await apiHeldSale(discardingHeldSaleId ? 'discard' : 'discard_cart', {id: discardingHeldSaleId, cart, discard_reason: reason, discard_note: note});
         heldSales = data.held_sales || [];
         // Discarding the cart currently on the till leaves nothing to complete.
         if (resumedHeldSaleId === discardingHeldSaleId) {
+            cart = {}; cartReviewUnresolved = false;
             resumedHeldSaleId = 0;
             resumedHeldSaleInput.value = '';
             persistCart();
         }
         closeDiscardModal();
-        renderHeldSales();
+        renderCart(); renderHeldSales();
         showCartMessage('Held sale discarded. The reason is in the audit log.', 'success');
     } catch (error) {
         discardError.textContent = error.message;
         discardError.className = 'cart-message visible error';
-    }
+    } finally { cartWorkspace.busy = false; }
 }
 
 function renderHeldSales() {
@@ -1355,15 +1361,7 @@ function renderHeldSales() {
 }
 
 function voidCurrentSale() {
-    if (Object.keys(cart).length === 0) {
-        showCartMessage('Cart is already empty.', 'error');
-        return;
-    }
-    voidReason.value = '';
-    voidError.textContent = '';
-    voidError.className = 'cart-message error';
-    voidModal.classList.add('open');
-    setTimeout(() => voidReason.focus(), 50);
+    openDiscardModal(resumedHeldSaleId);
 }
 
 function closeVoidModal() {
@@ -1388,30 +1386,34 @@ function confirmVoidSale() {
 }
 
 function persistCart() {
-    try {
-        sessionStorage.setItem('pos_cart', JSON.stringify({cart, heldSaleId: resumedHeldSaleId}));
-    } catch (error) {}
+    cartWorkspace.save(cart, resumedHeldSaleId, cartReviewUnresolved);
 }
 
 function restoreState() {
-    try {
-        const storedCart = sessionStorage.getItem('pos_cart');
-        if (storedCart) {
-            const saved = JSON.parse(storedCart);
-            // Older sessions stored the cart directly, without held-sale metadata.
-            const savedCart = saved?.cart ?? saved;
-            if (savedCart && typeof savedCart === 'object' && !Array.isArray(savedCart)) {
-                cart = savedCart;
-                const heldSaleId = Number(saved.heldSaleId);
-                resumedHeldSaleId = Number.isSafeInteger(heldSaleId) && heldSaleId > 0 ? heldSaleId : 0;
-            }
-        }
-    } catch (error) { cart = {}; resumedHeldSaleId = 0; }
-    // Keep the cart and its identity together across reloads and failed checkout.
-    // Checkout still validates ownership, unresolved status, and the owning shift.
+    const saved = cartWorkspace.state;
+    if (saved) {
+        cart = saved.cart || {};
+        resumedHeldSaleId = Number(saved.heldSaleId) || 0;
+        cartReviewUnresolved = !!saved.unresolved;
+    }
     resumedHeldSaleInput.value = resumedHeldSaleId ? String(resumedHeldSaleId) : '';
     renderCart();
     loadHeldSales();
+    if (Object.keys(cart).length) showCartMessage('Unfinished cart recovered for this Cashier Shift. Review stock and prices before checkout.', 'info');
+}
+
+async function reviewCurrentCart() {
+    const reviewed = await cartWorkspace.review(cart);
+    if (reviewed === null) {
+        cartReviewUnresolved = true;
+        persistCart();
+        showCartMessage('Cart changes remain unresolved. Requested lines are preserved; review again before checkout.', 'error');
+        return false;
+    }
+    cart = reviewed;
+    cartReviewUnresolved = false;
+    renderCart();
+    return Object.keys(cart).length > 0;
 }
 
 function onScanSuccess(decodedText) {

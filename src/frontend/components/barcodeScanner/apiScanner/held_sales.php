@@ -76,17 +76,28 @@ $respond = static function (array $payload) use ($heldService, $userId): void {
 
 try {
     App\Store\StoreWriteGate::begin($pdo);
+    $heldService->assertCartContext($userId, (int)($input['cashier_context'] ?? 0), (int)($input['shift_context'] ?? 0));
 
+    if ($action === 'review') {
+        $review = $heldService->review($userId, $actorRole, (array)($input['cart'] ?? []));
+        $pdo->commit();
+        $respond(['success' => true, 'review' => $review]);
+    }
+    if ($action === 'discard_cart') {
+        $heldService->discardCart($userId, $actorRole, (array)($input['cart'] ?? []), (string)($input['discard_reason'] ?? ''), isset($input['discard_note']) ? (string)$input['discard_note'] : null);
+        $pdo->commit();
+        $respond(['success' => true]);
+    }
     if ($action === 'hold') {
         $held = $heldService->hold($userId, $actorRole, (array)($input['cart'] ?? []), (string)($input['customer_label'] ?? ''));
         $pdo->commit();
-        $respond(['success' => true, 'id' => $held['held_sale_id'], 'reference_no' => $held['reference_no']]);
+        $respond(['success' => true, 'id' => $held['held_sale_id'], 'reference_no' => $held['reference_no'], 'review' => $held['review']]);
     }
 
     if ($action === 'resume') {
         $resumed = $heldService->resume($userId, $actorRole, (int)($input['id'] ?? 0));
         $pdo->commit();
-        $respond(['success' => true, 'id' => $resumed['held_sale_id'], 'shift_id' => $resumed['shift_id'], 'cart' => $resumed['cart']]);
+        $respond(['success' => true, 'id' => $resumed['held_sale_id'], 'shift_id' => $resumed['shift_id'], 'cart' => $resumed['cart'], 'review' => $resumed['review']]);
     }
 
     // Ticket #91: the discard replaced the bare cancel. There is no way to drop a

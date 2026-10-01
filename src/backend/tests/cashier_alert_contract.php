@@ -32,6 +32,7 @@ try {
     $sales = $read('src/frontend/components/invoice/sales.php');
     $ui = $read('src/frontend/assets/js/ui.js');
     $held = $read('src/frontend/components/barcodeScanner/apiScanner/held_sales.php');
+    $cartWorkspace = $read('src/frontend/assets/js/cart-workspace.js');
 
     $assert($pos !== '', 'pos.php must be readable');
     $assert($stock !== '', 'cashier/stock_issues.php must be readable');
@@ -147,11 +148,11 @@ try {
         'Held sale failures must show their aligned easy sentence'
     );
     $assert(
-        str_contains($pos, $heldLine),
+        str_contains($cartWorkspace, $heldLine),
         'The POS held sale client fallback must show the same aligned easy sentence'
     );
     $assert(
-        str_contains($pos, "console.error('Held sale"),
+        str_contains($cartWorkspace, "console.error('Held sale"),
         'Held sale failures must keep the full detail on the developer console'
     );
 

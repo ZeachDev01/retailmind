@@ -15,6 +15,7 @@ if (!fs.existsSync(chromium.executablePath())) {
         .replace(/<\?=[\s\S]*?\?>/g, '<input name="csrf_token" value="fixture">');
     const modal = pos.match(/<div id="checkout-modal"[\s\S]*?(?=<div id="void-modal")/)[0];
     const functions = pos.slice(pos.indexOf('function validateCheckout('), pos.indexOf('async function apiHeldSale('));
+    const editGuard = pos.slice(pos.indexOf('function cartChangesAllowed()'), pos.indexOf('function addToCart('));
     const source = fs.readFileSync('src/frontend/assets/js/checkout-attempt.js', 'utf8')
         + fs.readFileSync('src/frontend/assets/js/checkout-quote.js', 'utf8');
     let quoteTotal = 80;
@@ -22,6 +23,7 @@ if (!fs.existsSync(chromium.executablePath())) {
     let submissions = 0;
     let stale = true;
     let unavailable = false;
+    let quotedCart = null;
     const server = http.createServer((request, response) => {
         if (request.url === '/lost-response') { request.socket.destroy(); return; }
         if (request.url === '/receipt') { response.end('<p>Saved Receipt #42</p>'); return; }
@@ -34,6 +36,7 @@ if (!fs.existsSync(chromium.executablePath())) {
             request.on('data', chunk => { body += chunk; });
             request.on('end', () => {
                 if (body.includes('review_quote')) {
+                    quotedCart = JSON.parse(body.match(/name="cart"\r\n\r\n([^\r]+)/)[1]);
                     if (unavailable) { response.end('<p>Sign in again.</p>'); return; }
                     response.setHeader('Content-Type', 'application/json');
                     response.end(JSON.stringify({token: 'server-quote', quote: {total: quoteTotal,
@@ -70,6 +73,7 @@ if (!fs.existsSync(chromium.executablePath())) {
             const checkoutQuote = new CheckoutQuote(checkoutForm);
             const checkoutAttempt = new CheckoutAttempt(checkoutForm, '1', {recoverUrl: '/pos', restore: value => cart = value, message: showCartMessage});
             window.loaded = checkoutAttempt.recover().then(() => checkoutButton.disabled = false);
+            ${editGuard}
             ${functions}
         </script>`);
     });
@@ -80,6 +84,20 @@ if (!fs.existsSync(chromium.executablePath())) {
         const page = await browser.newPage();
         await page.goto(origin + '/pos'); await page.evaluate(() => loaded);
         assert(await page.locator('#cash-received').evaluate(input => input.readOnly), 'Cash collection awaits server review');
+        await page.evaluate(() => {
+            window.cartWorkspace = {busy:false, context:{locked:false}};
+            window.reviewCurrentCart = async () => {
+                await new Promise(resolve => setTimeout(resolve, 50));
+                window.editRefusedDuringReview = !cartChangesAllowed();
+                if (cartChangesAllowed()) cart[1].qty = 99;
+                cart[1].qty = 2; return true;
+            };
+        });
+        await page.click('#checkout-button');
+        await page.waitForFunction(() => document.getElementById('checkout-modal').classList.contains('open'));
+        assert.equal(await page.evaluate(() => editRefusedDuringReview), true, 'Delayed review blocks intervening cart edits');
+        assert.equal(quotedCart[0].qty, 2, 'Accepted stock review rebuilds the hidden quote payload');
+        await page.evaluate(() => { window.cartWorkspace = null; cart[1].qty = 4; checkoutModal.classList.remove('open'); checkoutSummary.innerHTML = ''; });
         unavailable = true;
         await page.click('#checkout-button');
         await page.waitForFunction(() => document.getElementById('message').textContent.includes('final quote is unavailable'));

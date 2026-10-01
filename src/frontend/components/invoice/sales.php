@@ -222,6 +222,7 @@ if ($sale_id > 0) {
 <?php if ($checkoutCompleted): ?>
 <script>
 sessionStorage.removeItem('pos_cart');
+sessionStorage.removeItem('retailmind.cart-workspace');
 try {
     const key = <?= json_encode('retailmind.checkout.' . (int)$_SESSION['user_id']) ?>;
     const pending = JSON.parse(localStorage.getItem(key) || 'null');

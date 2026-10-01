@@ -106,10 +106,9 @@ class HeldSaleService
     /**
      * Holds a cart under the authenticated Cashier's own open Cashier Shift.
      *
-     * The cart is re-derived from the database rather than trusted: prices,
-     * names, and stock come from the products table, and a quantity is clamped to
-     * what is actually on hand. A client that posts a fabricated price holds a
-     * cart that will not be the one it is charged at.
+     * Requested lines remain intact, alongside a current availability review.
+     * Holding reserves neither stock nor a price. Checkout separately derives
+     * the charge from current products and requires the server-reviewed quote.
      *
      * @return array{held_sale_id: int, reference_no: string}
      */
@@ -121,14 +120,12 @@ class HeldSaleService
             // cannot be held against a drawer this Cashier does not own.
             $shift = $this->requireHoldingShift($cashierId);
 
-            $rehydrated = $this->rehydrateCart($cart);
-            if ($rehydrated === []) {
-                throw new RuntimeException('No active products can be held.');
-            }
+            $review = $this->reviewCart($cart);
+            $requestedCart = $review['requested_cart'];
 
             $itemCount = 0;
             $total = 0.0;
-            foreach ($rehydrated as $line) {
+            foreach ($requestedCart as $line) {
                 $itemCount += (int)$line['qty'];
                 $total += (float)$line['price'] * (int)$line['qty'];
             }
@@ -143,7 +140,7 @@ class HeldSaleService
                 (int)$shift['shift_id'],
                 $reference,
                 $customerLabel !== null && trim($customerLabel) !== '' ? trim($customerLabel) : null,
-                json_encode($rehydrated, JSON_UNESCAPED_UNICODE),
+                json_encode($requestedCart, JSON_UNESCAPED_UNICODE),
                 $itemCount,
                 $total,
                 $this->expiry(),
@@ -152,6 +149,7 @@ class HeldSaleService
             return [
                 'held_sale_id' => (int)$this->pdo->lastInsertId(),
                 'reference_no' => $reference,
+                'review' => $review,
             ];
         });
     }
@@ -182,6 +180,7 @@ class HeldSaleService
                 'held_sale_id' => (int)$heldSale['held_sale_id'],
                 'shift_id' => (int)$heldSale['shift_id'],
                 'cart' => json_decode((string)$heldSale['cart_json'], true) ?: [],
+                'review' => $this->reviewCart(json_decode((string)$heldSale['cart_json'], true) ?: []),
             ];
         });
     }
@@ -338,6 +337,15 @@ class HeldSaleService
         return $this->shifts->lockOpenShift($cashierId, true);
     }
 
+    /** Called inside the endpoint transaction before any cart decision. */
+    public function assertCartContext(int $cashierId, int $expectedCashier, int $expectedShift): void
+    {
+        $shift = $this->requireHoldingShift($cashierId);
+        if ($cashierId !== $expectedCashier || (int)$shift['shift_id'] !== $expectedShift) {
+            throw new DomainException('Your Cashier or shift changed. Reload Point of Sale before working on a cart.');
+        }
+    }
+
     /**
      * Loads a held sale that is this Cashier's and in one of $statuses.
      *
@@ -440,65 +448,65 @@ class HeldSaleService
         }
     }
 
-    /**
-     * Rebuilds a requested cart from what the Store actually stocks and charges.
-     *
-     * A held cart is only as good as its contents when it is resumed, so nothing
-     * the client sent is believed: names, prices, and availability are read back
-     * from the products table, and a quantity above what is on hand is clamped.
-     */
-    private function rehydrateCart(array $cart): array
+    /** Revalidate without altering requested lines or reserving products. */
+    public function reviewCart(array $cart): array
     {
-        $quantities = [];
-        foreach ($cart as $productId => $line) {
-            $productId = (int)$productId;
-            $quantity = (int)(is_array($line) ? ($line['qty'] ?? 0) : 0);
-            if ($productId > 0 && $quantity > 0) {
-                $quantities[$productId] = $quantity;
+        if ($cart === []) throw new DomainException('Cart is empty.');
+        $requested = [];
+        $proposal = [];
+        $changes = [];
+        $stmt = $this->pdo->prepare("SELECT p.product_name, p.sku, p.barcode, p.unit_price,
+            p.status, p.reorder_level, p.safety_stock, i.quantity_on_hand
+            FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id WHERE p.product_id = ?");
+        foreach ($cart as $id => $line) {
+            if (!ctype_digit((string)$id) || (int)$id < 1 || !is_array($line)
+                || filter_var($line['qty'] ?? null, FILTER_VALIDATE_INT) === false || (int)$line['qty'] < 1) {
+                throw new DomainException('Check the requested cart quantities.');
             }
-        }
-        if ($quantities === []) {
-            throw new RuntimeException('Cart is empty.');
-        }
-
-        $ids = array_keys($quantities);
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $stmt = $this->pdo->prepare(
-            "SELECT p.product_id, p.product_name, p.sku, p.barcode, p.unit_price,
-                    p.reorder_level, p.safety_stock, i.quantity_on_hand
-             FROM products p
-             JOIN inventory i ON i.product_id = p.product_id
-             WHERE p.status = 'active' AND p.product_id IN ({$placeholders})"
-        );
-        $stmt->execute($ids);
-        $stocked = [];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $product) {
-            $stocked[(int)$product['product_id']] = $product;
-        }
-
-        $rehydrated = [];
-        foreach ($quantities as $productId => $quantity) {
-            if (!isset($stocked[$productId])) {
+            $stmt->execute([(int)$id]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            $qty = (int)$line['qty'];
+            $name = (string)($line['name'] ?? ($product['product_name'] ?? 'Unavailable product'));
+            $price = (float)($line['price'] ?? ($product['unit_price'] ?? 0));
+            if (!is_finite($price) || $price < 0) throw new DomainException('Check the requested cart prices.');
+            $requested[$id] = array_merge($line, ['name' => $name, 'qty' => $qty, 'price' => $price]);
+            if (!$product || $product['status'] !== 'active' || (int)$product['quantity_on_hand'] < 1) {
+                $changes[] = $name . ': unavailable; proposed removal of ' . $qty . ' unit(s).';
                 continue;
             }
-            $product = $stocked[$productId];
-            $quantity = min($quantity, (int)$product['quantity_on_hand']);
-            if ($quantity < 1) {
-                continue;
-            }
-            $rehydrated[$productId] = [
-                'name' => (string)$product['product_name'],
-                'price' => (float)$product['unit_price'],
-                'qty' => $quantity,
-                'stock' => (int)$product['quantity_on_hand'],
-                'reorder_level' => (int)$product['reorder_level'],
-                'safety_stock' => (int)$product['safety_stock'],
-                'sku' => $product['sku'],
-                'barcode' => $product['barcode'],
-            ];
+            $stock = (int)$product['quantity_on_hand'];
+            $currentPrice = (float)$product['unit_price'];
+            $currentQty = min($qty, $stock);
+            $proposal[$id] = ['name' => (string)$product['product_name'], 'qty' => $currentQty,
+                'price' => $currentPrice, 'stock' => $stock, 'sku' => $product['sku'], 'barcode' => $product['barcode'],
+                'reorder_level' => (int)$product['reorder_level'], 'safety_stock' => (int)$product['safety_stock']];
+            if ($currentQty !== $qty) $changes[] = $name . ': requested quantity ' . $qty . ', available ' . $currentQty . '.';
+            if (round($price, 2) !== round($currentPrice, 2)) $changes[] = $name . ': price changed from PHP ' . number_format($price, 2) . ' to PHP ' . number_format($currentPrice, 2) . '.';
+            if ($name !== $product['product_name']) $changes[] = $name . ': now named ' . $product['product_name'] . '.';
         }
+        return ['requested_cart' => $requested, 'cart' => $proposal, 'changes' => $changes];
+    }
 
-        return $rehydrated;
+    public function review(int $cashierId, string $actorRole, array $cart): array
+    {
+        return $this->transaction(function () use ($cashierId, $actorRole, $cart): array {
+            $this->requireCashierWorkspace($actorRole, 'review a cart');
+            $this->requireHoldingShift($cashierId);
+            return $this->reviewCart($cart);
+        });
+    }
+
+    public function discardCart(int $cashierId, string $actorRole, array $cart, string $reason, ?string $note = null): void
+    {
+        $this->transaction(function () use ($cashierId, $actorRole, $cart, $reason, $note): void {
+            $this->requireCashierWorkspace($actorRole, 'discard a cart');
+            $shift = $this->requireHoldingShift($cashierId);
+            $reason = $this->requireDiscardReason($reason);
+            $note = trim($note ?? '');
+            if (($reason === 'other' && $note === '') || mb_strlen($note) > 255) throw new DomainException('Add a discard note of at most 255 characters.');
+            $review = $this->reviewCart($cart);
+            $this->audit($cashierId, 0, (int)$shift['shift_id'], ['ordinary_cart' => $review['requested_cart'], 'discard_reason' => $reason, 'discard_note' => $note]);
+        });
     }
 
     /** Casts a listed cart to the types the point of sale expects, never from the database's strings. */
