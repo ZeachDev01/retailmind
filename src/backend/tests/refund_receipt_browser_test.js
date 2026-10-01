@@ -13,6 +13,9 @@ const { chromium } = require('playwright');
     const script = fs.readFileSync(path.join(root, 'src/frontend/assets/js/sale-receipt.js'), 'utf8');
     const browser = await chromium.launch({ headless: true });
     try {
+        const legacy = execFileSync(process.env.PHP_BINARY || 'php', [path.join(__dirname, 'support/refund_receipt_fixture.php'), 'legacy-noncash', '80'], { encoding: 'utf8' });
+        assert.ok(legacy.includes('External settlement evidence is unavailable on this receipt.'));
+        assert.ok(!legacy.includes('Refund completed externally'), 'Legacy noncash receipt must not invent settlement evidence');
         for (const width of [80, 58]) {
             for (const variant of ['short', 'long']) {
                 const html = execFileSync(process.env.PHP_BINARY || 'php', [path.join(__dirname, 'support/refund_receipt_fixture.php'), variant, String(width)], { encoding: 'utf8' });

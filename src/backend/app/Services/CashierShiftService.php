@@ -16,6 +16,7 @@ use Throwable;
 
 require_once __DIR__ . '/../Audit/AuditRecordCategory.php';
 require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
+require_once __DIR__ . '/../Store/StoreWriteGate.php';
 
 /**
  * Cashier Shifts (ticket #88).
@@ -206,20 +207,22 @@ class CashierShiftService
             $actorRole,
             'Only the Cashier workspace can lock a Register. Switch to your Cashier workspace to secure your register.'
         );
-        $shift = $this->requireOpenShift($actorId, 'lock this Register');
-        if (!empty($shift['locked_at'])) {
-            throw new DomainException('This Register is already locked.');
-        }
+        return $this->transaction(function () use ($actorId): int {
+            $shift = $this->lockOpenShift($actorId);
+            if (!empty($shift['locked_at'])) {
+                throw new DomainException('This Register is already locked.');
+            }
 
-        $this->setRegisterLock((int)$shift['shift_id'], true);
-        // Re-read so the Protected Audit Record carries the time the lock was
-        // actually taken, not the moment before it.
-        $shift = $this->getOpenShift($actorId) ?? $shift;
-        $this->auditShiftEvent($actorId, self::AUDIT_ACTION_LOCKED, (int)$shift['shift_id'], $shift, [
-            'locked_at' => $shift['locked_at'],
-        ]);
+            $this->setRegisterLock((int)$shift['shift_id'], true);
+            // Re-read so the Protected Audit Record carries the time the lock was
+            // actually taken, not the moment before it.
+            $shift = $this->getOpenShift($actorId) ?? $shift;
+            $this->auditShiftEvent($actorId, self::AUDIT_ACTION_LOCKED, (int)$shift['shift_id'], $shift, [
+                'locked_at' => $shift['locked_at'],
+            ]);
 
-        return (int)$shift['shift_id'];
+            return (int)$shift['shift_id'];
+        });
     }
 
     /**
@@ -258,14 +261,20 @@ class CashierShiftService
             throw new DomainException('That password is not correct.');
         }
 
-        $this->setRegisterLock((int)$shift['shift_id'], false);
-        // The record keeps when the Register was locked, which is the only moment
-        // an unlock happens, so a reader can see how long the break was.
-        $this->auditShiftEvent($actorId, self::AUDIT_ACTION_UNLOCKED, (int)$shift['shift_id'], $shift, [
-            'locked_at' => $shift['locked_at'],
-        ]);
+        return $this->transaction(function () use ($actorId): int {
+            $shift = $this->lockOpenShift($actorId);
+            if (empty($shift['locked_at'])) {
+                throw new DomainException('This Register is not locked.');
+            }
+            $this->setRegisterLock((int)$shift['shift_id'], false);
+            // The record keeps when the Register was locked, which is the only moment
+            // an unlock happens, so a reader can see how long the break was.
+            $this->auditShiftEvent($actorId, self::AUDIT_ACTION_UNLOCKED, (int)$shift['shift_id'], $shift, [
+                'locked_at' => $shift['locked_at'],
+            ]);
 
-        return (int)$shift['shift_id'];
+            return (int)$shift['shift_id'];
+        });
     }
 
     /**
@@ -280,6 +289,25 @@ class CashierShiftService
         if ($this->isRegisterLocked($cashierId)) {
             throw new DomainException(self::LOCKED_MESSAGE);
         }
+    }
+
+    /** Take the ownership lock before reading or changing any operational state. */
+    public function lockOpenShift(int $cashierId, bool $requireUnlocked = false): array
+    {
+        if (!$this->pdo->inTransaction()) {
+            throw new RuntimeException('Shift authorization requires an active transaction.');
+        }
+        $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+        $stmt = $this->pdo->prepare("SELECT * FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
+        $stmt->execute([$cashierId]);
+        $shift = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$shift) {
+            throw new DomainException('Open your Cashier Shift before continuing.');
+        }
+        if ($requireUnlocked && !empty($shift['locked_at'])) {
+            throw new DomainException(self::LOCKED_MESSAGE);
+        }
+        return $shift;
     }
 
     private function requireOpenShift(int $cashierId, string $action): array
@@ -444,7 +472,7 @@ class CashierShiftService
     {
         $started = !$this->pdo->inTransaction();
         if ($started) {
-            $this->pdo->beginTransaction();
+            \App\Store\StoreWriteGate::begin($this->pdo);
         }
         try {
             $result = $operation();
@@ -461,7 +489,7 @@ class CashierShiftService
     }
 
     /** Record an accountable movement in the signed-in Cashier's open drawer. */
-    public function addDrawerMovement(int $actorId, string $actorRole, string $type, float $amount, string $reason, ?string $note = null): int
+    public function addDrawerMovement(int $actorId, string $actorRole, string $type, float $amount, string $reason, ?string $note = null, string $approverUsername = '', string $approverPassword = ''): int
     {
         $this->requireCashierWorkspace($actorRole, 'Only the Cashier workspace can record a drawer movement.');
         if (!isset(self::DRAWER_REASONS[$type][$reason])) {
@@ -471,11 +499,14 @@ class CashierShiftService
             throw new InvalidArgumentException('Enter a positive amount in pesos and centavos.');
         }
         $note = trim((string)$note);
+        if ($reason === 'other' && $note === '') {
+            throw new DomainException('Explain the Other reason before recording this movement.');
+        }
         if (strlen($note) > 255) {
             throw new InvalidArgumentException('The note must be 255 characters or fewer.');
         }
 
-        return $this->transaction(function () use ($actorId, $type, $amount, $reason, $note): int {
+        return $this->transaction(function () use ($actorId, $type, $amount, $reason, $note, $approverUsername, $approverPassword): int {
             // Serialize with shift closure so a movement cannot enter a drawer
             // after its closing balance has been calculated.
             $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
@@ -489,6 +520,13 @@ class CashierShiftService
                 throw new DomainException(self::LOCKED_MESSAGE);
             }
             $shiftId = (int)$shift['shift_id'];
+            $approval = null;
+            if ($type === 'cash_out' && in_array($reason, ['petty_cash', 'supplier_payment'], true)) {
+                $approval = $this->authorizeDrawerSpending($approverUsername, $approverPassword);
+            }
+            if ($type !== 'cash_in') {
+                $this->assertCashPayoutAvailable($shiftId, $amount);
+            }
             $this->pdo->prepare(
                 'INSERT INTO cash_drawer_movements (shift_id, cashier_id, movement_type, amount, reason, note, recorded_by)
                  VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -502,11 +540,47 @@ class CashierShiftService
                 'Cashier Shifts', $movementId,
                 json_encode(['drawer_movement_id' => $movementId, 'shift_id' => $shiftId, 'cashier_id' => $actorId,
                     'actor_id' => $actorId, 'type' => $type, 'amount' => $amount, 'reason' => $reason,
-                    'note' => $note === '' ? null : $note], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    'note' => $note === '' ? null : $note, 'authorization' => $approval], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
                 'system',
             ]);
             return $movementId;
         });
+    }
+
+    /** Caller must hold the paying shift lock inside its Store write transaction. */
+    public function assertCashPayoutAvailable(int $shiftId, float $amount): void
+    {
+        if (!$this->pdo->inTransaction()) {
+            throw new DomainException('Drawer payouts require a locked Cashier Shift transaction.');
+        }
+        $expected = (float)$this->calculateShift($shiftId)['calculated_expected_cash'];
+        if (round($amount * 100) > round($expected * 100)) {
+            throw new DomainException('Insufficient expected drawer cash. Record an actual float addition before paying out. Expected cash is a ledger estimate; check physical funds too.');
+        }
+    }
+
+    private function authorizeDrawerSpending(string $username, string $password): array
+    {
+        $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+        $stmt = $this->pdo->prepare("SELECT u.user_id, u.password_hash, r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id
+            WHERE u.username=? AND u.status='active' AND u.must_change_password=0 AND r.role_name IN ('admin','super_admin')" . $locking);
+        $stmt->execute([trim($username)]);
+        $approver = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$approver || $password === '' || !password_verify($password, (string)$approver['password_hash'])) {
+            throw new DomainException('Administrator authorization is required for supplier payments and petty cash.');
+        }
+        $approval = ['approved_by' => (int)$approver['user_id']];
+        if ($approver['role_name'] === 'super_admin') {
+            $stmt = $this->pdo->prepare("SELECT session_id, reason, expires_at, status FROM emergency_access_sessions WHERE actor_user_id=? ORDER BY session_id DESC LIMIT 1" . $locking);
+            $stmt->execute([$approver['user_id']]);
+            $emergency = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$emergency || $emergency['status'] !== 'active' || $emergency['expires_at'] <= gmdate('Y-m-d H:i:s')) {
+                throw new DomainException('Super Administrator authorization requires active Emergency Access.');
+            }
+            $approval['emergency_session_id'] = (int)$emergency['session_id'];
+            $approval['emergency_reason'] = $emergency['reason'];
+        }
+        return $approval;
     }
 
     public function calculateShift(int $shiftId): array

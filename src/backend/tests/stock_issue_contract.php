@@ -19,7 +19,7 @@ $throws = static function (callable $operation, string $message) use ($assert): 
         $operation();
         $assert(false, $message);
     } catch (Throwable $exception) {
-        $assert($exception instanceof RuntimeException, $message . ' (received ' . $exception::class . ')');
+        $assert($exception instanceof RuntimeException || $exception instanceof DomainException, $message . ' (received ' . $exception::class . ')');
     }
 };
 
@@ -79,6 +79,7 @@ $pdo->exec('CREATE TABLE inventory (product_id INTEGER PRIMARY KEY, quantity_on_
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES ({$activeProductId}, 10)");
 
 $pdo->exec('CREATE TABLE cashier_shifts (
+    locked_at TEXT NULL,
     shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
     cashier_id INTEGER NOT NULL,
     opened_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

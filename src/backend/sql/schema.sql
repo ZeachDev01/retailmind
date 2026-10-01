@@ -246,6 +246,10 @@ CREATE TABLE `cash_refunds` (
   `payment_method` enum('cash','card','ewallet') NOT NULL DEFAULT 'cash',
   `reason` varchar(50) NOT NULL,
   `note` varchar(255) DEFAULT NULL,
+  `original_cashier_id` int(11) DEFAULT NULL,
+  `approved_by` int(11) DEFAULT NULL,
+  `exception_reason` varchar(255) DEFAULT NULL,
+  `payment_reference` varchar(100) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`refund_id`),
   KEY `idx_cash_refunds_sale` (`sale_id`),
@@ -253,7 +257,28 @@ CREATE TABLE `cash_refunds` (
   KEY `idx_cash_refunds_cashier` (`cashier_id`),
   CONSTRAINT `fk_cash_refunds_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_cash_refunds_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE RESTRICT,
-  CONSTRAINT `fk_cash_refunds_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT
+  CONSTRAINT `fk_cash_refunds_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_cash_refunds_original_cashier_id` FOREIGN KEY (`original_cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_cash_refunds_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `cash_refund_exception_access` (
+  `access_id` int(11) NOT NULL AUTO_INCREMENT,
+  `token_hash` char(64) NOT NULL,
+  `sale_id` int(11) NOT NULL,
+  `cashier_id` int(11) NOT NULL,
+  `shift_id` int(11) NOT NULL,
+  `approved_by` int(11) NOT NULL,
+  `exception_reason` varchar(255) NOT NULL,
+  `expires_at` bigint NOT NULL,
+  `used_refund_id` int(11) DEFAULT NULL,
+  PRIMARY KEY (`access_id`),
+  UNIQUE KEY `uq_refund_exception_token` (`token_hash`),
+  FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE RESTRICT,
+  FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE RESTRICT,
+  FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  FOREIGN KEY (`used_refund_id`) REFERENCES `cash_refunds` (`refund_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1183,6 +1208,18 @@ CREATE TABLE `sale_item_batches` (
 DROP TABLE IF EXISTS `sale_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `checkout_attempts` (
+  `cashier_id` int(11) NOT NULL,
+  `attempt_id` char(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `request_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `sale_id` int(11) NOT NULL,
+  `result_json` longtext NOT NULL,
+  PRIMARY KEY (`cashier_id`,`attempt_id`),
+  UNIQUE KEY `uq_checkout_attempt_sale` (`sale_id`),
+  CONSTRAINT `fk_checkout_attempt_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_checkout_attempt_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `sale_items` (
   `sale_item_id` int(11) NOT NULL AUTO_INCREMENT,
   `sale_id` int(11) NOT NULL,

@@ -175,14 +175,13 @@ class DashboardService
     public function getSalesTrend(int $days = 30, ?DateTimeImmutable $asOf = null): array
     {
         $days = max(7, min(365, $days));
-        $asOf = ($asOf ?? new DateTimeImmutable('today'))->setTime(0, 0);
+        $manila = new \DateTimeZone('Asia/Manila');
+        $asOf = ($asOf ?? new DateTimeImmutable('today', $manila))->setTimezone($manila)->setTime(0, 0);
         $start = $asOf->modify('-' . ($days - 1) . ' days');
         $endExclusive = $asOf->modify('+1 day');
 
-        // TIMESTAMP values are converted using the MySQL session timezone. Align it
-        // with the configured PHP/application timezone before applying day boundaries.
-        $timezoneStmt = $this->pdo->prepare('SET time_zone = ?');
-        $timezoneStmt->execute([$asOf->format('P')]);
+        // Database::connection pins the shared read session to +08:00. Do not
+        // mutate it here: later receipt/history queries use the same projection.
 
         $stmt = $this->pdo->prepare(
             "SELECT DATE(sale_date) AS sale_day,

@@ -6,6 +6,8 @@ use App\Store\StoreScope;
 use DateTimeImmutable;
 use PDO;
 
+require_once __DIR__ . '/PhilippineTime.php';
+
 final class ReceiptTableService
 {
     private const DEFAULT_PAGE_LENGTH = 25;
@@ -22,6 +24,8 @@ final class ReceiptTableService
         5 => 's.payment_method',
         6 => 'reversal_count',
         7 => 's.shift_id',
+        9 => 'refunded_amount',
+        10 => 'remaining_net_amount',
     ];
     private const REVERSAL_STATUSES = ['pending', 'approved', 'rejected', 'none'];
 
@@ -63,7 +67,10 @@ final class ReceiptTableService
                     COALESCE(reversal_summary.approved_count, 0) AS approved_reversals,
                     COALESCE(reversal_summary.rejected_count, 0) AS rejected_reversals,
                     COALESCE(reversal_summary.reversal_count, 0) AS reversal_count,
-                    COALESCE(refund_summary.refunded_amount, 0) AS refunded_amount,
+                    COALESCE(refund_summary.refunded_amount, 0) AS cash_refunded_amount,
+                    COALESCE(reversal_summary.legacy_refunded_amount, 0) AS legacy_refunded_amount,
+                    COALESCE(refund_summary.refunded_amount, 0) + COALESCE(reversal_summary.legacy_refunded_amount, 0) AS refunded_amount,
+                    GREATEST(0, s.total_amount - COALESCE(refund_summary.refunded_amount, 0) - COALESCE(reversal_summary.legacy_refunded_amount, 0)) AS remaining_net_amount,
                     COALESCE(refund_summary.refund_count, 0) AS refund_count,
                     -- Ticket #89: the Cashier Shift a sale ran under and the
                     -- Register that shift anchors, both read by joining the sale
@@ -81,7 +88,8 @@ final class ReceiptTableService
                         SUM(status = 'pending') AS pending_count,
                         SUM(status = 'approved') AS approved_count,
                         SUM(status = 'rejected') AS rejected_count,
-                        COUNT(*) AS reversal_count
+                        COUNT(*) AS reversal_count,
+                        SUM(CASE WHEN status = 'approved' AND settlement_method IN ('cash', 'card', 'ewallet') THEN refund_amount ELSE 0 END) AS legacy_refunded_amount
                     FROM sale_reversals
                     GROUP BY sale_id
                 ) reversal_summary ON reversal_summary.sale_id = s.sale_id
@@ -148,6 +156,7 @@ final class ReceiptTableService
             'date_to' => $dateTo,
             'cashier_id' => $cashierId,
             'reversal_status' => $reversalStatus,
+            'refund_status' => in_array($request['refund_status'] ?? '', ['none', 'partial', 'full'], true) ? $request['refund_status'] : null,
             'order_column' => $orderColumn,
             'order_direction' => $orderDirection,
         ];
@@ -194,15 +203,22 @@ final class ReceiptTableService
         }
         if ($request['date_from'] !== null) {
             $clauses[] = 's.sale_date >= :date_from';
-            $params[':date_from'] = $request['date_from'] . ' 00:00:00';
+            $params[':date_from'] = PhilippineTime::dayStart($request['date_from']);
         }
         if ($request['date_to'] !== null) {
-            $clauses[] = 's.sale_date < DATE_ADD(:date_to, INTERVAL 1 DAY)';
-            $params[':date_to'] = $request['date_to'];
+            $clauses[] = 's.sale_date < :date_to';
+            $params[':date_to'] = PhilippineTime::dayAfter($request['date_to']);
         }
         if ($request['cashier_id'] !== null) {
             $clauses[] = 's.cashier_id = :filter_cashier_id';
             $params[':filter_cashier_id'] = $request['cashier_id'];
+        }
+        if ($request['refund_status'] === 'none') {
+            $clauses[] = 'COALESCE(refund_summary.refund_count, 0) = 0';
+        } elseif ($request['refund_status'] === 'partial') {
+            $clauses[] = 'COALESCE(refund_summary.refund_count, 0) > 0 AND refund_summary.refunded_amount < s.total_amount';
+        } elseif ($request['refund_status'] === 'full') {
+            $clauses[] = 'COALESCE(refund_summary.refund_count, 0) > 0 AND refund_summary.refunded_amount >= s.total_amount';
         }
         if ($request['reversal_status'] === 'none') {
             $clauses[] = 'COALESCE(reversal_summary.reversal_count, 0) = 0';
@@ -230,6 +246,10 @@ final class ReceiptTableService
                 FROM sale_reversals
                 GROUP BY sale_id
              ) reversal_summary ON reversal_summary.sale_id = s.sale_id
+             LEFT JOIN (
+                 SELECT sale_id, SUM(refund_amount) AS refunded_amount, COUNT(*) AS refund_count
+                 FROM cash_refunds GROUP BY sale_id
+             ) refund_summary ON refund_summary.sale_id = s.sale_id
              {$whereSql}"
         );
         $this->bindValues($statement, $params);
@@ -260,7 +280,9 @@ final class ReceiptTableService
             $row[$key] = (int)$row[$key];
         }
         $row['total_amount'] = (float)$row['total_amount'];
-        $row['refunded_amount'] = (float)$row['refunded_amount'];
+        foreach (['refunded_amount', 'cash_refunded_amount', 'legacy_refunded_amount', 'remaining_net_amount'] as $amount) $row[$amount] = (float)$row[$amount];
+        $row['refund_status'] = $row['refund_count'] === 0 ? 'None' : ($row['cash_refunded_amount'] >= $row['total_amount'] ? 'Full Cash Refund' : 'Partial Cash Refund');
+        $row['sale_date_display'] = PhilippineTime::format($row['sale_date']);
 
         // Ticket #89: a sale with no Cashier Shift is shown as Legacy /
         // Unassigned. It is never given a shift or a Register it did not run

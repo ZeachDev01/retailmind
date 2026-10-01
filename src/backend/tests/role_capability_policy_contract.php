@@ -37,7 +37,7 @@ $capabilities = [
 $expected = [
     'super_admin' => [true, false, true, false, false, true, true, true, true, true, true, true, true, false, true],
     'admin' => [false, true, true, false, false, true, false, true, true, false, false, true, true, true, true],
-    'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, false, true, true, true, false],
+    'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, false, true, true, false, false],
     'cashier' => [false, false, true, false, true, false, false, false, false, false, false, true, false, false, false],
 ];
 
@@ -75,6 +75,7 @@ $assert(!$policy->allows('admin', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP, 
 
 $emergency = AuthorizationContext::emergencyAccess(101, 41, 'Restore Store operations during an incident');
 $assert($policy->allows('super_admin', RoleCapabilityPolicy::STORE_OPERATIONS, null, $emergency, 41), 'Emergency Access should permit isolated Store operations');
+$assert($policy->allows('super_admin', RoleCapabilityPolicy::MANAGE_SALE_REVERSALS, null, $emergency, 41), 'Emergency Access permits a reason-bound Legacy Reversal decision');
 $assert($policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $emergency, 41), 'Emergency Access should permit emergency inventory mutation');
 $assert(!$policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $emergency), 'Emergency Access should require an authenticated actor identifier');
 $assert(!$policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $emergency, 42), 'Emergency context must not elevate another Super Administrator');

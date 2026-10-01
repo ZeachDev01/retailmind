@@ -391,6 +391,22 @@ $sections = $roleSections[$role] ?? [];
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
 <script src="<?= sidebar_e(app_url('assets/js/ui.js')) ?>"></script>
+<?php
+require_once __DIR__ . '/../../backend/app/Services/CashierShiftService.php';
+require_once __DIR__ . '/../../backend/app/Services/HeldSaleService.php';
+$cartRecoveryShift = $role === 'cashier' ? (new \App\Services\CashierShiftService($pdo))->getOpenShift((int)$_SESSION['user_id']) : null;
+?>
+<script src="<?= sidebar_e(app_url('assets/js/cart-workspace.js')) ?>"></script>
+<script>
+window.cartWorkspace = new CartWorkspace(<?= json_encode([
+    'cashier' => (int)$_SESSION['user_id'], 'shift' => (int)($cartRecoveryShift['shift_id'] ?? 0),
+    'workspace' => $role, 'locked' => !empty($cartRecoveryShift['locked_at']),
+    'endpoint' => app_url('components/barcodeScanner/apiScanner/held_sales.php'),
+    'csrf' => csrf_token(), 'reasons' => \App\Services\HeldSaleService::DISCARD_REASONS,
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+cartWorkspace.bindNavigation();
+</script>
+
 <link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/backup.css')) ?>">
 <script>
     // Shared Database Backup status (ticket #69): every signed-in session is

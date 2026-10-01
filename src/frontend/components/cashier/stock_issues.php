@@ -13,7 +13,7 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/StockIssueService.php';
 require_role(['cashier']);
 
-$stockIssueService = new StockIssueService($pdo);
+$stockIssueService = new StockIssueService($pdo, null, (string)current_role());
 $message = '';
 $error = '';
 
@@ -90,7 +90,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <div class="main-content">
             <div class="topbar">
-                <h1>Report Stock Issue</h1>
+                <h1>Report Stock Issue</h1><p class="page-subtitle">Your Stock Issue report history remains separate. Dates use Philippine time (Asia/Manila).</p>
             </div>
 
             <?php if ($message): ?>

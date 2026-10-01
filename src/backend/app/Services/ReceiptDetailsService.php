@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+require_once __DIR__ . '/PhilippineTime.php';
+
 use PDO;
 
 final class ReceiptDetailsService
@@ -177,7 +179,7 @@ final class ReceiptDetailsService
         return '<div class="receipt-meta">'
             . '<div><strong>Transaction #' . (int)$sale['sale_id'] . '</strong></div>'
             . '<div>Receipt #' . (int)$sale['sale_id'] . '</div>'
-            . '<div>Date/Time: ' . $escape((string)$sale['sale_date']) . '</div>'
+            . '<div>Date/Time: ' . $escape(PhilippineTime::format($sale['sale_date'])) . ' Philippine time' . '</div>'
             . '<div>Cashier: ' . $escape($cashier) . '</div>'
             . '<div>Register: ' . $escape($register) . '</div>'
             . '</div>';

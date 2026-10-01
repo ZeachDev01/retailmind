@@ -11,7 +11,7 @@
         <div class="receipt-meta">
             <div><strong>Refund #<?= (int)$refund['refund_id'] ?></strong></div>
             <div>Original Sale Receipt #<?= (int)$refund['sale_id'] ?></div>
-            <div>Date/Time: <?= $escape($refund['created_at']) ?></div>
+            <div>Date/Time: <?= $escape(\App\Services\PhilippineTime::format($refund['created_at'])) ?> Philippine time</div>
             <div>Cashier: <?= $escape($refund['cashier_name']) ?></div>
             <div>Register: <?= $escape($refund['register_name'] ?: 'Legacy / Unassigned') ?></div>
             <div>Reason: <?= $escape($refund['reason']) ?></div>
@@ -30,5 +30,13 @@
         <div><span>Original payment method</span><strong><?= $escape(strtoupper($refund['payment_method'])) ?></strong></div>
         <div class="sale-receipt-grand-total"><span>Total refunded</span><strong class="sale-receipt-money"><?= $money($refund['refund_amount']) ?></strong></div>
     </div>
+    <?php if ($refund['payment_method'] !== 'cash'): ?>
+    <?php if (!empty($refund['payment_reference'])): ?>
+    <p>Refund completed externally and recorded in RetailMind.</p>
+    <p>Payment Reference: <?= $escape($refund['payment_reference']) ?></p>
+    <?php else: ?>
+    <p>Noncash refund recorded. External settlement evidence is unavailable on this receipt.</p>
+    <?php endif; ?>
+    <?php endif; ?>
     <div class="sale-receipt-footer"><?= $escape($store['footer']) ?></div>
 </div>

@@ -35,6 +35,15 @@
 .sale-receipt .receipt-url { margin: 1mm 0 0; font-size: 10px; color: #111; }
 .sale-receipt-footer { text-align: center; margin-top: 3mm; }
 .receipt-print-root { display: none; }
+.sale-receipt-dialog { width: min(600px, calc(100% - 24px)); max-width: calc(100% - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 0; border: 0; border-radius: 18px; color: #1f2937; background: #fff; box-shadow: 0 24px 64px rgba(15, 23, 42, .24); overflow-y: auto; }
+.sale-receipt-dialog::backdrop { background: rgba(15, 23, 42, .55); }
+.sale-receipt-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; position: sticky; top: 0; z-index: 1; background: #fff; border-bottom: 1px solid #e5e7eb; }
+.sale-receipt-dialog-header h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
+.sale-receipt-dialog .receipt-container { padding: 1rem; }
+.sale-receipt-dialog .receipt-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; }
+.sale-receipt-dialog .checkout-complete-banner { flex-wrap: wrap; }
+.sale-receipt-dialog :focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.receipt-dialog-status { padding: 1rem; }
 @media print {
     @page { size: auto; margin: 0; }
     /* A direct body child avoids modal height/overflow and shell positioning. */
@@ -43,6 +52,7 @@
     body.sale-receipt-printing > .receipt-print-root { display: block !important; }
     .receipt-print-root .sale-receipt { width: var(--receipt-paper-width, 80mm); max-width: 100%; margin: 0; border: 0; }
     .receipt-print-root .no-print { display: none !important; }
+    .sale-receipt-dialog { display: none !important; }
 }
 
 .sale-receipt[data-paper-width-mm="58"] { --receipt-paper-width: 58mm; }

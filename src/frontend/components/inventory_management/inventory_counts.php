@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../../backend/app/Services/StockIssueService.php';
 require_role(['admin', 'inventory_manager']);
 
 $countService = new InventoryCountService($pdo);
-$stockIssueService = new StockIssueService($pdo);
+$stockIssueService = new StockIssueService($pdo, null, (string)current_role());
 $message = '';
 $error = '';
 
