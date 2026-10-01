@@ -33,6 +33,7 @@ php src/backend/tests/register_schema_parity_contract.php
 php src/backend/tests/register_legacy_upgrade_integration.php
 php src/backend/tests/cashier_shift_opening_contract.php
 php src/backend/tests/drawer_movement_contract.php
+node src/backend/tests/drawer_movement_browser_test.js
 php src/backend/tests/cashier_shift_schema_parity_contract.php
 php src/backend/tests/sale_shift_attribution_contract.php
 php src/backend/tests/checkout_attempt_integration.php

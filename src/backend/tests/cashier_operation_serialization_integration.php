@@ -67,9 +67,10 @@ try {
     $bootstrap = var_export(realpath(__DIR__ . '/../bootstrap/app.php'), true);
     $endpoint = var_export(realpath(__DIR__ . '/../../frontend/components/cashier/stock_issues.php'), true);
     $posEndpoint = var_export(realpath(__DIR__ . '/../../frontend/components/cashier/pos.php'), true);
+    $shiftEndpoint = var_export(realpath(__DIR__ . '/../../frontend/components/cashier/shifts.php'), true);
     $fixtureDatabase = var_export($database, true);
     $routerCode = '<?php require ' . $bootstrap . '; $_ENV["DB_NAME"]=' . $fixtureDatabase . ';'
-        . ' App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; if ($_SERVER["REQUEST_URI"]==="/pos") require ' . $posEndpoint . '; else require ' . $endpoint . ';';
+        . ' App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; if ($_SERVER["REQUEST_URI"]==="/pos") require ' . $posEndpoint . '; elseif ($_SERVER["REQUEST_URI"]==="/shifts") require ' . $shiftEndpoint . '; else require ' . $endpoint . ';';
     file_put_contents($router, $routerCode);
     $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
     $assert(is_resource($socket), 'Reserve local HTTP port');
@@ -85,6 +86,20 @@ try {
         return [$http_response_header[0]??'',(string)$body];
     };
     $post=['csrf_token'=>'fixture-csrf','product_id'=>1,'category'=>'damaged','quantity'=>1,'explanation'=>'HTTP packaging defect','cashier_id'=>2,'shift_id'=>999,'role'=>'admin'];
+    $movement=['csrf_token'=>'fixture-csrf','action'=>'movement','movement_type'=>'cash_out','amount'=>10,'reason'=>'petty_cash','approved_by'=>1,'shift_id'=>999,'cashier_id'=>2];
+    [$status,$body]=$request(1,'cashier',$movement,'/shifts');
+    $assert(str_contains($status,'200') && str_contains($body,'Expected cash is a ledger estimate') && str_contains($body,'Cash Refunds'),'Drawer form renders physical-cash and refund guidance');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===0,'Forged approver identity cannot authorize spending');
+    $movement['approver_username']='fixture-admin';$movement['approver_password']='fixture-password';
+    $request(1,'cashier',$movement,'/shifts');
+    $row=$pdo->query('SELECT * FROM cash_drawer_movements')->fetch(PDO::FETCH_ASSOC);
+    $assert((int)$row['cashier_id']===1 && (int)$row['shift_id']===$shiftId,'HTTP spending binds authenticated Cashier and current shift');
+    $movement['amount']=1000;$request(1,'cashier',$movement,'/shifts');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===1,'HTTP excess spending refused despite valid approval');
+    $request(1,'admin',$movement,'/shifts');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===1,'Administrator workspace cannot bypass Cashier movement boundary');
+    // Restore the fixture float through the real ledger, rather than erase spending.
+    $shifts->addDrawerMovement(1,'cashier','cash_in',10,'additional_float');
     [$status,$body]=$request(1,'cashier',$post);
     $assert(str_contains($status,'200'), 'Assigned Administrator HTTP request authorized: '.$status);
     $assert((int)$pdo->query('SELECT reported_by FROM inventory_adjustments ORDER BY adjustment_id DESC LIMIT 1')->fetchColumn()===1,'HTTP ignores forged actor and shift');

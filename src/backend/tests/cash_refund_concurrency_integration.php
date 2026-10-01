@@ -35,7 +35,13 @@ if (($argv[1] ?? '') === '--worker') {
             exit(1);
         }
         $service = new CashRefundService($pdo, new CashierShiftService($pdo));
-        $service->refund(1, 'cashier', 1, $items, 'customer_return');
+        if (($argv[3] ?? '') === 'drop') {
+            (new CashierShiftService($pdo))->addDrawerMovement(1, 'cashier', 'safe_drop', 25, 'excess_cash');
+        } elseif (($argv[3] ?? '') === 'withdraw') {
+            (new CashierShiftService($pdo))->addDrawerMovement(1, 'cashier', 'cash_out', 25, 'other', 'Cash collected');
+        } else {
+            $service->refund(1, 'cashier', (int)($argv[3] ?? 1), (isset($argv[3]) ? [2 => ['quantity'=>1,'disposition'=>'damaged']] : $items), 'customer_return');
+        }
         echo "refunded\n";
     } catch (DomainException $e) {
         echo "refused\n";
@@ -149,6 +155,52 @@ try {
         'Committed customer details survive Store, product, Cashier and Register edits.');
     $assert((new \App\Services\ReceiptPaperService($pdo))->currentWidth(1, 'cashier') === 58,
         'Printing uses the current Register width without rewriting preserved details.');
+
+    $shifts = new CashierShiftService($pdo);
+    $pdo->exec("INSERT INTO sales (sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES (2,1,1,25,'cash')");
+    $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (2,2,1,1,25,25)');
+    $shifts->addDrawerMovement(1,'cashier','safe_drop',100,'excess_cash');
+    // Independent processes compete for the last 25 pesos, with the parent
+    // holding the shared shift row so every contender reaches the write path.
+    foreach ([['drop','withdraw'], ['2','drop']] as $operations) {
+        $pdo->beginTransaction(); $pdo->query('SELECT shift_id FROM cashier_shifts WHERE shift_id=1 FOR UPDATE')->fetch();
+        foreach ($operations as $operation) {
+            $process=proc_open([PHP_BINARY,__FILE__,'--worker',$database,$operation],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
+            $assert(is_resource($process),'Payout worker starts'); $workers[]=[$process,$pipes];
+            $assert(trim((string)fgets($pipes[1]))==='ready','Payout worker ready');
+        }
+        foreach ($workers as [$process,$pipes]) { fwrite($pipes[0],"go\n");fflush($pipes[0]); }
+        usleep(300000); $pdo->commit(); $results=[];
+        foreach ($workers as [$process,$pipes]) {
+            fclose($pipes[0]);$results[]=trim(stream_get_contents($pipes[1]));$error=stream_get_contents($pipes[2]);
+            fclose($pipes[1]);fclose($pipes[2]);$assert(proc_close($process)===0,'Payout worker: '.$error);
+        }
+        $workers=[];sort($results);$assert($results===['refunded','refused'],'Only one outgoing operation consumes the available cash');
+        $assert((float)$shifts->calculateShift(1)['calculated_expected_cash']===0.0,'Competing payouts never overdraw');
+        $shifts->addDrawerMovement(1,'cashier','cash_in',25,'additional_float','Physical float replenished');
+    }
+    // Ensure insufficient refunds fail before receipt, inventory or audit writes.
+    if ($service->refundableQuantity(2)>0) {
+        $shifts->addDrawerMovement(1,'cashier','safe_drop',25,'excess_cash');
+        $count=(int)$pdo->query('SELECT COUNT(*) FROM cash_refunds')->fetchColumn();
+        try { $service->refund(1,'cashier',2,[2=>['quantity'=>1,'disposition'=>'damaged']],'customer_return'); throw new LogicException('Insufficient refund succeeds'); }
+        catch (DomainException $e) { $assert(str_contains($e->getMessage(),'Insufficient expected'),'Refund explains recorded top-up'); }
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_refunds')->fetchColumn()===$count,'Insufficient refund appends nothing');
+        $shifts->addDrawerMovement(1,'cashier','cash_in',25,'additional_float');
+        $service->refund(1,'cashier',2,[2=>['quantity'=>1,'disposition'=>'damaged']],'customer_return');
+    }
+
+    // Historical cash sales do not put money into today's paying shift.
+    $pdo->exec("INSERT INTO sales (sale_id,cashier_id,total_amount,payment_method) VALUES (3,1,25,'cash'),(4,1,25,'card'),(5,1,25,'ewallet')");
+    $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (3,3,1,1,25,25),(4,4,1,1,25,25),(5,5,1,1,25,25)');
+    $balance=(float)$shifts->calculateShift(1)['calculated_expected_cash'];
+    if ($balance>0) $shifts->addDrawerMovement(1,'cashier','safe_drop',$balance,'excess_cash');
+    try { $service->refund(1,'cashier',3,[3=>['quantity'=>1,'disposition'=>'damaged']],'customer_return'); throw new LogicException('Unfunded historical refund succeeds'); }
+    catch (DomainException $e) { $assert(str_contains($e->getMessage(),'Insufficient expected'),'Unfunded refund requires top-up'); }
+    $shifts->addDrawerMovement(1,'cashier','cash_in',25,'additional_float');
+    $service->refund(1,'cashier',3,[3=>['quantity'=>1,'disposition'=>'damaged']],'customer_return');
+    foreach ([4,5] as $saleId) $service->refund(1,'cashier',$saleId,[$saleId=>['quantity'=>1,'disposition'=>'damaged']],'customer_return');
+    $assert((float)$shifts->calculateShift(1)['calculated_expected_cash']===0.0,'Card and e-wallet refunds permitted with empty drawer and do not deduct cash');
 
     $legacy = new SaleReversalService($pdo);
     try {

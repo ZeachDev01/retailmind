@@ -182,6 +182,9 @@ class CashRefundService
             }
             $lines = $this->settleLines($sale, $requested);
             $amount = $this->settleAmount($sale, $lines);
+            if ($sale['payment_method'] === 'cash') {
+                $this->shifts->assertCashPayoutAvailable($shiftId, $amount);
+            }
 
             $this->pdo->prepare(
                 'INSERT INTO cash_refunds
