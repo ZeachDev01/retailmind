@@ -100,7 +100,7 @@ try {
     $sale = $saleId > 0 ? $refundService->refundableSaleForCashier($actorId, $saleId, $exceptionToken ?: null) : null;
 } catch (DomainException $e) {
     $sale = null;
-    $error = $e->getMessage();
+    $error = \App\Support\OperatorAlert::message($e, 'Ask your Administrator to authorize this sale again.');
     $exceptionToken = '';
 }
 $refunds = $refundService->recentForCashier($actorId);

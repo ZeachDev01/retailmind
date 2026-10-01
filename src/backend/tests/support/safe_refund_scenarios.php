@@ -15,7 +15,16 @@ $snapshot = static function () use ($pdo): array {
     return $result;
 };
 $migration = require __DIR__.'/../../database/migrations/202610010003_safe_refund_exceptions.php';
+$oldRows=$pdo->query('SELECT refund_id,sale_id,shift_id,cashier_id,refund_amount,payment_method,reason,note,created_at FROM cash_refunds')->fetchAll(PDO::FETCH_ASSOC);
+// Model an older install, retaining its financial rows, then apply the upgrade.
+$pdo->exec('DROP TABLE cash_refund_exception_access');
+$pdo->exec('ALTER TABLE cash_refunds DROP FOREIGN KEY fk_cash_refunds_original_cashier_id, DROP FOREIGN KEY fk_cash_refunds_approved_by,
+    DROP COLUMN original_cashier_id, DROP COLUMN approved_by, DROP COLUMN exception_reason, DROP COLUMN payment_reference');
 $migration['up']($pdo); $migration['up']($pdo);
+$assert($oldRows===$pdo->query('SELECT refund_id,sale_id,shift_id,cashier_id,refund_amount,payment_method,reason,note,created_at FROM cash_refunds')->fetchAll(PDO::FETCH_ASSOC),'Repeatable upgrade leaves existing refund records untouched');
+$columns=$pdo->query('SHOW COLUMNS FROM cash_refunds')->fetchAll(PDO::FETCH_ASSOC);
+$types=array_column($columns,'Type','Field');
+$assert($types['exception_reason']==='varchar(255)' && $types['payment_reference']==='varchar(100)' && isset($types['original_cashier_id'],$types['approved_by']),'Fresh and upgraded refund metadata have the required column shapes');
 $pdo->exec("INSERT INTO roles(role_id,role_name) VALUES (2,'admin'),(3,'super_admin')");
 $hash=password_hash('fixture-password',PASSWORD_DEFAULT);
 $pdo->prepare("INSERT INTO users(user_id,full_name,username,password_hash,role_id,branch_id,status,must_change_password)
@@ -115,6 +124,11 @@ $assert($snapshot()===$before,'Reused exception cannot spend another remaining u
 $assert($service->refundableSaleForCashier(1,11)===null,'Exception does not broaden routine history');
 $assert((new \App\Services\RefundReceiptService($pdo))->forCashier($id,1,1)!==null,'Issuer retains own saved Refund Receipt');
 $pdo->exec('DELETE FROM fiscal_period_locks WHERE period_id=2');
+$pdo->exec("UPDATE fiscal_periods SET status='closed' WHERE period_id=2");
+$before=$snapshot();
+$refused(fn()=>$service->refund(1,'cashier',13,$damaged(13),'customer_return',null,'CURRENT-CLOSED',true));
+$assert($snapshot()===$before,'Closed entire current period refuses even Damaged noncash returns atomically');
+$pdo->exec("UPDATE fiscal_periods SET status='open' WHERE period_id=2");
 $expired=$exceptions->openSale(1,'cashier',12,'refund-admin','fixture-password','Original Cashier absent');
 $pdo->exec('UPDATE cash_refund_exception_access SET expires_at=1 WHERE sale_id=12');
 $refused(fn()=>$service->refundableSaleForCashier(1,12,$expired));

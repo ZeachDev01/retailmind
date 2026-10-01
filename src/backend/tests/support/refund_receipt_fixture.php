@@ -16,6 +16,10 @@ $details = ['refund' => ['refund_id' => 105, 'sale_id' => 103, 'created_at' => '
     'store' => ['name' => 'Synthetic Store', 'address' => '123 Example Street, Tangub City',
     'contact' => '555-0100 / example@example.test', 'tin' => 'TIN EXAMPLE123', 'currency_symbol' => '₱',
     'footer' => 'Thank you for shopping with us.']];
+if (($argv[1] ?? '') === 'legacy-noncash') {
+    $details['refund']['payment_method'] = 'card';
+    unset($details['refund']['payment_reference']);
+}
 echo '<section class="receipt-container"><h2 class="no-print">Refund recorded — synthetic example</h2><button class="no-print" type="button" onclick="printReceiptSection(this)">Print Refund Receipt</button>';
 App\Services\RefundReceiptPresentation::render($details, (int)($argv[2] ?? 80));
 echo '</section>';

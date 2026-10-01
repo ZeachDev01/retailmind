@@ -127,8 +127,13 @@ if (!fs.existsSync(chromium.executablePath())) {
         await page.click('#checkout-button'); await page.waitForSelector('#review-cash');
         assert.match(await page.locator('#checkout-summary').textContent(), /Total due: ₱70.00/);
         stale = false;
+        // The deliberately broken response commits Chromium's error page.
+        // Wait for that navigation instead of racing it with an arbitrary delay.
+        const lostResponseNavigation = page.waitForEvent('framenavigated', {
+            predicate: frame => frame === page.mainFrame() && frame.url().startsWith('chrome-error://')
+        });
         await page.click('#confirm-checkout-button');
-        await page.waitForTimeout(150);
+        await lostResponseNavigation;
         await page.goto(origin + '/pos');
         await page.waitForURL(origin + '/receipt');
         assert.match(await page.textContent('body'), /Saved Receipt #42/);

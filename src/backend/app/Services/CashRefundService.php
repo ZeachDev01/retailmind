@@ -179,7 +179,7 @@ class CashRefundService
                 $approval = $exceptionService->authorize((string)($exception['username'] ?? ''), (string)($exception['password'] ?? ''));
                 if ($approval['approved_by'] !== (int)$access['approved_by']) throw new DomainException('The Administrator who opened this sale must approve this specific refund.');
             }
-            $sale = $this->lockOwnSale($cashierId, $saleId, $access !== null);
+            $sale = $this->lockAuthorizedSale($cashierId, $saleId, $access !== null);
             // Historical sales remain immutable: only today's affected ledgers must be open.
             $this->fiscalPeriodGuard->assertOpenNow('cash_refunds', 'cash refund');
             if (array_filter($requested, static fn(array $line): bool => $line['disposition'] === self::RESTOCKABLE)) {
@@ -463,12 +463,12 @@ class CashRefundService
     /**
      * The sale being refunded, locked for the rest of the transaction.
      *
-     * Two rules are settled by this one row. It is the Cashier's own sale, so a
-     * Cashier cannot refund somebody else's transaction; and the lock is what
+     * Routine access enforces the Cashier's own sale. An exception has already
+     * been authorized for this specific sale, Cashier and shift; the lock is what
      * makes the remaining-balance caps safe under concurrency, because every
      * remaining quantity and the remaining amount are read while it is held.
      */
-    private function lockOwnSale(int $cashierId, int $saleId, bool $exception = false): array
+    private function lockAuthorizedSale(int $cashierId, int $saleId, bool $exception = false): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT sale_id, cashier_id, total_amount, payment_method, sale_date
@@ -641,7 +641,7 @@ class CashRefundService
     /**
      * The money, capped by what the sale has left to give back.
      *
-     * The cap is read under the sale lock held by lockOwnSale(), so a second
+     * The cap is read under the sale lock held by lockAuthorizedSale(), so a second
      * refund that validated a moment ago sees this one. Rounded to the cent
      * before the comparison, because the balance is money and a fraction of a
      * cent is not a smaller amount of it.
