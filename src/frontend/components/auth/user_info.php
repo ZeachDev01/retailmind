@@ -2,7 +2,6 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 
-use App\Authorization\RoleCapabilityPolicy;
 use App\Services\ProfileImageStorage;
 
 if (!is_logged_in()) {
@@ -33,8 +32,10 @@ function account_role_label(string $role): string
 
 function can_manage_own_profile_image(): bool
 {
-    return has_capability(RoleCapabilityPolicy::PLATFORM_GOVERNANCE)
-        || has_capability(RoleCapabilityPolicy::STORE_OPERATIONS);
+    return is_logged_in()
+        && !(bool)($_SESSION['is_recovery_account'] ?? false)
+        && !(bool)($_SESSION['must_change_password'] ?? false)
+        && in_array(current_role(), ['cashier', 'inventory_manager', 'admin', 'super_admin'], true);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -42,15 +43,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? 'update_profile');
 
     if (in_array($action, ['replace_profile_image', 'remove_profile_image'], true)) {
-        if (!can_manage_own_profile_image()) {
+        if (!can_manage_own_profile_image()
+            || isset($_POST['user_id']) || isset($_GET['user_id'])
+        ) {
             http_response_code(403);
-            die('Access denied: only administrators can manage profile pictures.');
+            die('Access denied: you can manage only your own profile picture.');
         }
 
         $imageService = profile_image_storage();
         $currentFilename = (string)($_SESSION['profile_image'] ?? '');
 
         try {
+            $pdo->beginTransaction();
+            $newFilename = null;
             if ($action === 'replace_profile_image') {
                 $newFilename = $imageService->replace(
                     $_FILES['profile_image'] ?? [],
@@ -58,9 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     static function (string $filename) use ($pdo): void {
                         $stmt = $pdo->prepare('UPDATE users SET profile_image = ? WHERE user_id = ?');
                         $stmt->execute([$filename, (int)$_SESSION['user_id']]);
-                    }
+                    },
+                    static fn() => $pdo->commit()
                 );
-                $_SESSION['profile_image'] = $newFilename;
                 $message = $currentFilename !== '' ? 'Profile picture replaced.' : 'Profile picture uploaded.';
             } else {
                 $imageService->remove(
@@ -68,11 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     static function () use ($pdo): void {
                         $stmt = $pdo->prepare('UPDATE users SET profile_image = NULL WHERE user_id = ?');
                         $stmt->execute([(int)$_SESSION['user_id']]);
-                    }
+                    },
+                    static fn() => $pdo->commit()
                 );
-                $_SESSION['profile_image'] = null;
-                $message = 'Profile picture removed. The default picture is now shown.';
+                $message = 'Profile picture removed. Your initials are now shown.';
             }
+
+            $_SESSION['profile_image'] = $newFilename;
 
             log_activity(
                 $pdo,
@@ -95,6 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log('Profile picture update failed: ' . $e->getMessage());
             $message = \App\Support\OperatorAlert::message($e, 'The profile picture could not be updated. Please try again. Tell your Administrator if this keeps happening.');
             $messageClass = 'tag-warning';
+        }
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
         }
     } else {
         $fullName = trim((string)($_POST['full_name'] ?? ''));
@@ -152,7 +162,6 @@ $statusClass = $account['status'] === 'active' ? 'tag-success' : 'tag-warning';
 $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required' : 'Current';
 $passwordStatusClass = (int)$account['must_change_password'] === 1 ? 'tag-warning' : 'tag-success';
 $profileImageUrl = profile_image_url((int)$account['user_id']);
-$defaultProfileImageUrl = default_profile_image_url();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -208,12 +217,13 @@ $defaultProfileImageUrl = default_profile_image_url();
                     <?php if (can_manage_own_profile_image()): ?>
                         <div class="profile-picture-settings">
                             <div class="profile-picture-frame">
-                                <img id="profile-picture-preview" class="profile-picture-preview" src="<?= htmlspecialchars($profileImageUrl) ?>" alt="Current profile picture" data-default-src="<?= htmlspecialchars($defaultProfileImageUrl) ?>" onerror="this.onerror=null;this.src=this.dataset.defaultSrc">
+                                <span class="profile-avatar-fallback"><?= htmlspecialchars(profile_initials($displayName)) ?></span>
+                                <img id="profile-picture-preview" class="profile-picture-preview" src="<?= htmlspecialchars($profileImageUrl) ?>" alt="Current profile picture" <?= profile_image_storage()->exists($account['profile_image'] ?? null) ? '' : 'hidden' ?> onerror="this.hidden=true">
                             </div>
                             <div class="profile-picture-controls">
                                 <div class="profile-picture-copy">
                                     <h4>Profile picture</h4>
-                                    <p>Use a clear, recent image so other administrators can identify your account.</p>
+                                    <p>Optional. Without a picture, your name initials appear.</p>
                                 </div>
                                 <form method="POST" enctype="multipart/form-data" class="profile-picture-form">
                                     <?= csrf_field() ?>
@@ -226,7 +236,7 @@ $defaultProfileImageUrl = default_profile_image_url();
                                     </div>
                                     <small class="field-help">JPEG, PNG, GIF, or WebP. Maximum 2 MB.</small>
                                     <div class="profile-picture-actions">
-                                        <button class="btn btn-small" type="submit"><i class="bi bi-cloud-arrow-up"></i><?= !empty($account['profile_image']) ? 'Save replacement' : 'Upload picture' ?></button>
+                                        <button class="btn btn-small" type="submit"><i class="bi bi-cloud-arrow-up"></i>Save picture</button>
                                     </div>
                                 </form>
                                 <?php if (!empty($account['profile_image'])): ?>
@@ -329,6 +339,7 @@ $defaultProfileImageUrl = default_profile_image_url();
                 var reader = new FileReader();
                 reader.addEventListener('load', function(event) {
                     preview.src = event.target.result;
+                    preview.hidden = false;
                 });
                 reader.readAsDataURL(file);
                 if (filename) filename.textContent = file.name;

@@ -113,6 +113,9 @@
 }
 
 .profile-picture-frame {
+    position: relative;
+    display: grid;
+    place-items: center;
     width: 116px;
     aspect-ratio: 1;
     overflow: hidden;
@@ -123,12 +126,18 @@
 }
 
 .profile-picture-preview {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
     max-width: none;
     object-fit: cover;
     object-position: center 20%;
+}
+
+.profile-picture-preview[hidden] {
+    display: none;
 }
 
 .profile-picture-controls {

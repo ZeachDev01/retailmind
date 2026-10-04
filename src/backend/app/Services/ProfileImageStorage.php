@@ -22,15 +22,18 @@ final class ProfileImageStorage
 
     private $isUploadedFile;
     private $moveUploadedFile;
+    private $deleteFile;
 
     public function __construct(
         private string $directory,
         ?callable $isUploadedFile = null,
-        ?callable $moveUploadedFile = null
+        ?callable $moveUploadedFile = null,
+        ?callable $deleteFile = null
     ) {
         $this->directory = rtrim($directory, '/\\');
         $this->isUploadedFile = $isUploadedFile ?? static fn(string $path): bool => is_uploaded_file($path);
         $this->moveUploadedFile = $moveUploadedFile ?? static fn(string $source, string $destination): bool => move_uploaded_file($source, $destination);
+        $this->deleteFile = $deleteFile ?? static fn(string $path): bool => unlink($path);
     }
 
     public static function hasUpload(?array $file): bool
@@ -83,6 +86,7 @@ final class ProfileImageStorage
         } while (is_file($destination));
 
         if (!($this->moveUploadedFile)($temporaryPath, $destination)) {
+            $this->delete($filename);
             throw new RuntimeException('The profile picture could not be saved.');
         }
         @chmod($destination, 0640);
@@ -90,7 +94,7 @@ final class ProfileImageStorage
         return $filename;
     }
 
-    public function replace(array $file, ?string $currentFilename, callable $persist): string
+    public function replace(array $file, ?string $currentFilename, callable $persist, ?callable $complete = null): string
     {
         $filename = $this->store($file);
         if ($filename === null) {
@@ -98,23 +102,42 @@ final class ProfileImageStorage
         }
 
         try {
-            $persist($filename);
+            $this->persistAndDelete($currentFilename, static fn() => $persist($filename), $complete);
         } catch (Throwable $exception) {
             $this->delete($filename);
             throw $exception;
         }
 
-        if (!$this->delete($currentFilename)) {
-            error_log('Unable to delete a superseded profile image from managed storage.');
-        }
         return $filename;
     }
 
-    public function remove(?string $currentFilename, callable $persist): void
+    public function remove(?string $currentFilename, callable $persist, ?callable $complete = null): void
     {
-        $persist();
-        if (!$this->delete($currentFilename)) {
-            error_log('Unable to delete a removed profile image from managed storage.');
+        $this->persistAndDelete($currentFilename, $persist, $complete);
+    }
+
+    private function persistAndDelete(?string $currentFilename, callable $persist, ?callable $complete): void
+    {
+        $path = $this->pathFor($currentFilename);
+        // Keep only a transient copy until the database commit succeeds, never picture history.
+        $previousContents = $path !== null && is_file($path) ? file_get_contents($path) : null;
+        if ($previousContents === false) {
+            throw new RuntimeException('The current profile picture could not be read. Please try again.');
+        }
+        try {
+            $persist();
+            if (!$this->delete($currentFilename)) {
+                throw new RuntimeException('The previous profile picture could not be removed. Please try again.');
+            }
+            if ($complete !== null) $complete();
+        } catch (Throwable $exception) {
+            if ($previousContents !== null && !is_file($path)) {
+                if (file_put_contents($path, $previousContents) === false) {
+                    throw new RuntimeException('The previous profile picture could not be restored.', 0, $exception);
+                }
+                @chmod($path, 0640);
+            }
+            throw $exception;
         }
     }
 
@@ -165,7 +188,7 @@ final class ProfileImageStorage
         if ($path === null || !is_file($path)) {
             return true;
         }
-        return unlink($path);
+        return ($this->deleteFile)($path);
     }
 
     private function ensureDirectory(): void

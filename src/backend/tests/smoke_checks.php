@@ -210,10 +210,10 @@ $checks = [
         'file' => 'src/frontend/components/auth/preferences.php',
         'needles' => ['Preferences', 'preferences.css', 'notify_low_stock', 'notify_replenishment', 'notify_adjustment', 'notify_email', 'notify_inapp', 'low_stock_threshold', 'csrf_field()'],
     ],
-    'Administrator profile pictures are self-service only' => [
+    'Ordinary account profile pictures are self-service only' => [
         'file' => 'src/frontend/components/auth/user_info.php',
-        'needles' => ['replace_profile_image', 'remove_profile_image', 'RoleCapabilityPolicy::PLATFORM_GOVERNANCE', 'RoleCapabilityPolicy::STORE_OPERATIONS', "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp'],
-        'forbidden' => ['is_system_admin', "\$_POST['user_id']", "\$_GET['user_id']", "\$_REQUEST['user_id']"],
+        'needles' => ['replace_profile_image', 'remove_profile_image', "['cashier', 'inventory_manager', 'admin', 'super_admin']", "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp', 'Save picture', 'Optional.'],
+        'forbidden' => ['is_system_admin', "\$_REQUEST['user_id']"],
     ],
     'Admin User Info uses a dedicated responsive layout' => [
         'file' => 'src/frontend/components/auth/user_info.php',
