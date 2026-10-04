@@ -67,6 +67,8 @@ php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/profile_picture_self_service_test.php
 node src/backend/tests/profile_picture_crop_browser_test.js
 php src/backend/tests/profile_picture_management_test.php
+php src/backend/tests/profile_picture_authority_test.php
+node src/backend/tests/profile_picture_visibility_http_test.js
 php src/backend/tests/operator_alert_test.php
 php src/backend/tests/operator_alert_ui_contract.php
 node src/backend/tests/operator_alert_wrapper_behavior_test.js

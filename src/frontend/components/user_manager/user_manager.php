@@ -66,17 +66,6 @@ function role_names_for_ids(PDO $pdo, array $roleIds): array
     return $roles;
 }
 
-function can_manage_user(array $user): bool
-{
-    $roles = array_filter(explode(',', (string)($user['assigned_roles'] ?? $user['role_name'] ?? '')));
-    foreach ($roles as $role) {
-        if (!has_capability(RoleCapabilityPolicy::MANAGE_USERS, $role)) {
-            return false;
-        }
-    }
-    return $roles !== [];
-}
-
 $action = (string)($_POST['action'] ?? '');
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string)($_GET['action'] ?? '') === 'availability') {
     header('Content-Type: application/json; charset=UTF-8');
@@ -94,7 +83,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     profile_image_check_request_size();
     csrf_verify();
     try {
-        if ($action === 'create') {
+        if ($action === 'remove_profile_image') {
+            $userId = (int)($_POST['user_id'] ?? 0);
+            $lifecycle->removePicture($actorId, $actorRole, $userId, profile_image_storage());
+            if ($userId === $actorId) $_SESSION['profile_image'] = null;
+            $message = 'Profile picture removed. Initials are now shown.';
+            $messageClass = 'tag-success';
+        } elseif ($action === 'create') {
             $createFormSubmitted = true;
             $firstName = trim((string)($_POST['first_name'] ?? ''));
             $lastName = trim((string)($_POST['last_name'] ?? ''));
@@ -154,7 +149,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $newProfileImage = profile_image_storage()->store($_FILES['profile_image']);
                 $account['profile_image'] = $newProfileImage;
             } elseif (isset($_POST['remove_profile_image'])) {
-                $account['profile_image'] = null;
+                throw new InvalidArgumentException('Use Remove picture to remove the current picture separately.');
             }
             try {
                 $after = $lifecycle->update($actorId, $actorRole, $userId, $account);
@@ -190,7 +185,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $messageClass = 'tag-success';
         }
     } catch (PDOException $exception) {
-        $message = \App\Support\OperatorAlert::message($exception, 'Unable to save the account. Username or email may already exist. Tell your Administrator if this keeps happening.');
+        $message = \App\Support\OperatorAlert::message($exception, $action === 'remove_profile_image'
+            ? 'The profile picture could not be removed. Please try again. Tell your Administrator if this keeps happening.'
+            : 'Unable to save the account. Username or email may already exist. Tell your Administrator if this keeps happening.');
         $messageClass = 'tag-warning';
     } catch (Throwable $exception) {
         $message = \App\Support\OperatorAlert::message($exception, 'The account could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
@@ -249,14 +246,17 @@ $disabledCount = count($users) - $activeCount;
                     <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Password</th><th>Action</th></tr></thead>
                     <tbody>
                     <?php foreach ($users as $user):
-                        $canManage = can_manage_user($user);
+                        $pictureTarget = $user;
+                        $pictureTarget['roles'] = explode(',', (string)($user['assigned_roles'] ?? $user['role_name']));
+                        $canManage = !(bool)($_SESSION['is_recovery_account'] ?? false)
+                            && $lifecycle->canManageAccount($actorId, $actorRole, $pictureTarget);
                         $isSelf = (int)$user['user_id'] === $actorId;
                         $isSuper = $user['role_name'] === 'super_admin';
                         $hasImage = !empty($user['profile_image']) && profile_image_storage()->exists((string)$user['profile_image']);
                         $statusView = $dormancyStatusTab->view($user);
                     ?>
                         <tr>
-                            <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['full_name'], $user['profile_image'] ?? null, 'user-avatar') ?><strong><?= htmlspecialchars(display_person_name((string)$user['full_name'])) ?></strong></div></td>
+                            <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['full_name'], $lifecycle->canViewPicture($actorId, $actorRole, $pictureTarget) ? ($user['profile_image'] ?? null) : null, 'user-avatar') ?><strong><?= htmlspecialchars(display_person_name((string)$user['full_name'])) ?></strong></div></td>
                             <td><?= htmlspecialchars((string)($user['email'] ?: $user['username'])) ?></td>
                             <td><?= htmlspecialchars(implode(', ', array_map('display_label', array_filter(explode(',', (string)($user['assigned_roles'] ?? $user['role_name'])))))) ?></td>
                             <td><?= htmlspecialchars(display_label((string)$user['status'])) ?></td>
@@ -339,7 +339,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('drawerStatusButton').disabled = isSelf || isSuper;
         document.getElementById('drawerRevokeButton').disabled = isSelf || isSuper;
         const remove = document.getElementById('drawerRemoveProfileImage');
-        remove.checked = false; remove.disabled = button.dataset.hasProfileImage !== '1';
+        remove.disabled = button.dataset.hasProfileImage !== '1';
         selectDrawerTab('user');
         setOpen(drawerOverlay, true);
     }));

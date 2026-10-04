@@ -16,7 +16,8 @@ if (($argv[1] ?? '') === 'request') {
     file_put_contents($directory . '/' . $old, $gif);
     $uploadPath = tempnam(sys_get_temp_dir(), 'rm-management-upload-');
     file_put_contents($uploadPath, $scenario === 'gif' ? $gif : '<?php echo "spoofed"; ?>');
-    $storage = new ProfileImageStorage($directory, 'is_file', 'copy');
+    $storage = new ProfileImageStorage($directory, 'is_file', 'copy',
+        static fn(string $path): bool => $GLOBALS['scenario'] === 'remove-delete-error' ? false : unlink($path));
     function profile_image_storage(): ProfileImageStorage { return $GLOBALS['storage']; }
     function store_scope_id(PDO $pdo): int { return 1; }
     function role_capability_policy(): App\Authorization\RoleCapabilityPolicy { return new App\Authorization\RoleCapabilityPolicy(); }
@@ -33,6 +34,11 @@ if (($argv[1] ?? '') === 'request') {
             password_hash TEXT, status TEXT, disabled_at TEXT, session_version INTEGER,
             must_change_password INTEGER, is_recovery_account INTEGER, role_id INTEGER, branch_id INTEGER)");
     $pdo->prepare("INSERT INTO users VALUES (2, 'Saved Person', 'saved', 'saved@example.test', ?, 'hash', 'active', NULL, 1, 0, 0, 4, 1)")->execute([$old]);
+    $pdo->exec("INSERT INTO roles VALUES (1, 'admin'), (2, 'super_admin');
+        CREATE TABLE activity_log (user_id INTEGER, action TEXT, category TEXT, module TEXT, record_id INTEGER,
+            previous_value TEXT, new_value TEXT, ip_address TEXT)");
+    $pdo->prepare("INSERT INTO users VALUES (1, 'Actor', 'actor', NULL, NULL, 'hash', 'active', NULL, 1, 0, 0, ?, 1)")
+        ->execute([$role === 'super_admin' ? 2 : 1]);
     $before = $pdo->query('SELECT * FROM users')->fetchAll(PDO::FETCH_ASSOC);
     $_SESSION = ['user_id' => 1, 'role' => $role, 'csrf_token' => 'valid-token'];
     $_SERVER['REQUEST_METHOD'] = 'POST';
@@ -45,6 +51,10 @@ if (($argv[1] ?? '') === 'request') {
         'error' => UPLOAD_ERR_OK, 'name' => 'avatar.png', 'type' => 'image/png']];
     if ($scenario === 'oversized') $_FILES['profile_image']['size'] = 5 * 1024 * 1024 + 1;
     if ($scenario === 'php-limit') $_FILES['profile_image']['error'] = UPLOAD_ERR_INI_SIZE;
+    if (str_starts_with($scenario, 'remove-')) {
+        $_POST['action'] = 'remove_profile_image'; $_FILES = [];
+        if ($scenario === 'remove-persistence-error') $pdo->exec("CREATE TRIGGER reject_picture BEFORE UPDATE OF profile_image ON users BEGIN SELECT RAISE(ABORT, 'Write failed'); END");
+    }
     if ($scenario === 'request-too-large') {
         $_POST = []; $_FILES = [];
         $_SERVER['CONTENT_LENGTH'] = 1024 * 1024 * 1024;
@@ -55,6 +65,9 @@ if (($argv[1] ?? '') === 'request') {
         $result = ['status' => http_response_code() ?: 200, 'message' => $GLOBALS['message'] ?? $output,
             'unchanged' => $pdo->query('SELECT * FROM users')->fetchAll(PDO::FETCH_ASSOC) === $before,
             'old_exists' => is_file($directory . '/' . $old), 'files' => count(glob($directory . '/*'))];
+        $expected = $before;
+        $expected[0]['profile_image'] = null;
+        $result['picture_only'] = $pdo->query('SELECT * FROM users')->fetchAll(PDO::FETCH_ASSOC) === $expected;
         if ($output !== '') $result['message'] = $output;
         foreach (glob($directory . '/*') as $file) unlink($file);
         rmdir($directory);
@@ -81,6 +94,19 @@ foreach (['admin', 'super_admin'] as $role) {
                 || !str_contains($result['message'], in_array($scenario, ['oversized', 'php-limit', 'request-too-large'], true) ? '5 MB' : 'JPG')) {
                 throw new RuntimeException("{$role} {$action} {$scenario}: validation must explain failure, preserve account and picture, and leave no staged files: {$output} {$errors}");
             }
+        }
+    }
+}
+foreach (['admin', 'super_admin'] as $role) {
+    foreach (['remove-valid', 'remove-delete-error', 'remove-persistence-error'] as $scenario) {
+        $process = proc_open([PHP_BINARY, __FILE__, 'request', $role, 'remove_profile_image', $scenario], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $output = stream_get_contents($pipes[1]); $errors = stream_get_contents($pipes[2]);
+        fclose($pipes[1]); fclose($pipes[2]); $code = proc_close($process);
+        $result = json_decode($output, true);
+        $success = $scenario === 'remove-valid';
+        if ($code !== 0 || !is_array($result) || ($success ? !$result['picture_only'] || $result['old_exists'] : !$result['unchanged'] || !$result['old_exists'])
+            || !str_contains($result['message'], $success ? 'Initials' : 'could not')) {
+            throw new RuntimeException("{$role} {$scenario}: dedicated removal must preserve unrelated submitted edits and handle failures: {$output} {$errors}");
         }
     }
 }

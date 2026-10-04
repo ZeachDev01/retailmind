@@ -21,7 +21,7 @@ final class UserLifecycleService
         $this->notifier = $notifier ?? new UserAccountNotifier();
     }
 
-    public function get(int $userId): array
+    public function get(int $userId, bool $lock = false): array
     {
         $statement = $this->pdo->prepare(
             'SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash,
@@ -29,7 +29,7 @@ final class UserLifecycleService
                     u.role_id, u.branch_id, r.role_name
              FROM users u
              JOIN roles r ON r.role_id = u.role_id
-             WHERE u.user_id = ?'
+             WHERE u.user_id = ?' . ($lock && $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '')
         );
         $statement->execute([$userId]);
         $user = $statement->fetch(PDO::FETCH_ASSOC);
@@ -258,19 +258,60 @@ final class UserLifecycleService
         return $roles;
     }
 
+    public function canManageAccount(int $actorId, string $actorRole, array $target): bool
+    {
+        try {
+            $this->requireManageable($actorId, $actorRole, $target, true);
+            return true;
+        } catch (DomainException) {
+            return false;
+        }
+    }
+
+    public function canViewPicture(int $actorId, string $actorRole, array $target): bool
+    {
+        return !(bool)($target['is_recovery_account'] ?? false)
+            && ($actorId === (int)$target['user_id'] || $this->canManageAccount($actorId, $actorRole, $target));
+    }
+
+    public function removePicture(int $actorId, string $actorRole, int $userId, ProfileImageStorage $storage): array
+    {
+        // Own the commit so storage can restore the old bytes if the commit fails.
+        if ($this->pdo->inTransaction()) {
+            throw new DomainException('Finish the current account change before removing its picture.');
+        }
+        $this->pdo->beginTransaction();
+        try {
+            if ((bool)$this->get($actorId)['is_recovery_account']) {
+                throw new DomainException('Recovery Account picture management is unavailable.');
+            }
+            $before = $this->get($userId, true);
+            $this->requireManageable($actorId, $actorRole, $before, true);
+            $storage->remove($before['profile_image'], function () use ($actorId, $actorRole, $userId, $before): void {
+                $this->pdo->prepare('UPDATE users SET profile_image = NULL WHERE user_id = ?')->execute([$userId]);
+                $this->audit($actorId, $actorRole, 'User profile picture removal', $userId,
+                    $this->auditSnapshot($before), $this->auditSnapshot($this->get($userId)));
+            }, fn() => $this->pdo->commit());
+            return $this->get($userId);
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $exception;
+        }
+    }
+
     private function requireManageable(int $actorId, string $actorRole, array $target, bool $allowProtectedSelf): void
     {
         if ((bool)($target['is_recovery_account'] ?? false)) {
             throw new DomainException('The Recovery Account can be managed only through the offline recovery procedure.');
         }
-        $targetRoles = array_values(array_unique(array_map('strval', $target['roles'] ?? [$target['role_name']])));
+        $targetRoles = array_values(array_unique(array_merge([$target['role_name']], array_map('strval', $target['roles'] ?? []))));
         foreach ($targetRoles as $targetRole) {
             if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_USERS, $targetRole)) {
                 throw new DomainException('Your account cannot manage this privileged user.');
             }
         }
         $targetRole = (string)$target['role_name'];
-        if ($targetRole === 'super_admin' && (!$allowProtectedSelf || $actorId !== (int)$target['user_id'])) {
+        if (in_array('super_admin', $targetRoles, true) && (!$allowProtectedSelf || $actorId !== (int)$target['user_id'])) {
             throw new DomainException('The Super Administrator account is protected.');
         }
         if (!$allowProtectedSelf && $actorId === (int)$target['user_id']) {

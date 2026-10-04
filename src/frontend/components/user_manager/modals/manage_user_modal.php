@@ -27,7 +27,7 @@
                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= \App\Services\ProfileImageStorage::MAX_FILE_SIZE ?>">
                         <input type="file" id="drawerProfileImage" name="profile_image" accept="<?= \App\Services\ProfileImageStorage::ACCEPT ?>">
                         <small class="field-help"><?= \App\Services\ProfileImageStorage::HELP ?></small>
-                        <label class="profile-image-remove"><input type="checkbox" name="remove_profile_image" value="1" id="drawerRemoveProfileImage"> Remove current picture</label>
+                        <button type="submit" name="action" value="remove_profile_image" id="drawerRemoveProfileImage" class="btn btn-secondary" formnovalidate>Remove picture</button>
                     </div>
                     <div class="form-group">
                         <label>Role access</label>

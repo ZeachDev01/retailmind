@@ -11,6 +11,7 @@
 !/src/backend/storage/sessions/.gitkeep
 /src/backend/storage/profile-images/*
 !/src/backend/storage/profile-images/.gitkeep
+!/src/backend/storage/profile-images/.htaccess
 /src/backend/sql/backup_schema.sql
 /backend/storage/imports/*
 !/backend/storage/imports/.gitkeep
