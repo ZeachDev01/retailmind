@@ -362,13 +362,13 @@ unset($_SESSION['_login_username']);
                 password: password ? password.value : ''
             };
 
-            if (hasLoginError && password && window.sessionStorage) {
+            if (hasLoginError && password) {
                 try {
                     password.value = window.sessionStorage.getItem(passwordStateKey) || '';
                     window.sessionStorage.removeItem(passwordStateKey);
                 } catch (error) {}
                 loginFormState.password = password.value;
-            } else if (window.sessionStorage) {
+            } else {
                 try {
                     window.sessionStorage.removeItem(passwordStateKey);
                 } catch (error) {}

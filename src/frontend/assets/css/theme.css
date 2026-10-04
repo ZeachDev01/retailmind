@@ -3,6 +3,9 @@
 .theme-control select { width:auto; min-width:5.6rem; min-height:36px; margin:0; padding:.3rem .5rem; border:1px solid var(--border,#cbd5e1); border-radius:6px; background:var(--card-bg,#fff); color:var(--text,#1f2937); font:inherit; }
 .theme-control select:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
 .theme-topbar { display:flex; justify-content:flex-end; padding:.5rem 1rem; background:var(--card-bg,#fff); color:var(--text,#1f2937); }
+.landing-modal-open .theme-topbar { display:none; }
+.landing-login-modal__body>.theme-control { margin-bottom:1rem; }
+.landing-login-modal__shell[aria-hidden="true"] .theme-control { visibility:hidden; }
 .theme-save-alert { position:fixed; bottom:1rem; right:1rem; z-index:11000; max-width:min(28rem,calc(100vw - 2rem)); padding:1rem; border:1px solid #b45309; border-radius:8px; background:#fff7ed; color:#78350f; }
 .theme-save-alert[hidden] { display:none; }
 @media(max-width:768px) { .theme-control>span { display:none; } .theme-control select { min-height:44px; } .admin-mobile-topbar .theme-control { margin-left:auto; } }

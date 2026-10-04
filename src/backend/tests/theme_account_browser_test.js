@@ -34,6 +34,7 @@ const fixture = action => {
         const context = await browser.newContext({baseURL:origin,colorScheme:'dark'});
         const page = await context.newPage();
         const control = () => page.getByRole('combobox',{name:'Display theme'}).filter({visible:true});
+        const savedModes = {admin:'dark',super_admin:'light',inventory_manager:'system',cashier:'dark'};
         const contrast = async locator => {
             const ratio = await locator.first().evaluate(el => {
                 const rgb = value => value.match(/[\d.]+/g).slice(0,3).map(Number);
@@ -58,13 +59,29 @@ const fixture = action => {
             const response = page.waitForResponse(r=>r.url().endsWith('/auth/theme.php') && r.request().method()==='POST' && new URLSearchParams(r.request().postData()).get('mode') === mode);
             await control().selectOption(mode); assert.equal((await response).status(),200);
         };
+        const gateControl = async () => {
+            for (const width of [320,390,1280]) {
+                await page.setViewportSize({width,height:900});
+                const bounds=await control().boundingBox();
+                assert(bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=width,'Gate theme control fits');
+                assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Gate theme control unobscured');
+                await control().focus();
+                assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Gate theme focus visible');
+                await contrast(control());
+            }
+            assert.equal((await context.request.post('/components/auth/theme.php',{form:{mode:'dark',csrf_token:'bad'}})).status(),403,'Gate rejects invalid CSRF');
+        };
         await page.goto('/?login=1'); await control().selectOption('light');
         for (const role of ['admin','super_admin','inventory_manager','cashier']) {
             console.log('Theme browser role: '+role);
             await login(role);
             assert.equal(await control().inputValue(),'system',role + ' default');
             await select('dark'); await page.reload(); assert.equal(await control().inputValue(),'dark');
-            if (role === 'cashier') await page.waitForFunction(()=>document.activeElement.id === 'sku-input');
+            if (role === 'cashier') {
+                // POS has native autofocus plus a delayed startup focus at 100 ms.
+                await page.waitForFunction(()=>document.activeElement.id === 'sku-input');
+                await page.waitForTimeout(150);
+            }
             await control().focus(); await page.keyboard.press('Home');
             await page.waitForFunction(()=>document.querySelector('[data-theme-select]').value === 'light');
             assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Visible keyboard focus');
@@ -124,6 +141,14 @@ const fixture = action => {
             await page.goto('/components/auth/user_info.php');
             const editable = page.locator('input[type="text"]').first();
             if(await editable.count()) { await editable.fill('Unsubmitted theme test'); await select('light'); assert.equal(await editable.inputValue(),'Unsubmitted theme test'); await select('dark'); }
+            if (role === 'admin') {
+                await page.goto('/components/auth/preferences.php');
+                await page.locator('#low_stock_threshold').fill('17');
+                await select('light'); assert.equal(await page.locator('#low_stock_threshold').inputValue(),'17'); await select('dark');
+                await page.goto('/components/auth/change_password.php');
+                await page.locator('#new_password').fill('Unsubmitted@2026');
+                await select('light'); assert.equal(await page.locator('#new_password').inputValue(),'Unsubmitted@2026'); await select('dark');
+            }
             if(role === 'cashier') {
                 await page.goto('/components/cashier/dashboard.php'); await contrast(page.locator('.stock-level-pill'));
                 await page.goto('/components/cashier/pos.php');
@@ -181,25 +206,52 @@ const fixture = action => {
             await page.getByRole('alert').filter({hasText:'display theme was not saved'}).waitFor();
             await page.unroute('**/auth/theme.php');
             await select('dark');
+            await select(savedModes[role]);
             await page.goto('/components/auth/logout.php');
             assert.equal(await control().inputValue(),'light','Separate login preference restored');
         }
         const fresh = await browser.newContext({baseURL:origin});
         const other = await fresh.newPage();
-        await other.goto('/?login=1');
-        await other.locator('#landing-login-username').fill('theme_admin'); await other.locator('#landing-login-password').fill(data.password);
-        await Promise.all([other.waitForNavigation({waitUntil:'domcontentloaded'}),other.locator('#landing-login-password').press('Enter')]);
-        await other.goto('/');
-        assert.equal(await other.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).inputValue(),'dark','Fresh browser restores account');
+        for (const role of ['admin','super_admin','inventory_manager','cashier']) {
+            await other.goto('/?login=1');
+            assert.equal(await other.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).inputValue(),'system','Fresh browser has no local login preference');
+            await other.locator('#landing-login-username').fill('theme_'+role); await other.locator('#landing-login-password').fill(data.password);
+            await Promise.all([other.waitForNavigation({waitUntil:'domcontentloaded'}),other.locator('#landing-login-password').press('Enter')]);
+            await other.goto('/');
+            assert.equal(await other.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).inputValue(),savedModes[role],'Fresh browser restores '+role+' account');
+            await other.goto('/components/auth/logout.php');
+        }
+        const blocked = await browser.newContext({baseURL:origin,colorScheme:'dark'});
+        await blocked.addInitScript(()=>{
+            for (const storage of ['localStorage','sessionStorage']) Object.defineProperty(window,storage,{get(){throw new DOMException('blocked','SecurityError');}});
+        });
+        const privatePage=await blocked.newPage();
+        await privatePage.goto('/?login=1');
+        await privatePage.getByRole('combobox',{name:'Display theme'}).selectOption('light');
+        await privatePage.locator('#landing-login-username').fill('theme_inventory_manager');
+        await privatePage.locator('#landing-login-password').fill(data.password);
+        await Promise.all([privatePage.waitForNavigation({waitUntil:'domcontentloaded'}),privatePage.locator('#landing-login-password').press('Enter')]);
+        await privatePage.goto('/');
+        const privateControl=privatePage.getByRole('combobox',{name:'Display theme'}).filter({visible:true});
+        assert.equal(await privateControl.inputValue(),'system','Blocked storage sign-in restores account');
+        assert.equal(await privatePage.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(11, 18, 32)','Blocked storage System follows device');
+        const privateSave=privatePage.waitForResponse(r=>r.url().endsWith('/auth/theme.php') && r.request().method()==='POST');
+        await privateControl.selectOption('light'); assert.equal((await privateSave).status(),200);
+        await privatePage.reload(); assert.equal(await privateControl.inputValue(),'light','Blocked storage account change survives reload');
+        await privatePage.goto('/components/auth/logout.php');
+        assert.equal(await privateControl.inputValue(),'system','Blocked storage logout restores System');
         assert.equal((await context.request.post('/components/auth/theme.php',{form:{mode:'dark'}})).status(),401);
         fixture('gates');
         await login('admin');
         await page.waitForURL('**/change_password.php');
+        await gateControl();
         await page.locator('#new_password').fill('Unsubmitted@2026'); await select('light');
         assert.equal(await page.locator('#new_password').inputValue(),'Unsubmitted@2026');
         await page.goto('/components/administrator/dashboard.php'); await page.waitForURL('**/change_password.php');
+        assert.equal(JSON.parse(fixture('state')).users[0].must_change_password,1,'Appearance cannot complete password gate');
         await page.goto('/components/auth/logout.php');
         await login('cashier'); await page.getByRole('heading',{name:'Register locked'}).waitFor();
+        await gateControl();
         await page.locator('#pos-unlock-password').fill('not-submitted'); await select('light');
         assert.equal(await page.locator('#pos-unlock-password').inputValue(),'not-submitted');
         await page.reload(); await page.getByRole('heading',{name:'Register locked'}).waitFor();
