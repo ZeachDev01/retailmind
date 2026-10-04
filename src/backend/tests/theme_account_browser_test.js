@@ -64,6 +64,7 @@ const fixture = action => {
             await login(role);
             assert.equal(await control().inputValue(),'system',role + ' default');
             await select('dark'); await page.reload(); assert.equal(await control().inputValue(),'dark');
+            if (role === 'cashier') await page.waitForFunction(()=>document.activeElement.id === 'sku-input');
             await control().focus(); await page.keyboard.press('Home');
             await page.waitForFunction(()=>document.querySelector('[data-theme-select]').value === 'light');
             assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Visible keyboard focus');
@@ -84,13 +85,25 @@ const fixture = action => {
                 assert.equal(saved.find(user=>user.user_id === ['admin','super_admin','inventory_manager','cashier'].indexOf(role)+1).theme_preference,'light');
                 await page.reload(); await select('dark');
             }
+            for (const width of [320,360,390,800]) {
+                await page.setViewportSize({width,height:844});
+                assert(await control().isVisible());
+                const bounds = await control().boundingBox();
+                assert(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= width && bounds.y + bounds.height <= 844,'Mobile control stays inside viewport at '+width+'px');
+                assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2) === el;}),'Mobile control remains unobscured at '+width+'px');
+            }
             await page.setViewportSize({width:390,height:844});
-            assert(await control().isVisible());
+            await control().focus();
+            assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Mobile keyboard focus remains visible');
             assert(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth));
             fs.mkdirSync(screenshotOutput,{recursive:true});
             await page.screenshot({path:path.join(screenshotOutput,role+'-mobile.png'),fullPage:true});
             await select('system'); await page.emulateMedia({colorScheme:'light'});
             await page.waitForFunction(()=>getComputedStyle(document.body).backgroundColor !== 'rgb(11, 18, 32)');
+            await page.emulateMedia({colorScheme:'dark'});
+            await page.waitForFunction(()=>getComputedStyle(document.body).backgroundColor === 'rgb(11, 18, 32)');
+            await select('light');
+            assert.notEqual(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(11, 18, 32)','Explicit Light overrides dark device');
             await select('dark');
             await page.emulateMedia({colorScheme:'light'});
             assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(11, 18, 32)');

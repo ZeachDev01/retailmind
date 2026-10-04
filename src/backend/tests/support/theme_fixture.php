@@ -31,11 +31,6 @@ $rolesMigration['up']($pdo);
 $backupMigration = require __DIR__ . '/../../database/migrations/202609260001_shared_database_backups.php';
 $backupMigration['up']($pdo);
 $fresh = $pdo->query("SHOW COLUMNS FROM users LIKE 'theme_preference'")->fetch(PDO::FETCH_ASSOC);
-$pdo->exec('ALTER TABLE users DROP COLUMN theme_preference');
-$migration = require __DIR__ . '/../../database/migrations/202610040001_user_theme.php';
-$migration['up']($pdo); $migration['up']($pdo);
-$upgraded = $pdo->query("SHOW COLUMNS FROM users LIKE 'theme_preference'")->fetch(PDO::FETCH_ASSOC);
-if ($fresh !== $upgraded) throw new RuntimeException('Fresh/upgrade appearance storage differs.');
 $pdo->exec("INSERT INTO branches (branch_id,branch_name,branch_code) VALUES (1,'Theme Test Store','THEME')");
 $password = 'ThemeTest@2026';
 $roles = ['admin','super_admin','inventory_manager','cashier'];
@@ -44,7 +39,18 @@ foreach ($roles as $index => $role) {
     $pdo->prepare('INSERT INTO roles (role_id,role_name) VALUES (?,?)')->execute([$id,$role]);
     $pdo->prepare('INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id,must_change_password) VALUES (?,?,?,?,?,1,0)')
         ->execute([$id,'Theme Test ' . $role,'theme_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
+    if ($pdo->query('SELECT theme_preference FROM users WHERE user_id=' . $id)->fetchColumn() !== 'system') {
+        throw new RuntimeException('Fresh accounts must default to System.');
+    }
     $pdo->prepare('INSERT INTO user_roles (user_id,role_id,is_primary) VALUES (?,?,1)')->execute([$id,$id]);
+}
+$pdo->exec('ALTER TABLE users DROP COLUMN theme_preference');
+$migration = require __DIR__ . '/../../database/migrations/202610040001_user_theme.php';
+$migration['up']($pdo); $migration['up']($pdo);
+$upgraded = $pdo->query("SHOW COLUMNS FROM users LIKE 'theme_preference'")->fetch(PDO::FETCH_ASSOC);
+if ($fresh !== $upgraded) throw new RuntimeException('Fresh/upgrade appearance storage differs.');
+if ((int)$pdo->query("SELECT COUNT(*) FROM users WHERE theme_preference='system'")->fetchColumn() !== count($roles)) {
+    throw new RuntimeException('Existing accounts must default to System after upgrade.');
 }
 $pdo->exec("INSERT INTO registers (register_id,name) VALUES (1,'Theme Register')");
 $pdo->exec('INSERT INTO cashier_shifts (shift_id,cashier_id,register_id,opening_cash) VALUES (1,4,1,100)');
