@@ -65,7 +65,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = $pdo->prepare('UPDATE users SET profile_image = ? WHERE user_id = ?');
                         $stmt->execute([$filename, (int)$_SESSION['user_id']]);
                     },
-                    static fn() => $pdo->commit()
+                    static fn() => $pdo->commit(),
+                    is_array($_POST['crop'] ?? null) ? $_POST['crop'] : []
                 );
                 $message = $currentFilename !== '' ? 'Profile picture replaced.' : 'Profile picture uploaded.';
             } else {
@@ -226,7 +227,8 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
                                     <h4>Profile picture</h4>
                                     <p>Optional. Without a picture, your name initials appear.</p>
                                 </div>
-                                <form method="POST" enctype="multipart/form-data" class="profile-picture-form">
+                                <form method="POST" enctype="multipart/form-data" class="profile-picture-form" id="profile-picture-form"
+                                      data-max-bytes="<?= ProfileImageStorage::MAX_BYTES ?>" data-max-dimension="<?= ProfileImageStorage::MAX_DIMENSION ?>" data-max-pixels="<?= ProfileImageStorage::MAX_PIXELS ?>">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="replace_profile_image">
                                     <div class="profile-picture-picker">
@@ -236,8 +238,23 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
                                         <span class="profile-picture-filename" id="profile-picture-filename">No file selected</span>
                                     </div>
                                     <small class="field-help"><?= ProfileImageStorage::HELP ?></small>
+                                    <p id="profile-crop-error" class="field-help" role="alert"></p>
+                                    <fieldset id="profile-crop-editor" hidden>
+                                        <legend>Adjust square crop</legend>
+                                        <canvas id="profile-crop-preview" width="256" height="256" role="img" aria-label="Selected square picture crop"></canvas>
+                                        <label for="profile-crop-zoom">Zoom</label>
+                                        <input id="profile-crop-zoom" type="range" min="1" max="10" step="0.1" value="1">
+                                        <label for="profile-crop-horizontal">Horizontal position</label>
+                                        <input id="profile-crop-horizontal" type="range" min="0" max="100" value="50">
+                                        <label for="profile-crop-vertical">Vertical position</label>
+                                        <input id="profile-crop-vertical" type="range" min="0" max="100" value="50">
+                                        <input id="profile-crop-x" type="hidden" name="crop[x]">
+                                        <input id="profile-crop-y" type="hidden" name="crop[y]">
+                                        <input id="profile-crop-size" type="hidden" name="crop[size]">
+                                    </fieldset>
                                     <div class="profile-picture-actions">
-                                        <button class="btn btn-small" type="submit"><i class="bi bi-cloud-arrow-up"></i>Save picture</button>
+                                        <button id="profile-picture-save" class="btn btn-small" type="submit" disabled><i class="bi bi-cloud-arrow-up"></i>Save picture</button>
+                                        <button id="profile-picture-cancel" class="btn btn-quiet btn-small" type="button" hidden>Cancel</button>
                                     </div>
                                 </form>
                                 <?php if (!empty($account['profile_image'])): ?>
@@ -317,36 +334,7 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
             </div>
         </main>
     </div>
-    <script>
-        (function() {
-            var input = document.getElementById('profile_image');
-            var preview = document.getElementById('profile-picture-preview');
-            var filename = document.getElementById('profile-picture-filename');
-            if (!input || !preview) return;
-
-            input.addEventListener('change', function() {
-                var file = input.files && input.files[0];
-                if (!file) return;
-                var allowedTypes = <?= json_encode(explode(',', ProfileImageStorage::ACCEPT)) ?>;
-                if (allowedTypes.indexOf(file.type) === -1 || file.size > <?= ProfileImageStorage::MAX_FILE_SIZE ?>) {
-                    input.value = '';
-                    if (filename) filename.textContent = 'No file selected';
-                    if (window.RetailMindUI) {
-                        RetailMindUI.toast(<?= json_encode(ProfileImageStorage::HELP) ?>, 'warning');
-                    }
-                    return;
-                }
-
-                var reader = new FileReader();
-                reader.addEventListener('load', function(event) {
-                    preview.src = event.target.result;
-                    preview.hidden = false;
-                });
-                reader.readAsDataURL(file);
-                if (filename) filename.textContent = file.name;
-            });
-        })();
-    </script>
+    <script src="<?= htmlspecialchars(app_url('assets/js/profile-picture-crop.js')) ?>"></script>
 </body>
 
 </html>

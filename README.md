@@ -55,6 +55,14 @@ viewable. Images must decode successfully and stay within 8,000 pixels per side
 and 40 million pixels total. Uploads are validated before any picture or account
 change; no client crop replaces the original-file validation.
 
+Profile picture selection opens a square preview. Adjust Zoom, Horizontal
+position, and Vertical position, then Save picture or Cancel. Only Save uploads
+the original and crop coordinates; the server validates both and saves the
+selected area as a 512 × 512 still PNG. Cancel leaves the saved picture unchanged.
+Run `node src/backend/tests/profile_picture_crop_browser_test.js` to verify the
+HTTP upload/crop flow with Chromium and an isolated temporary SQLite database;
+this test never connects to the Store database. PHP needs PDO SQLite for it.
+
 PHP requires Fileinfo and GD with JPEG, PNG, and WebP support. The release ships
 `.user.ini` for CGI/FastCGI and `.htaccess` settings for Apache mod_php:
 `upload_max_filesize=5M`, `post_max_size=8M`, and `memory_limit=256M`. Hosts with

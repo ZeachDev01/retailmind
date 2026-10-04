@@ -43,7 +43,7 @@ final class ProfileImageStorage
         return is_array($file) && (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
     }
 
-    public function store(?array $file): ?string
+    public function store(?array $file, ?array $crop = null): ?string
     {
         if (!self::hasUpload($file)) {
             return null;
@@ -90,7 +90,28 @@ final class ProfileImageStorage
             throw new InvalidArgumentException('The profile picture dimensions are too large.');
         }
 
-        $this->validateStillImage($temporaryPath, $mime);
+        $image = $this->validateStillImage($temporaryPath, $mime);
+        if ($crop !== null) {
+            foreach (['x', 'y', 'size'] as $key) {
+                if (!isset($crop[$key]) || !is_scalar($crop[$key])
+                    || filter_var($crop[$key], FILTER_VALIDATE_INT) === false) {
+                    throw new InvalidArgumentException('Choose a square crop before saving your picture.');
+                }
+            }
+            $x = (int)$crop['x']; $y = (int)$crop['y']; $size = (int)$crop['size'];
+            if ($x < 0 || $y < 0 || $size < 1 || $size > min($width, $height)
+                || $x > $width - $size || $y > $height - $size) {
+                throw new InvalidArgumentException('The picture crop is outside the image. Choose the image again and adjust its crop.');
+            }
+            $output = imagecreatetruecolor(512, 512);
+            if ($output === false) throw new RuntimeException('The picture crop could not be processed. Please try again.');
+            imagealphablending($output, false);
+            imagesavealpha($output, true);
+            if (!imagecopyresampled($output, $image, 0, 0, $x, $y, 512, 512, $size, $size)) {
+                throw new RuntimeException('The picture crop could not be processed. Please try again.');
+            }
+            $mime = 'image/png';
+        }
         $this->ensureDirectory();
         $extension = self::MIME_EXTENSIONS[$mime];
         do {
@@ -98,7 +119,7 @@ final class ProfileImageStorage
             $destination = $this->directory . DIRECTORY_SEPARATOR . $filename;
         } while (is_file($destination));
 
-        if (!($this->moveUploadedFile)($temporaryPath, $destination)) {
+        if (!($crop !== null ? @imagepng($output, $destination) : ($this->moveUploadedFile)($temporaryPath, $destination))) {
             $this->delete($filename);
             throw new RuntimeException('The profile picture could not be saved.');
         }
@@ -107,9 +128,9 @@ final class ProfileImageStorage
         return $filename;
     }
 
-    public function replace(array $file, ?string $currentFilename, callable $persist, ?callable $complete = null): string
+    public function replace(array $file, ?string $currentFilename, callable $persist, ?callable $complete = null, ?array $crop = null): string
     {
-        $filename = $this->store($file);
+        $filename = $this->store($file, $crop);
         if ($filename === null) {
             throw new InvalidArgumentException('Select a valid image to upload.');
         }
@@ -214,7 +235,7 @@ final class ProfileImageStorage
         }
     }
 
-    private function validateStillImage(string $path, string $mime): void
+    private function validateStillImage(string $path, string $mime): \GdImage
     {
         $contents = file_get_contents($path);
         if ($contents === false) {
@@ -260,6 +281,7 @@ final class ProfileImageStorage
             restore_error_handler();
         }
         if ($image === false || $decodeWarning) throw new InvalidArgumentException($invalid);
+        return $image;
     }
 
     private function detectSupportedMime(string $path): string

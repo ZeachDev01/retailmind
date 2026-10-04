@@ -218,6 +218,10 @@
     flex: 0 0 auto;
 }
 
+.profile-picture-actions [hidden] {
+    display: none;
+}
+
 .profile-picture-remove-form {
     padding: 0;
 }
@@ -293,6 +297,31 @@
 
 .account-status-value.is-active {
     color: #15803d;
+}
+
+#profile-crop-editor {
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0.75rem;
+}
+
+#profile-crop-preview {
+    display: block;
+    width: min(100%, 256px);
+    height: auto;
+    margin-bottom: 0.75rem;
+    border: 1px solid #64748b;
+}
+
+#profile-crop-editor label,
+#profile-crop-editor input[type="range"] {
+    display: block;
+    width: 100%;
+}
+
+#profile-crop-editor input[type="range"] {
+    min-height: 44px;
 }
 
 .account-status-value.is-inactive {

@@ -60,7 +60,7 @@ if (($argv[1] ?? '') === 'request') {
     if ($scenario === 'anonymous') unset($_SESSION['user_id']);
     $_SERVER['SCRIPT_NAME'] = '/components/auth/user_info.php';
     $_SERVER['REQUEST_METHOD'] = in_array($scenario, ['optional', 'missing'], true) ? 'GET' : 'POST';
-    $_POST = ['action' => in_array($scenario, ['remove', 'remove-delete-error', 'remove-commit-error'], true) ? 'remove_profile_image' : 'replace_profile_image', 'csrf_token' => 'valid-token'];
+    $_POST = ['action' => in_array($scenario, ['remove', 'remove-delete-error', 'remove-commit-error'], true) ? 'remove_profile_image' : 'replace_profile_image', 'csrf_token' => 'valid-token', 'crop' => ['x' => 0, 'y' => 0, 'size' => 1]];
     $_GET = [];
     if ($scenario === 'target') $_POST['user_id'] = 2;
     if ($scenario === 'query-target') $_GET['user_id'] = 2;
