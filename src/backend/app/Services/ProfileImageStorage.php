@@ -8,10 +8,12 @@ use Throwable;
 
 final class ProfileImageStorage
 {
-    public const MAX_BYTES = 2 * 1024 * 1024;
+    public const MAX_BYTES = 5 * 1024 * 1024;
     public const MAX_FILE_SIZE = self::MAX_BYTES;
     public const MAX_DIMENSION = 8000;
     public const MAX_PIXELS = 40000000;
+    public const ACCEPT = 'image/jpeg,image/png,image/webp';
+    public const HELP = 'JPG, PNG, or WebP. Maximum 5 MB. No animation.';
 
     private const MIME_EXTENSIONS = [
         'image/jpeg' => 'jpg',
@@ -48,6 +50,9 @@ final class ProfileImageStorage
         }
 
         $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if (in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            throw new InvalidArgumentException('Profile pictures must not exceed 5 MB.');
+        }
         if ($error !== UPLOAD_ERR_OK) {
             throw new InvalidArgumentException('The profile picture could not be uploaded. Please try another image.');
         }
@@ -55,21 +60,28 @@ final class ProfileImageStorage
         $temporaryPath = (string)($file['tmp_name'] ?? '');
         $reportedSize = (int)($file['size'] ?? 0);
         if ($temporaryPath === '' || $reportedSize <= 0 || !($this->isUploadedFile)($temporaryPath)) {
-            throw new InvalidArgumentException('Select a valid JPEG, PNG, GIF, or WebP image.');
+            throw new InvalidArgumentException('Select a valid JPG, PNG, or WebP image.');
         }
         if ($reportedSize > self::MAX_BYTES) {
-            throw new InvalidArgumentException('Profile pictures must not exceed 2MB.');
+            throw new InvalidArgumentException('Profile pictures must not exceed 5 MB.');
         }
 
         $actualSize = filesize($temporaryPath);
-        if ($actualSize === false || $actualSize <= 0 || $actualSize > self::MAX_BYTES) {
-            throw new InvalidArgumentException('Profile pictures must not exceed 2MB.');
+        if ($actualSize === false || $actualSize <= 0) {
+            throw new InvalidArgumentException('Select a valid JPG, PNG, or WebP image.');
+        }
+        if ($actualSize > self::MAX_BYTES) {
+            throw new InvalidArgumentException('Profile pictures must not exceed 5 MB.');
         }
 
         $mime = $this->detectSupportedMime($temporaryPath);
+        // GIF remains readable for existing pictures, but cannot be uploaded again.
+        if ($mime === 'image/gif') {
+            throw new InvalidArgumentException('Only JPG, PNG, and nonanimated WebP profile pictures are supported.');
+        }
         $imageInfo = @getimagesize($temporaryPath);
         if ($imageInfo === false || !$this->imageTypeMatchesMime((int)$imageInfo[2], $mime)) {
-            throw new InvalidArgumentException('Select a valid JPEG, PNG, GIF, or WebP image.');
+            throw new InvalidArgumentException('Select a valid JPG, PNG, or WebP image.');
         }
 
         $width = (int)($imageInfo[0] ?? 0);
@@ -78,6 +90,7 @@ final class ProfileImageStorage
             throw new InvalidArgumentException('The profile picture dimensions are too large.');
         }
 
+        $this->validateStillImage($temporaryPath, $mime);
         $this->ensureDirectory();
         $extension = self::MIME_EXTENSIONS[$mime];
         do {
@@ -201,11 +214,59 @@ final class ProfileImageStorage
         }
     }
 
+    private function validateStillImage(string $path, string $mime): void
+    {
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            throw new RuntimeException('The profile picture could not be read. Please try again.');
+        }
+        $invalid = 'Select a complete, valid JPG, PNG, or WebP image.';
+        if ($mime === 'image/png' || $mime === 'image/webp') {
+            $png = $mime === 'image/png';
+            $size = strlen($contents);
+            if (!$png && unpack('V', substr($contents, 4, 4))[1] + 8 !== $size) {
+                throw new InvalidArgumentException($invalid);
+            }
+            for ($offset = $png ? 8 : 12; $offset < $size;) {
+                $overhead = $png ? 12 : 8;
+                if ($size - $offset < $overhead) throw new InvalidArgumentException($invalid);
+                $type = substr($contents, $offset + ($png ? 4 : 0), 4);
+                $length = unpack($png ? 'N' : 'V', substr($contents, $offset + ($png ? 0 : 4), 4))[1];
+                $end = $offset + $overhead + $length + ($png ? 0 : $length % 2);
+                if ($end > $size) throw new InvalidArgumentException($invalid);
+                $data = substr($contents, $offset + 8, $length);
+                if ($png && hash('crc32b', $type . $data, true) !== substr($contents, $end - 4, 4)) {
+                    throw new InvalidArgumentException($invalid);
+                }
+                if (($png && in_array($type, ['acTL', 'fcTL', 'fdAT'], true))
+                    || (!$png && (in_array($type, ['ANIM', 'ANMF'], true)
+                        || ($type === 'VP8X' && $length > 0 && (ord($data[0]) & 2) !== 0)))) {
+                    throw new InvalidArgumentException('Animated profile pictures are not supported. Choose a still JPG, PNG, or WebP image.');
+                }
+                $offset = $end;
+            }
+            if ($png && ($type !== 'IEND' || $length !== 0)) throw new InvalidArgumentException($invalid);
+        } elseif (!str_ends_with($contents, "\xff\xd9")) {
+            throw new InvalidArgumentException($invalid);
+        }
+        if (!function_exists('imagecreatefromstring')) {
+            throw new RuntimeException('Profile picture validation is unavailable. Tell your Administrator.');
+        }
+        $decodeWarning = false;
+        set_error_handler(static function () use (&$decodeWarning): bool { $decodeWarning = true; return true; });
+        try {
+            $image = imagecreatefromstring($contents);
+        } finally {
+            restore_error_handler();
+        }
+        if ($image === false || $decodeWarning) throw new InvalidArgumentException($invalid);
+    }
+
     private function detectSupportedMime(string $path): string
     {
         $mime = (string)finfo_file(new \finfo(FILEINFO_MIME_TYPE), $path);
         if (!isset(self::MIME_EXTENSIONS[$mime])) {
-            throw new InvalidArgumentException('Only JPEG, PNG, GIF, and WebP profile pictures are supported.');
+            throw new InvalidArgumentException('Only JPG, PNG, and nonanimated WebP profile pictures are supported.');
         }
         return $mime;
     }

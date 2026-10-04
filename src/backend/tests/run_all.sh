@@ -65,6 +65,7 @@ php src/backend/tests/password_change_modes_contract.php
 php src/backend/tests/recovery_exclusion_reset_audit_contract.php
 php src/backend/tests/profile_image_storage_test.php
 php src/backend/tests/profile_picture_self_service_test.php
+php src/backend/tests/profile_picture_management_test.php
 php src/backend/tests/operator_alert_test.php
 php src/backend/tests/operator_alert_ui_contract.php
 node src/backend/tests/operator_alert_wrapper_behavior_test.js

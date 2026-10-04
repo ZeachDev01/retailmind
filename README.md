@@ -49,6 +49,18 @@ The same flag enables this test in `src/backend/tests/run_all.sh`.
 
 ## InfinityFree upload pipeline
 
+Profile pictures accept still JPG, PNG, and WebP originals up to 5 MB (5,242,880
+bytes). GIF and animated PNG/WebP uploads are rejected; existing pictures remain
+viewable. Images must decode successfully and stay within 8,000 pixels per side
+and 40 million pixels total. Uploads are validated before any picture or account
+change; no client crop replaces the original-file validation.
+
+PHP requires Fileinfo and GD with JPEG, PNG, and WebP support. The release ships
+`.user.ini` for CGI/FastCGI and `.htaccess` settings for Apache mod_php:
+`upload_max_filesize=5M`, `post_max_size=8M`, and `memory_limit=256M`. Hosts with
+locked settings must permit those limits, including multipart request overhead.
+Check the effective web PHP settings after deployment; CLI settings may differ.
+
 The GitHub Actions workflow in `.github/workflows/ci.yml` runs the full checks on
 pushes and pull requests. On a push to `main`, a separate deployment job builds
 the production PHP release, checks its PHP syntax and file sizes, then uploads

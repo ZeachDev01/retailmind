@@ -193,7 +193,7 @@ $checks = [
     ],
     'Staff profile image upload remains optional' => [
         'file' => 'src/frontend/components/user_manager/modals/add_user_modal.php',
-        'needles' => ['enctype="multipart/form-data"', 'name="profile_image"', 'accept="image/jpeg,image/png,image/gif,image/webp"', 'Optional'],
+        'needles' => ['enctype="multipart/form-data"', 'name="profile_image"', 'ProfileImageStorage::ACCEPT', 'Optional'],
         'forbidden' => ['name="profile_image" required'],
     ],
     'Staff profile images are rendered through shared fallback logic' => [
@@ -212,7 +212,7 @@ $checks = [
     ],
     'Ordinary account profile pictures are self-service only' => [
         'file' => 'src/frontend/components/auth/user_info.php',
-        'needles' => ['replace_profile_image', 'remove_profile_image', "['cashier', 'inventory_manager', 'admin', 'super_admin']", "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp', 'Save picture', 'Optional.'],
+        'needles' => ['replace_profile_image', 'remove_profile_image', "['cashier', 'inventory_manager', 'admin', 'super_admin']", "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'ProfileImageStorage::ACCEPT', 'Save picture', 'Optional.'],
         'forbidden' => ['is_system_admin', "\$_REQUEST['user_id']"],
     ],
     'Admin User Info uses a dedicated responsive layout' => [

@@ -39,6 +39,7 @@ function can_manage_own_profile_image(): bool
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    profile_image_check_request_size();
     csrf_verify();
     $action = (string)($_POST['action'] ?? 'update_profile');
 
@@ -230,11 +231,11 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
                                     <input type="hidden" name="action" value="replace_profile_image">
                                     <div class="profile-picture-picker">
                                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= ProfileImageStorage::MAX_FILE_SIZE ?>">
-                                        <input class="profile-picture-input" type="file" id="profile_image" name="profile_image" accept="image/jpeg,image/png,image/gif,image/webp" required>
+                                        <input class="profile-picture-input" type="file" id="profile_image" name="profile_image" accept="<?= ProfileImageStorage::ACCEPT ?>" required>
                                         <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-image"></i><?= !empty($account['profile_image']) ? 'Choose replacement' : 'Choose image' ?></label>
                                         <span class="profile-picture-filename" id="profile-picture-filename">No file selected</span>
                                     </div>
-                                    <small class="field-help">JPEG, PNG, GIF, or WebP. Maximum 2 MB.</small>
+                                    <small class="field-help"><?= ProfileImageStorage::HELP ?></small>
                                     <div class="profile-picture-actions">
                                         <button class="btn btn-small" type="submit"><i class="bi bi-cloud-arrow-up"></i>Save picture</button>
                                     </div>
@@ -326,12 +327,12 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
             input.addEventListener('change', function() {
                 var file = input.files && input.files[0];
                 if (!file) return;
-                var allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                var allowedTypes = <?= json_encode(explode(',', ProfileImageStorage::ACCEPT)) ?>;
                 if (allowedTypes.indexOf(file.type) === -1 || file.size > <?= ProfileImageStorage::MAX_FILE_SIZE ?>) {
                     input.value = '';
                     if (filename) filename.textContent = 'No file selected';
                     if (window.RetailMindUI) {
-                        RetailMindUI.toast('Choose a JPEG, PNG, GIF, or WebP image no larger than 2 MB.', 'warning');
+                        RetailMindUI.toast(<?= json_encode(ProfileImageStorage::HELP) ?>, 'warning');
                     }
                     return;
                 }

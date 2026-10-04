@@ -27,6 +27,7 @@ if grep -Fvxq 'inventory_system/src/backend/storage/profile-images/.gitkeep' <<<
   exit 1
 fi
 for required in \
+  'inventory_system/.user.ini' \
   'inventory_system/src/backend/storage/logs/.gitkeep' \
   'inventory_system/src/backend/storage/sessions/.gitkeep' \
   'inventory_system/src/backend/storage/backups/.gitkeep' \

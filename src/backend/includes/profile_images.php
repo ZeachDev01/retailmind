@@ -2,6 +2,19 @@
 
 use App\Services\ProfileImageStorage;
 
+function profile_image_check_request_size(): void
+{
+    $limit = trim((string)ini_get('post_max_size'));
+    $multiplier = match (strtolower(substr($limit, -1))) {
+        'g' => 1024 ** 3, 'm' => 1024 ** 2, 'k' => 1024, default => 1,
+    };
+    $bytes = (int)$limit * $multiplier;
+    if ($bytes > 0 && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > $bytes) {
+        http_response_code(413);
+        exit('The upload request is too large. Choose a profile picture no larger than 5 MB and try again.');
+    }
+}
+
 function profile_image_storage(): ProfileImageStorage
 {
     static $storage = null;

@@ -14,8 +14,9 @@
             <div class="form-group" id="createEmailGroup"><label for="createEmailInput">Email</label><input type="email" id="createEmailInput" name="email" value="<?= htmlspecialchars($createFormValues['email'], ENT_QUOTES, 'UTF-8') ?>" autocomplete="off" aria-describedby="createEmailNotice"><small class="field-error" id="createEmailNotice" aria-live="polite">This email is already in use.</small></div>
             <div class="form-group">
                 <label for="createProfileImage">Profile Picture <span class="optional-label">Optional</span></label>
-                <input type="file" id="createProfileImage" name="profile_image" accept="image/jpeg,image/png,image/gif,image/webp">
-                <small class="field-help">JPEG, PNG, GIF, or WebP. Maximum 2MB.</small>
+                <input type="hidden" name="MAX_FILE_SIZE" value="<?= \App\Services\ProfileImageStorage::MAX_FILE_SIZE ?>">
+                <input type="file" id="createProfileImage" name="profile_image" accept="<?= \App\Services\ProfileImageStorage::ACCEPT ?>">
+                <small class="field-help"><?= \App\Services\ProfileImageStorage::HELP ?></small>
             </div>
             <div class="form-group">
                 <label>Password</label>

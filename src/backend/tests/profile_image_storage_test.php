@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../bootstrap/app.php';
+restore_exception_handler();
 if (!function_exists('app_url')) {
     function app_url(string $path = ''): string
     {
@@ -169,15 +170,81 @@ try {
     );
 
     $gifPath = $makeFile(base64_decode('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', true));
-    $gifFilename = $storage->store($upload($gifPath, 'avatar.gif', 'image/gif'));
-    $assert(is_string($gifFilename) && str_ends_with($gifFilename, '.gif'), 'GIF uploads must use the server-derived extension.');
-    $assert($storage->delete($gifFilename), 'A persisted GIF profile image could not be removed.');
+    $expectException(static fn() => $storage->store($upload($gifPath, 'avatar.png', 'image/png')), 'Renamed GIF uploads must be rejected.');
+    $legacyGif = str_repeat('c', 64) . '.gif';
+    file_put_contents($testDirectory . '/' . $legacyGif, file_get_contents($gifPath));
+    $assert(($storage->read($legacyGif)['mime'] ?? null) === 'image/gif', 'Existing GIF pictures must remain viewable.');
+    $assert($storage->delete($legacyGif), 'Existing GIF pictures must remain removable.');
+
+    $pngChunk = static fn(string $type, string $data): string => pack('N', strlen($data)) . $type . $data . hash('crc32b', $type . $data, true);
+    $png = file_get_contents($pngPath);
+    $atLimit = substr($png, 0, -12) . $pngChunk('tEXt', 'Comment' . "\0" . str_repeat('x', 5 * 1024 * 1024 - strlen($png) - 20)) . substr($png, -12);
+    $boundaryPath = $makeFile($atLimit);
+    $boundaryFilename = $storage->store($upload($boundaryPath, 'boundary.png'));
+    $assert($storage->exists($boundaryFilename), 'A genuine picture at exactly 5 MB must be accepted.');
+    $storage->delete($boundaryFilename);
+
+    $boundaryMinusOne = $makeFile(substr($png, 0, -12) . $pngChunk('tEXt', 'Comment' . "\0" . str_repeat('x', 5 * 1024 * 1024 - strlen($png) - 21)) . substr($png, -12));
+    $storage->delete($storage->store($upload($boundaryMinusOne, 'below-limit.png')));
+    $boundaryPlusOne = $makeFile(substr($png, 0, -12) . $pngChunk('tEXt', 'Comment' . "\0" . str_repeat('x', 5 * 1024 * 1024 - strlen($png) - 19)) . substr($png, -12));
+    $expectException(static fn() => $storage->store($upload($boundaryPlusOne, 'above-limit.png')), 'A genuine image one byte over 5 MB must be rejected.');
+    $spoofedSize = $upload($boundaryPlusOne, 'small.png');
+    $spoofedSize['size'] = 1;
+    $expectException(static fn() => $storage->store($spoofedSize), 'Actual original-file size must override a spoofed small size.');
+    $largeOriginal = $upload($pngPath, 'cropped.png');
+    $largeOriginal['size'] = 5 * 1024 * 1024 + 1;
+    $expectException(static fn() => $storage->store($largeOriginal), 'Reported oversized original must not pass with a smaller output.');
+
+    $apng = substr($png, 0, 33) . $pngChunk('acTL', pack('NN', 2, 0)) . substr($png, 33);
+    $webp = file_get_contents($webpPath);
+    $webpChunk = static fn(string $type, string $data): string => $type . pack('V', strlen($data)) . $data . (strlen($data) % 2 ? "\0" : '');
+    $animatedWebpChunks = $webpChunk('VP8X', "\x02" . str_repeat("\0", 9)) . $webpChunk('ANIM', str_repeat("\0", 6)) . $webpChunk('ANMF', str_repeat("\0", 16) . substr($webp, 12));
+    $animatedWebp = 'RIFF' . pack('V', strlen($animatedWebpChunks) + 4) . 'WEBP' . $animatedWebpChunks;
+    $animationMessage = 'Animated profile pictures are not supported. Choose a still JPG, PNG, or WebP image.';
+    foreach ([$apng, $animatedWebp] as $animation) {
+        $animationPath = $makeFile($animation);
+        $expectException(static fn() => $storage->store($upload($animationPath, 'still.jpg', 'image/jpeg')), 'Animated images must be rejected despite renamed extension and spoofed MIME.', $animationMessage);
+    }
+    foreach (['png' => $apng, 'webp' => $animatedWebp] as $extension => $legacyContents) {
+        $legacyFilename = str_repeat('d', 32) . '.' . $extension;
+        file_put_contents($testDirectory . '/' . $legacyFilename, $legacyContents);
+        $assert($storage->read($legacyFilename) !== null, 'Existing animated pictures must remain viewable until replaced or removed.');
+        $storage->delete($legacyFilename);
+    }
+    // Metadata may contain animation marker text without making an image animated.
+    $stillMetadata = $makeFile(substr($png, 0, -12) . $pngChunk('tEXt', "Comment\0acTL fcTL ANIM ANMF") . substr($png, -12));
+    $storage->delete($storage->store($upload($stillMetadata, 'still.png')));
+
+    $invalidImages = ['', substr($png, 0, 33), substr($png, 0, -5), substr(file_get_contents($jpegPath), 0, -2), substr($webp, 0, -4)];
+    $jpeg = file_get_contents($jpegPath);
+    $invalidImages[] = substr($jpeg, 0, 2) . "\xff\xfe\x00\x04\xff\xd9" . substr($jpeg, 2, -2);
+    // Keep valid headers and CRCs: reject dangerous dimensions before attempting a decode.
+    foreach ([[8001, 1], [1, 8001], [8000, 8000], [0, 1]] as [$width, $height]) {
+        $invalidImages[] = substr($png, 0, 8) . $pngChunk('IHDR', pack('NN', $width, $height) . substr($png, 24, 5)) . substr($png, 33);
+    }
+    $corruptPng = $png;
+    $corruptPng[45] = chr(ord($corruptPng[45]) ^ 1);
+    $invalidImages[] = $corruptPng;
+    $invalidImages[] = substr($png, 0, 33) . $pngChunk('IDAT', 'not compressed pixels') . substr($png, -12);
+    $beforeValidation = glob($testDirectory . '/*');
+    foreach ($invalidImages as $invalidImage) {
+        $invalidPath = $makeFile($invalidImage);
+        $expectException(static fn() => $storage->replace($upload($invalidPath, 'avatar.png', 'image/png'), $storedFilename, static function (): void {
+            throw new LogicException('Invalid image must never reach account persistence.');
+        }), 'Empty, malformed, or unsafe-dimension uploads must be rejected.');
+        $assert($storage->exists($storedFilename) && glob($testDirectory . '/*') === $beforeValidation, 'Failed validation must preserve saved picture and leave no staged files.');
+    }
+    foreach ([UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE, UPLOAD_ERR_PARTIAL] as $error) {
+        $failedUpload = $upload($pngPath, 'avatar.png');
+        $failedUpload['error'] = $error;
+        $expectException(static fn() => $storage->store($failedUpload), 'PHP upload errors must fail without saving.');
+    }
 
     $oversizedPath = $makeFile(str_repeat('x', ProfileImageStorage::MAX_BYTES + 1));
     $expectException(
         static fn() => $storage->store($upload($oversizedPath, 'large.png', 'image/png')),
         'Oversized uploads must be rejected before storage.',
-        'Profile pictures must not exceed 2MB.'
+        'Profile pictures must not exceed 5 MB.'
     );
 
     $assert($storage->read('../app.log') === null, 'Storage traversal attempts must not resolve a file.');

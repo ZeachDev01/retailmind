@@ -1,6 +1,12 @@
 Options -Indexes
 
-<FilesMatch "^(\.env|\.ftp-deploy-sync-state\.json|composer\.(json|lock)|.*\.(joblib|pyc|log|sql))$">
+<IfModule mod_php.c>
+    php_value upload_max_filesize 5M
+    php_value post_max_size 8M
+    php_value memory_limit 256M
+</IfModule>
+
+<FilesMatch "^(\.env|\.user\.ini|\.ftp-deploy-sync-state\.json|composer\.(json|lock)|.*\.(joblib|pyc|log|sql))$">
     Require all denied
 </FilesMatch>
 

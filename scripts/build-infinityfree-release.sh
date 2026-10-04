@@ -7,7 +7,7 @@ release=.release
 rm -rf "$release"
 mkdir -p "$release/src/backend" "$release/src/frontend"
 
-cp index.php .htaccess "$release/"
+cp index.php .htaccess .user.ini "$release/"
 cp src/.htaccess "$release/src/"
 cp -a src/frontend/. "$release/src/frontend/"
 

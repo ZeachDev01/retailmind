@@ -91,6 +91,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string)($_GET['action'] 
     exit;
 }
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    profile_image_check_request_size();
     csrf_verify();
     try {
         if ($action === 'create') {

@@ -68,6 +68,16 @@ if (($argv[1] ?? '') === 'request') {
     if ($scenario === 'bad-csrf') $_POST['csrf_token'] = 'wrong';
     $_FILES = ['profile_image' => ['tmp_name' => $uploadPath, 'size' => filesize($uploadPath), 'error' => UPLOAD_ERR_OK]];
     if ($scenario === 'upload-error') $_FILES['profile_image']['error'] = UPLOAD_ERR_PARTIAL;
+    if ($scenario === 'invalid-image') file_put_contents($uploadPath, '<?php echo "spoofed"; ?>');
+    if ($scenario === 'gif') {
+        file_put_contents($uploadPath, base64_decode('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='));
+        $_FILES['profile_image']['size'] = filesize($uploadPath);
+    }
+    if ($scenario === 'oversized') $_FILES['profile_image']['size'] = 5 * 1024 * 1024 + 1;
+    if ($scenario === 'request-too-large') {
+        $_POST = []; $_FILES = [];
+        $_SERVER['CONTENT_LENGTH'] = 1024 * 1024 * 1024;
+    }
     ob_start();
     register_shutdown_function(static function () use ($pdo, $directory, $uploadPath, $old): void {
         $html = ob_get_clean();
@@ -112,6 +122,7 @@ foreach (['cashier', 'inventory_manager', 'admin', 'super_admin'] as $role) {
     foreach (['optional', 'missing'] as $scenario) {
         $result = $request($role, $scenario);
         $assert(str_contains($result['html'], 'Save picture'), "{$role}: picture action must be available.");
+        $assert(str_contains($result['html'], 'accept="image/jpeg,image/png,image/webp"') && str_contains($result['html'], 'Maximum 5 MB. No animation.') && str_contains($result['html'], 'value="5242880"'), "{$role}: picker, help text, and original-file limit must agree.");
         $assert(substr_count($result['html'], 'profile-avatar-fallback">TP') === 3, "{$role}: Profile and menu must share initials fallback.");
         $assert(str_contains($result['html'], 'hidden onerror="this.hidden=true"'), "{$role}: missing picture preview must show initials.");
     }
@@ -127,11 +138,14 @@ foreach (['cashier', 'inventory_manager', 'admin', 'super_admin'] as $role) {
         $result = $request($role, $scenario);
         $assert($result['status'] === 403 && $result['old_exists'] && $result['files'] === 1, "{$role}: {$scenario} must reject without mutation.");
     }
-    foreach (['persistence', 'upload-error', 'delete-error', 'remove-delete-error', 'commit-error', 'remove-commit-error'] as $scenario) {
+    foreach (['persistence', 'upload-error', 'invalid-image', 'gif', 'oversized', 'delete-error', 'remove-delete-error', 'commit-error', 'remove-commit-error'] as $scenario) {
         $result = $request($role, $scenario);
         $assert($result['old_exists'] && $result['files'] === 1 && $result['session_image'] === $result['image'], "{$role}: {$scenario} must preserve prior image.");
         $assert(str_contains($result['html'], 'tag-warning'), "{$role}: {$scenario} must show failure.");
+        $assert($result['name'] === 'Test Person' && $result['other_image'] === null, "{$role}: failed validation must preserve account data.");
     }
+    $result = $request($role, 'request-too-large');
+    $assert($result['status'] === 413 && str_contains($result['html'], 'no larger than 5 MB') && $result['old_exists'] && $result['files'] === 1, "{$role}: discarded oversized POST must show a clear size error and preserve picture.");
     foreach (['mandatory', 'anonymous'] as $scenario) {
         $result = $request($role, $scenario);
         $assert($result['html'] === '' && $result['old_exists'] && $result['files'] === 1, "{$role}: {$scenario} must block Profile access.");
