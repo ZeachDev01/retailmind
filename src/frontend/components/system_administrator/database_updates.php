@@ -41,11 +41,11 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Database Updates | RetailMind</title>
     <style>
-        body { font: 16px/1.5 system-ui, sans-serif; background: #f7f8fb; color: #202638; margin: 0; }
-        main { max-width: 42rem; margin: 7vh auto; padding: 2rem; background: white; border: 1px solid #dce2ea; border-radius: .75rem; }
+        body { font: 16px/1.5 system-ui, sans-serif; background: var(--bg, #f7f8fb); color: var(--text, #202638); margin: 0; }
+        main { max-width: 42rem; margin: 7vh auto; padding: 2rem; background: var(--card-bg, white); border: 1px solid var(--border, #dce2ea); border-radius: .75rem; }
         h1 { margin-top: 0; }
-        .success { color: #166534; }
-        .error { color: #b91c1c; }
+        .success { color: var(--theme-success-text, #166534); }
+        .error { color: var(--theme-danger-text, #b91c1c); }
         button { background: #263b74; color: white; border: 0; border-radius: .4rem; padding: .75rem 1rem; font: inherit; cursor: pointer; }
         button:disabled { opacity: .5; cursor: default; }
     </style>

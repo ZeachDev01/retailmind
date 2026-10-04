@@ -25,6 +25,11 @@ Receipt AJAX fragments inherit their host's current appearance. Canvas Forecast
 Analytics labels redraw on theme changes and before/after printing. Other chart
 surfaces use shared CSS colors.
 
+The Administrator inventory includes Operational Audit alongside Stock Issue and
+Cashier Shift oversight. Users & Access serves both role boundaries, with the
+shared control inside its Add Store Staff dialog and Manage Account drawer.
+Database Updates uses theme surfaces even though it has a standalone layout.
+
 ## Paper paths
 
 The print-media rules enforce light backgrounds and dark text for Report

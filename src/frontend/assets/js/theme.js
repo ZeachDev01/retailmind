@@ -35,6 +35,7 @@
             document.body.prepend(bar);
         }
         document.querySelectorAll('.landing-login-modal__body').forEach(panel => panel.prepend(wrapper.cloneNode(true)));
+        document.querySelectorAll('.user-modal-header>div, .user-drawer-identity>div').forEach(panel => panel.append(wrapper.cloneNode(true)));
         const warning = document.createElement('div');
         warning.className = 'theme-save-alert';
         warning.setAttribute('role', 'alert');

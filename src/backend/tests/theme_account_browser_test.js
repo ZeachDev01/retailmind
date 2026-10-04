@@ -33,7 +33,7 @@ const fixture = action => {
         browser = await chromium.launch({headless:true});
         const context = await browser.newContext({baseURL:origin,colorScheme:'dark'});
         const page = await context.newPage();
-        const control = () => page.getByRole('combobox',{name:'Display theme'}).filter({visible:true});
+        const control = () => page.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).last();
         const savedModes = {admin:'dark',super_admin:'light',inventory_manager:'system',cashier:'dark'};
         const contrast = async locator => {
             const ratio = await locator.first().evaluate(el => {
@@ -126,6 +126,75 @@ const fixture = action => {
             assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(11, 18, 32)');
             await page.setViewportSize({width:1280,height:900});
             await page.screenshot({path:path.join(screenshotOutput,role+'-desktop.png'),fullPage:true});
+            if (role === 'admin' || role === 'super_admin') {
+                const governanceState = JSON.parse(fixture('governance_state'));
+                const routes = role === 'admin' ? [
+                    'administrator/dashboard', 'administrator/store_settings', 'administrator/registers',
+                    'administrator/shift_report', 'administrator/stock_issues', 'administrator/database_backup',
+                    'system_administrator/fiscal_periods', 'user_manager/user_manager', 'system_administrator/audit_logs',
+                ] : [
+                    'super_administrator/dashboard', 'system_administrator/system_settings', 'user_manager/user_manager',
+                    'system_administrator/audit_logs', 'system_administrator/backup_restore', 'system_administrator/database_updates',
+                    'system_administrator/emergency_access', 'system_administrator/recovery_account',
+                    'system_administrator/system_health', 'system_administrator/ml_settings',
+                ];
+                for (const route of routes) {
+                    console.log('Theme governance screen: '+role+' '+route);
+                    const response = await page.goto('/components/'+route+'.php');
+                    assert.equal(response.status(),200,'Authorized screen renders '+route);
+                    assert.equal(await control().inputValue(),'dark','Selected mode follows navigation '+route);
+                    for (const mode of ['light','dark']) {
+                        await select(mode);
+                        for (const selector of ['main h1', 'main h2', 'main label', 'main input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])', 'main select', 'main td', 'main .alert', 'main .health-status', 'main .health-detail', 'main .tag-warning', 'main .tag-success']) {
+                            const visible = page.locator(selector).filter({visible:true});
+                            if (await visible.count()) await contrast(visible);
+                        }
+                    }
+                    const draft = page.locator('main input[type="text"], main input[type="number"], main textarea').filter({visible:true}).first();
+                    if (await draft.count() && await draft.isEditable()) {
+                        const value = await draft.getAttribute('type') === 'number' ? '17' : 'Unsubmitted governance work';
+                        await draft.fill(value); await select('light');
+                        assert.equal(await draft.inputValue(),value,'Appearance preserves form draft '+route);
+                        await select('dark');
+                    }
+                    for (const width of [320,390,1280]) {
+                        await page.setViewportSize({width,height:900});
+                        const bounds=await control().boundingBox();
+                        assert(bounds && bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=width,'Governance control fits '+route+' '+width);
+                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Governance control unobscured '+route);
+                        await control().focus(); await contrast(control());
+                        assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Governance focus visible '+route);
+                    }
+                    await page.reload(); assert.equal(await control().inputValue(),'dark','Governance mode survives reload '+route);
+                    if (route === 'user_manager/user_manager') {
+                        for (const [open, overlay, close, field] of [
+                            ['#openUserModal','#userModalOverlay','#closeUserModal','#createUsernameInput'],
+                            ['.open-user-drawer','#userDrawerOverlay','#closeUserDrawer','#drawerUsername'],
+                        ]) {
+                            await page.locator(open).first().click();
+                            await page.locator(field).fill('UnsubmittedAccount');
+                            for (const width of [320,390,1280]) {
+                                await page.setViewportSize({width,height:900});
+                                for (const mode of ['light','dark']) {
+                                    await select(mode);
+                                    assert(await page.locator(overlay).isVisible(),'Open account dialog retained');
+                                    assert.equal(await page.locator(field).inputValue(),'UnsubmittedAccount');
+                                    await contrast(page.locator(field));
+                                    await contrast(page.locator(overlay+' h3'));
+                                    await contrast(page.locator(overlay+' label').first());
+                                    const bounds=await control().boundingBox();
+                                    assert(bounds.x>=0 && bounds.x+bounds.width<=width,'Dialog theme control fits '+width);
+                                    assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Dialog theme control unobscured');
+                                }
+                            }
+                            await page.locator(close).click();
+                        }
+                    }
+                }
+                const forbidden = role === 'admin' ? 'system_administrator/system_settings' : 'administrator/store_settings';
+                assert.equal((await context.request.get('/components/'+forbidden+'.php')).status(),403,'Appearance preserves role boundary');
+                assert.deepEqual(JSON.parse(fixture('governance_state')),governanceState,'Appearance does not change governance or Store records');
+            }
             if(role === 'super_admin') {
                 await page.goto('/components/system_administrator/emergency_access.php');
                 await contrast(page.locator('.emergency-action-note')); await contrast(page.locator('.emergency-expiry strong'));

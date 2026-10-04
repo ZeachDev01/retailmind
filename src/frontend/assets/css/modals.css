@@ -21,8 +21,8 @@
   max-height: calc(100dvh - 2rem);
   display: flex;
   flex-direction: column;
-  background: #111827;
-  color: #e5edf8;
+  background: var(--card-bg, #fff);
+  color: var(--text, #1f2937);
   border-radius: 16px;
   box-shadow: 0 20px 45px rgba(15, 23, 42, 0.24);
   overflow: hidden;
@@ -37,7 +37,7 @@
   border-bottom: 1px solid rgba(71, 85, 105, 0.58);
 }
 .user-modal-header p {
-  color: #94a3b8;
+  color: var(--muted);
   margin-top: 0.2rem;
   font-size: 0.92rem;
 }
@@ -61,7 +61,7 @@
 }
 .manage-users-page .user-modal .form-group > label,
 .manage-users-page .user-modal .field-help {
-  color: #b7c4d7;
+  color: var(--muted);
 }
 .optional-label {
   color: var(--muted);

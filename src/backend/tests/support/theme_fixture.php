@@ -8,6 +8,15 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'governance_state') {
+    $pdo->exec("USE `{$database}`");
+    $state = [];
+    foreach (['registers', 'attention_settings', 'platform_settings', 'store_settings', 'ml_settings', 'user_roles', 'fiscal_periods'] as $table) {
+        $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
+    }
+    $state['users'] = $pdo->query('SELECT user_id,username,full_name,password_hash,role_id,status,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode($state); exit;
+}
 if ($argv[1] === 'state') {
     $pdo->exec("USE `{$database}`");
     echo json_encode(['users'=>$pdo->query('SELECT user_id,theme_preference,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC),
