@@ -115,7 +115,7 @@ if ($receiptId > 0 && $receipt === null) {
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
+<head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Refunds</title>

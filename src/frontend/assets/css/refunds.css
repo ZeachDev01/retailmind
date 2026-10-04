@@ -259,7 +259,7 @@
     }
 
     .cashier-refunds-page ::selection {
-        background: #dbeafe;
+        background: var(--theme-info-surface, #dbeafe);
         color: var(--text);
     }
 

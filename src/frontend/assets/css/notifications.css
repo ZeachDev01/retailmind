@@ -29,7 +29,7 @@
             background: #5a6268;
         }
         .notification-item {
-            background: white;
+            background: var(--theme-surface, white);
             border: 1px solid #ddd;
             border-radius: 4px;
             padding: 1rem;
@@ -40,7 +40,7 @@
             align-items: start;
         }
         .notification-item.unread {
-            background: #f0f7ff;
+            background: var(--theme-surface-soft, #f0f7ff);
             border-color: #93c5fd;
         }
         .notification-icon {
@@ -54,24 +54,24 @@
             flex-shrink: 0;
         }
         .notification-icon.low_stock {
-            background: #fff3cd;
-            color: #856404;
+            background: var(--theme-warning-surface, #fff3cd);
+            color: var(--theme-warning-text, #856404);
         }
         .notification-icon.replenishment {
-            background: #d1ecf1;
-            color: #0c5460;
+            background: var(--theme-surface-soft, #d1ecf1);
+            color: var(--theme-info-text, #0c5460);
         }
         .notification-icon.adjustment {
-            background: #f8d7da;
-            color: #721c24;
+            background: var(--theme-danger-surface, #f8d7da);
+            color: var(--theme-danger-text, #721c24);
         }
         .notification-icon.system {
-            background: #d4edda;
-            color: #155724;
+            background: var(--theme-success-surface, #d4edda);
+            color: var(--theme-success-text, #155724);
         }
         .notification-icon.fiscal_period {
-            background: #e7e8ea;
-            color: #383d41;
+            background: var(--theme-surface-soft, #e7e8ea);
+            color: var(--theme-ink, #383d41);
         }
         .notification-content h4 {
             margin: 0 0 0.5rem 0;
@@ -79,7 +79,7 @@
         }
         .notification-content p {
             margin: 0;
-            color: #666;
+            color: var(--theme-muted, #666);
             font-size: 0.95rem;
             line-height: 1.4;
         }
@@ -109,7 +109,7 @@
         .empty-state {
             text-align: center;
             padding: 3rem 1rem;
-            color: #666;
+            color: var(--theme-muted, #666);
         }
         .empty-state-icon {
             font-size: 3rem;
@@ -129,10 +129,10 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             text-decoration: none;
-            color: #007bff;
+            color: var(--theme-info-text, #007bff);
         }
         .pagination a:hover {
-            background: #f5f5f5;
+            background: var(--theme-surface-soft, #f5f5f5);
         }
         .pagination .current {
             background: #007bff;

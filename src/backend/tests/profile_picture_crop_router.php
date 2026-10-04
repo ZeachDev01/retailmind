@@ -42,6 +42,7 @@ function format_display_datetime(string $value): string { return $value; }
 function log_activity(...$args): void {}
 function current_role(): string { return $GLOBALS['role']; }
 function is_logged_in(): bool { return true; }
+function retailmind_theme_head(): void {}
 $helpers = file_get_contents(__DIR__ . '/../includes/profile_images.php');
 $helpers = preg_replace('/function profile_image_storage\(\).*?^}\R/ms', '', $helpers);
 eval('?>' . $helpers);

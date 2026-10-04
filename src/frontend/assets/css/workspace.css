@@ -17,7 +17,7 @@
     padding: 1rem 1.1rem;
     border: 1px solid #dbe3ec;
     border-radius: 8px;
-    background: #fff;
+    background: var(--theme-surface, #fff);
 }
 
 .workspace-option.is-active {
@@ -31,8 +31,8 @@
     height: 48px;
     place-items: center;
     border-radius: 8px;
-    background: #eef4ff;
-    color: #1d4ed8;
+    background: var(--theme-surface-soft, #eef4ff);
+    color: var(--theme-info-text, #1d4ed8);
     font-size: 1.3rem;
 }
 
@@ -46,18 +46,18 @@
 }
 
 .workspace-option-copy strong {
-    color: #172033;
+    color: var(--theme-info-text, #172033);
     font-size: 1rem;
 }
 
 .workspace-option-copy small {
     margin-top: .25rem;
-    color: #64748b;
+    color: var(--theme-muted, #64748b);
     line-height: 1.4;
 }
 
 .workspace-current {
-    color: #1d4ed8;
+    color: var(--theme-info-text, #1d4ed8);
     font-size: .82rem;
     font-weight: 700;
 }

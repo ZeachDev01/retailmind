@@ -4,6 +4,7 @@ require_once dirname(__DIR__) . '/backend/bootstrap/app.php';
 
 App\Core\Session::start();
 require_once dirname(__DIR__) . '/backend/includes/csrf.php';
+require_once dirname(__DIR__) . '/backend/includes/theme.php';
 
 function landing_app_base_url(): string
 {
@@ -114,7 +115,7 @@ unset($_SESSION['_login_username']);
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
+<head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetailMind - Store inventory, sales, and forecasting</title>

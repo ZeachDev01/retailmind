@@ -47,7 +47,7 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cashier Shift Report</title>
     <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/style.css')) ?>">

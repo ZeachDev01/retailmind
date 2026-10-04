@@ -23,25 +23,25 @@
 .database-restore-page .main-content .btn { min-height: 44px; border-radius: 6px; font-size: .88rem; font-weight: 600; padding: .7rem 1.15rem; transition: background-color .15s ease, border-color .15s ease; }
 .database-restore-page .main-content .btn:active { transform: translateY(1px); }
 .database-restore-page .main-content :where(a, button, input, select, summary, [tabindex]):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; box-shadow: none; }
-.database-restore-page .backup-storage-note { background: #f4f7fc; padding: 1rem; border-radius: 6px; color: var(--recovery-muted); font-size: .8rem; line-height: 1.65; }
+.database-restore-page .backup-storage-note { background: var(--theme-surface-soft, #f4f7fc); padding: 1rem; border-radius: 6px; color: var(--recovery-muted); font-size: .8rem; line-height: 1.65; }
 .database-restore-page .backup-storage-note strong { color: var(--recovery-ink); }
 .database-restore-page .backup-storage-note p { margin-top: .25rem; }
 .database-restore-page .backup-safety { padding-top: 1.25rem; margin-top: 1.25rem; border-top: 1px solid var(--recovery-line); font-size: .8rem; }
 .database-restore-page .backup-safety strong { font-weight: 600; }
 .database-restore-page .backup-safety p { color: var(--recovery-muted); margin: .2rem 0 .65rem; }
 .database-restore-page .backup-safety a { color: var(--primary-dark); text-underline-offset: 3px; }
-.database-restore-page .restore-warning { padding: 1rem; background: #fff4f2; border: 1px solid #f0d4ce; border-radius: 6px; color: #854136; font-size: .8rem; line-height: 1.6; }
-.database-restore-page .restore-warning strong { display: block; color: #92362c; margin-bottom: .3rem; font-size: .86rem; }
+.database-restore-page .restore-warning { padding: 1rem; background: var(--theme-surface-soft, #fff4f2); border: 1px solid #f0d4ce; border-radius: 6px; color: var(--theme-danger-text, #854136); font-size: .8rem; line-height: 1.6; }
+.database-restore-page .restore-warning strong { display: block; color: var(--theme-danger-text, #92362c); margin-bottom: .3rem; font-size: .86rem; }
 .database-restore-page .backup-restore-panel form { margin-top: 1.25rem; }
 .database-restore-page .form-group { margin-bottom: 1.1rem; }
 .database-restore-page .form-group label { display: flex; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; font-size: .84rem; font-weight: 600; }
 .database-restore-page .field-required { color: var(--recovery-muted); font-size: .72rem; font-weight: 400; }
-.database-restore-page .restore-file-field { padding: .85rem; border: 1px dashed #aebdd2; background: #f8faff; border-radius: 6px; }
+.database-restore-page .restore-file-field { padding: .85rem; border: 1px dashed #aebdd2; background: var(--theme-surface-soft, #f8faff); border-radius: 6px; }
 .database-restore-page .restore-file-field input { display: block; width: 100%; border: none; border-radius: 0; background: transparent; padding: 0; font-size: .8rem; color: var(--recovery-ink); }
-.database-restore-page input[type="file"]::file-selector-button { margin-right: .75rem; padding: .5rem .75rem; border: 1px solid #c7d2e2; border-radius: 4px; background: #fff; color: var(--recovery-ink); cursor: pointer; font: inherit; transition: background-color .15s ease; }
-.database-restore-page input[type="file"]::file-selector-button:hover { background: #eaf0fb; }
+.database-restore-page input[type="file"]::file-selector-button { margin-right: .75rem; padding: .5rem .75rem; border: 1px solid #c7d2e2; border-radius: 4px; background: var(--theme-surface, #fff); color: var(--recovery-ink); cursor: pointer; font: inherit; transition: background-color .15s ease; }
+.database-restore-page input[type="file"]::file-selector-button:hover { background: var(--theme-surface-soft, #eaf0fb); }
 .database-restore-page .restore-file-field p { color: var(--recovery-muted); font-size: .75rem; line-height: 1.5; margin-top: .65rem; }
-.database-restore-page #restore-password { width: 100%; min-height: 44px; border: 1px solid #bdc9d9; border-radius: 6px; background: #fff; }
+.database-restore-page #restore-password { width: 100%; min-height: 44px; border: 1px solid #bdc9d9; border-radius: 6px; background: var(--theme-surface, #fff); }
 .database-restore-page .main-content .backup-hint { font-size: .75rem; color: var(--recovery-muted); margin-top: .4rem; }
 .database-restore-page .main-content .btn-danger { background: #b73b32; border: 1px solid #b73b32; color: #fff; }
 .database-restore-page .main-content .btn-danger:hover { background: #962e27; border-color: #962e27; }
@@ -58,13 +58,13 @@
 .database-restore-page .history-search { flex: 1 1 220px; }
 .database-restore-page .history-filter { flex: 0 1 160px; }
 .database-restore-page .history-tools label { display: block; color: var(--recovery-muted); font-size: .75rem; margin-bottom: .35rem; }
-.database-restore-page .history-tools input, .database-restore-page .history-tools select { width: 100%; min-height: 42px; padding: .55rem .75rem; border: 1px solid #c7d2e2; background: #fff; color: var(--recovery-ink); border-radius: 5px; font-size: .8rem; }
+.database-restore-page .history-tools input, .database-restore-page .history-tools select { width: 100%; min-height: 42px; padding: .55rem .75rem; border: 1px solid #c7d2e2; background: var(--theme-surface, #fff); color: var(--recovery-ink); border-radius: 5px; font-size: .8rem; }
 .database-restore-page .history-count { font-size: .75rem; color: var(--recovery-muted); padding-bottom: .7rem; }
 .database-restore-page .backup-history .table-wrap { border: none; border-top: 1px solid var(--recovery-line); border-radius: 0; overflow-x: auto; }
 .database-restore-page .backup-history table { min-width: 840px; table-layout: auto; }
-.database-restore-page .backup-history th { font-size: .73rem; font-weight: 600; color: var(--recovery-muted); padding: .75rem 1.25rem; background: #f7f9fc; white-space: nowrap; }
-.database-restore-page .backup-history td { padding: 1rem 1.25rem; vertical-align: top; font-size: .8rem; border-bottom: 1px solid #e9edf3; }
-.database-restore-page .backup-history tbody tr:hover { background: #f9fbfe; }
+.database-restore-page .backup-history th { font-size: .73rem; font-weight: 600; color: var(--recovery-muted); padding: .75rem 1.25rem; background: var(--theme-surface-soft, #f7f9fc); white-space: nowrap; }
+.database-restore-page .backup-history td { padding: 1rem 1.25rem; vertical-align: top; font-size: .8rem; border-bottom: 1px solid var(--theme-border, #e9edf3); }
+.database-restore-page .backup-history tbody tr:hover { background: var(--theme-surface-soft, #f9fbfe); }
 .database-restore-page .backup-history td.history-file { min-width: 290px; max-width: 400px; overflow-wrap: anywhere; }
 .database-restore-page .history-filename { display: block; color: var(--recovery-ink); font: .78rem/1.55 Consolas, "Courier New", monospace; }
 .database-restore-page .history-type { display: inline-block; margin-top: .35rem; color: var(--recovery-muted); font-size: .72rem; }
@@ -72,15 +72,15 @@
 .database-restore-page .history-user { min-width: 150px; max-width: 200px; }
 .database-restore-page .history-status { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; white-space: nowrap; color: var(--recovery-muted); }
 .database-restore-page .history-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.database-restore-page .history-status.is-completed { color: #207144; }
-.database-restore-page .history-status.is-failed { color: #b42318; }
+.database-restore-page .history-status.is-completed { color: var(--theme-success-text, #207144); }
+.database-restore-page .history-status.is-failed { color: var(--theme-danger-text, #b42318); }
 .database-restore-page .history-notes { margin-top: .4rem; font-size: .74rem; }
 .database-restore-page .history-notes summary { color: var(--primary-dark); }
 .database-restore-page .history-notes p { padding-top: .5rem; color: var(--recovery-muted); line-height: 1.6; white-space: pre-wrap; }
 .database-restore-page .history-footnote { color: var(--recovery-muted); font-size: .74rem; padding: .85rem 1.5rem; border-top: 1px solid var(--recovery-line); }
 .database-restore-page .recovery-empty { padding: 2rem 0; text-align: center; }
 .database-restore-page .recovery-empty p { margin-top: .3rem; color: var(--recovery-muted); }
-.database-restore-page .main-content .backup-ready { margin-bottom: 1.5rem; background: #f0fdf4; }
+.database-restore-page .main-content .backup-ready { margin-bottom: 1.5rem; background: var(--theme-surface-soft, #f0fdf4); }
 .database-restore-page .backup-ready > p { margin-top: .6rem; overflow-wrap: anywhere; }
 @media (max-width: 1180px) {
     .database-restore-page .recovery-workspace { grid-template-columns: 1fr; }

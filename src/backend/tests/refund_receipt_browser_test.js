@@ -10,6 +10,7 @@ const { chromium } = require('playwright');
     const output = process.env.RECEIPT_BROWSER_OUTPUT || path.join(os.tmpdir(), 'retailmind-refund-receipt-105');
     fs.mkdirSync(output, { recursive: true });
     const css = fs.readFileSync(path.join(root, 'src/frontend/assets/css/sale-receipt.css'), 'utf8');
+    const themeCss = fs.readFileSync(path.join(root, 'src/frontend/assets/css/theme.css'), 'utf8');
     const script = fs.readFileSync(path.join(root, 'src/frontend/assets/js/sale-receipt.js'), 'utf8');
     const browser = await chromium.launch({ headless: true });
     try {
@@ -22,10 +23,11 @@ const { chromium } = require('playwright');
                 const page = await browser.newPage();
                 const writes = [];
                 page.on('request', request => { if (request.method() !== 'GET') writes.push(request.url()); });
-                await page.setContent(`<html><head><meta charset="UTF-8"><style>${css}</style></head><body><main>${html}</main></body></html>`);
+                await page.setContent(`<html data-theme="dark"><head><meta charset="UTF-8"><style>${css}</style><style>${themeCss}</style></head><body><main>${html}</main></body></html>`);
                 await page.evaluate(() => { window.printCalls = 0; window.print = () => window.printCalls++; });
                 await page.addScriptTag({ content: script });
                 assert.equal(await page.evaluate(() => window.printCalls), 0, 'successful refund never auto-prints');
+                assert.equal(await page.locator('.receipt-print-area').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(21, 34, 56)', 'Receipt preview follows dark appearance');
                 const text = await page.locator('.receipt-print-area').innerText();
                 for (const content of ['Refund #105', 'Original Sale Receipt #103', 'Other', 'Total refunded', 'Original payment method']) assert.ok(text.includes(content));
                 for (const secret of ['PRIVATE-REFUND-NOTE', 'damaged', 'restockable']) assert.ok(!text.includes(secret));
@@ -41,6 +43,7 @@ const { chromium } = require('playwright');
                 assert.equal(await page.evaluate(() => window.printCalls), 1);
                 assert.equal(await page.locator('.receipt-print-root .receipt-print-area').innerHTML(), await page.locator('main .receipt-print-area').innerHTML());
                 await page.emulateMedia({ media: 'print' });
+                assert.equal(await page.locator('.receipt-print-root .receipt-print-area').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(255, 255, 255)', 'Thermal paper remains light');
                 assert.equal(await page.locator('main').isVisible(), false);
                 assert.equal(await page.locator('.receipt-print-root button').count(), 0);
                 const overflow = await page.locator('.receipt-print-root .receipt-print-area').evaluate(el =>

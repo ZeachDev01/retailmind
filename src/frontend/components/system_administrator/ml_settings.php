@@ -61,7 +61,7 @@ try {
     $runs = [];
 }
 ?>
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ML Settings</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
+<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ML Settings</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
 <body><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
 <div class="topbar"><div><h1>Random Forest Settings</h1><p class="page-subtitle">Control data readiness, tree parameters, prediction ranges, and automatic retraining.</p></div><a class="btn" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Open forecasts</a></div>
 <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>

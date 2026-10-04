@@ -19,6 +19,7 @@ if (($argv[1] ?? '') === 'request') {
     );
     function profile_image_storage(): ProfileImageStorage { return $GLOBALS['storage']; }
     function app_url(string $path = ''): string { return '/' . ltrim($path, '/'); }
+    function retailmind_theme_head(): void {}
     function format_display_datetime(string $value): string { return $value; }
     function log_activity(...$args): void {}
     function user_role_names(PDO $pdo, int $id, string $role): array { return [$role]; }

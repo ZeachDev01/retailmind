@@ -45,7 +45,7 @@ usort($productMetrics, static fn(array $a, array $b): int => ($a['wape'] ?? PHP_
 $best = array_slice($productMetrics, 0, 5);
 $worst = array_slice(array_reverse($productMetrics), 0, 5);
 ?>
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forecast Analytics</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>"></head>
+<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forecast Analytics</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>"></head>
 <body><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content"><div class="topbar"><div><h1>Forecast Analytics</h1><p class="page-subtitle">Backtesting, accuracy trends, feature importance, and product-level performance.</p></div><div class="u-flex-wrap"><a class="btn" href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>">Forecast exceptions</a><a class="btn" href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">Data readiness</a></div></div>
 <div class="card-grid"><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'mean_absolute_error')) ?></div><div class="label">Random Forest MAE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'root_mean_squared_error')) ?></div><div class="label">RMSE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'wape')) ?><?= isset($metrics['wape']) ? '%' : '' ?></div><div class="label">Random Forest WAPE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'baseline_wape')) ?><?= isset($metrics['baseline_wape']) ? '%' : '' ?></div><div class="label">7-day baseline WAPE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'model_improvement_vs_baseline_pct')) ?><?= isset($metrics['model_improvement_vs_baseline_pct']) ? '%' : '' ?></div><div class="label">Improvement vs baseline</div></div><div class="stat-card"><div class="value"><?= !empty($metrics['model_beats_baseline']) ? 'Yes' : (array_key_exists('model_beats_baseline', $metrics) ? 'No' : '-') ?></div><div class="label">Model beats baseline</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'eligible_products', 0)) ?></div><div class="label">Eligible products</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'zero_sales_records', 0)) ?></div><div class="label">Zero-sales dates used</div></div></div>
 <section class="forecast-analytics-tabs" aria-labelledby="analytics-view-title">
@@ -68,6 +68,8 @@ $worst = array_slice(array_reverse($productMetrics), 0, 5);
 const featureData = <?= json_encode(['labels' => array_keys($featureImportance), 'values' => array_values($featureImportance)], JSON_HEX_TAG) ?>;
 const trendData = <?= json_encode($trainingTrend, JSON_HEX_TAG) ?>;
 const actualData = <?= json_encode(array_reverse($actualVsForecast), JSON_HEX_TAG) ?>;
+let analyticsPrinting = false;
+function analyticsTextColor() { return !analyticsPrinting && document.documentElement.dataset.theme === 'dark' ? '#b1bfd3' : '#475569'; }
 function drawBars(canvasId, labels, series, legends) {
   const canvas = document.getElementById(canvasId), dpr = window.devicePixelRatio || 1, width = canvas.clientWidth || 600, height = 240;
   canvas.width = width*dpr; canvas.height = height*dpr; const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,width,height);
@@ -75,12 +77,12 @@ function drawBars(canvasId, labels, series, legends) {
   ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,height-pad.b); ctx.lineTo(width-pad.r,height-pad.b); ctx.stroke();
   const groups=Math.max(1,labels.length), groupW=cw/groups, barW=Math.max(3,groupW/(series.length+1));
   series.forEach((s,si)=>{ctx.fillStyle=s.fill || (si===0?'#2563eb':'#16a34a'); s.values.forEach((value,i)=>{value=Number(value)||0; const h=value/max*ch; const x=pad.l+i*groupW+(si+.4)*barW; ctx.fillRect(x,height-pad.b-h,barW*.8,h);});});
-  ctx.fillStyle='#64748b'; ctx.font='11px sans-serif'; labels.forEach((label,i)=>{ctx.save();ctx.translate(pad.l+i*groupW+groupW/2,height-pad.b+8);ctx.rotate(-.45);ctx.fillText(String(label).slice(0,18),0,0);ctx.restore();});
+  ctx.fillStyle=analyticsTextColor(); ctx.font='11px sans-serif'; labels.forEach((label,i)=>{ctx.save();ctx.translate(pad.l+i*groupW+groupW/2,height-pad.b+8);ctx.rotate(-.45);ctx.fillText(String(label).slice(0,18),0,0);ctx.restore();});
   ctx.fillText(max.toFixed(1),4,pad.t+5); if(legends){legends.forEach((x,i)=>ctx.fillText(x, pad.l+i*110, 12));}
 }
 function drawLine(canvasId, labels, values) {
  const canvas=document.getElementById(canvasId),dpr=window.devicePixelRatio||1,w=canvas.clientWidth||600,h=240;canvas.width=w*dpr;canvas.height=h*dpr;const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);const p={l:45,r:15,t:15,b:45},cw=w-p.l-p.r,ch=h-p.t-p.b;const nums=values.map(Number).filter(Number.isFinite),max=Math.max(1,...nums)*1.1;
- ctx.strokeStyle='#94a3b8';ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(p.l,h-p.b);ctx.lineTo(w-p.r,h-p.b);ctx.stroke();ctx.strokeStyle='#2563eb';ctx.lineWidth=2;ctx.beginPath();values.forEach((v,i)=>{const x=p.l+(labels.length<=1?cw/2:i*cw/(labels.length-1)),y=h-p.b-(Number(v)||0)/max*ch;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.fillStyle='#64748b';ctx.font='11px sans-serif';labels.forEach((l,i)=>{if(i%Math.max(1,Math.ceil(labels.length/6))===0)ctx.fillText(String(l).slice(5,10),p.l+(labels.length<=1?0:i*cw/(labels.length-1))-12,h-18);});ctx.fillText(max.toFixed(1),3,p.t+5);
+ ctx.strokeStyle='#94a3b8';ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(p.l,h-p.b);ctx.lineTo(w-p.r,h-p.b);ctx.stroke();ctx.strokeStyle='#2563eb';ctx.lineWidth=2;ctx.beginPath();values.forEach((v,i)=>{const x=p.l+(labels.length<=1?cw/2:i*cw/(labels.length-1)),y=h-p.b-(Number(v)||0)/max*ch;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.fillStyle=analyticsTextColor();ctx.font='11px sans-serif';labels.forEach((l,i)=>{if(i%Math.max(1,Math.ceil(labels.length/6))===0)ctx.fillText(String(l).slice(5,10),p.l+(labels.length<=1?0:i*cw/(labels.length-1))-12,h-18);});ctx.fillText(max.toFixed(1),3,p.t+5);
 }
 function drawAnalyticsPanel(panel) {
   if (panel === 'features') drawBars('featureChart', featureData.labels, [{values:featureData.values,fill:'#2563eb'}]);
@@ -100,4 +102,8 @@ analyticsTabs.forEach((tab,index) => {
   tab.addEventListener('keydown',event=>{ if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return; event.preventDefault(); let next=index; if(event.key==='ArrowRight')next=(index+1)%analyticsTabs.length; if(event.key==='ArrowLeft')next=(index-1+analyticsTabs.length)%analyticsTabs.length; if(event.key==='Home')next=0; if(event.key==='End')next=analyticsTabs.length-1; analyticsTabs[next].focus(); activateAnalyticsTab(analyticsTabs[next]); });
 });
 drawAnalyticsPanel('features');
+const redrawAnalytics = () => drawAnalyticsPanel(document.querySelector('[data-analytics-tab].is-active').dataset.analyticsTab);
+window.addEventListener('retailmind:themechange', redrawAnalytics);
+window.addEventListener('beforeprint', () => { analyticsPrinting = true; redrawAnalytics(); });
+window.addEventListener('afterprint', () => { analyticsPrinting = false; redrawAnalytics(); });
 </script></body></html>

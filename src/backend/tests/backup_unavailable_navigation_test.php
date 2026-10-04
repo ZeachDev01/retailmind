@@ -18,9 +18,12 @@ function app_url(string $path): string
 {
     return '/retailmind/' . ltrim($path, '/');
 }
+// This extracted unavailable-hosting branch has no session/theme integration.
+function retailmind_theme_head(): void {}
 
 ob_start();
-eval('if (!RecoveryStore::isAvailable()) {' . $match[1] . "\n}");
+$branch = str_replace("require_once __DIR__ . '/../../../backend/includes/theme.php';", '', $match[1]);
+eval('if (!RecoveryStore::isAvailable()) {' . $branch . "\n}");
 $html = (string)ob_get_clean();
 
 if (http_response_code() !== 503

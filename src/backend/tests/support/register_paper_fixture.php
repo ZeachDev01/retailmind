@@ -8,6 +8,7 @@ $availableCount = 1;
 $message = $messageClass = '';
 function app_url(string $path): string { return '/'.$path; }
 function csrf_field(): string { return '<input type="hidden" name="csrf_token" value="synthetic">'; }
+function retailmind_theme_head(): void {}
 require_once __DIR__ . '/../../bootstrap/app.php';
 $source = file_get_contents(__DIR__ . '/../../../frontend/components/administrator/registers.php');
 $source = substr($source, strpos($source, '<!DOCTYPE html>'));

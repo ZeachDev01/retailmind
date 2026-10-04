@@ -19,6 +19,7 @@ if (!fs.existsSync(chromium.executablePath())) {
     fs.mkdirSync(output, { recursive: true });
     const css = ['global', 'invoices', 'responsive', 'sale-receipt'].map(name =>
         fs.readFileSync(path.join(root, `src/frontend/assets/css/${name}.css`), 'utf8')).join('\n');
+    const themeCss = fs.readFileSync(path.join(root, 'src/frontend/assets/css/theme.css'), 'utf8');
     const script = fs.readFileSync(path.join(root, 'src/frontend/assets/js/sale-receipt.js'), 'utf8');
     const browser = await chromium.launch({ headless: true });
     try {
@@ -69,7 +70,7 @@ if (!fs.existsSync(chromium.executablePath())) {
                 const html = execFileSync(process.env.PHP_BINARY || 'php',
                     [path.join(__dirname, 'support/sale_receipt_fixture.php'), variant, String(paperWidthMm)], { encoding: 'utf8' });
                 const page = await browser.newPage();
-                await page.setContent(`<html><head><meta charset="UTF-8"><style>${css}</style></head><body><div class="app-shell"><div class="main-content">Application framing${html}</div></div></body></html>`);
+                await page.setContent(`<html data-theme="dark"><head><meta charset="UTF-8"><style>${css}</style><style>${themeCss}</style></head><body><div class="app-shell"><div class="main-content">Application framing${html}</div></div></body></html>`);
                 await page.evaluate(() => { window.printCalls = 0; window.print = () => { window.printCalls++; }; });
                 await page.addScriptTag({ content: script });
                 assert.equal(await page.evaluate(() => window.printCalls), 0, 'loading completed receipt never prints');
@@ -89,6 +90,7 @@ if (!fs.existsSync(chromium.executablePath())) {
                 assert.equal(await page.evaluate(() => window.printCalls), 1, 'only deliberate action prints');
                 assert.equal(await page.locator('.receipt-print-root .sale-receipt').count(), 1);
                 await page.emulateMedia({ media: 'print' });
+                assert.equal(await page.locator('.receipt-print-root .receipt-print-area').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(255, 255, 255)', 'Thermal paper remains light');
                 assert.equal(await page.locator('.app-shell').isVisible(), false, 'application frame is excluded');
                 assert.equal(await page.locator('.receipt-print-root button').count(), 0, 'controls are excluded');
                 assert.equal(await page.locator('.receipt-print-root .sale-receipt').isVisible(), true);

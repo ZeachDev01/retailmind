@@ -20,8 +20,8 @@ $auth = $read('src/backend/includes/auth.php');
 
 // Seam 1: session validation gate is the single enforcement point.
 $assert(
-    str_contains($auth, "in_array(\$currentScript, ['change_password.php', 'logout.php']"),
-    'session gate must allow only the change screen and logout when the flag is set'
+    str_contains($auth, "in_array(\$currentScript, ['change_password.php', 'logout.php', 'theme.php']"),
+    'session gate must allow only the change screen, logout, and own-account appearance when the flag is set'
 );
 $assert(
     str_contains($auth, "header('Location: ' . app_url('components/auth/change_password.php'))"),

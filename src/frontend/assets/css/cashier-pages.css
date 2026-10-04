@@ -1,7 +1,7 @@
 /* cashier-pages.css - extracted view-specific styles. */
 
 /* Source: frontend\cashier\shifts.php */
-.shift-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.metric{font-size:1.35rem;font-weight:700}.positive{color:#15803d}.negative{color:#b91c1c}
+.shift-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.metric{font-size:1.35rem;font-weight:700}.positive{color: var(--theme-success-text, #15803d)}.negative{color: var(--theme-danger-text, #b91c1c)}
 
 /* Shift workspace: scoped so other Cashier pages keep their own layouts. */
 .cashier-shifts-page .shift-grid {
@@ -188,8 +188,8 @@
 }
 
 .cashier-shifts-page .shift-status--open {
-    color: #166534;
-    background: #dcfce7;
+    color: var(--theme-success-text, #166534);
+    background: var(--theme-success-surface, #dcfce7);
 }
 
 .cashier-shifts-page .shift-status--closed {
@@ -248,8 +248,8 @@
 }
 
 .cashier-shifts-page ::selection {
-    background: #dbeafe;
-    color: #1e3a8a;
+    background: var(--theme-info-surface, #dbeafe);
+    color: var(--theme-info-text, #1e3a8a);
 }
 
 @media (max-width: 900px) {

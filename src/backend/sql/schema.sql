@@ -1574,6 +1574,7 @@ CREATE TABLE `users` (
   `username` varchar(50) NOT NULL,
   `email` varchar(100) DEFAULT NULL,
   `profile_image` varchar(255) DEFAULT NULL,
+  `theme_preference` enum('light','dark','system') NOT NULL DEFAULT 'system',
   `password_hash` varchar(255) NOT NULL,
   `role_id` int(11) NOT NULL,
   `status` enum('active','disabled') DEFAULT 'active',

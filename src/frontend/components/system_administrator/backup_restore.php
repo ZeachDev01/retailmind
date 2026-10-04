@@ -21,7 +21,10 @@ if (!RecoveryStore::isAvailable()) {
     $dashboardUrl = htmlspecialchars(app_url('components/super_administrator/dashboard.php'), ENT_QUOTES, 'UTF-8');
     $logoutUrl = htmlspecialchars(app_url('components/auth/logout.php'), ENT_QUOTES, 'UTF-8');
     $stylesheetUrl = htmlspecialchars(app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
-    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    echo '<!doctype html><html lang="en"><head>';
+    require_once __DIR__ . '/../../../backend/includes/theme.php';
+    retailmind_theme_head();
+    echo '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         . '<title>Backup &amp; Restore unavailable</title><link rel="stylesheet" href="' . $stylesheetUrl . '"></head>'
         . '<body><main style="max-width:44rem;margin:4rem auto;padding:1.5rem">'
         . '<h1>Backup &amp; Restore</h1>'
@@ -120,7 +123,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
+<head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Backup &amp; Restore</title>

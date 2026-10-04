@@ -1,18 +1,18 @@
 /* Reusable utility classes for formerly inline static styles. */
 .u-text-muted { color: var(--muted); }
-.u-text-muted-legacy { color: #666; }
-.u-text-muted-help { color: #666; font-size: 0.85rem; }
+.u-text-muted-legacy { color: var(--theme-muted, #666); }
+.u-text-muted-help { color: var(--theme-muted, #666); font-size: 0.85rem; }
 .u-text-center { text-align: center; }
 .u-text-right { text-align: right; }
 .u-empty-cell { text-align: center; color: var(--muted); }
 .u-empty-cell-padded { text-align: center; color: var(--muted); padding: 2rem; }
 .u-block-label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
-.u-field-static { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb; }
+.u-field-static { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface-soft, #f9fafb); }
 .u-field-select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; }
 .u-field-basic { padding: 0.45rem; border: 1px solid var(--border); border-radius: 8px; }
 .u-field-compact { width: 100%; padding: .55rem; }
 .u-field-compact-spaced { width: 100%; padding: .55rem; margin-bottom: .4rem; }
-.u-select-filter { min-height: 42px; border: 1px solid var(--border); border-radius: 10px; padding: .55rem .75rem; background: #fff; }
+.u-select-filter { min-height: 42px; border: 1px solid var(--border); border-radius: 10px; padding: .55rem .75rem; background: var(--theme-surface, #fff); }
 .u-flex-inline { display: inline; }
 .u-flex-wrap { display: flex; gap: .5rem; flex-wrap: wrap; }
 .u-flex-wrap-loose { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -59,7 +59,7 @@
 .u-button-gray { background: #6b7280; }
 .u-button-orange { background: #f59e0b; }
 .u-button-green { background: #10b981; }
-.u-info-note { margin-top: 1rem; padding: .85rem; border-radius: 11px; background: #eff6ff; color: #1e3a8a; }
+.u-info-note { margin-top: 1rem; padding: .85rem; border-radius: 11px; background: var(--theme-surface-soft, #eff6ff); color: var(--theme-info-text, #1e3a8a); }
 .u-icon-large { font-size: 2rem; }
 .u-action-summary { text-align: right; min-width: 120px; }
 .u-input-grow { flex: 1; min-width: 220px; }
@@ -75,5 +75,5 @@
 .u-scanner-permission-copy { color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
 .u-search-icon { display: block; font-size: 1.4rem; margin-bottom: 0.35rem; }
 .u-skeleton-inline { display: inline-block; width: 180px; height: 16px; }
-.u-admin-link-button { background: none; border: none; color: #3b82f6; text-decoration: none; cursor: pointer; padding: 0; font: inherit; }
-.u-stock-ok-icon { background: #dcfce7; color: #166534; }
+.u-admin-link-button { background: none; border: none; color: var(--theme-info-text, #3b82f6); text-decoration: none; cursor: pointer; padding: 0; font: inherit; }
+.u-stock-ok-icon { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); }

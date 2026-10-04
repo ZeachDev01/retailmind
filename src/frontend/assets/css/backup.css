@@ -9,9 +9,9 @@
     max-width: 34rem;
     padding: 0.6rem 1rem;
     border-radius: 0 0 0.6rem 0.6rem;
-    background: #fef3c7;
+    background: var(--theme-warning-surface, #fef3c7);
     border: 1px solid #f59e0b;
-    color: #78350f;
+    color: var(--theme-warning-text, #78350f);
     font-size: 0.9rem;
     line-height: 1.35;
     text-align: center;
@@ -19,24 +19,24 @@
 }
 
 .rm-backup-notice.is-resumed {
-    background: #dcfce7;
+    background: var(--theme-success-surface, #dcfce7);
     border-color: #16a34a;
-    color: #14532d;
+    color: var(--theme-success-text, #14532d);
 }
 
 .backup-ready {
-    background: #f0fdf4;
+    background: var(--theme-surface-soft, #f0fdf4);
 }
 
 .backup-hint {
-    color: #6b7280;
+    color: var(--theme-muted, #6b7280);
     font-size: 0.85rem;
 }
 
 .backup-guidance {
     margin: 0 0 0.5rem;
     padding-left: 1.1rem;
-    color: #374151;
+    color: var(--theme-ink, #374151);
     line-height: 1.5;
 }
 
@@ -51,9 +51,9 @@
 
  .database-restore-page .dashboard-section { box-shadow:none; padding:1.25rem; }
  .database-restore-page h3 { font-size:1.1rem; font-weight:650; }
- .database-restore-page .backup-guidance { padding-left:1.1rem; font-size:.9rem; line-height:1.6; color:#475569; }
+ .database-restore-page .backup-guidance { padding-left:1.1rem; font-size:.9rem; line-height:1.6; color:var(--theme-muted, #475569); }
  .database-restore-page .backup-guidance li + li { margin-top:.4rem; }
- .database-restore-page .section-description, .database-restore-page .backup-hint { color:#475569; }
+ .database-restore-page .section-description, .database-restore-page .backup-hint { color:var(--theme-muted, #475569); }
  .database-restore-page .btn { min-height:44px; }
 
 

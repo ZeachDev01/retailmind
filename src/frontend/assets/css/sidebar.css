@@ -27,7 +27,7 @@
 }
 .sidebar-brand:hover .brand-icon,
 .sidebar-brand:focus-visible .brand-icon {
-    background: #fff;
+    background: var(--theme-surface, #fff);
     transform: translateY(-1px);
 }
 .sidebar-brand .brand-icon {
@@ -39,7 +39,7 @@
     overflow: hidden;
     padding: 3px;
     border-radius: 10px;
-    background: #fff;
+    background: var(--theme-surface, #fff);
     transition: transform .2s ease;
 }
 .sidebar-brand .brand-icon img { width: 100%; height: 100%; display: block; object-fit: contain; }
@@ -122,7 +122,7 @@
     font-size: 0.85rem;
     border-radius: 6px;
 }
-.sidebar .dropdown-content a:hover { background: rgba(255,255,255,0.04); color: #fff; }
+.sidebar .dropdown-content a:hover { background: var(--theme-surface-glass, rgba(255,255,255,0.04)); color: #fff; }
 .sidebar .dropdown.open .dropdown-content { display: block; }
 
 /* Improve button focus/selection behavior */
@@ -150,7 +150,7 @@
     display: block;
     width: 20px;
     height: 2px;
-    background: #f9fafb;
+    background: var(--theme-surface-soft, #f9fafb);
     border-radius: 2px;
     transition: transform 0.2s ease, opacity 0.2s ease;
 }
@@ -200,11 +200,11 @@ body.no-scroll { overflow: hidden; }
     place-items: center;
     border: 1px solid rgba(255,255,255,.12);
     border-radius: 8px;
-    background: rgba(255,255,255,.05);
+    background: var(--theme-surface-glass, rgba(255,255,255,.05));
     color: #cbd5e1;
     cursor: pointer;
 }
-.sidebar-collapse:hover { color: #fff; background: rgba(255,255,255,.1); }
+.sidebar-collapse:hover { color: #fff; background: var(--theme-surface-glass, rgba(255,255,255,.1)); }
 .sidebar .dropbtn { position: relative; padding-right: 2rem; }
 .sidebar .dropbtn .dropdown-chevron {
     position: absolute;
@@ -248,7 +248,7 @@ body.no-scroll { overflow: hidden; }
     text-align: left;
     cursor: pointer;
 }
-.sidebar-profile:hover { background: rgba(255,255,255,.07); }
+.sidebar-profile:hover { background: var(--theme-surface-glass, rgba(255,255,255,.07)); }
 .sidebar-avatar {
     width: 36px;
     height: 36px;
@@ -301,7 +301,7 @@ body.no-scroll { overflow: hidden; }
     padding: .75rem .8rem;
     border: 1px solid rgba(148, 163, 184, .12);
     border-radius: 8px;
-    background: rgba(255,255,255,.04);
+    background: var(--theme-surface-glass, rgba(255,255,255,.04));
     color: #dbeafe;
     text-decoration: none;
     font-weight: 700;
@@ -394,12 +394,12 @@ button.sidebar-workspace-option:focus-visible {
 }
 .sidebar-workspace-option > i:last-child,
 .sidebar-workspace-option small {
-    color: #7f91aa;
+    color: var(--theme-info-text, #7f91aa);
     font-size: .68rem;
     font-weight: 700;
 }
 .sidebar-workspace-option.is-current {
-    background: rgba(255, 255, 255, .04);
+    background: var(--theme-surface-glass, rgba(255, 255, 255, .04));
     color: #fff;
 }
 .sidebar-account-actions a > i:first-child {
@@ -412,7 +412,7 @@ button.sidebar-workspace-option:focus-visible {
 .sidebar-account-actions a > i:last-child {
     width: auto;
     min-width: 0;
-    color: #64748b;
+    color: var(--theme-muted, #64748b);
     font-size: .78rem;
 }
 .sidebar-account-actions .sidebar-account-logout {

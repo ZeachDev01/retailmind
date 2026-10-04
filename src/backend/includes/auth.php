@@ -7,6 +7,7 @@ App\Core\Session::start();
 
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/csrf.php';
+require_once __DIR__ . '/theme.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/password_policy.php';
 require_once __DIR__ . '/profile_images.php';
@@ -324,7 +325,7 @@ function validate_current_session(PDO $pdo): void
     $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
 
     $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-    if ($_SESSION['must_change_password'] && !in_array($currentScript, ['change_password.php', 'logout.php'], true)) {
+    if ($_SESSION['must_change_password'] && !in_array($currentScript, ['change_password.php', 'logout.php', 'theme.php'], true)) {
         if (!headers_sent()) {
             header('Location: ' . app_url('components/auth/change_password.php'));
         }

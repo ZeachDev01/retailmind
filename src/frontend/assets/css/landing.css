@@ -4,9 +4,9 @@
     --landing-navy-deep: #0b1427;
     --landing-blue: #2563eb;
     --landing-blue-deep: #1d4ed8;
-    --landing-canvas: #f4f6f9;
-    --landing-surface: #ffffff;
-    --landing-surface-soft: #f8fafc;
+    --landing-canvas: var(--theme-surface-soft, #f4f6f9);
+    --landing-surface: var(--theme-surface-soft, #ffffff);
+    --landing-surface-soft: var(--theme-surface-soft, #f8fafc);
     --landing-ink: #1f2937;
     --landing-muted: #667085;
     --landing-line: #dce2ea;
@@ -19,10 +19,10 @@
     overflow-x: hidden;
 }
 
-.landing-page ::selection { background: #bfdbfe; color: #102449; }
+.landing-page ::selection { background: var(--theme-info-surface, #bfdbfe); color: var(--theme-ink, #102449); }
 .landing-page::-webkit-scrollbar { width: 11px; }
-.landing-page::-webkit-scrollbar-track { background: #e9edf3; }
-.landing-page::-webkit-scrollbar-thumb { background: #9aa7ba; border: 3px solid #e9edf3; border-radius: 999px; }
+.landing-page::-webkit-scrollbar-track { background: var(--theme-surface-soft, #e9edf3); }
+.landing-page::-webkit-scrollbar-thumb { background: #9aa7ba; border: 3px solid var(--theme-border, #e9edf3); border-radius: 999px; }
 .landing-page::-webkit-scrollbar-thumb:hover { background: #718096; }
 
 .landing-page h1,
@@ -56,7 +56,7 @@
     z-index: 100;
     top: 0;
     border-bottom: 1px solid var(--landing-line);
-    background: rgba(255, 255, 255, .96);
+    background: var(--theme-surface-glass, rgba(255, 255, 255, .96));
 }
 .landing-nav { width: 100%; min-height: 76px; display: flex; align-items: stretch; justify-content: space-between; margin: 0; }
 .landing-brand {
@@ -78,7 +78,7 @@
     place-items: center;
     padding: .75rem 1rem;
     border-left: 1px solid var(--landing-line);
-    color: #475569;
+    color: var(--theme-muted, #475569);
     font-size: .82rem;
     font-weight: 700;
     text-decoration: none;
@@ -157,7 +157,7 @@
     animation: landing-panel-settle 520ms cubic-bezier(.16, 1, .3, 1) both;
 }
 .landing-hero__visual::after { content: none; }
-.landing-hero__image { position: relative; height: clamp(320px, 35vw, 470px); overflow: hidden; background: #dbe3ed; }
+.landing-hero__image { position: relative; height: clamp(320px, 35vw, 470px); overflow: hidden; background: var(--theme-info-surface, #dbe3ed); }
 .landing-hero__image::after {
     content: "";
     position: absolute;
@@ -184,7 +184,7 @@
     font-size: .74rem;
     font-weight: 700;
 }
-.landing-preview { background: #fff; }
+.landing-preview { background: var(--theme-surface, #fff); }
 .landing-preview__header {
     display: flex;
     align-items: center;
@@ -198,7 +198,7 @@
     position: relative;
     flex: 0 0 auto;
     padding-left: 1rem;
-    color: #166534;
+    color: var(--theme-success-text, #166534);
     font-size: .72rem;
     font-weight: 750;
 }
@@ -232,7 +232,7 @@
     height: 8px;
     border: 2px solid var(--landing-blue);
     border-radius: 50%;
-    background: #fff;
+    background: var(--theme-surface, #fff);
 }
 .landing-preview li span,
 .landing-preview li strong { display: block; }
@@ -363,7 +363,7 @@
     max-height: min(760px, calc(100vh - 2rem));
     overflow: hidden;
     border-radius: 18px;
-    background: #fff;
+    background: var(--theme-surface, #fff);
     box-shadow: 0 24px 64px rgba(11, 20, 39, .3);
     perspective: 1400px;
 }
@@ -378,13 +378,13 @@
     place-items: center;
     border: 0;
     border-radius: 10px;
-    background: #eef2f7;
-    color: #475569;
+    background: var(--theme-surface-soft, #eef2f7);
+    color: var(--theme-muted, #475569);
     font-size: 1.35rem;
     line-height: 1;
     cursor: pointer;
 }
-.landing-login-modal__close:hover { background: #e2e8f0; color: var(--landing-navy); }
+.landing-login-modal__close:hover { background: var(--theme-surface-soft, #e2e8f0); color: var(--landing-navy); }
 .landing-login-modal__flipper {
     display: grid;
     transform-style: preserve-3d;
@@ -396,7 +396,7 @@
     display: grid;
     grid-template-columns: 290px minmax(0, 1fr);
     min-height: 510px;
-    background: #fff;
+    background: var(--theme-surface, #fff);
     backface-visibility: hidden;
 }
 .landing-login-modal__shell--recovery { transform: rotateY(180deg); }
@@ -416,7 +416,7 @@
     place-items: center;
     overflow: hidden;
     border-radius: 12px;
-    background: #fff;
+    background: var(--theme-surface, #fff);
 }
 .landing-login-modal__logo img { width: 52px; height: 52px; display: block; }
 .landing-login-modal__aside h2 { margin: .45rem 0 0; color: #fff; font-size: 2rem; letter-spacing: -.025em; }
@@ -427,18 +427,18 @@
 .landing-login-modal__body--recovery { max-width: 590px; }
 .landing-login-modal__privacy { margin: 1.2rem 0 0; color: var(--landing-muted); font-size: .78rem; line-height: 1.55; }
 .landing-login-form .form-group { margin-bottom: 1rem; }
-.landing-login-form label { display: block; margin-bottom: .42rem; color: #344054; font-size: .8rem; font-weight: 700; }
+.landing-login-form label { display: block; margin-bottom: .42rem; color: var(--theme-info-text, #344054); font-size: .8rem; font-weight: 700; }
 .landing-login-form input {
     width: 100%;
     min-height: 46px;
     padding: .72rem .85rem;
     border: 1px solid #cfd6df;
     border-radius: 10px;
-    background: #fff;
+    background: var(--theme-surface, #fff);
     color: var(--landing-ink);
     font: inherit;
 }
-.landing-login-form input::placeholder { color: #7b8798; }
+.landing-login-form input::placeholder { color: var(--theme-info-text, #7b8798); }
 .landing-login-form input:focus { border-color: var(--landing-blue); box-shadow: var(--focus-ring); outline: 0; }
 .landing-login-form .password-input { position: relative; }
 .landing-login-form .password-input input { padding-right: 4.5rem; }
@@ -450,8 +450,8 @@
     padding: 0 .55rem;
     border: 0;
     border-radius: 7px;
-    background: #eef2f7;
-    color: #475569;
+    background: var(--theme-surface-soft, #eef2f7);
+    color: var(--theme-muted, #475569);
     font-size: .72rem;
     font-weight: 700;
     transform: translateY(-50%);
@@ -469,9 +469,9 @@
 }
 .landing-login-modal__actions .landing-btn { width: 100%; }
 .landing-login-modal__actions a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--landing-blue-deep); font-size: .8rem; font-weight: 700; text-underline-offset: .25rem; }
-.landing-login-modal .error-msg { margin-bottom: 1rem; padding: .78rem .9rem; border-radius: 10px; background: #fef2f2; color: #991b1b; font-size: .82rem; line-height: 1.45; }
-.landing-login-modal .tag-success { margin-bottom: 1rem; padding: .78rem .9rem; border-radius: 10px; background: #f0fdf4; color: #166534; font-size: .82rem; }
-.landing-login-modal .tag-warning { margin-bottom: 1rem; padding: .78rem .9rem; border-radius: 10px; background: #fffbeb; color: #92400e; font-size: .82rem; line-height: 1.45; }
+.landing-login-modal .error-msg { margin-bottom: 1rem; padding: .78rem .9rem; border-radius: 10px; background: var(--theme-surface-soft, #fef2f2); color: var(--theme-danger-text, #991b1b); font-size: .82rem; line-height: 1.45; }
+.landing-login-modal .tag-success { margin-bottom: 1rem; padding: .78rem .9rem; border-radius: 10px; background: var(--theme-surface-soft, #f0fdf4); color: var(--theme-success-text, #166534); font-size: .82rem; }
+.landing-login-modal .tag-warning { margin-bottom: 1rem; padding: .78rem .9rem; border-radius: 10px; background: var(--theme-surface-soft, #fffbeb); color: var(--theme-warning-text, #92400e); font-size: .82rem; line-height: 1.45; }
 .landing-modal-open { overflow: hidden; }
 
 @keyframes landing-panel-settle {

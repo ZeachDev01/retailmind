@@ -172,7 +172,7 @@ function forecast_prototype_chart(string $points, array $daily): void
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Demand Forecast prototype · <?= htmlspecialchars($variantNames[$prototypeVariant]) ?></title>

@@ -1,0 +1,58 @@
+/* Appearance changes colors only; operational layouts and paper widths stay owned by their stylesheets. */
+.theme-control { display:inline-flex; align-items:center; gap:.4rem; flex-shrink:0; font-size:.875rem; color:var(--text,#1f2937); }
+.theme-control select { width:auto; min-width:5.6rem; min-height:36px; margin:0; padding:.3rem .5rem; border:1px solid var(--border,#cbd5e1); border-radius:6px; background:var(--card-bg,#fff); color:var(--text,#1f2937); font:inherit; }
+.theme-control select:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
+.theme-topbar { display:flex; justify-content:flex-end; padding:.5rem 1rem; background:var(--card-bg,#fff); color:var(--text,#1f2937); }
+.theme-save-alert { position:fixed; bottom:1rem; right:1rem; z-index:11000; max-width:min(28rem,calc(100vw - 2rem)); padding:1rem; border:1px solid #b45309; border-radius:8px; background:#fff7ed; color:#78350f; }
+.theme-save-alert[hidden] { display:none; }
+@media(max-width:768px) { .theme-control>span { display:none; } .theme-control select { min-height:44px; } .admin-mobile-topbar .theme-control { margin-left:auto; } }
+@media screen {
+html[data-theme="dark"] {
+    --theme-surface:#152238; --theme-surface-soft:#1c2c43; --theme-surface-glass:rgba(21,34,56,.96); --theme-ink:#e5edf8; --theme-muted:#b1bfd3; --theme-border:#41516a;
+    --theme-danger-text:#fca5a5; --theme-success-text:#86efac; --theme-info-text:#93c5fd; --theme-warning-text:#fde68a;
+    --theme-accent-text:#c4b5fd;
+    --theme-danger-surface:#482431; --theme-success-surface:#153c30; --theme-info-surface:#1e3658; --theme-warning-surface:#453619;
+    --bg:#0b1220; --card-bg:#152238; --surface-soft:#1c2c43; --text:#e5edf8; --muted:#b1bfd3; --border:#41516a;
+    --primary:#60a5fa; --primary-dark:#93c5fd; --danger:#fca5a5; --success:#86efac;
+    --fp-bg:#0b1220; --fp-surface:#152238; --fp-text:#e5edf8; --fp-muted:#b1bfd3; --fp-line:#41516a;
+    --focus-ring:0 0 0 3px rgba(96,165,250,.55);
+}
+html[data-theme="dark"] .landing-page { --landing-canvas:#0b1220; --landing-surface:#152238; --landing-surface-soft:#1c2c43; --landing-ink:#e5edf8; --landing-muted:#b1bfd3; --landing-line:#41516a; }
+html[data-theme="dark"] .cashier-page { --cashier-surface:#152238; --cashier-border:#41516a; --cashier-text:#e5edf8; --cashier-muted:#b1bfd3; }
+html[data-theme="dark"] .auth-page { --auth-ink:#e5edf8; --auth-muted:#b1bfd3; --auth-canvas:#0b1220; --auth-canvas-tint:#152238; --auth-surface:#152238; }
+html[data-theme="dark"] :is(.landing-preview__header strong,.landing-preview__grid strong) { color:#e5edf8; }
+html[data-theme="dark"] .landing-header { background:#152238; }
+html[data-theme="dark"] .forecast-prototype { --fp-navy:#e5edf8; --fp-ink:#e5edf8; --fp-muted:#b1bfd3; --fp-line:#41516a; --fp-canvas:#0b1220; }
+html[data-theme="dark"] .super-administrator-workspace { --control-navy:#e5edf8; --control-canvas:#0b1220; --control-muted:#b1bfd3; --control-line:#41516a; }
+html[data-theme="dark"] .database-restore-page .main-content { --recovery-ink:#e5edf8; --recovery-muted:#b1bfd3; --recovery-line:#41516a; }
+html[data-theme="dark"] body { background:#0b1220 !important; color:#e5edf8 !important; }
+html[data-theme="dark"] :is(.main-content,.landing-shell,.landing-login-panel,.landing-login-modal,.landing-login-card,.auth-card,.login-card,.preferences-card,.workspace-card,.card,.stat-card,.chart-card,.table-card,.report-card,.panel,.toolbar,.topbar,.global-topbar,.admin-mobile-topbar,.table-wrap,.form-card,.summary-card,.pos-panel,.cart-panel,.sale-receipt,.refund-receipt,.swal2-popup,.modal-content,.modal-card,.modal-dialog,.drawer,.drawer-panel,.command-palette,.command-panel,.account-menu,.global-account-menu,.dropdown-menu) { background-color:#152238 !important; color:#e5edf8 !important; border-color:#41516a !important; }
+html[data-theme="dark"] :is(h1,h2,h3,h4,h5,h6,label,th,td,.value,.stat-value,.card-title,.modal-title,.swal2-title,.swal2-html-container,.receipt-store-line,.sale-receipt-money) { color:inherit; }
+html[data-theme="dark"] :is(p,.page-subtitle,.muted,.text-muted,.label,.hint,.help-text,.form-help,.sale-receipt-sku,.receipt-url) { color:#b1bfd3; }
+html[data-theme="dark"] :is(input,select,textarea) { background-color:#101c2e !important; color:#e5edf8 !important; border-color:#526580 !important; }
+html[data-theme="dark"] :is(input,textarea)::placeholder { color:#a9b8ce; opacity:1; }
+html[data-theme="dark"] :is(input,select,textarea,button,a):focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
+html[data-theme="dark"] :is(table,thead,tbody,tr,th,td) { border-color:#41516a !important; }
+html[data-theme="dark"] :is(th,thead,.table-header) { background-color:#1c2c43 !important; color:#e5edf8 !important; }
+html[data-theme="dark"] td { background-color:#152238; color:#e5edf8; }
+html[data-theme="dark"] .dt-container .dt-paging-button { background:#1c2c43 !important; color:#e5edf8 !important; border-color:#526580 !important; }
+html[data-theme="dark"] .dt-container .dt-paging-button.current { background:#2563eb !important; color:#fff !important; }
+html[data-theme="dark"] :is(tbody tr:hover td,.list-item:hover,.dropdown-item:hover) { background-color:#243952; }
+html[data-theme="dark"] :is(.btn,.button,.global-search-trigger,.global-notification-button,.global-account-button) { background-color:#1c2c43; color:#e5edf8; border-color:#526580; }
+html[data-theme="dark"] :is(.btn-primary,.btn-blue,button[type="submit"]) { background-color:#2563eb; color:#fff; }
+html[data-theme="dark"] a:not(.btn):not(.sidebar a) { color:#93c5fd; }
+html[data-theme="dark"] :is(.tag-success,.badge-success,.alert-success) { background-color:#153c30; color:#a7f3d0; border-color:#43866c; }
+html[data-theme="dark"] :is(.tag-warning,.badge-warning,.alert-warning) { background-color:#453619; color:#fde68a; border-color:#917337; }
+html[data-theme="dark"] :is(.tag-danger,.badge-danger,.alert-danger,.tag-error) { background-color:#482431; color:#fecdd3; border-color:#9a5063; }
+html[data-theme="dark"] :is(.tag-info,.badge-info,.alert-info) { background-color:#1e3658; color:#bfdbfe; border-color:#4a72a4; }
+html[data-theme="dark"] :is(.sale-receipt,.refund-receipt) * { border-color:#60718a; }
+/* A barcode's machine-readable ink keeps a white inset on the themed label. */
+html[data-theme="dark"] .barcode-svg { background-color:#fff; }
+html[data-theme="dark"] .theme-save-alert { background:#453619; color:#fde68a; border-color:#917337; }
+}
+@media print {
+    .theme-control,.theme-topbar,.theme-save-alert { display:none !important; }
+    html,body { color-scheme:light !important; background:#fff !important; color:#111 !important; }
+    body * { background-color:transparent !important; color:#111 !important; border-color:#777 !important; box-shadow:none !important; }
+    .sale-receipt,.refund-receipt,.receipt-print-root,.receipt-print-area,table,th,td { background:#fff !important; color:#111 !important; }
+}

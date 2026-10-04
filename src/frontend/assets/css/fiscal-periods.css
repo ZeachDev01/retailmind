@@ -12,14 +12,14 @@
 
 .fiscal-period-page .message.success {
     border-color: #86efac;
-    background: #f0fdf4;
-    color: #166534;
+    background: var(--theme-surface-soft, #f0fdf4);
+    color: var(--theme-success-text, #166534);
 }
 
 .fiscal-period-page .message.error {
     border-color: #fecaca;
-    background: #fef2f2;
-    color: #991b1b;
+    background: var(--theme-surface-soft, #fef2f2);
+    color: var(--theme-danger-text, #991b1b);
 }
 
 .fiscal-period-stats {
@@ -28,7 +28,7 @@
 
 .fiscal-period-stats .fiscal-stat-locked {
     border-color: #fecaca;
-    background: #fff7f7;
+    background: var(--theme-surface-soft, #fff7f7);
 }
 
 .fiscal-period-stats .fiscal-stat-locked .stat-icon {
@@ -169,18 +169,18 @@
 }
 
 .fiscal-status-badge.open {
-    background: #dcfce7;
-    color: #166534;
+    background: var(--theme-success-surface, #dcfce7);
+    color: var(--theme-success-text, #166534);
 }
 
 .fiscal-status-badge.closed {
-    background: #fef3c7;
-    color: #92400e;
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #92400e);
 }
 
 .fiscal-status-badge.locked {
-    background: #fee2e2;
-    color: #991b1b;
+    background: var(--theme-surface-soft, #fee2e2);
+    color: var(--theme-danger-text, #991b1b);
 }
 
 .fiscal-period-details {
@@ -229,22 +229,22 @@
 
 .fiscal-action-close {
     border: 1px solid #f59e0b;
-    background: #fffbeb;
-    color: #92400e;
+    background: var(--theme-surface-soft, #fffbeb);
+    color: var(--theme-warning-text, #92400e);
 }
 
 .fiscal-action-close:hover {
-    background: #fef3c7;
+    background: var(--theme-warning-surface, #fef3c7);
 }
 
 .fiscal-action-lock {
     border: 1px solid #fca5a5;
-    background: #fef2f2;
-    color: #991b1b;
+    background: var(--theme-surface-soft, #fef2f2);
+    color: var(--theme-danger-text, #991b1b);
 }
 
 .fiscal-action-lock:hover {
-    background: #fee2e2;
+    background: var(--theme-surface-soft, #fee2e2);
 }
 
 .fiscal-read-only {

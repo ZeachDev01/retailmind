@@ -68,20 +68,20 @@
 
 .audit-log-page .audit-action-badge.is-success {
   border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--theme-surface-soft, #f0fdf4);
+  color: var(--theme-success-text, #166534);
 }
 
 .audit-log-page .audit-action-badge.is-danger {
   border-color: #fecaca;
-  background: #fef2f2;
-  color: #991b1b;
+  background: var(--theme-surface-soft, #fef2f2);
+  color: var(--theme-danger-text, #991b1b);
 }
 
 .audit-log-page .audit-action-badge.is-neutral {
-  border-color: #e2e8f0;
-  background: #f8fafc;
-  color: #475569;
+  border-color: var(--theme-border, #e2e8f0);
+  background: var(--theme-surface-soft, #f8fafc);
+  color: var(--theme-muted, #475569);
 }
 
 .audit-log-page .audit-details summary {
@@ -148,7 +148,7 @@
 .audit-log-page .dt-container .dt-length select {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--theme-surface, #fff);
 }
 
 .audit-log-page .dt-container .dt-search input {

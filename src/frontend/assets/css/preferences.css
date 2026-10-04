@@ -1,6 +1,6 @@
 .account-preferences {
     --preference-accent: #2563eb;
-    --preference-accent-soft: #eff6ff;
+    --preference-accent-soft: var(--theme-info-surface, #eff6ff);
 }
 
 .preferences-panel {
@@ -62,14 +62,14 @@
     padding: .85rem 1rem;
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: #fff;
+    background: var(--theme-surface, #fff);
     cursor: pointer;
     transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
 }
 
 .preference-option:hover {
     border-color: #bfdbfe;
-    background: #f8fbff;
+    background: var(--theme-surface-soft, #f8fbff);
     box-shadow: 0 4px 12px rgba(37, 99, 235, .06);
 }
 
@@ -112,7 +112,7 @@
     padding: .9rem 1rem;
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: #fff;
+    background: var(--theme-surface, #fff);
 }
 
 .threshold-field label,
@@ -153,7 +153,7 @@
     display: flex;
     justify-content: flex-end;
     padding: 1rem 1.35rem;
-    background: #f8fafc;
+    background: var(--theme-surface-soft, #f8fafc);
 }
 
 .preferences-actions .btn {

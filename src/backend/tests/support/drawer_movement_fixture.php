@@ -1,4 +1,5 @@
 <?php
+function retailmind_theme_head(): void {}
 // Render the production form with synthetic data; no Store connection or writes.
 require_once __DIR__ . '/../../bootstrap/app.php';
 function app_url(string $path): string { return '/' . $path; }
