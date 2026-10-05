@@ -251,7 +251,7 @@ function forecast_prototype_chart(string $points, array $daily): void
                     <div><span>Suggested reorder</span><strong><?= $selected['reorder'] ?></strong><small>lead time <?= $selected['lead'] ?> days</small></div>
                     <hr>
                     <p>This is decision support. Review incoming stock, supplier terms, and Store conditions before acting.</p>
-                    <button type="button" disabled>Review replenishment</button>
+                    <button class="no-print" type="button" disabled>Review replenishment</button>
                 </aside>
             </div>
 
@@ -260,7 +260,7 @@ function forecast_prototype_chart(string $points, array $daily): void
                 <div><h1>Forecast action queue</h1><p>Work from the most exposed products toward healthy stock coverage.</p></div>
                 <div class="fp-queue-summary"><span><b><?= $totals['urgent'] ?></b> urgent</span><span><b><?= number_format($totals['reorder']) ?></b> suggested units</span></div>
             </header>
-            <section class="fp-queue-toolbar" aria-label="Queue filters">
+            <section class="fp-queue-toolbar no-print" aria-label="Queue filters">
                 <div class="fp-segmented"><button class="is-active" type="button">All products</button><button type="button">Urgent</button><button type="button">Watch</button><button type="button">Covered</button></div>
                 <label><span>Sort</span><select><option>Highest risk first</option><option>Largest reorder</option><option>Lowest readiness</option></select></label>
             </section>
@@ -281,7 +281,7 @@ function forecast_prototype_chart(string $points, array $daily): void
     </main>
 </div>
 
-<nav class="fp-switcher" aria-label="Prototype variants" data-current-variant="<?= $prototypeVariant ?>">
+<nav class="fp-switcher no-print" aria-label="Prototype variants" data-current-variant="<?= $prototypeVariant ?>">
     <button type="button" data-prototype-direction="-1" aria-label="Previous variant"><i class="bi bi-arrow-left"></i></button>
     <span><small>Prototype variant</small><strong><?= $prototypeVariant ?> · <?= htmlspecialchars($variantNames[$prototypeVariant]) ?></strong></span>
     <button type="button" data-prototype-direction="1" aria-label="Next variant"><i class="bi bi-arrow-right"></i></button>

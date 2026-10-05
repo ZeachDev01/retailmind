@@ -13,6 +13,7 @@ const recovery = fs.mkdtempSync(path.join(os.tmpdir(),'rm-theme-recovery-'));
 const fixtureEnv = {...process.env,BACKUP_STORAGE_PATH:recovery};
 const screenshotOutput = process.env.THEME_BROWSER_OUTPUT || path.join(os.tmpdir(),'retailmind-theme-browser');
 const receiptsOnly = process.env.THEME_RECEIPTS_ONLY === '1';
+const reportsOnly = process.env.THEME_REPORTS_ONLY === '1';
 const fixture = action => {
     const result = spawnSync(php, ['src/backend/tests/support/theme_fixture.php', action, database], {encoding:'utf8',env:fixtureEnv});
     if (result.status !== 0) throw new Error(result.stderr || result.stdout);
@@ -75,7 +76,117 @@ const fixture = action => {
             }
             assert.equal((await context.request.post('/components/auth/theme.php',{form:{mode:'dark',csrf_token:'bad'}})).status(),403,'Gate rejects invalid CSRF');
         };
+        const reportAcceptance = async role => {
+            fixture('reports');
+            const records = JSON.parse(fixture('inventory_state'));
+            const transactions = JSON.parse(fixture('cashier_state'));
+            const routes = role === 'admin' ? [
+                '/components/report/report_generation.php?report=inventory_valuation',
+                '/components/report/report_generation.php?report=sales_product&from=2020-01-01&to=2030-01-01',
+            ] : [
+                '/components/invoice/purchase_orders.php',
+                '/components/inventory_management/print_barcodes.php?product_id=1&quantity=120',
+                '/components/report/data_readiness.php', '/components/report/forecast_exceptions.php',
+                '/components/report/predictions.php', '/components/report/predictions.php?variant=A',
+                '/components/report/forecast_analytics.php',
+            ];
+            await page.addInitScript(()=>{window.printCalls=0;window.print=()=>window.printCalls++;});
+            for (const route of routes) {
+                console.log('Theme report screen/paper: '+role+' '+route);
+                assert.equal((await page.goto(route)).status(),200);
+                const content = page.locator('.main-content,.sheet').first();
+                const rendered = await content.innerText();
+                assert.equal(await page.evaluate(()=>window.printCalls),0,'Navigation never prints reports');
+                for (const mode of ['light','dark']) {
+                    await select(mode);
+                    for (const selector of ['h1','h2','h3','label','td','th','.value','.label','.tag-warning','.tag-success','input:not([type="hidden"]):not([type="checkbox"])','select','textarea']) {
+                        const visible=page.locator('.main-content '+selector+',.barcode-page '+selector).filter({visible:true});
+                        if(await visible.count()) await contrast(visible);
+                    }
+                }
+                const draft=page.locator('#from,#quantity').first();
+                if(await draft.count()) await draft.fill(route.includes('print_barcodes')?'121':'2026-01-02');
+                for (const width of [320,390,1280]) {
+                    await page.setViewportSize({width,height:900});
+                    const bounds=await control().boundingBox();
+                    assert(bounds && bounds.x>=0 && bounds.x+bounds.width<=width,'Report control fits '+route+' '+width);
+                    assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Report control unobscured');
+                    await control().focus();
+                    assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Report focus visible');
+                }
+                await select('system'); await page.emulateMedia({colorScheme:'light'});
+                await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+                await page.emulateMedia({colorScheme:'dark'});
+                await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+                await select('light'); assert.equal(await page.locator('html').getAttribute('data-theme'),'light','Explicit report mode overrides device');
+                await select('dark');
+                if(await draft.count()) assert.equal(await draft.inputValue(),route.includes('print_barcodes')?'121':'2026-01-02','Mode/device changes preserve report draft');
+                if(route.includes('inventory_valuation')) assert.equal(await page.locator('tbody tr').count(),66,'Representative report retains all inventory rows');
+                if(route.includes('sales_product')) assert((await page.locator('tbody').innerText()).includes('25.00'),'Report retains original sale amount');
+                if(route.includes('purchase_orders')) {
+                    assert((await page.locator('.po-card').innerText()).includes('15.00'),'Purchase Order retains five units at cost 3');
+                    await page.getByRole('button',{name:'Cancel',exact:true}).first().click();
+                    const dialog=page.locator('.rm-modal-overlay.open'); await dialog.waitFor();
+                    await select('light'); await contrast(dialog.locator('h2,h3')); await select('dark');
+                    await dialog.locator('.rm-cancel').click();
+                }
+                if(route.includes('forecast_analytics')) {
+                    for(const tab of ['features','trend','actual']) {
+                        await page.locator('[data-analytics-tab="'+tab+'"]').click();
+                        const canvas=page.locator('[data-analytics-panel="'+tab+'"] canvas');
+                        const pixels=()=>canvas.evaluate(el=>Array.from(el.getContext('2d').getImageData(0,0,45,45).data));
+                        const dark=await pixels(); assert(dark.some((v,i)=>i%4===3 && v>0),'Visible canvas axes/labels');
+                        await select('light'); assert.notDeepEqual(await pixels(),dark,'Each visible chart redraws on theme change');
+                        await select('system'); await page.emulateMedia({colorScheme:'light'});
+                        await page.waitForFunction(()=>document.documentElement.dataset.theme==='light'); const light=await pixels();
+                        await page.emulateMedia({colorScheme:'dark'}); await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+                        assert.notDeepEqual(await pixels(),light,'Each visible chart follows live System'); await select('dark');
+                        await page.evaluate(()=>window.dispatchEvent(new Event('beforeprint'))); await page.emulateMedia({media:'print'});
+                        assert.notDeepEqual(await pixels(),dark,'Paper chart labels redraw with dark ink');
+                        assert.equal(await canvas.evaluate(el=>el.getContext('2d').fillStyle),'#475569','Paper canvas label/legend ink');
+                        await page.emulateMedia({media:'screen'}); await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')));
+                        assert.equal(await canvas.evaluate(el=>el.getContext('2d').fillStyle),'#b1bfd3','Screen canvas restored after print');
+                    }
+                }
+                const pageSize=page.getByRole('combobox',{name:'Rows per page'});
+                if(await pageSize.count()) {
+                    const before=await page.locator('tbody tr:not([hidden])').allTextContents();
+                    await select('light'); await select('dark');
+                    assert.deepEqual(await page.locator('tbody tr:not([hidden])').allTextContents(),before,'Report pagination retains visible rows');
+                    await pageSize.selectOption('100');
+                }
+                for(const paperMode of ['dark','system']) {
+                    await select(paperMode); await page.emulateMedia({colorScheme:'dark',media:'print'});
+                    assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+                    assert.equal(await page.locator('.sidebar,.admin-mobile-topbar,.sidebar-backdrop,.theme-control,.theme-topbar,.report-filters,.report-actions,.no-print').filter({visible:true}).count(),0,'Paper hides navigation/forms/actions');
+                    const paperControls=await page.locator('button,input,select,textarea').filter({visible:true}).evaluateAll(els=>els.map(el=>el.outerHTML.slice(0,180)));
+                    assert.equal(paperControls.length,0,'Paper contains no screen controls: '+JSON.stringify(paperControls));
+                    for(const selector of ['.main-content td','.main-content h2','.po-head','.label-product','.label-code','.fp-chart-axis']) {
+                        const visible=page.locator(selector).filter({visible:true});
+                        if(await visible.count()) assert.equal(await visible.first().evaluate(el=>getComputedStyle(el).color),'rgb(17, 17, 17)','Dark paper ink '+selector);
+                    }
+                    if(await page.locator('.table-wrap').count()) assert(await page.locator('.table-wrap').first().evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Paper table does not clip');
+                    const pdf=await page.pdf({format:'A4',margin:{top:'10mm',bottom:'10mm',left:'10mm',right:'10mm'}});
+                    if(route.includes('forecast_analytics')) assert.equal(await page.locator('#actualChart').evaluate(el=>el.getContext('2d').fillStyle),'#475569','Print preview keeps dark chart ink after browser print events');
+                    if(route.includes('inventory_valuation')||route.includes('print_barcodes')) assert((pdf.toString('latin1').match(/\/Type \/Page\b/g)||[]).length>1,'Long reports/label sheets retain pagination');
+                    fs.mkdirSync(screenshotOutput,{recursive:true});
+                    if(paperMode==='dark') await page.screenshot({path:path.join(screenshotOutput,'report-'+role+'-'+routes.indexOf(route)+'-print.png'),fullPage:true});
+                    await page.emulateMedia({media:'screen'}); await select('dark');
+                }
+                const print=page.locator('button[onclick="window.print()"]');
+                if(await print.count()) { await print.first().click(); assert.equal(await page.evaluate(()=>window.printCalls),1,'Explicit action alone invokes report print'); }
+                await page.reload(); assert.equal(await control().inputValue(),'dark','Report choice survives reload');
+                assert.equal(await content.innerText(),rendered,'Theme/printing preserves report values');
+            }
+            assert.deepEqual(JSON.parse(fixture('inventory_state')),records,'Report appearance/printing preserves inventory, purchasing and forecasts');
+            assert.deepEqual(JSON.parse(fixture('cashier_state')),transactions,'Report appearance/printing preserves transactions');
+            if(role==='inventory_manager') assert.equal((await context.request.get('/components/administrator/store_settings.php')).status(),403,'Report appearance cannot expand role visibility');
+        };
         await page.goto('/?login=1'); await control().selectOption('light');
+        if(reportsOnly) {
+            for(const role of ['admin','inventory_manager']) { await login(role); await select('dark'); await reportAcceptance(role); await page.goto('/components/auth/logout.php'); }
+            console.log('Theme report browser: passed (real application/MySQL, screens/state/modes/mobile/charts, light paper, controls/pagination/manual print)'); return;
+        }
         for (const role of receiptsOnly ? ['cashier'] : ['admin','super_admin','inventory_manager','cashier']) {
             console.log('Theme browser role: '+role);
             await login(role);
@@ -542,12 +653,7 @@ const fixture = action => {
                 assert.notDeepEqual(await pixels(),systemLightPixels,'Live System change redraws chart pixels'); await select('dark');
                 await page.goto('/components/report/predictions.php?variant=A'); await contrast(page.locator('.fp-prototype-note'));
             }
-            if(role === 'admin') {
-                await page.goto('/components/report/report_generation.php');
-                await page.emulateMedia({media:'print'});
-                assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
-                assert.equal(await control().count(),0); await page.emulateMedia({media:'screen'});
-            }
+            if(role === 'admin' || role === 'inventory_manager') await reportAcceptance(role);
             await page.route('**/auth/theme.php',route=>route.fulfill({status:503,contentType:'application/json',body:'{"success":false}'}));
             await control().selectOption('light');
             await page.getByRole('alert').filter({hasText:'display theme was not saved'}).waitFor();

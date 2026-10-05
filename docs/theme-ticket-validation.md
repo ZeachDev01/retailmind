@@ -232,3 +232,40 @@ regression evidence and pre-existing route-label failure/legacy DB skips apply.
 Review against `b0c89ae`: Standards and Spec independently found zero remaining
 findings. No receipt storage, transaction rules, permissions or automatic print
 behavior changed.
+
+## #128 — Report viewing and light paper
+
+Confirmed #122 closed. Inventoried every current non-receipt explicit print
+implementation: Report Generation (Print/Export PDF, all sixteen report catalog
+entries), Purchase Orders and standalone Printable Barcode Labels. Also audited
+native browser printing of Data Readiness, Forecast Exceptions, Demand Forecasts,
+the development Forecast dashboard and Forecast Analytics. Stock Receiving's
+operational form/screen remains covered by #125.
+Receipt printing remains covered by #127.
+
+Real-browser assertions reproduced Purchase Orders leaking creation/actions and
+navigation into paper, plus shared global Search, smart-table controls and
+dynamic purchasing confirmation controls. Existing `no-print` markup now marks
+Purchase Order and prototype actions. Shared print CSS hides shell tools/overlays,
+clears shell padding and prevents table clipping without changing screen paging,
+data, label dimensions or report filters. Analytics labels also follow print-media
+changes so a print preview stays dark after browser `afterprint` events and returns
+to the active screen palette when print media ends.
+
+Expanded the disposable application/MySQL browser suite across nine representative
+report routes: Light/Dark and both live System changes, explicit overrides,
+navigation/reload, filter drafts, desktop/mobile control visibility/focus at 320,
+390 and 1280 px, representative text/form/table/status contrast and open purchasing
+confirmation appearance. Three visible canvas kinds exercise rendered axes and
+labels, live redraw and paper/screen restoration. Populated sales, five-unit
+Purchase Orders, actual forecasts/training runs, 66 inventory rows and 120 labels
+verify values, selected screen pagination, light Dark/System paper, hidden controls,
+unclipped tables and multipage browser PDFs. Inventory/purchasing/forecast and
+transaction snapshots remain unchanged. Navigation never requests print; explicit
+Print requests still call browser print.
+
+Validation: `RUN_DB_TESTS=1 THEME_REPORTS_ONLY=1` scoped account browser passed;
+no enabled browser/database check skipped. Changed PHP/JS syntax and whitespace
+checks passed. Print screenshots inspected for Purchase Orders and Forecast
+Analytics. Parent #121 owns final global regression; the previously documented
+baseline route-label failure and optional legacy Store DB skips remain separate.

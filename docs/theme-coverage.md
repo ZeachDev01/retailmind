@@ -37,6 +37,18 @@ Generation, Purchase Orders, barcode labels, Sale Receipts, and Refund Receipts.
 They hide appearance controls. Receipt print clones keep the existing 58 mm /
 80 mm widths, transaction-time details, and user-initiated print behavior.
 
+| Existing non-receipt paper path | Implementation and retained behavior |
+| --- | --- |
+| Report Generation (all sixteen catalog reports) | Same table/metrics renderer; Print and Export PDF call browser print. GET filters, CSV export and selected smart-table page stay unchanged. |
+| Purchase Orders | Whole current order list through browser print; Store/supplier/product data and totals remain visible. Creation form and per-order actions stay on screen. |
+| Printable Barcode Labels | Standalone sheet with its existing label dimensions, quantities and page margins. Manual Print stays manual; Generate Barcode and Print retains its explicit redirect/load print request. |
+| Forecast/report browser print | Data Readiness, Forecast Exceptions, Demand Forecasts (including development dashboard variants) and Forecast Analytics use light paper. Active analytics tab stays selected; features, accuracy trend and actual/forecast canvases redraw labels for print and return to screen colors afterward. |
+
+Shared paper rules hide desktop/mobile navigation, Search/dialog overlays, and
+smart-table search/page controls, while retaining the selected rows and report
+data. Paper tables wrap within their available width; label and report pagination
+remain owned by the existing renderers. No screen palette inversion is used.
+
 ## Verification
 
 `node src/backend/tests/theme_login_browser_test.js` starts its own application
@@ -50,6 +62,12 @@ mobile, keyboard/focus/contrast, account isolation/persistence, protected writes
 failed saves, open dialogs, chart redraw, scan/form/cart preservation, workspace
 switching, gates, and distinct report print paths. Screenshots go to the OS temp
 directory (override with `THEME_BROWSER_OUTPUT`).
+
+`THEME_REPORTS_ONLY=1` narrows that disposable account suite to report acceptance:
+nine routes, populated sales/Purchase Order/forecast values, 66 inventory rows,
+120 barcode labels and multipage browser PDFs. It tests Dark and dark-resolving
+System paper, screen controls, filter/pagination state, all three canvas kinds,
+mobile focus/access and unchanged inventory/transaction database snapshots.
 
 Sale/Refund Receipt browser suites also exercise dark previews and light print
 clones at both paper widths with short/long details. `run_all.sh` includes the

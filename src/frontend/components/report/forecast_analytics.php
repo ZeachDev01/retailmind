@@ -69,7 +69,8 @@ const featureData = <?= json_encode(['labels' => array_keys($featureImportance),
 const trendData = <?= json_encode($trainingTrend, JSON_HEX_TAG) ?>;
 const actualData = <?= json_encode(array_reverse($actualVsForecast), JSON_HEX_TAG) ?>;
 let analyticsPrinting = false;
-function analyticsTextColor() { return !analyticsPrinting && document.documentElement.dataset.theme === 'dark' ? '#b1bfd3' : '#475569'; }
+const analyticsPrintMedia = window.matchMedia('print');
+function analyticsTextColor() { return !analyticsPrinting && !analyticsPrintMedia.matches && document.documentElement.dataset.theme === 'dark' ? '#b1bfd3' : '#475569'; }
 function drawBars(canvasId, labels, series, legends) {
   const canvas = document.getElementById(canvasId), dpr = window.devicePixelRatio || 1, width = canvas.clientWidth || 600, height = 240;
   canvas.width = width*dpr; canvas.height = height*dpr; const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,width,height);
@@ -104,6 +105,7 @@ analyticsTabs.forEach((tab,index) => {
 drawAnalyticsPanel('features');
 const redrawAnalytics = () => drawAnalyticsPanel(document.querySelector('[data-analytics-tab].is-active').dataset.analyticsTab);
 window.addEventListener('retailmind:themechange', redrawAnalytics);
+analyticsPrintMedia.addEventListener('change', redrawAnalytics);
 window.addEventListener('beforeprint', () => { analyticsPrinting = true; redrawAnalytics(); });
 window.addEventListener('afterprint', () => { analyticsPrinting = false; redrawAnalytics(); });
 </script></body></html>

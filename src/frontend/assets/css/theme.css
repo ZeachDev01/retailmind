@@ -57,7 +57,11 @@ html[data-theme="dark"] .barcode-svg { background-color:#fff; }
 html[data-theme="dark"] .theme-save-alert { background:#453619; color:#fde68a; border-color:#917337; }
 }
 @media print {
-    .theme-control,.theme-topbar,.theme-save-alert { display:none !important; }
+    .theme-control,.theme-topbar,.theme-save-alert,.sidebar,.global-topbar,.admin-mobile-topbar,.sidebar-backdrop,.command-overlay,.rm-modal-overlay,.rm-drawer-overlay,.auto-table-toolbar,.auto-table-pagination,.no-print { display:none !important; }
+    .app-shell { display:block; min-height:0; }
+    .main-content { padding:0 !important; }
+    .table-wrap { overflow:visible !important; }
+    .table-wrap table { min-width:0; }
     html,body { color-scheme:light !important; background:#fff !important; color:#111 !important; }
     body * { background-color:transparent !important; color:#111 !important; border-color:#777 !important; box-shadow:none !important; }
     .sale-receipt,.refund-receipt,.receipt-print-root,.receipt-print-area,table,th,td { background:#fff !important; color:#111 !important; }
