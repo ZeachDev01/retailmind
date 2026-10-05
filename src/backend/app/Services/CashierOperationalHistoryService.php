@@ -5,6 +5,8 @@ namespace App\Services;
 use InvalidArgumentException;
 use PDO;
 
+require_once __DIR__ . '/PhilippineTime.php';
+
 /** Read-only, identity-scoped operational records for the active Cashier. */
 final class CashierOperationalHistoryService
 {
@@ -49,20 +51,36 @@ final class CashierOperationalHistoryService
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function page(string $type, int $cashierId, int $page = 1, int $size = self::PAGE_SIZE): array
+    public function page(string $type, int $cashierId, int $page = 1, int $size = self::PAGE_SIZE, ?string $fromDay = null, ?string $throughDay = null): array
     {
         $query = $this->query($type);
         $page = max(1, $page);
         $size = max(1, min(100, $size));
         $alias = $query['alias'];
+        $dateConditions = '';
+        $dateParameters = [];
+        if ($fromDay !== null) {
+            $dateConditions .= " AND {$query['date']} >= :date_start";
+            $dateParameters[':date_start'] = PhilippineTime::dayStart($fromDay);
+        }
+        if ($throughDay !== null) {
+            $dateConditions .= " AND {$query['date']} < :date_after";
+            $dateParameters[':date_after'] = PhilippineTime::dayAfter($throughDay);
+        }
+        if ($fromDay !== null && $throughDay !== null && $fromDay > $throughDay) {
+            throw new InvalidArgumentException('The end date must be on or after the start date.');
+        }
         $sql = "SELECT {$query['columns']} FROM {$query['table']} {$alias}
-                WHERE {$alias}.cashier_id = :cashier_id
+                WHERE {$alias}.cashier_id = :cashier_id{$dateConditions}
                 ORDER BY {$query['date']} DESC, {$alias}.{$query['id']} DESC
                 LIMIT :size OFFSET :offset";
         $statement = $this->pdo->prepare($sql);
         $statement->bindValue(':cashier_id', $cashierId, PDO::PARAM_INT);
         $statement->bindValue(':size', $size, PDO::PARAM_INT);
         $statement->bindValue(':offset', ($page - 1) * $size, PDO::PARAM_INT);
+        foreach ($dateParameters as $name => $value) {
+            $statement->bindValue($name, $value, PDO::PARAM_STR);
+        }
         $statement->execute();
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }

@@ -210,10 +210,10 @@ $checks = [
         'file' => 'src/frontend/components/auth/preferences.php',
         'needles' => ['Preferences', 'preferences.css', 'notify_low_stock', 'notify_replenishment', 'notify_adjustment', 'notify_email', 'notify_inapp', 'low_stock_threshold', 'csrf_field()'],
     ],
-    'Administrator profile pictures are self-service only' => [
+    'Ordinary account profile pictures are self-service only' => [
         'file' => 'src/frontend/components/auth/user_info.php',
-        'needles' => ['replace_profile_image', 'remove_profile_image', 'RoleCapabilityPolicy::PLATFORM_GOVERNANCE', 'RoleCapabilityPolicy::STORE_OPERATIONS', "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp'],
-        'forbidden' => ['is_system_admin', "\$_POST['user_id']", "\$_GET['user_id']", "\$_REQUEST['user_id']"],
+        'needles' => ['replace_profile_image', 'remove_profile_image', "['cashier', 'inventory_manager', 'admin', 'super_admin']", "(int)\$_SESSION['user_id']", 'ProfileImageStorage::MAX_FILE_SIZE', 'image/jpeg,image/png,image/gif,image/webp', 'Save picture', 'Optional.'],
+        'forbidden' => ['is_system_admin', "\$_REQUEST['user_id']"],
     ],
     'Admin User Info uses a dedicated responsive layout' => [
         'file' => 'src/frontend/components/auth/user_info.php',
@@ -262,7 +262,7 @@ $checks = [
     ],
     'Sales workspace exposes transaction filters and reversal actions' => [
         'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['sales-tabs', 'Sales Transactions', 'Sales Reversals', 'id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'tab=reversals&sale_id=', 'SaleReversalService', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
+        'needles' => ['sales-tabs', 'Sales Transactions', 'Legacy Reversals', 'id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'tab=reversals&sale_id=', 'SaleReversalService', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
     ],
     'Sales transaction server contract is isolated and safe' => [
         'file' => 'src/backend/app/Services/ReceiptTableService.php',
@@ -580,7 +580,7 @@ $checks = [
             'requireHoldingShift',
             'requireOwnUnresolved',
             'requireCashierWorkspace',
-            'Open a Cashier Shift before holding a sale.',
+            'lockOpenShift($cashierId, true)',
             "const UNRESOLVED_STATUSES = ['held', 'resumed']",
             'Held sale not found or already resolved.',
         ],

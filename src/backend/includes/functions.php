@@ -35,12 +35,8 @@ function format_audit_value($value): ?string
 
 function format_display_datetime($value): string
 {
-    if ($value === null || $value === '') {
-        return '-';
-    }
-
-    $timestamp = strtotime((string)$value);
-    return $timestamp === false ? (string)$value : date('m-d-y h:i A', $timestamp);
+    require_once __DIR__ . '/../app/Services/PhilippineTime.php';
+    return \App\Services\PhilippineTime::format($value);
 }
 
 function format_display_date($value): string

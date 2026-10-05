@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $shiftId = $service->openShift($actorId, $actorRole, $registerId, (float)($_POST['opening_float'] ?? 0));
             $message = "Shift #{$shiftId} opened on " . ($service->registerName($registerId) ?? 'your register') . '.';
         } elseif ($action === 'movement') {
-            $movementId = $service->addDrawerMovement($actorId, $actorRole, (string)($_POST['movement_type'] ?? ''), (float)($_POST['amount'] ?? 0), (string)($_POST['reason'] ?? ''), (string)($_POST['note'] ?? ''));
+            $movementId = $service->addDrawerMovement($actorId, $actorRole, (string)($_POST['movement_type'] ?? ''), (float)($_POST['amount'] ?? 0), (string)($_POST['reason'] ?? ''), (string)($_POST['note'] ?? ''), (string)($_POST['approver_username'] ?? ''), (string)($_POST['approver_password'] ?? ''));
             $message = 'Cash drawer movement recorded.';
         } elseif ($action === 'count' || $action === 'close') {
             if (!$isCashier && $actorRole !== 'admin') {
@@ -139,7 +139,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <div class="topbar">
                 <div>
                     <h1>Cashier Shifts</h1>
-                    <p class="page-subtitle">Open the register, record drawer cash changes, and reconcile cash at closing.</p>
+                    <p class="page-subtitle">Open the register, record drawer cash changes, and reconcile cash at closing. Dates use Philippine time (Asia/Manila).</p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
             </div>
             <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?><?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -182,11 +182,12 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </section>
                 <?php if ($openShift && $isCashier && !$ownRegisterLocked && !$countPreview): ?><section class="dashboard-section">
                         <h2>Drawer movement</h2>
+                        <p class="shift-help">Expected cash is a ledger estimate; check physical funds before any payout. If funds are insufficient, physically add float and record the addition first. Use <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a> for customer refunds; never record a second drawer movement for a refund.</p>
                         <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="movement">
                             <div class="form-row">
                                 <div><label for="movement-type">Type</label><select id="movement-type" name="movement_type">
                                         <?php foreach (CashierShiftService::DRAWER_REASONS as $type => $reasons): ?>
-                                            <option value="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $type))) ?></option>
+                                            <option value="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars(['cash_in' => 'Float addition / cash returned', 'cash_out' => 'Cash removal / spending', 'safe_drop' => 'Safe drop'][$type]) ?></option>
                                         <?php endforeach; ?>
                                     </select></div>
                                 <div><label for="movement-amount">Amount (₱)</label><input id="movement-amount" type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required></div>
@@ -196,7 +197,11 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                         <option value="<?= htmlspecialchars($value) ?>" data-types="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars($label) ?></option>
                                     <?php endforeach; ?>
                                 <?php endforeach; ?>
-                            </select><label for="movement-note">Note <span class="shift-optional">(optional)</span></label><textarea id="movement-note" name="note" maxlength="255" rows="2"></textarea><button class="btn" type="submit">Record movement</button>
+                            </select><label for="movement-note">Explanation (required for Other)</label><textarea id="movement-note" name="note" maxlength="255" rows="2"></textarea>
+                            <p class="shift-help">Supplier payments and petty cash require Administrator authorization for this movement's amount and reason.</p>
+                            <label for="movement-approver">Authorizing Administrator username</label><input id="movement-approver" name="approver_username" autocomplete="off">
+                            <label for="movement-approval-password">Administrator password</label><input id="movement-approval-password" name="approver_password" type="password" autocomplete="new-password">
+                            <button class="btn" type="submit">Record movement</button>
                         </form>
                     </section><?php endif; ?>
                 <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section">
@@ -205,7 +210,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         <?php if ($unresolvedHeldSales): ?><div class="message error">
                             This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
                             <ul><?php foreach ($unresolvedHeldSales as $unresolved): ?>
-                                    <li><?= htmlspecialchars($unresolved['reference_no']) ?> &middot; <?= (int)$unresolved['item_count'] ?> item(s) &middot; &#8369;<?= number_format((float)$unresolved['total_amount'], 2) ?> &middot; <?= $unresolved['status'] === 'resumed' ? 'resumed' : 'held' ?> since <?= htmlspecialchars((string)$unresolved['created_at']) ?></li>
+                                    <li><?= htmlspecialchars($unresolved['reference_no']) ?> &middot; <?= (int)$unresolved['item_count'] ?> item(s) &middot; &#8369;<?= number_format((float)$unresolved['total_amount'], 2) ?> &middot; <?= $unresolved['status'] === 'resumed' ? 'resumed' : 'held' ?> since <?= htmlspecialchars(format_display_datetime($unresolved['created_at'])) ?> Philippine time</li>
                                 <?php endforeach; ?></ul>
                         </div><?php endif; ?>
                         <?php if ($countPreview): ?>
@@ -300,8 +305,13 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 if (movementReason.selectedOptions[0]?.disabled) {
                     movementReason.selectedIndex = [...movementReason.options].findIndex(option => !option.disabled);
                 }
+                document.getElementById('movement-note').required = movementReason.value === 'other';
+                const spending = movementType.value === 'cash_out' && ['petty_cash', 'supplier_payment'].includes(movementReason.value);
+                document.getElementById('movement-approver').required = spending;
+                document.getElementById('movement-approval-password').required = spending;
             };
             movementType.addEventListener('change', syncReasons);
+            movementReason.addEventListener('change', syncReasons);
             syncReasons();
         }
     </script>

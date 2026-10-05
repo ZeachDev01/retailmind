@@ -31,7 +31,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
             <header class="topbar cashier-topbar">
                 <div class="cashier-heading">
                     <h1>My Sales</h1>
-                    <p><?= htmlspecialchars(date('l, m-d-y')) ?> performance and recent activity.</p>
+                    <p><?= htmlspecialchars((new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('l, M j, Y')) ?> performance and recent activity. Philippine time (Asia/Manila).</p>
                 </div>
                 <div class="cashier-meta">
                     <span class="cashier-chip online">Register ready</span>

@@ -77,8 +77,12 @@ The break-time state of an open Cashier Shift that leaves the drawer owned and t
 _Avoid_: Closed shift, break mode, shared PIN, session logout
 
 **Cash Refund**:
-An append-only record a Cashier issues against one of their own completed sales, in the active Cashier workspace and under their own open Cashier Shift. It never edits, deletes, or voids the sale it reverses, so what is left refundable is a sum over the refunds already issued rather than a column on the sale. It is settled on the sale's original payment method, and only a cash refund reduces expected drawer cash. Full and partial refunds are allowed, capped by each line's remaining quantity and by the amount the customer actually paid, even under concurrent attempts. No supervisor approval is required: individual identity, a predefined reason, a note when the reason is Other, append-only records, Cashier-scoped visibility, and a Protected Audit Record are what make it accountable. Every returned item is classified Restockable or Damaged, and only a Restockable quantity returns to available inventory — a Damaged unit still consumes the refundable balance, because the money left the drawer either way.
+An append-only record a Cashier issues against a completed sale, normally their own, in the active Cashier workspace and under their own open Cashier Shift; an Administrator-authorized exception permits another Cashier to handle an absent or disabled original Cashier's sale while retaining original seller, issuing Cashier, approver, and paying-shift attribution. It never edits, deletes, or voids the sale it reverses, so what is left refundable is a sum over the refunds already issued rather than a column on the sale. It is settled on the sale's original payment method, and only a cash refund reduces expected drawer cash. Full and partial refunds are allowed, capped by each line's remaining quantity and by the amount the customer actually paid, even under concurrent attempts. Routine own-sale refunds require no supervisor approval: individual identity, a predefined reason, a note when the reason is Other, append-only records, Cashier-scoped visibility, and a Protected Audit Record are what make them accountable. Every returned item is classified Restockable or Damaged, and only a Restockable quantity returns to available inventory; a Damaged customer return is not also deducted through a Stock Issue.
 _Avoid_: Sale edit, sale void, stock-only return, supervisor-approved reversal, store credit
+
+**Payment Reference**:
+The identifier retained as evidence of a card or e-wallet payment or refund completed and verified externally before it is recorded in RetailMind. RetailMind records the transaction and reference without using a payment gateway to move money.
+_Avoid_: Gateway confirmation, automatically processed payment
 
 **Sale Receipt**:
 The customer-facing record of a completed sale, shown after checkout and available for later reprint. Its transaction-time details remain the same on a reprint even if Store details or the Register name change later.
@@ -87,6 +91,14 @@ _Avoid_: Invoice, live sale summary
 **Refund Receipt**:
 The separate customer-facing record of one Cash Refund, identifying the original sale and the items and amount refunded. It is shown when the refund is recorded and remains available for later reprint.
 _Avoid_: Edited Sale Receipt, sale void slip
+
+**Receipt History**:
+The customer receipt lookup and reprint view presented by Sales Transactions, with visibility limited to the viewer's authorized sales.
+_Avoid_: Operational history, invoice management
+
+**Cashier Operational History**:
+The individually scoped record of a Cashier's sales, refunds, drawer movements, and Cashier Shifts, presented by My History.
+_Avoid_: Receipt history, Store-wide report
 
 **Stock Issue**:
 A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Other, moving through pending, returned, cancelled, approved, or rejected. Inventory Managers decide reports; only an approval deducts stock through a linked stock movement. Approved and rejected reports are immutable, and an erroneous approval is corrected only through a separate Inventory Manager inventory count linked back to the report. Administrators hold read-only oversight.

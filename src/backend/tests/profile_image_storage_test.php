@@ -87,6 +87,7 @@ try {
 
     $rollbackFilename = str_repeat('b', 64) . '.png';
     file_put_contents($testDirectory . '/' . $rollbackFilename, file_get_contents($pngPath));
+    $filesBeforeFailure = glob($testDirectory . '/*');
     try {
         $storage->replace($upload($pngPath, 'replacement.png'), $rollbackFilename, static function (): void {
             throw new RuntimeException('Persistence failed');
@@ -94,9 +95,55 @@ try {
         $failures[] = 'A failed replacement persistence callback must throw.';
     } catch (RuntimeException $e) {
         $assert($storage->exists($rollbackFilename), 'A failed replacement removed the previous image.');
+        $assert(glob($testDirectory . '/*') === $filesBeforeFailure, 'Failed persistence must clean up the staged replacement.');
+    }
+
+    $failingStorage = new ProfileImageStorage(
+        $testDirectory,
+        static fn(string $path): bool => is_file($path),
+        static function (string $source, string $destination): bool {
+            file_put_contents($destination, 'partial upload');
+            return false;
+        }
+    );
+    try {
+        $failingStorage->replace($upload($pngPath, 'replacement.png'), $rollbackFilename, static function (): void {
+            throw new LogicException('Storage failure must not reach persistence.');
+        });
+        $failures[] = 'Storage failure must reject replacement.';
+    } catch (RuntimeException $e) {
+        $assert($storage->exists($rollbackFilename), 'Storage failure must preserve the previous picture.');
+        $assert(glob($testDirectory . '/*') === $filesBeforeFailure, 'Storage failure must clean up partial staged files.');
+    }
+
+    try {
+        $storage->remove($rollbackFilename, static function (): void {
+            throw new RuntimeException('Persistence failed');
+        });
+        $failures[] = 'Failed removal persistence must throw.';
+    } catch (RuntimeException $e) {
+        $assert($storage->exists($rollbackFilename), 'Failed removal must preserve the previous picture.');
     }
 
     $removePersisted = false;
+    $deleteFailureStorage = new ProfileImageStorage(
+        $testDirectory,
+        'is_file',
+        'copy',
+        static fn(string $path): bool => basename($path) === $rollbackFilename ? false : unlink($path)
+    );
+    try {
+        $deleteFailureStorage->replace($upload($pngPath, 'replacement.png'), $rollbackFilename, static function (): void {});
+        $failures[] = 'Failed old-image deletion must not report replacement success.';
+    } catch (RuntimeException $e) {
+        $assert(glob($testDirectory . '/*') === $filesBeforeFailure, 'Deletion failure must preserve old image and clean up replacement.');
+    }
+    try {
+        $deleteFailureStorage->remove($rollbackFilename, static function (): void {});
+        $failures[] = 'Failed old-image deletion must not report removal success.';
+    } catch (RuntimeException $e) {
+        $assert($storage->exists($rollbackFilename), 'Deletion failure must preserve the previous image.');
+    }
     $storage->remove($rollbackFilename, static function () use (&$removePersisted): void {
         $removePersisted = true;
     });

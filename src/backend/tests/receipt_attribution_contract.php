@@ -37,7 +37,7 @@ $assert = static function (bool $condition, string $message): void {
     }
 };
 $assert(str_contains($html, 'Receipt #42'), 'receipt number is rendered');
-$assert(str_contains($html, '2026-09-30 10:11:12'), 'transaction timestamp is rendered');
+$assert(str_contains($html, 'Sep 30, 2026 · 10:11 AM'), 'transaction timestamp is rendered');
 $assert(str_contains($html, 'Cashier: Alice &amp; Co'), 'Cashier display name is rendered safely');
 $assert(str_contains($html, 'Register: Front &lt;Counter&gt;'), 'Register display name is rendered safely');
 $assert(!str_contains($html, 'private_username') && !str_contains($html, 'private@example.test'),
@@ -112,7 +112,7 @@ foreach ([
     $paperReceipts[] = $paper[0] ?? '';
     $assert(str_contains($receipt, 'Historical receipt: original Store and item details were not preserved'),
         $route . ' visibly marks pre-feature receipt details as reconstructed');
-    foreach (['Transaction #42', 'Receipt #42', '2026-09-30 10:11:12',
+    foreach (['Transaction #42', 'Receipt #42', 'Sep 30, 2026 · 10:11 AM',
         'Cashier: Alice &amp; Co', 'Register: Main Till', 'Test item', 'Total Amount'] as $required) {
         $assert(str_contains($receipt, $required), $route . ' renders ' . $required);
     }

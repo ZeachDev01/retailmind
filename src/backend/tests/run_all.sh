@@ -33,8 +33,16 @@ php src/backend/tests/register_schema_parity_contract.php
 php src/backend/tests/register_legacy_upgrade_integration.php
 php src/backend/tests/cashier_shift_opening_contract.php
 php src/backend/tests/drawer_movement_contract.php
+node src/backend/tests/drawer_movement_browser_test.js
 php src/backend/tests/cashier_shift_schema_parity_contract.php
 php src/backend/tests/sale_shift_attribution_contract.php
+php src/backend/tests/checkout_attempt_integration.php
+php src/backend/tests/checkout_quote_integration.php
+php src/backend/tests/cashier_operation_serialization_integration.php
+node src/backend/tests/checkout_attempt_behavior_test.js
+node src/backend/tests/checkout_attempt_browser_test.js
+node src/backend/tests/checkout_quote_browser_test.js
+node src/backend/tests/cart_workspace_browser_test.js
 php src/backend/tests/sale_shift_schema_parity_contract.php
 php src/backend/tests/cashier_shift_register_lock_contract.php
 php src/backend/tests/register_lock_schema_parity_contract.php
@@ -42,6 +50,8 @@ php src/backend/tests/held_sale_shift_contract.php
 php src/backend/tests/held_sale_schema_parity_contract.php
 php src/backend/tests/cash_refund_contract.php
 php src/backend/tests/cash_refund_concurrency_integration.php
+php src/backend/tests/legacy_reversal_transition_integration.php
+node src/backend/tests/safe_refund_browser_test.js
 php src/backend/tests/cash_refund_schema_parity_contract.php
 php src/backend/tests/store_staff_availability_contract.php
 php src/backend/tests/store_staff_username_notice_contract.php
@@ -54,6 +64,7 @@ php src/backend/tests/password_policy_contract.php
 php src/backend/tests/password_change_modes_contract.php
 php src/backend/tests/recovery_exclusion_reset_audit_contract.php
 php src/backend/tests/profile_image_storage_test.php
+php src/backend/tests/profile_picture_self_service_test.php
 php src/backend/tests/operator_alert_test.php
 php src/backend/tests/operator_alert_ui_contract.php
 node src/backend/tests/operator_alert_wrapper_behavior_test.js
@@ -75,9 +86,13 @@ php src/backend/tests/database_integration.php
 php src/backend/tests/user_password_reset_integration.php
 php src/backend/tests/audit_visibility_integration.php
 php src/backend/tests/database_backup_workflow_integration.php
+php src/backend/tests/philippine_time_contract.php
+php src/backend/tests/philippine_time_mysql_integration.php
+php src/backend/tests/receipt_history_integration.php
 php src/backend/tests/receipt_table_contract.php
 php src/backend/tests/receipt_attribution_contract.php
 node src/backend/tests/sale_receipt_browser_test.js
+node src/backend/tests/sale_receipt_dialog_browser_test.js
 node src/backend/tests/refund_receipt_browser_test.js
 node src/backend/tests/refund_reprint_browser_test.js
 php src/backend/tests/cashier_operational_history_contract.php

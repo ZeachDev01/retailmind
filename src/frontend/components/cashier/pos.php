@@ -20,6 +20,21 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SAL
 // the service judges the same context this page did.
 $actorRole = (string)current_role();
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['recover_checkout'])) {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+    try {
+        $saved = $salesWorkflowService->recoverAttempt((string)$_GET['recover_checkout'], $cashierId, $actorRole);
+        if ($saved !== null) $_SESSION['completed_checkout_sale'] = (int)$saved['sale_id'];
+        echo json_encode(['sale' => $saved, 'receipt_url' => $saved === null ? null : app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $saved['sale_id'] . '&checkout=complete')], JSON_THROW_ON_ERROR);
+    } catch (Throwable $e) {
+        http_response_code(409);
+        echo json_encode(['message' => 'Checkout recovery is unavailable. Retry recovery before collecting another payment.']);
+        error_log('Checkout recovery failed: ' . (string)$e);
+    }
+    exit;
+}
+
 $checkout_error = '';
 $checkout_notice = '';
 $lock_error = '';
@@ -63,6 +78,14 @@ if ($posRegisterLocked && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // The one message a locked Register produces, in the page's own refusal
     // channel — the same channel the void and checkout refusals below use.
     $checkout_error = CashierShiftService::LOCKED_MESSAGE;
+    if (($_POST['action'] ?? '') === 'review_quote') {
+        csrf_verify();
+        header('Content-Type: application/json');
+        header('Cache-Control: no-store');
+        http_response_code(409);
+        echo json_encode(['message' => $checkout_error], JSON_THROW_ON_ERROR);
+        exit;
+    }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'void_cart') {
     csrf_verify();
 
@@ -70,8 +93,16 @@ if ($posRegisterLocked && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($reason === '') {
         $checkout_error = 'A reason is required to void the current sale.';
     } else {
-        log_activity($pdo, $cashierId, 'Voided sale before final checkout: ' . $reason);
-        $checkout_notice = 'Sale voided before checkout and audit log was recorded.';
+        try {
+            App\Store\StoreWriteGate::begin($pdo);
+            $shiftService->lockOpenShift($cashierId, true);
+            log_activity($pdo, $cashierId, 'Voided sale before final checkout: ' . $reason);
+            $pdo->commit();
+            $checkout_notice = 'Sale voided before checkout and audit log was recorded.';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $checkout_error = \App\Support\OperatorAlert::message($e, 'The current sale could not be voided.');
+        }
     }
 }
 
@@ -85,13 +116,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     $payment_method = in_array($_POST['payment_method'] ?? '', ['cash', 'card', 'ewallet'], true)
         ? $_POST['payment_method'] : 'cash';
     $paymentDetails = [
+        'checkout_attempt' => (string)($_POST['checkout_attempt'] ?? ''),
         'cash_received' => $_POST['cash_received'] ?? 0,
         'payment_reference' => $_POST['payment_reference'] ?? '',
+        'payment_method' => $payment_method,
+        'payment_verified' => ($_POST['payment_verified'] ?? '') === '1',
         'discount_type' => $_POST['discount_type'] ?? 'none',
         'discount_value' => $_POST['discount_value'] ?? 0,
         'discount_reason' => $_POST['discount_reason'] ?? '',
         'discount_approver_username' => $_POST['discount_approver_username'] ?? '',
         'discount_approver_password' => $_POST['discount_approver_password'] ?? '',
+        'reviewed_quote' => $_SESSION['checkout_quotes'][(string)($_POST['quote_token'] ?? '')]['state_hash'] ?? '',
         // Ticket #91: the cart the Cashier resumed, if any. The service settles it
         // against this Cashier and against the shift it already resolved for the
         // sale, so a value tampered with here completes nothing.
@@ -99,13 +134,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     ];
 
     try {
+        if (($_POST['action'] ?? '') === 'review_quote') {
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            $quote = $salesWorkflowService->reviewQuote($cart, $cashierId, $actorRole, $paymentDetails);
+            $token = bin2hex(random_bytes(24));
+            $_SESSION['checkout_quotes'] = array_slice($_SESSION['checkout_quotes'] ?? [], -19, null, true);
+            $_SESSION['checkout_quotes'][$token] = ['state_hash' => $quote['state_hash']];
+            unset($quote['state_hash'], $quote['discount']['approval_state']);
+            echo json_encode(['quote' => $quote, 'token' => $token], JSON_THROW_ON_ERROR);
+            exit;
+        }
         // Ticket #89: the active workspace is passed explicitly so the service,
         // not the account's stored role, decides who may sell.
         $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
+        $_SESSION['completed_checkout_sale'] = (int)$result['sale_id'];
         header('Location: ' . app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $result['sale_id'] . '&checkout=complete'));
         exit;
     } catch (Throwable $e) {
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
+        if (($_POST['action'] ?? '') === 'review_quote') {
+            http_response_code(409);
+            echo json_encode(['message' => $checkout_error], JSON_THROW_ON_ERROR);
+            exit;
+        }
     }
 }
 
@@ -366,6 +418,9 @@ $quickCategoryIcon = static function (string $categoryName): string {
                 <form method="POST" id="checkout-form" class="payment-section">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="checkout">
+                    <input type="hidden" name="checkout_attempt" id="checkout-attempt-input">
+                    <input type="hidden" name="quote_token" id="quote-token-input">
+                    <input type="hidden" name="payment_verified" value="0">
                     <input type="hidden" name="cart" id="cart-input">
                     <input type="hidden" name="held_sale_id" id="held-sale-id-input" value="">
 
@@ -381,7 +436,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <div class="payment-grid">
                         <div class="payment-field" id="cash-field">
                             <label class="pos-field-label" for="cash-received">Cash received</label>
-                            <input type="text" name="cash_received" id="cash-received" placeholder="0.00" inputmode="decimal" autocomplete="off">
+                            <input type="text" name="cash_received" id="cash-received" placeholder="Enter after quote review" inputmode="decimal" autocomplete="off" readonly>
                         </div>
                         <div class="payment-field" id="change-field">
                             <label class="pos-field-label" for="change-due">Change due</label>
@@ -390,33 +445,30 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     </div>
 
                     <div class="cash-quick" id="cash-quick" aria-label="Quick cash amounts">
-                        <button type="button" data-tender="exact">Exact</button>
-                        <button type="button" data-tender="50">+50</button>
-                        <button type="button" data-tender="100">+100</button>
-                        <button type="button" data-tender="500">+500</button>
+                        <span class="muted">Review the final quote to enter cash and see change.</span>
                     </div>
 
                     <div class="payment-field hidden" id="reference-field">
                         <label class="pos-field-label" for="payment-reference">Payment reference</label>
-                        <input type="text" name="payment_reference" id="payment-reference" placeholder="Card approval or wallet reference">
+                        <input type="text" name="payment_reference" id="payment-reference" placeholder="Enter after quote review" readonly>
                     </div>
 
                     <details class="payment-field" id="discount-panel">
-                        <summary class="pos-field-label">Discount or promotion</summary><p class="muted u-mt-05">Eligible scheduled promotions are checked automatically at checkout. The larger eligible discount is applied.</p>
+                        <summary class="pos-field-label">Discount or promotion</summary><p class="muted u-mt-05">Review the final server quote before collecting payment. Only the best eligible discount applies.</p>
                         <div class="payment-grid u-mt-075">
                             <div><label class="pos-field-label" for="discount-type">Discount type</label><select name="discount_type" id="discount-type" class="pos-select"><option value="none">No discount</option><option value="percentage">Percentage</option><option value="fixed">Fixed amount</option></select></div>
                             <div><label class="pos-field-label" for="discount-value">Value</label><input type="number" min="0" step="0.01" name="discount_value" id="discount-value" value="0"></div>
                         </div>
                         <div class="payment-field"><label class="pos-field-label" for="discount-reason">Reason</label><input type="text" name="discount_reason" id="discount-reason" placeholder="Promotion, customer eligibility, or approved adjustment"></div>
                         <div class="payment-grid hidden" id="supervisor-fields">
-                            <div><label class="pos-field-label" for="discount-approver-username">Supervisor username</label><input type="text" name="discount_approver_username" id="discount-approver-username" autocomplete="off"></div>
-                            <div><label class="pos-field-label" for="discount-approver-password">Supervisor password</label><input type="password" name="discount_approver_password" id="discount-approver-password" autocomplete="new-password"></div>
+                            <div><label class="pos-field-label" for="discount-approver-username">Administrator username</label><input type="text" name="discount_approver_username" id="discount-approver-username" autocomplete="off"></div>
+                            <div><label class="pos-field-label" for="discount-approver-password">Administrator password</label><input type="password" name="discount_approver_password" id="discount-approver-password" autocomplete="new-password"></div>
                         </div>
                         <small id="discount-summary" class="muted">No discount applied.</small>
                     </details>
 
                     <button class="btn btn-block checkout-primary" id="checkout-button" type="button" onclick="checkoutNow()" title="Checkout (Ctrl+Enter)" disabled>
-                        <i class="bi bi-check2-circle" aria-hidden="true"></i>Complete checkout
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>Review final quote
                     </button>
                 </form>
 
@@ -451,7 +503,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <div class="checkout-dialog">
         <div class="checkout-dialog-header">
             <div>
-                <h3 id="checkout-title">Confirm checkout</h3>
+                <h3 id="checkout-title">Review final quote before payment</h3>
                 <p>Verify the payment details before completing the sale.</p>
             </div>
             <button type="button" class="modal-close" onclick="closeCheckoutConfirm()" aria-label="Close checkout confirmation"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
@@ -491,7 +543,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <div class="checkout-dialog">
         <div class="checkout-dialog-header">
             <div>
-                <h3 id="discard-title">Discard held sale</h3>
+                <h3 id="discard-title">Discard unfinished sale</h3>
                 <p>The reason is recorded in the audit log. Discarding moves no cash.</p>
             </div>
             <button type="button" class="modal-close" onclick="closeDiscardModal()" aria-label="Close discard dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
@@ -508,13 +560,15 @@ $quickCategoryIcon = static function (string $categoryName): string {
             <div id="discard-error" class="cart-message error" role="alert"></div>
         </div>
         <div class="checkout-dialog-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeDiscardModal()">Keep held sale</button>
-            <button type="button" class="btn btn-danger" onclick="confirmDiscardHeldSale()"><i class="bi bi-trash3" aria-hidden="true"></i>Discard held sale</button>
+            <button type="button" class="btn btn-secondary" onclick="closeDiscardModal()">Keep working</button>
+            <button type="button" class="btn btn-danger" onclick="confirmDiscardHeldSale()"><i class="bi bi-trash3" aria-hidden="true"></i>Discard sale</button>
         </div>
     </div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="<?= app_url('assets/js/checkout-attempt.js') ?>"></script>
+<script src="<?= app_url('assets/js/checkout-quote.js') ?>"></script>
 <script>
 let cart = {};
 let heldSales = [];
@@ -522,6 +576,7 @@ let heldSales = [];
 // the sale settles that held sale on the shift it was held under; the service
 // settles it against the Cashier and the shift, so this is a hint, not a claim.
 let resumedHeldSaleId = 0;
+let cartReviewUnresolved = false;
 let scanCooldown = false;
 let scannerActive = false;
 let checkoutConfirmed = false;
@@ -876,7 +931,15 @@ async function addCodeFromInput() {
     scannerResult.innerHTML = `<strong>Item added</strong><span>${escapeHtml(product.name)}</span>`;
 }
 
+function cartChangesAllowed() {
+    if (!posShiftOpen || cartWorkspace.context.locked || cartWorkspace.busy || checkoutSubmitting || (typeof checkoutAttempt !== 'undefined' && checkoutAttempt.pending)) {
+        showCartMessage('Finish checkout recovery or unlock your Register before changing the cart.', 'error'); return false;
+    }
+    return true;
+}
+
 function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '') {
+    if (!cartChangesAllowed()) return;
     const productId = Number(id);
     const currentQty = cart[productId]?.qty || 0;
     const availableStock = Number(stock);
@@ -906,6 +969,7 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
 }
 
 function updateCartQty(id, newQty) {
+    if (!cartChangesAllowed()) return;
     const item = cart[id];
     if (!item) {
         return;
@@ -918,7 +982,7 @@ function updateCartQty(id, newQty) {
     }
 
     if (item.stock !== undefined && qty > item.stock) {
-        cart[id].qty = item.stock;
+        showCartMessage('Requested quantity exceeds available stock. Choose a quantity explicitly.', 'error'); return;
         showCartMessage(`Only ${item.stock} units of ${item.name} are available.`, 'error');
     } else {
         cart[id].qty = qty;
@@ -934,6 +998,7 @@ function changeCartQty(id, delta) {
 }
 
 function removeFromCart(id) {
+    if (!cartChangesAllowed()) return;
     if (!cart[id]) {
         return;
     }
@@ -944,15 +1009,8 @@ function removeFromCart(id) {
 }
 
 async function clearCart() {
-    if (Object.keys(cart).length === 0) {
-        return;
-    }
-    if (!await RetailMindUI.confirm({title:'Clear current sale',message:'Remove every item from the cart?',confirmText:'Clear cart',danger:true})) return;
-    cart = {};
-    resetPaymentState();
-    renderCart();
-    showCartMessage('Cart cleared.', 'info');
-    skuInput.focus();
+    if (!cartChangesAllowed() || (!Object.keys(cart).length && !resumedHeldSaleId)) return;
+    openDiscardModal(resumedHeldSaleId);
 }
 
 function resetPaymentState() {
@@ -1063,7 +1121,7 @@ function setQuickTender(value) {
     updatePaymentFields();
 }
 
-function validateCheckout() {
+function validateCheckout(requirePayment = true) {
     const payload = Object.entries(cart).map(([product_id, item]) => ({ product_id: Number(product_id), qty: Number(item.qty) }));
     if (payload.length === 0) {
         showCartMessage('Cart is empty. Add items before checkout.', 'error');
@@ -1071,8 +1129,8 @@ function validateCheckout() {
         return false;
     }
 
-    const total = getNetTotal();
-    if (paymentMethod.value === 'cash') {
+    const total = checkoutQuote.isCurrent() ? checkoutQuote.reviewed.total : getNetTotal();
+    if (requirePayment && paymentMethod.value === 'cash') {
         const received = Number(cashReceived.value);
         if (!Number.isFinite(received) || received < 0) {
             showCartMessage('Enter a valid cash amount.', 'error');
@@ -1085,7 +1143,7 @@ function validateCheckout() {
             return false;
         }
     }
-    if (paymentMethod.value !== 'cash' && paymentReference.value.trim() === '') {
+    if (requirePayment && paymentMethod.value !== 'cash' && paymentReference.value.trim() === '') {
         showCartMessage('Enter the card or e-wallet payment reference.', 'error');
         paymentReference.focus();
         return false;
@@ -1097,24 +1155,52 @@ function validateCheckout() {
     return true;
 }
 
-function checkoutNow() {
-    if (!validateCheckout()) {
+async function checkoutNow() {
+    if (checkoutSubmitting || !checkoutAttempt.ready || window.cartWorkspace?.busy) return;
+    if (!validateCheckout(false)) {
         return;
     }
 
-    const itemCount = getCartItemCount();
+    let quote;
+    checkoutButton.disabled = true;
+    if (window.cartWorkspace) cartWorkspace.busy = true;
+    try {
+        if (window.cartWorkspace && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
+        if (!validateCheckout(false)) return;
+        quote = await checkoutQuote.review();
+    } catch (error) {
+        showCartMessage(error.message, 'error');
+        return;
+    } finally {
+        if (window.cartWorkspace) cartWorkspace.busy = false;
+        checkoutButton.disabled = false;
+    }
     const methodLabel = paymentMethod.options[paymentMethod.selectedIndex].text;
     const paymentLine = paymentMethod.value === 'cash'
-        ? `<p><strong>Cash:</strong> &#8369;${money(cashReceived.value)} &nbsp; <strong>Change:</strong> &#8369;${changeDue.value}</p>`
-        : `<p><strong>Reference:</strong> ${escapeHtml(paymentReference.value.trim())}</p>`;
+        ? `<label>Cash received <input id="review-cash" type="number" min="0" step="0.01" value="${escapeHtml(cashReceived.value)}" oninput="updateReviewedPayment()"></label><p>Change: ₱<span id="review-change">0.00</span></p>`
+        : `<p>Complete and verify the ${escapeHtml(methodLabel)} payment externally for ₱${money(quote.total)}.</p><label>Payment Reference <input id="review-reference" value="${escapeHtml(paymentReference.value)}" oninput="updateReviewedPayment()"></label><label><input type="checkbox" id="review-verified"> I verified this payment externally.</label>`;
 
     checkoutSummary.innerHTML = `
-        <p><strong>${itemCount}</strong> item(s) totaling <strong>&#8369;${money(getNetTotal())}</strong></p><p><strong>Gross:</strong> &#8369;${money(getCartTotal())} &nbsp; <strong>Discount:</strong> &#8369;${money(getDiscountAmount())}</p>
+        ${quote.sale.items.map(item => `<p>${escapeHtml(item.product_name)} · ${item.quantity} × ₱${money(item.unit_price)} = ₱${money(item.subtotal)}</p>`).join('')}
+        <p><strong>Eligible promotions:</strong> ${quote.eligible_promotions.map(p => escapeHtml(p.promotion_name)).join(', ') || 'None'}</p>
+        <p><strong>Selected discount:</strong> ${escapeHtml(quote.discount.promotion_name || quote.discount.discount_reason || 'None')} · ₱${money(quote.discount.discount_amount)}</p>
+        <p><strong>Gross:</strong> ₱${money(quote.sale.total)} · <strong>Total due:</strong> ₱${money(quote.total)}</p>
         <p><strong>Payment method:</strong> ${escapeHtml(methodLabel)}</p>
         ${paymentLine}
     `;
     checkoutModal.classList.add('open');
+    updateReviewedPayment();
     checkoutModal.querySelector('.btn:last-child').focus();
+}
+
+function updateReviewedPayment() {
+    const cash = document.getElementById('review-cash');
+    const reference = document.getElementById('review-reference');
+    if (cash) {
+        cashReceived.value = cash.value;
+        document.getElementById('review-change').textContent = money(Math.max(0, Number(cash.value) - checkoutQuote.reviewed.total));
+    }
+    if (reference) paymentReference.value = reference.value;
 }
 
 function closeCheckoutConfirm() {
@@ -1124,37 +1210,44 @@ function closeCheckoutConfirm() {
     checkoutButton.focus();
 }
 
-function submitConfirmedCheckout() {
+async function submitConfirmedCheckout() {
     if (checkoutSubmitting) return;
+    if (!checkoutAttempt.ready) {
+        showCartMessage('Recover the previous checkout before collecting another payment.', 'error');
+        return;
+    }
     if (!validateCheckout()) {
         closeCheckoutConfirm();
         return;
     }
+    if (!checkoutQuote.isCurrent()) {
+        showCartMessage('The cart or discount changed. Review the final quote again.', 'error');
+        closeCheckoutConfirm();
+        return;
+    }
+    if (paymentMethod.value !== 'cash' && !document.getElementById('review-verified')?.checked) {
+        showCartMessage('Verify the external payment before recording it.', 'error');
+        return;
+    }
     checkoutSubmitting = true;
+    checkoutForm.elements.payment_verified.value = paymentMethod.value === 'cash' || document.getElementById('review-verified')?.checked ? '1' : '0';
     checkoutConfirmed = true;
     confirmCheckoutButton.disabled = true;
     confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
-    checkoutForm.submit();
+    try {
+        await checkoutAttempt.save(cart);
+        checkoutForm.submit();
+    } catch (error) {
+        checkoutSubmitting = false;
+        checkoutConfirmed = false;
+        confirmCheckoutButton.disabled = false;
+        confirmCheckoutButton.textContent = 'Confirm payment';
+        showCartMessage('Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.', 'error');
+    }
 }
 
 async function apiHeldSale(action, payload = {}) {
-    const heldSaleFallback = 'The held sale could not be completed. Check your connection and try again. Tell your Administrator if this keeps happening.';
-    let response;
-    try {
-        response = await fetch(heldSalesApiUrl, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({action,...payload})});
-    } catch (networkError) {
-        console.error('Held sale request failed:', networkError);
-        throw new Error(heldSaleFallback);
-    }
-    let data;
-    try {
-        data = await response.json();
-    } catch (parseError) {
-        console.error('Held sale response could not be read:', parseError);
-        throw new Error(heldSaleFallback);
-    }
-    if (!response.ok || !data.success) throw new Error(data.message || heldSaleFallback);
-    return data;
+    return cartWorkspace.request(action, payload);
 }
 
 async function loadHeldSales() {
@@ -1167,11 +1260,13 @@ async function loadHeldSales() {
 }
 
 async function holdCurrentSale() {
+    if (!cartChangesAllowed()) return;
     if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
     if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before holding a sale.', 'error'); return; }
     if (resumedHeldSaleId) { showCartMessage('This sale is already held. Complete checkout or discard it from Held sales before holding another sale.', 'error'); return; }
     try {
-        const data = await apiHeldSale('hold', {cart});
+        const data = await cartWorkspace.exclusive(() => cartWorkspace.holdRequested(cart));
+        if (!data) { cartReviewUnresolved = true; persistCart(); showCartMessage('Requested lines preserved. Availability changes remain unresolved.', 'error'); return; }
         heldSales = data.held_sales || [];
         cart = {};
         resetPaymentState();
@@ -1180,8 +1275,12 @@ async function holdCurrentSale() {
 }
 
 async function resumeHeldSale(id) {
-    if (Object.keys(cart).length > 0 && !await RetailMindUI.confirm({title:'Resume held sale',message:'Replace the current cart with this held sale?',confirmText:'Resume sale'})) return;
+    if (!cartChangesAllowed()) return;
+    if (Object.keys(cart).length > 0 || resumedHeldSaleId) {
+        if (!await cartWorkspace.resolveWork()) return;
+    }
     try {
+        cartWorkspace.busy = true;
         const data = await apiHeldSale('resume', {id});
         cart = data.cart || {}; heldSales = data.held_sales || [];
         resetPaymentState();
@@ -1189,8 +1288,12 @@ async function resumeHeldSale(id) {
         // settlement of this held sale rather than an ordinary new sale.
         resumedHeldSaleId = Number(data.id || id) || 0;
         resumedHeldSaleInput.value = String(resumedHeldSaleId);
-        renderCart(); renderHeldSales(); showCartMessage('Held sale resumed. Complete the checkout to finish it.', 'success'); skuInput.focus();
-    } catch (error) { showCartMessage(error.message, 'error'); }
+        renderCart(); renderHeldSales();
+        const reviewed = await cartWorkspace.acceptReview(data.review);
+        if (reviewed === null) { cartReviewUnresolved = true; persistCart(); showCartMessage('Held sale remains unresolved. Requested lines are preserved; review again before checkout.', 'error'); return; }
+        cart = reviewed; cartReviewUnresolved = false; renderCart();
+        showCartMessage('Held sale resumed. Complete checkout or discard it with a reason to finish it.', 'success'); skuInput.focus();
+    } catch (error) { showCartMessage(error.message, 'error'); } finally { cartWorkspace.busy = false; }
 }
 
 // Ticket #91: a held sale cannot be dropped from the list. It has to be either
@@ -1199,6 +1302,7 @@ async function resumeHeldSale(id) {
 // the service refuses an empty one there, so this is a courtesy rather than the
 // rule: posting around it would simply be rejected.
 function openDiscardModal(id) {
+    if (!cartChangesAllowed()) return;
     discardingHeldSaleId = Number(id) || 0;
     discardReason.value = 'customer_cancelled';
     discardNote.value = '';
@@ -1215,6 +1319,7 @@ function closeDiscardModal() {
 }
 
 async function confirmDiscardHeldSale() {
+    if (!cartChangesAllowed()) return;
     const reason = discardReason.value;
     const note = discardNote.value.trim();
     if (reason === 'other' && note === '') {
@@ -1223,23 +1328,25 @@ async function confirmDiscardHeldSale() {
         discardNote.focus();
         return;
     }
-    if (discardingHeldSaleId === 0) { closeDiscardModal(); return; }
+
     try {
-        const data = await apiHeldSale('discard', {id: discardingHeldSaleId, discard_reason: reason, discard_note: note});
+        cartWorkspace.busy = true;
+        const data = await apiHeldSale(discardingHeldSaleId ? 'discard' : 'discard_cart', {id: discardingHeldSaleId, cart, discard_reason: reason, discard_note: note});
         heldSales = data.held_sales || [];
         // Discarding the cart currently on the till leaves nothing to complete.
         if (resumedHeldSaleId === discardingHeldSaleId) {
+            cart = {}; cartReviewUnresolved = false;
             resumedHeldSaleId = 0;
             resumedHeldSaleInput.value = '';
             persistCart();
         }
         closeDiscardModal();
-        renderHeldSales();
+        renderCart(); renderHeldSales();
         showCartMessage('Held sale discarded. The reason is in the audit log.', 'success');
     } catch (error) {
         discardError.textContent = error.message;
         discardError.className = 'cart-message visible error';
-    }
+    } finally { cartWorkspace.busy = false; }
 }
 
 function renderHeldSales() {
@@ -1256,15 +1363,7 @@ function renderHeldSales() {
 }
 
 function voidCurrentSale() {
-    if (Object.keys(cart).length === 0) {
-        showCartMessage('Cart is already empty.', 'error');
-        return;
-    }
-    voidReason.value = '';
-    voidError.textContent = '';
-    voidError.className = 'cart-message error';
-    voidModal.classList.add('open');
-    setTimeout(() => voidReason.focus(), 50);
+    openDiscardModal(resumedHeldSaleId);
 }
 
 function closeVoidModal() {
@@ -1289,30 +1388,34 @@ function confirmVoidSale() {
 }
 
 function persistCart() {
-    try {
-        sessionStorage.setItem('pos_cart', JSON.stringify({cart, heldSaleId: resumedHeldSaleId}));
-    } catch (error) {}
+    cartWorkspace.save(cart, resumedHeldSaleId, cartReviewUnresolved);
 }
 
 function restoreState() {
-    try {
-        const storedCart = sessionStorage.getItem('pos_cart');
-        if (storedCart) {
-            const saved = JSON.parse(storedCart);
-            // Older sessions stored the cart directly, without held-sale metadata.
-            const savedCart = saved?.cart ?? saved;
-            if (savedCart && typeof savedCart === 'object' && !Array.isArray(savedCart)) {
-                cart = savedCart;
-                const heldSaleId = Number(saved.heldSaleId);
-                resumedHeldSaleId = Number.isSafeInteger(heldSaleId) && heldSaleId > 0 ? heldSaleId : 0;
-            }
-        }
-    } catch (error) { cart = {}; resumedHeldSaleId = 0; }
-    // Keep the cart and its identity together across reloads and failed checkout.
-    // Checkout still validates ownership, unresolved status, and the owning shift.
+    const saved = cartWorkspace.state;
+    if (saved) {
+        cart = saved.cart || {};
+        resumedHeldSaleId = Number(saved.heldSaleId) || 0;
+        cartReviewUnresolved = !!saved.unresolved;
+    }
     resumedHeldSaleInput.value = resumedHeldSaleId ? String(resumedHeldSaleId) : '';
     renderCart();
     loadHeldSales();
+    if (Object.keys(cart).length) showCartMessage('Unfinished cart recovered for this Cashier Shift. Review stock and prices before checkout.', 'info');
+}
+
+async function reviewCurrentCart() {
+    const reviewed = await cartWorkspace.review(cart);
+    if (reviewed === null) {
+        cartReviewUnresolved = true;
+        persistCart();
+        showCartMessage('Cart changes remain unresolved. Requested lines are preserved; review again before checkout.', 'error');
+        return false;
+    }
+    cart = reviewed;
+    cartReviewUnresolved = false;
+    renderCart();
+    return Object.keys(cart).length > 0;
 }
 
 function onScanSuccess(decodedText) {
@@ -1407,7 +1510,7 @@ function updateClock() {
         return;
     }
     const now = new Date();
-    cashierClock.innerHTML = `<i class="bi bi-clock" aria-hidden="true"></i>${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    cashierClock.innerHTML = `<i class="bi bi-clock" aria-hidden="true"></i>${now.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })} Philippine time`;
 }
 
 startBtn.addEventListener('click', startScanner);
@@ -1541,6 +1644,28 @@ if (cashierClock) {
     updateClock();
     setInterval(updateClock, 30000);
 }
+const checkoutAttempt = new CheckoutAttempt(checkoutForm, <?= json_encode((string)$cashierId) ?>, {
+    recoverUrl: <?= json_encode(app_url('components/cashier/pos.php')) ?>,
+    restore(savedCart) { cart = savedCart; resumedHeldSaleId = Number(resumedHeldSaleInput.value) || null; renderCart(); },
+    message(text) { showCartMessage(text, 'error'); }
+});
+const checkoutQuote = new CheckoutQuote(checkoutForm);
+checkoutAttempt.recover().then(async () => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('new_sale')) return;
+    url.searchParams.delete('new_sale');
+    history.replaceState(null, '', url);
+    if (!checkoutAttempt.ready || checkoutAttempt.pending) return;
+    try {
+        if (!await cartWorkspace.resolveWork()) return;
+        cart = {};
+        cartWorkspace.clear();
+        cartReviewUnresolved = false;
+        resetPaymentState();
+        renderCart();
+        await loadHeldSales();
+    } catch (error) { showCartMessage('Unfinished work is preserved. ' + error.message, 'error'); }
+});
 setTimeout(() => skuInput.focus(), 100);
 </script>
         <?php // Ticket #90: the point of sale and its scripts are withheld entirely while the Register is locked, so a locked till has no cart, no scanner, and no checkout to drive. ?>

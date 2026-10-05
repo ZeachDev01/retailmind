@@ -179,7 +179,7 @@ try {
         refund_amount REAL NOT NULL DEFAULT 0.00,
         payment_method TEXT NOT NULL DEFAULT 'cash',
         reason TEXT NOT NULL,
-        note TEXT NULL,
+        note TEXT NULL, original_cashier_id INTEGER NULL, approved_by INTEGER NULL, exception_reason TEXT NULL, payment_reference TEXT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     $pdo->exec("CREATE TABLE cash_refund_items (
@@ -642,7 +642,7 @@ try {
         'cashier',
         $cardSaleId,
         $returnOf($cardTeaItemId, 1),
-        'wrong_item'
+        'wrong_item', null, 'CARD-REFUND-123', true
     );
     $assert($restockRefundId > 0, 'a Restockable refund of a Card sale is written');
     $assert(
@@ -686,7 +686,7 @@ try {
     $pdo->exec("UPDATE sales SET payment_method = 'ewallet' WHERE sale_id = {$walletSaleId}");
     $walletDrawerBefore = (float)$shifts->calculateShift($caseyShiftId)['calculated_expected_cash'];
     $walletRefundId = $refunds->refund($casey, 'cashier', $walletSaleId,
-        $returnOf($walletItemId, 1, CashRefundService::DAMAGED), 'other', 'Wallet return');
+        $returnOf($walletItemId, 1, CashRefundService::DAMAGED), 'other', 'Wallet return', 'WALLET-REFUND-123', true);
     $assert((string)$refundRow($pdo, $walletRefundId)['payment_method'] === 'ewallet',
         'an e-wallet refund keeps the original payment method');
     $assert((string)$refundRow($pdo, $walletRefundId)['note'] === 'Wallet return',
@@ -1059,7 +1059,7 @@ try {
     $refundService = $refunds;
     $actorRole = 'cashier';
     $storeId = 1;
-    $saleId = 0;
+    $saleId = 0; $exceptionToken = '';
     $_GET = ['refund_id' => $reprintId];
     foreach ([$dana, $casey] as $actorId) {
         http_response_code(200);

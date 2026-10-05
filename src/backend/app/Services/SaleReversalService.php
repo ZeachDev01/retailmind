@@ -1,24 +1,17 @@
 <?php
 // app/Services/SaleReversalService.php
 
-require_once __DIR__ . '/NotificationService.php';
-require_once __DIR__ . '/../Store/StoreWriteGate.php';
-use App\Store\StoreWriteGate;
-require_once __DIR__ . '/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/LegacyReversalTransitionService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 class SaleReversalService
 {
     private PDO $pdo;
-    private NotificationService $notificationService;
-    private FiscalPeriodGuardService $fiscalPeriodGuard;
     private App\Store\StoreScope $storeScope;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
-        $this->notificationService = new NotificationService($pdo);
-        $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
         $this->storeScope = new App\Store\StoreScope($pdo);
     }
 
@@ -72,7 +65,7 @@ class SaleReversalService
     {
         $storeId = $this->storeScope->id();
         $params = [$storeId, $storeId];
-        $where = 'WHERE (cashier.branch_id = ? OR EXISTS (
+        $where = 'WHERE (s.sale_id IS NULL OR cashier.user_id IS NULL OR cashier.branch_id = ? OR EXISTS (
             SELECT 1 FROM sale_items scope_si
             JOIN products scope_p ON scope_p.product_id = scope_si.product_id
             WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
@@ -86,8 +79,8 @@ class SaleReversalService
             "SELECT sr.*, s.total_amount, requester.full_name AS requested_by_name,
                     approver.full_name AS approved_by_name
              FROM sale_reversals sr
-             JOIN sales s ON s.sale_id = sr.sale_id
-             JOIN users cashier ON cashier.user_id = s.cashier_id
+             LEFT JOIN sales s ON s.sale_id = sr.sale_id
+             LEFT JOIN users cashier ON cashier.user_id = s.cashier_id
              LEFT JOIN users requester ON requester.user_id = sr.requested_by
              LEFT JOIN users approver ON approver.user_id = sr.approved_by
              $where
@@ -95,6 +88,33 @@ class SaleReversalService
         );
         $stmt->execute($params);
         return $stmt->fetchAll();
+    }
+
+    /** Read-only preview; decisions recheck every condition under locks. */
+    public function reviewBalances(int $reversalId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT r.*,s.total_amount,s.shift_id,s.payment_method AS original_method,
+            cs.status AS shift_status,cs.locked_at FROM sale_reversals r
+            LEFT JOIN sales s ON s.sale_id=r.sale_id LEFT JOIN cashier_shifts cs ON cs.shift_id=s.shift_id WHERE r.reversal_id=?');
+        $stmt->execute([$reversalId]);
+        $record = $stmt->fetch();
+        if (!$record || $record['total_amount'] === null) return ['limitation'=>'Broken sale link: leave pending for investigation.'];
+        $stmt = $this->pdo->prepare("SELECT COALESCE(SUM(refund_amount),0) FROM sale_reversals WHERE sale_id=? AND status='approved'");
+        $stmt->execute([$record['sale_id']]);
+        $record['paid_before'] = round((float)$record['total_amount']-(float)$stmt->fetchColumn(),2);
+        $record['paid_after'] = $record['paid_before']-(float)$record['refund_amount'];
+        $stmt = $this->pdo->prepare("SELECT i.*,si.quantity AS sold_quantity,p.product_name,inv.quantity_on_hand,
+            COALESCE((SELECT SUM(a.quantity) FROM sale_reversal_items a JOIN sale_reversals r ON r.reversal_id=a.reversal_id
+                WHERE a.sale_item_id=i.sale_item_id AND r.status='approved'),0) AS approved_quantity
+            FROM sale_reversal_items i LEFT JOIN sale_items si ON si.sale_item_id=i.sale_item_id
+            LEFT JOIN products p ON p.product_id=i.product_id LEFT JOIN inventory inv ON inv.product_id=i.product_id WHERE i.reversal_id=?");
+        $stmt->execute([$reversalId]);
+        $record['items'] = $stmt->fetchAll();
+        if ($record['shift_id']) {
+            $record['cash_before'] = (new App\Services\CashierShiftService($this->pdo))->calculateShift((int)$record['shift_id'])['calculated_expected_cash'];
+            $record['cash_after'] = $record['cash_before']-($record['settlement_method']==='cash' ? (float)$record['refund_amount'] : 0);
+        }
+        return $record;
     }
 
     public function requestReversal(
@@ -107,300 +127,17 @@ class SaleReversalService
         float $refundAmount = 0.0,
         string $exchangeDetails = ''
     ): int {
-        $allowedTypes = ['cancel', 'return', 'refund', 'exchange'];
-        if (!in_array($type, $allowedTypes, true)) {
-            throw new RuntimeException('Invalid reversal type.');
-        }
-
-        $reason = trim($reason);
-        if ($reason === '') {
-            throw new RuntimeException('A reversal reason is required.');
-        }
-
-        $settlementMethod = in_array($settlementMethod, ['none', 'cash', 'card', 'ewallet', 'exchange'], true)
-            ? $settlementMethod
-            : 'none';
-
-        $sale = $this->getSaleWithItems($saleId);
-        if (!$sale) {
-            throw new RuntimeException('Sale not found.');
-        }
-        if (!empty($sale['approved_full_reversal'])) {
-            throw new RuntimeException('This sale already has an approved full cancellation.');
-        }
-
-        $this->fiscalPeriodGuard->assertOpenForDate($sale['sale_date'], 'sales', 'sale return');
-        $this->fiscalPeriodGuard->assertOpenForDate($sale['sale_date'], 'sale_reversals', 'sale return');
-        $this->fiscalPeriodGuard->assertOpenNow('sale_reversals', 'sale return');
-
-        $itemPayload = $this->buildItemPayload($sale, $type, $requestedItems);
-        if (!$itemPayload) {
-            throw new RuntimeException('Select at least one return item with a valid quantity.');
-        }
-
-        StoreWriteGate::begin($this->pdo);
-        try {
-            $this->requireNoCashRefunds($saleId);
-            $stmt = $this->pdo->prepare(
-                "INSERT INTO sale_reversals
-                    (sale_id, reversal_type, status, reason, settlement_method, refund_amount, exchange_details, requested_by)
-                 VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)"
-            );
-            $stmt->execute([
-                $saleId,
-                $type,
-                $reason,
-                $settlementMethod,
-                max(0, $refundAmount),
-                trim($exchangeDetails),
-                $requestedBy,
-            ]);
-            $reversalId = (int)$this->pdo->lastInsertId();
-
-            $itemStmt = $this->pdo->prepare(
-                "INSERT INTO sale_reversal_items
-                    (reversal_id, sale_item_id, product_id, quantity, unit_price, subtotal)
-                 VALUES (?, ?, ?, ?, ?, ?)"
-            );
-            foreach ($itemPayload as $item) {
-                $itemStmt->execute([
-                    $reversalId,
-                    $item['sale_item_id'],
-                    $item['product_id'],
-                    $item['quantity'],
-                    $item['unit_price'],
-                    $item['subtotal'],
-                ]);
-            }
-
-            $this->logActivity(
-                $requestedBy,
-                'Sale reversal requested',
-                'Sales Reversals',
-                $reversalId,
-                ['sale_id' => $saleId, 'status' => 'completed'],
-                [
-                    'reversal_id' => $reversalId,
-                    'sale_id' => $saleId,
-                    'reversal_type' => $type,
-                    'status' => 'pending',
-                    'reason' => $reason,
-                    'settlement_method' => $settlementMethod,
-                    'refund_amount' => max(0, $refundAmount),
-                    'item_count' => count($itemPayload),
-                ]
-            );
-
-            $this->pdo->commit();
-            return $reversalId;
-        } catch (Throwable $e) {
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-            throw $e;
-        }
+        throw new RuntimeException('New Legacy Reversal requests are disabled. Use full or partial Cash Refunds; an exchange requires a refund plus a new sale.');
     }
 
-    public function approveReversal(int $reversalId, int $approvedBy): void
+    public function approveReversal(int $reversalId, int $approvedBy, string $reason = '', array $evidence = []): void
     {
-        StoreWriteGate::begin($this->pdo);
-        try {
-            $stmt = $this->pdo->prepare(
-                "SELECT sr.* FROM sale_reversals sr
-                 JOIN sales s ON s.sale_id = sr.sale_id
-                 JOIN users u ON u.user_id = s.cashier_id
-                 WHERE sr.reversal_id = ? AND (
-                     u.branch_id = ? OR EXISTS (
-                         SELECT 1 FROM sale_items scope_si
-                         JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                         WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-                     )
-                 ) FOR UPDATE"
-            );
-            $storeId = $this->storeScope->id();
-            $stmt->execute([$reversalId, $storeId, $storeId]);
-            $reversal = $stmt->fetch();
-
-            if (!$reversal) {
-                throw new RuntimeException('Reversal request not found.');
-            }
-            if ($reversal['status'] !== 'pending') {
-                throw new RuntimeException('Only pending reversal requests can be approved.');
-            }
-
-            $this->requireNoCashRefunds((int)$reversal['sale_id']);
-            $saleStmt = $this->pdo->prepare("SELECT sale_date FROM sales WHERE sale_id = ?");
-            $saleStmt->execute([(int)$reversal['sale_id']]);
-            $saleDate = $saleStmt->fetchColumn();
-            if (!$saleDate) {
-                throw new RuntimeException('Sale not found for this reversal request.');
-            }
-            $this->fiscalPeriodGuard->assertOpenForDate((string)$saleDate, 'sales', 'sale return');
-            $this->fiscalPeriodGuard->assertOpenForDate((string)$saleDate, 'sale_reversals', 'sale return');
-            $this->fiscalPeriodGuard->assertOpenNow('sale_reversals', 'sale return');
-            $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
-
-            $itemsStmt = $this->pdo->prepare(
-                "SELECT sri.*, si.quantity AS sold_quantity,
-                        COALESCE(approved.approved_qty, 0) AS already_reversed
-                 FROM sale_reversal_items sri
-                 JOIN sale_items si ON si.sale_item_id = sri.sale_item_id
-                 LEFT JOIN (
-                    SELECT sri2.sale_item_id, SUM(sri2.quantity) AS approved_qty
-                    FROM sale_reversal_items sri2
-                    JOIN sale_reversals sr2 ON sr2.reversal_id = sri2.reversal_id
-                    WHERE sr2.status = 'approved'
-                    GROUP BY sri2.sale_item_id
-                 ) approved ON approved.sale_item_id = sri.sale_item_id
-                 WHERE sri.reversal_id = ?
-                 FOR UPDATE"
-            );
-            $itemsStmt->execute([$reversalId]);
-            $items = $itemsStmt->fetchAll();
-
-            foreach ($items as $item) {
-                $remaining = (int)$item['sold_quantity'] - (int)$item['already_reversed'];
-                if ((int)$item['quantity'] > $remaining) {
-                    throw new RuntimeException('One or more return quantities now exceed the remaining sold quantity.');
-                }
-
-                $this->restoreSaleItemBatches(
-                    (int)$item['sale_item_id'],
-                    (int)$item['quantity'],
-                    (int)$item['already_reversed']
-                );
-
-                $this->pdo->prepare(
-                    "UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?"
-                )->execute([(int)$item['quantity'], (int)$item['product_id']]);
-
-                $this->pdo->prepare(
-                    "UPDATE products SET quantity_sold = GREATEST(quantity_sold - ?, 0) WHERE product_id = ?"
-                )->execute([(int)$item['quantity'], (int)$item['product_id']]);
-
-                $this->pdo->prepare(
-                    "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
-                     VALUES (?, ?, 'return', ?)"
-                )->execute([(int)$item['product_id'], (int)$item['quantity'], $approvedBy]);
-            }
-
-            $this->pdo->prepare(
-                "UPDATE sale_reversals
-                 SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
-                 WHERE reversal_id = ?"
-            )->execute([$approvedBy, $reversalId]);
-
-            $this->logActivity(
-                $approvedBy,
-                'Sale reversal approved',
-                'Sales Reversals',
-                $reversalId,
-                [
-                    'reversal_id' => $reversalId,
-                    'sale_id' => (int)$reversal['sale_id'],
-                    'status' => 'pending',
-                ],
-                [
-                    'reversal_id' => $reversalId,
-                    'sale_id' => (int)$reversal['sale_id'],
-                    'reversal_type' => $reversal['reversal_type'],
-                    'status' => 'approved',
-                    'restored_item_lines' => count($items),
-                ]
-            );
-
-            $this->pdo->commit();
-            $this->notificationService->checkAndNotifyLowStock();
-        } catch (Throwable $e) {
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-            throw $e;
-        }
+        (new App\Services\LegacyReversalTransitionService($this->pdo))->decide($reversalId, $approvedBy, 'approved', $reason, $evidence);
     }
 
-    public function rejectReversal(int $reversalId, int $rejectedBy, string $reason): void
+    public function rejectReversal(int $reversalId, int $rejectedBy, string $reason, array $evidence = []): void
     {
-        $reason = trim($reason);
-        if ($reason === '') {
-            throw new RuntimeException('A rejection reason is required.');
-        }
-
-        $stmt = $this->pdo->prepare(
-            "UPDATE sale_reversals sr
-             SET sr.status = 'rejected', sr.approved_by = ?, sr.approved_at = CURRENT_TIMESTAMP, sr.rejection_reason = ?
-             WHERE sr.reversal_id = ? AND sr.status = 'pending'
-               AND EXISTS (
-                   SELECT 1 FROM sales s JOIN users u ON u.user_id = s.cashier_id
-                   WHERE s.sale_id = sr.sale_id AND (
-                       u.branch_id = ? OR EXISTS (
-                           SELECT 1 FROM sale_items scope_si
-                           JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                           WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-                       )
-                   )
-               )"
-        );
-        $storeId = $this->storeScope->id();
-        $stmt->execute([$rejectedBy, $reason, $reversalId, $storeId, $storeId]);
-
-        if ($stmt->rowCount() === 0) {
-            throw new RuntimeException('Only pending reversal requests can be rejected.');
-        }
-
-        $this->logActivity(
-            $rejectedBy,
-            'Sale reversal rejected',
-            'Sales Reversals',
-            $reversalId,
-            ['status' => 'pending'],
-            ['status' => 'rejected', 'rejection_reason' => $reason]
-        );
-    }
-
-    private function requireNoCashRefunds(int $saleId): void
-    {
-        // Share the sale lock with CashRefundService before choosing a ledger.
-        $sale = $this->pdo->prepare('SELECT sale_id FROM sales WHERE sale_id = ? FOR UPDATE');
-        $sale->execute([$saleId]);
-        $refund = $this->pdo->prepare('SELECT refund_id FROM cash_refunds WHERE sale_id = ? LIMIT 1 FOR UPDATE');
-        $refund->execute([$saleId]);
-        if ($refund->fetchColumn() !== false) {
-            throw new RuntimeException('This sale already has a Cash Refund. Use Cash Refunds for any remaining returned items.');
-        }
-    }
-
-    private function buildItemPayload(array $sale, string $type, array $requestedItems): array
-    {
-        $payload = [];
-        foreach ($sale['items'] as $item) {
-            $remaining = (int)$item['quantity'] - (int)$item['reversed_qty'];
-            if ($remaining <= 0) {
-                continue;
-            }
-
-            $quantity = $type === 'cancel'
-                ? $remaining
-                : (int)($requestedItems[$item['sale_item_id']] ?? 0);
-
-            if ($quantity <= 0) {
-                continue;
-            }
-            if ($quantity > $remaining) {
-                throw new RuntimeException('Return quantity cannot exceed the remaining sold quantity.');
-            }
-
-            $unitPrice = (float)$item['unit_price'];
-            $payload[] = [
-                'sale_item_id' => (int)$item['sale_item_id'],
-                'product_id' => (int)$item['product_id'],
-                'quantity' => $quantity,
-                'unit_price' => $unitPrice,
-                'subtotal' => $unitPrice * $quantity,
-            ];
-        }
-
-        return $payload;
+        (new App\Services\LegacyReversalTransitionService($this->pdo))->decide($reversalId, $rejectedBy, 'rejected', $reason, $evidence);
     }
 
     private function hasApprovedFullReversal(int $saleId): bool
@@ -414,59 +151,4 @@ class SaleReversalService
         return (int)$stmt->fetchColumn() > 0;
     }
 
-    private function restoreSaleItemBatches(int $saleItemId, int $quantity, int $alreadyReversed): void
-    {
-        $stmt = $this->pdo->prepare(
-            "SELECT batch_id, quantity
-             FROM sale_item_batches
-             WHERE sale_item_id = ?
-             ORDER BY sale_item_batch_id ASC
-             FOR UPDATE"
-        );
-        $stmt->execute([$saleItemId]);
-        $allocations = $stmt->fetchAll();
-
-        if (!$allocations) {
-            return;
-        }
-
-        $remainingToSkip = $alreadyReversed;
-        $remainingToRestore = $quantity;
-
-        foreach ($allocations as $allocation) {
-            if ($remainingToRestore <= 0) {
-                break;
-            }
-
-            $allocatedQty = (int)$allocation['quantity'];
-            if ($remainingToSkip >= $allocatedQty) {
-                $remainingToSkip -= $allocatedQty;
-                continue;
-            }
-
-            $availableFromAllocation = $allocatedQty - $remainingToSkip;
-            $remainingToSkip = 0;
-            $restoreQty = min($remainingToRestore, $availableFromAllocation);
-
-            $this->pdo->prepare(
-                "UPDATE product_batches
-                 SET remaining_quantity = remaining_quantity + ?
-                 WHERE batch_id = ?"
-            )->execute([$restoreQty, (int)$allocation['batch_id']]);
-
-            $remainingToRestore -= $restoreQty;
-        }
-    }
-
-    private function logActivity(
-        int $userId,
-        string $action,
-        ?string $module = null,
-        ?int $recordId = null,
-        $previousValue = null,
-        $newValue = null
-    ): void
-    {
-        log_activity($this->pdo, $userId, $action, $module, $recordId, $previousValue, $newValue);
-    }
 }

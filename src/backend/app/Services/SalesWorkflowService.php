@@ -49,16 +49,17 @@ use App\Services\ReceiptDetailsService;
  */
 class SalesWorkflowService
 {
+    public const QUOTE_CHANGED = 'Prices, stock, promotions or approval changed. Review the final quote again before recording payment.';
     private PDO $pdo;
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
     private RoleCapabilityPolicy $policy;
     private HeldSaleService $heldSales;
 
-    public function __construct(PDO $pdo, ?RoleCapabilityPolicy $policy = null)
+    public function __construct(PDO $pdo, ?RoleCapabilityPolicy $policy = null, ?NotificationService $notifications = null)
     {
         $this->pdo = $pdo;
-        $this->notificationService = new NotificationService($pdo);
+        $this->notificationService = $notifications ?? new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
         $this->policy = $policy ?? new RoleCapabilityPolicy();
         $this->heldSales = new HeldSaleService($pdo, new CashierShiftService($pdo, $this->policy));
@@ -69,6 +70,22 @@ class SalesWorkflowService
      */
     public function checkout(array $cart, int $userId, string $actorRole, string $paymentMethod, array $paymentDetails = []): array
     {
+        // A competing Store writer may fail fast at the write gate. Retry that
+        // race with the same identity; a backup pause remains an explicit refusal.
+        for ($retry = 0; ; $retry++) {
+            try {
+                return $this->checkoutOnce($cart, $userId, $actorRole, $paymentMethod, $paymentDetails);
+            } catch (PDOException $e) {
+                if ($retry >= 20 || !in_array((int)($e->errorInfo[1] ?? 0), [1205, 1213], true)) {
+                    throw $e;
+                }
+                usleep(100000);
+            }
+        }
+    }
+
+    private function checkoutOnce(array $cart, int $userId, string $actorRole, string $paymentMethod, array $paymentDetails): array
+    {
         $cleanCart = $this->sanitizeCart($cart);
         if (!$cleanCart) {
             throw new RuntimeException('Your cart is empty or invalid.');
@@ -78,10 +95,22 @@ class SalesWorkflowService
         // cannot sell is refused without beginning any Store write.
         $this->requireCashierWorkspace($actorRole);
 
-        $this->assertCheckoutFiscalPeriodsOpen();
+        $attempt = $this->attemptIdentity($paymentDetails);
+        $fingerprint = $this->attemptFingerprint($cleanCart, $paymentMethod, $paymentDetails);
+        // Recovery remains available after a shift or fiscal period closes.
+        $saved = $attempt === null ? null : $this->recoverAttempt($attempt, $userId, $actorRole, $fingerprint);
+        if ($saved !== null) {
+            return $saved;
+        }
 
         StoreWriteGate::begin($this->pdo);
         try {
+            $saved = $attempt === null ? null : $this->recoverAttempt($attempt, $userId, $actorRole, $fingerprint);
+            if ($saved !== null) {
+                $this->pdo->commit();
+                return $saved;
+            }
+            $this->assertCheckoutFiscalPeriodsOpen();
             // Resolved and locked inside the transaction so the shift that
             // authorizes this sale is the shift that is still open at commit.
             $attribution = $this->resolveSaleAttribution($userId);
@@ -91,13 +120,26 @@ class SalesWorkflowService
             // the sale, so a held sale cannot be completed onto a drawer that is
             // not the one it was held under.
             $resumedHeldSale = $this->resolveResumedHeldSale($userId, $attribution, $paymentDetails);
-            $sale = $this->buildSalePayload($cleanCart);
-            $manualDiscount = $this->resolveDiscount($userId, $sale['total'], $paymentDetails);
-            $automaticPromotion = $this->resolveAutomaticPromotion($sale['items'], $sale['total']);
-            $discount = $automaticPromotion['discount_amount'] > $manualDiscount['discount_amount'] ? $automaticPromotion : $manualDiscount;
-            $netTotal = max(0, $sale['total'] - $discount['discount_amount']);
+            $quote = $this->buildQuote($cleanCart, $userId, $attribution, $paymentDetails);
+            // Browser requests always carry the server-held reviewed hash. Legacy
+            // internal callers keep their interface, while reviewed callers fail closed.
+            if (($attempt !== null || array_key_exists('reviewed_quote', $paymentDetails))
+                && !hash_equals($quote['state_hash'], (string)($paymentDetails['reviewed_quote'] ?? ''))) {
+                throw new DomainException(self::QUOTE_CHANGED);
+            }
+            $sale = $quote['sale'];
+            $discount = $quote['discount'];
+            $netTotal = $quote['total'];
             $payment = $this->resolvePayment($paymentMethod, $paymentDetails, $netTotal);
             $saleId = $this->insertSale($userId, $attribution, $sale['total'], $netTotal, $paymentMethod, $payment, $discount);
+            if (!empty($discount['approval_state'])) {
+                $this->pdo->prepare("INSERT INTO activity_log (user_id, action, category, module, record_id, metadata) VALUES (?, 'Approved sale discount', 'store_operation', 'sales', ?, ?)")
+                    ->execute([$discount['discount_authorized_by'], $saleId, json_encode([
+                        'cashier_id' => $userId, 'quote_hash' => $quote['state_hash'],
+                        'discount_amount' => $discount['discount_amount'],
+                        'emergency_access_session_id' => $discount['approval_state']['emergency_session_id'] ?? null,
+                    ], JSON_THROW_ON_ERROR)]);
+            }
 
             foreach ($sale['items'] as $item) {
                 $this->recordSaleItem($saleId, $item, $userId);
@@ -113,16 +155,119 @@ class SalesWorkflowService
                 $this->heldSales->markCompleted((int)$resumedHeldSale['held_sale_id'], $saleId);
             }
 
+            $result = ['sale_id' => $saleId, 'total' => $netTotal, 'discount_amount' => $discount['discount_amount']];
+            if ($attempt !== null) {
+                $this->pdo->prepare('INSERT INTO checkout_attempts (cashier_id, attempt_id, request_hash, sale_id, result_json) VALUES (?, ?, ?, ?, ?)')
+                    ->execute([$userId, $attempt, $fingerprint, $saleId, json_encode($result, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION)]);
+            }
             $this->pdo->commit();
-            $this->notificationService->checkAndNotifyLowStock();
-            $this->notificationService->checkAndNotifyExpiringStock();
-            return ['sale_id' => $saleId, 'total' => $netTotal, 'discount_amount' => $discount['discount_amount']];
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e;
         }
+        foreach (['checkAndNotifyLowStock', 'checkAndNotifyExpiringStock'] as $notification) {
+            try {
+                $this->notificationService->$notification();
+            } catch (Throwable $e) {
+                error_log("Sale {$saleId} committed; {$notification} notification failed: " . $e->getMessage());
+            }
+        }
+        return $result;
+    }
+
+    public function recoverAttempt(string $attempt, int $userId, string $actorRole, ?string $fingerprint = null): ?array
+    {
+        $this->requireCashierWorkspace($actorRole);
+        $this->attemptIdentity(['checkout_attempt' => $attempt]);
+        $statement = $this->pdo->prepare('SELECT request_hash, result_json FROM checkout_attempts WHERE cashier_id = ? AND attempt_id = ?');
+        $statement->execute([$userId, $attempt]);
+        $saved = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!$saved) {
+            return null;
+        }
+        if ($fingerprint !== null && !hash_equals($saved['request_hash'], $fingerprint)) {
+            throw new DomainException('This checkout attempt belongs to a different cart or payment. Recover its saved receipt before starting another sale.');
+        }
+        return json_decode($saved['result_json'], true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /** The quote is read under the same locks as checkout and makes no sale. */
+    public function reviewQuote(array $cart, int $userId, string $actorRole, array $details = []): array
+    {
+        $this->requireCashierWorkspace($actorRole);
+        $cart = $this->sanitizeCart($cart);
+        if (!$cart) throw new DomainException('Your cart is empty or invalid.');
+        StoreWriteGate::begin($this->pdo);
+        try {
+            $this->assertCheckoutFiscalPeriodsOpen();
+            $shiftId = $this->resolveSaleAttribution($userId);
+            $this->resolveResumedHeldSale($userId, $shiftId, $details);
+            return $this->buildQuote($cart, $userId, $shiftId, $details);
+        } finally {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+        }
+    }
+
+    private function buildQuote(array $cart, int $userId, int $shiftId, array $details): array
+    {
+        $sale = $this->buildSalePayload($cart);
+        $manual = $this->resolveDiscount($userId, $sale['total'], $details);
+        $promotion = $this->resolveAutomaticPromotion($sale['items'], $sale['total']);
+        $discount = $promotion['discount_amount'] > $manual['discount_amount'] ? $promotion : $manual;
+        if ($discount['promotion_id'] === null && $discount['discount_amount'] > $sale['total'] * 0.10) {
+            $approval = $this->authorizeSupervisor(
+                trim((string)($details['discount_approver_username'] ?? '')),
+                (string)($details['discount_approver_password'] ?? '')
+            );
+            $discount['discount_authorized_by'] = (int)$approval['user_id'];
+            $discount['approval_state'] = $approval;
+        }
+        $total = round(max(0, $sale['total'] - $discount['discount_amount']), 2);
+        $inputs = [
+            'payment_method' => (string)($details['payment_method'] ?? ''),
+            'discount_type' => (string)($details['discount_type'] ?? 'none'),
+            'discount_value' => (float)($details['discount_value'] ?? 0),
+            'discount_reason' => trim((string)($details['discount_reason'] ?? '')),
+            'held_sale_id' => (int)($details['held_sale_id'] ?? 0),
+        ];
+        return ['sale' => $sale, 'discount' => $discount, 'total' => $total,
+            'eligible_promotions' => $promotion['eligible_promotions'],
+            'state_hash' => hash('sha256', json_encode([$userId, $shiftId, $inputs, $sale, $discount, $promotion['eligible_promotions']], JSON_THROW_ON_ERROR))];
+    }
+
+    private function attemptIdentity(array $details): ?string
+    {
+        // Non-browser service callers retain their existing checkout interface.
+        if (!array_key_exists('checkout_attempt', $details)) {
+            return null;
+        }
+        $attempt = (string)$details['checkout_attempt'];
+        if (!preg_match('/^[a-f0-9]{32}$/D', $attempt)) {
+            throw new DomainException('A valid checkout attempt is required. Reload the point of sale.');
+        }
+        return $attempt;
+    }
+
+    private function attemptFingerprint(array $cart, string $method, array $details): string
+    {
+        $quantities = [];
+        foreach ($cart as $item) {
+            $quantities[$item['product_id']] = ($quantities[$item['product_id']] ?? 0) + $item['qty'];
+        }
+        ksort($quantities);
+        // Authorization passwords are never persisted or fingerprinted.
+        $payment = [
+            'cash_received' => $method === 'cash' ? (float)($details['cash_received'] ?? 0) : null,
+            'payment_reference' => $method === 'cash' ? null : trim((string)($details['payment_reference'] ?? '')),
+            'discount_type' => (string)($details['discount_type'] ?? 'none'),
+            'discount_value' => (float)($details['discount_value'] ?? 0),
+            'discount_reason' => trim((string)($details['discount_reason'] ?? '')),
+            'discount_approver_username' => trim((string)($details['discount_approver_username'] ?? '')),
+            'held_sale_id' => (int)($details['held_sale_id'] ?? 0),
+        ];
+        return hash('sha256', json_encode([$quantities, $method, $payment], JSON_THROW_ON_ERROR));
     }
 
     public function getActiveProducts(): array
@@ -154,15 +299,18 @@ class SalesWorkflowService
 
     private function sanitizeCart(array $cart): array
     {
-        $cleanCart = [];
+        $quantities = [];
         foreach ($cart as $item) {
             $productId = (int)($item['product_id'] ?? 0);
             $qty = (int)($item['qty'] ?? 0);
             if ($productId > 0 && $qty > 0) {
-                $cleanCart[] = ['product_id' => $productId, 'qty' => $qty];
+                $quantities[$productId] = ($quantities[$productId] ?? 0) + $qty;
             }
         }
 
+        ksort($quantities);
+        $cleanCart = [];
+        foreach ($quantities as $productId => $qty) $cleanCart[] = ['product_id' => $productId, 'qty' => $qty];
         return $cleanCart;
     }
 
@@ -187,6 +335,8 @@ class SalesWorkflowService
             }
 
             $batchPlan = $this->buildFefoBatchPlan($item['product_id'], $item['qty']);
+            $batchState = $this->pdo->prepare('SELECT batch_id, remaining_quantity, expiration_date, date_received FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY batch_id' . $this->rowLock());
+            $batchState->execute([$item['product_id']]);
             $unitPrice = (float)$product['unit_price'];
             $subtotal = $unitPrice * $item['qty'];
             $total += $subtotal;
@@ -198,6 +348,9 @@ class SalesWorkflowService
                 'subtotal' => $subtotal,
                 'batch_plan' => $batchPlan,
                 'category_id' => (int)($product['category_id'] ?? 0),
+                'product_name' => (string)($product['product_name'] ?? ''),
+                'available_stock' => (int)$product['quantity_on_hand'],
+                'batch_state' => $batchState->fetchAll(PDO::FETCH_ASSOC),
             ];
         }
 
@@ -207,7 +360,7 @@ class SalesWorkflowService
     private function lockProductForCheckout(int $productId): ?array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT p.unit_price, p.category_id, p.status, i.quantity_on_hand
+            "SELECT p.unit_price, p.category_id, p.status, p.product_name, i.quantity_on_hand
              FROM products p JOIN inventory i ON p.product_id = i.product_id
              WHERE p.product_id = ? AND p.status = 'active'" . $this->rowLock()
         );
@@ -316,6 +469,7 @@ class SalesWorkflowService
             $type = 'none';
         }
         $value = max(0, (float)($details['discount_value'] ?? 0));
+        if (!is_finite($value)) throw new DomainException('Enter a valid discount value.');
         $reason = trim((string)($details['discount_reason'] ?? ''));
         $amount = 0.0;
         if ($type === 'percentage') {
@@ -342,21 +496,12 @@ class SalesWorkflowService
             throw new RuntimeException('A discount reason is required.');
         }
 
-        $authorizedBy = $userId;
-        $threshold = $grossTotal * 0.10;
-        if ($amount > $threshold) {
-            $authorizedBy = $this->authorizeSupervisor(
-                trim((string)($details['discount_approver_username'] ?? '')),
-                (string)($details['discount_approver_password'] ?? '')
-            );
-        }
-
         return [
             'discount_type' => $type,
             'discount_value' => $value,
             'discount_amount' => $amount,
             'discount_reason' => $reason,
-            'discount_authorized_by' => $authorizedBy,
+            'discount_authorized_by' => $userId,
             'promotion_id' => null,
             'promotion_name' => null,
         ];
@@ -368,15 +513,20 @@ class SalesWorkflowService
             'discount_type' => 'none', 'discount_value' => 0.0, 'discount_amount' => 0.0,
             'discount_reason' => null, 'discount_authorized_by' => null,
             'promotion_id' => null, 'promotion_name' => null,
+            'eligible_promotions' => [],
         ];
         try {
             $promotions = $this->pdo->query(
-                "SELECT * FROM promotions WHERE status='active' AND starts_at<=NOW() AND ends_at>=NOW() ORDER BY discount_value DESC"
+                "SELECT * FROM promotions WHERE status='active' AND starts_at<=NOW() AND ends_at>=NOW() ORDER BY promotion_id" . $this->rowLock()
             )->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
+            // Older isolated schemas predate promotions. A query/connection
+            // failure must never silently remove a discount from a reviewed sale.
+            if ((int)($e->errorInfo[1] ?? 0) !== 1146 && !str_contains($e->getMessage(), 'no such table: promotions')) throw $e;
             return $default;
         }
         $best = $default;
+        $eligiblePromotions = [];
         foreach ($promotions as $promotion) {
             $eligibleSubtotal = 0.0;
             $eligibleQuantity = 0;
@@ -397,6 +547,7 @@ class SalesWorkflowService
                 ? round($eligibleSubtotal * min(100, $value) / 100, 2)
                 : round(min($eligibleSubtotal, $value), 2);
             $amount = min($amount, $grossTotal);
+            $eligiblePromotions[] = $promotion + ['applied_amount' => $amount];
             if ($amount > (float)$best['discount_amount']) {
                 $best = [
                     'discount_type' => (string)$promotion['discount_type'],
@@ -409,32 +560,51 @@ class SalesWorkflowService
                 ];
             }
         }
+        $best['eligible_promotions'] = $eligiblePromotions;
         return $best;
     }
 
-    private function authorizeSupervisor(string $username, string $password): int
+    private function authorizeSupervisor(string $username, string $password): array
     {
         if ($username === '' || $password === '') {
-            throw new RuntimeException('A supervisor login is required for discounts above 10%.');
+            throw new RuntimeException('Administrator approval is required for an applied manual discount above 10%.');
         }
         $stmt = $this->pdo->prepare(
-            "SELECT u.user_id, u.password_hash
+            "SELECT u.user_id, u.password_hash, u.status, u.username, r.role_name
              FROM users u JOIN roles r ON r.role_id = u.role_id
              WHERE u.username = ? AND u.status = 'active' AND r.role_name IN ('admin','super_admin')
-             LIMIT 1"
+             LIMIT 1" . $this->rowLock()
         );
         $stmt->execute([$username]);
         $supervisor = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$supervisor || !password_verify($password, (string)$supervisor['password_hash'])) {
-            throw new RuntimeException('Supervisor authorization failed.');
+            throw new RuntimeException('Administrator approval failed.');
         }
-        return (int)$supervisor['user_id'];
+        if ($supervisor['role_name'] === 'super_admin') {
+            $emergency = $this->pdo->prepare("SELECT session_id, reason, expires_at, status FROM emergency_access_sessions WHERE actor_user_id = ? ORDER BY session_id DESC LIMIT 1" . $this->rowLock());
+            $emergency->execute([$supervisor['user_id']]);
+            $session = $emergency->fetch(PDO::FETCH_ASSOC);
+            if (!$session || $session['status'] !== 'active' || $session['expires_at'] <= gmdate('Y-m-d H:i:s')) {
+                throw new DomainException('Super Administrator approval requires active Emergency Access.');
+            }
+            $supervisor['emergency_session_id'] = (int)$session['session_id'];
+            $supervisor['emergency_reason'] = $session['reason'];
+            $supervisor['emergency_expires_at'] = $session['expires_at'];
+        }
+        return $supervisor;
     }
 
     private function resolvePayment(string $paymentMethod, array $paymentDetails, float $total): array
     {
+        if (!in_array($paymentMethod, ['cash', 'card', 'ewallet'], true)) {
+            throw new DomainException('Choose cash, card or e-wallet payment.');
+        }
         $cashReceived = $paymentMethod === 'cash' ? (float)($paymentDetails['cash_received'] ?? 0) : null;
-        $changeDue = $paymentMethod === 'cash' ? max(0, $cashReceived - $total) : null;
+        if ($paymentMethod === 'cash' && (!is_finite($cashReceived) || $cashReceived < 0 || !is_numeric($paymentDetails['cash_received'] ?? null))) {
+            throw new DomainException('Enter a valid cash amount.');
+        }
+        $cashReceived = $cashReceived === null ? null : round($cashReceived, 2);
+        $changeDue = $paymentMethod === 'cash' ? round(max(0, $cashReceived - $total), 2) : null;
         $paymentReference = $paymentMethod !== 'cash' ? trim((string)($paymentDetails['payment_reference'] ?? '')) : null;
 
         if ($paymentMethod === 'cash' && $cashReceived < $total) {
@@ -442,6 +612,11 @@ class SalesWorkflowService
         }
         if ($paymentMethod !== 'cash' && $paymentReference === '') {
             throw new RuntimeException('Payment reference is required for card or e-wallet payments.');
+        }
+        if ($paymentMethod !== 'cash'
+            && (array_key_exists('checkout_attempt', $paymentDetails) || array_key_exists('reviewed_quote', $paymentDetails) || array_key_exists('payment_verified', $paymentDetails))
+            && ($paymentDetails['payment_verified'] ?? false) !== true) {
+            throw new DomainException('Verify the external payment before recording it.');
         }
 
         return [
@@ -641,6 +816,8 @@ class SalesWorkflowService
             $plan[] = [
                 'batch_id' => (int)$batch['batch_id'],
                 'quantity' => $take,
+                'available_quantity' => (int)$batch['remaining_quantity'],
+                'expiration_date' => $batch['expiration_date'],
             ];
             $remaining -= $take;
         }

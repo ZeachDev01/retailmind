@@ -58,7 +58,6 @@ final class RoleCapabilityPolicy
             self::MUTATE_INVENTORY,
             self::VIEW_SALES_HISTORY,
             self::VIEW_STORE_REPORTS,
-            self::MANAGE_SALE_REVERSALS,
         ],
         'cashier' => [
             self::VIEW_INVENTORY,
@@ -68,7 +67,7 @@ final class RoleCapabilityPolicy
     ];
 
     private const ADMIN_DELEGATED_ROLES = ['inventory_manager', 'cashier'];
-    private const EMERGENCY_CAPABILITIES = [self::STORE_OPERATIONS, self::MUTATE_INVENTORY];
+    private const EMERGENCY_CAPABILITIES = [self::STORE_OPERATIONS, self::MUTATE_INVENTORY, self::MANAGE_SALE_REVERSALS];
 
     public function allows(
         string $actorRole,
