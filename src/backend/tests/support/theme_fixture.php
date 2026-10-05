@@ -8,6 +8,14 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'inventory_state') {
+    $pdo->exec("USE `{$database}`");
+    $state = [];
+    foreach (['products', 'inventory', 'suppliers', 'supplier_products', 'replenishment_requests', 'purchase_orders', 'purchase_order_items', 'stock_movements', 'inventory_counts', 'inventory_adjustments', 'stock_predictions', 'forecast_runs', 'forecast_decisions', 'stock_receiving', 'promotions'] as $table) {
+        $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
+    }
+    echo json_encode($state); exit;
+}
 if ($argv[1] === 'governance_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];
@@ -68,6 +76,9 @@ $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,10)');
 $pdo->exec("UPDATE products SET barcode='THEME-BARCODE' WHERE product_id=1");
 $pdo->exec("INSERT INTO suppliers (supplier_id,supplier_name,created_by) VALUES (1,'Theme Test Supplier',3)");
 $pdo->exec('INSERT INTO supplier_products (supplier_id,product_id) VALUES (1,1)');
+$pdo->exec("INSERT INTO inventory_adjustments (product_id,adjustment_qty,adjustment_type,reported_by,shift_id,reason) VALUES (1,1,'damaged',4,1,'Disposable theme Stock Issue')");
+$pdo->exec("INSERT INTO purchase_orders (po_number,supplier_id,status,created_by) VALUES ('THEME-PO',1,'draft',3)");
+$pdo->exec("INSERT INTO replenishment_requests (product_id,request_qty,requested_by,status,approved_by) VALUES (1,5,3,'approved',1)");
 $pdo->prepare("INSERT INTO emergency_access_sessions (actor_user_id,reason,activated_at,expires_at,duration_minutes,status) VALUES (2,'Disposable appearance coverage',?,?,30,'active')")
     ->execute([date('Y-m-d H:i:s'),date('Y-m-d H:i:s',time()+1800)]);
 App\Store\StoreWriteGate::begin($pdo); $pdo->commit();

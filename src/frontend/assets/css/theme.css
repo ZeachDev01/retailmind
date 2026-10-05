@@ -7,6 +7,7 @@
 .landing-login-modal__body>.theme-control { margin-bottom:1rem; }
 .landing-login-modal__shell[aria-hidden="true"] .theme-control { visibility:hidden; }
 .user-modal-overlay:not(.open) .theme-control,.user-drawer-overlay:not(.open) .theme-control { visibility:hidden; }
+.rm-modal-overlay:not(.open) .theme-control,.rm-drawer-overlay:not(.open) .theme-control { visibility:hidden; }
 .theme-save-alert { position:fixed; bottom:1rem; right:1rem; z-index:11000; max-width:min(28rem,calc(100vw - 2rem)); padding:1rem; border:1px solid #b45309; border-radius:8px; background:#fff7ed; color:#78350f; }
 .theme-save-alert[hidden] { display:none; }
 @media(max-width:768px) { .theme-control>span { display:none; } .theme-control select { min-height:44px; } .admin-mobile-topbar .theme-control { margin-left:auto; } }

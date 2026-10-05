@@ -240,14 +240,110 @@ const fixture = action => {
                 }
             }
             if(role === 'inventory_manager') {
-                for(const route of ['/components/inventory_management/inventory_counts.php','/components/report/stock_receiving.php']) {
-                    await page.goto(route); await page.locator('#product_code_scan').fill('THEME-BARCODE'); await page.locator('#product_code_scan').press('Enter');
-                    await page.waitForFunction(()=>document.getElementById('product_id').value==='1');
-                    const field=route.includes('inventory_counts') ? '#physical_quantity' : '#received_qty';
-                    const notes=page.locator(route.includes('inventory_counts') ? '#discrepancy_reason' : '#notes');
-                    await page.locator(field).fill('7'); await notes.fill('Unsubmitted inventory work');
-                    await select('light'); assert.equal(await page.locator(field).inputValue(),'7'); assert.equal(await notes.inputValue(),'Unsubmitted inventory work');
-                    await select('dark'); assert.equal(await page.locator('#product_id').inputValue(),'1'); await contrast(page.locator(field));
+                const inventoryState = JSON.parse(fixture('inventory_state'));
+                const inventoryRoutes = [
+                    'inventory_management/inventory_overview','inventory_management/inventory_insights',
+                    'inventory_management/products','inventory_management/csv_import',
+                    'inventory_management/reorder_planner','inventory_management/replenishment_requests',
+                    'inventory_management/stock_issues','inventory_management/suppliers','inventory_management/inventory_counts',
+                    'report/stock_receiving','invoice/purchase_orders','report/predictions','report/forecast_exceptions',
+                    'report/data_readiness','report/forecast_analytics',
+                ];
+                for (const route of inventoryRoutes) {
+                    console.log('Theme inventory screen: '+route);
+                    assert.equal((await page.goto('/components/'+route+'.php')).status(),200);
+                    assert.equal(await control().inputValue(),'dark','Inventory navigation retains mode');
+                    for (const mode of ['light','dark']) {
+                        await select(mode);
+                        for (const selector of ['main h1','main h3','main label','main td','main th','main input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])','main select','main .tag','main .message']) {
+                            const visible=page.locator(selector).filter({visible:true});
+                            if (await visible.count()) await contrast(visible);
+                        }
+                    }
+                    for (const width of [320,390,1280]) {
+                        await page.setViewportSize({width,height:900});
+                        const bounds=await control().boundingBox();
+                        assert(bounds && bounds.x>=0 && bounds.x+bounds.width<=width,'Inventory control fits '+route);
+                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Inventory control unobscured');
+                        await control().focus(); await contrast(control());
+                        assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'));
+                    }
+                    await page.reload(); assert.equal(await control().inputValue(),'dark');
+                }
+                await page.goto('/components/inventory_management/products.php');
+                await page.locator('.manage-product').first().click();
+                await select('light'); await select('dark');
+                await contrast(page.locator('#product-drawer-title'));
+                await page.locator('#product-drawer [data-close-drawer]').click();
+                await page.locator('#product-add-trigger').click(); await contrast(page.locator('#add-product-btn'));
+                await page.locator('#add-product-btn').click();
+                assert.equal(await control().inputValue(),'dark','New dialog control reflects current mode');
+                await page.locator('#add-product-modal input[name="product_name"]').fill('Unsubmitted product');
+                for (const width of [320,390,1280]) {
+                    await page.setViewportSize({width,height:900});
+                    for (const mode of ['light','dark','system']) {
+                        await select(mode); await page.emulateMedia({colorScheme:'light'});
+                        if (mode === 'system') {
+                            await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+                            assert.equal(await page.locator('#add-product-modal input[name="product_name"]').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+                        }
+                        await page.emulateMedia({colorScheme:'dark'});
+                        if (mode === 'system') {
+                            await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+                            assert.equal(await page.locator('#add-product-modal input[name="product_name"]').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(16, 28, 46)');
+                        }
+                        assert(await page.locator('#add-product-modal').isVisible());
+                        assert.equal(await page.locator('#add-product-modal input[name="product_name"]').inputValue(),'Unsubmitted product');
+                        await contrast(page.locator('#add-product-modal h2'));
+                        const bounds=await control().boundingBox();
+                        assert(bounds && bounds.x>=0 && bounds.x+bounds.width<=width,'Inventory dialog selector fits');
+                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Inventory dialog selector unobscured');
+                    }
+                }
+                await page.locator('#add-product-modal [data-close-modal]').first().click();
+                await page.setViewportSize({width:1280,height:900}); await select('dark');
+                await page.goto('/components/invoice/purchase_orders.php');
+                await page.locator('form[data-confirm] button').click();
+                await page.getByRole('heading',{name:'Cancel purchase order'}).waitFor();
+                await select('light'); await select('dark');
+                await contrast(page.getByRole('heading',{name:'Cancel purchase order'}));
+                await page.locator('.rm-cancel').click();
+                await page.locator('textarea[name="notes"]').fill('Unsubmitted purchasing work');
+                await page.locator('select[name="supplier_id"]').selectOption('1');
+                await page.locator('input[name="request_ids[]"]').check();
+                await select('light'); await select('system'); await page.emulateMedia({colorScheme:'light'});
+                assert.equal(await page.locator('textarea[name="notes"]').inputValue(),'Unsubmitted purchasing work');
+                assert.equal(await page.locator('select[name="supplier_id"]').inputValue(),'1');
+                assert(await page.locator('input[name="request_ids[]"]').isChecked());
+                await page.emulateMedia({colorScheme:'dark'}); await select('dark');
+                await page.goto('/components/inventory_management/stock_issues.php');
+                await page.locator('textarea[name="review_notes"]').fill('Unsubmitted Stock Issue decision');
+                await select('light'); await select('dark');
+                assert.equal(await page.locator('textarea[name="review_notes"]').inputValue(),'Unsubmitted Stock Issue decision');
+                assert.equal((await context.request.get('/components/administrator/store_settings.php')).status(),403);
+                assert.equal((await context.request.get('/components/system_administrator/ml_settings.php')).status(),403);
+                assert.equal((await context.request.get('/components/inventory_management/promotions.php')).status(),403);
+                assert.deepEqual(JSON.parse(fixture('inventory_state')),inventoryState,'Appearance preserves inventory, purchasing, Stock Issues and forecasts');
+
+                for (const width of [390,1280]) {
+                    await page.setViewportSize({width,height:900});
+                    for(const route of ['/components/inventory_management/inventory_counts.php','/components/report/stock_receiving.php']) {
+                        await page.goto(route); await page.locator('#product_code_scan').fill('THEME-BARCODE'); await page.locator('#product_code_scan').press('Enter');
+                        await page.waitForFunction(()=>document.getElementById('product_id').value==='1');
+                        const field=route.includes('inventory_counts') ? '#physical_quantity' : '#received_qty';
+                        const notes=page.locator(route.includes('inventory_counts') ? '#discrepancy_reason' : '#notes');
+                        await page.locator(field).fill('7'); await notes.fill('Unsubmitted inventory work');
+                        await select('light'); assert.equal(await page.locator(field).inputValue(),'7'); assert.equal(await notes.inputValue(),'Unsubmitted inventory work');
+                        await select('dark'); assert.equal(await page.locator('#product_id').inputValue(),'1'); await contrast(page.locator(field));
+                        await select('system'); await page.emulateMedia({colorScheme:'light'});
+                        await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+                        await page.emulateMedia({colorScheme:'dark'});
+                        await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+                        assert.equal(await page.locator('#product_id').inputValue(),'1');
+                        assert.equal(await page.locator(field).inputValue(),'7');
+                        assert.equal(await notes.inputValue(),'Unsubmitted inventory work');
+                        await select('dark');
+                    }
                 }
                 await page.goto('/components/inventory_management/suppliers.php'); await contrast(page.locator('.count-badge')); await contrast(page.locator('.status-badge--active'));
                 for(const route of ['/components/invoice/purchase_orders.php','/components/inventory_management/print_barcodes.php?product_id=1']) {
@@ -261,7 +357,13 @@ const fixture = action => {
                 const canvas=page.locator('#featureChart');
                 const pixels=()=>canvas.evaluate(el=>Array.from(el.getContext('2d').getImageData(0,0,45,45).data));
                 const darkPixels=await pixels(); assert(darkPixels.some((v,i)=>i%4===3 && v>0),'Chart visibly draws its labels/axes');
-                await select('light'); assert.notDeepEqual(await pixels(),darkPixels,'Theme switch redraws visible chart pixels'); await select('dark');
+                await select('light'); assert.notDeepEqual(await pixels(),darkPixels,'Theme switch redraws visible chart pixels');
+                await select('system'); await page.emulateMedia({colorScheme:'light'});
+                await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+                const systemLightPixels=await pixels();
+                await page.emulateMedia({colorScheme:'dark'});
+                await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+                assert.notDeepEqual(await pixels(),systemLightPixels,'Live System change redraws chart pixels'); await select('dark');
                 await page.goto('/components/report/predictions.php?variant=A'); await contrast(page.locator('.fp-prototype-note'));
             }
             if(role === 'admin') {

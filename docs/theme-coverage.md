@@ -17,7 +17,7 @@ Changing appearance changes neither forms nor workflow state.
 | Shared account and gates | Staff login, Profile, Preferences, workspace selection, Mandatory/Voluntary Password Change, password reset, Register Lock inside POS |
 | Administrator | Store Operations dashboard, Store Settings, Registers, Shift Report, Stock Issue oversight, Database Backup, operational staff management, Fiscal Periods |
 | Super Administrator | Platform Control Center, Platform Settings, Audit Logs, Database Backup/Restore (including unavailable-hosting screen), Database Updates, Emergency Access, Recovery Account, System Health, ML Settings, privileged account management |
-| Inventory Manager | Inventory Overview/Insights, Products, CSV Import, barcode labels, Promotions, Reorder Planner, Replenishment Requests, Stock Issues, Suppliers, Inventory Counts, Stock Receiving, Purchase Orders |
+| Inventory Manager | Inventory Overview/Insights, Products, CSV Import, barcode labels, Reorder Planner, Replenishment Requests, Stock Issues, Suppliers, Inventory Counts, Stock Receiving, Purchase Orders |
 | Cashier | Dashboard, POS/product lookup, Cashier Shifts, Cash Refunds, Stock Issues, My History, Held Sales within POS |
 | Reports and receipts | Sales/Receipt History, Sale Receipt previews/dialogs/reprints, Refund Receipt previews/reprints, Data Readiness, Forecast Analytics, Forecast dashboard, Forecast Exceptions, Predictions, Report Generation, notifications |
 
@@ -54,3 +54,7 @@ directory (override with `THEME_BROWSER_OUTPUT`).
 Sale/Refund Receipt browser suites also exercise dark previews and light print
 clones at both paper widths with short/long details. `run_all.sh` includes the
 theme suites; account tests explicitly report a skip when `RUN_DB_TESTS` is unset.
+
+Products menus, drawers and wizard panels use the shared palette. Shared inventory
+overlays and dynamically created purchase confirmations contain synchronized
+appearance controls. Promotions remains restricted to Administrator roles.

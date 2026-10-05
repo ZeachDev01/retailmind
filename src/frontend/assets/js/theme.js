@@ -42,7 +42,9 @@
         warning.hidden = true;
         document.body.append(warning);
         let saving = Promise.resolve();
-        document.querySelectorAll('[data-theme-select]').forEach(select => select.addEventListener('change', () => {
+        document.addEventListener('change', event => {
+            const select = event.target;
+            if (!select.matches('[data-theme-select]')) return;
             mode = select.value;
             apply();
             if (!config.authenticated) {
@@ -64,7 +66,7 @@
                     warning.hidden = false;
                 }
             });
-        }));
+        });
         apply();
     });
 })();

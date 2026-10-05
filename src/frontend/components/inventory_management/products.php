@@ -300,7 +300,7 @@ foreach ($products as $product) {
 
         .product-add-menu-item:hover,
         .product-add-menu-item:focus-visible {
-            background: #f1f5f9;
+            background: var(--surface-soft, #f1f5f9);
             outline: none;
         }
 
@@ -309,8 +309,8 @@ foreach ($products as $product) {
             width: 34px;
             height: 34px;
             place-items: center;
-            color: #2563eb;
-            background: #eff6ff;
+            color: var(--theme-info-text, #2563eb);
+            background: var(--theme-info-surface, #eff6ff);
             border-radius: 6px;
         }
 
@@ -355,13 +355,13 @@ foreach ($products as $product) {
 
         .product-drawer-tab:hover {
             color: var(--text);
-            background: #f1f5f9;
+            background: var(--surface-soft, #f1f5f9);
         }
 
         .product-drawer-tab.is-active {
-            color: #1d4ed8;
-            background: #eff6ff;
-            border-color: #bfdbfe;
+            color: var(--theme-info-text, #1d4ed8);
+            background: var(--theme-info-surface, #eff6ff);
+            border-color: var(--border, #bfdbfe);
         }
 
         .product-drawer-panel[hidden],
@@ -381,7 +381,7 @@ foreach ($products as $product) {
             margin-bottom: 1rem;
             border: 1px solid var(--border);
             border-radius: 8px;
-            background: #fff;
+            background: var(--card-bg, #fff);
             overflow: visible;
         }
 
@@ -397,7 +397,7 @@ foreach ($products as $product) {
             display: grid;
             grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
             border-top: 1px solid var(--border);
-            background: #fbfcfe;
+            background: var(--surface-soft, #fbfcfe);
         }
 
         .catalog-filter-row[hidden] {
@@ -418,7 +418,7 @@ foreach ($products as $product) {
             flex: 0 0 42px;
             padding: 0;
             color: var(--muted);
-            background: #fff;
+            background: var(--card-bg, #fff);
             border: 1px solid var(--border);
             border-radius: 6px;
             cursor: pointer;
@@ -426,9 +426,9 @@ foreach ($products as $product) {
 
         .catalog-icon-button:hover,
         .catalog-icon-button.is-active {
-            color: #2563eb;
-            background: #eff6ff;
-            border-color: #bfdbfe;
+            color: var(--theme-info-text, #2563eb);
+            background: var(--theme-info-surface, #eff6ff);
+            border-color: var(--border, #bfdbfe);
         }
 
         .catalog-search {
@@ -511,7 +511,7 @@ foreach ($products as $product) {
             padding: .55rem .7rem;
             border: 1px solid var(--border);
             border-radius: 6px;
-            background: #fff;
+            background: var(--card-bg, #fff);
             color: var(--text);
         }
 

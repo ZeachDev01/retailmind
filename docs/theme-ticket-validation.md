@@ -94,3 +94,46 @@ Review against `57491bb`: Standards found zero documented violations and one
 optional repeated browser geometry-check smell; kept the small direct assertions.
 Spec found zero missing, incorrect or unrequested behaviors. Contrast assertions
 sample representative selector categories, not every text node.
+
+## #125 — Inventory Manager workflows
+
+Confirmed #122 closed. Audited fifteen reachable Inventory Manager routes:
+Inventory Overview/Insights, Products, CSV Import, Reorder Planner, Replenishment
+Requests, Stock Issues, Suppliers, Inventory Counts, Stock Receiving, Purchase
+Orders, Demand Forecast, Forecast Exceptions, Data Readiness and Forecast
+Analytics. Barcode on-screen/paper paths retain existing browser coverage.
+Promotions remains Administrator-only; its Inventory Manager request returns 403.
+
+Products had permanently white inline toolbar/filter panels and light menu/tab
+colors. They now use existing palette variables with their original Light
+fallbacks. Shared overlay opening now places a synchronized appearance control
+inside modal/drawer headers, including dynamically created purchasing confirmations.
+The existing theme save handler delegates changes so newly opened controls work;
+closed overlay controls are hidden. No new dependencies or permissions.
+
+Disposable real-browser/application/MySQL checks cover all fifteen routes in
+Light/Dark, navigation/reload persistence, representative text/input/table/status
+contrast and accessible unobscured controls at 320, 390 and 1280 px. Added product
+menu/drawer/wizard checks, live System transitions in an open wizard with its draft
+retained, dynamic Purchase Order cancellation confirmation (dismissed), purchasing
+supplier/request selections and notes, and pending Stock Issue decision notes.
+Receiving/count barcode scans at 390 and 1280 px retain product/quantity/notes
+through live System updates; open-wizard input colors and chart pixels change with
+the device appearance. Existing Operator Alerts, device overrides,
+account isolation, account gates and report paper checks pass alongside them.
+Database snapshots confirm products, inventory, Supplier Product Terms, purchasing,
+Stock Issues, counts, receiving, promotions and Demand Forecast records unchanged.
+Camera hardware was not exercised; barcode input uses keyboard scanner events.
+
+Validation: account browser suite with RUN_DB_TESTS=1 and login browser suite passed;
+no enabled browser/database checks skipped. Changed PHP/JS syntax, CSS balance
+(33 files), inventory counts scan, Stock Issue, Stock Issue correction, role
+capability, Operator Alert UI and whitespace checks passed. Contract fixtures use
+temporary recovery storage. Parent #121's full regression evidence and pre-existing
+route-label failure/optional legacy DB skips remain applicable. Contrast checks
+sample representative selector categories, not every text node.
+
+Review against f22ef0b: Standards found zero documented violations or actionable
+smells (small shared-overlay theme coupling remains reasonable). Spec identified
+partial mobile scanning/live System rendering evidence; the added external
+rendering and preserved scan/draft assertions resolve that validation gap.
