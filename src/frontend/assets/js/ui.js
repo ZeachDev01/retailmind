@@ -187,11 +187,10 @@
 
   RM.openOverlay = function (overlay) {
     if (!overlay) return;
-    const theme = qs('.theme-control');
-    const header = qs('.rm-modal-header>div, .rm-drawer-header>div', overlay);
+    const theme = qs('.theme-control:not(.theme-mobile-menu)');
+    const header = qs('.rm-modal-header>div, .rm-drawer-header>div, .command-footer', overlay);
     if (theme && header && !qs('.theme-control', overlay)) {
       const control = theme.cloneNode(true);
-      qs('select', control).value = qs('select', theme).value;
       header.append(control);
     }
     overlay.classList.add("open");

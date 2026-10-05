@@ -35,7 +35,12 @@ const fixture = action => {
         browser = await chromium.launch({headless:true});
         const context = await browser.newContext({baseURL:origin,colorScheme:'dark'});
         const page = await context.newPage();
-        const control = () => page.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).last();
+        const control = () => page.locator('[data-theme-current], [data-theme-mode][aria-pressed="true"]').filter({visible:true}).last();
+        const option = async mode => {
+            const choice = page.locator('[data-theme-mode="'+mode+'"]').filter({visible:true}).last();
+            if (!await choice.count()) await page.locator('.theme-trigger').filter({visible:true}).click();
+            return choice;
+        };
         const savedModes = {admin:'dark',super_admin:'light',inventory_manager:'system',cashier:'dark'};
         const contrast = async locator => {
             await locator.first().evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished)));
@@ -62,15 +67,15 @@ const fixture = action => {
         };
         const select = async mode => {
             const response = page.waitForResponse(r=>r.url().endsWith('/auth/theme.php') && r.request().method()==='POST' && new URLSearchParams(r.request().postData()).get('mode') === mode);
-            await control().selectOption(mode); assert.equal((await response).status(),200);
+            await (await option(mode)).click(); assert.equal((await response).status(),200);
         };
         const gateControl = async () => {
             for (const width of [320,390,1280]) {
                 await page.setViewportSize({width,height:900});
                 const bounds=await control().boundingBox();
                 assert(bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=width,'Gate theme control fits');
-                assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Gate theme control unobscured');
-                await control().focus();
+                assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Gate theme control unobscured');
+                await page.keyboard.press('Tab'); await control().focus();
                 assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Gate theme focus visible');
                 await contrast(control());
             }
@@ -111,8 +116,8 @@ const fixture = action => {
                     await page.setViewportSize({width,height:900});
                     const bounds=await control().boundingBox();
                     assert(bounds && bounds.x>=0 && bounds.x+bounds.width<=width,'Report control fits '+route+' '+width);
-                    assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Report control unobscured');
-                    await control().focus();
+                    assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Report control unobscured');
+                    await page.keyboard.press('Tab'); await control().focus();
                     assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Report focus visible');
                 }
                 await select('system'); await page.emulateMedia({colorScheme:'light'});
@@ -184,14 +189,14 @@ const fixture = action => {
                 await page.setViewportSize({width:1280,height:900});
                 const print=page.locator('button[onclick="window.print()"]');
                 if(await print.count()) { await print.first().click(); assert.equal(await page.evaluate(()=>window.printCalls),1,'Explicit action alone invokes report print'); }
-                await page.reload(); assert.equal(await control().inputValue(),'dark','Report choice survives reload');
+                await page.reload(); assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark','Report choice survives reload');
                 assert.equal(await content.innerText(),rendered,'Theme/printing preserves report values');
             }
             assert.deepEqual(JSON.parse(fixture('inventory_state')),records,'Report appearance/printing preserves inventory, purchasing and forecasts');
             assert.deepEqual(JSON.parse(fixture('cashier_state')),transactions,'Report appearance/printing preserves transactions');
             if(role==='inventory_manager') assert.equal((await context.request.get('/components/administrator/store_settings.php')).status(),403,'Report appearance cannot expand role visibility');
         };
-        await page.goto('/?login=1'); await control().selectOption('light');
+        await page.goto('/?login=1'); await (await option('light')).click();
         if(reportsOnly) {
             for(const role of ['admin','inventory_manager']) { await login(role); await select('dark'); await reportAcceptance(role); await page.goto('/components/auth/logout.php'); }
             console.log('Theme report browser: passed (real application/MySQL, screens/state/modes/mobile/charts, light paper, controls/pagination/manual print)'); return;
@@ -199,15 +204,15 @@ const fixture = action => {
         for (const role of receiptsOnly ? ['cashier'] : ['admin','super_admin','inventory_manager','cashier']) {
             console.log('Theme browser role: '+role);
             await login(role);
-            assert.equal(await control().inputValue(),'system',role + ' default');
-            await select('dark'); await page.reload(); assert.equal(await control().inputValue(),'dark');
+            assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'system',role + ' default');
+            await select('dark'); await page.reload(); assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark');
             if (role === 'cashier') {
                 // POS has native autofocus plus a delayed startup focus at 100 ms.
                 await page.waitForFunction(()=>document.activeElement.id === 'sku-input');
                 await page.waitForTimeout(150);
             }
-            await control().focus(); await page.keyboard.press('Home');
-            await page.waitForFunction(()=>document.querySelector('[data-theme-select]').value === 'light');
+            await (await option('light')).focus(); await page.keyboard.press('Space');
+            await page.waitForFunction(()=>document.querySelector('[data-theme-mode="light"]').getAttribute('aria-pressed') === 'true');
             assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Visible keyboard focus');
             await select('dark');
             await contrast(control()); await contrast(page.locator('h1,h2'));
@@ -228,13 +233,17 @@ const fixture = action => {
             }
             for (const width of [320,360,390,800]) {
                 await page.setViewportSize({width,height:844});
+                const tools = page.locator('.header-display-tools').filter({visible:true});
+                const notification = await tools.locator('.global-notification-button').boundingBox();
+                const theme = await tools.locator('.theme-control').boundingBox();
+                assert(notification.x >= 0 && notification.x + notification.width <= theme.x && theme.x + theme.width <= width, 'Notifications precede theme; whole group fits at '+width+'px');
                 assert(await control().isVisible());
                 const bounds = await control().boundingBox();
                 assert(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= width && bounds.y + bounds.height <= 844,'Mobile control stays inside viewport at '+width+'px');
-                assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2) === el;}),'Mobile control remains unobscured at '+width+'px');
+                assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Mobile control remains unobscured at '+width+'px');
             }
             await page.setViewportSize({width:390,height:844});
-            await control().focus();
+            await page.keyboard.press('Tab'); await control().focus();
             assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Mobile keyboard focus remains visible');
             assert(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth));
             fs.mkdirSync(screenshotOutput,{recursive:true});
@@ -266,7 +275,7 @@ const fixture = action => {
                     console.log('Theme governance screen: '+role+' '+route);
                     const response = await page.goto('/components/'+route+'.php');
                     assert.equal(response.status(),200,'Authorized screen renders '+route);
-                    assert.equal(await control().inputValue(),'dark','Selected mode follows navigation '+route);
+                    assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark','Selected mode follows navigation '+route);
                     for (const mode of ['light','dark']) {
                         await select(mode);
                         for (const selector of ['main h1', 'main h2', 'main label', 'main input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])', 'main select', 'main td', 'main .alert', 'main .health-status', 'main .health-detail', 'main .tag-warning', 'main .tag-success']) {
@@ -285,11 +294,11 @@ const fixture = action => {
                         await page.setViewportSize({width,height:900});
                         const bounds=await control().boundingBox();
                         assert(bounds && bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=width,'Governance control fits '+route+' '+width);
-                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Governance control unobscured '+route);
-                        await control().focus(); await contrast(control());
+                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Governance control unobscured '+route);
+                        await page.keyboard.press('Tab'); await control().focus(); await contrast(control());
                         assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),'Governance focus visible '+route);
                     }
-                    await page.reload(); assert.equal(await control().inputValue(),'dark','Governance mode survives reload '+route);
+                    await page.reload(); assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark','Governance mode survives reload '+route);
                     if (route === 'user_manager/user_manager') {
                         for (const [open, overlay, close, field] of [
                             ['#openUserModal','#userModalOverlay','#closeUserModal','#createUsernameInput'],
@@ -309,7 +318,7 @@ const fixture = action => {
                                     await contrast(page.locator(overlay+' label').first());
                                     const bounds=await control().boundingBox();
                                     assert(bounds.x>=0 && bounds.x+bounds.width<=width,'Dialog theme control fits '+width);
-                                    assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Dialog theme control unobscured');
+                                    assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Dialog theme control unobscured');
                                 }
                             }
                             await page.locator(close).click();
@@ -327,7 +336,7 @@ const fixture = action => {
                 await page.goto('/components/auth/workspace.php');
                 await page.locator('form').filter({has:page.locator('input[value="inventory_manager"]')}).getByRole('button',{name:'Open'}).click();
                 await page.waitForURL('**/inventory_overview.php');
-                assert.equal(await control().inputValue(),'dark','Workspace retains personal mode');
+                assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark','Workspace retains personal mode');
                 await page.goto('/components/auth/workspace.php');
                 await page.locator('form').filter({has:page.locator('input[value="super_admin"]')}).getByRole('button',{name:'Open'}).click();
                 await page.waitForURL('**/super_administrator/dashboard.php');
@@ -350,7 +359,7 @@ const fixture = action => {
                     const [screen,query] = route.split('?');
                     console.log('Theme Cashier screen: '+route);
                     assert.equal((await page.goto('/components/cashier/'+screen+'.php'+(query ? '?'+query : ''))).status(),200);
-                    assert.equal(await control().inputValue(),'dark');
+                    assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark');
                     for (const mode of ['light','dark']) {
                         await select(mode);
                         // The hero paints a gradient; this helper composites solid backgrounds only.
@@ -363,11 +372,11 @@ const fixture = action => {
                         await page.setViewportSize({width,height:900});
                         const bounds=await control().boundingBox();
                         assert(bounds && bounds.x>=0 && bounds.x+bounds.width<=width,'Cashier control fits '+route);
-                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Cashier control unobscured');
-                        await control().focus(); await contrast(control());
+                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Cashier control unobscured');
+                        await page.keyboard.press('Tab'); await control().focus(); await contrast(control());
                         assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'));
                     }
-                    await page.reload(); assert.equal(await control().inputValue(),'dark');
+                    await page.reload(); assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark');
                 }
                 for (const width of [390,1280]) {
                     await page.setViewportSize({width,height:900});
@@ -437,7 +446,7 @@ const fixture = action => {
                 }
                 await page.locator('#checkout-button').click(); await page.locator('#review-cash').fill('100');
                 await page.route('**/auth/theme.php',route=>route.fulfill({status:503,contentType:'application/json',body:'{"success":false}'}));
-                await control().selectOption('light');
+                await (await option('light')).click();
                 const saveAlert=page.getByRole('alert').filter({hasText:'display theme was not saved'}); await saveAlert.waitFor();
                 assert(await saveAlert.evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Save warning visible above open checkout');
                 await contrast(saveAlert); assert.equal(await page.locator('#review-cash').inputValue(),'100');
@@ -485,19 +494,19 @@ const fixture = action => {
                         await select('dark'); await page.emulateMedia({colorScheme:'light'});
                         assert.equal(await receipt.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(21, 34, 56)','Explicit Dark overrides live light device');
                         await page.reload();
-                        assert.equal(await control().inputValue(),'dark'); assert.equal(await receipt.innerText(),details);
+                        assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark'); assert.equal(await receipt.innerText(),details);
                         assert.equal(await receipt.getAttribute('data-paper-width-mm'),String(paper),'Reprint uses current Register paper width');
                         assert(Math.abs((await receipt.boundingBox()).width-paper*96/25.4)<1,'Rendered thermal width');
                         if (route.includes('/sales.php')) {
                             const nativeDialog=page.locator('#receiptModal');
                             const keyboardSave=page.waitForResponse(r=>r.url().endsWith('/auth/theme.php') && r.request().method()==='POST');
-                            await control().focus(); await page.keyboard.press('Home'); assert.equal((await keyboardSave).status(),200);
-                            assert.equal(await control().inputValue(),'light','Native modal theme selection works by keyboard');
+                            await (await option('light')).focus(); await page.keyboard.press('Space'); assert.equal((await keyboardSave).status(),200);
+                            assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'light','Modal theme selection works by keyboard');
                             await select('dark');
-                            await control().focus(); await page.keyboard.press('Tab');
+                            await page.keyboard.press('Tab'); await control().focus(); await page.keyboard.press('Tab');
                             assert(await nativeDialog.evaluate(el=>el.contains(document.activeElement)),'Keyboard remains inside native modal');
                             await page.route('**/auth/theme.php',r=>r.fulfill({status:503,contentType:'application/json',body:'{"success":false}'}));
-                            await control().selectOption('light');
+                            await (await option('light')).click();
                             const warning=nativeDialog.getByRole('alert').filter({hasText:'display theme was not saved'}); await warning.waitFor();
                             for (const width of [320,390,1280]) {
                                 await page.setViewportSize({width,height:900});
@@ -548,7 +557,7 @@ const fixture = action => {
                 for (const route of inventoryRoutes) {
                     console.log('Theme inventory screen: '+route);
                     assert.equal((await page.goto('/components/'+route+'.php')).status(),200);
-                    assert.equal(await control().inputValue(),'dark','Inventory navigation retains mode');
+                    assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark','Inventory navigation retains mode');
                     for (const mode of ['light','dark']) {
                         await select(mode);
                         for (const selector of ['main h1','main h3','main label','main td','main th','main input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])','main select','main .tag','main .message']) {
@@ -560,11 +569,11 @@ const fixture = action => {
                         await page.setViewportSize({width,height:900});
                         const bounds=await control().boundingBox();
                         assert(bounds && bounds.x>=0 && bounds.x+bounds.width<=width,'Inventory control fits '+route);
-                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Inventory control unobscured');
-                        await control().focus(); await contrast(control());
+                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Inventory control unobscured');
+                        await page.keyboard.press('Tab'); await control().focus(); await contrast(control());
                         assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'));
                     }
-                    await page.reload(); assert.equal(await control().inputValue(),'dark');
+                    await page.reload(); assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark');
                 }
                 await page.goto('/components/inventory_management/products.php');
                 await page.locator('.manage-product').first().click();
@@ -573,7 +582,7 @@ const fixture = action => {
                 await page.locator('#product-drawer [data-close-drawer]').click();
                 await page.locator('#product-add-trigger').click(); await contrast(page.locator('#add-product-btn'));
                 await page.locator('#add-product-btn').click();
-                assert.equal(await control().inputValue(),'dark','New dialog control reflects current mode');
+                assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark','New dialog control reflects current mode');
                 await page.locator('#add-product-modal input[name="product_name"]').fill('Unsubmitted product');
                 for (const width of [320,390,1280]) {
                     await page.setViewportSize({width,height:900});
@@ -593,7 +602,7 @@ const fixture = action => {
                         await contrast(page.locator('#add-product-modal h2'));
                         const bounds=await control().boundingBox();
                         assert(bounds && bounds.x>=0 && bounds.x+bounds.width<=width,'Inventory dialog selector fits');
-                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Inventory dialog selector unobscured');
+                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Inventory dialog selector unobscured');
                     }
                 }
                 await page.locator('#add-product-modal [data-close-modal]').first().click();
@@ -643,7 +652,7 @@ const fixture = action => {
                 }
                 await page.goto('/components/inventory_management/suppliers.php'); await contrast(page.locator('.count-badge')); await contrast(page.locator('.status-badge--active'));
                 for(const route of ['/components/invoice/purchase_orders.php','/components/inventory_management/print_barcodes.php?product_id=1']) {
-                    await page.goto(route); assert.equal(await control().inputValue(),'dark');
+                    await page.goto(route); assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark');
                     if(route.includes('print_barcodes')) assert.equal(await page.locator('.barcode-svg').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)','Barcode ink retains readable inset');
                     await page.emulateMedia({media:'print'});
                     assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
@@ -664,24 +673,24 @@ const fixture = action => {
             }
             if(role === 'admin' || role === 'inventory_manager') await reportAcceptance(role);
             await page.route('**/auth/theme.php',route=>route.fulfill({status:503,contentType:'application/json',body:'{"success":false}'}));
-            await control().selectOption('light');
+            await (await option('light')).click();
             await page.getByRole('alert').filter({hasText:'display theme was not saved'}).waitFor();
             await page.unroute('**/auth/theme.php');
             await select('dark');
             await select(savedModes[role]);
             await page.goto('/components/auth/logout.php');
-            assert.equal(await control().inputValue(),'light','Separate login preference restored');
+            assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'light','Separate login preference restored');
         }
         const fresh = await browser.newContext({baseURL:origin});
         const other = await fresh.newPage();
         for (const role of ['admin','super_admin','inventory_manager','cashier']) {
             await other.goto('/?login=1');
             await other.waitForFunction(()=>document.activeElement.id==='landing-login-username');
-            assert.equal(await other.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).inputValue(),'system','Fresh browser has no local login preference');
+            assert.equal(await other.locator('[data-theme-mode][aria-pressed="true"]').filter({visible:true}).getAttribute('data-theme-mode'),'system','Fresh browser has no local login preference');
             await other.locator('#landing-login-username').fill('theme_'+role); await other.locator('#landing-login-password').fill(data.password);
             await Promise.all([other.waitForNavigation({waitUntil:'domcontentloaded'}),other.locator('#landing-login-password').press('Enter')]);
             await other.goto('/');
-            assert.equal(await other.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).inputValue(),savedModes[role],'Fresh browser restores '+role+' account');
+            assert.equal(await other.locator('[data-theme-mode][aria-pressed="true"]').filter({visible:true}).getAttribute('data-theme-mode'),savedModes[role],'Fresh browser restores '+role+' account');
             await other.goto('/components/auth/logout.php');
         }
         const blocked = await browser.newContext({baseURL:origin,colorScheme:'dark'});
@@ -691,19 +700,19 @@ const fixture = action => {
         const privatePage=await blocked.newPage();
         await privatePage.goto('/?login=1');
         await privatePage.waitForFunction(()=>document.activeElement.id==='landing-login-username');
-        await privatePage.getByRole('combobox',{name:'Display theme'}).selectOption('light');
+        await privatePage.locator('[data-theme-mode="light"]').filter({visible:true}).click();
         await privatePage.locator('#landing-login-username').fill('theme_inventory_manager');
         await privatePage.locator('#landing-login-password').fill(data.password);
         await Promise.all([privatePage.waitForNavigation({waitUntil:'domcontentloaded'}),privatePage.locator('#landing-login-password').press('Enter')]);
         await privatePage.goto('/');
-        const privateControl=privatePage.getByRole('combobox',{name:'Display theme'}).filter({visible:true});
-        assert.equal(await privateControl.inputValue(),'system','Blocked storage sign-in restores account');
+        const privateControl=privatePage.locator('[data-theme-mode][aria-pressed="true"]').filter({visible:true});
+        assert.equal(await privateControl.getAttribute('data-theme-mode'),'system','Blocked storage sign-in restores account');
         assert.equal(await privatePage.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(11, 18, 32)','Blocked storage System follows device');
         const privateSave=privatePage.waitForResponse(r=>r.url().endsWith('/auth/theme.php') && r.request().method()==='POST');
-        await privateControl.selectOption('light'); assert.equal((await privateSave).status(),200);
-        await privatePage.reload(); assert.equal(await privateControl.inputValue(),'light','Blocked storage account change survives reload');
+        await privatePage.locator('[data-theme-mode="light"]').filter({visible:true}).click(); assert.equal((await privateSave).status(),200);
+        await privatePage.reload(); assert.equal(await privateControl.getAttribute('data-theme-mode'),'light','Blocked storage account change survives reload');
         await privatePage.goto('/components/auth/logout.php');
-        assert.equal(await privateControl.inputValue(),'system','Blocked storage logout restores System');
+        assert.equal(await privateControl.getAttribute('data-theme-mode'),'system','Blocked storage logout restores System');
         assert.equal((await context.request.post('/components/auth/theme.php',{form:{mode:'dark'}})).status(),401);
         fixture('gates');
         await login('admin');

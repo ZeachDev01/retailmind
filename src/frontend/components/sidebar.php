@@ -267,10 +267,11 @@ $sections = $roleSections[$role] ?? [];
 <div class="admin-mobile-topbar" aria-label="Mobile navigation">
     <div class="admin-mobile-brand">
         <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
-            <i class="bi bi-list" aria-hidden="true"></i>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
-            <img class="admin-mobile-logo-image" src="<?= sidebar_e($sidebarBrandLogoUrl) ?>" alt="">
+            <img class="admin-mobile-logo-image" src="<?= sidebar_e($sidebarBrandIconUrl) ?>" alt="">
+            <span class="admin-mobile-logo-copy"><strong>RetailMind</strong><small>Inventory &amp; Forecasting</small></span>
         </a>
     </div>
     <div class="admin-mobile-tools">
@@ -363,12 +364,12 @@ $sections = $roleSections[$role] ?? [];
 
 <div class="global-topbar" aria-label="Global tools">
     <button type="button" class="global-search-trigger" data-command-open aria-label="Search products, reports, settings, and pages">
-        <i class="bi bi-search" aria-hidden="true"></i>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
         <span>Search products, reports, settings, and pages...</span>
         <kbd>Ctrl K</kbd>
     </button>
     <a class="global-notification-button" href="<?= sidebar_e(app_url('components/notification/notifications.php')) ?>" aria-label="Notifications<?= $notificationCount > 0 ? ': ' . (int)$notificationCount . ' unread' : '' ?>">
-        <i class="bi bi-bell" aria-hidden="true"></i>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4M12 2V1"/></svg>
         <span>Notifications</span>
         <?php if ($notificationCount > 0): ?><strong><?= $notificationCount > 99 ? '99+' : (int)$notificationCount ?></strong><?php endif; ?>
     </a>
