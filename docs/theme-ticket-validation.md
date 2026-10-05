@@ -264,11 +264,17 @@ unclipped tables at A4-like 794 px and multipage browser PDFs. Inventory/purchas
 transaction snapshots remain unchanged. Navigation never requests print; explicit
 Print requests still call browser print.
 
-Validation: `RUN_DB_TESTS=1 THEME_REPORTS_ONLY=1` scoped account browser passed;
+Validation: `RUN_DB_TESTS=1 THEME_REPORTS_ONLY=1` scoped account browser and the
+full `RUN_DB_TESTS=1` account browser passed after the final paper corrections;
 no enabled browser/database check skipped. Changed PHP/JS syntax, CSS balance
-(33 files) and whitespace checks passed. Print screenshots inspected for Purchase Orders and Forecast
-Analytics. Parent #121 owns final global regression; the previously documented
-baseline route-label failure and optional legacy Store DB skips remain separate.
+(33 files) and whitespace checks passed. Print screenshots inspected for Purchase Orders,
+Forecast Analytics and dashboard variants B/C. Parent #121's final broad regression
+passed PHP lint (405 files), JavaScript syntax (32 files), CSS balance (33 files),
+forecast regression, smoke (111), schema/authorization checks and the other executed
+contracts/browser suites. The sole contract failure remains the seven pre-existing
+Super Administrator dashboard route-label expectations, verified against baseline
+`e328acd`. Optional legacy Store DB checks explicitly skipped; they are not passing
+evidence. Both theme browser/database acceptance runs were enabled with no skips.
 
 Standards review found zero violations or actionable smells. Spec review found
 two remaining development dashboard paper gaps: variant B's product navigation
@@ -277,3 +283,6 @@ screen-only; print layout removes queue minimum widths, wraps cells and retains
 all forecast data. B/C routes and rendered A4-width assertions cover both fixes.
 Those narrower assertions also reproduced inherited mobile `white-space:nowrap`
 clipping Report Generation; print cells now wrap while screen paging remains intact.
+Both Standards and Spec independently rechecked `9f67c7c...1cacded` and found zero
+remaining findings. No report queries, record writes, role permissions, native
+manual-print actions or barcode generation/print-request behavior changed.
