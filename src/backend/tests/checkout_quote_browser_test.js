@@ -32,6 +32,7 @@ if (!fs.existsSync(chromium.executablePath())) {
             response.end(JSON.stringify({sale: committed, receipt_url: committed ? '/receipt' : null})); return;
         }
         if (request.method === 'POST') {
+            if (request.url !== '/pos') { response.writeHead(404); response.end('Unknown quote route'); return; }
             let body = '';
             request.on('data', chunk => { body += chunk; });
             request.on('end', () => {

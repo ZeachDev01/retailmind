@@ -58,3 +58,8 @@ theme suites; account tests explicitly report a skip when `RUN_DB_TESTS` is unse
 Products menus, drawers and wizard panels use the shared palette. Shared inventory
 overlays and dynamically created purchase confirmations contain synchronized
 appearance controls. Promotions remains restricted to Administrator roles.
+
+Cashier inventory includes Product Finder and all four My History tabs/details.
+POS quote review and current-cart/Held Sale discard dialogs contain synchronized
+appearance controls. Stock warning pills retain their semantic warning text in
+Light and Dark. Appearance preserves payment drafts and unresolved Held Sales.

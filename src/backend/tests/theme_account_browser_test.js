@@ -49,6 +49,8 @@ const fixture = action => {
         };
         const login = async role => {
             await page.goto('/?login=1');
+            // Wait for the modal's delayed startup focus before typing credentials.
+            await page.waitForFunction(()=>document.activeElement.id==='landing-login-username');
             await page.locator('#landing-login-username').fill('theme_' + role);
             await page.locator('#landing-login-password').fill(data.password);
             await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),page.getByRole('button',{name:'Log in',exact:true}).click()]);
@@ -173,6 +175,7 @@ const fixture = action => {
                         ]) {
                             await page.locator(open).first().click();
                             await page.locator(field).fill('UnsubmittedAccount');
+                            await page.locator(overlay).evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished)));
                             for (const width of [320,390,1280]) {
                                 await page.setViewportSize({width,height:900});
                                 for (const mode of ['light','dark']) {
@@ -219,6 +222,55 @@ const fixture = action => {
                 await select('light'); assert.equal(await page.locator('#new_password').inputValue(),'Unsubmitted@2026'); await select('dark');
             }
             if(role === 'cashier') {
+                const cashierState = JSON.parse(fixture('cashier_state'));
+                for (const route of ['dashboard','pos','findProduct','shifts','refunds?sale_id=1','stock_issues','history','history?type=refunds','history?type=movements','history?type=shifts','history?type=sales&id=1']) {
+                    const [screen,query] = route.split('?');
+                    console.log('Theme Cashier screen: '+route);
+                    assert.equal((await page.goto('/components/cashier/'+screen+'.php'+(query ? '?'+query : ''))).status(),200);
+                    assert.equal(await control().inputValue(),'dark');
+                    for (const mode of ['light','dark']) {
+                        await select(mode);
+                        // The hero paints a gradient; this helper composites solid backgrounds only.
+                        for (const selector of ['main h1','main h2:not(#cashier-hero-title)','main h3','main label','main td','main th','main input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])','main select','main .stock-level-pill','main .shift-status-pill']) {
+                            const visible=page.locator(selector).filter({visible:true});
+                            if(await visible.count()) await contrast(visible);
+                        }
+                    }
+                    for (const width of [320,390,1280]) {
+                        await page.setViewportSize({width,height:900});
+                        const bounds=await control().boundingBox();
+                        assert(bounds && bounds.x>=0 && bounds.x+bounds.width<=width,'Cashier control fits '+route);
+                        assert(await control().evaluate(el=>{const b=el.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===el;}),'Cashier control unobscured');
+                        await control().focus(); await contrast(control());
+                        assert(await control().evaluate(el=>getComputedStyle(el).outlineStyle!=='none'));
+                    }
+                    await page.reload(); assert.equal(await control().inputValue(),'dark');
+                }
+                for (const width of [390,1280]) {
+                    await page.setViewportSize({width,height:900});
+                    for (const [route,fields] of [
+                        ['shifts', [['#movement-amount','17'],['#movement-note','Unsubmitted drawer work'],['#actual-cash','125']]],
+                        ['refunds?sale_id=1', [['#return-quantity-1','1'],['#note','Unsubmitted Cash Refund']]],
+                        ['stock_issues', [['#quantity','2'],['#explanation','Unsubmitted Stock Issue']]],
+                        ['history', [['input[name="date_from"]','2026-10-01']]],
+                    ]) {
+                        const [screen,query]=route.split('?');
+                        await page.goto('/components/cashier/'+screen+'.php'+(query ? '?'+query : ''));
+                        if(screen==='stock_issues') {
+                            await page.locator('#barcode-input').fill('THEME-BARCODE'); await page.locator('#barcode-input').press('Enter');
+                            await page.locator('#product-results').getByRole('button',{name:'Select',exact:true}).click();
+                            await page.waitForFunction(()=>document.getElementById('product_id').value==='1');
+                        }
+                        for(const [selector,value] of fields) await page.locator(selector).fill(value);
+                        await select('light'); await select('system'); await page.emulateMedia({colorScheme:'light'});
+                        await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+                        await page.emulateMedia({colorScheme:'dark'});
+                        await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+                        for(const [selector,value] of fields) assert.equal(await page.locator(selector).inputValue(),value,'Cashier draft retained');
+                        if(screen==='stock_issues') assert.equal(await page.locator('#product_id').inputValue(),'1');
+                        await select('dark');
+                    }
+                }
                 await page.goto('/components/cashier/dashboard.php'); await contrast(page.locator('.stock-level-pill'));
                 await page.goto('/components/cashier/pos.php');
                 await contrast(page.locator('.count-badge').filter({visible:true}));
@@ -227,6 +279,50 @@ const fixture = action => {
                 await page.locator('#cart-body').getByText('Theme Test Item',{exact:true}).waitFor();
                 const cartText = await page.locator('#cart-body').innerText();
                 await select('light'); assert.equal(await page.locator('#cart-body').innerText(),cartText); await select('dark');
+                await page.getByRole('spinbutton',{name:'Theme Test Item quantity',exact:true}).fill('2');
+                await page.getByRole('spinbutton',{name:'Theme Test Item quantity',exact:true}).press('Tab');
+                await page.locator('#hold-list').getByText('THEME-HELD',{exact:true}).waitFor();
+                for (const width of [320,390,1280]) {
+                    await page.setViewportSize({width,height:900});
+                    await page.locator('#checkout-button').click(); await page.locator('#review-cash').fill('100');
+                    const reviewed=await page.locator('#checkout-summary').innerText();
+                    await select('light'); await select('system'); await page.emulateMedia({colorScheme:'light'});
+                    await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+                    assert.equal(await page.locator('#review-cash').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+                    await page.emulateMedia({colorScheme:'dark'}); await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+                    assert.equal(await page.locator('#review-cash').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(16, 28, 46)');
+                    assert.equal(await page.locator('#review-cash').inputValue(),'100');
+                    assert.equal(await page.locator('#checkout-summary').innerText(),reviewed);
+                    await contrast(page.locator('#review-cash')); await gateControl();
+                    await page.getByRole('button',{name:'Review cart',exact:true}).click(); await select('dark');
+                    await page.locator('#void-sale-btn').click(); await page.locator('#discard-note').fill('Unsubmitted cart discard reason');
+                    await select('light'); await select('dark'); await gateControl();
+                    assert.equal(await page.locator('#discard-note').inputValue(),'Unsubmitted cart discard reason');
+                    await page.getByRole('button',{name:'Keep working',exact:true}).click();
+                    await page.locator('#hold-list').getByRole('button',{name:'Discard',exact:true}).click();
+                    await page.locator('#discard-note').fill('Unsubmitted discard reason');
+                    await select('light'); await select('dark'); await gateControl();
+                    assert.equal(await page.locator('#discard-note').inputValue(),'Unsubmitted discard reason');
+                    await page.getByRole('button',{name:'Keep working',exact:true}).click();
+                    assert.equal(await page.getByRole('spinbutton',{name:'Theme Test Item quantity',exact:true}).inputValue(),'2');
+                }
+                await page.locator('#sku-input').fill('UNKNOWN-THEME-CODE'); await page.locator('#sku-input').press('Enter');
+                await page.locator('#cart-message').filter({hasText:'No product found'}).waitFor();
+                for (const mode of ['light','dark']) {
+                    await select(mode); await contrast(page.locator('#cart-message'));
+                    assert.equal(await page.getByRole('spinbutton',{name:'Theme Test Item quantity',exact:true}).inputValue(),'2');
+                }
+                await page.locator('#checkout-button').click(); await page.locator('#review-cash').fill('100');
+                await page.route('**/auth/theme.php',route=>route.fulfill({status:503,contentType:'application/json',body:'{"success":false}'}));
+                await control().selectOption('light');
+                const saveAlert=page.getByRole('alert').filter({hasText:'display theme was not saved'}); await saveAlert.waitFor();
+                assert(await saveAlert.evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Save warning visible above open checkout');
+                await contrast(saveAlert); assert.equal(await page.locator('#review-cash').inputValue(),'100');
+                await page.unroute('**/auth/theme.php'); await select('dark');
+                await page.getByRole('button',{name:'Review cart',exact:true}).click();
+                assert.equal((await context.request.get('/components/administrator/store_settings.php')).status(),403);
+                assert.equal((await context.request.get('/components/inventory_management/products.php')).status(),403);
+                assert.deepEqual(JSON.parse(fixture('cashier_state')),cashierState,'Theme changes preserve Held Sale, shift, sale/refund, stock and drawer records');
                 await page.goto('/components/invoice/sales.php?tab=transactions&sale_id=1');
                 await page.locator('.receipt-print-area').waitFor();
                 assert.equal(await page.locator('.receipt-print-area').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(21, 34, 56)');
@@ -385,6 +481,7 @@ const fixture = action => {
         const other = await fresh.newPage();
         for (const role of ['admin','super_admin','inventory_manager','cashier']) {
             await other.goto('/?login=1');
+            await other.waitForFunction(()=>document.activeElement.id==='landing-login-username');
             assert.equal(await other.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).inputValue(),'system','Fresh browser has no local login preference');
             await other.locator('#landing-login-username').fill('theme_'+role); await other.locator('#landing-login-password').fill(data.password);
             await Promise.all([other.waitForNavigation({waitUntil:'domcontentloaded'}),other.locator('#landing-login-password').press('Enter')]);
@@ -398,6 +495,7 @@ const fixture = action => {
         });
         const privatePage=await blocked.newPage();
         await privatePage.goto('/?login=1');
+        await privatePage.waitForFunction(()=>document.activeElement.id==='landing-login-username');
         await privatePage.getByRole('combobox',{name:'Display theme'}).selectOption('light');
         await privatePage.locator('#landing-login-username').fill('theme_inventory_manager');
         await privatePage.locator('#landing-login-password').fill(data.password);

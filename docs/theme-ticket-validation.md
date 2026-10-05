@@ -137,3 +137,56 @@ Review against f22ef0b: Standards found zero documented violations or actionable
 smells (small shared-overlay theme coupling remains reasonable). Spec identified
 partial mobile scanning/live System rendering evidence; the added external
 rendering and preserved scan/draft assertions resolve that validation gap.
+
+## #126 — Cashier workflows
+
+Confirmed #122 closed. Audited Dashboard, POS, Product Finder, Cashier Shifts,
+Cash Refunds, Stock Issues and My History (sales, refunds, drawer movements,
+shifts and sale details). POS quote review and current-cart/Held Sale discard
+dialogs concealed the top-bar appearance control; their headers now contain
+synchronized shared controls. Closed dialog controls remain hidden. A more
+specific muted-span rule overrode the stock-warning pill's semantic text in
+Light (4.22:1 contrast); the pill selector now retains its existing warning color.
+
+Real payment review uncovered a pre-existing URL bug: the hidden `action` input
+shadowed `form.action`, sending quote requests to an invalid URL. Both JavaScript
+callers now read the native action attribute: quote review uses the current page
+when absent, and the workspace navigation guard checks its explicit target.
+No quote mathematics, payment submission, transaction or authorization rules
+changed. Tightened the quote browser's route fixture: it failed before the getter
+fix and passed afterward. The workspace regression verifies a named action input
+cannot bypass the unfinished-cart decision when a switch is cancelled.
+
+Disposable browser/application/MySQL checks cover all seven screens and history
+variants in Light/Dark, navigation/reload persistence, representative headings,
+table/form/status contrast and unobscured keyboard-focused controls at 320, 390
+and 1280 px. Drafts include drawer amount/note/count, Cash Refund quantity/note,
+Stock Issue product scan/selection/quantity/explanation and history dates. POS
+checks preserve cart quantity, payment and open quote/discard forms across mode
+changes and both live System transitions, including visible rendered input colors.
+Unknown-product Operator Alerts remain readable; failed appearance saves remain
+visible above an open checkout without losing payment input. Database snapshots
+confirm unchanged shifts/locks, Held Sales, sales/refunds, stock and drawer records;
+forbidden Administrator and Inventory Manager requests still return 403.
+
+Validation: full account browser suite with `RUN_DB_TESTS=1`, login browser,
+reviewed-quote browser, checkout-attempt browser and cart-workspace browser passed.
+Cash Refund, Cashier Shift opening/reconciliation/Register Lock, Cashier workspace
+authorization, Held Sale shift ownership, My History, Stock Issue and Cashier
+Operator Alert contracts passed. Changed JavaScript/PHP syntax, CSS balance
+(33 files) and whitespace checks passed. No enabled browser/database checks skipped.
+Parent #121's broader regression evidence, pre-existing Super Administrator
+route-label failure and optional legacy DB skips remain applicable.
+
+Harness retries exposed delayed landing autofocus racing credential entry, and
+account-drawer geometry sampled during its opening transition. Checks now wait
+for observable startup focus and completed native animations. Temporary diagnosis
+probes were removed. Existing account/gate and receipt-paper coverage coordinates
+the sibling scopes. Camera hardware was not exercised; barcode lookup uses
+keyboard scanner input. Contrast sampling covers representative solid-background
+selectors; the dashboard's gradient hero is outside that helper.
+
+Review against 88666ab: Standards found zero violations and one optional repeated
+fixture snapshot-loop smell; kept the direct fixture. Spec's Operator Alert
+validation gap is resolved by the added failure-state checks. Both reviewers also
+cleared the URL getter/guard corrections with no remaining findings.

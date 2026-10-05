@@ -23,7 +23,7 @@ const source = fs.readFileSync('src/frontend/assets/js/cart-workspace.js', 'utf8
             window.Swal = {fire: async () => answers.shift()};
             window.RetailMindUI = {confirm: async () => answers.shift(), alert: async value => messages.push(value)};
             window.workspace = new CartWorkspace(context); workspace.bindNavigation();
-        </script><a href='/auth/logout.php'>Logout</a><form action='/auth/workspace.php'><button>Switch workspace</button></form>`);
+        </script><a href='/auth/logout.php'>Logout</a><form action='/auth/workspace.php'><input type='hidden' name='action' value='switch'><button>Switch workspace</button></form>`);
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const browser = await chromium.launch({headless:true});
@@ -36,6 +36,10 @@ const source = fs.readFileSync('src/frontend/assets/js/cart-workspace.js', 'utf8
         await page.evaluate(() => { answers.push(false); });
         assert.equal(await page.evaluate(() => workspace.review(workspace.state.cart)), null, 'declining review retains unresolved requested work');
         assert.equal(await page.evaluate(() => workspace.state.cart[1].qty), 5);
+        await page.evaluate(() => answers.push({isConfirmed:false,isDenied:false}));
+        await page.getByRole('button',{name:'Switch workspace'}).click(); await page.waitForTimeout(50);
+        assert.equal(page.url(),url+'/','Named action input cannot bypass unfinished-work workspace decision');
+        assert.equal(await page.evaluate(()=>workspace.state.cart[1].qty),5);
         await page.evaluate(() => answers.push({isConfirmed:false,isDenied:false}));
         await page.click('a'); await page.waitForTimeout(50);
         assert.equal(page.url(), url + '/', 'cancel logout keeps work and page');

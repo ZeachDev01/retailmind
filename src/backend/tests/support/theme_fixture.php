@@ -32,6 +32,14 @@ if ($argv[1] === 'state') {
         'sales'=>(int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn(),
         'stock'=>(int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=1')->fetchColumn()]); exit;
 }
+if ($argv[1] === 'cashier_state') {
+    $pdo->exec("USE `{$database}`");
+    $state = [];
+    foreach (['cashier_shifts', 'cash_drawer_movements', 'held_sales', 'sales', 'sale_items', 'cash_refunds', 'cash_refund_items', 'inventory', 'inventory_adjustments', 'stock_movements'] as $table) {
+        $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
+    }
+    echo json_encode($state); exit;
+}
 if ($argv[1] === 'gates') {
     $pdo->exec("USE `{$database}`");
     $pdo->exec('UPDATE users SET must_change_password=1 WHERE user_id=1');
@@ -71,6 +79,8 @@ if ((int)$pdo->query("SELECT COUNT(*) FROM users WHERE theme_preference='system'
 }
 $pdo->exec("INSERT INTO registers (register_id,name) VALUES (1,'Theme Register')");
 $pdo->exec('INSERT INTO cashier_shifts (shift_id,cashier_id,register_id,opening_cash) VALUES (1,4,1,100)');
+$pdo->prepare('INSERT INTO held_sales (cashier_id,shift_id,reference_no,customer_label,cart_json,item_count,total_amount) VALUES (4,1,?,?,?,?,?)')
+    ->execute(['THEME-HELD', 'Unfinished theme customer', json_encode([1 => ['qty' => 1, 'name' => 'Theme Test Item', 'price' => 25]]), 1, 25]);
 $pdo->exec("INSERT INTO products (product_id,sku,product_name,unit_price,branch_id) VALUES (1,'THEME-ITEM','Theme Test Item',25,1)");
 $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,10)');
 $pdo->exec("UPDATE products SET barcode='THEME-BARCODE' WHERE product_id=1");

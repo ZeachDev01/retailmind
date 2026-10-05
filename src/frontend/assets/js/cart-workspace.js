@@ -109,7 +109,7 @@ class CartWorkspace {
         }, true);
         document.addEventListener('submit', event => {
             const form = event.target;
-            if (!form.action.includes('auth/workspace.php') || !this.state) return;
+            if (!(form.getAttribute('action') || '').includes('auth/workspace.php') || !this.state) return;
             event.preventDefault(); event.stopImmediatePropagation();
             run(() => HTMLFormElement.prototype.submit.call(form));
         }, true);

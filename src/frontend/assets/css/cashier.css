@@ -1288,7 +1288,7 @@
     font-size: 0.74rem;
 }
 
-.stock-level-pill {
+.stock-alert-item .stock-level-pill {
     flex: 0 0 auto;
     padding: 0.24rem 0.5rem;
     border-radius: 999px;

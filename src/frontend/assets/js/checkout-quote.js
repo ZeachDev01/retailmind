@@ -21,7 +21,7 @@ class CheckoutQuote {
         let response;
         let outcome;
         try {
-            response = await fetch(this.form.action || window.location.href, {
+            response = await fetch(this.form.getAttribute('action') || window.location.href, {
                 method: 'POST', body: data, cache: 'no-store'
             });
             outcome = await response.json();
