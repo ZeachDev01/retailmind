@@ -252,7 +252,7 @@ data, label dimensions or report filters. Analytics labels also follow print-med
 changes so a print preview stays dark after browser `afterprint` events and returns
 to the active screen palette when print media ends.
 
-Expanded the disposable application/MySQL browser suite across nine representative
+Expanded the disposable application/MySQL browser suite across eleven representative
 report routes: Light/Dark and both live System changes, explicit overrides,
 navigation/reload, filter drafts, desktop/mobile control visibility/focus at 320,
 390 and 1280 px, representative text/form/table/status contrast and open purchasing
@@ -260,12 +260,20 @@ confirmation appearance. Three visible canvas kinds exercise rendered axes and
 labels, live redraw and paper/screen restoration. Populated sales, five-unit
 Purchase Orders, actual forecasts/training runs, 66 inventory rows and 120 labels
 verify values, selected screen pagination, light Dark/System paper, hidden controls,
-unclipped tables and multipage browser PDFs. Inventory/purchasing/forecast and
+unclipped tables at A4-like 794 px and multipage browser PDFs. Inventory/purchasing/forecast and
 transaction snapshots remain unchanged. Navigation never requests print; explicit
 Print requests still call browser print.
 
 Validation: `RUN_DB_TESTS=1 THEME_REPORTS_ONLY=1` scoped account browser passed;
-no enabled browser/database check skipped. Changed PHP/JS syntax and whitespace
-checks passed. Print screenshots inspected for Purchase Orders and Forecast
+no enabled browser/database check skipped. Changed PHP/JS syntax, CSS balance
+(33 files) and whitespace checks passed. Print screenshots inspected for Purchase Orders and Forecast
 Analytics. Parent #121 owns final global regression; the previously documented
 baseline route-label failure and optional legacy Store DB skips remain separate.
+
+Standards review found zero violations or actionable smells. Spec review found
+two remaining development dashboard paper gaps: variant B's product navigation
+rail leaked and variant C's 1050 px queue clipped A4 output. The rail is now
+screen-only; print layout removes queue minimum widths, wraps cells and retains
+all forecast data. B/C routes and rendered A4-width assertions cover both fixes.
+Those narrower assertions also reproduced inherited mobile `white-space:nowrap`
+clipping Report Generation; print cells now wrap while screen paging remains intact.

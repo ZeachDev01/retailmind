@@ -144,3 +144,12 @@
 @media (prefers-reduced-motion:no-preference) {
     .fp-attention-list a, .fp-product-rail nav a, .fp-queue-row { transition:background-color 180ms ease-out, color 180ms ease-out; }
 }
+
+@media print {
+    .fp-workspace { grid-template-columns:minmax(0,1fr); }
+    .fp-decision-rail { grid-column:auto; }
+    .fp-table-wrap,.fp-queue { overflow:visible; }
+    .fp-table-wrap table { min-width:0; white-space:normal; overflow-wrap:anywhere; }
+    .fp-prototype-note a,.fp-panel-heading>a,.fp-queue-row a { display:none; }
+    .fp-queue-header,.fp-queue-row { min-width:0; grid-template-columns:40px repeat(5,minmax(0,1fr)); gap:.5rem; overflow-wrap:anywhere; }
+}

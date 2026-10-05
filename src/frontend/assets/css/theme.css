@@ -62,6 +62,7 @@ html[data-theme="dark"] .theme-save-alert { background:#453619; color:#fde68a; b
     .main-content { padding:0 !important; }
     .table-wrap { overflow:visible !important; }
     .table-wrap table { min-width:0; }
+    .table-wrap th,.table-wrap td { white-space:normal !important; overflow-wrap:anywhere; }
     html,body { color-scheme:light !important; background:#fff !important; color:#111 !important; }
     body * { background-color:transparent !important; color:#111 !important; border-color:#777 !important; box-shadow:none !important; }
     .sale-receipt,.refund-receipt,.receipt-print-root,.receipt-print-area,table,th,td { background:#fff !important; color:#111 !important; }

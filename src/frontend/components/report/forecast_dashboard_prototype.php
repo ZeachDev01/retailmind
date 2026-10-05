@@ -231,7 +231,7 @@ function forecast_prototype_chart(string $points, array $daily): void
                 <div class="fp-heading-metrics"><span>MAE <b><?= $metricMae ?></b></span><span>RMSE <b><?= $metricRmse ?></b></span></div>
             </header>
             <div class="fp-workspace">
-                <aside class="fp-product-rail" aria-label="Products">
+                <aside class="fp-product-rail no-print" aria-label="Products">
                     <label for="fp-product-search">Products</label>
                     <input id="fp-product-search" type="search" placeholder="Find a product" autocomplete="off">
                     <nav>

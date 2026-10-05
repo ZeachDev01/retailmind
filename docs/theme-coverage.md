@@ -64,7 +64,8 @@ switching, gates, and distinct report print paths. Screenshots go to the OS temp
 directory (override with `THEME_BROWSER_OUTPUT`).
 
 `THEME_REPORTS_ONLY=1` narrows that disposable account suite to report acceptance:
-nine routes, populated sales/Purchase Order/forecast values, 66 inventory rows,
+eleven routes (including all three Forecast dashboard variants), populated
+sales/Purchase Order/forecast values, 66 inventory rows,
 120 barcode labels and multipage browser PDFs. It tests Dark and dark-resolving
 System paper, screen controls, filter/pagination state, all three canvas kinds,
 mobile focus/access and unchanged inventory/transaction database snapshots.

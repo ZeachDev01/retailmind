@@ -88,6 +88,7 @@ const fixture = action => {
                 '/components/inventory_management/print_barcodes.php?product_id=1&quantity=120',
                 '/components/report/data_readiness.php', '/components/report/forecast_exceptions.php',
                 '/components/report/predictions.php', '/components/report/predictions.php?variant=A',
+                '/components/report/predictions.php?variant=B', '/components/report/predictions.php?variant=C',
                 '/components/report/forecast_analytics.php',
             ];
             await page.addInitScript(()=>{window.printCalls=0;window.print=()=>window.printCalls++;});
@@ -155,6 +156,7 @@ const fixture = action => {
                     assert.deepEqual(await page.locator('tbody tr:not([hidden])').allTextContents(),before,'Report pagination retains visible rows');
                     await pageSize.selectOption('100');
                 }
+                await page.setViewportSize({width:794,height:1123});
                 for(const paperMode of ['dark','system']) {
                     await select(paperMode); await page.emulateMedia({colorScheme:'dark',media:'print'});
                     assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
@@ -165,7 +167,13 @@ const fixture = action => {
                         const visible=page.locator(selector).filter({visible:true});
                         if(await visible.count()) assert.equal(await visible.first().evaluate(el=>getComputedStyle(el).color),'rgb(17, 17, 17)','Dark paper ink '+selector);
                     }
-                    if(await page.locator('.table-wrap').count()) assert(await page.locator('.table-wrap').first().evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Paper table does not clip');
+                    if(await page.locator('.table-wrap').count()) {
+                        const size=await page.locator('.table-wrap').first().evaluate(el=>({scroll:el.scrollWidth,width:el.clientWidth,table:el.querySelector('table').getBoundingClientRect().width,cell:getComputedStyle(el.querySelector('td')).cssText,whitespace:getComputedStyle(el.querySelector('td')).whiteSpace,wrap:getComputedStyle(el.querySelector('td')).overflowWrap}));
+                        assert(size.scroll<=size.width+1,'Paper table does not clip '+JSON.stringify(size));
+                    }
+                    for(const selector of ['.fp-table-wrap','.fp-queue']) {
+                        if(await page.locator(selector).count()) assert(await page.locator(selector).evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Prototype paper does not clip '+selector);
+                    }
                     const pdf=await page.pdf({format:'A4',margin:{top:'10mm',bottom:'10mm',left:'10mm',right:'10mm'}});
                     if(route.includes('forecast_analytics')) assert.equal(await page.locator('#actualChart').evaluate(el=>el.getContext('2d').fillStyle),'#475569','Print preview keeps dark chart ink after browser print events');
                     if(route.includes('inventory_valuation')||route.includes('print_barcodes')) assert((pdf.toString('latin1').match(/\/Type \/Page\b/g)||[]).length>1,'Long reports/label sheets retain pagination');
@@ -173,6 +181,7 @@ const fixture = action => {
                     if(paperMode==='dark') await page.screenshot({path:path.join(screenshotOutput,'report-'+role+'-'+routes.indexOf(route)+'-print.png'),fullPage:true});
                     await page.emulateMedia({media:'screen'}); await select('dark');
                 }
+                await page.setViewportSize({width:1280,height:900});
                 const print=page.locator('button[onclick="window.print()"]');
                 if(await print.count()) { await print.first().click(); assert.equal(await page.evaluate(()=>window.printCalls),1,'Explicit action alone invokes report print'); }
                 await page.reload(); assert.equal(await control().inputValue(),'dark','Report choice survives reload');
