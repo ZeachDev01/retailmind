@@ -10,6 +10,8 @@
         function open(trigger) {
             returnFocus = trigger || document.getElementById('receipt-table-title');
             if (!dialog.open) dialog.showModal();
+            const warning = document.querySelector('.theme-save-alert');
+            if (warning) dialog.querySelector('.sale-receipt-dialog-header').append(warning);
             title.focus();
         }
         function close() {
@@ -32,6 +34,8 @@
         });
         dialog.addEventListener('cancel', () => pending?.abort());
         dialog.addEventListener('close', () => {
+            const warning = dialog.querySelector('.theme-save-alert');
+            if (warning) document.body.append(warning);
             returnFocus?.focus();
             // Refreshing a historical view must never repeat a payment announcement.
             const url = new URL(window.location.href);

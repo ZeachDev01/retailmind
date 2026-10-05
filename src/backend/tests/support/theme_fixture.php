@@ -35,10 +35,32 @@ if ($argv[1] === 'state') {
 if ($argv[1] === 'cashier_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];
-    foreach (['cashier_shifts', 'cash_drawer_movements', 'held_sales', 'sales', 'sale_items', 'cash_refunds', 'cash_refund_items', 'inventory', 'inventory_adjustments', 'stock_movements'] as $table) {
+    foreach (['cashier_shifts', 'cash_drawer_movements', 'held_sales', 'sales', 'sale_items', 'sale_receipt_details', 'cash_refunds', 'cash_refund_items', 'refund_receipt_details', 'inventory', 'inventory_adjustments', 'stock_movements'] as $table) {
         $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
     }
     echo json_encode($state); exit;
+}
+if ($argv[1] === 'receipts') {
+    $pdo->exec("USE `{$database}`");
+    require_once __DIR__ . '/../../app/Services/CashRefundService.php';
+    $pdo->beginTransaction();
+    $pdo->exec("INSERT INTO sales (sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES (2,4,1,25,'cash'),(3,4,1,25,'cash'),(4,1,NULL,25,'cash')");
+    $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (2,2,1,1,25,25),(3,3,1,1,25,25),(4,4,1,1,25,25)');
+    (new App\Services\ReceiptDetailsService($pdo))->preserveSale(2);
+    $pdo->exec("INSERT INTO cash_refunds (refund_id,sale_id,shift_id,cashier_id,refund_amount,reason) VALUES (1,2,1,4,25,'customer_return'),(2,4,1,1,25,'customer_return')");
+    $pdo->exec('INSERT INTO cash_refund_items (refund_id,sale_item_id,product_id,quantity,unit_price,subtotal) VALUES (1,2,1,1,25,25),(2,4,1,1,25,25)');
+    (new App\Services\RefundReceiptService($pdo))->preserve(1);
+    (new App\Services\RefundReceiptService($pdo))->preserve(2);
+    $pdo->commit();
+    $pdo->exec("UPDATE products SET product_name='Edited live product' WHERE product_id=1");
+    $pdo->exec("UPDATE registers SET name='Edited live Register' WHERE register_id=1");
+    $pdo->exec("INSERT INTO store_settings (setting_key,setting_value) VALUES ('store_name','Edited live Store'),('receipt_footer','Edited live footer') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+    exit;
+}
+if (in_array($argv[1], ['paper58', 'paper80'], true)) {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("UPDATE registers SET paper_width_mm='" . ($argv[1] === 'paper58' ? '58' : '80') . "' WHERE register_id=1");
+    exit;
 }
 if ($argv[1] === 'gates') {
     $pdo->exec("USE `{$database}`");

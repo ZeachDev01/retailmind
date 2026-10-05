@@ -190,3 +190,45 @@ Review against 88666ab: Standards found zero violations and one optional repeate
 fixture snapshot-loop smell; kept the direct fixture. Spec's Operator Alert
 validation gap is resolved by the added failure-state checks. Both reviewers also
 cleared the URL getter/guard corrections with no remaining findings.
+
+## #127 — Sale Receipt and Refund Receipt appearance
+
+Confirmed #122 closed. Native Sale Receipt dialogs made the outer appearance
+control and body-level save warning inert and concealed. Their sticky header now
+contains the shared synchronized control and existing warning while open; closing
+returns the warning to the page. Initial checkout/history dialogs open before
+DOMContentLoaded, so warning creation also honors an already-open dialog. Header
+wrapping keeps controls and warnings readable at mobile widths. Native modal focus
+containment, loading/error handling and manual printing remain intact.
+
+Extended the disposable application/MySQL browser fixture with saved Sale and
+Refund Receipts, a legacy sale and another seller/issuing Cashier's records. After
+editing live Store/product/Register details, reprints keep their recorded details.
+Checks cover Light/Dark/System and both live device transitions at 320, 390 and
+1280 px, representative text/action contrast, unobscured labelled controls and
+focus, keyboard selection inside the native modal, reload/navigation, failed saves,
+close/reopen warning restoration and unchanged receipt contents. Both 58 mm and
+80 mm reprints use the active Register's current width. Explicit printing creates
+light paper with dark ink, no controls or clipping; navigation never auto-prints.
+Database snapshots retain transactions, refunds, stock, shifts, Held Sales and
+immutable customer details. Legacy notices and denied receipt reads remain intact.
+`THEME_RECEIPTS_ONLY=1` narrows the account browser suite to this acceptance slice;
+its normal invocation still exercises every role. Contrast waits for native CSS
+transitions; close assertions wait for the native close event.
+
+The current frontend has no standalone receipt PHP route. The obsolete backend
+legacy route is blocked by hosting configuration; it was not revived. Current
+shell/dialog routes use real application requests; standalone renderer suites
+retain short/long Sale and Refund Receipt and 58/80 mm paper coverage.
+
+Validation: full account and scoped receipt browsers with `RUN_DB_TESTS=1`, login browser, all four
+Sale/Refund Receipt rendering/dialog/reprint browser suites, receipt attribution
+and Cash Refund contracts passed. Disposable Receipt History integration passed
+inside the dialog suite. Changed PHP/JS syntax, CSS balance and whitespace checks
+passed. Optional Receipt Table contract explicitly skipped because it targets the
+configured live database; production data was not changed. Parent #121's broader
+regression evidence and pre-existing route-label failure/legacy DB skips apply.
+
+Review against `b0c89ae`: Standards and Spec independently found zero remaining
+findings. No receipt storage, transaction rules, permissions or automatic print
+behavior changed.

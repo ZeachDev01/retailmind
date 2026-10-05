@@ -12,6 +12,7 @@ const php = process.env.PHP_BINARY || 'php';
 const recovery = fs.mkdtempSync(path.join(os.tmpdir(),'rm-theme-recovery-'));
 const fixtureEnv = {...process.env,BACKUP_STORAGE_PATH:recovery};
 const screenshotOutput = process.env.THEME_BROWSER_OUTPUT || path.join(os.tmpdir(),'retailmind-theme-browser');
+const receiptsOnly = process.env.THEME_RECEIPTS_ONLY === '1';
 const fixture = action => {
     const result = spawnSync(php, ['src/backend/tests/support/theme_fixture.php', action, database], {encoding:'utf8',env:fixtureEnv});
     if (result.status !== 0) throw new Error(result.stderr || result.stdout);
@@ -36,6 +37,7 @@ const fixture = action => {
         const control = () => page.getByRole('combobox',{name:'Display theme'}).filter({visible:true}).last();
         const savedModes = {admin:'dark',super_admin:'light',inventory_manager:'system',cashier:'dark'};
         const contrast = async locator => {
+            await locator.first().evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished)));
             const ratio = await locator.first().evaluate(el => {
                 const rgb = value => value.match(/[\d.]+/g).slice(0,3).map(Number);
                 const luminance = values => values.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
@@ -74,7 +76,7 @@ const fixture = action => {
             assert.equal((await context.request.post('/components/auth/theme.php',{form:{mode:'dark',csrf_token:'bad'}})).status(),403,'Gate rejects invalid CSRF');
         };
         await page.goto('/?login=1'); await control().selectOption('light');
-        for (const role of ['admin','super_admin','inventory_manager','cashier']) {
+        for (const role of receiptsOnly ? ['cashier'] : ['admin','super_admin','inventory_manager','cashier']) {
             console.log('Theme browser role: '+role);
             await login(role);
             assert.equal(await control().inputValue(),'system',role + ' default');
@@ -100,7 +102,7 @@ const fixture = action => {
             if (role !== 'admin') {
                 assert.equal((await context.request.post(endpoint,{form:{mode:'light',csrf_token:token,user_id:'1'}})).status(),200);
                 const saved = JSON.parse(fixture('state')).users;
-                assert.equal(saved[0].theme_preference,'dark','Client identity cannot change another user');
+                assert.equal(saved[0].theme_preference,receiptsOnly ? 'system' : 'dark','Client identity cannot change another user');
                 assert.equal(saved.find(user=>user.user_id === ['admin','super_admin','inventory_manager','cashier'].indexOf(role)+1).theme_preference,'light');
                 await page.reload(); await select('dark');
             }
@@ -222,6 +224,7 @@ const fixture = action => {
                 await select('light'); assert.equal(await page.locator('#new_password').inputValue(),'Unsubmitted@2026'); await select('dark');
             }
             if(role === 'cashier') {
+                if (!receiptsOnly) {
                 const cashierState = JSON.parse(fixture('cashier_state'));
                 for (const route of ['dashboard','pos','findProduct','shifts','refunds?sale_id=1','stock_issues','history','history?type=refunds','history?type=movements','history?type=shifts','history?type=sales&id=1']) {
                     const [screen,query] = route.split('?');
@@ -323,17 +326,94 @@ const fixture = action => {
                 assert.equal((await context.request.get('/components/administrator/store_settings.php')).status(),403);
                 assert.equal((await context.request.get('/components/inventory_management/products.php')).status(),403);
                 assert.deepEqual(JSON.parse(fixture('cashier_state')),cashierState,'Theme changes preserve Held Sale, shift, sale/refund, stock and drawer records');
-                await page.goto('/components/invoice/sales.php?tab=transactions&sale_id=1');
-                await page.locator('.receipt-print-area').waitFor();
-                assert.equal(await page.locator('.receipt-print-area').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(21, 34, 56)');
-                {
-                    const details=await page.locator('.receipt-print-area').textContent();
-                    await page.emulateMedia({media:'print'});
-                    assert.equal(await page.locator('.receipt-print-area').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
-                    assert.equal(await control().count(),0);
-                    assert.equal(await page.locator('.receipt-print-area').textContent(),details);
-                    await page.emulateMedia({media:'screen'});
                 }
+                fixture('receipts');
+                await page.addInitScript(()=>{window.printCalls=0;window.print=()=>window.printCalls++;});
+                for (const paper of [58,80]) {
+                    fixture('paper'+paper);
+                    const receiptState=JSON.parse(fixture('cashier_state'));
+                    for (const [route,printButton] of [
+                        ['/components/invoice/sales.php?tab=transactions&sale_id=1','Print Receipt'],
+                        ['/components/cashier/refunds.php?refund_id=1','Print Refund Receipt'],
+                    ]) {
+                        console.log('Theme receipt: '+paper+'mm '+route);
+                        assert.equal((await page.goto(route)).status(),200);
+                        const receipt=page.locator('.receipt-print-area'); await receipt.waitFor();
+                        const details=await receipt.innerText();
+                        assert(details.includes('Theme Test Item') && details.includes('Theme Register'),'Recorded product/Register details preserved');
+                        assert(!details.includes('Edited live'),'Reprint does not use edited Store/product/Register details');
+                        assert.equal(await page.evaluate(()=>window.printCalls),0,'Receipt navigation never auto-prints');
+                        await gateControl();
+                        for (const width of [320,390,1280]) {
+                            await page.setViewportSize({width,height:900});
+                            for (const mode of ['light','dark']) {
+                                await select(mode);
+                                assert.equal(await receipt.evaluate(el=>getComputedStyle(el).backgroundColor),mode==='dark'?'rgb(21, 34, 56)':'rgb(255, 255, 255)');
+                                for (const selector of ['h1','.receipt-meta','.sale-receipt-item-name','.sale-receipt-money','.receipt-store-line']) await contrast(receipt.locator(selector));
+                                await contrast(page.getByRole('button',{name:printButton,exact:true}));
+                                assert.equal(await receipt.innerText(),details,'Theme preserves receipt contents');
+                            }
+                            await select('system');
+                            for (const scheme of ['light','dark']) {
+                                await page.emulateMedia({colorScheme:scheme});
+                                await page.waitForFunction(scheme=>document.documentElement.dataset.theme===scheme,scheme);
+                                assert.equal(await receipt.evaluate(el=>getComputedStyle(el).backgroundColor),scheme==='dark'?'rgb(21, 34, 56)':'rgb(255, 255, 255)');
+                                assert.equal(await receipt.innerText(),details);
+                            }
+                            assert(await receipt.evaluate(el=>Array.from(el.querySelectorAll('*')).every(child=>child.scrollWidth<=child.clientWidth+1)),'Thermal receipt text fits');
+                        }
+                        await select('dark'); await page.emulateMedia({colorScheme:'light'});
+                        assert.equal(await receipt.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(21, 34, 56)','Explicit Dark overrides live light device');
+                        await page.reload();
+                        assert.equal(await control().inputValue(),'dark'); assert.equal(await receipt.innerText(),details);
+                        assert.equal(await receipt.getAttribute('data-paper-width-mm'),String(paper),'Reprint uses current Register paper width');
+                        assert(Math.abs((await receipt.boundingBox()).width-paper*96/25.4)<1,'Rendered thermal width');
+                        if (route.includes('/sales.php')) {
+                            const nativeDialog=page.locator('#receiptModal');
+                            const keyboardSave=page.waitForResponse(r=>r.url().endsWith('/auth/theme.php') && r.request().method()==='POST');
+                            await control().focus(); await page.keyboard.press('Home'); assert.equal((await keyboardSave).status(),200);
+                            assert.equal(await control().inputValue(),'light','Native modal theme selection works by keyboard');
+                            await select('dark');
+                            await control().focus(); await page.keyboard.press('Tab');
+                            assert(await nativeDialog.evaluate(el=>el.contains(document.activeElement)),'Keyboard remains inside native modal');
+                            await page.route('**/auth/theme.php',r=>r.fulfill({status:503,contentType:'application/json',body:'{"success":false}'}));
+                            await control().selectOption('light');
+                            const warning=nativeDialog.getByRole('alert').filter({hasText:'display theme was not saved'}); await warning.waitFor();
+                            for (const width of [320,390,1280]) {
+                                await page.setViewportSize({width,height:900});
+                                assert(await warning.evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),'Failed save warning visible in native modal');
+                                await contrast(warning);
+                            }
+                            assert.equal(await receipt.innerText(),details);
+                            await page.keyboard.press('Escape'); await page.waitForFunction(()=>!document.querySelector('#receiptModal').open);
+                            await page.locator('body>.theme-save-alert').waitFor();
+                            assert(await page.locator('body>.theme-save-alert').isVisible(),'Unsaved warning remains after modal closes');
+                            await page.evaluate(()=>viewReceipt(1,document.querySelector('#receipt-table-title')));
+                            await receipt.waitFor(); assert.equal(await receipt.innerText(),details,'AJAX reopening preserves themed receipt');
+                            assert(await warning.isVisible(),'Existing warning follows reopened modal');
+                            await page.unroute('**/auth/theme.php'); await select('dark');
+                        }
+                        await page.getByRole('button',{name:printButton,exact:true}).click();
+                        assert.equal(await page.evaluate(()=>window.printCalls),1,'Only explicit printing calls browser print');
+                        await page.emulateMedia({media:'print'});
+                        const paperCopy=page.locator('.receipt-print-root .receipt-print-area');
+                        assert.equal(await paperCopy.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+                        assert.equal(await paperCopy.evaluate(el=>getComputedStyle(el).color),'rgb(17, 17, 17)');
+                        assert.equal(await paperCopy.innerText(),details);
+                        assert.equal(await control().count(),0,'Print hides appearance controls');
+                        assert.equal(await page.locator('.receipt-print-root button,.receipt-print-root select').count(),0,'Paper contains no controls');
+                        assert(Math.abs((await paperCopy.boundingBox()).width-paper*96/25.4)<1);
+                        await page.evaluate(()=>window.dispatchEvent(new Event('afterprint'))); await page.emulateMedia({media:'screen'});
+                        assert.equal(await receipt.innerText(),details);
+                        assert.deepEqual(JSON.parse(fixture('cashier_state')),receiptState,'Screen/printing preserves transactions and immutable customer details');
+                    }
+                }
+                await page.goto('/components/invoice/sales.php?tab=transactions&sale_id=3');
+                assert((await page.locator('.receipt-print-area').innerText()).includes('original Store and item details were not preserved'),'Legacy original-details notice retained');
+                assert.equal((await context.request.get('/components/invoice/sales.php?action=view&ajax=1&sale_id=4')).status(),403,'Cashier cannot see another seller receipt');
+                const forbiddenRefund=await context.request.get('/components/cashier/refunds.php?refund_id=2');
+                assert(!(await forbiddenRefund.text()).includes('aria-label="Refund Receipt"'),'Cashier cannot see another issuing Cashier refund');
+                if (receiptsOnly) { console.log('Theme receipt browser: passed (real application/MySQL, modes/mobile/modal, saved details, 58/80mm, manual print, authorization)'); return; }
             }
             if(role === 'inventory_manager') {
                 const inventoryState = JSON.parse(fixture('inventory_state'));
@@ -525,7 +605,7 @@ const fixture = action => {
         assert.equal(await page.locator('#pos-unlock-password').inputValue(),'not-submitted');
         await page.reload(); await page.getByRole('heading',{name:'Register locked'}).waitFor();
         const finalState=JSON.parse(fixture('state'));
-        assert.equal(finalState.shift.status,'open'); assert(finalState.shift.locked_at); assert.equal(finalState.sales,1); assert.equal(finalState.stock,10);
+        assert.equal(finalState.shift.status,'open'); assert(finalState.shift.locked_at); assert.equal(finalState.sales,4); assert.equal(finalState.stock,10);
         console.log('Theme account browser: passed (fresh/upgrade parity, all roles/mobile, keyboard/focus/contrast, device, persistence/isolation, protected writes/failures, dialogs/charts, scans/forms/cart, gates, receipt/report paper)');
     } finally {
         if(browser) await browser.close(); if(server) server.kill(); fixture('cleanup'); fs.rmSync(recovery,{recursive:true,force:true});
