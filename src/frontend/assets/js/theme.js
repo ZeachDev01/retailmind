@@ -96,7 +96,6 @@
             menu.classList.add('theme-login-menu');
             modalClose.before(menu);
         }
-        document.querySelectorAll('.user-modal-header>div, .user-drawer-identity>div, .checkout-dialog-header>div, .sale-receipt-dialog-header').forEach(panel => panel.append(wrapper.cloneNode(true)));
         const warning = document.createElement('div');
         warning.className = 'theme-save-alert';
         warning.setAttribute('role', 'alert');

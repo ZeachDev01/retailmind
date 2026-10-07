@@ -16,7 +16,11 @@ const {chromium} = require('playwright');
         const desktop = fragment('<div class="global-topbar"','<div class="command-overlay"').replace('<strong>#</strong>','<strong>99+</strong>');
         const logo = 'data:image/png;base64,'+fs.readFileSync('src/frontend/assets/img/retailmind-icon-512.png').toString('base64');
         const html = '<style>'+css+'</style>'+mobile.replace('src="#"','src="'+logo+'"')+desktop+
-            '<main class="main-content"><h1>Control Center</h1><p>Open a platform control directly.</p></main>';
+            '<main class="main-content"><h1>Control Center</h1><p>Open a platform control directly.</p></main>'+
+            '<section class="dialog-fixture user-modal-overlay" id="userModalOverlay"><div class="user-modal-header"><div><h3>Add Staff</h3></div></div><input value="Unsubmitted staff"></section>'+
+            '<section class="dialog-fixture user-drawer-overlay"><div class="user-drawer-identity"><div></div></div></section>'+
+            '<section class="dialog-fixture checkout-modal"><div class="checkout-dialog-header"><div></div></div></section>'+
+            '<dialog class="dialog-fixture"><div class="sale-receipt-dialog-header"></div></dialog>';
         await page.route('http://retailmind.test/', route => route.fulfill({contentType:'text/html',body:html}));
         const saves = [];
         await page.route('**/theme', route => {
@@ -72,6 +76,23 @@ const {chromium} = require('playwright');
             }
         }
         assert.deepEqual(saves, Array(4).fill(['light','dark','system']).flat());
+        assert.equal(await page.locator('.dialog-fixture .theme-control').count(),0,'Staff, drawer, checkout and receipt dialogs have no theme selectors');
+        await page.addScriptTag({content:fs.readFileSync('src/frontend/assets/js/ui.js','utf8')});
+        for (const header of ['rm-modal-header','rm-drawer-header','command-footer']) {
+            await page.evaluate(header => {
+                const overlay=document.createElement('section');
+                overlay.className='dialog-fixture rm-modal-overlay';
+                overlay.innerHTML='<div class="'+header+'"><div></div></div><input value="Unsubmitted work">';
+                document.body.append(overlay);
+                RetailMindUI.openOverlay(overlay);
+            },header);
+            assert.equal(await page.locator('.dialog-fixture .theme-control').count(),0,'Opening '+header+' does not inject theme control');
+            assert.equal(await page.locator('.dialog-fixture').last().locator('input').inputValue(),'Unsubmitted work');
+            await page.evaluate(() => RetailMindUI.closeOverlay(document.querySelector('.dialog-fixture.rm-modal-overlay.open')));
+        }
+        await page.evaluate(() => RetailMindUI.openOverlay(document.getElementById('userModalOverlay')));
+        assert.equal(await page.locator('#userModalOverlay .theme-control').count(),0,'Add Staff remains free of theme selectors after opening');
+        assert.equal(await page.locator('#userModalOverlay input').inputValue(),'Unsubmitted staff');
         console.log('Mobile theme browser: passed (layout, selection, saves, keyboard, dismissal)');
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode=1; });

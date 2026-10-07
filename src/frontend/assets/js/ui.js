@@ -187,13 +187,6 @@
 
   RM.openOverlay = function (overlay) {
     if (!overlay) return;
-    const theme = qs('.theme-control');
-    const header = qs('.rm-modal-header>div, .rm-drawer-header>div, .command-footer', overlay);
-    if (theme && header && !qs('.theme-control', overlay)) {
-      const control = theme.cloneNode(true);
-      control.removeAttribute('open');
-      header.append(control);
-    }
     overlay.classList.add("open");
     overlay.setAttribute("aria-hidden", "false");
     document.body.classList.add("no-scroll");
