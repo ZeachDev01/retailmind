@@ -61,15 +61,21 @@
         wrapper.innerHTML = '<summary class="theme-trigger" data-theme-current="system"></summary><div class="theme-menu-panel"><div class="theme-options" role="group" aria-label="Display theme">' + modes.map(value =>
             `<button type="button" data-theme-mode="${value}" aria-label="${value[0].toUpperCase() + value.slice(1)}" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[value]}</svg><span>${value[0].toUpperCase() + value.slice(1)}</span></button>`
         ).join('') + '</div></div>';
+        const sidebarThemeTarget = document.querySelector('[data-sidebar-theme-target]');
         const desktop = document.querySelector('.global-topbar');
         const mobile = document.querySelector('.admin-mobile-topbar');
         const landingLogin = document.querySelector('.landing-nav__login');
+        const isLandingPage = document.body.classList.contains('landing-page');
+        if (sidebarThemeTarget) {
+            wrapper.classList.add('sidebar-theme-control');
+            sidebarThemeTarget.append(wrapper);
+        }
         if (desktop) {
             const tools = document.createElement('div');
             tools.className = 'header-display-tools';
             const notification = desktop.querySelector('.global-notification-button');
             if (notification) tools.append(notification);
-            tools.append(wrapper);
+            if (!sidebarThemeTarget) tools.append(wrapper);
             desktop.append(tools);
             if (mobile) {
                 const mobileTools = tools.cloneNode(true);
@@ -82,7 +88,7 @@
         } else if (landingLogin) {
             wrapper.classList.add('theme-landing-menu');
             landingLogin.before(wrapper);
-        } else {
+        } else if (!isLandingPage && !sidebarThemeTarget) {
             const bar = document.createElement('div');
             bar.className = 'theme-topbar';
             bar.setAttribute('aria-label', 'Display tools');
@@ -145,7 +151,7 @@
                     warning.hidden = false;
                 }
             });
-        });
+        }, true);
         apply();
     });
 })();
