@@ -111,12 +111,43 @@ original account. The member must configure their own hosted `.env` (including
 `APP_URL` and database credentials), import the schema, and apply the database
 updates described below. Each account keeps its own database and runtime storage.
 
-After importing `src/backend/sql/schema.sql` into a new hosted database, sign in
-as Super Administrator and open
-`/src/frontend/components/system_administrator/database_updates.php`. Apply the
-pending database updates before using the workspaces. This uses the same
-idempotent migrations as `php src/backend/scripts/migrate.php` on local or CI
-installations and does not replace existing users or their passwords.
+### Single-run database imports
+
+Select your RetailMind database in phpMyAdmin, then use **Import** with one file:
+
+| File | Use | Existing records |
+| ---- | --- | ---------------- |
+| `src/backend/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, including passwords and transaction history |
+| `src/backend/sql/schema.sql` | Install into an empty database | Drops and recreates RetailMind tables; includes seed accounts and products |
+
+Both files include all 37 migrations through `202610040001_user_theme` (October 8,
+2026), including required operational tables, role mappings, settings defaults,
+indexes, foreign keys, and historical backfills. Barcode pairing, email logs,
+settings, and forecasting SQL dependencies are included too. The update checks actual table,
+column, and constraint state even if the migration ledger incorrectly reports an
+update as applied. It can be imported again. It requires the existing base
+RetailMind tables; it is not a fresh-install script.
+
+Back up the database and stop Store activity before importing the update. Stop
+on the first error. MySQL/MariaDB DDL commits independently, so a failed import
+can leave a partial upgrade; resolve the reported problem and rerun the file.
+Conflicting open shifts, orphaned references, and Stores needing consolidation
+must be resolved rather than silently discarded. Neither file needs a hardcoded
+database name, stored-procedure permissions, or a separate PHP migration run for
+the included updates.
+
+SQL does not install Composer packages, PHP extensions, the Python forecasting
+service, `.env` credentials, or private backup storage; configure those separately.
+For later migrations, use `php src/backend/scripts/migrate.php` locally or open
+`/src/frontend/components/system_administrator/database_updates.php` as Super
+Administrator. Change the seeded password after a fresh installation.
+
+Validation (creates and removes disposable databases only):
+
+```powershell
+$env:RUN_DB_TESTS='1'
+php src/backend/tests/consolidated_sql_integration.php
+```
 
 **Hosting compatibility:** InfinityFree only permits application files under
 `htdocs`, so the app starts in web-only mode when its default private recovery

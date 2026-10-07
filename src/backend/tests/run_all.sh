@@ -10,6 +10,7 @@ python src/backend/tests/infinityfree_deploy_contract.py
 python src/backend/tests/forecast_regression.py
 php src/backend/tests/smoke_checks.php
 php src/backend/tests/fresh_schema_contract.php
+php src/backend/tests/consolidated_sql_integration.php
 php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/backup_unavailable_navigation_test.php
