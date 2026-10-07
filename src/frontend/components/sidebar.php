@@ -355,6 +355,11 @@ $sections = $roleSections[$role] ?? [];
                 </summary>
                 <div class="sidebar-preferences-options">
                     <div class="sidebar-theme-target" data-sidebar-theme-target></div>
+                    <button type="button" class="sidebar-account-button" data-fullscreen-toggle aria-pressed="false">
+                        <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+                        <span>Full Screen</span>
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
                     <?php if ($role !== 'cashier'): ?>
                         <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>">
                             <i class="bi bi-bell" aria-hidden="true"></i>
