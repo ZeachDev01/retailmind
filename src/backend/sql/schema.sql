@@ -1808,7 +1808,47 @@ UNLOCK TABLES;
 
 LOCK TABLES `schema_migrations` WRITE;
 /*!40000 ALTER TABLE `schema_migrations` DISABLE KEYS */;
-INSERT INTO `schema_migrations` (`migration_key`, `description`, `applied_at`) VALUES ('2026_07_operational_updates','Suppliers, purchase orders, shifts, held sales, forecast decisions, units, and inventory insights','2026-09-14 07:29:34'),('202608040001_auth_security','Authentication security tables and mandatory password-change support','2026-09-16 23:47:10'),('202608040002_operational_updates','Operational workflow tables and columns','2026-09-16 23:47:10'),('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases','2026-09-16 23:47:11'),('202609130001_branch_management','Branches, branch-scoped users and privilege assignments','2026-09-16 23:47:11'),('202609130002_role_access_update','Make administrator inventory access read-only','2026-09-16 23:47:11'),('202609130003_superadmin_inventory_read_only','Make super administrator inventory access read-only','2026-09-16 23:47:11'),('202609130004_remove_seller_role','Replace the duplicate seller role with cashier','2026-09-16 23:47:11'),('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches','2026-09-16 23:47:11'),('202609170001_admin_profile_images','Nullable generated profile image filename for administrator accounts','2026-09-16 23:47:11'),('202609170001_profile_images','Optional generated profile image filename for user accounts','2026-09-17 01:06:29'),('202609170001_staff_profile_images','Optional profile image filename for staff accounts','2026-09-16 23:59:31'),('202609180002_audit_record_categories','Categorize Protected Audit Records for authority-scoped visibility','2026-09-18 06:13:38'),('202609180003_emergency_access','Durable reason-bound Emergency Access sessions and audit correlation','2026-09-18 06:13:38'),('202609180004_recovery_account','Sealed Recovery Account identity and offline lifecycle state','2026-09-18 06:13:38'),('202609180005_attention_foundation','Shared live attention settings, active state, and notification keys','2026-09-18 06:13:38');
+INSERT INTO `schema_migrations` (`migration_key`, `description`, `applied_at`) VALUES
+('2026_07_operational_updates','Suppliers, purchase orders, shifts, held sales, forecast decisions, units, and inventory insights','2026-09-14 07:29:34'),
+('202608040001_auth_security','Authentication security tables and mandatory password-change support','2026-09-16 23:47:10'),
+('202608040002_operational_updates','Operational workflow tables and columns','2026-09-16 23:47:10'),
+('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases','2026-09-16 23:47:11'),
+('202609130001_branch_management','Branches, branch-scoped users and privilege assignments','2026-09-16 23:47:11'),
+('202609130002_role_access_update','Make administrator inventory access read-only','2026-09-16 23:47:11'),
+('202609130003_superadmin_inventory_read_only','Make super administrator inventory access read-only','2026-09-16 23:47:11'),
+('202609130004_remove_seller_role','Replace the duplicate seller role with cashier','2026-09-16 23:47:11'),
+('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches','2026-09-16 23:47:11'),
+('202609170001_admin_profile_images','Nullable generated profile image filename for administrator accounts','2026-09-16 23:47:11'),
+('202609170001_profile_images','Optional generated profile image filename for user accounts','2026-09-17 01:06:29'),
+('202609170001_staff_profile_images','Optional profile image filename for staff accounts','2026-09-16 23:59:31'),
+('202609180001_singleton_store_scope','Resolve the singleton Store compatibility identity','2026-09-18 06:13:38'),
+('202609180002_audit_record_categories','Categorize Protected Audit Records for authority-scoped visibility','2026-09-18 06:13:38'),
+('202609180003_emergency_access','Durable reason-bound Emergency Access sessions and audit correlation','2026-09-18 06:13:38'),
+('202609180004_recovery_account','Sealed Recovery Account identity and offline lifecycle state','2026-09-18 06:13:38'),
+('202609180005_attention_foundation','Shared live attention settings, active state, and notification keys','2026-09-18 06:13:38'),
+('202609230001_cashier_stock_issues','Link cashier stock-issue reports to shifts and stock movements (ticket #29)','2026-10-07 00:00:00'),
+('202609230002_stock_issue_corrections','Stock-issue correction lifecycle: returned/cancelled states and append-only revision trail (ticket #30)','2026-10-07 00:00:00'),
+('202609240001_stock_issue_oversight_correction_link','Link correction inventory counts to approved stock-issue reports for oversight history (ticket #31)','2026-10-07 00:00:00'),
+('202609240002_dormancy_policy_settings','Seed Dormancy Policy disable-days and warn-days Platform Settings (ticket #60)','2026-10-07 00:00:00'),
+('202609240003_user_disabled_at','Record when a user account transitions to Disabled (ticket #61)','2026-10-07 00:00:00'),
+('202609250001_user_multi_roles','Allow users to hold multiple role templates','2026-10-07 00:00:00'),
+('202609260001_shared_database_backups','Shared encrypted Database Backup coordination for Administrator and Super Administrator','2026-10-07 00:00:00'),
+('202609290001_store_registers','Named physical Registers maintained by Administrators','2026-10-07 00:00:00'),
+('202609290002_cashier_shift_registers','Bind each open Cashier Shift to an exclusively owned Register (ticket #88)','2026-10-07 00:00:00'),
+('202609290003_sale_shift_attribution','Attribute each new sale to the Cashier and Cashier Shift that authorized it (ticket #89)','2026-10-07 00:00:00'),
+('202609290004_cashier_shift_register_lock','Let a Cashier lock an open Cashier Shift and resume it with their own password (ticket #90)','2026-10-07 00:00:00'),
+('202609290005_held_sale_shift_ownership','Keep held sales inside the Cashier Shift that authorized them (ticket #91)','2026-10-07 00:00:00'),
+('202609290006_append_only_cash_refunds','Record append-only Cash Refunds against completed sales (ticket #92)','2026-10-07 00:00:00'),
+('202609300001_accountable_drawer_movements','Record accountable Cashier drawer movements (ticket #94)','2026-10-07 00:00:00'),
+('202609300001_sale_receipt_details','Preserve customer-facing Sale Receipt details at checkout','2026-10-07 00:00:00'),
+('202609300002_cashier_shift_reconciliation','Preserve Cashier Shift reconciliation and review status (ticket #95)','2026-10-07 00:00:00'),
+('202609300003_administrator_shift_intervention','Preserve the closing actor and intervention reason for Cashier Shifts (ticket #96)','2026-10-07 00:00:00'),
+('202609300003_refund_receipt_details','Preserve customer-facing Refund Receipt details atomically','2026-10-07 00:00:00'),
+('202609300004_legacy_register_columns','Upgrade existing Register columns to the current Cashier schema','2026-10-07 00:00:00'),
+('202609300005_register_paper_width','Configure thermal receipt paper width per Register','2026-10-07 00:00:00'),
+('202610010001_checkout_attempts','Persist Cashier checkout identities with committed sale outcomes','2026-10-07 00:00:00'),
+('202610010003_safe_refund_exceptions','Preserve external settlement and specific Cash Refund exception attribution (#113)','2026-10-07 00:00:00'),
+('202610040001_user_theme','Personal display theme for every Staff account','2026-10-07 00:00:00');
 /*!40000 ALTER TABLE `schema_migrations` ENABLE KEYS */;
 UNLOCK TABLES;
 
