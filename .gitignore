@@ -31,3 +31,6 @@
 *.pyc
 *.pyo
 .release/
+.agents/
+skills/
+skills-lock.json
