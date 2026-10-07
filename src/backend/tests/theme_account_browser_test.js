@@ -38,7 +38,7 @@ const fixture = action => {
         const control = () => page.locator('[data-theme-current], [data-theme-mode][aria-pressed="true"]').filter({visible:true}).last();
         const option = async mode => {
             const choice = page.locator('[data-theme-mode="'+mode+'"]').filter({visible:true}).last();
-            if (!await choice.count()) await page.locator('.theme-trigger').filter({visible:true}).click();
+            if (!await choice.count()) await page.locator('.theme-trigger').filter({visible:true}).last().click();
             return choice;
         };
         const savedModes = {admin:'dark',super_admin:'light',inventory_manager:'system',cashier:'dark'};
@@ -66,8 +66,10 @@ const fixture = action => {
             await control().waitFor();
         };
         const select = async mode => {
+            const choice = await option(mode);
             const response = page.waitForResponse(r=>r.url().endsWith('/auth/theme.php') && r.request().method()==='POST' && new URLSearchParams(r.request().postData()).get('mode') === mode);
-            await (await option(mode)).click(); assert.equal((await response).status(),200);
+            const [saved] = await Promise.all([response, choice.click()]);
+            assert.equal(saved.status(),200);
         };
         const gateControl = async () => {
             for (const width of [320,390,1280]) {
@@ -686,11 +688,11 @@ const fixture = action => {
         for (const role of ['admin','super_admin','inventory_manager','cashier']) {
             await other.goto('/?login=1');
             await other.waitForFunction(()=>document.activeElement.id==='landing-login-username');
-            assert.equal(await other.locator('[data-theme-mode][aria-pressed="true"]').filter({visible:true}).getAttribute('data-theme-mode'),'system','Fresh browser has no local login preference');
+            assert.equal(await other.locator('#loginModal [data-theme-current]').getAttribute('data-theme-current'),'system','Fresh browser has no local login preference');
             await other.locator('#landing-login-username').fill('theme_'+role); await other.locator('#landing-login-password').fill(data.password);
             await Promise.all([other.waitForNavigation({waitUntil:'domcontentloaded'}),other.locator('#landing-login-password').press('Enter')]);
             await other.goto('/');
-            assert.equal(await other.locator('[data-theme-mode][aria-pressed="true"]').filter({visible:true}).getAttribute('data-theme-mode'),savedModes[role],'Fresh browser restores '+role+' account');
+            assert.equal(await other.locator('[data-theme-current]').filter({visible:true}).getAttribute('data-theme-current'),savedModes[role],'Fresh browser restores '+role+' account');
             await other.goto('/components/auth/logout.php');
         }
         const blocked = await browser.newContext({baseURL:origin,colorScheme:'dark'});
@@ -700,19 +702,21 @@ const fixture = action => {
         const privatePage=await blocked.newPage();
         await privatePage.goto('/?login=1');
         await privatePage.waitForFunction(()=>document.activeElement.id==='landing-login-username');
+        await privatePage.locator('#loginModal .theme-trigger').click();
         await privatePage.locator('[data-theme-mode="light"]').filter({visible:true}).click();
         await privatePage.locator('#landing-login-username').fill('theme_inventory_manager');
         await privatePage.locator('#landing-login-password').fill(data.password);
         await Promise.all([privatePage.waitForNavigation({waitUntil:'domcontentloaded'}),privatePage.locator('#landing-login-password').press('Enter')]);
         await privatePage.goto('/');
-        const privateControl=privatePage.locator('[data-theme-mode][aria-pressed="true"]').filter({visible:true});
-        assert.equal(await privateControl.getAttribute('data-theme-mode'),'system','Blocked storage sign-in restores account');
+        const privateControl=privatePage.locator('[data-theme-current]').filter({visible:true});
+        assert.equal(await privateControl.getAttribute('data-theme-current'),'system','Blocked storage sign-in restores account');
         assert.equal(await privatePage.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(11, 18, 32)','Blocked storage System follows device');
         const privateSave=privatePage.waitForResponse(r=>r.url().endsWith('/auth/theme.php') && r.request().method()==='POST');
+        await privateControl.click();
         await privatePage.locator('[data-theme-mode="light"]').filter({visible:true}).click(); assert.equal((await privateSave).status(),200);
-        await privatePage.reload(); assert.equal(await privateControl.getAttribute('data-theme-mode'),'light','Blocked storage account change survives reload');
+        await privatePage.reload(); assert.equal(await privateControl.getAttribute('data-theme-current'),'light','Blocked storage account change survives reload');
         await privatePage.goto('/components/auth/logout.php');
-        assert.equal(await privateControl.getAttribute('data-theme-mode'),'system','Blocked storage logout restores System');
+        assert.equal(await privatePage.locator('#loginModal [data-theme-current]').getAttribute('data-theme-current'),'system','Blocked storage logout restores System');
         assert.equal((await context.request.post('/components/auth/theme.php',{form:{mode:'dark'}})).status(),401);
         fixture('gates');
         await login('admin');

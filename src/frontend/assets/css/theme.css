@@ -13,12 +13,12 @@
 .global-topbar:has(.header-display-tools) { height:76px; }
 .global-topbar:has(.header-display-tools) .global-search-trigger { flex:0 1 490px; min-width:0; height:42px; }
 .command-footer:has(.theme-control) { flex-wrap:wrap; align-items:center; }
-.command-footer .theme-control { width:100%; }
+.command-footer .theme-control { margin-left:auto; }
 @media(min-width:901px) { body:has(.global-topbar .header-display-tools) .main-content { padding-top:6rem; } }
 .theme-topbar { display:flex; justify-content:flex-end; padding:.5rem 1rem; background:var(--card-bg,#fff); color:var(--text,#1f2937); }
 .landing-modal-open .theme-topbar { display:none; }
-.landing-login-modal__body>.theme-control { margin-bottom:1rem; }
-.landing-login-modal__shell[aria-hidden="true"] .theme-control { visibility:hidden; }
+.landing-login-modal__panel>.theme-login-menu { position:absolute; z-index:2; top:.85rem; right:calc(.85rem + 44px + 8px); }
+.theme-login-menu .theme-trigger { height:44px; }
 .user-modal-overlay:not(.open) .theme-control,.user-drawer-overlay:not(.open) .theme-control { visibility:hidden; }
 .rm-modal-overlay:not(.open) .theme-control,.rm-drawer-overlay:not(.open) .theme-control { visibility:hidden; }
 .command-overlay:not(.open) .theme-control { visibility:hidden; }
@@ -84,7 +84,7 @@ html[data-theme="dark"] .forecast-prototype { --fp-navy:#e5edf8; --fp-ink:#e5edf
 html[data-theme="dark"] .super-administrator-workspace { --control-navy:#e5edf8; --control-canvas:#0b1220; --control-muted:#b1bfd3; --control-line:#41516a; }
 html[data-theme="dark"] .database-restore-page .main-content { --recovery-ink:#e5edf8; --recovery-muted:#b1bfd3; --recovery-line:#41516a; }
 html[data-theme="dark"] body { background:#0b1220 !important; color:#e5edf8 !important; }
-html[data-theme="dark"] :is(.main-content,.landing-shell,.landing-login-panel,.landing-login-modal,.landing-login-card,.auth-card,.login-card,.preferences-card,.workspace-card,.card,.stat-card,.chart-card,.table-card,.report-card,.panel,.toolbar,.topbar,.global-topbar,.admin-mobile-topbar,.table-wrap,.form-card,.summary-card,.pos-panel,.cart-panel,.sale-receipt,.refund-receipt,.swal2-popup,.modal-content,.modal-card,.modal-dialog,.drawer,.drawer-panel,.command-palette,.command-panel,.account-menu,.global-account-menu,.dropdown-menu) { background-color:#152238 !important; color:#e5edf8 !important; border-color:#41516a !important; }
+html[data-theme="dark"] :is(.main-content,.landing-shell,.landing-login-panel,.landing-login-card,.auth-card,.login-card,.preferences-card,.workspace-card,.card,.stat-card,.chart-card,.table-card,.report-card,.panel,.toolbar,.topbar,.global-topbar,.admin-mobile-topbar,.table-wrap,.form-card,.summary-card,.pos-panel,.cart-panel,.sale-receipt,.refund-receipt,.swal2-popup,.modal-content,.modal-card,.modal-dialog,.drawer,.drawer-panel,.command-palette,.command-panel,.account-menu,.global-account-menu,.dropdown-menu) { background-color:#152238 !important; color:#e5edf8 !important; border-color:#41516a !important; }
 html[data-theme="dark"] :is(h1,h2,h3,h4,h5,h6,label,th,td,.value,.stat-value,.card-title,.modal-title,.swal2-title,.swal2-html-container,.receipt-store-line,.sale-receipt-money) { color:inherit; }
 html[data-theme="dark"] :is(p,.page-subtitle,.muted,.text-muted,.label,.hint,.help-text,.form-help,.sale-receipt-sku,.receipt-url) { color:#b1bfd3; }
 html[data-theme="dark"] :is(input,select,textarea) { background-color:#101c2e !important; color:#e5edf8 !important; border-color:#526580 !important; }

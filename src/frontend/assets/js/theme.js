@@ -51,16 +51,16 @@
     apply();
     device.addEventListener('change', () => { if (mode === 'system') apply(); });
     document.addEventListener('DOMContentLoaded', () => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'theme-control';
+        const wrapper = document.createElement('details');
+        wrapper.className = 'theme-control theme-mobile-menu';
         const icons = {
             light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
             dark: '<path d="M20.5 13A9 9 0 0 1 11 3.5 9 9 0 1 0 20.5 13Z"/>',
             system: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M12 17v4m-4 0h8"/>'
         };
-        wrapper.innerHTML = '<div class="theme-options" role="group" aria-label="Display theme">' + modes.map(value =>
+        wrapper.innerHTML = '<summary class="theme-trigger" data-theme-current="system"></summary><div class="theme-menu-panel"><div class="theme-options" role="group" aria-label="Display theme">' + modes.map(value =>
             `<button type="button" data-theme-mode="${value}" aria-label="${value[0].toUpperCase() + value.slice(1)}" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[value]}</svg><span>${value[0].toUpperCase() + value.slice(1)}</span></button>`
-        ).join('') + '</div>';
+        ).join('') + '</div></div>';
         const desktop = document.querySelector('.global-topbar');
         const mobile = document.querySelector('.admin-mobile-topbar');
         const landingLogin = document.querySelector('.landing-nav__login');
@@ -73,13 +73,6 @@
             desktop.append(tools);
             if (mobile) {
                 const mobileTools = tools.cloneNode(true);
-                const mobileControl = mobileTools.querySelector('.theme-control');
-                const menu = document.createElement('details');
-                menu.className = 'theme-control theme-mobile-menu';
-                menu.innerHTML = '<summary class="theme-trigger" data-theme-current="system"></summary><div class="theme-menu-panel"><div class="theme-menu-title">Appearance</div></div>';
-                menu.querySelector('.theme-menu-panel').append(mobileControl.querySelector('.theme-options'));
-                menu.querySelector('[data-theme-mode="system"]>span').innerHTML = 'System<small>Follows your device</small>';
-                mobileControl.replaceWith(menu);
                 mobile.append(mobileTools);
                 const search = desktop.querySelector('.global-search-trigger').cloneNode(true);
                 search.classList.add('mobile-header-search');
@@ -87,6 +80,7 @@
                 mobile.append(search);
             }
         } else if (landingLogin) {
+            wrapper.classList.add('theme-landing-menu');
             landingLogin.before(wrapper);
         } else {
             const bar = document.createElement('div');
@@ -95,7 +89,13 @@
             bar.append(wrapper);
             document.body.prepend(bar);
         }
-        document.querySelectorAll('.landing-login-modal__body').forEach(panel => panel.prepend(wrapper.cloneNode(true)));
+        const modalClose = document.querySelector('.landing-login-modal__close');
+        if (modalClose) {
+            const menu = wrapper.cloneNode(true);
+            menu.classList.remove('theme-landing-menu');
+            menu.classList.add('theme-login-menu');
+            modalClose.before(menu);
+        }
         document.querySelectorAll('.user-modal-header>div, .user-drawer-identity>div, .checkout-dialog-header>div, .sale-receipt-dialog-header').forEach(panel => panel.append(wrapper.cloneNode(true)));
         const warning = document.createElement('div');
         warning.className = 'theme-save-alert';
@@ -105,11 +105,15 @@
         let saving = Promise.resolve();
         document.addEventListener('keydown', event => {
             if (event.key !== 'Escape') return;
-            document.querySelectorAll('.theme-mobile-menu[open]').forEach(menu => {
+            const menus = [...document.querySelectorAll('.theme-mobile-menu[open]')].filter(menu => menu.querySelector('summary').offsetParent !== null);
+            if (!menus.length) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            menus.forEach(menu => {
                 menu.open = false;
                 menu.querySelector('summary').focus();
             });
-        });
+        }, true);
         document.addEventListener('click', event => {
             document.querySelectorAll('.theme-mobile-menu[open]').forEach(menu => {
                 if (!menu.contains(event.target)) menu.open = false;

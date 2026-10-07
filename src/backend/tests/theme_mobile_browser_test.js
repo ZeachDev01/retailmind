@@ -27,26 +27,29 @@ const {chromium} = require('playwright');
         await page.evaluate(() => { window.retailmindTheme = {mode:'system',authenticated:true,endpoint:'/theme',csrf:'test'}; });
         await page.addScriptTag({content:fs.readFileSync('src/frontend/assets/js/theme.js','utf8')});
         await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
-        const menu = page.locator('.admin-mobile-topbar .theme-mobile-menu');
+        const menu = page.locator('.theme-mobile-menu').filter({visible:true});
         const trigger = menu.locator('summary');
-        for (const width of [320,390,800]) {
+        for (const width of [320,390,800,1280]) {
             await page.setViewportSize({width,height:844});
-            const header = page.locator('.admin-mobile-topbar');
+            const header = page.locator(width <= 900 ? '.admin-mobile-topbar' : '.global-topbar');
             const bounds = await header.boundingBox();
             assert(bounds.width<=width);
             const notification = await header.locator('.global-notification-button').boundingBox();
             const theme = await trigger.boundingBox();
             assert(notification.x+notification.width<=theme.x && theme.x+theme.width<=width);
-            assert(Math.abs(notification.y-theme.y)<1, 'Notification and theme share first row');
-            const search = await header.locator('.mobile-header-search').boundingBox();
-            assert(search.y>=theme.y+theme.height, 'Search occupies second row');
+            assert(Math.abs(notification.y+notification.height/2-theme.y-theme.height/2)<1, 'Notification and theme align at '+width+'px');
+            assert(theme.width >= 44 && theme.height >= 44, 'Theme trigger meets touch target');
+            if (width <= 900) {
+                const search = await header.locator('.mobile-header-search').boundingBox();
+                assert(search.y>=theme.y+theme.height, 'Search occupies second row');
+            }
             assert.equal(await menu.locator('[data-theme-mode]').filter({visible:true}).count(),0);
             await trigger.click();
             assert.equal(await menu.locator('[data-theme-mode]').filter({visible:true}).count(),3);
             const panel = await menu.locator('.theme-menu-panel').boundingBox();
             assert(panel.x>=0 && panel.x+panel.width<=width);
-            if (process.env.THEME_MOBILE_OUTPUT && width===390) {
-                await page.screenshot({path:process.env.THEME_MOBILE_OUTPUT+'/open.png'});
+            if (process.env.THEME_MOBILE_OUTPUT && [390,1280].includes(width)) {
+                await page.screenshot({path:process.env.THEME_MOBILE_OUTPUT+'/theme-'+width+'-open.png'});
             }
             for (const mode of ['light','dark','system']) {
                 if (await menu.getAttribute('open') === null) await trigger.click();
@@ -64,11 +67,11 @@ const {chromium} = require('playwright');
             await trigger.click();
             await page.mouse.click(16,400);
             assert.equal(await menu.getAttribute('open'),null, 'Outside click closes menu');
-            if (process.env.THEME_MOBILE_OUTPUT && width===390) {
-                await page.screenshot({path:process.env.THEME_MOBILE_OUTPUT+'/closed.png'});
+            if (process.env.THEME_MOBILE_OUTPUT && [390,1280].includes(width)) {
+                await page.screenshot({path:process.env.THEME_MOBILE_OUTPUT+'/theme-'+width+'-closed.png'});
             }
         }
-        assert.deepEqual(saves, ['light','dark','system','light','dark','system','light','dark','system']);
+        assert.deepEqual(saves, Array(4).fill(['light','dark','system']).flat());
         console.log('Mobile theme browser: passed (layout, selection, saves, keyboard, dismissal)');
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode=1; });

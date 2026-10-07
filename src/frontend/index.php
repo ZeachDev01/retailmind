@@ -136,8 +136,10 @@ unset($_SESSION['_login_username']);
                 </span>
             </a>
             <div class="landing-nav__links">
+                <div class="landing-nav__sections">
                 <a href="#capabilities">Capabilities</a>
                 <a href="#workflow">Workflow</a>
+                </div>
                 <a class="landing-nav__login" href="<?= $loginUrl ?>" data-login-modal-open>Staff login</a>
             </div>
         </nav>
@@ -352,7 +354,7 @@ unset($_SESSION['_login_username']);
             var recoveryBack = modal.querySelector('[data-recovery-modal-back]');
             var closers = modal.querySelectorAll('[data-login-modal-close]');
             var pageRegions = [document.querySelector('.landing-header'), document.getElementById('main-content')].filter(Boolean);
-            var focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+            var focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
             var activeOpener = null;
             var viewFocusTimer = null;
             var passwordStateKey = 'retailmind.login.password';
@@ -496,6 +498,9 @@ unset($_SESSION['_login_username']);
                     return;
                 }
                 if (event.key === 'Escape') {
+                    if (modal.querySelector('.theme-mobile-menu[open]')) {
+                        return;
+                    }
                     event.preventDefault();
                     closeModal();
                     return;
