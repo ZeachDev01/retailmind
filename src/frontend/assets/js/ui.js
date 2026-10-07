@@ -586,16 +586,23 @@
     const buttons = qsa("[data-fullscreen-toggle]");
     if (!buttons.length) return;
 
+    // Navigation stays inside this document's frame to preserve fullscreen.
+    let host = window;
+    try {
+      if (window.parent !== window && window.parent.rmFullscreenHost) host = window.parent;
+    } catch (_) {}
+    const fullscreenDocument = host.document;
+
     const fullscreenEnabled =
-      document.fullscreenEnabled ||
-      document.webkitFullscreenEnabled ||
-      document.msFullscreenEnabled;
+      fullscreenDocument.fullscreenEnabled ||
+      fullscreenDocument.webkitFullscreenEnabled ||
+      fullscreenDocument.msFullscreenEnabled;
 
     function fullscreenElement() {
       return (
-        document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.msFullscreenElement ||
+        fullscreenDocument.fullscreenElement ||
+        fullscreenDocument.webkitFullscreenElement ||
+        fullscreenDocument.msFullscreenElement ||
         null
       );
     }
@@ -616,7 +623,7 @@
     }
 
     async function enterFullscreen() {
-      const root = document.documentElement;
+      const root = fullscreenDocument.documentElement;
       if (root.requestFullscreen) return root.requestFullscreen();
       if (root.webkitRequestFullscreen) return root.webkitRequestFullscreen();
       if (root.msRequestFullscreen) return root.msRequestFullscreen();
@@ -624,9 +631,9 @@
     }
 
     async function exitFullscreen() {
-      if (document.exitFullscreen) return document.exitFullscreen();
-      if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
-      if (document.msExitFullscreen) return document.msExitFullscreen();
+      if (fullscreenDocument.exitFullscreen) return fullscreenDocument.exitFullscreen();
+      if (fullscreenDocument.webkitExitFullscreen) return fullscreenDocument.webkitExitFullscreen();
+      if (fullscreenDocument.msExitFullscreen) return fullscreenDocument.msExitFullscreen();
       return Promise.resolve();
     }
 
@@ -649,9 +656,37 @@
         updateButtons();
       });
     });
-    document.addEventListener("fullscreenchange", updateButtons);
-    document.addEventListener("webkitfullscreenchange", updateButtons);
-    document.addEventListener("MSFullscreenChange", updateButtons);
+    const events = ["fullscreenchange", "webkitfullscreenchange", "MSFullscreenChange"];
+    events.forEach((event) => fullscreenDocument.addEventListener(event, updateButtons));
+    window.addEventListener("pagehide", () => {
+      events.forEach((event) => fullscreenDocument.removeEventListener(event, updateButtons));
+    });
+    if (host === window) {
+      window.rmFullscreenHost = true;
+      document.addEventListener("click", (event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !fullscreenElement()) return;
+        const link = event.target.closest("a[href]");
+        if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
+        const destination = new URL(link.href, location.href);
+        if (destination.origin !== location.origin || !/^https?:$/.test(destination.protocol)) return;
+        if (destination.pathname === location.pathname && destination.search === location.search && destination.hash) return;
+        event.preventDefault();
+        let frame = document.getElementById("rm-fullscreen-page");
+        if (!frame) {
+          frame = document.createElement("iframe");
+          frame.id = "rm-fullscreen-page";
+          frame.title = "RetailMind workspace";
+          frame.allow = "fullscreen";
+          frame.setAttribute("allowfullscreen", "");
+          frame.style.cssText = "position:fixed;inset:0;width:100%;height:100%;border:0;background:var(--theme-bg, #fff);z-index:2147483647;";
+          frame.addEventListener("load", () => {
+            try { document.title = frame.contentDocument.title; } catch (_) {}
+          });
+          document.body.append(frame);
+        }
+        frame.src = destination.href;
+      });
+    }
     updateButtons();
   }
 
