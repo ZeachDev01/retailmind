@@ -93,6 +93,24 @@ runtime storage. Set up the production `.env` directly on the host and import
 the database through phpMyAdmin; those steps are not part of the file upload.
 Change the initial Super Administrator password before exposing the site.
 
+### Deploy the same code to a member's InfinityFree account
+
+In the same repository's **Settings → Secrets and variables → Actions**, add:
+
+| Type | Name | Value |
+| ---- | ---- | ----- |
+| Secret | `INFINITYFREE_MEMBER_FTP_USERNAME` | Your member's InfinityFree FTP username |
+| Secret | `INFINITYFREE_MEMBER_FTP_PASSWORD` | Your member's InfinityFree FTP password |
+| Variable | `INFINITYFREE_MEMBER_FTP_SERVER_DIR` | Their website's exact FTP directory, ending in `/htdocs/` |
+| Variable | `INFINITYFREE_MEMBER_DEPLOY_ENABLED` | `true` to enable the second deployment |
+
+Once enabled, every push to `main` deploys the same commit to both accounts in
+independent jobs. A failed deployment to one account does not cancel the other.
+Leave the enable variable unset or set it to `false` to deploy only to the
+original account. The member must configure their own hosted `.env` (including
+`APP_URL` and database credentials), import the schema, and apply the database
+updates described below. Each account keeps its own database and runtime storage.
+
 After importing `src/backend/sql/schema.sql` into a new hosted database, sign in
 as Super Administrator and open
 `/src/frontend/components/system_administrator/database_updates.php`. Apply the
