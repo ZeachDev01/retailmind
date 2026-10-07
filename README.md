@@ -1,3 +1,5 @@
+Hi
+
 Fresh-install login:
 
 - Username: superadmin
@@ -79,10 +81,10 @@ the database, `.env`, runtime storage, tests, Python service, or development fil
 Before the first deployment, configure these in the GitHub repository under
 **Settings → Secrets and variables → Actions**:
 
-| Type | Name | Value |
-| --- | --- | --- |
-| Secret | `INFINITYFREE_FTP_USERNAME` | The FTP username from the InfinityFree account dashboard |
-| Secret | `INFINITYFREE_FTP_PASSWORD` | The FTP password from that dashboard |
+| Type     | Name                          | Value                                                                                                                      |
+| -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Secret   | `INFINITYFREE_FTP_USERNAME`   | The FTP username from the InfinityFree account dashboard                                                                   |
+| Secret   | `INFINITYFREE_FTP_PASSWORD`   | The FTP password from that dashboard                                                                                       |
 | Variable | `INFINITYFREE_FTP_SERVER_DIR` | The exact FTP website directory, ending in `/htdocs/` (usually `/htdocs/`, or `/your-domain/htdocs/` for an add-on domain) |
 
 The FTPS server is `ftpupload.net` on port 21. The workflow fails with a clear
