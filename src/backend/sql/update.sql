@@ -1250,6 +1250,155 @@ EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610040001_user_theme','Personal display theme for every Staff account') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+-- Runtime SQL dependencies: includes/pairing.php, includes/functions.php, demandForcasting/train_model.py.
+CREATE TABLE IF NOT EXISTS `barcode_pairings` (
+  `pairing_id` int(11) NOT NULL AUTO_INCREMENT,
+  `code` varchar(12) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `status` enum('pending','connected','expired') NOT NULL DEFAULT 'pending',
+  `device_label` varchar(120) DEFAULT NULL,
+  `expires_at` datetime NOT NULL,
+  `connected_at` datetime DEFAULT NULL,
+  `last_seen_at` datetime DEFAULT NULL,
+  `access_token_hash` varchar(255) DEFAULT NULL,
+  `joined_ip` varchar(45) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`pairing_id`),
+  UNIQUE KEY `code` (`code`),
+  KEY `idx_barcode_pairings_code` (`code`),
+  KEY `idx_barcode_pairings_expires_at` (`expires_at`),
+  KEY `created_by` (`created_by`),
+  CONSTRAINT `barcode_pairings_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `barcode_scans` (
+  `scan_id` int(11) NOT NULL AUTO_INCREMENT,
+  `pairing_id` int(11) NOT NULL,
+  `barcode` varchar(255) NOT NULL,
+  `payload` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`scan_id`),
+  KEY `idx_barcode_scans_pairing_scan` (`pairing_id`,`scan_id`),
+  CONSTRAINT `barcode_scans_ibfk_1` FOREIGN KEY (`pairing_id`) REFERENCES `barcode_pairings` (`pairing_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `email_delivery_log` (
+  `email_log_id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `recipient` varchar(190) NOT NULL,
+  `subject` varchar(255) NOT NULL,
+  `status` enum('sent','failed','queued') NOT NULL,
+  `provider` varchar(50) DEFAULT NULL,
+  `error_message` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`email_log_id`),
+  KEY `idx_email_delivery_log_created_at` (`created_at`),
+  KEY `idx_email_delivery_log_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `store_settings` (
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` text NOT NULL,
+  `updated_by` int(11) DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`setting_key`),
+  KEY `updated_by` (`updated_by`),
+  CONSTRAINT `store_settings_ibfk_1` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `ml_settings` (
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` text NOT NULL,
+  `updated_by` int(11) DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`setting_key`),
+  KEY `updated_by` (`updated_by`),
+  CONSTRAINT `ml_settings_ibfk_1` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `model_training_runs` (
+  `training_run_id` int(11) NOT NULL AUTO_INCREMENT,
+  `model_name` varchar(100) NOT NULL,
+  `model_version` varchar(30) NOT NULL,
+  `trigger_type` enum('manual','scheduled','automatic','cli') NOT NULL DEFAULT 'cli',
+  `status` enum('running','completed','failed','skipped') NOT NULL DEFAULT 'running',
+  `started_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `completed_at` timestamp NULL DEFAULT NULL,
+  `duration_seconds` decimal(10,2) DEFAULT NULL,
+  `sales_records_used` int(11) DEFAULT 0,
+  `eligible_products` int(11) DEFAULT 0,
+  `metrics_json` longtext DEFAULT NULL,
+  `error_message` text DEFAULT NULL,
+  `host_name` varchar(150) DEFAULT NULL,
+  PRIMARY KEY (`training_run_id`),
+  KEY `idx_model_training_runs_started_at` (`started_at`),
+  KEY `idx_model_training_runs_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `forecast_evaluations` (
+  `evaluation_id` int(11) NOT NULL AUTO_INCREMENT,
+  `training_run_id` int(11) DEFAULT NULL,
+  `product_id` int(11) NOT NULL,
+  `evaluation_records` int(11) NOT NULL DEFAULT 0,
+  `actual_total` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `predicted_total` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `mae` decimal(14,4) DEFAULT NULL,
+  `rmse` decimal(14,4) DEFAULT NULL,
+  `wape` decimal(10,4) DEFAULT NULL,
+  `smape` decimal(10,4) DEFAULT NULL,
+  `generated_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`evaluation_id`),
+  KEY `idx_forecast_evaluations_product` (`product_id`,`generated_at`),
+  KEY `training_run_id` (`training_run_id`),
+  CONSTRAINT `forecast_evaluations_ibfk_1` FOREIGN KEY (`training_run_id`) REFERENCES `model_training_runs` (`training_run_id`) ON DELETE SET NULL,
+  CONSTRAINT `forecast_evaluations_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='barcode_pairings' AND column_name='access_token_hash'), 'ALTER TABLE `barcode_pairings` ADD COLUMN `access_token_hash` VARCHAR(255) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='barcode_pairings' AND column_name='joined_ip'), 'ALTER TABLE `barcode_pairings` ADD COLUMN `joined_ip` VARCHAR(45) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_predictions' AND column_name='lower_bound_7_days'), 'ALTER TABLE `stock_predictions` ADD COLUMN `lower_bound_7_days` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_predictions' AND column_name='upper_bound_7_days'), 'ALTER TABLE `stock_predictions` ADD COLUMN `upper_bound_7_days` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_predictions' AND column_name='lower_bound_30_days'), 'ALTER TABLE `stock_predictions` ADD COLUMN `lower_bound_30_days` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_predictions' AND column_name='upper_bound_30_days'), 'ALTER TABLE `stock_predictions` ADD COLUMN `upper_bound_30_days` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_predictions' AND column_name='lead_time_lower_bound'), 'ALTER TABLE `stock_predictions` ADD COLUMN `lead_time_lower_bound` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_predictions' AND column_name='lead_time_upper_bound'), 'ALTER TABLE `stock_predictions` ADD COLUMN `lead_time_upper_bound` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_predictions' AND column_name='forecast_explanation'), 'ALTER TABLE `stock_predictions` ADD COLUMN `forecast_explanation` TEXT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+-- Forecast defaults; retain any configured values.
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_history_days','30');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('preferred_history_days','90');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_nonzero_sales_days','5');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('history_window_days','365');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('forecast_period_days','30');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('n_estimators','300');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('max_depth','18');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('min_samples_split','4');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('min_samples_leaf','2');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('retrain_frequency_days','7');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('retrain_new_sales_records','100');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('accuracy_threshold_wape','35.0');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_lower','10');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_upper','90');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('holiday_dates','');
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
 SELECT 'RetailMind SQL update completed through 202610040001_user_theme' AS result;

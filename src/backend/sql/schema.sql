@@ -2004,3 +2004,20 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300005_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010001_checkout_attempts','Persist Cashier checkout identities with committed sale outcomes') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010003_safe_refund_exceptions','Preserve external settlement and specific Cash Refund exception attribution (#113)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610040001_user_theme','Personal display theme for every Staff account') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- Forecast defaults; retain any configured values.
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_history_days','30');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('preferred_history_days','90');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_nonzero_sales_days','5');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('history_window_days','365');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('forecast_period_days','30');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('n_estimators','300');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('max_depth','18');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('min_samples_split','4');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('min_samples_leaf','2');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('retrain_frequency_days','7');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('retrain_new_sales_records','100');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('accuracy_threshold_wape','35.0');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_lower','10');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_upper','90');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('holiday_dates','');
