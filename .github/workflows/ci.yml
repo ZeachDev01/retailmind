@@ -63,11 +63,18 @@ jobs:
         run: bash src/backend/tests/run_all.sh
 
   deploy:
-    name: Deploy to InfinityFree
+    name: Deploy to InfinityFree (${{ matrix.target }})
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: >-
+          ${{ fromJSON(vars.INFINITYFREE_MEMBER_DEPLOY_ENABLED == 'true' &&
+          '[{"target":"production","config_prefix":"INFINITYFREE"},{"target":"member","config_prefix":"INFINITYFREE_MEMBER"}]' ||
+          '[{"target":"production","config_prefix":"INFINITYFREE"}]') }}
     concurrency:
-      group: infinityfree-production
+      group: infinityfree-${{ matrix.target }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -86,25 +93,26 @@ jobs:
         run: find .release -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l > /dev/null
       - name: Check FTP configuration
         env:
-          FTP_USERNAME: ${{ secrets.INFINITYFREE_FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.INFINITYFREE_FTP_PASSWORD }}
-          FTP_SERVER_DIR: ${{ vars.INFINITYFREE_FTP_SERVER_DIR }}
+          CONFIG_PREFIX: ${{ matrix.config_prefix }}
+          FTP_USERNAME: ${{ secrets[format('{0}_FTP_USERNAME', matrix.config_prefix)] }}
+          FTP_PASSWORD: ${{ secrets[format('{0}_FTP_PASSWORD', matrix.config_prefix)] }}
+          FTP_SERVER_DIR: ${{ vars[format('{0}_FTP_SERVER_DIR', matrix.config_prefix)] }}
         run: |
-          test -n "$FTP_USERNAME" || { echo 'Missing INFINITYFREE_FTP_USERNAME secret'; exit 1; }
-          test -n "$FTP_PASSWORD" || { echo 'Missing INFINITYFREE_FTP_PASSWORD secret'; exit 1; }
-          test -n "$FTP_SERVER_DIR" || { echo 'Missing INFINITYFREE_FTP_SERVER_DIR variable'; exit 1; }
+          test -n "$FTP_USERNAME" || { echo "Missing ${CONFIG_PREFIX}_FTP_USERNAME secret"; exit 1; }
+          test -n "$FTP_PASSWORD" || { echo "Missing ${CONFIG_PREFIX}_FTP_PASSWORD secret"; exit 1; }
+          test -n "$FTP_SERVER_DIR" || { echo "Missing ${CONFIG_PREFIX}_FTP_SERVER_DIR variable"; exit 1; }
           [[ "$FTP_SERVER_DIR" == */htdocs/ ]] || { echo 'FTP server directory must end in /htdocs/'; exit 1; }
       - name: Upload over explicit FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ftpupload.net
-          username: ${{ secrets.INFINITYFREE_FTP_USERNAME }}
-          password: ${{ secrets.INFINITYFREE_FTP_PASSWORD }}
+          username: ${{ secrets[format('{0}_FTP_USERNAME', matrix.config_prefix)] }}
+          password: ${{ secrets[format('{0}_FTP_PASSWORD', matrix.config_prefix)] }}
           protocol: ftps
           port: 21
           security: strict
           local-dir: ./.release/
-          server-dir: ${{ vars.INFINITYFREE_FTP_SERVER_DIR }}
+          server-dir: ${{ vars[format('{0}_FTP_SERVER_DIR', matrix.config_prefix)] }}
           exclude: |
             .env
             **/.env
@@ -113,9 +121,9 @@ jobs:
       # removes an unchanged file, that state alone will not put it back.
       - name: Restore root entry and access rules
         env:
-          FTP_USERNAME: ${{ secrets.INFINITYFREE_FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.INFINITYFREE_FTP_PASSWORD }}
-          FTP_SERVER_DIR: ${{ vars.INFINITYFREE_FTP_SERVER_DIR }}
+          FTP_USERNAME: ${{ secrets[format('{0}_FTP_USERNAME', matrix.config_prefix)] }}
+          FTP_PASSWORD: ${{ secrets[format('{0}_FTP_PASSWORD', matrix.config_prefix)] }}
+          FTP_SERVER_DIR: ${{ vars[format('{0}_FTP_SERVER_DIR', matrix.config_prefix)] }}
         run: |
           for file in index.php .htaccess; do
             curl --fail --show-error --silent --ssl-reqd --ftp-pasv \
