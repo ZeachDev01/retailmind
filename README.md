@@ -1,4 +1,4 @@
-Hi
+Hi hello
 
 Fresh-install login:
 
@@ -97,12 +97,12 @@ Change the initial Super Administrator password before exposing the site.
 
 In the same repository's **Settings → Secrets and variables → Actions**, add:
 
-| Type | Name | Value |
-| ---- | ---- | ----- |
-| Secret | `INFINITYFREE_MEMBER_FTP_USERNAME` | Your member's InfinityFree FTP username |
-| Secret | `INFINITYFREE_MEMBER_FTP_PASSWORD` | Your member's InfinityFree FTP password |
+| Type     | Name                                 | Value                                                     |
+| -------- | ------------------------------------ | --------------------------------------------------------- |
+| Secret   | `INFINITYFREE_MEMBER_FTP_USERNAME`   | Your member's InfinityFree FTP username                   |
+| Secret   | `INFINITYFREE_MEMBER_FTP_PASSWORD`   | Your member's InfinityFree FTP password                   |
 | Variable | `INFINITYFREE_MEMBER_FTP_SERVER_DIR` | Their website's exact FTP directory, ending in `/htdocs/` |
-| Variable | `INFINITYFREE_MEMBER_DEPLOY_ENABLED` | `true` to enable the second deployment |
+| Variable | `INFINITYFREE_MEMBER_DEPLOY_ENABLED` | `true` to enable the second deployment                    |
 
 Once enabled, every push to `main` deploys the same commit to both accounts in
 independent jobs. A failed deployment to one account does not cancel the other.
@@ -115,10 +115,10 @@ updates described below. Each account keeps its own database and runtime storage
 
 Select your RetailMind database in phpMyAdmin, then use **Import** with one file:
 
-| File | Use | Existing records |
-| ---- | --- | ---------------- |
-| `src/backend/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, including passwords and transaction history |
-| `src/backend/sql/schema.sql` | Install into an empty database | Drops and recreates RetailMind tables; includes seed accounts and products |
+| File                         | Use                                               | Existing records                                                           |
+| ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
+| `src/backend/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, including passwords and transaction history                      |
+| `src/backend/sql/schema.sql` | Install into an empty database                    | Drops and recreates RetailMind tables; includes seed accounts and products |
 
 Both files include all 37 migrations through `202610040001_user_theme` (October 8,
 2026), including required operational tables, role mappings, settings defaults,
