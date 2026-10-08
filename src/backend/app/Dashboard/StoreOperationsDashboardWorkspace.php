@@ -22,7 +22,7 @@ final class StoreOperationsDashboardWorkspace
         ['label' => 'Sales Exceptions', 'description' => 'Review reversals and unusual discounts', 'icon' => 'bi-receipt-cutoff', 'destination' => 'components/invoice/sales.php?tab=reversals', 'capability' => RoleCapabilityPolicy::MANAGE_SALE_REVERSALS],
         ['label' => 'Store Approvals', 'description' => 'Resolve pending replenishment decisions', 'icon' => 'bi-check2-square', 'destination' => 'components/inventory_management/replenishment_requests.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Fiscal Periods', 'description' => 'Govern Store accounting windows', 'icon' => 'bi-calendar-check', 'destination' => 'components/system_administrator/fiscal_periods.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
-        ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_STORE_REPORTS],
+        ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_FORECASTS],
         ['label' => 'Store Settings', 'description' => 'Set operational attention thresholds', 'icon' => 'bi-sliders', 'destination' => 'components/administrator/store_settings.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Database Backup', 'description' => 'Create and download an encrypted Store copy', 'icon' => 'bi-database-check', 'destination' => 'components/administrator/database_backup.php', 'capability' => RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP],
     ];
@@ -292,7 +292,7 @@ final class StoreOperationsDashboardWorkspace
             : (str_contains($destination, '/sales_history.php')
                 ? RoleCapabilityPolicy::VIEW_SALES_HISTORY
                 : (str_contains($destination, '/report/')
-                    ? RoleCapabilityPolicy::VIEW_STORE_REPORTS
+                    ? RoleCapabilityPolicy::VIEW_FORECASTS
                     : (str_contains($destination, '/inventory_insights.php')
                         ? RoleCapabilityPolicy::VIEW_INVENTORY
                         : RoleCapabilityPolicy::STORE_OPERATIONS)));

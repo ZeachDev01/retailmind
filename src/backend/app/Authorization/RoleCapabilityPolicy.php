@@ -21,6 +21,14 @@ final class RoleCapabilityPolicy
     public const MANAGE_DATABASE_BACKUP = 'manage_database_backup';
     public const MANAGE_REGISTERS = 'manage_registers';
 
+    public const VIEW_FORECASTS = 'view_forecasts';
+    public const GENERATE_FORECASTS = 'generate_forecasts';
+    public const RETRAIN_MODELS = 'retrain_models';
+    public const CONFIGURE_MODELS = 'configure_models';
+    public const APPROVE_MODELS = 'approve_models';
+    public const REPLACE_MODELS = 'replace_models';
+    public const ROLL_BACK_MODELS = 'roll_back_models';
+
     private const BASE_CAPABILITIES = [
         'super_admin' => [
             self::PLATFORM_GOVERNANCE,
@@ -34,6 +42,13 @@ final class RoleCapabilityPolicy
             self::ASSIGN_PRIVILEGES,
             self::ACTIVATE_EMERGENCY_ACCESS,
             self::MANAGE_DATABASE_BACKUP,
+            self::VIEW_FORECASTS,
+            self::GENERATE_FORECASTS,
+            self::RETRAIN_MODELS,
+            self::CONFIGURE_MODELS,
+            self::APPROVE_MODELS,
+            self::REPLACE_MODELS,
+            self::ROLL_BACK_MODELS,
         ],
         // Shared preservation authority: the Administrator may create and
         // download a Database Backup but never restoration authority, which
@@ -52,12 +67,15 @@ final class RoleCapabilityPolicy
             // sits with the Administrator and never with the Super
             // Administrator (ADR-0001).
             self::MANAGE_REGISTERS,
+            self::VIEW_FORECASTS,
+            self::GENERATE_FORECASTS,
         ],
         'inventory_manager' => [
             self::VIEW_INVENTORY,
             self::MUTATE_INVENTORY,
             self::VIEW_SALES_HISTORY,
             self::VIEW_STORE_REPORTS,
+            self::VIEW_FORECASTS,
         ],
         'cashier' => [
             self::VIEW_INVENTORY,

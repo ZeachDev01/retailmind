@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 
-require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
+require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
 $storeId = store_scope_id($pdo);
 
 $metrics = get_ml_model_metrics();
