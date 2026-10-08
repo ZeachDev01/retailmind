@@ -694,7 +694,10 @@
       window.rmFullscreenHost = true;
       let pendingFrame = null;
       window.rmNavigateFullscreen = (destination, theme) => {
-        if (pendingFrame) return pendingFrame;
+        if (pendingFrame) {
+          if (!destination) return pendingFrame;
+          pendingFrame.remove();
+        }
         let shell = document.getElementById("rm-fullscreen-shell");
         if (!shell) {
           shell = document.createElement("div");
@@ -717,24 +720,23 @@
             if (frame.contentWindow.location.href === "about:blank") return;
           } catch (_) {}
           try { document.title = frame.contentDocument.title; } catch (_) {}
-          // Paint the loaded page before replacing the current visible page.
-          window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-            if (previousFrame) previousFrame.removeAttribute("id");
+          // Swap only after loading; animation must never gate visibility or navigation.
+          window.requestAnimationFrame(() => {
+            if (pendingFrame !== frame || !frame.isConnected) return;
+            if (previousFrame) previousFrame.remove();
             frame.id = "rm-fullscreen-page";
             frame.style.opacity = "1";
             frame.style.pointerEvents = "auto";
+            shell.style.backgroundColor = frame.style.backgroundColor;
+            pendingFrame = null;
+            frame.focus();
             const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            const animation = !reducedMotion && frame.animate
-              ? frame.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: "ease-out" })
-              : null;
-            const finish = () => {
-              if (previousFrame) previousFrame.remove();
-              shell.style.backgroundColor = frame.style.backgroundColor;
-              pendingFrame = null;
-            };
-            if (animation) animation.finished.then(finish, finish);
-            else finish();
-          }));
+            if (!reducedMotion && frame.animate) {
+              frame.animate([{ opacity: 0.96 }, { opacity: 1 }], {
+                duration: 120, easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+              });
+            }
+          });
         });
         if (destination) frame.src = destination.href;
         shell.append(frame);
