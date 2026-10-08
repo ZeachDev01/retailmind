@@ -91,6 +91,15 @@ message until these values are configured. It generates `.env` during deployment
 the database itself must still be imported through phpMyAdmin.
 Change the initial Super Administrator password before exposing the site.
 
+If the hosted page says "RetailMind cannot reach its data", read the latest
+error in `htdocs/src/backend/storage/logs/app.log` through the hosting File
+Manager. Keep `APP_DEBUG=false` on the live site. Confirm `htdocs/.env` exists
+and its `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` match the account's
+MySQL Databases page; use the full database name and the exact MySQL hostname,
+not the website or FTP hostname. For automated deployments, correct the GitHub
+secrets above and redeploy, since each deployment replaces `.env`.
+The environment loader supports hosting with `putenv()` disabled.
+
 After importing `src/backend/sql/schema.sql` into a new hosted database, sign in
 as Super Administrator and open
 `/src/frontend/components/system_administrator/database_updates.php`. Apply the
