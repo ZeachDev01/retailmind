@@ -37,3 +37,4 @@ if ($failures) {
 }
 
 echo "Forecast navigation contract: passed\n";
+
