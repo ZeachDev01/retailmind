@@ -69,12 +69,9 @@ PHP requires Fileinfo and GD with JPEG, PNG, and WebP support. The release ships
 locked settings must permit those limits, including multipart request overhead.
 Check the effective web PHP settings after deployment; CLI settings may differ.
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` runs the full checks on
-pushes and pull requests. On a push to branch `1`, a separate deployment job builds
-the production PHP release, checks its PHP syntax and file sizes, then uploads
-it to InfinityFree using explicit FTPS. The upload can proceed when an unrelated
-full-suite test fails. It does not upload
-the database, `.env`, runtime storage, tests, Python service, or development files.
+On a push to branch `1`, the GitHub Actions workflow in `.github/workflows/ci.yml`
+creates the production `.env` from repository secrets and uploads the project to
+InfinityFree over FTP.
 
 Before the first deployment, configure these in the GitHub repository under
 **Settings → Secrets and variables → Actions**:
@@ -84,11 +81,14 @@ Before the first deployment, configure these in the GitHub repository under
 | Secret | `FTP_SERVER` | The FTP hostname from the InfinityFree account dashboard (usually `ftpupload.net`) |
 | Secret | `FTP_USERNAME` | The FTP username from the InfinityFree account dashboard |
 | Secret | `FTP_PASSWORD` | The FTP password from that dashboard |
+| Secret | `DB_HOST` | The MySQL hostname from the InfinityFree MySQL Databases page |
+| Secret | `DB_NAME` | The complete InfinityFree database name |
+| Secret | `DB_USER` | The InfinityFree MySQL username |
+| Secret | `DB_PASSWORD` | The InfinityFree hosting/database password |
 
 The workflow uploads to `/htdocs/` over explicit FTPS on port 21 and fails with a clear
-message until these values are configured. It never deletes the remote `.env` or
-runtime storage. Set up the production `.env` directly on the host and import
-the database through phpMyAdmin; those steps are not part of the file upload.
+message until these values are configured. It generates `.env` during deployment;
+the database itself must still be imported through phpMyAdmin.
 Change the initial Super Administrator password before exposing the site.
 
 After importing `src/backend/sql/schema.sql` into a new hosted database, sign in
