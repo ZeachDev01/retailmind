@@ -101,10 +101,7 @@
 }
 
 .profile-picture-settings {
-    display: grid;
-    grid-template-columns: 116px minmax(0, 1fr);
-    gap: 1.15rem;
-    align-items: start;
+    display: block;
     margin-bottom: 1.35rem;
     padding: 1rem;
     border: 1px solid #dbe7f5;
@@ -389,7 +386,6 @@
     }
 
     .profile-picture-settings {
-        grid-template-columns: 88px minmax(0, 1fr);
         padding: 0.85rem;
     }
 
@@ -418,9 +414,7 @@
         padding: 1rem;
     }
 
-    .profile-picture-settings {
-        grid-template-columns: 1fr;
-    }
+
 
     .profile-picture-frame {
         width: 104px;

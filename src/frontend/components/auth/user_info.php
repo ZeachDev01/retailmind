@@ -195,7 +195,6 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
             <?php endif; ?>
 
             <section class="account-hero user-info-hero">
-                <?= profile_avatar_html((int)$account['user_id'], $displayName, $account['profile_image'] ?? null, 'account-avatar') ?>
                 <div class="account-hero-copy">
                     <span class="user-info-eyebrow">Signed-in account</span>
                     <h2><?= htmlspecialchars($account['full_name']) ?></h2>
@@ -218,10 +217,6 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
                     </div>
                     <?php if (can_manage_own_profile_image()): ?>
                         <div class="profile-picture-settings">
-                            <div class="profile-picture-frame">
-                                <span class="profile-avatar-fallback"><?= htmlspecialchars(profile_initials($displayName)) ?></span>
-                                <img id="profile-picture-preview" class="profile-picture-preview" src="<?= htmlspecialchars($profileImageUrl) ?>" alt="Current profile picture" <?= profile_image_storage()->exists($account['profile_image'] ?? null) ? '' : 'hidden' ?> onerror="this.hidden=true">
-                            </div>
                             <div class="profile-picture-controls">
                                 <div class="profile-picture-copy">
                                     <h4>Profile picture</h4>
