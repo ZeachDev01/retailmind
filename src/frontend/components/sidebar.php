@@ -321,8 +321,8 @@ $sections = $roleSections[$role] ?? [];
             <details class="sidebar-workspace-switcher">
                 <summary class="sidebar-account-workspace">
                     <i class="bi bi-grid" aria-hidden="true"></i>
-                    <span>Change workspace</span>
-                    <i class="bi bi-chevron-down sidebar-workspace-chevron" aria-hidden="true"></i>
+                    <span>Workspace</span>
+                    <i class="bi bi-chevron-right sidebar-workspace-chevron" aria-hidden="true"></i>
                 </summary>
                 <div class="sidebar-workspace-options">
                     <?php foreach ($assignedWorkspaceRoles as $assignedRole): ?>
@@ -347,13 +347,28 @@ $sections = $roleSections[$role] ?? [];
                     <?php endforeach; ?>
                 </div>
             </details>
-            <?php if ($role !== 'cashier'): ?>
-                <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>">
+            <details class="sidebar-preferences-menu">
+                <summary class="sidebar-account-preferences">
                     <i class="bi bi-sliders" aria-hidden="true"></i>
                     <span>Preferences</span>
-                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
-                </a>
-            <?php endif; ?>
+                    <i class="bi bi-chevron-right sidebar-preferences-chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="sidebar-preferences-options">
+                    <div class="sidebar-theme-target" data-sidebar-theme-target></div>
+                    <button type="button" class="sidebar-account-button" data-fullscreen-toggle aria-pressed="false">
+                        <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+                        <span>Full Screen</span>
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                    <?php if ($role !== 'cashier'): ?>
+                        <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>">
+                            <i class="bi bi-bell" aria-hidden="true"></i>
+                            <span>Notifications</span>
+                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </details>
             <a href="<?= sidebar_e(app_url('components/auth/logout.php')) ?>" class="sidebar-account-logout">
                 <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
                 <span>Logout</span>

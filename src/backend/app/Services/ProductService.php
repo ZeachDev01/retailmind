@@ -397,10 +397,18 @@ class ProductService
         if ($qtyChange === 0) {
             throw new RuntimeException('Quantity change cannot be zero.');
         }
-        $roleStmt = $this->pdo->prepare("SELECT r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=?");
+        $roleStmt = $this->pdo->prepare(
+            "SELECT 1
+             FROM users u
+             JOIN roles primary_role ON primary_role.role_id = u.role_id
+             LEFT JOIN user_roles ur ON ur.user_id = u.user_id
+             LEFT JOIN roles assigned_role ON assigned_role.role_id = ur.role_id
+             WHERE u.user_id = ?
+               AND (primary_role.role_name = 'inventory_manager' OR assigned_role.role_name = 'inventory_manager')
+             LIMIT 1"
+        );
         $roleStmt->execute([$userId]);
-        $role = (string)$roleStmt->fetchColumn();
-        if ($role !== 'inventory_manager') {
+        if ($roleStmt->fetchColumn() === false) {
             throw new RuntimeException('Direct stock adjustments require Inventory Manager access.');
         }
         if (mb_strlen($adjustmentReason) < 8) {

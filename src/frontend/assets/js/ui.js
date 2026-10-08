@@ -528,7 +528,40 @@
       });
     }
     if (accountMenu && accountMenuTriggers.length) {
+      const submenus = qsa(".sidebar-workspace-switcher, .sidebar-preferences-menu", accountMenu);
+      const positionSubmenu = (submenu) => {
+        const panel = submenu.querySelector(".sidebar-workspace-options, .sidebar-preferences-options");
+        const anchor = submenu.querySelector("summary").getBoundingClientRect();
+        const menuBounds = accountMenu.getBoundingClientRect();
+        panel.style.left = "0px";
+        panel.style.top = "0px";
+        const width = panel.offsetWidth;
+        const height = panel.offsetHeight;
+        const left = menuBounds.right + 8 + width <= window.innerWidth - 12
+          ? menuBounds.right + 8
+          : Math.max(12, menuBounds.left - width - 8);
+        // Fixed descendants use the transformed account menu as their origin.
+        panel.style.left = `${left - menuBounds.left}px`;
+        panel.style.top = `${Math.max(12, Math.min(anchor.top, window.innerHeight - height - 12)) - menuBounds.top}px`;
+      };
+      submenus.forEach((submenu) => {
+        submenu.addEventListener("toggle", () => {
+          submenu.querySelector("summary").setAttribute("aria-expanded", String(submenu.open));
+          if (!submenu.open) return;
+          submenus.forEach((other) => {
+            if (other !== submenu) other.open = false;
+          });
+          positionSubmenu(submenu);
+        });
+        submenu.querySelector("summary").setAttribute("aria-expanded", "false");
+      });
+      window.addEventListener("resize", () => {
+        submenus.forEach((submenu) => {
+          if (submenu.open) positionSubmenu(submenu);
+        });
+      });
       const setAccountMenuOpen = function (isOpen) {
+        if (!isOpen) submenus.forEach((submenu) => { submenu.open = false; });
         accountMenu.classList.toggle("open", isOpen);
         accountMenu.setAttribute("aria-hidden", isOpen ? "false" : "true");
         accountMenuTriggers.forEach((trigger) => {
@@ -541,12 +574,202 @@
           setAccountMenuOpen(!accountMenu.classList.contains("open"));
         });
       });
-      accountMenu.addEventListener("click", (event) => event.stopPropagation());
-      document.addEventListener("click", () => setAccountMenuOpen(false));
+      document.addEventListener("click", (event) => {
+        if (!accountMenu.contains(event.target)) setAccountMenuOpen(false);
+      });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") setAccountMenuOpen(false);
       });
     }
+  }
+
+  function initFullscreenToggle() {
+    const buttons = qsa("[data-fullscreen-toggle]");
+    if (!buttons.length) return;
+
+    // Navigation stays inside this document's frame to preserve fullscreen.
+    let host = window;
+    try {
+      if (window.parent !== window && window.parent.rmFullscreenHost) host = window.parent;
+    } catch (_) {}
+    const fullscreenDocument = host.document;
+    function syncFrameBackground() {
+      if (host === window) return;
+      const shell = fullscreenDocument.getElementById("rm-fullscreen-shell");
+      const frame = fullscreenDocument.getElementById("rm-fullscreen-page");
+      if (!shell || !frame) return;
+      const theme = document.documentElement.dataset.theme;
+      shell.style.backgroundColor = theme === "dark" ? "#0b1220" : getComputedStyle(document.body).backgroundColor;
+      frame.style.colorScheme = theme === "dark" ? "dark" : "light";
+    }
+    syncFrameBackground();
+    window.addEventListener("retailmind:themechange", syncFrameBackground);
+
+    const fullscreenEnabled =
+      fullscreenDocument.fullscreenEnabled ||
+      fullscreenDocument.webkitFullscreenEnabled ||
+      fullscreenDocument.msFullscreenEnabled;
+
+    function fullscreenElement() {
+      return (
+        fullscreenDocument.fullscreenElement ||
+        fullscreenDocument.webkitFullscreenElement ||
+        fullscreenDocument.msFullscreenElement ||
+        null
+      );
+    }
+
+    function fullscreenActive() {
+      return !!fullscreenElement() || !!host.rmFullscreenFallback;
+    }
+
+    function setFallback(enabled) {
+      host.rmFullscreenFallback = enabled;
+      fullscreenDocument.documentElement.classList.toggle("rm-fullscreen-fallback", enabled);
+      host.dispatchEvent(new host.Event("retailmind:fullscreenchange"));
+    }
+
+    function updateButtons() {
+      const enabled = fullscreenActive();
+      buttons.forEach((button) => {
+        const icon = qs("i:first-child", button);
+        const label = qs("span", button);
+        button.setAttribute("aria-pressed", enabled ? "true" : "false");
+        if (icon) {
+          icon.className = "bi " + (enabled ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
+        }
+        if (label) {
+          label.textContent = enabled ? "Exit Full Screen" : "Full Screen";
+        }
+      });
+    }
+
+    async function enterFullscreen() {
+      const root = fullscreenDocument.documentElement;
+      if (fullscreenEnabled) {
+        try {
+          if (root.requestFullscreen) { await root.requestFullscreen({ navigationUI: "hide" }); return; }
+          if (root.webkitRequestFullscreen) { await root.webkitRequestFullscreen(); return; }
+          if (root.msRequestFullscreen) { await root.msRequestFullscreen(); return; }
+        } catch (_) {
+          // Some mobile browsers expose the API but reject document fullscreen.
+        }
+      }
+      setFallback(true);
+    }
+
+    async function exitFullscreen() {
+      if (host.rmFullscreenFallback) { setFallback(false); return; }
+      if (fullscreenDocument.exitFullscreen) return fullscreenDocument.exitFullscreen();
+      if (fullscreenDocument.webkitExitFullscreen) return fullscreenDocument.webkitExitFullscreen();
+      if (fullscreenDocument.msExitFullscreen) return fullscreenDocument.msExitFullscreen();
+      return Promise.resolve();
+    }
+
+    buttons.forEach((button) => {
+      if (!fullscreenEnabled) {
+        button.title = "Use the available screen space. This browser keeps its controls visible.";
+      }
+      button.addEventListener("click", async () => {
+        try {
+          if (fullscreenActive()) {
+            await exitFullscreen();
+          } else {
+            await enterFullscreen();
+          }
+        } catch (error) {
+          RM.toast("Full screen could not be changed by this browser.", "warning", "Attention");
+        }
+        updateButtons();
+      });
+    });
+    const events = ["fullscreenchange", "webkitfullscreenchange", "MSFullscreenChange"];
+    events.forEach((event) => fullscreenDocument.addEventListener(event, updateButtons));
+    host.addEventListener("retailmind:fullscreenchange", updateButtons);
+    window.addEventListener("pagehide", () => {
+      events.forEach((event) => fullscreenDocument.removeEventListener(event, updateButtons));
+      host.removeEventListener("retailmind:fullscreenchange", updateButtons);
+    });
+    if (host === window) {
+      window.rmFullscreenHost = true;
+      let pendingFrame = null;
+      window.rmNavigateFullscreen = (destination, theme) => {
+        if (pendingFrame) {
+          if (!destination) return pendingFrame;
+          pendingFrame.remove();
+        }
+        let shell = document.getElementById("rm-fullscreen-shell");
+        if (!shell) {
+          shell = document.createElement("div");
+          shell.id = "rm-fullscreen-shell";
+          shell.style.cssText = "position:fixed;inset:0;width:100%;height:100%;height:100dvh;z-index:2147483647;";
+          document.body.append(shell);
+        }
+        const previousFrame = document.getElementById("rm-fullscreen-page");
+        const frame = document.createElement("iframe");
+        frame.name = "rm-fullscreen-" + Date.now();
+        pendingFrame = frame;
+        frame.title = "RetailMind workspace";
+        frame.allow = "fullscreen";
+        frame.setAttribute("allowfullscreen", "");
+        frame.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;";
+        frame.style.colorScheme = theme === "dark" ? "dark" : "light";
+        frame.style.backgroundColor = theme === "dark" ? "#0b1220" : "#fff";
+        frame.addEventListener("load", () => {
+          try {
+            if (frame.contentWindow.location.href === "about:blank") return;
+          } catch (_) {}
+          try { document.title = frame.contentDocument.title; } catch (_) {}
+          // Swap only after loading; animation must never gate visibility or navigation.
+          window.requestAnimationFrame(() => {
+            if (pendingFrame !== frame || !frame.isConnected) return;
+            if (previousFrame) previousFrame.remove();
+            frame.id = "rm-fullscreen-page";
+            frame.style.opacity = "1";
+            frame.style.pointerEvents = "auto";
+            shell.style.backgroundColor = frame.style.backgroundColor;
+            pendingFrame = null;
+            frame.focus();
+            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            if (!reducedMotion && frame.animate) {
+              frame.animate([{ opacity: 0.96 }, { opacity: 1 }], {
+                duration: 120, easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+              });
+            }
+          });
+        });
+        if (destination) frame.src = destination.href;
+        shell.append(frame);
+        return frame;
+      };
+    }
+    window.rmPrepareFullscreenForm = (form, submitter) => {
+      if (host !== window || !fullscreenActive()) return;
+      const target = submitter?.getAttribute("formtarget") || form.target;
+      if (target && target !== "_self") return;
+      const destination = new URL(submitter?.getAttribute("formaction") || form.action || location.href, location.href);
+      if (destination.origin !== location.origin || !/^https?:$/.test(destination.protocol)) return;
+      if ((submitter?.getAttribute("formmethod") || form.method).toLowerCase() === "dialog") return;
+      const frame = host.rmNavigateFullscreen(null, document.documentElement.dataset.theme);
+      if (submitter?.hasAttribute("formtarget")) submitter.setAttribute("formtarget", frame.name);
+      else form.target = frame.name;
+    };
+    document.addEventListener("submit", (event) => {
+      if (!event.defaultPrevented) window.rmPrepareFullscreenForm(event.target, event.submitter);
+    });
+    document.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      if (host === window && !fullscreenActive()) return;
+      const link = event.target.closest("a[href]");
+      if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
+      const destination = new URL(link.href, location.href);
+      if (destination.origin !== location.origin || !/^https?:$/.test(destination.protocol)) return;
+      if (destination.pathname === location.pathname && destination.search === location.search && destination.hash) return;
+      if (/\/auth\/logout\.php$/.test(destination.pathname)) return;
+      event.preventDefault();
+      host.rmNavigateFullscreen(destination, document.documentElement.dataset.theme);
+    });
+    updateButtons();
   }
 
   function initDialogAccessibility() {
@@ -581,6 +804,7 @@
         });
         if (ok) {
           form.dataset.confirmed = "1";
+          window.rmPrepareFullscreenForm?.(form, event.submitter);
           form.submit();
         }
       });
@@ -683,6 +907,7 @@
     initCommandPalette();
     initConnectionStatus();
     initSidebarState();
+    initFullscreenToggle();
     initDialogAccessibility();
     initSmartTables();
   });

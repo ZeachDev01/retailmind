@@ -49,6 +49,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         csrf_verify();
         try {
             // Handle image upload
+            $initialQuantity = filter_var($_POST['initial_stock_quantity'] ?? '0', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 2147483647]]);
+            if ($initialQuantity === false) {
+                throw new RuntimeException('Initial quantity must be a whole number of zero or more.');
+            }
             $productImage = '';
             if (!empty($_FILES['product_image']['name'])) {
                 $file = $_FILES['product_image'];
@@ -94,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'selling_price' => $_POST['selling_price'] ?? 0,
                 'reorder_level' => $_POST['reorder_level'] ?? 10,
                 'preferred_supplier' => $_POST['preferred_supplier'] ?? '',
-                'supplier_lead_time_days' => $_POST['supplier_lead_time_days'] ?? 7,
+                'supplier_lead_time_days' => trim((string)($_POST['supplier_lead_time_days'] ?? '')) === '' ? 0 : $_POST['supplier_lead_time_days'],
                 'safety_stock' => $_POST['safety_stock'] ?? 0,
                 'minimum_order_quantity' => $_POST['minimum_order_quantity'] ?? 1,
                 'units_per_package' => $_POST['units_per_package'] ?? 1,
@@ -106,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'expiration_date' => $_POST['expiration_date'] ?? null,
                 'product_image' => $productImage,
                 'status' => $_POST['status'] ?? 'active',
-                'initial_stock_quantity' => 0,
+                'initial_stock_quantity' => $initialQuantity,
             ], (int)$_SESSION['user_id']);
 
             $newProductStmt = $pdo->prepare(
@@ -202,6 +206,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $categories = $productService->getCategories();
 $products = $productService->getProductsForManagement();
+$existingBrands = $pdo->query("SELECT DISTINCT TRIM(brand) AS brand FROM products WHERE brand IS NOT NULL AND TRIM(brand) <> '' ORDER BY brand")->fetchAll(PDO::FETCH_COLUMN);
+$knownFoodBrands = [
+    "JACK'nJILL", 'Oishi', 'Piattos', 'Nova', 'Chippy', 'Clover', 'Rebisco',
+    'Fita', 'SkyFlakes', 'Hansel', 'Nissin', 'Lucky Me!', 'Indomie', 'Maggi',
+    'Knorr', 'Del Monte', 'Dole', 'Heinz', 'UFC', 'Mama Sita\'s', 'Ajinomoto',
+    'Century', '555', 'Ligo', 'Mega', 'San Marino', 'Argentina', 'CDO',
+    'Purefoods', 'Spam', 'Nestle', 'Nescafe', 'Milo', 'Bear Brand', 'Alaska',
+    'Alpine', 'Anchor', 'Eden', 'Dari Creme', 'Magnolia', 'Selecta',
+    'Gardenia', 'Monde', 'Oreo', 'Cadbury', 'Toblerone', 'KitKat', 'Ferrero',
+    'Nutella', 'Kellogg\'s', 'Quaker', 'Pringles', 'Lay\'s', 'Doritos',
+    'Cheetos', 'Coca-Cola', 'Pepsi', 'Sprite', 'Fanta', 'Royal', 'Mountain Dew',
+    '7UP', 'Tang', 'C2', 'Zesto', 'Dutch Mill', 'Yakult', 'Gatorade',
+];
+$brandSuggestions = [];
+// Prefer the saved spelling when a known brand already exists.
+foreach (array_merge($existingBrands, $knownFoodBrands) as $brand) {
+    $brandKey = strtolower(trim($brand));
+    if (!isset($brandSuggestions[$brandKey])) {
+        $brandSuggestions[$brandKey] = trim($brand);
+    }
+}
+natcasesort($brandSuggestions);
 $activeProducts = $productService->getActiveProducts();
 $variantParents = $products;
 $totalProducts = count($products);
@@ -230,11 +256,75 @@ foreach ($products as $product) {
     <title>Products &amp; Stock</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <style>
-        /* Fix scrolling in wizard modal */
+        /* Keep wizard actions visible while the fields scroll. */
+        #add-product-modal {
+            padding: 12px;
+        }
+
+        #add-product-modal .rm-modal {
+            max-height: calc(100dvh - 24px);
+        }
+
+        #add-product-form {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #add-product-modal .rm-modal-header,
+        #add-product-modal .rm-modal-actions {
+            flex-shrink: 0;
+        }
+
         #add-product-modal .rm-modal-body {
-            max-height: 65vh;
+            min-height: 0;
+            max-height: none;
             overflow-y: auto;
             overflow-x: hidden;
+            overscroll-behavior: contain;
+        }
+
+        #add-product-modal .form-group,
+        #add-product-modal .detail-grid > * {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        #add-product-modal input:not([type="checkbox"]),
+        #add-product-modal select,
+        #add-product-modal img,
+        #add-product-modal video {
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        #add-product-modal .btn[hidden] {
+            display: none;
+        }
+
+        @media (max-width: 640px) {
+            #add-product-modal .rm-modal-actions {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+                padding: 12px;
+            }
+
+            #add-product-modal .rm-modal-actions .btn {
+                min-width: 0;
+                min-height: 44px;
+                white-space: normal;
+            }
+
+            #add-product-modal .wizard-step-indicator {
+                font-size: 11px;
+            }
+
+            #add-product-modal .form-grid,
+            #add-product-modal .detail-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
         }
 
         #add-product-modal .wizard-panel {
@@ -522,17 +612,166 @@ foreach ($products as $product) {
             text-align: center;
         }
 
+        .products-page .main-content {
+            min-width: 0;
+        }
+
+        .product-table-shell .data-table {
+            width: 100%;
+        }
+
+        .product-table-shell .data-table-scroll {
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .product-table-shell .action-cell {
+            min-width: 130px;
+        }
+
+        .product-table-shell .btn {
+            white-space: nowrap;
+        }
+
+        .product-table-shell .product-copy strong,
+        .product-table-shell .product-copy span {
+            max-width: min(34vw, 340px);
+        }
+
+        .bulk-bar {
+            flex-wrap: wrap;
+        }
+
+        .bulk-bar strong {
+            min-width: max-content;
+        }
+
+        #add-product-modal .rm-modal {
+            width: min(880px, calc(100vw - 2rem));
+        }
+
+        #add-product-modal .rm-modal-actions {
+            flex-wrap: wrap;
+        }
+
+        #add-product-modal .u-flex-wrap > input {
+            min-width: min(100%, 240px);
+        }
+
         @media (max-width: 1100px) {
             .catalog-toolbar-primary {
+                display: grid;
+                grid-template-columns: auto minmax(240px, 1fr) minmax(150px, .55fr) minmax(160px, .65fr) auto auto;
+                align-items: end;
+            }
+
+            .catalog-filter-row {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .catalog-utility-controls {
+                grid-column: 1 / -1;
+                justify-content: flex-start;
                 flex-wrap: wrap;
+            }
+
+            .catalog-search,
+            .catalog-field,
+            .catalog-show-field,
+            .catalog-sort-field {
+                min-width: 0;
+            }
+
+            .catalog-toolbar .product-add-trigger {
+                min-width: 92px;
+            }
+
+            .product-table-shell .data-table {
+                min-width: 780px;
+            }
+
+            .product-table-shell .column-category,
+            .product-table-shell .column-price {
+                display: none;
+            }
+
+            .product-table-shell .product-copy strong,
+            .product-table-shell .product-copy span {
+                max-width: min(30vw, 280px);
+            }
+
+            .table-pagination {
+                justify-content: flex-start;
+            }
+
+            .pagination-buttons {
+                display: flex;
+                flex-wrap: wrap;
+                gap: .35rem;
+            }
+        }
+
+        @media (min-width: 641px) and (max-width: 920px) {
+            .catalog-toolbar-primary {
+                grid-template-columns: auto minmax(0, 1fr) minmax(150px, .7fr);
+            }
+
+            .catalog-filter-button,
+            .catalog-toolbar .product-add-menu {
+                grid-column: auto;
+            }
+
+            .catalog-sort-field {
+                grid-column: 2;
+            }
+
+            .catalog-filter-button {
+                justify-self: stretch;
+            }
+
+            .catalog-filter-button,
+            .catalog-toolbar .product-add-trigger {
+                width: 100%;
+            }
+
+            .product-add-menu-list {
+                right: 0;
+                left: auto;
             }
 
             .catalog-filter-row {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .catalog-utility-controls {
-                grid-column: 1 / -1;
+            .product-table-shell .data-table {
+                min-width: 680px;
+            }
+
+            .product-table-shell .column-barcode {
+                display: none;
+            }
+
+            .bulk-bar {
+                align-items: stretch;
+            }
+
+            .bulk-bar strong {
+                width: 100%;
+            }
+
+            .bulk-bar .btn {
+                flex: 1 1 150px;
+            }
+
+            .rm-drawer {
+                width: min(520px, 88vw);
+            }
+
+            #add-product-modal .rm-modal {
+                width: min(760px, calc(100vw - 1.5rem));
+            }
+
+            #add-product-modal .rm-modal-body {
+                max-height: calc(100vh - 13rem);
             }
         }
 
@@ -557,6 +796,85 @@ foreach ($products as $product) {
                 grid-column: auto;
                 justify-content: flex-start;
                 flex-wrap: wrap;
+            }
+
+            .catalog-view-controls > *,
+            .catalog-utility-controls > *,
+            .catalog-filter-button,
+            .catalog-toolbar .product-add-trigger,
+            .product-add-menu,
+            .product-add-menu-list {
+                width: 100%;
+            }
+
+            .catalog-view-controls {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                display: grid;
+            }
+
+            .catalog-icon-button {
+                width: 100%;
+            }
+
+            .catalog-utility-controls select,
+            .catalog-utility-controls .toolbar-count {
+                flex: 1 1 100%;
+            }
+
+            .product-table-shell tr {
+                grid-template-columns: auto minmax(0, 1fr);
+            }
+
+            .product-table-shell td.product-cell,
+            .product-table-shell td.stock-cell,
+            .product-table-shell td.status-cell,
+            .product-table-shell td.action-cell {
+                grid-column: 1 / -1;
+            }
+
+            .product-table-shell .product-copy strong,
+            .product-table-shell .product-copy span {
+                max-width: calc(100vw - 8.5rem);
+            }
+
+            .product-table-shell .stock-cell,
+            .product-table-shell .status-cell {
+                padding-left: calc(40px + .7rem);
+            }
+
+            .product-table-shell .row-actions .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .table-pagination {
+                align-items: stretch;
+            }
+
+            .table-pagination label,
+            .product-pagination-status,
+            .pagination-buttons {
+                width: 100%;
+            }
+
+            .pagination-buttons {
+                justify-content: center;
+            }
+
+            #add-product-modal .rm-modal {
+                width: calc(100vw - 1rem);
+                max-height: calc(100vh - 1rem);
+                border-radius: 12px;
+            }
+
+            #add-product-modal .rm-modal-body {
+                max-height: calc(100vh - 12.5rem);
+                padding: .9rem;
+            }
+
+            #add-product-modal .u-flex-wrap > .btn,
+            #add-product-modal .u-flex-wrap > input {
+                width: 100%;
             }
         }
 
@@ -731,7 +1049,7 @@ foreach ($products as $product) {
             <header class="rm-modal-header">
                 <div>
                     <h2 id="add-product-title">Add Product</h2>
-                    <p>Complete the guided steps. Stock begins at zero and must be received through the approved workflow.</p>
+                    <p>Complete the product details and enter any starting stock.</p>
                 </div><button type="button" class="rm-close" data-close-modal aria-label="Close add product"><i class="bi bi-x-lg"></i></button>
             </header>
             <form method="POST" id="add-product-form" novalidate enctype="multipart/form-data">
@@ -745,7 +1063,7 @@ foreach ($products as $product) {
                     <section class="wizard-panel active" data-panel="1">
                         <div class="form-grid">
                             <div class="form-group full"><label>Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
-                            <div class="form-group"><label>Brand</label><input name="brand" maxlength="120"></div>
+                            <div class="form-group"><label for="product-brand">Brand</label><input name="brand" id="product-brand" maxlength="120" list="product-brand-suggestions" autocomplete="off"><datalist id="product-brand-suggestions"><?php foreach ($brandSuggestions as $brand): ?><option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"></option><?php endforeach; ?></datalist></div>
                             <div class="form-group"><label>Category *</label><select name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
@@ -790,19 +1108,20 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel" data-panel="4">
                         <div class="form-grid">
+                            <div class="form-group full"><label for="initial-stock-quantity">Initial Quantity (Base Units)</label><input id="initial-stock-quantity" type="number" name="initial_stock_quantity" min="0" max="2147483647" step="1" value="0" required><small class="field-help">Total individual units: one box of 24 packs = 24. Leave at 0 if no stock is on hand.</small><small class="field-error">Enter a whole number of zero or more.</small></div>
                             <div class="form-group"><label>Reorder Level</label><input type="number" min="0" name="reorder_level" value="10"></div>
                             <div class="form-group"><label>Safety Stock</label><input type="number" min="0" name="safety_stock" value="0"></div>
                             <div class="form-group"><label>Minimum Order Quantity</label><input type="number" min="1" name="minimum_order_quantity" value="1"></div>
                             <div class="form-group"><label>Units per Package/Case</label><input type="number" min="1" name="units_per_package" value="1"></div>
-                            <div class="form-group"><label>Preferred Supplier</label><input name="preferred_supplier" placeholder="Supplier name"></div>
-                            <div class="form-group"><label>Supplier Lead Time (Days)</label><input type="number" min="0" name="supplier_lead_time_days" value="7"></div>
+                            <div class="form-group"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
+                            <div class="form-group"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>
                             <div class="form-group full"><label>Expiration Date</label><input type="date" name="expiration_date"></div>
                         </div>
                     </section>
 
                     <section class="wizard-panel" data-panel="5">
                         <div class="detail-grid" id="product-review"></div>
-                        <div class="u-info-note"><i class="bi bi-info-circle"></i> The product will start at zero stock. Use Stock Receiving after creation.</div>
+                        <div class="u-info-note"><i class="bi bi-info-circle"></i> Initial quantity is recorded as starting stock. Use Stock Receiving for subsequent deliveries.</div>
                         <div class="form-grid u-mt-1">
                             <label class="form-group full u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" checked>Open printable barcode labels after saving</label>
                             <div class="form-group"><label>Number of labels</label><input type="number" name="label_quantity" value="1" min="1" max="200"></div>
@@ -1344,10 +1663,20 @@ foreach ($products as $product) {
             nextButton.hidden = wizardStep === 5;
             saveButton.hidden = wizardStep !== 5;
             if (wizardStep === 5) renderReview();
+            document.querySelector('#add-product-modal .rm-modal-body').scrollTop = 0;
+            if (wizardStep === 2) {
+                document.getElementById('create-barcode-input').focus({ preventScroll: true });
+            }
         }
 
         function validateStep(step) {
             let valid = true;
+            if (step === 4) {
+                const quantity = document.getElementById('initial-stock-quantity');
+                const invalid = !quantity.validity.valid;
+                quantity.closest('.form-group').classList.toggle('invalid', invalid);
+                return !invalid;
+            }
             const panel = document.querySelector(`.wizard-panel[data-panel="${step}"]`);
             panel.querySelectorAll('.form-group').forEach(group => group.classList.remove('invalid'));
             if (step === 1) {
@@ -1388,8 +1717,17 @@ foreach ($products as $product) {
             if (validateStep(wizardStep)) setWizardStep(wizardStep + 1);
         });
         backButton.addEventListener('click', () => setWizardStep(wizardStep - 1));
+        addProductForm.addEventListener('keydown', event => {
+            if (wizardStep === 2 && event.key === 'Enter' && event.target.matches('input')) {
+                event.preventDefault();
+            }
+        });
         addProductForm.addEventListener('submit', event => {
-            for (let step = 1; step <= 3; step++) {
+            if (wizardStep !== 5) {
+                event.preventDefault();
+                return;
+            }
+            for (let step = 1; step <= 4; step++) {
                 if (!validateStep(step)) {
                     event.preventDefault();
                     setWizardStep(step);
@@ -1411,6 +1749,7 @@ foreach ($products as $product) {
                 ['Barcode', data.get('barcode') || 'Generate automatically'],
                 ['Cost Price', formatMoney(data.get('cost_price'))],
                 ['Selling Price', formatMoney(data.get('selling_price'))],
+                ['Initial Quantity', `${data.get('initial_stock_quantity')} ${data.get('base_unit') || 'piece'}`],
                 ['Reorder / Safety', `${data.get('reorder_level')} / ${data.get('safety_stock')}`],
                 ['Supplier', data.get('preferred_supplier') || '—']
             ];

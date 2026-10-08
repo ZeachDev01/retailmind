@@ -1,6 +1,7 @@
  -- RetailMind canonical database schema and seed data
--- This file is the single source of truth for fresh database imports.
--- It contains the complete schema plus Shalom Main, accounts, products, stock, and required settings.
+-- Fresh install reconciled through 2026-10-08; all 37 migrations are included.
+-- Complete schema plus Store, accounts, products, stock, and required settings.
+-- Existing database: import update.sql instead; this file replaces records.
 -- WARNING: Importing this file drops and recreates existing RetailMind tables.
 
 -- MariaDB dump 10.19  Distrib 10.4.32-MariaDB, for Win64 (AMD64)
@@ -94,18 +95,22 @@ DROP TABLE IF EXISTS `backup_history`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `backup_history` (
-  `backup_id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `backup_id` bigint NOT NULL AUTO_INCREMENT,
   `filename` varchar(255) NOT NULL,
   `backup_type` enum('manual','scheduled','restore') NOT NULL DEFAULT 'manual',
-  `file_size` bigint(20) DEFAULT NULL,
+  `file_size` bigint DEFAULT NULL,
   `status` enum('completed','failed') NOT NULL DEFAULT 'completed',
-  `performed_by` int(11) DEFAULT NULL,
-  `notes` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `performed_by` int DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `snapshot_at` datetime DEFAULT NULL,
+  `envelope_version` varchar(16) DEFAULT NULL,
+  `cipher` varchar(64) DEFAULT NULL,
+  `requested_by_role` varchar(32) DEFAULT NULL,
   PRIMARY KEY (`backup_id`),
   KEY `performed_by` (`performed_by`),
   CONSTRAINT `backup_history_ibfk_1` FOREIGN KEY (`performed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1605,6 +1610,71 @@ CREATE TABLE `users` (
 --
 -- Dumping routines for database 'inventory_system'
 --
+
+-- Tables added by reconciled migrations.
+
+DROP TABLE IF EXISTS `backup_operations`;
+CREATE TABLE `backup_operations` (
+  `operation_key` varchar(64) NOT NULL,
+  `active_slot` tinyint DEFAULT '1',
+  `state` enum('capturing','completed','failed','abandoned') NOT NULL DEFAULT 'capturing',
+  `requested_by` int DEFAULT NULL,
+  `requested_by_role` varchar(32) DEFAULT NULL,
+  `artifact_token` varchar(64) DEFAULT NULL,
+  `artifact_path` varchar(255) DEFAULT NULL,
+  `filename` varchar(255) DEFAULT NULL,
+  `file_size` bigint DEFAULT NULL,
+  `envelope_version` varchar(16) DEFAULT NULL,
+  `cipher` varchar(64) DEFAULT NULL,
+  `snapshot_at` datetime DEFAULT NULL,
+  `started_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `heartbeat_at` datetime DEFAULT NULL,
+  `finished_at` datetime DEFAULT NULL,
+  `detail` text COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`operation_key`),
+  UNIQUE KEY `uq_backup_operations_active` (`active_slot`),
+  KEY `idx_backup_operations_started` (`started_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `restore_preserved_activity`;
+CREATE TABLE `restore_preserved_activity` (
+  `log_id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `action` varchar(255) NOT NULL,
+  `category` enum('store_operation','security','recovery','platform_setting','recovery_account') NOT NULL,
+  `module` varchar(100) DEFAULT NULL,
+  `record_id` int DEFAULT NULL,
+  `previous_value` text COLLATE utf8mb4_unicode_ci,
+  `new_value` text COLLATE utf8mb4_unicode_ci,
+  `metadata` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`log_id`),
+  KEY `user_id` (`user_id`),
+  KEY `idx_activity_log_category_created` (`category`,`created_at`),
+  CONSTRAINT `restore_preserved_activity_chk_1` CHECK (json_valid(`metadata`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `store_write_gate`;
+CREATE TABLE `store_write_gate` (
+  `gate_key` varchar(64) NOT NULL,
+  `paused_at` datetime DEFAULT NULL,
+  `paused_by` int DEFAULT NULL,
+  PRIMARY KEY (`gate_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `user_roles`;
+CREATE TABLE `user_roles` (
+  `user_id` int NOT NULL,
+  `role_id` int NOT NULL,
+  `is_primary` tinyint(1) NOT NULL DEFAULT '0',
+  `assigned_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`,`role_id`),
+  KEY `idx_user_roles_role` (`role_id`),
+  CONSTRAINT `fk_user_roles_role` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_user_roles_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -1808,7 +1878,47 @@ UNLOCK TABLES;
 
 LOCK TABLES `schema_migrations` WRITE;
 /*!40000 ALTER TABLE `schema_migrations` DISABLE KEYS */;
-INSERT INTO `schema_migrations` (`migration_key`, `description`, `applied_at`) VALUES ('2026_07_operational_updates','Suppliers, purchase orders, shifts, held sales, forecast decisions, units, and inventory insights','2026-09-14 07:29:34'),('202608040001_auth_security','Authentication security tables and mandatory password-change support','2026-09-16 23:47:10'),('202608040002_operational_updates','Operational workflow tables and columns','2026-09-16 23:47:10'),('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases','2026-09-16 23:47:11'),('202609130001_branch_management','Branches, branch-scoped users and privilege assignments','2026-09-16 23:47:11'),('202609130002_role_access_update','Make administrator inventory access read-only','2026-09-16 23:47:11'),('202609130003_superadmin_inventory_read_only','Make super administrator inventory access read-only','2026-09-16 23:47:11'),('202609130004_remove_seller_role','Replace the duplicate seller role with cashier','2026-09-16 23:47:11'),('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches','2026-09-16 23:47:11'),('202609170001_admin_profile_images','Nullable generated profile image filename for administrator accounts','2026-09-16 23:47:11'),('202609170001_profile_images','Optional generated profile image filename for user accounts','2026-09-17 01:06:29'),('202609170001_staff_profile_images','Optional profile image filename for staff accounts','2026-09-16 23:59:31'),('202609180002_audit_record_categories','Categorize Protected Audit Records for authority-scoped visibility','2026-09-18 06:13:38'),('202609180003_emergency_access','Durable reason-bound Emergency Access sessions and audit correlation','2026-09-18 06:13:38'),('202609180004_recovery_account','Sealed Recovery Account identity and offline lifecycle state','2026-09-18 06:13:38'),('202609180005_attention_foundation','Shared live attention settings, active state, and notification keys','2026-09-18 06:13:38');
+INSERT INTO `schema_migrations` (`migration_key`, `description`, `applied_at`) VALUES
+('2026_07_operational_updates','Suppliers, purchase orders, shifts, held sales, forecast decisions, units, and inventory insights','2026-09-14 07:29:34'),
+('202608040001_auth_security','Authentication security tables and mandatory password-change support','2026-09-16 23:47:10'),
+('202608040002_operational_updates','Operational workflow tables and columns','2026-09-16 23:47:10'),
+('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases','2026-09-16 23:47:11'),
+('202609130001_branch_management','Branches, branch-scoped users and privilege assignments','2026-09-16 23:47:11'),
+('202609130002_role_access_update','Make administrator inventory access read-only','2026-09-16 23:47:11'),
+('202609130003_superadmin_inventory_read_only','Make super administrator inventory access read-only','2026-09-16 23:47:11'),
+('202609130004_remove_seller_role','Replace the duplicate seller role with cashier','2026-09-16 23:47:11'),
+('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches','2026-09-16 23:47:11'),
+('202609170001_admin_profile_images','Nullable generated profile image filename for administrator accounts','2026-09-16 23:47:11'),
+('202609170001_profile_images','Optional generated profile image filename for user accounts','2026-09-17 01:06:29'),
+('202609170001_staff_profile_images','Optional profile image filename for staff accounts','2026-09-16 23:59:31'),
+('202609180001_singleton_store_scope','Resolve the singleton Store compatibility identity','2026-09-18 06:13:38'),
+('202609180002_audit_record_categories','Categorize Protected Audit Records for authority-scoped visibility','2026-09-18 06:13:38'),
+('202609180003_emergency_access','Durable reason-bound Emergency Access sessions and audit correlation','2026-09-18 06:13:38'),
+('202609180004_recovery_account','Sealed Recovery Account identity and offline lifecycle state','2026-09-18 06:13:38'),
+('202609180005_attention_foundation','Shared live attention settings, active state, and notification keys','2026-09-18 06:13:38'),
+('202609230001_cashier_stock_issues','Link cashier stock-issue reports to shifts and stock movements (ticket #29)','2026-10-07 00:00:00'),
+('202609230002_stock_issue_corrections','Stock-issue correction lifecycle: returned/cancelled states and append-only revision trail (ticket #30)','2026-10-07 00:00:00'),
+('202609240001_stock_issue_oversight_correction_link','Link correction inventory counts to approved stock-issue reports for oversight history (ticket #31)','2026-10-07 00:00:00'),
+('202609240002_dormancy_policy_settings','Seed Dormancy Policy disable-days and warn-days Platform Settings (ticket #60)','2026-10-07 00:00:00'),
+('202609240003_user_disabled_at','Record when a user account transitions to Disabled (ticket #61)','2026-10-07 00:00:00'),
+('202609250001_user_multi_roles','Allow users to hold multiple role templates','2026-10-07 00:00:00'),
+('202609260001_shared_database_backups','Shared encrypted Database Backup coordination for Administrator and Super Administrator','2026-10-07 00:00:00'),
+('202609290001_store_registers','Named physical Registers maintained by Administrators','2026-10-07 00:00:00'),
+('202609290002_cashier_shift_registers','Bind each open Cashier Shift to an exclusively owned Register (ticket #88)','2026-10-07 00:00:00'),
+('202609290003_sale_shift_attribution','Attribute each new sale to the Cashier and Cashier Shift that authorized it (ticket #89)','2026-10-07 00:00:00'),
+('202609290004_cashier_shift_register_lock','Let a Cashier lock an open Cashier Shift and resume it with their own password (ticket #90)','2026-10-07 00:00:00'),
+('202609290005_held_sale_shift_ownership','Keep held sales inside the Cashier Shift that authorized them (ticket #91)','2026-10-07 00:00:00'),
+('202609290006_append_only_cash_refunds','Record append-only Cash Refunds against completed sales (ticket #92)','2026-10-07 00:00:00'),
+('202609300001_accountable_drawer_movements','Record accountable Cashier drawer movements (ticket #94)','2026-10-07 00:00:00'),
+('202609300001_sale_receipt_details','Preserve customer-facing Sale Receipt details at checkout','2026-10-07 00:00:00'),
+('202609300002_cashier_shift_reconciliation','Preserve Cashier Shift reconciliation and review status (ticket #95)','2026-10-07 00:00:00'),
+('202609300003_administrator_shift_intervention','Preserve the closing actor and intervention reason for Cashier Shifts (ticket #96)','2026-10-07 00:00:00'),
+('202609300003_refund_receipt_details','Preserve customer-facing Refund Receipt details atomically','2026-10-07 00:00:00'),
+('202609300004_legacy_register_columns','Upgrade existing Register columns to the current Cashier schema','2026-10-07 00:00:00'),
+('202609300005_register_paper_width','Configure thermal receipt paper width per Register','2026-10-07 00:00:00'),
+('202610010001_checkout_attempts','Persist Cashier checkout identities with committed sale outcomes','2026-10-07 00:00:00'),
+('202610010003_safe_refund_exceptions','Preserve external settlement and specific Cash Refund exception attribution (#113)','2026-10-07 00:00:00'),
+('202610040001_user_theme','Personal display theme for every Staff account','2026-10-07 00:00:00');
 /*!40000 ALTER TABLE `schema_migrations` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1852,3 +1962,62 @@ UPDATE `users` SET `password_hash` = '$2y$12$pmB8fB3r3Br3bBIzEE2v9.RgnbJxZCjCCMq
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed
+
+-- Required migration backfills and defaults for fresh installations.
+INSERT IGNORE INTO user_roles (user_id,role_id,is_primary) SELECT user_id,role_id,1 FROM users WHERE role_id IS NOT NULL;
+INSERT IGNORE INTO store_write_gate (gate_key) VALUES ('store_writes');
+INSERT IGNORE INTO platform_settings (setting_key,setting_value) VALUES ('emergency_access_duration_minutes','15'),('dormancy_disable_days','45'),('dormancy_warn_days','30');
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040001_auth_security','Authentication security tables and mandatory password-change support') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040002_operational_updates','Operational workflow tables and columns') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Branches, branch-scoped users and privilege assignments') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130002_role_access_update','Make administrator inventory access read-only') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130003_superadmin_inventory_read_only','Make super administrator inventory access read-only') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130004_remove_seller_role','Replace the duplicate seller role with cashier') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609170001_profile_images','Optional generated profile image filename for user accounts') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609180001_singleton_store_scope','Resolve the singleton Store compatibility identity') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609180002_audit_record_categories','Categorize Protected Audit Records for authority-scoped visibility') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609180003_emergency_access','Durable reason-bound Emergency Access sessions and audit correlation') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609180004_recovery_account','Sealed Recovery Account identity and offline lifecycle state') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609180005_attention_foundation','Shared live attention settings, active state, and notification keys') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609230001_cashier_stock_issues','Link cashier stock-issue reports to shifts and stock movements (ticket #29)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609230002_stock_issue_corrections','Stock-issue correction lifecycle: returned/cancelled states and append-only revision trail (ticket #30)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609240001_stock_issue_oversight_correction_link','Link correction inventory counts to approved stock-issue reports for oversight history (ticket #31)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609240002_dormancy_policy_settings','Seed Dormancy Policy disable-days and warn-days Platform Settings (ticket #60)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609240003_user_disabled_at','Record when a user account transitions to Disabled (ticket #61)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609250001_user_multi_roles','Allow users to hold multiple role templates') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609260001_shared_database_backups','Shared encrypted Database Backup coordination for Administrator and Super Administrator') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609290001_store_registers','Named physical Registers maintained by Administrators') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609290002_cashier_shift_registers','Bind each open Cashier Shift to an exclusively owned Register (ticket #88)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609290003_sale_shift_attribution','Attribute each new sale to the Cashier and Cashier Shift that authorized it (ticket #89)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609290004_cashier_shift_register_lock','Let a Cashier lock an open Cashier Shift and resume it with their own password (ticket #90)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609290005_held_sale_shift_ownership','Keep held sales inside the Cashier Shift that authorized them (ticket #91)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609290006_append_only_cash_refunds','Record append-only Cash Refunds against completed sales (ticket #92)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300001_accountable_drawer_movements','Record accountable Cashier drawer movements (ticket #94)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300001_sale_receipt_details','Preserve customer-facing Sale Receipt details at checkout') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300002_cashier_shift_reconciliation','Preserve Cashier Shift reconciliation and review status (ticket #95)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300003_administrator_shift_intervention','Preserve the closing actor and intervention reason for Cashier Shifts (ticket #96)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300003_refund_receipt_details','Preserve customer-facing Refund Receipt details atomically') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300004_legacy_register_columns','Upgrade existing Register columns to the current Cashier schema') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300005_register_paper_width','Configure thermal receipt paper width per Register') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010001_checkout_attempts','Persist Cashier checkout identities with committed sale outcomes') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010003_safe_refund_exceptions','Preserve external settlement and specific Cash Refund exception attribution (#113)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610040001_user_theme','Personal display theme for every Staff account') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- Forecast defaults; retain any configured values.
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_history_days','30');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('preferred_history_days','90');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_nonzero_sales_days','5');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('history_window_days','365');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('forecast_period_days','30');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('n_estimators','300');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('max_depth','18');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('min_samples_split','4');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('min_samples_leaf','2');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('retrain_frequency_days','7');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('retrain_new_sales_records','100');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('accuracy_threshold_wape','35.0');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_lower','10');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_upper','90');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('holiday_dates','');

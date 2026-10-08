@@ -40,6 +40,19 @@
 .theme-mobile-menu .theme-options button[aria-pressed="true"] { box-shadow:none; }
 .theme-mobile-menu .theme-options button[aria-pressed="true"]::after { content:""; width:6px; height:12px; margin-left:auto; border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(45deg); }
 .theme-mobile-menu .theme-options small { display:block; font-size:.7rem; color:var(--muted,#6b7280); }
+.sidebar-theme-target .theme-control { display:block; width:100%; color:#dbeafe; }
+.sidebar-theme-target .theme-trigger { width:100%; min-width:0; min-height:42px; padding:.55rem .65rem; border-color:transparent; background:transparent; color:inherit; font-size:.82rem; font-weight:700; }
+.sidebar-theme-target .theme-trigger:hover,
+.sidebar-theme-target .theme-trigger:focus-visible { background:rgba(37,99,235,.18); color:#fff; box-shadow:none; }
+.sidebar-theme-target .theme-trigger svg { width:18px; height:18px; color:#93c5fd; }
+.sidebar-theme-target .theme-menu-panel { position:absolute; top:auto; bottom:calc(100% + .25rem); right:0; width:100%; max-height:min(240px,40vh); overflow-y:auto; overscroll-behavior:contain; margin:0; border-color:rgba(148,163,184,.22); background:#111827; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+.sidebar-theme-target .theme-trigger::after { transform:rotate(225deg); }
+.sidebar-theme-target .theme-mobile-menu[open] .theme-trigger::after { transform:rotate(45deg); }
+.sidebar-theme-target .theme-mobile-menu:not([open]) .theme-menu-panel { display:none; }
+.sidebar-theme-target .theme-mobile-menu .theme-options button { min-height:40px; color:#dbeafe; border-top-color:rgba(148,163,184,.12); background:transparent; font-size:.8rem; }
+.sidebar-theme-target .theme-mobile-menu .theme-options button:hover,
+.sidebar-theme-target .theme-mobile-menu .theme-options button:focus-visible { background:rgba(37,99,235,.18); color:#fff; }
+.sidebar-theme-target .theme-mobile-menu .theme-options button[aria-pressed="true"] { background:rgba(37,99,235,.28); color:#fff; }
 @media(max-width:900px) {
     .theme-options button { min-height:44px; }
     .admin-mobile-topbar:has(.theme-mobile-menu) { height:auto; flex-wrap:wrap; gap:.5rem; padding:.5rem; }

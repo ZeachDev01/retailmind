@@ -111,7 +111,10 @@ class CartWorkspace {
             const form = event.target;
             if (!(form.getAttribute('action') || '').includes('auth/workspace.php') || !this.state) return;
             event.preventDefault(); event.stopImmediatePropagation();
-            run(() => HTMLFormElement.prototype.submit.call(form));
+            run(() => {
+                window.rmPrepareFullscreenForm?.(form, event.submitter);
+                HTMLFormElement.prototype.submit.call(form);
+            });
         }, true);
     }
 }
