@@ -69,6 +69,15 @@ video {
 
 html { scroll-behavior: smooth; }
 body { overflow-x: hidden; }
+/* Persistent app mode keeps the existing navigation inside the available viewport. */
+html.rm-app-fullscreen { height: 100%; overflow: hidden; }
+html.rm-app-fullscreen body {
+    height: 100%;
+    height: 100dvh;
+}
+html.rm-app-fullscreen body:not(.no-scroll) { overflow-y: auto; }
+html.rm-app-fullscreen .app-shell { min-height: 100%; }
+html.rm-app-fullscreen .sidebar { min-height: 100vh; min-height: 100dvh; height: 100vh; height: 100dvh; }
 body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }

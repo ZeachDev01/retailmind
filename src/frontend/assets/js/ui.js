@@ -587,33 +587,30 @@
     if (!button) return;
     const icon = qs("i", button);
     const label = qs("span", button);
-    const activeElement = () =>
-      document.fullscreenElement || document.webkitFullscreenElement || null;
-    const update = () => {
-      const active = !!activeElement();
+    const storageKey = "retailmind_fullscreen";
+    const root = document.documentElement;
+    const update = (active) => {
+      root.classList.toggle("rm-app-fullscreen", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
       if (icon)
         icon.className = "bi " + (active ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
       if (label) label.textContent = active ? "Exit Full Screen" : "Full Screen";
     };
-    button.addEventListener("click", async () => {
+    const restore = () => {
       try {
-        if (activeElement()) {
-          if (document.exitFullscreen) await document.exitFullscreen();
-          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-        } else if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen({ navigationUI: "hide" });
-        } else if (document.documentElement.webkitRequestFullscreen) {
-          document.documentElement.webkitRequestFullscreen();
-        }
-      } catch (_) {
-        RM.toast("Full screen could not be changed by this browser.", "warning", "Attention");
-      }
-      update();
+        update(localStorage.getItem(storageKey) === "1");
+      } catch (_) {} // Storage may be unavailable in private/restricted browsers.
+    };
+    button.addEventListener("click", () => {
+      const active = !root.classList.contains("rm-app-fullscreen");
+      update(active);
+      try {
+        localStorage.setItem(storageKey, active ? "1" : "0");
+      } catch (_) {}
     });
-    document.addEventListener("fullscreenchange", update);
-    document.addEventListener("webkitfullscreenchange", update);
-    update();
+    // Native fullscreen ends on PHP navigation and cannot be restored without a gesture.
+    window.addEventListener("pageshow", restore);
+    restore();
   }
 
   function initDialogAccessibility() {
