@@ -592,6 +592,17 @@
       if (window.parent !== window && window.parent.rmFullscreenHost) host = window.parent;
     } catch (_) {}
     const fullscreenDocument = host.document;
+    function syncFrameBackground() {
+      if (host === window) return;
+      const shell = fullscreenDocument.getElementById("rm-fullscreen-shell");
+      const frame = fullscreenDocument.getElementById("rm-fullscreen-page");
+      if (!shell || !frame) return;
+      const theme = document.documentElement.dataset.theme;
+      shell.style.backgroundColor = theme === "dark" ? "#0b1220" : getComputedStyle(document.body).backgroundColor;
+      frame.style.colorScheme = theme === "dark" ? "dark" : "light";
+    }
+    syncFrameBackground();
+    window.addEventListener("retailmind:themechange", syncFrameBackground);
 
     const fullscreenEnabled =
       fullscreenDocument.fullscreenEnabled ||
@@ -607,8 +618,18 @@
       );
     }
 
+    function fullscreenActive() {
+      return !!fullscreenElement() || !!host.rmFullscreenFallback;
+    }
+
+    function setFallback(enabled) {
+      host.rmFullscreenFallback = enabled;
+      fullscreenDocument.documentElement.classList.toggle("rm-fullscreen-fallback", enabled);
+      host.dispatchEvent(new host.Event("retailmind:fullscreenchange"));
+    }
+
     function updateButtons() {
-      const enabled = !!fullscreenElement();
+      const enabled = fullscreenActive();
       buttons.forEach((button) => {
         const icon = qs("i:first-child", button);
         const label = qs("span", button);
@@ -624,13 +645,20 @@
 
     async function enterFullscreen() {
       const root = fullscreenDocument.documentElement;
-      if (root.requestFullscreen) return root.requestFullscreen();
-      if (root.webkitRequestFullscreen) return root.webkitRequestFullscreen();
-      if (root.msRequestFullscreen) return root.msRequestFullscreen();
-      return Promise.reject(new Error("Fullscreen is not supported."));
+      if (fullscreenEnabled) {
+        try {
+          if (root.requestFullscreen) { await root.requestFullscreen({ navigationUI: "hide" }); return; }
+          if (root.webkitRequestFullscreen) { await root.webkitRequestFullscreen(); return; }
+          if (root.msRequestFullscreen) { await root.msRequestFullscreen(); return; }
+        } catch (_) {
+          // Some mobile browsers expose the API but reject document fullscreen.
+        }
+      }
+      setFallback(true);
     }
 
     async function exitFullscreen() {
+      if (host.rmFullscreenFallback) { setFallback(false); return; }
       if (fullscreenDocument.exitFullscreen) return fullscreenDocument.exitFullscreen();
       if (fullscreenDocument.webkitExitFullscreen) return fullscreenDocument.webkitExitFullscreen();
       if (fullscreenDocument.msExitFullscreen) return fullscreenDocument.msExitFullscreen();
@@ -639,13 +667,11 @@
 
     buttons.forEach((button) => {
       if (!fullscreenEnabled) {
-        button.disabled = true;
-        button.title = "Full screen is not available in this browser.";
-        return;
+        button.title = "Use the available screen space. This browser keeps its controls visible.";
       }
       button.addEventListener("click", async () => {
         try {
-          if (fullscreenElement()) {
+          if (fullscreenActive()) {
             await exitFullscreen();
           } else {
             await enterFullscreen();
@@ -658,35 +684,88 @@
     });
     const events = ["fullscreenchange", "webkitfullscreenchange", "MSFullscreenChange"];
     events.forEach((event) => fullscreenDocument.addEventListener(event, updateButtons));
+    host.addEventListener("retailmind:fullscreenchange", updateButtons);
     window.addEventListener("pagehide", () => {
       events.forEach((event) => fullscreenDocument.removeEventListener(event, updateButtons));
+      host.removeEventListener("retailmind:fullscreenchange", updateButtons);
     });
     if (host === window) {
       window.rmFullscreenHost = true;
-      document.addEventListener("click", (event) => {
-        if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !fullscreenElement()) return;
-        const link = event.target.closest("a[href]");
-        if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
-        const destination = new URL(link.href, location.href);
-        if (destination.origin !== location.origin || !/^https?:$/.test(destination.protocol)) return;
-        if (destination.pathname === location.pathname && destination.search === location.search && destination.hash) return;
-        event.preventDefault();
-        let frame = document.getElementById("rm-fullscreen-page");
-        if (!frame) {
-          frame = document.createElement("iframe");
-          frame.id = "rm-fullscreen-page";
-          frame.title = "RetailMind workspace";
-          frame.allow = "fullscreen";
-          frame.setAttribute("allowfullscreen", "");
-          frame.style.cssText = "position:fixed;inset:0;width:100%;height:100%;border:0;background:var(--theme-bg, #fff);z-index:2147483647;";
-          frame.addEventListener("load", () => {
-            try { document.title = frame.contentDocument.title; } catch (_) {}
-          });
-          document.body.append(frame);
+      let pendingFrame = null;
+      window.rmNavigateFullscreen = (destination, theme) => {
+        if (pendingFrame) return pendingFrame;
+        let shell = document.getElementById("rm-fullscreen-shell");
+        if (!shell) {
+          shell = document.createElement("div");
+          shell.id = "rm-fullscreen-shell";
+          shell.style.cssText = "position:fixed;inset:0;width:100%;height:100%;height:100dvh;z-index:2147483647;";
+          document.body.append(shell);
         }
-        frame.src = destination.href;
-      });
+        const previousFrame = document.getElementById("rm-fullscreen-page");
+        const frame = document.createElement("iframe");
+        frame.name = "rm-fullscreen-" + Date.now();
+        pendingFrame = frame;
+        frame.title = "RetailMind workspace";
+        frame.allow = "fullscreen";
+        frame.setAttribute("allowfullscreen", "");
+        frame.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;";
+        frame.style.colorScheme = theme === "dark" ? "dark" : "light";
+        frame.style.backgroundColor = theme === "dark" ? "#0b1220" : "#fff";
+        frame.addEventListener("load", () => {
+          try {
+            if (frame.contentWindow.location.href === "about:blank") return;
+          } catch (_) {}
+          try { document.title = frame.contentDocument.title; } catch (_) {}
+          // Paint the loaded page before replacing the current visible page.
+          window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+            if (previousFrame) previousFrame.removeAttribute("id");
+            frame.id = "rm-fullscreen-page";
+            frame.style.opacity = "1";
+            frame.style.pointerEvents = "auto";
+            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            const animation = !reducedMotion && frame.animate
+              ? frame.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: "ease-out" })
+              : null;
+            const finish = () => {
+              if (previousFrame) previousFrame.remove();
+              shell.style.backgroundColor = frame.style.backgroundColor;
+              pendingFrame = null;
+            };
+            if (animation) animation.finished.then(finish, finish);
+            else finish();
+          }));
+        });
+        if (destination) frame.src = destination.href;
+        shell.append(frame);
+        return frame;
+      };
     }
+    window.rmPrepareFullscreenForm = (form, submitter) => {
+      if (host !== window || !fullscreenActive()) return;
+      const target = submitter?.getAttribute("formtarget") || form.target;
+      if (target && target !== "_self") return;
+      const destination = new URL(submitter?.getAttribute("formaction") || form.action || location.href, location.href);
+      if (destination.origin !== location.origin || !/^https?:$/.test(destination.protocol)) return;
+      if ((submitter?.getAttribute("formmethod") || form.method).toLowerCase() === "dialog") return;
+      const frame = host.rmNavigateFullscreen(null, document.documentElement.dataset.theme);
+      if (submitter?.hasAttribute("formtarget")) submitter.setAttribute("formtarget", frame.name);
+      else form.target = frame.name;
+    };
+    document.addEventListener("submit", (event) => {
+      if (!event.defaultPrevented) window.rmPrepareFullscreenForm(event.target, event.submitter);
+    });
+    document.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      if (host === window && !fullscreenActive()) return;
+      const link = event.target.closest("a[href]");
+      if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
+      const destination = new URL(link.href, location.href);
+      if (destination.origin !== location.origin || !/^https?:$/.test(destination.protocol)) return;
+      if (destination.pathname === location.pathname && destination.search === location.search && destination.hash) return;
+      if (/\/auth\/logout\.php$/.test(destination.pathname)) return;
+      event.preventDefault();
+      host.rmNavigateFullscreen(destination, document.documentElement.dataset.theme);
+    });
     updateButtons();
   }
 
@@ -722,6 +801,7 @@
         });
         if (ok) {
           form.dataset.confirmed = "1";
+          window.rmPrepareFullscreenForm?.(form, event.submitter);
           form.submit();
         }
       });

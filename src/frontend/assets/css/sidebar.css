@@ -497,6 +497,15 @@ button.sidebar-workspace-option:focus-visible {
     min-width: 0;
 }
 
+html.rm-fullscreen-fallback {
+    min-height: 100%;
+    min-height: 100dvh;
+}
+html.rm-fullscreen-fallback body {
+    min-height: 100%;
+    min-height: 100dvh;
+}
+
 body.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-width); flex-basis: var(--sidebar-collapsed-width); }
 body.sidebar-collapsed .sidebar-brand-copy,
 body.sidebar-collapsed .sidebar-section-title,
