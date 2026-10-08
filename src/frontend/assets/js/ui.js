@@ -574,8 +574,9 @@
           setAccountMenuOpen(!accountMenu.classList.contains("open"));
         });
       });
-      accountMenu.addEventListener("click", (event) => event.stopPropagation());
-      document.addEventListener("click", () => setAccountMenuOpen(false));
+      document.addEventListener("click", (event) => {
+        if (!accountMenu.contains(event.target)) setAccountMenuOpen(false);
+      });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") setAccountMenuOpen(false);
       });
