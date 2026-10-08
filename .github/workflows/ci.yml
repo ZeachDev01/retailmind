@@ -50,3 +50,14 @@ jobs:
           port: 21
           security: strict
           server-dir: /htdocs/
+
+      # The sync cache can skip .env even if it was removed from the server.
+      - name: Upload production environment
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          curl --fail --silent --show-error --ssl-reqd \
+            --user "$FTP_USERNAME:$FTP_PASSWORD" \
+            --upload-file .env "ftp://$FTP_SERVER/htdocs/.env"

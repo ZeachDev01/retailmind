@@ -91,6 +91,14 @@ message until these values are configured. It generates `.env` during deployment
 the database itself must still be imported through phpMyAdmin.
 Change the initial Super Administrator password before exposing the site.
 
+For a manual upload, copy `.env.infinityfree.example` to `htdocs/.env` (beside
+`index.php`, named exactly `.env`, without `.txt`). Replace its four
+`REPLACE_WITH_...` values using the hosting account's MySQL details. The password
+is the hosting/database password, not your InfinityFree website login password.
+Enable hidden-file visibility in your FTP client if `.env` is not listed.
+The real `.env` is intentionally excluded from Git, so uploading a GitHub source
+archive alone does not supply database credentials. Never commit the filled file.
+
 If the hosted page says "RetailMind cannot reach its data", read the latest
 error in `htdocs/src/backend/storage/logs/app.log` through the hosting File
 Manager. Keep `APP_DEBUG=false` on the live site. Confirm `htdocs/.env` exists
