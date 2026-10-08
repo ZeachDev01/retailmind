@@ -582,6 +582,40 @@
     }
   }
 
+  function initFullscreenToggle() {
+    const button = qs("[data-fullscreen-toggle]");
+    if (!button) return;
+    const icon = qs("i", button);
+    const label = qs("span", button);
+    const activeElement = () =>
+      document.fullscreenElement || document.webkitFullscreenElement || null;
+    const update = () => {
+      const active = !!activeElement();
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      if (icon)
+        icon.className = "bi " + (active ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
+      if (label) label.textContent = active ? "Exit Full Screen" : "Full Screen";
+    };
+    button.addEventListener("click", async () => {
+      try {
+        if (activeElement()) {
+          if (document.exitFullscreen) await document.exitFullscreen();
+          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        } else if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          document.documentElement.webkitRequestFullscreen();
+        }
+      } catch (_) {
+        RM.toast("Full screen could not be changed by this browser.", "warning", "Attention");
+      }
+      update();
+    });
+    document.addEventListener("fullscreenchange", update);
+    document.addEventListener("webkitfullscreenchange", update);
+    update();
+  }
+
   function initDialogAccessibility() {
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
@@ -716,6 +750,7 @@
     initCommandPalette();
     initConnectionStatus();
     initSidebarState();
+    initFullscreenToggle();
     initDialogAccessibility();
     initSmartTables();
   });
