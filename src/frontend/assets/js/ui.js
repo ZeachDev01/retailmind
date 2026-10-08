@@ -2,6 +2,7 @@
   "use strict";
 
   const RM = (window.RetailMindUI = window.RetailMindUI || {});
+  RM.navigate = (url) => window.RetailMindNavigation ? window.RetailMindNavigation.navigate(url) : window.location.assign(url);
 
   function qs(selector, root) {
     return (root || document).querySelector(selector);
@@ -312,10 +313,10 @@
     });
     if (flash && flash.dataset.redirect) {
       if (hasSwal && lastAlert) {
-        lastAlert.then(() => window.location.assign(flash.dataset.redirect));
+        lastAlert.then(() => RM.navigate(flash.dataset.redirect));
       } else if (!hasSwal) {
         window.setTimeout(
-          () => window.location.assign(flash.dataset.redirect),
+          () => RM.navigate(flash.dataset.redirect),
           3500,
         );
       }
@@ -459,7 +460,7 @@
         render();
       }
       if (event.key === "Enter" && visibleItems[activeIndex]) {
-        window.location.href = visibleItems[activeIndex].href;
+        RM.navigate(visibleItems[activeIndex].href);
       }
     });
     document.addEventListener("keydown", (event) => {
@@ -587,24 +588,8 @@
     const buttons = qsa("[data-fullscreen-toggle]");
     if (!buttons.length) return;
 
-    // Navigation stays inside this document's frame to preserve fullscreen.
-    let host = window;
-    try {
-      if (window.parent !== window && window.parent.rmFullscreenHost) host = window.parent;
-    } catch (_) {}
-    const fullscreenDocument = host.document;
-    function syncFrameBackground() {
-      if (host === window) return;
-      const shell = fullscreenDocument.getElementById("rm-fullscreen-shell");
-      const frame = fullscreenDocument.getElementById("rm-fullscreen-page");
-      if (!shell || !frame) return;
-      const theme = document.documentElement.dataset.theme;
-      shell.style.backgroundColor = theme === "dark" ? "#0b1220" : getComputedStyle(document.body).backgroundColor;
-      frame.style.colorScheme = theme === "dark" ? "dark" : "light";
-    }
-    syncFrameBackground();
-    window.addEventListener("retailmind:themechange", syncFrameBackground);
-
+    const host = window;
+    const fullscreenDocument = document;
     const fullscreenEnabled =
       fullscreenDocument.fullscreenEnabled ||
       fullscreenDocument.webkitFullscreenEnabled ||
@@ -690,85 +675,6 @@
       events.forEach((event) => fullscreenDocument.removeEventListener(event, updateButtons));
       host.removeEventListener("retailmind:fullscreenchange", updateButtons);
     });
-    if (host === window) {
-      window.rmFullscreenHost = true;
-      let pendingFrame = null;
-      window.rmNavigateFullscreen = (destination, theme) => {
-        if (pendingFrame) {
-          if (!destination) return pendingFrame;
-          pendingFrame.remove();
-        }
-        let shell = document.getElementById("rm-fullscreen-shell");
-        if (!shell) {
-          shell = document.createElement("div");
-          shell.id = "rm-fullscreen-shell";
-          shell.style.cssText = "position:fixed;inset:0;width:100%;height:100%;height:100dvh;z-index:2147483647;";
-          document.body.append(shell);
-        }
-        const previousFrame = document.getElementById("rm-fullscreen-page");
-        const frame = document.createElement("iframe");
-        frame.name = "rm-fullscreen-" + Date.now();
-        pendingFrame = frame;
-        frame.title = "RetailMind workspace";
-        frame.allow = "fullscreen";
-        frame.setAttribute("allowfullscreen", "");
-        frame.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;";
-        frame.style.colorScheme = theme === "dark" ? "dark" : "light";
-        frame.style.backgroundColor = theme === "dark" ? "#0b1220" : "#fff";
-        frame.addEventListener("load", () => {
-          try {
-            if (frame.contentWindow.location.href === "about:blank") return;
-          } catch (_) {}
-          try { document.title = frame.contentDocument.title; } catch (_) {}
-          // Swap only after loading; animation must never gate visibility or navigation.
-          window.requestAnimationFrame(() => {
-            if (pendingFrame !== frame || !frame.isConnected) return;
-            if (previousFrame) previousFrame.remove();
-            frame.id = "rm-fullscreen-page";
-            frame.style.opacity = "1";
-            frame.style.pointerEvents = "auto";
-            shell.style.backgroundColor = frame.style.backgroundColor;
-            pendingFrame = null;
-            frame.focus();
-            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            if (!reducedMotion && frame.animate) {
-              frame.animate([{ opacity: 0.96 }, { opacity: 1 }], {
-                duration: 120, easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-              });
-            }
-          });
-        });
-        if (destination) frame.src = destination.href;
-        shell.append(frame);
-        return frame;
-      };
-    }
-    window.rmPrepareFullscreenForm = (form, submitter) => {
-      if (host !== window || !fullscreenActive()) return;
-      const target = submitter?.getAttribute("formtarget") || form.target;
-      if (target && target !== "_self") return;
-      const destination = new URL(submitter?.getAttribute("formaction") || form.action || location.href, location.href);
-      if (destination.origin !== location.origin || !/^https?:$/.test(destination.protocol)) return;
-      if ((submitter?.getAttribute("formmethod") || form.method).toLowerCase() === "dialog") return;
-      const frame = host.rmNavigateFullscreen(null, document.documentElement.dataset.theme);
-      if (submitter?.hasAttribute("formtarget")) submitter.setAttribute("formtarget", frame.name);
-      else form.target = frame.name;
-    };
-    document.addEventListener("submit", (event) => {
-      if (!event.defaultPrevented) window.rmPrepareFullscreenForm(event.target, event.submitter);
-    });
-    document.addEventListener("click", (event) => {
-      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-      if (host === window && !fullscreenActive()) return;
-      const link = event.target.closest("a[href]");
-      if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
-      const destination = new URL(link.href, location.href);
-      if (destination.origin !== location.origin || !/^https?:$/.test(destination.protocol)) return;
-      if (destination.pathname === location.pathname && destination.search === location.search && destination.hash) return;
-      if (/\/auth\/logout\.php$/.test(destination.pathname)) return;
-      event.preventDefault();
-      host.rmNavigateFullscreen(destination, document.documentElement.dataset.theme);
-    });
     updateButtons();
   }
 
@@ -804,8 +710,7 @@
         });
         if (ok) {
           form.dataset.confirmed = "1";
-          window.rmPrepareFullscreenForm?.(form, event.submitter);
-          form.submit();
+          form.requestSubmit(event.submitter || undefined);
         }
       });
     });
@@ -901,14 +806,19 @@
     });
   }
 
-  document.addEventListener("DOMContentLoaded", function () {
+  RM.initPageContent = function () {
     initQueryToasts();
     initServerNotifications();
+    initDialogAccessibility();
+    initSmartTables();
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
     initCommandPalette();
     initConnectionStatus();
     initSidebarState();
     initFullscreenToggle();
-    initDialogAccessibility();
-    initSmartTables();
+    if (window.RetailMindNavigation) window.RetailMindNavigation.initializePage(RM.initPageContent);
+    else RM.initPageContent();
   });
 })();

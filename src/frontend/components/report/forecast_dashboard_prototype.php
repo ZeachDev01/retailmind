@@ -294,7 +294,7 @@ function forecast_prototype_chart(string $points, array $daily): void
         const url = new URL(window.location.href);
         const index = variants.indexOf(current);
         url.searchParams.set('variant', variants[(index + direction + variants.length) % variants.length]);
-        window.location.href = url.toString();
+        RetailMindUI.navigate(url.toString());
     }
     document.querySelectorAll('[data-prototype-direction]').forEach((button) => {
         button.addEventListener('click', () => move(Number(button.dataset.prototypeDirection)));

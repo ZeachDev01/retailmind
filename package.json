@@ -6,6 +6,8 @@
     "test:e2e": "cross-env RUN_DB_TESTS=1 node src/backend/tests/inventory_counts_scan_browser_test.js && cross-env RUN_DB_TESTS=1 node src/backend/tests/stock_receiving_scan_browser_test.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^26.6.4",
     "cross-env": "^10.1.0",
     "playwright": "^1.63.0"
   }

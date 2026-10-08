@@ -251,7 +251,17 @@ $roleSections = [
 ];
 
 $sections = $roleSections[$role] ?? [];
+$GLOBALS['rm_navigation_flash'] = $flashMessages;
+$GLOBALS['rm_navigation_shell'] = [
+    'name' => $sidebarUserName,
+    'avatar' => profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage, 'sidebar-avatar'),
+    'mobileAvatar' => profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage),
+    'notifications' => $notificationCount,
+];
 ?>
+<!--rm-shell-start-->
+<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/page-navigation.css')) ?>">
+<script src="<?= sidebar_e(app_url('assets/js/page-navigation.js')) ?>" data-workspace="<?= sidebar_e((string)$role) ?>"></script>
 <link rel="stylesheet" href="<?= sidebar_e($avatarStylesheetUrl) ?>" data-avatar-styles>
 <script>
     (function() {
@@ -411,15 +421,17 @@ $sections = $roleSections[$role] ?? [];
 require_once __DIR__ . '/../../backend/app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../../backend/app/Services/HeldSaleService.php';
 $cartRecoveryShift = $role === 'cashier' ? (new \App\Services\CashierShiftService($pdo))->getOpenShift((int)$_SESSION['user_id']) : null;
-?>
-<script src="<?= sidebar_e(app_url('assets/js/cart-workspace.js')) ?>"></script>
-<script>
-window.cartWorkspace = new CartWorkspace(<?= json_encode([
+$cartWorkspaceContext = [
     'cashier' => (int)$_SESSION['user_id'], 'shift' => (int)($cartRecoveryShift['shift_id'] ?? 0),
     'workspace' => $role, 'locked' => !empty($cartRecoveryShift['locked_at']),
     'endpoint' => app_url('components/barcodeScanner/apiScanner/held_sales.php'),
     'csrf' => csrf_token(), 'reasons' => \App\Services\HeldSaleService::DISCARD_REASONS,
-], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+];
+$GLOBALS['rm_navigation_cart'] = $cartWorkspaceContext;
+?>
+<script src="<?= sidebar_e(app_url('assets/js/cart-workspace.js')) ?>"></script>
+<script>
+window.cartWorkspace = new CartWorkspace(<?= json_encode($cartWorkspaceContext, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
 cartWorkspace.bindNavigation();
 </script>
 
@@ -504,11 +516,6 @@ cartWorkspace.bindNavigation();
             overlay.addEventListener('click', function() {
                 setSidebarOpen(false);
             });
-            sidebar.querySelectorAll('a').forEach(function(link) {
-                link.addEventListener('click', function() {
-                    setSidebarOpen(false);
-                });
-            });
             window.addEventListener('resize', function() {
                 if (window.innerWidth > 900) {
                     setSidebarOpen(false);
@@ -552,3 +559,4 @@ cartWorkspace.bindNavigation();
         });
     });
 </script>
+<!--rm-shell-end-->

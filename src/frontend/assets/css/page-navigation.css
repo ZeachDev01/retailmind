@@ -1,0 +1,23 @@
+.page-navigation-status {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    color: inherit;
+    background: var(--surface, Canvas);
+    border: 1px solid var(--border, #94a3b8);
+    border-radius: .5rem;
+}
+.page-navigation-spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: page-navigation-spin .7s linear infinite;
+}
+@keyframes page-navigation-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .page-navigation-spinner { animation: none; }
+}

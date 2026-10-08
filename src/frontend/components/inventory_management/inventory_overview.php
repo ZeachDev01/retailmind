@@ -217,6 +217,7 @@ $recent_movements = $recentStmt->fetchAll();
 <?php include __DIR__ . '/../modals/product_overview/expiredStock.php'; ?>
 <?php include __DIR__ . '/../modals/product_overview/product.php'; ?>
 <script>
+window.addEventListener('pagehide', () => document.documentElement.classList.remove('overview-fefo-active'));
 document.addEventListener('DOMContentLoaded', function () {
     const overviewTabs = Array.from(document.querySelectorAll('[data-overview-tab]'));
     const overviewTabPanels = Array.from(document.querySelectorAll('[data-overview-tab-panel]'));

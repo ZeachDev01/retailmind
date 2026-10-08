@@ -1556,7 +1556,7 @@ document.querySelectorAll('[data-pos-focus]').forEach(button => {
             skuInput.focus();
             skuInput.select();
         } else if (target === 'find') {
-            window.location.href = findProductUrl;
+            RetailMindUI.navigate(findProductUrl);
         } else if (target === 'cash') {
             paymentMethod.value = 'cash';
             updatePaymentFields();
@@ -1616,7 +1616,7 @@ document.addEventListener('keydown', event => {
     }
     if (event.key === 'F3') {
         event.preventDefault();
-        window.location.href = findProductUrl;
+        RetailMindUI.navigate(findProductUrl);
         return;
     }
     if (event.key === 'F4') {

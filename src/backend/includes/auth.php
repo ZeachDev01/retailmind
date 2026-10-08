@@ -11,6 +11,7 @@ require_once __DIR__ . '/theme.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/password_policy.php';
 require_once __DIR__ . '/profile_images.php';
+require_once __DIR__ . '/page_navigation.php';
 
 function app_base_url(): string
 {

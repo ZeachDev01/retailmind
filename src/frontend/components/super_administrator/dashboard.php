@@ -316,7 +316,7 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                 window.setTimeout(refreshWhenSafe, 30000);
                 return;
             }
-            window.location.reload();
+            RetailMindUI.navigate(window.location.href);
         };
 
         const staleAt = Date.parse((dashboard.dataset.staleAfter || '').replace(' ', 'T'));

@@ -179,7 +179,7 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
                 window.setTimeout(refreshWhenSafe, 30000);
                 return;
             }
-            window.location.assign('<?= $escape($rangeUrl) ?>');
+            RetailMindUI.navigate('<?= $escape($rangeUrl) ?>');
         };
         const staleAt = Date.parse((dashboard.dataset.staleAfter || '').replace(' ', 'T'));
         window.setInterval(() => { if (Number.isFinite(staleAt) && Date.now() >= staleAt) staleNotice.hidden = false; }, 30000);

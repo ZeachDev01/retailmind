@@ -160,7 +160,7 @@ if (categoryButtons) {
 
 document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
-        window.location.href = posUrl;
+        RetailMindUI.navigate(posUrl);
     }
 });
 

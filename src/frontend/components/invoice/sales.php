@@ -387,7 +387,7 @@ try {
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Edit Receipt #<?= $sale_id ?></h2>
-                <button type="button" class="modal-close" title="Close" onclick="window.location.href='<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>'">&times;</button>
+                <button type="button" class="modal-close" title="Close" onclick="RetailMindUI.navigate('<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>')">&times;</button>
             </div>
             <div class="receipt-container">
                 <form method="POST">
