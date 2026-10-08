@@ -582,6 +582,79 @@
     }
   }
 
+  function initFullscreenToggle() {
+    const buttons = qsa("[data-fullscreen-toggle]");
+    if (!buttons.length) return;
+
+    const fullscreenEnabled =
+      document.fullscreenEnabled ||
+      document.webkitFullscreenEnabled ||
+      document.msFullscreenEnabled;
+
+    function fullscreenElement() {
+      return (
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement ||
+        null
+      );
+    }
+
+    function updateButtons() {
+      const enabled = !!fullscreenElement();
+      buttons.forEach((button) => {
+        const icon = qs("i:first-child", button);
+        const label = qs("span", button);
+        button.setAttribute("aria-pressed", enabled ? "true" : "false");
+        if (icon) {
+          icon.className = "bi " + (enabled ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
+        }
+        if (label) {
+          label.textContent = enabled ? "Exit Full Screen" : "Full Screen";
+        }
+      });
+    }
+
+    async function enterFullscreen() {
+      const root = document.documentElement;
+      if (root.requestFullscreen) return root.requestFullscreen();
+      if (root.webkitRequestFullscreen) return root.webkitRequestFullscreen();
+      if (root.msRequestFullscreen) return root.msRequestFullscreen();
+      return Promise.reject(new Error("Fullscreen is not supported."));
+    }
+
+    async function exitFullscreen() {
+      if (document.exitFullscreen) return document.exitFullscreen();
+      if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+      if (document.msExitFullscreen) return document.msExitFullscreen();
+      return Promise.resolve();
+    }
+
+    buttons.forEach((button) => {
+      if (!fullscreenEnabled) {
+        button.disabled = true;
+        button.title = "Full screen is not available in this browser.";
+        return;
+      }
+      button.addEventListener("click", async () => {
+        try {
+          if (fullscreenElement()) {
+            await exitFullscreen();
+          } else {
+            await enterFullscreen();
+          }
+        } catch (error) {
+          RM.toast("Full screen could not be changed by this browser.", "warning", "Attention");
+        }
+        updateButtons();
+      });
+    });
+    document.addEventListener("fullscreenchange", updateButtons);
+    document.addEventListener("webkitfullscreenchange", updateButtons);
+    document.addEventListener("MSFullscreenChange", updateButtons);
+    updateButtons();
+  }
+
   function initDialogAccessibility() {
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
@@ -716,6 +789,7 @@
     initCommandPalette();
     initConnectionStatus();
     initSidebarState();
+    initFullscreenToggle();
     initDialogAccessibility();
     initSmartTables();
   });
