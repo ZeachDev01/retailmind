@@ -70,7 +70,7 @@ locked settings must permit those limits, including multipart request overhead.
 Check the effective web PHP settings after deployment; CLI settings may differ.
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` runs the full checks on
-pushes and pull requests. On a push to `main`, a separate deployment job builds
+pushes and pull requests. On a push to branch `1`, a separate deployment job builds
 the production PHP release, checks its PHP syntax and file sizes, then uploads
 it to InfinityFree using explicit FTPS. The upload can proceed when an unrelated
 full-suite test fails. It does not upload
