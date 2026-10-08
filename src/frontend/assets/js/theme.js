@@ -13,6 +13,7 @@
     const apply = () => {
         document.documentElement.dataset.theme = mode === 'system' ? (device.matches ? 'dark' : 'light') : mode;
         document.documentElement.style.colorScheme = document.documentElement.dataset.theme;
+        document.documentElement.style.backgroundColor = document.documentElement.dataset.theme === 'dark' ? '#0b1220' : '';
         document.querySelectorAll('img[src*="/assets/img/retailmind-"], link[rel="icon"][href*="retailmind-favicon-"], [data-brand-base]').forEach(image => {
             const attribute = image.tagName === 'LINK' ? 'href' : 'src';
             if (!image.dataset.brandBase) {
