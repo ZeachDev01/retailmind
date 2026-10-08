@@ -31,11 +31,44 @@ const path = require('node:path');
             assert.equal(await page.evaluate(() => document.documentElement.classList.contains('rm-app-fullscreen')), enabled);
             assert.equal(await page.evaluate(() => localStorage.getItem('retailmind_fullscreen')), enabled ? '1' : '0');
         };
-        // No native API is needed, including on iOS or browsers that reject fullscreen.
+        // Simulate native API rejection only after checking real native fullscreen.
         await page.addInitScript(() => {
-            Element.prototype.requestFullscreen = () => { throw new Error('Native fullscreen must not be requested'); };
+            if (sessionStorage.getItem('rejectNativeFullscreen') !== '1') return;
+            Element.prototype.requestFullscreen = () => { throw new Error('Native fullscreen unavailable'); };
             Element.prototype.webkitRequestFullscreen = Element.prototype.requestFullscreen;
         });
+        await page.setViewportSize({width:768,height:844});
+        await page.goto('http://fullscreen.test/');
+        await openPreferences();
+        await page.locator('[data-fullscreen-toggle]').click();
+        await page.waitForFunction(() => !!document.fullscreenElement);
+        await checkState(true);
+        await page.locator('[data-account-menu-open]').click();
+        await page.locator('#menuToggle').click();
+        await page.locator('#appSidebar a').click();
+        await page.waitForURL('http://fullscreen.test/next.php');
+        await checkState(true);
+        assert.equal(await page.evaluate(() => document.fullscreenElement), null);
+        await page.reload();
+        await checkState(true);
+        await openPreferences();
+        await page.locator('[data-fullscreen-toggle]').click();
+        await checkState(false);
+        await page.locator('[data-fullscreen-toggle]').click();
+        await page.waitForFunction(() => !!document.fullscreenElement);
+        await page.evaluate(() => document.exitFullscreen());
+        await page.waitForFunction(() => document.querySelector('[data-fullscreen-toggle]').getAttribute('aria-pressed') === 'false');
+        await checkState(false);
+        await page.reload();
+        await checkState(false);
+        await openPreferences();
+        await page.locator('[data-fullscreen-toggle]').click();
+        await page.waitForFunction(() => !!document.fullscreenElement);
+        await page.locator('[data-fullscreen-toggle]').click();
+        await page.waitForFunction(() => !document.fullscreenElement);
+        await checkState(false);
+        console.log('PASS: Native fullscreen on tap, CSS persistence after navigation, browser exit and button exit');
+        await page.evaluate(() => sessionStorage.setItem('rejectNativeFullscreen', '1'));
         for (const width of [320,390,768,900,1024,1280]) {
             await page.setViewportSize({width,height:844});
             await page.goto('http://fullscreen.test/');
