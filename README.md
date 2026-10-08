@@ -81,11 +81,11 @@ Before the first deployment, configure these in the GitHub repository under
 
 | Type | Name | Value |
 | --- | --- | --- |
-| Secret | `INFINITYFREE_FTP_USERNAME` | The FTP username from the InfinityFree account dashboard |
-| Secret | `INFINITYFREE_FTP_PASSWORD` | The FTP password from that dashboard |
-| Variable | `INFINITYFREE_FTP_SERVER_DIR` | The exact FTP website directory, ending in `/htdocs/` (usually `/htdocs/`, or `/your-domain/htdocs/` for an add-on domain) |
+| Secret | `FTP_SERVER` | The FTP hostname from the InfinityFree account dashboard (usually `ftpupload.net`) |
+| Secret | `FTP_USERNAME` | The FTP username from the InfinityFree account dashboard |
+| Secret | `FTP_PASSWORD` | The FTP password from that dashboard |
 
-The FTPS server is `ftpupload.net` on port 21. The workflow fails with a clear
+The workflow uploads to `/htdocs/` over explicit FTPS on port 21 and fails with a clear
 message until these values are configured. It never deletes the remote `.env` or
 runtime storage. Set up the production `.env` directly on the host and import
 the database through phpMyAdmin; those steps are not part of the file upload.
