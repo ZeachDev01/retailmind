@@ -29,6 +29,15 @@ const {chromium} = require('playwright');
                     if (attempt === 100) throw new Error('PHP test server unavailable');
                     await new Promise(resolve => setTimeout(resolve, 50));
                 }
+                // InfinityFree serves a browser-check HTML page when its cookie is omitted.
+                await page.context().addCookies([{name:'rm-host-check', value:'passed', url:origin}]);
+                await page.route('**/manifest.webmanifest', async route => {
+                    const headers = await route.request().allHeaders();
+                    if (!(headers.cookie || '').includes('rm-host-check=passed')) {
+                        return route.fulfill({contentType:'text/html', body:'<html>Hosting browser check</html>'});
+                    }
+                    return route.continue();
+                });
                 await page.route('https://**/*', route => route.abort());
                 await page.goto(origin + prefix);
                 assert.equal(await page.locator('link[rel="manifest"]').count(), 1);
@@ -55,6 +64,8 @@ const {chromium} = require('playwright');
                 const parsed = await cdp.send('Page.getAppManifest');
                 assert.equal(parsed.url, manifestUrl);
                 assert.deepEqual(parsed.errors, [], 'Chromium accepts the manifest');
+                const installability = await cdp.send('Page.getInstallabilityErrors');
+                assert.deepEqual(installability.installabilityErrors, [], 'Chromium reports no installation blockers');
                 assert.equal(await page.locator('meta[name="apple-mobile-web-app-capable"]').getAttribute('content'), 'yes');
                 assert.equal(await page.locator('meta[name="apple-mobile-web-app-status-bar-style"]').getAttribute('content'), 'default');
                 const touchIcon = await page.locator('link[rel="apple-touch-icon"]').evaluate(el => el.href);

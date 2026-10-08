@@ -31,7 +31,7 @@ function retailmind_theme_head(): void
     echo '<script>window.retailmindTheme=' . json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';
     echo '<script src="' . htmlspecialchars(theme_url('assets/js/theme.js'), ENT_QUOTES, 'UTF-8') . '"></script>';
     echo '<link rel="stylesheet" href="' . htmlspecialchars(theme_url('assets/css/theme.css'), ENT_QUOTES, 'UTF-8') . '">';
-    echo '<link rel="manifest" href="' . htmlspecialchars(theme_url('manifest.webmanifest'), ENT_QUOTES, 'UTF-8') . '">';
+    echo '<link rel="manifest" crossorigin="use-credentials" href="' . htmlspecialchars(theme_url('manifest.webmanifest'), ENT_QUOTES, 'UTF-8') . '">';
     echo '<meta name="mobile-web-app-capable" content="yes">';
     echo '<meta name="apple-mobile-web-app-capable" content="yes">';
     echo '<meta name="apple-mobile-web-app-title" content="RetailMind">';

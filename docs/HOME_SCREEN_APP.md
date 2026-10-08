@@ -30,9 +30,19 @@ updated shared header at `src/backend/includes/theme.php`. The relative manifest
 scope supports both a domain root and a subfolder installation. Keep the existing
 icon assets at their current paths. No database migration is needed.
 
+On InfinityFree, the manifest link must include `crossorigin="use-credentials"`.
+Its browser-check cookie is needed to fetch the JSON manifest; without it, the
+host returns an HTML challenge that Chrome reports as a manifest syntax error.
+Deploy the updated `src/backend/includes/theme.php` and use
+`https://retailmind.infinityfreeapp.com/` when installing. A shortcut that opens
+in Chrome is different from an installed standalone app.
+
 The app remains online-only; this change adds no service worker or offline
-cache. Opening RetailMind in a normal browser tab still has the browser's native
-fullscreen navigation limitation. The installed app's display mode is managed
+cache. Sidebar links use Fetch to load pages in an isolated workspace frame,
+preserving native fullscreen in a normal browser tab. Deploy
+`src/frontend/assets/js/sidebar-loader.js`, `src/frontend/assets/js/ui.js`, and
+`src/frontend/components/sidebar.php` together. A full browser reload still exits
+native fullscreen. The installed app's display mode is managed
 by the browser/OS; the Full Screen button cannot turn it into a browser tab.
 
 ## Device check

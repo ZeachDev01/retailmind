@@ -406,6 +406,7 @@ $sections = $roleSections[$role] ?? [];
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
 <script src="<?= sidebar_e(app_url('assets/js/ui.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/ui.js')) ?>"></script>
+<script src="<?= sidebar_e(app_url('assets/js/sidebar-loader.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/sidebar-loader.js')) ?>"></script>
 <?php
 require_once __DIR__ . '/../../backend/app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../../backend/app/Services/HeldSaleService.php';

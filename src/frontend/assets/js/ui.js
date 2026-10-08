@@ -588,12 +588,15 @@
     const icon = qs("i", button);
     const label = qs("span", button);
     const storageKey = "retailmind_fullscreen";
-    const root = document.documentElement;
-    const nativeElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const fullscreenDocument = window.parent !== window && window.parent.RetailMindNavigation
+      ? window.parent.document : document;
+    const root = fullscreenDocument.documentElement;
+    const nativeElement = () => fullscreenDocument.fullscreenElement || fullscreenDocument.webkitFullscreenElement;
     let nativeActive = !!nativeElement();
     let leaving = false;
     const update = (active) => {
       root.classList.toggle("rm-app-fullscreen", active);
+      document.documentElement.classList.toggle("rm-app-fullscreen", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
       if (icon)
         icon.className = "bi " + (active ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
@@ -616,8 +619,8 @@
       save(active);
       try {
         if (!active && nativeElement()) {
-          if (document.exitFullscreen) await document.exitFullscreen();
-          else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+          if (fullscreenDocument.exitFullscreen) await fullscreenDocument.exitFullscreen();
+          else if (fullscreenDocument.webkitExitFullscreen) await fullscreenDocument.webkitExitFullscreen();
         } else if (active) {
           if (root.requestFullscreen) await root.requestFullscreen({ navigationUI: "hide" });
           else if (root.webkitRequestFullscreen) await root.webkitRequestFullscreen();
@@ -633,10 +636,14 @@
       else if (nativeActive && !leaving && document.visibilityState !== "hidden") save(false);
       nativeActive = active;
     };
-    document.addEventListener("fullscreenchange", nativeChanged);
-    document.addEventListener("webkitfullscreenchange", nativeChanged);
+    fullscreenDocument.addEventListener("fullscreenchange", nativeChanged);
+    fullscreenDocument.addEventListener("webkitfullscreenchange", nativeChanged);
+    window.addEventListener("pagehide", () => {
+      fullscreenDocument.removeEventListener("fullscreenchange", nativeChanged);
+      fullscreenDocument.removeEventListener("webkitfullscreenchange", nativeChanged);
+    });
     window.addEventListener("pagehide", () => { leaving = true; });
-    // Native fullscreen ends on PHP navigation and cannot be restored without a gesture.
+    // CSS mode also works when the browser does not support native fullscreen.
     window.addEventListener("pageshow", restore);
     restore();
   }
