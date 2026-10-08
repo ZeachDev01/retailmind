@@ -217,11 +217,11 @@ $checks = [
     ],
     'Admin User Info uses a dedicated responsive layout' => [
         'file' => 'src/frontend/components/auth/user_info.php',
-        'needles' => ['user-info.css', 'class="user-info-page"', 'user-info-layout', 'profile-picture-frame', 'profile-details-form'],
+        'needles' => ['user-info.css', 'class="user-info-page"', 'user-info-layout', 'profile-details-form'],
     ],
     'Admin User Info keeps profile media contained' => [
         'file' => 'src/frontend/assets/css/user-info.css',
-        'needles' => ['.user-info-page .profile-avatar', '.profile-picture-frame', 'overflow: hidden;', 'aspect-ratio: 1;', '.profile-picture-preview', 'object-fit: cover;', '@media (max-width: 720px)'],
+        'needles' => ['.user-info-page .profile-avatar', 'overflow: hidden;', 'object-fit: cover;', '@media (max-width: 720px)'],
     ],
     'Shared shell loads cache-safe avatar styling' => [
         'file' => 'src/frontend/components/sidebar.php',
