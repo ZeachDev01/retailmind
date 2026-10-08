@@ -462,8 +462,16 @@ unset($_SESSION['_login_username']);
                 closer.addEventListener('click', closeModal);
             });
             if (loginForm) {
+                var isLoginSubmitting = false;
                 loginForm.addEventListener('submit', async function(event) {
                     event.preventDefault();
+                    if (isLoginSubmitting) return;
+                    isLoginSubmitting = true;
+                    var submitBtn = loginForm.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.classList.add('btn-loading');
+                    }
                     try {
                         if (window.sessionStorage) {
                             window.sessionStorage.setItem(passwordStateKey, password ? password.value : '');
@@ -482,6 +490,14 @@ unset($_SESSION['_login_username']);
                         }
                     } catch (error) {}
                     HTMLFormElement.prototype.submit.call(loginForm);
+                });
+                window.addEventListener('pageshow', function() {
+                    isLoginSubmitting = false;
+                    var submitBtn = loginForm.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('btn-loading');
+                    }
                 });
             }
             if (password && passwordToggle) {

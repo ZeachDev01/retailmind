@@ -473,14 +473,8 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-modal-target]').forEach(function (trigger) {
         const modal = document.getElementById(trigger.dataset.modalTarget);
         if (!modal) return;
-        const open = function () { RetailMindUI.openOverlay(modal); };
-        const close = function () { RetailMindUI.closeOverlay(modal); };
-        trigger.addEventListener('click', open);
-        modal.querySelectorAll('[data-close-modal]').forEach(function (button) {
-            button.addEventListener('click', close);
-        });
-        modal.addEventListener('click', function (event) {
-            if (event.target === modal) close();
+        trigger.addEventListener('click', function () {
+            RetailMindUI.openOverlay(modal);
         });
     });
 });

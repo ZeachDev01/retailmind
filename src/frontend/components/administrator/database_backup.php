@@ -91,7 +91,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 <section class="dashboard-section">
                     <h3>Create backup</h3>
                     <p class="section-description">Saving changes pauses briefly while a consistent point-in-time copy is captured, then resumes automatically. You can keep browsing and your unsaved work is not lost.</p>
-                    <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button class="btn" data-backup-create>Create backup</button></form>
+                    <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn" data-backup-create>Create backup</button></form>
                 </section>
                 <section class="dashboard-section">
                     <h3>Keeping your copy safe</h3>

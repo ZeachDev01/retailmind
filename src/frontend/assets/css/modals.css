@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  z-index: 1100;
+  z-index: 2000;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -26,6 +26,11 @@
   border-radius: 16px;
   box-shadow: 0 20px 45px rgba(15, 23, 42, 0.24);
   overflow: hidden;
+  transform: scale(0.96);
+  transition: transform 0.2s ease;
+}
+.user-modal-overlay.open .user-modal {
+  transform: scale(1);
 }
 .user-modal-header {
   flex: 0 0 auto;
@@ -85,7 +90,7 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.58);
   backdrop-filter: blur(4px);
-  z-index: 1150;
+  z-index: 2000;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1340,7 +1345,7 @@ body.system-health-open {
 .rm-drawer-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1400;
+  z-index: 2000;
   padding: 1rem;
   background: rgba(15, 23, 42, 0.64);
   backdrop-filter: blur(3px);
@@ -1456,7 +1461,7 @@ body.system-health-open {
   position: fixed;
   top: 1rem;
   right: 1rem;
-  z-index: 1800;
+  z-index: 4000;
   display: grid;
   gap: 0.65rem;
   width: min(390px, calc(100vw - 2rem));

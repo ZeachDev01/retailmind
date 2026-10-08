@@ -110,7 +110,7 @@ function sidebar_render_dropdown(array $item): void
     $openClass = sidebar_dropdown_class($paths);
 ?>
     <div class="dropdown<?= $openClass ?>">
-        <button class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" type="button" title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><i class="bi bi-chevron-right dropdown-chevron" aria-hidden="true"></i></button>
+        <button type="button" class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><i class="bi bi-chevron-right dropdown-chevron" aria-hidden="true"></i></button>
         <div class="dropdown-content">
             <?php foreach ($item['items'] as $child): ?>
                 <?php sidebar_render_link($child); ?>
@@ -545,9 +545,6 @@ cartWorkspace.bindNavigation();
 
                 dropdown.classList.toggle('open');
                 button.setAttribute('aria-expanded', dropdown.classList.contains('open') ? 'true' : 'false');
-            });
-            button.addEventListener('mousedown', function(event) {
-                event.preventDefault();
             });
         });
     });

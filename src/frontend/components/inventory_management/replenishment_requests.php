@@ -278,12 +278,12 @@ $predictions = get_stored_predictions($pdo);
 
             <h3>Request Status</h3>
             <div class="tabs">
-                <button class="tab-link <?= $status_filter === 'pending' ? 'active' : '' ?>" onclick="location.href='?status=pending'">Pending</button>
-                <button class="tab-link <?= $status_filter === 'approved' ? 'active' : '' ?>" onclick="location.href='?status=approved'">Approved</button>
-                <button class="tab-link <?= $status_filter === 'partially_received' ? 'active' : '' ?>" onclick="location.href='?status=partially_received'">Partial</button>
-                <button class="tab-link <?= $status_filter === 'rejected' ? 'active' : '' ?>" onclick="location.href='?status=rejected'">Rejected</button>
-                <button class="tab-link <?= $status_filter === 'received' ? 'active' : '' ?>" onclick="location.href='?status=received'">Received</button>
-                <button class="tab-link <?= $status_filter === 'all' ? 'active' : '' ?>" onclick="location.href='?status=all'">All</button>
+                <button type="button" class="tab-link <?= $status_filter === 'pending' ? 'active' : '' ?>" onclick="location.href='?status=pending'">Pending</button>
+                <button type="button" class="tab-link <?= $status_filter === 'approved' ? 'active' : '' ?>" onclick="location.href='?status=approved'">Approved</button>
+                <button type="button" class="tab-link <?= $status_filter === 'partially_received' ? 'active' : '' ?>" onclick="location.href='?status=partially_received'">Partial</button>
+                <button type="button" class="tab-link <?= $status_filter === 'rejected' ? 'active' : '' ?>" onclick="location.href='?status=rejected'">Rejected</button>
+                <button type="button" class="tab-link <?= $status_filter === 'received' ? 'active' : '' ?>" onclick="location.href='?status=received'">Received</button>
+                <button type="button" class="tab-link <?= $status_filter === 'all' ? 'active' : '' ?>" onclick="location.href='?status=all'">All</button>
             </div>
 
             <?php if (empty($requests)): ?>

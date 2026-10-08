@@ -63,6 +63,10 @@
                 if (replace) history.replaceState(null, '', currentUrl);
                 notice.setAttribute('role', 'alert');
                 notice.textContent = 'Could not load the page. Check your connection and try again.';
+                notice.style.cursor = 'pointer';
+                notice.title = 'Click to dismiss';
+                notice.addEventListener('click', () => notice.remove(), {once: true});
+                setTimeout(() => { if (notice.isConnected) notice.remove(); }, 6000);
                 return;
             } finally {
                 if (pending === request) content.removeAttribute('aria-busy');

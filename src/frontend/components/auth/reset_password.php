@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p><a href="<?= htmlspecialchars(app_url('?login=1')) ?>">Continue to login</a></p>
             <?php elseif ($reset): ?><form method="post"><?= csrf_field() ?><input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>">
                     <div class="form-group"><label>New password</label><input type="password" name="password" required minlength="8"><small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small></div>
-                    <div class="form-group"><label>Confirm password</label><input type="password" name="password_confirm" required minlength="8"></div><button class="btn btn-block">Reset password</button>
+                    <div class="form-group"><label>Confirm password</label><input type="password" name="password_confirm" required minlength="8"></div><button type="submit" class="btn btn-block">Reset password</button>
                 </form>
             <?php else: ?><div class="alert tag-warning">This reset link is invalid or expired.</div><?php endif; ?>
         </div>

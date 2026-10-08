@@ -125,7 +125,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                                 Remaining: <?= (int)$req['remaining_qty'] ?>
                             </div>
                         </div>
-                        <button class="request-item btn-link" onclick="populateForm(<?= (int)$req['product_id'] ?>, <?= (int)$req['remaining_qty'] ?>, <?= (int)$req['request_id'] ?>)">
+                        <button type="button" class="request-item btn-link" onclick="populateForm(<?= (int)$req['product_id'] ?>, <?= (int)$req['remaining_qty'] ?>, <?= (int)$req['request_id'] ?>)">
                             Receive Now
                         </button>
                     </div>

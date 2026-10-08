@@ -349,6 +349,7 @@
     let visibleItems = [];
     let productItems = [];
     let productSearchTimer = null;
+    let productAbortController = null;
     const productsApi = overlay.dataset.productsApi || "";
     const productTarget = overlay.dataset.productTarget || "";
 
@@ -417,14 +418,20 @@
       productItems = [];
       render();
       clearTimeout(productSearchTimer);
+      if (productAbortController) {
+        productAbortController.abort();
+        productAbortController = null;
+      }
       if (term.length < 2 || !productsApi || !productTarget) return;
       productSearchTimer = setTimeout(async function () {
         try {
+          productAbortController = new AbortController();
           const response = await fetch(
             productsApi +
               "?scope=all&q=" +
               encodeURIComponent(term) +
               "&limit=6",
+            { signal: productAbortController.signal },
           );
           const data = await response.json();
           productItems = data.success
@@ -442,6 +449,7 @@
               }))
             : [];
         } catch (error) {
+          if (error && error.name === "AbortError") return;
           productItems = [];
         }
         render();
@@ -531,7 +539,9 @@
       const submenus = qsa(".sidebar-workspace-switcher, .sidebar-preferences-menu", accountMenu);
       const positionSubmenu = (submenu) => {
         const panel = submenu.querySelector(".sidebar-workspace-options, .sidebar-preferences-options");
-        const anchor = submenu.querySelector("summary").getBoundingClientRect();
+        const summary = submenu.querySelector("summary");
+        if (!panel || !summary) return;
+        const anchor = summary.getBoundingClientRect();
         const menuBounds = accountMenu.getBoundingClientRect();
         panel.style.left = "0px";
         panel.style.top = "0px";
@@ -546,14 +556,16 @@
       };
       submenus.forEach((submenu) => {
         submenu.addEventListener("toggle", () => {
-          submenu.querySelector("summary").setAttribute("aria-expanded", String(submenu.open));
+          const summary = submenu.querySelector("summary");
+          if (summary) summary.setAttribute("aria-expanded", String(submenu.open));
           if (!submenu.open) return;
           submenus.forEach((other) => {
             if (other !== submenu) other.open = false;
           });
           positionSubmenu(submenu);
         });
-        submenu.querySelector("summary").setAttribute("aria-expanded", "false");
+        const initialSummary = submenu.querySelector("summary");
+        if (initialSummary) initialSummary.setAttribute("aria-expanded", "false");
       });
       window.addEventListener("resize", () => {
         submenus.forEach((submenu) => {
@@ -651,8 +663,39 @@
   function initDialogAccessibility() {
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
-      const openOverlay = qs(".rm-drawer-overlay.open, .rm-modal-overlay.open");
-      if (openOverlay) RM.closeOverlay(openOverlay);
+      const openOverlay = qs(".command-overlay.open, .rm-drawer-overlay.open, .rm-modal-overlay.open, .user-drawer-overlay.open, .user-modal-overlay.open, .checkout-modal.open");
+      if (openOverlay) {
+        if (openOverlay.classList.contains("user-modal-overlay") || openOverlay.classList.contains("user-drawer-overlay") || openOverlay.classList.contains("checkout-modal")) {
+          openOverlay.classList.remove("open");
+          document.body.classList.remove("no-scroll");
+        } else {
+          RM.closeOverlay(openOverlay);
+        }
+      }
+    });
+    document.addEventListener("click", (event) => {
+      const overlay = event.target.closest(".command-overlay, .rm-drawer-overlay, .rm-modal-overlay, .user-drawer-overlay, .user-modal-overlay, .checkout-modal");
+      if (overlay && event.target === overlay && overlay.classList.contains("open")) {
+        if (overlay.classList.contains("user-modal-overlay") || overlay.classList.contains("user-drawer-overlay") || overlay.classList.contains("checkout-modal")) {
+          overlay.classList.remove("open");
+          document.body.classList.remove("no-scroll");
+        } else {
+          RM.closeOverlay(overlay);
+        }
+        return;
+      }
+      const closeBtn = event.target.closest("[data-close-modal], [data-close-drawer], .rm-close, .modal-close, .user-modal-close, .user-drawer-close");
+      if (closeBtn) {
+        const parentOverlay = closeBtn.closest(".command-overlay, .rm-drawer-overlay, .rm-modal-overlay, .user-drawer-overlay, .user-modal-overlay, .checkout-modal");
+        if (parentOverlay) {
+          if (parentOverlay.classList.contains("user-modal-overlay") || parentOverlay.classList.contains("user-drawer-overlay") || parentOverlay.classList.contains("checkout-modal")) {
+            parentOverlay.classList.remove("open");
+            document.body.classList.remove("no-scroll");
+          } else {
+            RM.closeOverlay(parentOverlay);
+          }
+        }
+      }
     });
     qsa("form[data-required-field]").forEach((form) => {
       form.addEventListener("submit", (event) => {
@@ -684,6 +727,39 @@
         }
       });
     });
+    document.addEventListener("submit", (event) => {
+      const form = event.target;
+      if (!form || event.defaultPrevented) return;
+      if (form.dataset.rmSubmitting === "1") {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.rmSubmitting = "1";
+      setTimeout(() => {
+        const submits = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+        submits.forEach((btn) => {
+          btn.disabled = true;
+          btn.classList.add("btn-loading");
+        });
+      }, 0);
+    }, true);
+    window.addEventListener("pageshow", () => {
+      qsa("form[data-rm-submitting='1']").forEach((form) => {
+        delete form.dataset.rmSubmitting;
+        const submits = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+        submits.forEach((btn) => {
+          btn.disabled = false;
+          btn.classList.remove("btn-loading");
+        });
+      });
+      qsa("[data-backup-create]").forEach((btn) => {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        if (btn.dataset.rmBackupLabel) {
+          btn.textContent = btn.dataset.rmBackupLabel;
+        }
+      });
+    });
   }
 
   function initSmartTables() {
@@ -692,7 +768,13 @@
         table.matches(
           ".data-table, .cart-table, .receipt-table, [data-no-smart-table]",
         ) ||
-        table.closest("#product-table")
+        table.closest("#product-table") ||
+        table.closest("#overview-product-view, #overview-panel-movements, #overview-panel-fefo, .product-overview-modal") ||
+        table.closest(".overview-panel") ||
+        (table.closest(".table-wrap") && (
+          table.closest(".table-wrap").nextElementSibling?.classList.contains("overview-pagination") ||
+          table.closest(".table-wrap").nextElementSibling?.classList.contains("table-pagination")
+        ))
       )
         return;
       const body = table.tBodies[0];
