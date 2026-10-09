@@ -57,4 +57,57 @@ class DemandForecastService
         $jobId = $stmt->fetchColumn();
         return $jobId !== false ? (int)$jobId : null;
     }
+
+    public function getProductForecast(int $jobId, int $productId): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT 
+                product_id,
+                MAX(forecast_origin) as forecast_origin,
+                MAX(model_version) as model_version,
+                MAX(readiness_level) as readiness_level,
+                MAX(limitation_marker) as limitation_marker,
+                SUM(CASE WHEN horizon_day <= 7 THEN predicted_units ELSE 0 END) as forecast_7_day,
+                SUM(CASE WHEN horizon_day <= 14 THEN predicted_units ELSE 0 END) as forecast_14_day,
+                SUM(CASE WHEN horizon_day <= 28 THEN predicted_units ELSE 0 END) as forecast_28_day
+            FROM demand_forecasts
+            WHERE job_id = :job_id AND product_id = :product_id
+            GROUP BY product_id
+        ");
+        $stmt->execute(['job_id' => $jobId, 'product_id' => $productId]);
+        
+        $aggregates = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($aggregates) {
+            $aggregates['product_id'] = (int)$aggregates['product_id'];
+            $aggregates['forecast_7_day'] = (int)$aggregates['forecast_7_day'];
+            $aggregates['forecast_14_day'] = (int)$aggregates['forecast_14_day'];
+            $aggregates['forecast_28_day'] = (int)$aggregates['forecast_28_day'];
+        }
+
+        $dailyStmt = $this->pdo->prepare("
+            SELECT 
+                target_date,
+                horizon_day,
+                predicted_units,
+                readiness_level,
+                limitation_marker
+            FROM demand_forecasts
+            WHERE job_id = :job_id AND product_id = :product_id
+            ORDER BY horizon_day ASC
+        ");
+        $dailyStmt->execute(['job_id' => $jobId, 'product_id' => $productId]);
+        
+        $daily = [];
+        while ($row = $dailyStmt->fetch(PDO::FETCH_ASSOC)) {
+            $row['horizon_day'] = (int)$row['horizon_day'];
+            $row['predicted_units'] = (int)$row['predicted_units'];
+            $daily[] = $row;
+        }
+
+        return [
+            'aggregates' => $aggregates ?: null,
+            'daily' => $daily
+        ];
+    }
 }

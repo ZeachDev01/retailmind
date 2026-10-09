@@ -36,6 +36,24 @@ class ScheduledDemandDriverService
     }
 
     /**
+     * Retrieves the effective drivers for a period.
+     */
+    public function getDriversForPeriod(PDO $pdo, int $productId, string $startDate, string $endDate, string $cutoffTimestamp): array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT effective_date, driver_type, details_json
+             FROM (
+                SELECT *, ROW_NUMBER() OVER(PARTITION BY effective_date, driver_type ORDER BY scheduled_at DESC) as rn 
+                FROM scheduled_demand_drivers 
+                WHERE product_id = ? AND effective_date >= ? AND effective_date <= ? AND scheduled_at <= ?
+             ) t WHERE rn = 1'
+        );
+        $stmt->execute([$productId, $startDate, $endDate, $cutoffTimestamp]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+
+    /**
      * Records or cancels daily drivers for all products affected by a promotion.
      */
     public function syncPromotionDrivers(PDO $pdo, int $promotionId, bool $isCancellation = false): void
