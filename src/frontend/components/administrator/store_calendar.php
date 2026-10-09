@@ -140,3 +140,4 @@ $range = $calendar->getCalendarDateRangeAtCutoff($pdo, $branchId, $startDate, $t
 </div>
 </body>
 </html>
+

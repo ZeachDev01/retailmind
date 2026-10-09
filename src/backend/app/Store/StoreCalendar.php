@@ -66,3 +66,4 @@ final class StoreCalendar
         return $result;
     }
 }
+
