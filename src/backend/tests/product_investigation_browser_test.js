@@ -101,7 +101,9 @@ const fixtureScript = path.join(__dirname, 'support', 'scan_workflow_fixture.php
 
     } catch (e) {
         console.error(e);
-        exitCode = 1;
+        const html = await page.content();
+        console.error("HTML:", html.substring(0, 1000));
+        process.exitCode = 1;
     } finally {
         if (browser) await browser.close();
         server.kill();
