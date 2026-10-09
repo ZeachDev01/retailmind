@@ -2,7 +2,10 @@
   "use strict";
 
   const RM = (window.RetailMindUI = window.RetailMindUI || {});
-  RM.navigate = (url) => window.RetailMindNavigation ? window.RetailMindNavigation.navigate(url) : window.location.assign(url);
+  RM.navigate = (url) => {
+    const navigation = window.RetailMindNavigation || (window.parent !== window && window.parent.RetailMindNavigation);
+    return navigation ? navigation.navigate(new URL(url, window.location.href).href) : window.location.assign(url);
+  };
 
   function qs(selector, root) {
     return (root || document).querySelector(selector);
@@ -350,6 +353,7 @@
     let visibleItems = [];
     let productItems = [];
     let productSearchTimer = null;
+    let productAbortController = null;
     const productsApi = overlay.dataset.productsApi || "";
     const productTarget = overlay.dataset.productTarget || "";
 
@@ -418,14 +422,20 @@
       productItems = [];
       render();
       clearTimeout(productSearchTimer);
+      if (productAbortController) {
+        productAbortController.abort();
+        productAbortController = null;
+      }
       if (term.length < 2 || !productsApi || !productTarget) return;
       productSearchTimer = setTimeout(async function () {
         try {
+          productAbortController = new AbortController();
           const response = await fetch(
             productsApi +
               "?scope=all&q=" +
               encodeURIComponent(term) +
               "&limit=6",
+            { signal: productAbortController.signal },
           );
           const data = await response.json();
           productItems = data.success
@@ -443,6 +453,7 @@
               }))
             : [];
         } catch (error) {
+          if (error && error.name === "AbortError") return;
           productItems = [];
         }
         render();
@@ -532,7 +543,9 @@
       const submenus = qsa(".sidebar-workspace-switcher, .sidebar-preferences-menu", accountMenu);
       const positionSubmenu = (submenu) => {
         const panel = submenu.querySelector(".sidebar-workspace-options, .sidebar-preferences-options");
-        const anchor = submenu.querySelector("summary").getBoundingClientRect();
+        const summary = submenu.querySelector("summary");
+        if (!panel || !summary) return;
+        const anchor = summary.getBoundingClientRect();
         const menuBounds = accountMenu.getBoundingClientRect();
         panel.style.left = "0px";
         panel.style.top = "0px";
@@ -547,14 +560,16 @@
       };
       submenus.forEach((submenu) => {
         submenu.addEventListener("toggle", () => {
-          submenu.querySelector("summary").setAttribute("aria-expanded", String(submenu.open));
+          const summary = submenu.querySelector("summary");
+          if (summary) summary.setAttribute("aria-expanded", String(submenu.open));
           if (!submenu.open) return;
           submenus.forEach((other) => {
             if (other !== submenu) other.open = false;
           });
           positionSubmenu(submenu);
         });
-        submenu.querySelector("summary").setAttribute("aria-expanded", "false");
+        const initialSummary = submenu.querySelector("summary");
+        if (initialSummary) initialSummary.setAttribute("aria-expanded", "false");
       });
       window.addEventListener("resize", () => {
         submenus.forEach((submenu) => {
@@ -585,104 +600,107 @@
   }
 
   function initFullscreenToggle() {
-    const buttons = qsa("[data-fullscreen-toggle]");
-    if (!buttons.length) return;
-
-    const host = window;
-    const fullscreenDocument = document;
-    const fullscreenEnabled =
-      fullscreenDocument.fullscreenEnabled ||
-      fullscreenDocument.webkitFullscreenEnabled ||
-      fullscreenDocument.msFullscreenEnabled;
-
-    function fullscreenElement() {
-      return (
-        fullscreenDocument.fullscreenElement ||
-        fullscreenDocument.webkitFullscreenElement ||
-        fullscreenDocument.msFullscreenElement ||
-        null
-      );
-    }
-
-    function fullscreenActive() {
-      return !!fullscreenElement() || !!host.rmFullscreenFallback;
-    }
-
-    function setFallback(enabled) {
-      host.rmFullscreenFallback = enabled;
-      fullscreenDocument.documentElement.classList.toggle("rm-fullscreen-fallback", enabled);
-      host.dispatchEvent(new host.Event("retailmind:fullscreenchange"));
-    }
-
-    function updateButtons() {
-      const enabled = fullscreenActive();
-      buttons.forEach((button) => {
-        const icon = qs("i:first-child", button);
-        const label = qs("span", button);
-        button.setAttribute("aria-pressed", enabled ? "true" : "false");
-        if (icon) {
-          icon.className = "bi " + (enabled ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
+    const button = qs("[data-fullscreen-toggle]");
+    if (!button) return;
+    const icon = qs("i", button);
+    const label = qs("span", button);
+    const storageKey = "retailmind_fullscreen";
+    const fullscreenDocument = window.parent !== window && window.parent.RetailMindNavigation
+      ? window.parent.document : document;
+    const root = fullscreenDocument.documentElement;
+    const nativeElement = () => fullscreenDocument.fullscreenElement || fullscreenDocument.webkitFullscreenElement;
+    let nativeActive = !!nativeElement();
+    let leaving = false;
+    const update = (active) => {
+      root.classList.toggle("rm-app-fullscreen", active);
+      document.documentElement.classList.toggle("rm-app-fullscreen", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      if (icon)
+        icon.className = "bi " + (active ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
+      if (label) label.textContent = active ? "Exit Full Screen" : "Full Screen";
+    };
+    const save = (active) => {
+      update(active);
+      try {
+        localStorage.setItem(storageKey, active ? "1" : "0");
+      } catch (_) {}
+    };
+    const restore = () => {
+      leaving = false;
+      try {
+        update(!!nativeElement() || localStorage.getItem(storageKey) === "1");
+      } catch (_) {} // Storage may be unavailable in private/restricted browsers.
+    };
+    button.addEventListener("click", async () => {
+      const active = !nativeElement() && !root.classList.contains("rm-app-fullscreen");
+      save(active);
+      try {
+        if (!active && nativeElement()) {
+          if (fullscreenDocument.exitFullscreen) await fullscreenDocument.exitFullscreen();
+          else if (fullscreenDocument.webkitExitFullscreen) await fullscreenDocument.webkitExitFullscreen();
+        } else if (active) {
+          if (root.requestFullscreen) await root.requestFullscreen({ navigationUI: "hide" });
+          else if (root.webkitRequestFullscreen) await root.webkitRequestFullscreen();
         }
-        if (label) {
-          label.textContent = enabled ? "Exit Full Screen" : "Full Screen";
-        }
-      });
-    }
-
-    async function enterFullscreen() {
-      const root = fullscreenDocument.documentElement;
-      if (fullscreenEnabled) {
-        try {
-          if (root.requestFullscreen) { await root.requestFullscreen({ navigationUI: "hide" }); return; }
-          if (root.webkitRequestFullscreen) { await root.webkitRequestFullscreen(); return; }
-          if (root.msRequestFullscreen) { await root.msRequestFullscreen(); return; }
-        } catch (_) {
-          // Some mobile browsers expose the API but reject document fullscreen.
-        }
+      } catch (_) {
+        // Keep CSS app mode if native fullscreen is unavailable or rejected.
+        if (nativeElement()) save(true);
       }
-      setFallback(true);
-    }
-
-    async function exitFullscreen() {
-      if (host.rmFullscreenFallback) { setFallback(false); return; }
-      if (fullscreenDocument.exitFullscreen) return fullscreenDocument.exitFullscreen();
-      if (fullscreenDocument.webkitExitFullscreen) return fullscreenDocument.webkitExitFullscreen();
-      if (fullscreenDocument.msExitFullscreen) return fullscreenDocument.msExitFullscreen();
-      return Promise.resolve();
-    }
-
-    buttons.forEach((button) => {
-      if (!fullscreenEnabled) {
-        button.title = "Use the available screen space. This browser keeps its controls visible.";
-      }
-      button.addEventListener("click", async () => {
-        try {
-          if (fullscreenActive()) {
-            await exitFullscreen();
-          } else {
-            await enterFullscreen();
-          }
-        } catch (error) {
-          RM.toast("Full screen could not be changed by this browser.", "warning", "Attention");
-        }
-        updateButtons();
-      });
     });
-    const events = ["fullscreenchange", "webkitfullscreenchange", "MSFullscreenChange"];
-    events.forEach((event) => fullscreenDocument.addEventListener(event, updateButtons));
-    host.addEventListener("retailmind:fullscreenchange", updateButtons);
+    const nativeChanged = () => {
+      const active = !!nativeElement();
+      if (active) save(true);
+      else if (nativeActive && !leaving && document.visibilityState !== "hidden") save(false);
+      nativeActive = active;
+    };
+    fullscreenDocument.addEventListener("fullscreenchange", nativeChanged);
+    fullscreenDocument.addEventListener("webkitfullscreenchange", nativeChanged);
     window.addEventListener("pagehide", () => {
-      events.forEach((event) => fullscreenDocument.removeEventListener(event, updateButtons));
-      host.removeEventListener("retailmind:fullscreenchange", updateButtons);
+      fullscreenDocument.removeEventListener("fullscreenchange", nativeChanged);
+      fullscreenDocument.removeEventListener("webkitfullscreenchange", nativeChanged);
     });
-    updateButtons();
+    window.addEventListener("pagehide", () => { leaving = true; });
+    // CSS mode also works when the browser does not support native fullscreen.
+    window.addEventListener("pageshow", restore);
+    restore();
   }
 
   function initDialogAccessibility() {
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
-      const openOverlay = qs(".rm-drawer-overlay.open, .rm-modal-overlay.open");
-      if (openOverlay) RM.closeOverlay(openOverlay);
+      const openOverlay = qs(".command-overlay.open, .rm-drawer-overlay.open, .rm-modal-overlay.open, .user-drawer-overlay.open, .user-modal-overlay.open, .checkout-modal.open");
+      if (openOverlay) {
+        if (openOverlay.classList.contains("user-modal-overlay") || openOverlay.classList.contains("user-drawer-overlay") || openOverlay.classList.contains("checkout-modal")) {
+          openOverlay.classList.remove("open");
+          document.body.classList.remove("no-scroll");
+        } else {
+          RM.closeOverlay(openOverlay);
+        }
+      }
+    });
+    document.addEventListener("click", (event) => {
+      const overlay = event.target.closest(".command-overlay, .rm-drawer-overlay, .rm-modal-overlay, .user-drawer-overlay, .user-modal-overlay, .checkout-modal");
+      if (overlay && event.target === overlay && overlay.classList.contains("open")) {
+        if (overlay.classList.contains("user-modal-overlay") || overlay.classList.contains("user-drawer-overlay") || overlay.classList.contains("checkout-modal")) {
+          overlay.classList.remove("open");
+          document.body.classList.remove("no-scroll");
+        } else {
+          RM.closeOverlay(overlay);
+        }
+        return;
+      }
+      const closeBtn = event.target.closest("[data-close-modal], [data-close-drawer], .rm-close, .modal-close, .user-modal-close, .user-drawer-close");
+      if (closeBtn) {
+        const parentOverlay = closeBtn.closest(".command-overlay, .rm-drawer-overlay, .rm-modal-overlay, .user-drawer-overlay, .user-modal-overlay, .checkout-modal");
+        if (parentOverlay) {
+          if (parentOverlay.classList.contains("user-modal-overlay") || parentOverlay.classList.contains("user-drawer-overlay") || parentOverlay.classList.contains("checkout-modal")) {
+            parentOverlay.classList.remove("open");
+            document.body.classList.remove("no-scroll");
+          } else {
+            RM.closeOverlay(parentOverlay);
+          }
+        }
+      }
     });
     qsa("form[data-required-field]").forEach((form) => {
       form.addEventListener("submit", (event) => {
@@ -714,6 +732,39 @@
         }
       });
     });
+    document.addEventListener("submit", (event) => {
+      const form = event.target;
+      if (!form || event.defaultPrevented) return;
+      if (form.dataset.rmSubmitting === "1") {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.rmSubmitting = "1";
+      setTimeout(() => {
+        const submits = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+        submits.forEach((btn) => {
+          btn.disabled = true;
+          btn.classList.add("btn-loading");
+        });
+      }, 0);
+    }, true);
+    window.addEventListener("pageshow", () => {
+      qsa("form[data-rm-submitting='1']").forEach((form) => {
+        delete form.dataset.rmSubmitting;
+        const submits = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+        submits.forEach((btn) => {
+          btn.disabled = false;
+          btn.classList.remove("btn-loading");
+        });
+      });
+      qsa("[data-backup-create]").forEach((btn) => {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        if (btn.dataset.rmBackupLabel) {
+          btn.textContent = btn.dataset.rmBackupLabel;
+        }
+      });
+    });
   }
 
   function initSmartTables() {
@@ -722,7 +773,13 @@
         table.matches(
           ".data-table, .cart-table, .receipt-table, [data-no-smart-table]",
         ) ||
-        table.closest("#product-table")
+        table.closest("#product-table") ||
+        table.closest("#overview-product-view, #overview-panel-movements, #overview-panel-fefo, .product-overview-modal") ||
+        table.closest(".overview-panel") ||
+        (table.closest(".table-wrap") && (
+          table.closest(".table-wrap").nextElementSibling?.classList.contains("overview-pagination") ||
+          table.closest(".table-wrap").nextElementSibling?.classList.contains("table-pagination")
+        ))
       )
         return;
       const body = table.tBodies[0];
@@ -818,7 +875,6 @@
     initConnectionStatus();
     initSidebarState();
     initFullscreenToggle();
-    if (window.RetailMindNavigation) window.RetailMindNavigation.initializePage(RM.initPageContent);
-    else RM.initPageContent();
+    RM.initPageContent();
   });
 })();

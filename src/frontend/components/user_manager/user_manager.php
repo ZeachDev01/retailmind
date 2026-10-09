@@ -298,7 +298,26 @@ $disabledCount = count($users) - $activeCount;
 document.addEventListener('DOMContentLoaded', function () {
     const addOverlay = document.getElementById('userModalOverlay');
     const drawerOverlay = document.getElementById('userDrawerOverlay');
-    const setOpen = (overlay, open) => { if (overlay) { overlay.classList.toggle('open', open); overlay.setAttribute('aria-hidden', open ? 'false' : 'true'); } };
+    const setOpen = (overlay, open) => {
+        if (!overlay) return;
+        if (open) {
+            if (window.RetailMindUI?.openOverlay) {
+                RetailMindUI.openOverlay(overlay);
+            } else {
+                overlay.classList.add('open');
+                overlay.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('no-scroll');
+            }
+        } else {
+            if (window.RetailMindUI?.closeOverlay) {
+                RetailMindUI.closeOverlay(overlay);
+            } else {
+                overlay.classList.remove('open');
+                overlay.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('no-scroll');
+            }
+        }
+    };
     document.getElementById('openUserModal')?.addEventListener('click', () => setOpen(addOverlay, true));
     document.querySelectorAll('#closeUserModal, #cancelUserModal').forEach(button => button.addEventListener('click', () => setOpen(addOverlay, false)));
     document.querySelectorAll('#closeUserDrawer, #cancelUserDrawer').forEach(button => button.addEventListener('click', () => setOpen(drawerOverlay, false)));

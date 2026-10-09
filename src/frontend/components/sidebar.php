@@ -110,7 +110,7 @@ function sidebar_render_dropdown(array $item): void
     $openClass = sidebar_dropdown_class($paths);
 ?>
     <div class="dropdown<?= $openClass ?>">
-        <button class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" type="button" title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><i class="bi bi-chevron-right dropdown-chevron" aria-hidden="true"></i></button>
+        <button type="button" class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><i class="bi bi-chevron-right dropdown-chevron" aria-hidden="true"></i></button>
         <div class="dropdown-content">
             <?php foreach ($item['items'] as $child): ?>
                 <?php sidebar_render_link($child); ?>
@@ -365,10 +365,9 @@ $GLOBALS['rm_navigation_shell'] = [
                 </summary>
                 <div class="sidebar-preferences-options">
                     <div class="sidebar-theme-target" data-sidebar-theme-target></div>
-                    <button type="button" class="sidebar-account-button" data-fullscreen-toggle aria-pressed="false">
+                    <button type="button" class="sidebar-preference-option" data-fullscreen-toggle aria-pressed="false">
                         <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
                         <span>Full Screen</span>
-                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
                     </button>
                     <?php if ($role !== 'cashier'): ?>
                         <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>">
@@ -416,7 +415,8 @@ $GLOBALS['rm_navigation_shell'] = [
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
-<script src="<?= sidebar_e(app_url('assets/js/ui.js')) ?>"></script>
+<script src="<?= sidebar_e(app_url('assets/js/ui.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/ui.js')) ?>"></script>
+<script src="<?= sidebar_e(app_url('assets/js/sidebar-loader.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/sidebar-loader.js')) ?>"></script>
 <?php
 require_once __DIR__ . '/../../backend/app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../../backend/app/Services/HeldSaleService.php';
@@ -552,9 +552,6 @@ cartWorkspace.bindNavigation();
 
                 dropdown.classList.toggle('open');
                 button.setAttribute('aria-expanded', dropdown.classList.contains('open') ? 'true' : 'false');
-            });
-            button.addEventListener('mousedown', function(event) {
-                event.preventDefault();
             });
         });
     });

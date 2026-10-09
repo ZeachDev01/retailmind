@@ -93,6 +93,23 @@ runtime storage. Set up the production `.env` directly on the host and import
 the database through phpMyAdmin; those steps are not part of the file upload.
 Change the initial Super Administrator password before exposing the site.
 
+For a manual upload, copy `.env.infinityfree.example` to `htdocs/.env` (beside
+`index.php`, named exactly `.env`, without `.txt`). Replace its four
+`REPLACE_WITH_...` values using the hosting account's MySQL details. The password
+is the hosting/database password, not your InfinityFree website login password.
+Enable hidden-file visibility in your FTP client if `.env` is not listed.
+The real `.env` is intentionally excluded from Git, so uploading a GitHub source
+archive alone does not supply database credentials. Never commit the filled file.
+
+If the hosted page says "RetailMind cannot reach its data", read the latest
+error in `htdocs/src/backend/storage/logs/app.log` through the hosting File
+Manager. Keep `APP_DEBUG=false` on the live site. Confirm `htdocs/.env` exists
+and its `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` match the account's
+MySQL Databases page; use the full database name and the exact MySQL hostname,
+not the website or FTP hostname. Automated deployments preserve the hosted `.env`;
+correct its credentials directly on the host.
+The environment loader supports hosting with `putenv()` disabled.
+
 ### Deploy the same code to a member's InfinityFree account
 
 In the same repository's **Settings → Secrets and variables → Actions**, add:

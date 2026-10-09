@@ -1264,6 +1264,7 @@ async function holdCurrentSale() {
     if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
     if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before holding a sale.', 'error'); return; }
     if (resumedHeldSaleId) { showCartMessage('This sale is already held. Complete checkout or discard it from Held sales before holding another sale.', 'error'); return; }
+    holdSaleButton.disabled = true;
     try {
         const data = await cartWorkspace.exclusive(() => cartWorkspace.holdRequested(cart));
         if (!data) { cartReviewUnresolved = true; persistCart(); showCartMessage('Requested lines preserved. Availability changes remain unresolved.', 'error'); return; }
@@ -1272,6 +1273,9 @@ async function holdCurrentSale() {
         resetPaymentState();
         renderCart(); renderHeldSales(); showCartMessage(`Sale ${data.reference_no} held on the server.`, 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); }
+    finally {
+        holdSaleButton.disabled = Object.keys(cart).length === 0 || !posShiftOpen;
+    }
 }
 
 async function resumeHeldSale(id) {
@@ -1629,6 +1633,8 @@ document.addEventListener('keydown', event => {
             closeCheckoutConfirm();
         } else if (voidModal.classList.contains('open')) {
             closeVoidModal();
+        } else if (discardModal.classList.contains('open')) {
+            closeDiscardModal();
         }
         return;
     }

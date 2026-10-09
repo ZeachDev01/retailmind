@@ -118,20 +118,27 @@ function renderProductButtons(products, emptyMessage = 'No matching active produ
     }).join('');
 }
 
+let currentFetchController = null;
+
 async function renderSearchResults() {
     const term = productSearchInput.value.trim();
     if (term === '') {
+        if (currentFetchController) currentFetchController.abort();
         productSearch = [];
         searchCount.textContent = '0 results';
         searchResults.innerHTML = '<div class="search-empty"><div><i class="bi bi-keyboard u-search-icon" aria-hidden="true"></i>Enter at least one letter or number to search.</div></div>';
         return;
     }
 
+    if (currentFetchController) currentFetchController.abort();
+    currentFetchController = new AbortController();
+
     try {
-        const response = await fetch(`${productsApiUrl}?q=${encodeURIComponent(term)}&limit=20`);
+        const response = await fetch(`${productsApiUrl}?q=${encodeURIComponent(term)}&limit=20`, { signal: currentFetchController.signal });
         const data = await response.json();
         renderProductButtons(data.success ? (data.products || []) : []);
     } catch (error) {
+        if (error.name === 'AbortError') return;
         renderProductButtons([], 'Unable to load products.');
     }
 }
@@ -148,11 +155,14 @@ if (categoryButtons) {
         categoryButtons.querySelectorAll('.pos-category-button').forEach(item => item.classList.toggle('active', item === button));
         productSearchInput.value = '';
         searchResults.innerHTML = '<div class="search-empty"><span class="skeleton u-skeleton-inline">Loading</span></div>';
+        if (currentFetchController) currentFetchController.abort();
+        currentFetchController = new AbortController();
         try {
-            const response = await fetch(`${productsApiUrl}?category=${encodeURIComponent(button.dataset.categoryId)}&limit=20`);
+            const response = await fetch(`${productsApiUrl}?category=${encodeURIComponent(button.dataset.categoryId)}&limit=20`, { signal: currentFetchController.signal });
             const data = await response.json();
             renderProductButtons(data.success ? (data.products || []) : [], 'No available products in this category.');
         } catch (error) {
+            if (error.name === 'AbortError') return;
             renderProductButtons([], 'Unable to load category products.');
         }
     });

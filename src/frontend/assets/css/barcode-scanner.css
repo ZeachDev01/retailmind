@@ -41,7 +41,7 @@
     background: var(--panel); color: var(--text); font-size: 1.05rem;
     display: flex; align-items: center; justify-content: center; cursor: pointer;
   }
-  .icon-btn:active { transform: scale(0.94); }
+  .icon-btn:active { transform: none; opacity: 0.85; }
 
   /* Connection status pill */
   .conn-pill {
@@ -126,7 +126,7 @@
     color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
     background: var(--accent-a);
   }
-  button.action:active { transform: scale(0.97); }
+  button.action:active { transform: none; opacity: 0.9; }
   button.action:disabled { opacity: 0.4; }
   button.action.stop { background: var(--danger); }
   button.action.torch { background: var(--panel-2); border: 1px solid var(--line); }

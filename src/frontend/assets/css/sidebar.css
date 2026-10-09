@@ -493,6 +493,33 @@ button.sidebar-workspace-option:focus-visible {
     padding: .55rem .65rem;
     font-size: .82rem;
 }
+.sidebar-preference-option {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: center;
+    gap: .7rem;
+    border: 1px solid rgba(148, 163, 184, .12);
+    border-radius: 8px;
+    background: var(--theme-surface-glass, rgba(255,255,255,.04));
+    color: #dbeafe;
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+.sidebar-preference-option:hover,
+.sidebar-preference-option:focus-visible {
+    border-color: rgba(96, 165, 250, .38);
+    background: rgba(37, 99, 235, .18);
+    color: #fff;
+    outline: none;
+}
+.sidebar-preference-option > i {
+    color: #93c5fd;
+    font-size: 1.15rem;
+    text-align: center;
+}
 .sidebar-theme-target {
     min-width: 0;
 }

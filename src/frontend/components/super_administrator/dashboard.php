@@ -183,7 +183,7 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                                 $categoryLabel = $attentionCategoryLabels[$item['category']] ?? ucfirst(str_replace('_', ' ', $item['category']));
                                 $actionLabel = $attentionActionLabels[$item['category']] ?? 'Open details';
                                 ?>
-                                <button class="triage-item attention-<?= $escape($item['severity']) ?>" type="button"
+                                <button type="button" class="triage-item attention-<?= $escape($item['severity']) ?>" type="button"
                                     aria-pressed="<?= $index === 0 ? 'true' : 'false' ?>"
                                     data-triage-item
                                     data-severity="<?= $escape(ucfirst($item['severity'])) ?>"

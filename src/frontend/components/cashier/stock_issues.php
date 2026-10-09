@@ -323,12 +323,16 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
             });
         }
 
+        let lookupAbortController = null;
         async function lookup(url, emptyMessage) {
+            if (lookupAbortController) lookupAbortController.abort();
+            lookupAbortController = new AbortController();
             try {
-                const response = await fetch(url);
+                const response = await fetch(url, { signal: lookupAbortController.signal });
                 const data = await response.json();
                 renderResults(data.success ? (data.products || []) : [], emptyMessage);
             } catch (error) {
+                if (error && error.name === 'AbortError') return;
                 renderResults([], 'Unable to load products.');
             }
         }
