@@ -199,7 +199,7 @@ unset($_SESSION['_login_username']);
                         <div><h3>Barcode sales</h3><p>Scan labels, hold sales, control discounts, and print receipts.</p></div>
                     </article>
                     <article class="landing-capability">
-                        <div><h3>Forecast planning</h3><p>Compare Random Forest forecasts, confidence ranges, and reorder inputs.</p></div>
+                        <div><h3>Forecast planning</h3><p>Review Random Forest forecasts and Store readiness across 7-, 14-, and 28-day horizons.</p></div>
                     </article>
                     <article class="landing-capability">
                         <div><h3>Purchase flow</h3><p>Manage suppliers, approvals, package conversion, and partial receiving.</p></div>

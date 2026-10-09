@@ -207,12 +207,21 @@ function get_stored_predictions(PDO $pdo): array
 
 function get_ml_model_metrics(): array
 {
-    $metricsPath = __DIR__ . '/../legacy/demandForcasting/model_metrics.json';
-    if (!is_readable($metricsPath)) {
+    global $pdo;
+    if (!isset($pdo)) {
         return [];
     }
-    $metrics = json_decode((string)file_get_contents($metricsPath), true);
-    return is_array($metrics) ? $metrics : [];
+    $stmt = $pdo->query("SELECT * FROM ml_model_evaluations ORDER BY evaluation_id DESC LIMIT 1");
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return [];
+    
+    return [
+        'last_trained' => $row['created_at'],
+        'wape' => $row['wape'] !== null ? (float)$row['wape'] : null,
+        'mae' => $row['mae'] !== null ? (float)$row['mae'] : null,
+        'rmse' => $row['rmse'] !== null ? (float)$row['rmse'] : null,
+        'baseline_wape' => $row['baseline_wape'] !== null ? (float)$row['baseline_wape'] : null
+    ];
 }
 
 function format_ml_metric(array $metrics, string $key, int $decimals = 2): string
@@ -338,8 +347,8 @@ function get_forecasting_readiness(PDO $pdo): array
                 sp.supplier_lead_time_days AS prediction_supplier_lead_time_days,
                 sp.safety_stock_used, sp.current_stock_used, sp.incoming_stock_used,
                 sp.minimum_order_quantity_used, sp.units_per_package_used,
-                sp.reorder_suggested, sp.suggested_reorder_qty, sp.confidence_score,
-                sp.forecast_explanation, sp.model_version, sp.generated_at,
+                sp.reorder_suggested, sp.suggested_reorder_qty, df.readiness_level,
+                sp.forecast_explanation, sp.model_version, df.forecast_origin,
                 fe.mae AS product_mae, fe.rmse AS product_rmse,
                 fe.wape AS product_wape, fe.smape AS product_smape
             FROM products p

@@ -144,7 +144,7 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
 
     private function modelArtifactCheck(): array
     {
-        $paths = glob($this->backendPath . '/legacy/demandForcasting/models/*') ?: [];
+        $paths = glob($this->backendPath . '/storage/ml_models/*') ?: [];
         $files = array_values(array_filter($paths, 'is_file'));
         if (!$files) {
             return $this->result('Forecast model artifact', 'warning', 'No trained model artifact was found.', 'Forecasting');
