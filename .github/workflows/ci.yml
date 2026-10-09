@@ -1,138 +1,63 @@
-name: RetailMind CI
+name: Deploy to InfinityFree
 
 on:
   push:
-  pull_request:
-
-permissions:
-  contents: read
+    branches:
+      - main
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: inventory_system
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-    env:
-      APP_ENV: development
-      DB_HOST: 127.0.0.1
-      DB_PORT: 3306
-      DB_NAME: inventory_system
-      DB_USER: root
-      DB_PASSWORD: root
-      RUN_DB_TESTS: 1
-      WHITESPACE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: pdo_mysql, curl, gd, fileinfo
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: npm
-      - name: Install PHP dependencies
-        run: composer install --no-interaction --prefer-dist
-      - name: Install Python dependencies
-        run: python -m pip install -r src/backend/legacy/demandForcasting/requirements.lock
-      - name: Install Node dependencies
-        run: npm ci
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Import fresh schema
-        run: mysql -h127.0.0.1 -uroot -proot inventory_system < src/backend/sql/schema.sql
-      - name: Run migrations
-        run: php src/backend/scripts/migrate.php
-      - name: Run checks
-        run: bash src/backend/tests/run_all.sh
-
   deploy:
-    name: Deploy to InfinityFree (${{ matrix.target }})
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include: >-
-          ${{ fromJSON(vars.INFINITYFREE_MEMBER_DEPLOY_ENABLED == 'true' &&
-          '[{"target":"production","config_prefix":"INFINITYFREE","secret_prefix":""},{"target":"member","config_prefix":"INFINITYFREE_MEMBER","secret_prefix":"INFINITYFREE_MEMBER_"}]' ||
-          '[{"target":"production","config_prefix":"INFINITYFREE","secret_prefix":""}]') }}
-    concurrency:
-      group: infinityfree-${{ matrix.target }}
-      cancel-in-progress: false
-    permissions:
-      contents: read
+
     steps:
-      - uses: actions/checkout@v7
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-      - name: Install production PHP dependencies
-        run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
-      - name: Check restricted-host startup
-        run: php src/backend/tests/recovery_store_restricted_host_contract.php
-      - name: Build deployment files
-        run: bash scripts/build-infinityfree-release.sh
-      - name: Check PHP syntax in deployment files
-        run: find .release -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l > /dev/null
-      - name: Check FTP configuration
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create production environment
         env:
-          CONFIG_PREFIX: ${{ matrix.config_prefix }}
-          SECRET_PREFIX: ${{ matrix.secret_prefix }}
-          FTP_SERVER: ${{ secrets[format('{0}FTP_SERVER', matrix.secret_prefix)] }}
-          FTP_USERNAME: ${{ secrets[format('{0}FTP_USERNAME', matrix.secret_prefix)] }}
-          FTP_PASSWORD: ${{ secrets[format('{0}FTP_PASSWORD', matrix.secret_prefix)] }}
-          FTP_SERVER_DIR: ${{ vars[format('{0}_FTP_SERVER_DIR', matrix.config_prefix)] }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-          test -n "$FTP_SERVER" || { echo "Missing ${SECRET_PREFIX}FTP_SERVER secret"; exit 1; }
-          test -n "$FTP_USERNAME" || { echo "Missing ${SECRET_PREFIX}FTP_USERNAME secret"; exit 1; }
-          test -n "$FTP_PASSWORD" || { echo "Missing ${SECRET_PREFIX}FTP_PASSWORD secret"; exit 1; }
-          test -n "$FTP_SERVER_DIR" || { echo "Missing ${CONFIG_PREFIX}_FTP_SERVER_DIR variable"; exit 1; }
-          [[ "$FTP_SERVER_DIR" == */htdocs/ ]] || { echo 'FTP server directory must end in /htdocs/'; exit 1; }
-      - name: Upload over explicit FTPS
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+          test -n "$DB_HOST" || { echo 'Missing DB_HOST secret'; exit 1; }
+          test -n "$DB_NAME" || { echo 'Missing DB_NAME secret'; exit 1; }
+          test -n "$DB_USER" || { echo 'Missing DB_USER secret'; exit 1; }
+          test -n "$DB_PASSWORD" || { echo 'Missing DB_PASSWORD secret'; exit 1; }
+          umask 077
+          printf '%s\n' \
+            'APP_NAME=RetailMind' \
+            'APP_ENV=production' \
+            'APP_DEBUG=false' \
+            'APP_URL=https://retailmind.infinityfreeapp.com' \
+            'APP_TIMEZONE=Asia/Manila' \
+            'SESSION_SECURE_COOKIE=true' \
+            'DB_CONNECTION=mysql' \
+            "DB_HOST=$DB_HOST" \
+            'DB_PORT=3306' \
+            "DB_NAME=$DB_NAME" \
+            "DB_USER=$DB_USER" \
+            "DB_PASSWORD=$DB_PASSWORD" \
+            'DB_CHARSET=utf8mb4' > .env
+
+      - name: Deploy to InfinityFree
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets[format('{0}FTP_SERVER', matrix.secret_prefix)] }}
-          username: ${{ secrets[format('{0}FTP_USERNAME', matrix.secret_prefix)] }}
-          password: ${{ secrets[format('{0}FTP_PASSWORD', matrix.secret_prefix)] }}
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           port: 21
           security: strict
-          local-dir: ./.release/
-          server-dir: ${{ vars[format('{0}_FTP_SERVER_DIR', matrix.config_prefix)] }}
-          exclude: |
-            .env
-            **/.env
-            **/storage/**
-      # FTP-Deploy-Action compares against its saved sync state. If the host
-      # removes an unchanged file, that state alone will not put it back.
-      - name: Restore root entry and access rules
+          server-dir: /htdocs/
+
+      # The sync cache can skip .env even if it was removed from the server.
+      - name: Upload production environment
         env:
-          FTP_SERVER: ${{ secrets[format('{0}FTP_SERVER', matrix.secret_prefix)] }}
-          FTP_USERNAME: ${{ secrets[format('{0}FTP_USERNAME', matrix.secret_prefix)] }}
-          FTP_PASSWORD: ${{ secrets[format('{0}FTP_PASSWORD', matrix.secret_prefix)] }}
-          FTP_SERVER_DIR: ${{ vars[format('{0}_FTP_SERVER_DIR', matrix.config_prefix)] }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          for file in index.php .htaccess; do
-            curl --fail --show-error --silent --ssl-reqd --ftp-pasv \
-              --retry 3 --retry-delay 2 \
-              --user "$FTP_USERNAME:$FTP_PASSWORD" \
-              --upload-file ".release/$file" \
-              "ftp://${FTP_SERVER}${FTP_SERVER_DIR}${file}"
-          done
+          curl --fail --silent --show-error --ssl-reqd \
+            --user "$FTP_USERNAME:$FTP_PASSWORD" \
+            --upload-file .env "ftp://$FTP_SERVER/htdocs/.env"
