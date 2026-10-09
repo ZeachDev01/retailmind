@@ -477,10 +477,15 @@ unset($_SESSION['_login_username']);
                             window.sessionStorage.setItem(passwordStateKey, password ? password.value : '');
                         }
                     } catch (error) {}
+                    var refreshController = new AbortController();
+                    var refreshTimeout = window.setTimeout(function() {
+                        refreshController.abort();
+                    }, 5000);
                     try {
                         var response = await fetch(loginForm.action + '?csrf_refresh=1', {
                             credentials: 'same-origin',
-                            cache: 'no-store'
+                            cache: 'no-store',
+                            signal: refreshController.signal
                         });
                         if (response.ok) {
                             var data = await response.json();
@@ -488,7 +493,11 @@ unset($_SESSION['_login_username']);
                                 loginForm.elements.csrf_token.value = data.csrf_token;
                             }
                         }
-                    } catch (error) {}
+                    } catch (error) {
+                        // The POST still validates the form token if refresh is unavailable.
+                    } finally {
+                        window.clearTimeout(refreshTimeout);
+                    }
                     HTMLFormElement.prototype.submit.call(loginForm);
                 });
                 window.addEventListener('pageshow', function() {
