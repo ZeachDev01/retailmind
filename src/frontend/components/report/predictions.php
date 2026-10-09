@@ -2,57 +2,75 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Forecasting\DemandForecastService;
 
 require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
 
-$prototypeVariant = strtoupper(trim((string)($_GET['variant'] ?? '')));
-$prototypeEnabled = strtolower((string)env('APP_ENV', 'production')) !== 'production'
-    && in_array($prototypeVariant, ['A', 'B', 'C'], true);
+$service = new DemandForecastService($pdo);
+$latestJobId = $service->getLatestSuccessfulJobId();
+$forecasts = $latestJobId ? $service->getForecastAggregates($latestJobId) : [];
 
-if ($prototypeEnabled) {
-    $forecastRows = get_forecasting_readiness($pdo);
-    $modelMetrics = get_ml_model_metrics();
-    require __DIR__ . '/forecast_dashboard_prototype.php';
-    exit;
-}
-
-$message = '';
-$messageClass = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['retrain'])) {
-    require_capability(RoleCapabilityPolicy::RETRAIN_MODELS);
-    csrf_verify();
-    $before = get_ml_model_metrics();
-    $response = call_ml_api(ML_API_RETRAIN_ENDPOINT, 'POST', [], max(180, ML_API_TIMEOUT));
-    $success = !empty($response['success']);
-    $message = $success ? 'Random Forest model retrained successfully.' : (string)($response['message'] ?? 'Retraining failed.');
-    $messageClass = $success ? 'tag-success' : 'tag-warning';
-    log_activity($pdo, (int)$_SESSION['user_id'], 'Model Retraining', 'Demand Forecasting', null, $before, $response);
-}
-
-$forecastRows = get_forecasting_readiness($pdo);
-$modelMetrics = get_ml_model_metrics();
-$treeCount = (int)($modelMetrics['hyperparameters']['n_estimators'] ?? $modelMetrics['settings']['n_estimators'] ?? 300);
 ?>
-<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Demand Forecasts</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>"></head>
-<body><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content"><div class="topbar"><div><h1>Random Forest Demand Forecasts</h1><p class="page-subtitle">Forecast ranges, product-level accuracy, and transparent reorder calculations.</p></div><form method="post"><?= csrf_field() ?>
-<?php if (has_capability(RoleCapabilityPolicy::GENERATE_FORECASTS)): ?>
-<button class="btn" name="generate" value="1" disabled title="Forecast generation is currently unavailable">Generate forecasts</button>
-<?php endif; ?>
-<?php if (has_capability(RoleCapabilityPolicy::RETRAIN_MODELS)): ?>
-<button class="btn" name="retrain" value="1">Retrain model</button>
-<?php endif; ?>
-</form></div>
-<?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-<div class="u-flex-wrap-loose"><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">Forecast analytics</a><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">Data readiness</a><?php if (has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)): ?><a class="btn btn-small" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">ML settings</a><?php endif; ?></div>
-<div class="card-grid"><div class="stat-card"><div class="value">RF v2</div><div class="label">Model version</div></div><div class="stat-card"><div class="value"><?= number_format($treeCount) ?></div><div class="label">Decision trees</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($modelMetrics, 'wape')) ?><?= isset($modelMetrics['wape']) ? '%' : '' ?></div><div class="label">WAPE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($modelMetrics, 'smape')) ?><?= isset($modelMetrics['smape']) ? '%' : '' ?></div><div class="label">SMAPE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($modelMetrics, 'mean_absolute_error')) ?></div><div class="label">MAE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars((string)($modelMetrics['training_date'] ?? '-')) ?></div><div class="label">Last trained</div></div></div>
-<div class="dashboard-section"><div class="table-wrap"><table><tr><th>Product</th><th>Status / data</th><th>7-day demand</th><th>30-day demand</th><th>Lead-time demand</th><th>Accuracy</th><th>Reorder calculation</th><th>Suggested</th><th>Supplier</th></tr>
-<?php foreach ($forecastRows as $row): $show=!empty($row['can_show_forecast']); $lead=(int)($row['prediction_supplier_lead_time_days'] ?? $row['supplier_lead_time_days']); ?>
-<tr><td><strong><?= htmlspecialchars($row['product_name']) ?></strong><br><span class="muted"><?= htmlspecialchars($row['sku']) ?></span></td><td><?= htmlspecialchars($row['forecast_status']) ?><br><span class="range"><?= (int)$row['calendar_history_days'] ?> calendar / <?= (int)$row['nonzero_sales_days'] ?> selling / <?= (int)$row['zero_sales_days'] ?> zero-sales days</span><br><span class="range"><?= htmlspecialchars($row['forecast_reason']) ?></span></td>
-<td><?php if($show): ?><?= (int)$row['predicted_demand_next_7_days'] ?><div class="range"><?= (int)$row['lower_bound_7_days'] ?>–<?= (int)$row['upper_bound_7_days'] ?></div><?php else: ?>-<?php endif; ?></td>
-<td><?php if($show): ?><?= (int)$row['predicted_demand_next_30_days'] ?><div class="range"><?= (int)$row['lower_bound_30_days'] ?>–<?= (int)$row['upper_bound_30_days'] ?></div><?php else: ?>-<?php endif; ?></td>
-<td><?php if($show): ?><?= (int)$row['forecasted_demand_during_lead_time'] ?> / <?= $lead ?>d<div class="range"><?= (int)$row['lead_time_lower_bound'] ?>–<?= (int)$row['lead_time_upper_bound'] ?></div><?php else: ?>-<?php endif; ?></td>
-<td><?php if($show): ?>Confidence <?= round((float)$row['confidence_score']*100) ?>%<br><span class="range">WAPE <?= $row['product_wape'] !== null ? number_format((float)$row['product_wape'],1).'%' : '-' ?><br>MAE <?= $row['product_mae'] !== null ? number_format((float)$row['product_mae'],1) : '-' ?></span><?php else: ?>-<?php endif; ?></td>
-<td><?php if($show): $d=(int)$row['forecasted_demand_during_lead_time'];$ss=(int)$row['safety_stock_used'];$cs=(int)$row['current_stock_used'];$inc=(int)$row['incoming_stock_used']; ?><div class="formula"><?= $d ?> + <?= $ss ?> − <?= $cs ?> − <?= $inc ?> = <?= $d+$ss-$cs-$inc ?></div><div class="range">Demand + safety − stock − incoming<br>MOQ <?= (int)$row['minimum_order_quantity_used'] ?>; package <?= (int)$row['units_per_package_used'] ?></div><?php else: ?>-<?php endif; ?></td>
-<td><?= $show ? (int)$row['suggested_reorder_qty'] : '-' ?></td><td><?= htmlspecialchars($row['preferred_supplier'] ?: '-') ?></td></tr>
-<?php endforeach; ?><?php if (!$forecastRows): ?><tr><td class="u-text-center" colspan="9">No forecast data. Import the v2 migration and train the model.</td></tr><?php endif; ?></table></div></div>
-</main></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <?php retailmind_theme_head(); ?>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Demand Forecast</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+</head>
+<body>
+<div class="app-shell">
+    <?php include __DIR__ . '/../sidebar.php'; ?>
+    <main class="main-content">
+        <div class="topbar">
+            <div>
+                <h1>Demand Forecast</h1>
+                <p class="page-subtitle">Expected demand, inventory exposure, and model readiness across the Store.</p>
+            </div>
+            
+            <?php if (has_capability(RoleCapabilityPolicy::RETRAIN_MODELS)): ?>
+                <form method="post" action="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">
+                    <button type="submit" name="action" value="generate" class="btn btn-primary">Generate Now</button>
+                </form>
+            <?php endif; ?>
+        </div>
+        
+        <?php if (empty($forecasts)): ?>
+            <div class="empty-state">
+                <i class="bi bi-graph-up-arrow empty-icon"></i>
+                <h2>No Forecasts Available</h2>
+                <p>Demand forecasts have not been generated yet or the last run failed.</p>
+            </div>
+        <?php else: ?>
+            <div class="card">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Product ID</th>
+                            <th>7 Days</th>
+                            <th>14 Days</th>
+                            <th>28 Days</th>
+                            <th>Readiness</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($forecasts as $f): ?>
+                            <tr>
+                                <td><?= htmlspecialchars((string)$f['product_id']) ?></td>
+                                <td><?= htmlspecialchars((string)$f['forecast_7_day']) ?></td>
+                                <td><?= htmlspecialchars((string)$f['forecast_14_day']) ?></td>
+                                <td><?= htmlspecialchars((string)$f['forecast_28_day']) ?></td>
+                                <td><?= htmlspecialchars((string)$f['readiness_level']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </main>
+</div>
+</body>
+</html>
