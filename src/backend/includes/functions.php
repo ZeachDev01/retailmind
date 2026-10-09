@@ -227,7 +227,7 @@ function format_ml_metric(array $metrics, string $key, int $decimals = 2): strin
 
 function ensure_key_value_table(PDO $pdo, string $table): void
 {
-    $allowed = ['ml_settings', 'store_settings'];
+    $allowed = ['ml_settings', 'store_settings', 'platform_settings'];
     if (!in_array($table, $allowed, true)) {
         throw new InvalidArgumentException('Unsupported settings table.');
     }
@@ -305,7 +305,8 @@ function get_forecasting_readiness(PDO $pdo): array
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
     $preferredHistoryDays = max($minimumHistoryDays, (int)$settings['preferred_history_days']);
     $minimumNonzeroDays = max(1, (int)$settings['minimum_nonzero_sales_days']);
-    $currentModelVersion = 'rf-v2';
+    $platformSettings = get_key_value_settings($pdo, 'platform_settings', ['ml_approved_model_version' => 'rf-v2']);
+    $currentModelVersion = $platformSettings['ml_approved_model_version'];
 
     $sql = "SELECT
                 p.product_id,
