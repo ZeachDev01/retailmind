@@ -1815,7 +1815,6 @@ tr:last-child td { border-bottom: none; }
   inset: 0;
   width: 100vw;
   background: rgba(15, 23, 42, 0.58);
-  backdrop-filter: blur(4px);
   z-index: 2000;
   display: flex;
   align-items: center;
@@ -3082,7 +3081,6 @@ body.system-health-open {
   z-index: 2000;
   padding: 1rem;
   background: rgba(15, 23, 42, 0.64);
-  backdrop-filter: blur(3px);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;

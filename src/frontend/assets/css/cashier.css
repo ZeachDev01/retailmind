@@ -1011,7 +1011,6 @@
     justify-content: center;
     padding: 1rem;
     background: rgba(15, 23, 42, 0.68);
-    backdrop-filter: blur(3px);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;

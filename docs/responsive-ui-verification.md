@@ -79,3 +79,20 @@ The final matrix's results and server log were written to `%TEMP%/rm-responsive-
 - External CDN requests were blocked by the environment. The real-page matrix served empty CDN responses to exercise local CSS/JavaScript and fallback tables. CDN-provided DataTables sorting/filtering/pagination and SweetAlert2 rendering require a connected-browser check.
 - Representative real forms and scoped confirmation/submission regression tests were exercised. The matrix did not complete payments, refunds, deletion, restoration, password changes, or email delivery against application data, and it does not click every action on every page.
 - The complete `run_all.sh` suite was not passed. The existing `theme_account_browser_test.js` timed out waiting for an appearance control to be visible before opening its current account/preferences menu; its older selector flow remains to be updated. Python/vendor-dependent repository gates were not run.
+
+## Follow-up: Android tablet, Products & Stock → Manage
+
+The reported rectangular blur artifact remained unverified by the original desktop/headless checks. A touch-enabled, mobile-viewport check of the real product page also passed before this follow-up change; that result alone does not prove the Android hardware issue was fixed.
+
+The shared product/modal/command/user drawers and checkout overlays no longer use live `backdrop-filter` blur. Their existing translucent dimming, placement, transitions, and interactions remain. This removes a GPU-dependent rendering path rather than adding more stacking overrides. Chromium has documented backdrop-image/filter size errors in its GPU renderer ([Chromium fix](https://chromium.googlesource.com/chromium/src/+/14e091ccc401d6807f03b5d1c10b17a8f53239bf)). That is a plausible mechanism for the screenshot, not a confirmed diagnosis of this tablet.
+
+The Products & Stock stylesheet URL now includes its file modification time so a normal page request selects the current CSS version. The touch checks also reproduced a separate promotion-form overflow at 1194/1280px: inventory styles overwrote the shared form grid with columns that retained native date-input minimum widths. These grid columns and children can now shrink within their container.
+
+Additional verification:
+
+- **238 production-markup layout checks passed**: seven page families, desktop and touch/mobile emulation, at 320, 375, 425, 768, 800, 820, 834, 900, 901, 912, 960, 1024, 1180, 1194, 1280, 1366, and 1440px. The previously failing date fields stayed within their cards.
+- **24 real-page/viewport checks passed** for Products & Stock and promotions with touch/mobile emulation and pixel ratio 2, at 768, 800, 820, 834, 900, 901, 912, 960, 1024, 1180, 1194, and 1280px. Manage uses an actual touch tap in this targeted run; its tabs, modals, pagination, and stylesheet-version assertion passed. Artifacts: `%TEMP%/rm-responsive-browser-5tXxSk/`.
+- The extended product layer test **passed** at 768x1024, 834x1112, 1024x768, and 1280x800 touch viewports, alongside its desktop/mobile cases, in both themes with three repeated cycles. It tests touch opening/initial close, open-drawer rotation, background scroll locking, inner touch scrolling, repeated reopening, and Escape dismissal after swipes. Chrome's injected swipe sequence sometimes suppressed a subsequent synthesized tap even on a plain HTML scroller, so that sequence is not used to claim close-button behavior after momentum scrolling on hardware. Screenshots: `%TEMP%/product-drawer-layers-818D6H/`.
+- Shared normal/short-viewport overlay/table tests, overlay lifecycle tests, stylesheet bundle equivalence/build checks, and product PHP lint passed again.
+
+This follow-up changes `modals.css`, `cashier.css`, `inventory.css`, generated `style.css`, `products.php`, and the three existing responsive/product browser tests. No database or business logic changed. The exact Android-device artifact still requires checking on that device after the updated stylesheet loads.

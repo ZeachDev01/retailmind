@@ -152,6 +152,8 @@ const fixture = action => {
         };
         const actions = async route => {
             if (route === 'inventory_management/products') {
+                const stylesheet = await page.locator('link[href*="assets/css/style.css"]').first().getAttribute('href');
+                assert(new URL(stylesheet, origin).searchParams.has('v'), 'Product page requests the current stylesheet version');
                 await page.locator('#clear-filters').click();
                 const first = page.getByRole('button', {name: 'First page', exact: true});
                 if (await first.isEnabled()) await first.click();

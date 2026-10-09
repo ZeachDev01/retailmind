@@ -9,7 +9,7 @@ const slice = (source, start, end) => clean(source.slice(source.indexOf(start), 
 (async () => {
     const browser = await chromium.launch({headless:true});
     try {
-        const page = await browser.newPage();
+        const widths = [320,375,425,768,800,820,834,900,901,912,960,1024,1180,1194,1280,1366,1440];
         const shared = ['style', 'theme'].map(name => read('assets/css/' + name + '.css')).join('\n');
         const promotions = read('components/inventory_management/promotions.php');
         const requests = read('components/inventory_management/replenishment_requests.php');
@@ -28,22 +28,26 @@ const slice = (source, start, end) => clean(source.slice(source.indexOf(start), 
             {name:'sales reversals', css:'invoices', html:'<div class="receipts-container">' + slice(sales, '<div class="grid-two sales-reversal-grid">', '<?php require __DIR__') + '</div>', selectors:['.sales-reversal-grid', '.sales-reversal-grid > div', '.panel']},
         ];
         const failures = [];
-        for (const fixture of fixtures) {
-            const html = '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><style>' + shared + (fixture.css ? read('assets/css/' + fixture.css + '.css') : '') + (fixture.inline || '') + '</style><div class="app-shell"><aside class="sidebar"></aside><main class="main-content">' + fixture.html + '</main></div>';
-            for (const width of [320,375,425,768,1024,1440]) {
-                await page.setViewportSize({width,height:900});
-                await page.setContent(html);
-                const overflow = await page.evaluate(selectors => [...document.querySelectorAll(selectors.join(','))].filter(el => el.getClientRects().length && !el.closest('[hidden]') && !el.closest('.table-wrap, .data-table-scroll')).map(el => {
-                    const container = el.parentElement.closest('.dashboard-section, .create-section, .forecast-item, .request-card, .main-content');
-                    return {tag:el.tagName, cls:el.className, name:el.name, box:el.getBoundingClientRect().toJSON(), parent:container.getBoundingClientRect().toJSON()};
-                }).filter(el => el.box.x < Math.max(0,el.parent.x) - 1 || el.box.right > Math.min(innerWidth,el.parent.right) + 1), fixture.selectors);
-                if (overflow.length) failures.push({page:fixture.name,width,overflow});
-                const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-                if (pageWidth > width + 1) failures.push({page:fixture.name,width,pageWidth});
+        for (const touch of [false, true]) {
+            const page = await browser.newPage({hasTouch:touch, isMobile:touch, deviceScaleFactor:touch ? 2 : 1});
+            for (const fixture of fixtures) {
+                const html = '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><style>' + shared + (fixture.css ? read('assets/css/' + fixture.css + '.css') : '') + (fixture.inline || '') + '</style><div class="app-shell"><aside class="sidebar"></aside><main class="main-content">' + fixture.html + '</main></div>';
+                for (const width of widths) {
+                    await page.setViewportSize({width,height:900});
+                    await page.setContent(html);
+                    const overflow = await page.evaluate(selectors => [...document.querySelectorAll(selectors.join(','))].filter(el => el.getClientRects().length && !el.closest('[hidden]') && !el.closest('.table-wrap, .data-table-scroll')).map(el => {
+                        const container = el.parentElement.closest('.dashboard-section, .create-section, .forecast-item, .request-card, .main-content');
+                        return {tag:el.tagName, cls:el.className, name:el.name, box:el.getBoundingClientRect().toJSON(), parent:container.getBoundingClientRect().toJSON()};
+                    }).filter(el => el.box.x < Math.max(0,el.parent.x) - 1 || el.box.right > Math.min(innerWidth,el.parent.right) + 1), fixture.selectors);
+                    if (overflow.length) failures.push({page:fixture.name,width,touch,overflow});
+                    const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+                    if (pageWidth > width + 1) failures.push({page:fixture.name,width,touch,pageWidth});
+                }
             }
+            await page.close();
         }
         if (process.env.RESPONSIVE_DIAGNOSTIC) console.log(JSON.stringify(failures, null, 2));
         assert.deepEqual(failures, [], 'Page-specific grids, forms and action controls remain inside every viewport');
-        console.log('Page responsive components: passed (production products, counts, cashier dashboard, sales reversals, promotion, replenishment and settings markup at 320/375/425/768/1024/1440px)');
+        console.log(`Page responsive components: passed (${fixtures.length * widths.length * 2} checks; production markup, desktop/touch, mobile/tablet/desktop widths and sidebar breakpoint boundaries)`);
     } finally { await browser.close(); }
 })().catch(error => {console.error(error); process.exitCode=1;});
