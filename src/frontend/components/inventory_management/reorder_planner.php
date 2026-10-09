@@ -30,13 +30,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "SELECT p.product_id, p.product_name, p.reorder_level, p.safety_stock,
                         p.minimum_order_quantity, p.units_per_package,
                         COALESCE(i.quantity_on_hand, 0) quantity_on_hand,
-                        sp.prediction_id, sp.suggested_reorder_qty
+                        NULL as prediction_id, NULL as suggested_reorder_qty
                  FROM products p
                  LEFT JOIN inventory i ON i.product_id = p.product_id
-                 LEFT JOIN stock_predictions sp ON sp.prediction_id = (
-                    SELECT MAX(sp2.prediction_id) FROM stock_predictions sp2 WHERE sp2.product_id = p.product_id
-                 )
-                 WHERE p.product_id IN ({$placeholders}) AND p.status = 'active'
+                 WHERE p.product_id IN ({}) AND p.status = 'active'
                  FOR UPDATE"
             );
             $stmt->execute($productIds);
@@ -100,8 +97,7 @@ $rows = $pdo->query(
     "SELECT p.product_id, p.sku, p.product_name, p.reorder_level, p.safety_stock,
             p.minimum_order_quantity, p.units_per_package, p.preferred_supplier,
             COALESCE(i.quantity_on_hand, 0) quantity_on_hand,
-            sp.prediction_id, sp.suggested_reorder_qty, sp.forecasted_demand_during_lead_time,
-            sp.incoming_stock_used, sp.confidence_score, sp.generated_at,
+            NULL as prediction_id, NULL as suggested_reorder_qty, NULL as forecasted_demand_during_lead_time, NULL as incoming_stock_used, NULL as confidence_score, NULL as generated_at,
             s.supplier_id, s.supplier_name,
             COALESCE(s.standard_lead_time_days, p.supplier_lead_time_days) lead_time_days,
             COALESCE(s.minimum_order_value, 0) supplier_minimum_value,
@@ -112,13 +108,10 @@ $rows = $pdo->query(
             ) has_open_request
      FROM products p
      LEFT JOIN inventory i ON i.product_id = p.product_id
-     LEFT JOIN stock_predictions sp ON sp.prediction_id = (
-        SELECT MAX(sp2.prediction_id) FROM stock_predictions sp2 WHERE sp2.product_id = p.product_id
-     )
      LEFT JOIN supplier_products spt ON spt.product_id = p.product_id AND spt.is_preferred = 1
      LEFT JOIN suppliers s ON s.supplier_id = spt.supplier_id AND s.status = 'active'
      WHERE p.status = 'active'
-       AND (COALESCE(sp.suggested_reorder_qty, 0) > 0 OR COALESCE(i.quantity_on_hand, 0) <= p.reorder_level)
+       AND (COALESCE(i.quantity_on_hand, 0) <= p.reorder_level)
      ORDER BY COALESCE(s.supplier_name, p.preferred_supplier, 'Unassigned'), p.product_name"
 )->fetchAll(PDO::FETCH_ASSOC);
 

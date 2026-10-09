@@ -77,15 +77,15 @@ class DashboardService
                 "SELECT COUNT(*) FROM replenishment_requests WHERE status = 'pending'"
             )->fetchColumn(),
             'forecasted_demand' => (int)$this->pdo->query(
-                "SELECT COALESCE(SUM(sp.predicted_demand_next_30_days), 0)
-                 FROM stock_predictions sp
-                 WHERE sp.prediction_id = (
-                    SELECT sp2.prediction_id
-                    FROM stock_predictions sp2
-                    WHERE sp2.product_id = sp.product_id
-                    ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC
+                "SELECT COALESCE(SUM(predicted_units), 0)
+                 FROM demand_forecasts df
+                 WHERE df.job_id = (
+                    SELECT job_id
+                    FROM ml_jobs
+                    WHERE trigger_type = 'forecast_generation' AND status = 'succeeded'
+                    ORDER BY completed_at DESC, job_id DESC
                     LIMIT 1
-                 )"
+                 ) AND df.horizon_day <= 28"
             )->fetchColumn(),
             'inventory_value' => (float)$this->pdo->query(
                 "SELECT COALESCE(SUM(i.quantity_on_hand * p.cost_price), 0)
@@ -138,18 +138,19 @@ class DashboardService
     public function getLatestForecasts(int $limit = 5): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT p.sku, p.product_name, sp.predicted_demand_next_30_days,
-                    sp.reorder_suggested, sp.suggested_reorder_qty, sp.confidence_score
-             FROM stock_predictions sp
-             JOIN products p ON p.product_id = sp.product_id
-             WHERE sp.prediction_id = (
-                SELECT sp2.prediction_id
-                FROM stock_predictions sp2
-                WHERE sp2.product_id = sp.product_id
-                ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC
+            "SELECT p.sku, p.product_name, SUM(df.predicted_units) as predicted_demand_next_30_days,
+                    0 as reorder_suggested, 0 as suggested_reorder_qty, 1.0 as confidence_score
+             FROM demand_forecasts df
+             JOIN products p ON p.product_id = df.product_id
+             WHERE df.job_id = (
+                SELECT job_id
+                FROM ml_jobs
+                WHERE trigger_type = 'forecast_generation' AND status = 'succeeded'
+                ORDER BY completed_at DESC, job_id DESC
                 LIMIT 1
-             )
-             ORDER BY sp.reorder_suggested DESC, sp.predicted_demand_next_30_days DESC
+             ) AND df.horizon_day <= 30
+             GROUP BY p.product_id, p.sku, p.product_name
+             ORDER BY predicted_demand_next_30_days DESC
              LIMIT ?"
         );
         $stmt->bindValue(1, $limit, PDO::PARAM_INT);
@@ -250,22 +251,25 @@ class DashboardService
     {
         $stmt = $this->pdo->prepare(
             "SELECT p.sku, p.product_name,
-                    COALESCE(sp.predicted_demand_next_30_days, 0) AS forecast_demand,
+                    COALESCE(df_agg.forecast_demand, 0) AS forecast_demand,
                     COALESCE(actual.units_sold, 0) AS actual_units
              FROM products p
-             LEFT JOIN stock_predictions sp ON sp.prediction_id = (
-                SELECT sp2.prediction_id FROM stock_predictions sp2
-                WHERE sp2.product_id = p.product_id
-                ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC LIMIT 1
-             )
+             LEFT JOIN (
+                SELECT product_id, SUM(predicted_units) as forecast_demand
+                FROM demand_forecasts
+                WHERE job_id = (
+                    SELECT job_id FROM ml_jobs WHERE trigger_type = 'forecast_generation' AND status = 'succeeded' ORDER BY completed_at DESC, job_id DESC LIMIT 1
+                ) AND horizon_day <= 28
+                GROUP BY product_id
+             ) df_agg ON df_agg.product_id = p.product_id
              LEFT JOIN (
                 SELECT si.product_id, SUM(si.quantity) AS units_sold
                 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
                 WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                 GROUP BY si.product_id
              ) actual ON actual.product_id = p.product_id
-             WHERE sp.prediction_id IS NOT NULL
-             ORDER BY GREATEST(COALESCE(sp.predicted_demand_next_30_days, 0), COALESCE(actual.units_sold, 0)) DESC
+             WHERE df_agg.forecast_demand IS NOT NULL OR actual.units_sold IS NOT NULL
+             ORDER BY GREATEST(COALESCE(df_agg.forecast_demand, 0), COALESCE(actual.units_sold, 0)) DESC
              LIMIT ?"
         );
         $stmt->bindValue(1, max(1, min(20, $limit)), PDO::PARAM_INT);

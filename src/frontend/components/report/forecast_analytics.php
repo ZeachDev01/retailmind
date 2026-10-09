@@ -23,10 +23,20 @@ $productMetrics = array_values(array_filter(
 $actualVsForecast = [];
 try {
     $actualStatement = $pdo->prepare(
-        "SELECT p.product_name, sp.forecast_value, sp.actual_demand, sp.generated_at
-         FROM stock_predictions sp JOIN products p ON p.product_id = sp.product_id
-         WHERE sp.actual_demand IS NOT NULL AND p.branch_id = ?
-         ORDER BY sp.generated_at DESC LIMIT 20"
+        "SELECT p.product_name, SUM(df.predicted_units) AS forecast_value,
+                (
+                    SELECT COALESCE(SUM(si.quantity), 0)
+                    FROM sale_items si
+                    JOIN sales s ON s.sale_id = si.sale_id
+                    WHERE si.product_id = df.product_id
+                      AND s.sale_date >= df.forecast_origin
+                      AND s.sale_date < DATE_ADD(df.forecast_origin, INTERVAL 28 DAY)
+                ) AS actual_demand,
+                df.forecast_origin AS generated_at
+         FROM demand_forecasts df JOIN products p ON p.product_id = df.product_id
+         WHERE p.branch_id = ? AND DATE_ADD(df.forecast_origin, INTERVAL 28 DAY) <= NOW()
+         GROUP BY df.job_id, df.product_id, df.forecast_origin, p.product_name
+         ORDER BY df.forecast_origin DESC LIMIT 20"
     );
     $actualStatement->execute([$storeId]);
     $actualVsForecast = $actualStatement->fetchAll(PDO::FETCH_ASSOC);
