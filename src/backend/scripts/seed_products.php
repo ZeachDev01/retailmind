@@ -17,7 +17,7 @@ try {
     if (strtolower((string)env('DATABASE_ENV', '')) === 'hosted') {
         throw new RuntimeException('Seed refused: hosted database configuration.');
     }
-    $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/product_seed.csv');
+    $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/src/backend/database/seeds/product_seed.csv');
     printf("Target: APP_ENV=%s MySQL %s:%s/%s\n", env('APP_ENV'), $config['host'], $config['port'], $config['database']);
     $pdo = Database::connection($config);
     if ($pdo->query('SELECT DATABASE()')->fetchColumn() !== $config['database']) {

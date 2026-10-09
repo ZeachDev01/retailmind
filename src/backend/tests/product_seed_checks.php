@@ -28,7 +28,7 @@ foreach (['local', 'development'] as $environment) {
     ProductSeeder::assertSafeTarget($environment, $config, 'retailmind_dev');
     $checks++;
 }
-$products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/product_seed.csv');
+$products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/src/backend/database/seeds/product_seed.csv');
 if (count($products) !== 60 || count(array_unique(array_column($products, 'category_name'))) !== 11) {
     throw new RuntimeException('Expected 60 representative products in 11 categories.');
 }
@@ -40,7 +40,7 @@ if ($fixture === false) {
 try {
     file_put_contents($fixture, "invalid,header\n");
     $reject(static fn () => ProductSeeder::loadProducts($fixture));
-    $source = file(dirname(__DIR__, 3) . '/product_seed.csv');
+    $source = file(dirname(__DIR__, 3) . '/src/backend/database/seeds/product_seed.csv');
     file_put_contents($fixture, $source[0] . $source[1] . $source[1]);
     $reject(static fn () => ProductSeeder::loadProducts($fixture));
     file_put_contents($fixture, $source[0] . str_replace(',0.75,', ',-1,', $source[1]));

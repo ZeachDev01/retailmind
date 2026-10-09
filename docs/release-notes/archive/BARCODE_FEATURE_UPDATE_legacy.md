@@ -1,5 +1,7 @@
 # Printable Barcode Feature
 
+Archived duplicate. See the [retained barcode feature note](../BARCODE_FEATURE_UPDATE.md).
+
 ## What was added
 
 - Products without manufacturer barcodes can now receive an automatically generated internal RetailMind barcode.

@@ -25,7 +25,7 @@ $asOf = (new DateTimeImmutable('today', $timezone))->setTime(0, 0);
 $pdo->prepare('SET time_zone = ?')->execute([$asOf->format('P')]);
 
 try {
-    $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/product_seed.csv');
+    $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/src/backend/database/seeds/product_seed.csv');
     $firstProducts = ProductSeeder::run($pdo, $products, true);
     $secondProducts = ProductSeeder::run($pdo, $products, true);
     $storeId = (new StoreScope($pdo))->id();

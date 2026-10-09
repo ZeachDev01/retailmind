@@ -1,5 +1,7 @@
 # Production deployment checklist
 
+Archived historical checklist with old paths. Use the [current deployment checklist](../../DEPLOYMENT_CHECKLIST.md).
+
 - Import `sql/schema.sql` for a new database or `sql/upgrade_random_forest_v2.sql` for an existing database.
 - Run `php scripts/migrate.php` after deploying updated application files.
 - Copy `.env.example` to `.env`; set `APP_ENV=production` and `APP_DEBUG=false`.

@@ -1,5 +1,8 @@
 Hi hello
 
+See the [documentation index](docs/README.md) for deployment, recovery,
+interface guides, architecture decisions, and release history.
+
 Fresh-install login:
 
 - Username: superadmin
@@ -93,9 +96,11 @@ runtime storage. Set up the production `.env` directly on the host and import
 the database through phpMyAdmin; those steps are not part of the file upload.
 Change the initial Super Administrator password before exposing the site.
 
-For a manual upload, copy `.env.infinityfree.example` to `htdocs/.env` (beside
-`index.php`, named exactly `.env`, without `.txt`). Replace its four
-`REPLACE_WITH_...` values using the hosting account's MySQL details. The password
+For a manual upload, create `htdocs/.env` (beside `index.php`, named exactly
+`.env`, without `.txt`). Set `APP_ENV=production`, `APP_DEBUG=false`,
+`APP_URL` to your website's HTTPS URL, and `SESSION_SECURE_COOKIE=true`.
+Set `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` using the hosting
+account's MySQL details. The password
 is the hosting/database password, not your InfinityFree website login password.
 Enable hidden-file visibility in your FTP client if `.env` is not listed.
 The real `.env` is intentionally excluded from Git, so uploading a GitHub source

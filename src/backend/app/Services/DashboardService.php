@@ -27,7 +27,7 @@ class DashboardService
                  FROM sales s
                  JOIN users u ON u.user_id = s.cashier_id
                  JOIN roles r ON r.role_id = u.role_id
-                 WHERE r.role_name = 'cashier' AND DATE(s.sale_date) = CURDATE()"
+                 WHERE r.role_name = 'cashier' AND s.sale_date >= CURDATE() AND s.sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)"
             )->fetchColumn(),
             'total_sales' => (float)$this->pdo->query("SELECT COALESCE(SUM(total_amount), 0) FROM sales")->fetchColumn(),
             'period_sales' => (float)$this->pdo->query("SELECT COALESCE(SUM(total_amount), 0) FROM sales WHERE sale_date >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)")->fetchColumn(),
@@ -280,7 +280,7 @@ class DashboardService
                     COUNT(*) AS transactions,
                     COALESCE(AVG(total_amount), 0) AS average_transaction
              FROM sales
-             WHERE cashier_id = ? AND DATE(sale_date) = CURDATE()"
+             WHERE cashier_id = ? AND sale_date >= CURDATE() AND sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)"
         );
         $stmt->execute([$cashierId]);
         $row = $stmt->fetch() ?: [];
@@ -318,7 +318,7 @@ class DashboardService
              JOIN products p ON p.product_id = si.product_id
              JOIN inventory i ON i.product_id = p.product_id
              WHERE s.cashier_id = ?
-               AND DATE(s.sale_date) = CURDATE()
+               AND s.sale_date >= CURDATE() AND s.sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
                AND i.quantity_on_hand <= p.reorder_level
              ORDER BY i.quantity_on_hand ASC, p.product_name ASC
              LIMIT ?"

@@ -51,7 +51,7 @@ The product name is **RetailMind** and the Store is **Shalom Store**. Product la
 - Existing workflows cover barcode sales, shifts, Stock Issues, products, inventory counts, receiving, suppliers, purchase orders, promotions, reports, notifications, backups, restore, audit visibility, system health, and demand forecasting.
 - `CONTEXT.md` is the authority for domain language and role responsibilities.
 - `docs/adr/` records the confirmed single-Store model, administrator boundaries, staff-safe Operator Alerts, and current Database Backup and Database Restore decisions.
-- `product_seed.csv` provides product seed data for the Store.
+- `src/backend/database/seeds/product_seed.csv` provides product seed data for the Store.
 - No approved testimonials, external customer roster, benchmark results, or marketing performance claims are on hand.
 
 ## Product Principles

@@ -23,7 +23,7 @@ function forecast_prototype_level(int $days, ?float $wape): array
 
 function forecast_prototype_fallback_rows(): array
 {
-    $path = dirname(__DIR__, 4) . '/product_seed.csv';
+    $path = dirname(__DIR__, 4) . '/src/backend/database/seeds/product_seed.csv';
     $rows = [];
     if (($handle = @fopen($path, 'rb')) !== false) {
         $headers = fgetcsv($handle);

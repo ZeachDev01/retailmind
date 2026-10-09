@@ -48,7 +48,7 @@ class SalesService
         ))';
         $total = $this->pdo->prepare('SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s JOIN users u ON u.user_id = s.cashier_id WHERE ' . $scopeSql);
         $total->execute([$storeId, $storeId]);
-        $today = $this->pdo->prepare('SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s JOIN users u ON u.user_id = s.cashier_id WHERE ' . $scopeSql . ' AND DATE(s.sale_date) = CURDATE()');
+        $today = $this->pdo->prepare('SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s JOIN users u ON u.user_id = s.cashier_id WHERE ' . $scopeSql . ' AND s.sale_date >= CURDATE() AND s.sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)');
         $today->execute([$storeId, $storeId]);
         return [
             'total_sales' => (float)$total->fetchColumn(),
