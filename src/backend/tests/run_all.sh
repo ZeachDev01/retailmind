@@ -115,3 +115,4 @@ printf 'Git whitespace: passed\n'
 bash src/backend/tests/release_package_check.sh
 printf 'PHP files linted: %s\n' "$(grep -c 'No syntax errors' /tmp/retailmind_php_lint.log)"
 printf 'Python compile: passed\n'
+php src/backend/tests/replenishment_queue_contract.php

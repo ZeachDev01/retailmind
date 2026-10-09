@@ -172,6 +172,7 @@ $managerInventoryItems = [
     ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Counts'],
     ['path' => 'components/inventory_management/csv_import.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'CSV Import'],
     ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
+    ['path' => 'components/inventory_management/replenishment_queue.php', 'icon' => 'bi-cart-plus', 'label' => 'Replenishment Queue'],
 ];
 
 $administratorReportItems = [
