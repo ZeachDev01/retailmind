@@ -2,9 +2,7 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_role(['admin']);
 
-$pdo = require __DIR__ . '/../../../backend/includes/db_connect.php'; // Not exactly, auth.php provides $pdo ? Wait, auth.php requires config/db.php which exposes $pdo.
-
-// Let's just use $GLOBALS['pdo'] or assume $pdo is available after auth.php.
+// $pdo is provided by auth.php which requires config/db.php
 
 use App\Store\StoreCalendar;
 use App\Services\PhilippineTime;
