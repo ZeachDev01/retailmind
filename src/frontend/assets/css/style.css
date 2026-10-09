@@ -3069,13 +3069,15 @@ body.system-health-open {
   background: rgba(15, 23, 42, 0.64);
   backdrop-filter: blur(3px);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.18s ease;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
 }
 .command-overlay.open,
 .rm-modal-overlay.open,
 .rm-drawer-overlay.open {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 .command-overlay {

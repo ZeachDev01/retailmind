@@ -4,6 +4,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 php src/backend/scripts/build_styles.php --check
 node src/backend/tests/stylesheet_bundle_browser_test.js
+node src/backend/tests/product_drawer_layer_browser_test.js
 find . -type f -name '*.php' -not -path './vendor/*' -not -path './.kilo/worktrees/*' -print0 | sort -z | xargs -0 -n1 php -l >/tmp/retailmind_php_lint.log
 python -m py_compile src/backend/legacy/demandForcasting/train_model.py src/backend/legacy/demandForcasting/auto_retrain.py src/backend/legacy/demandForcasting/db.py src/backend/legacy/demandForcasting/predict_api.py
 bash src/backend/tests/javascript_syntax_check.sh
