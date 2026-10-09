@@ -13,6 +13,7 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             $this->migrationCheck(),
             ...$this->storageChecks(),
             $this->mlServiceCheck(),
+            $this->workerHealthCheck(),
             $this->modelArtifactCheck(),
             $this->backupCheck(),
             $this->mailCheck(),
@@ -103,6 +104,41 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             return $this->result('Forecast API', !empty($payload['model_loaded']) ? 'healthy' : 'warning', $baseUrl . ' — ' . $modelState, 'Forecasting');
         } catch (Throwable $e) {
             return $this->result('Forecast API', 'warning', $baseUrl . ' is unavailable: ' . $e->getMessage(), 'Forecasting');
+        }
+    }
+
+    private function workerHealthCheck(): array
+    {
+        try {
+            $stmt = $this->pdo->query("SELECT status, queued_at, completed_at FROM ml_jobs ORDER BY job_id DESC LIMIT 1");
+            $job = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$job) {
+                return $this->result('Background Worker', 'healthy', 'No scheduled or manual background ML tasks have been recorded yet.', 'Forecasting');
+            }
+
+            if ($job['status'] === 'failed') {
+                return $this->result('Background Worker', 'critical', 'The worker encountered an error during its last task. Check diagnostic logs.', 'Forecasting');
+            }
+            if ($job['status'] === 'running' || $job['status'] === 'queued') {
+                $queuedAt = $job['queued_at'];
+                $ageMinutes = (time() - strtotime((string)$queuedAt)) / 60;
+                if ($ageMinutes > 120) {
+                    return $this->result('Background Worker', 'warning', 'A background task has been queued for over 2 hours without completion.', 'Forecasting');
+                }
+                return $this->result('Background Worker', 'healthy', 'The worker is currently processing a background task.', 'Forecasting');
+            }
+
+            $completedAt = $job['completed_at'];
+            $ageHours = (time() - strtotime((string)$completedAt)) / 3600;
+
+            if ($ageHours > 48) {
+                return $this->result('Background Worker', 'warning', 'No worker activity in ' . round($ageHours) . ' hours. A scheduled task may have been missed.', 'Forecasting');
+            }
+
+            return $this->result('Background Worker', 'healthy', 'Worker completed its last task ' . round($ageHours, 1) . ' hours ago.', 'Forecasting');
+        } catch (Throwable $e) {
+            return $this->result('Background Worker', 'warning', 'Unable to check worker health status.', 'Forecasting');
         }
     }
 

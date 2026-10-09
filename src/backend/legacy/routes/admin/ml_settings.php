@@ -20,6 +20,9 @@ $definitions = [
     'prediction_interval_lower' => ['label' => 'Prediction interval lower percentile', 'min' => 1, 'max' => 49, 'type' => 'number'],
     'prediction_interval_upper' => ['label' => 'Prediction interval upper percentile', 'min' => 51, 'max' => 99, 'type' => 'number'],
     'holiday_dates' => ['label' => 'Additional special dates (YYYY-MM-DD, comma-separated)', 'type' => 'text'],
+    'schedule_daily_forecast_time' => ['label' => 'Daily forecast generation time (HH:MM)', 'type' => 'time'],
+    'schedule_weekly_retrain_day' => ['label' => 'Weekly model retraining day', 'type' => 'text'],
+    'schedule_weekly_retrain_time' => ['label' => 'Weekly model retraining time (HH:MM)', 'type' => 'time'],
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -39,6 +42,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$parsed || $parsed->format('Y-m-d') !== $date) {
                     $errors[] = "Invalid special date: {$date}.";
                 }
+            }
+        } elseif ($key === 'schedule_weekly_retrain_day' && $value !== '') {
+            $validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            if (!in_array(ucfirst(strtolower($value)), $validDays, true)) {
+                $errors[] = "Invalid day of week: {$value}.";
+            } else {
+                $value = ucfirst(strtolower($value));
+            }
+        } elseif (($key === 'schedule_daily_forecast_time' || $key === 'schedule_weekly_retrain_time') && $value !== '') {
+            if (!preg_match('/^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$/', $value)) {
+                $errors[] = "Invalid time format for {$key}. Use HH:MM.";
             }
         }
         $updates[$key] = $value;

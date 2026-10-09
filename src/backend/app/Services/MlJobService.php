@@ -63,6 +63,35 @@ class MlJobService
             'ip' => $ipAddress ?? '127.0.0.1'
         ]);
 
+    public function enqueueSystem(string $triggerType): int
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO ml_jobs (trigger_type, status, requester_id, queued_at)
+            VALUES (:trigger, 'queued', NULL, NOW())
+        ");
+        $stmt->execute([
+            'trigger' => $triggerType,
+        ]);
+
+        $jobId = (int)$this->pdo->lastInsertId();
+
+        // Record Protected Audit Record for system scheduler
+        $action = 'Enqueued Scheduled ML Job';
+        $module = 'Demand Forecasting';
+        $category = AuditRecordCategory::classify($module, $action);
+        
+        $logStmt = $this->pdo->prepare("
+            INSERT INTO activity_log (user_id, action, category, module, record_id, new_value, ip_address, created_at)
+            VALUES (NULL, :action, :category, :module, :record_id, :new_value, '127.0.0.1', NOW())
+        ");
+        $logStmt->execute([
+            'action' => $action,
+            'category' => $category,
+            'module' => $module,
+            'record_id' => $jobId,
+            'new_value' => json_encode(['trigger_type' => $triggerType, 'status' => 'queued', 'origin' => 'scheduler']),
+        ]);
+
         return $jobId;
     }
 
