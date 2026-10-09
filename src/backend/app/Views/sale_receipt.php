@@ -12,7 +12,7 @@
                     <div><?= $escape($store['tin']) ?></div>
                 </div>
                 <?php // Legacy / Unassigned attribution is rendered without exposing the Cashier Shift identifier. ?>
-                <?= \App\Services\ReceiptDetailsService::renderMetadata($sale) ?>
+                <?= \App\Receipts\ReceiptDetailsService::renderMetadata($sale) ?>
             </div>
 
             <div class="sale-receipt-items" aria-label="Purchased items">

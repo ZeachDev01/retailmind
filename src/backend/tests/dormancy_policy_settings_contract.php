@@ -171,7 +171,7 @@ try {
     $assert(str_contains($serviceSource, 'public const DEFAULT_DISABLE_DAYS = 45'), 'Service default disable-days must be 45');
     $assert(str_contains($serviceSource, 'public const DEFAULT_WARN_DAYS = 30'), 'Service default warn-days must be 30');
 
-    $schema = $read('src/backend/sql/schema.sql');
+    $schema = $read('src/backend/database/sql/schema.sql');
     foreach (['dormancy_disable_days', 'dormancy_warn_days'] as $needle) {
         $assert(str_contains($schema, $needle), "Fresh schema must seed {$needle}");
     }

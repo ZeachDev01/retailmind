@@ -9,7 +9,7 @@ return [
         // Ticket #87. The Register identity is stable for the life of the
         // record so earlier operational references survive a rename, and a
         // disabled Register is withdrawn from new shifts without losing its
-        // history. This must match the `registers` table in sql/schema.sql so a
+        // history. This must match the `registers` table in database/sql/schema.sql so a
         // fresh install and an upgraded install agree.
         if (!Schema::tableExists($pdo, 'registers')) {
             $pdo->exec("CREATE TABLE registers (

@@ -18,7 +18,7 @@ return [
         //
         // NULL means unlocked, so this is the same shape as the other nullable
         // shift timestamps and needs no separate lookup table. The column must
-        // match sql/schema.sql so a fresh install and an upgraded install agree.
+        // match database/sql/schema.sql so a fresh install and an upgraded install agree.
         Schema::addColumnIfMissing($pdo, 'cashier_shifts', 'locked_at', 'TIMESTAMP NULL DEFAULT NULL AFTER `reviewed_at`');
     },
 ];

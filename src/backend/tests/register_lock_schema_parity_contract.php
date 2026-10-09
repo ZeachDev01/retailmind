@@ -1,7 +1,7 @@
 <?php
 // Register lock schema parity contract (ticket #90).
 //
-// A fresh install (src/backend/sql/schema.sql) and an upgraded install (the
+// A fresh install (src/backend/database/sql/schema.sql) and an upgraded install (the
 // 202609290004_cashier_shift_register_lock migration) must produce the same
 // Cashier Shift lock state. The two declarations are compared directly so the
 // check is deterministic and never depends on the state of a developer's
@@ -24,7 +24,7 @@ $assertMatches = static function (string $haystack, string $pattern, string $mes
 };
 
 $root = dirname(__DIR__, 3);
-$schema = (string)@file_get_contents($root . '/src/backend/sql/schema.sql');
+$schema = (string)@file_get_contents($root . '/src/backend/database/sql/schema.sql');
 $migration = (string)@file_get_contents($root . '/src/backend/database/migrations/202609290004_cashier_shift_register_lock.php');
 $assert($schema !== '' && $migration !== '', 'Register lock schema sources must be readable');
 

@@ -1,11 +1,8 @@
 <?php
 
-namespace App\Services;
+namespace App\Backup;
 
 use App\Authorization\RoleCapabilityPolicy;
-use App\Backup\DatabaseSnapshotWriter;
-use App\Backup\RecoveryStore;
-use App\Backup\SqlBackupFormat;
 use DomainException;
 use PDO;
 use Throwable;

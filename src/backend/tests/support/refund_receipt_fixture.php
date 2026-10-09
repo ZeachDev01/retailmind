@@ -1,6 +1,6 @@
 <?php
 // Synthetic customer receipt exercises production presentation without Store writes.
-require_once __DIR__ . '/../../app/Services/RefundReceiptPresentation.php';
+require_once __DIR__ . '/../../app/Receipts/RefundReceiptPresentation.php';
 $long = ($argv[1] ?? '') === 'long';
 $items = [];
 for ($i = 1; $i <= ($long ? 35 : 2); $i++) {
@@ -21,5 +21,5 @@ if (($argv[1] ?? '') === 'legacy-noncash') {
     unset($details['refund']['payment_reference']);
 }
 echo '<section class="receipt-container"><h2 class="no-print">Refund recorded — synthetic example</h2><button class="no-print" type="button" onclick="printReceiptSection(this)">Print Refund Receipt</button>';
-App\Services\RefundReceiptPresentation::render($details, (int)($argv[2] ?? 80));
+App\Receipts\RefundReceiptPresentation::render($details, (int)($argv[2] ?? 80));
 echo '</section>';

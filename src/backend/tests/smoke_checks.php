@@ -32,14 +32,14 @@ $checks = [
         ],
     ],
     'Fresh schema ships the same sale attribution relationship' => [
-        'file' => 'src/backend/sql/schema.sql',
+        'file' => 'src/backend/database/sql/schema.sql',
         'needles' => [
             'KEY `idx_sales_shift`',
             'CONSTRAINT `fk_sales_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE RESTRICT',
         ],
     ],
     'Unlinked sales are presented as Legacy / Unassigned' => [
-        'file' => 'src/backend/app/Services/ReceiptDetailsService.php',
+        'file' => 'src/backend/app/Receipts/ReceiptDetailsService.php',
         'needles' => ['Legacy / Unassigned', 'LEFT JOIN cashier_shifts cs ON cs.shift_id = s.shift_id', 'r.name AS register_name'],
     ],
     'Discount authorization recorded' => [
@@ -265,7 +265,7 @@ $checks = [
         'needles' => ['sales-tabs', 'Sales Transactions', 'Legacy Reversals', 'id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'tab=reversals&sale_id=', 'SaleReversalService', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
     ],
     'Sales transaction server contract is isolated and safe' => [
-        'file' => 'src/backend/app/Services/ReceiptTableService.php',
+        'file' => 'src/backend/app/Receipts/ReceiptTableService.php',
         'needles' => ['class ReceiptTableService', 'StoreScope', 'recordsTotal', 'recordsFiltered', "'s.sale_date'", "'s.total_amount'", "'item_count'", 'LIMIT :limit OFFSET :offset'],
         'forbidden' => ['ORDER BY {$request', 'ORDER BY ' . "\$_GET", "scope['branch_id']", 'scope_branch_id'],
     ],
@@ -367,7 +367,7 @@ $checks = [
         'needles' => ['getOpenShift', 'quantity_on_hand >= ?', 'adjustment_id', 'Insufficient available stock', 'A rejection reason is required', "'inventory_manager'"],
     ],
     'Stock-issue schema links reports to shifts and movements' => [
-        'file' => 'src/backend/sql/schema.sql',
+        'file' => 'src/backend/database/sql/schema.sql',
         'needles' => ['fk_inventory_adjustments_shift', 'fk_stock_movements_adjustment', 'review_notes', 'related_adjustment_id', 'fk_inventory_counts_related_adjustment'],
     ],
     'Administrator stock-issue oversight is read-only' => [
@@ -451,7 +451,7 @@ $checks = [
         ],
     ],
     'Fresh schema ships the same Register structure' => [
-        'file' => 'src/backend/sql/schema.sql',
+        'file' => 'src/backend/database/sql/schema.sql',
         'needles' => ['CREATE TABLE `registers`', 'UNIQUE KEY `register_name`', 'fk_registers_created_by'],
     ],
     // Exclusive Cashier Shift opening (ticket #88).
@@ -498,7 +498,7 @@ $checks = [
         'forbidden' => ["\nfunction "],
     ],
     'Fresh schema ships the same exclusive Cashier Shift constraints' => [
-        'file' => 'src/backend/sql/schema.sql',
+        'file' => 'src/backend/database/sql/schema.sql',
         'needles' => [
             'UNIQUE KEY `uq_cashier_shifts_open_cashier`',
             'UNIQUE KEY `uq_cashier_shifts_open_register`',
@@ -532,7 +532,7 @@ $checks = [
         'forbidden' => ["\nfunction "],
     ],
     'Fresh schema records the lock on the Cashier Shift' => [
-        'file' => 'src/backend/sql/schema.sql',
+        'file' => 'src/backend/database/sql/schema.sql',
         'needles' => ['`locked_at` timestamp NULL DEFAULT NULL'],
     ],
     'Checkout refuses a locked Register from the row that authorizes it' => [
@@ -642,7 +642,7 @@ $checks = [
         'forbidden' => ["\nfunction "],
     ],
     'Fresh schema ships the same held sale ownership structure' => [
-        'file' => 'src/backend/sql/schema.sql',
+        'file' => 'src/backend/database/sql/schema.sql',
         'needles' => [
             "enum('held','resumed','discarded','completed','expired')",
             'KEY `idx_held_sales_shift_status` (`shift_id`,`status`)',

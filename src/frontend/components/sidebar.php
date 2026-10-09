@@ -26,8 +26,9 @@ $assignedWorkspaceRoles = array_values(array_filter(
 $avatarStylesheetPath = __DIR__ . '/../assets/css/avatars.css';
 $avatarStylesheetVersion = is_file($avatarStylesheetPath) ? (string)filemtime($avatarStylesheetPath) : '1';
 $avatarStylesheetUrl = app_url('assets/css/avatars.css') . '?v=' . rawurlencode($avatarStylesheetVersion);
-$sidebarBrandLogoUrl = app_url('assets/img/retailmind-logo-600x200.png');
-$sidebarBrandIconUrl = app_url('assets/img/retailmind-icon-512.png');
+$sidebarBrandBaseUrl = app_url('assets/img/retailmind-web-assets%20dark%20mode/');
+$sidebarBrandLogoUrl = $sidebarBrandBaseUrl . 'logos/light/logo-header.png';
+$sidebarBrandIconUrl = $sidebarBrandBaseUrl . 'icons/light/icon-64.png';
 $commandProductTarget = match ($role) {
     'super_admin' => app_url('components/inventory_management/inventory_overview.php'),
     'admin', 'inventory_manager' => app_url('components/inventory_management/products.php'),
@@ -280,7 +281,7 @@ $GLOBALS['rm_navigation_shell'] = [
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
-            <img class="admin-mobile-logo-image" src="<?= sidebar_e($sidebarBrandIconUrl) ?>" alt="">
+            <img class="admin-mobile-logo-image" src="<?= sidebar_e($sidebarBrandIconUrl) ?>" data-brand-base="<?= sidebar_e($sidebarBrandBaseUrl) ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
             <span class="admin-mobile-logo-copy"><strong>RetailMind</strong><small>Inventory &amp; Forecasting</small></span>
         </a>
     </div>
@@ -296,7 +297,7 @@ $GLOBALS['rm_navigation_shell'] = [
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="appSidebar">
     <button type="button" class="sidebar-brand" id="sidebarBrandToggle" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="appSidebar">
-        <span class="brand-icon" aria-hidden="true"><img src="<?= sidebar_e($sidebarBrandIconUrl) ?>" alt=""></span>
+        <span class="brand-icon" aria-hidden="true"><img src="<?= sidebar_e($sidebarBrandIconUrl) ?>" data-brand-base="<?= sidebar_e($sidebarBrandBaseUrl) ?>" data-brand-variant="icons/STYLE/icon-64.png" alt=""></span>
         <span class="sidebar-brand-copy">
             <span class="sidebar-brand-title">RetailMind</span>
             <span>Inventory &amp; Forecasting</span>

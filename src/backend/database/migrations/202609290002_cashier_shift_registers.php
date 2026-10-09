@@ -13,7 +13,7 @@ return [
         // shift is open, carried by a UNIQUE key. Closed history is therefore
         // never constrained, and NULLs never collide in a unique index.
         //
-        // This must match the `cashier_shifts` table in sql/schema.sql so a
+        // This must match the `cashier_shifts` table in database/sql/schema.sql so a
         // fresh install and an upgraded install agree.
 
         // Existing history predates Registers, so the column stays nullable and

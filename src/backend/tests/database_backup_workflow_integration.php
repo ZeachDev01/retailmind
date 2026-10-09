@@ -13,8 +13,8 @@ require_once __DIR__ . '/../includes/backup.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\RecoveryStore;
 use App\Backup\SqlBackupFormat;
-use App\Services\DatabaseBackupService;
-use App\Services\DatabaseRestoreService;
+use App\Backup\DatabaseBackupService;
+use App\Backup\DatabaseRestoreService;
 use App\Store\StoreWriteGate;
 
 class InterruptedRestorePdo extends PDO
@@ -160,7 +160,7 @@ try {
     // not just the small failure-injection fixture above.
     $full = new PDO($dsn . ';dbname=' . $names[2], $config['username'], $config['password'], $options);
     $full->exec('SET FOREIGN_KEY_CHECKS=0');
-    foreach (split_sql_statements((string)file_get_contents(__DIR__ . '/../sql/schema.sql')) as $statement) {
+    foreach (split_sql_statements((string)file_get_contents(__DIR__ . '/../database/sql/schema.sql')) as $statement) {
         $full->exec($statement);
     }
     $full->exec('SET FOREIGN_KEY_CHECKS=1');

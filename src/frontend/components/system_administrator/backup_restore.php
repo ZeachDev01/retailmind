@@ -11,8 +11,8 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE)
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\RecoveryStore;
-use App\Services\DatabaseBackupService;
-use App\Services\DatabaseRestoreService;
+use App\Backup\DatabaseBackupService;
+use App\Backup\DatabaseRestoreService;
 
 if (!RecoveryStore::isAvailable()) {
     http_response_code(503);

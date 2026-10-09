@@ -1,7 +1,7 @@
 <?php
 // Held Sale Cashier Shift ownership schema parity contract (ticket #91, AC 6).
 //
-// A fresh install (src/backend/sql/schema.sql) and an upgraded install (the
+// A fresh install (src/backend/database/sql/schema.sql) and an upgraded install (the
 // 202609290005_held_sale_shift_ownership migration) must produce the same
 // held_sales table, because the closure invariant is only as good as the
 // relationship it reads. The two declarations are compared directly so the check
@@ -21,7 +21,7 @@ $assertMatches = static function (string $haystack, string $pattern, string $mes
 };
 
 $root = dirname(__DIR__, 3);
-$schema = (string)@file_get_contents($root . '/src/backend/sql/schema.sql');
+$schema = (string)@file_get_contents($root . '/src/backend/database/sql/schema.sql');
 $migration = (string)@file_get_contents($root . '/src/backend/database/migrations/202609290005_held_sale_shift_ownership.php');
 $assert($schema !== '' && $migration !== '', 'Held sale schema sources must be readable');
 

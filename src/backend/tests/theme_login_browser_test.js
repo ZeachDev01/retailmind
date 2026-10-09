@@ -19,6 +19,16 @@ const net = require('node:net');
             for(let i=0;i<200;i++) { try { if((await fetch(url)).ok)break; }catch{} if(i===199)throw new Error('Login test server unavailable'); await new Promise(resolve=>setTimeout(resolve,50)); }
         }
         browser = await chromium.launch({headless: true});
+        const lightContext = await browser.newContext({colorScheme: 'light'});
+        await lightContext.route('https://**/*', route => route.abort());
+        const lightPage = await lightContext.newPage();
+        const brandRequests = [];
+        lightPage.on('request', request => brandRequests.push(new URL(request.url()).pathname));
+        await lightPage.goto(url, {waitUntil: 'networkidle'});
+        assert(brandRequests.some(path => path.endsWith('/logos/light/logo-header.png')), 'Default light logo loads directly');
+        assert(brandRequests.some(path => path.endsWith('/icons/light/icon-64.png')), 'Default light icon loads directly');
+        assert(!brandRequests.some(path => /\/retailmind-(?:logo-600x200|icon-512)\.png$/.test(path)), 'Landing must not download original branding before themed branding');
+        await lightContext.close();
         const context = await browser.newContext({colorScheme: 'dark', viewport: {width: 390, height: 844}});
         const page = await context.newPage();
         await page.goto(url);

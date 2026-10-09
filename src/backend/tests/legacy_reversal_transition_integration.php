@@ -33,7 +33,7 @@ $assert=static function(bool $ok,string $message):void { if (!$ok) throw new Run
 $database='retailmind_legacy_test_'.bin2hex(random_bytes(6));$server=$connect();$created=false;$failed=false;
 try {
     $server->exec("CREATE DATABASE `{$database}`");$created=true;$pdo=$connect($database);
-    $schema = file_get_contents(__DIR__ . '/../sql/schema.sql');
+    $schema = file_get_contents(__DIR__ . '/../database/sql/schema.sql');
     preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', $schema, $tables);
     $assert(count($tables[0]) > 0, 'Canonical table definitions must be present.');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0');

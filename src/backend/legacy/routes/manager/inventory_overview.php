@@ -9,7 +9,7 @@ $inventoryService = new InventoryService($pdo);
 $low_stock = get_low_stock_products($pdo);
 $expiring_batches = $inventoryService->getExpiringSoonBatches();
 $expired_batches = $inventoryService->getExpiredBatches();
-$fefo_recommendations = array_slice($inventoryService->getFefoRecommendations(), 0, 10);
+$fefo_recommendations = $inventoryService->getFefoRecommendations();
 $total_products = $pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
 $total_units = $pdo->query("SELECT COALESCE(SUM(quantity_on_hand),0) FROM inventory")->fetchColumn();
 $out_of_stock = $pdo->query("SELECT COUNT(*) FROM inventory WHERE quantity_on_hand = 0")->fetchColumn();

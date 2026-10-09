@@ -80,12 +80,13 @@ if (isset($_SESSION['user_id'])) {
 $loginUrl = htmlspecialchars(landing_app_url('?login=1'), ENT_QUOTES, 'UTF-8');
 $loginActionUrl = htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8');
 $forgotPasswordUrl = htmlspecialchars(landing_app_url('components/auth/forgot_password.php'), ENT_QUOTES, 'UTF-8');
-$styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css?v=20260928d'), ENT_QUOTES, 'UTF-8');
+$styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css?v=' . filemtime(__DIR__ . '/assets/css/style.css')), ENT_QUOTES, 'UTF-8');
 $landingStyleUrl = htmlspecialchars(landing_app_url('assets/css/landing.css?v=' . filemtime(__DIR__ . '/assets/css/landing.css')), ENT_QUOTES, 'UTF-8');
-$faviconUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-favicon-32.png'), ENT_QUOTES, 'UTF-8');
-$brandLogoUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-logo-600x200.png'), ENT_QUOTES, 'UTF-8');
+$brandBaseUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-web-assets%20dark%20mode/'), ENT_QUOTES, 'UTF-8');
+$faviconUrl = $brandBaseUrl . 'icons/light/favicon-32.png';
+$brandLogoUrl = $brandBaseUrl . 'logos/light/logo-header.png';
 $heroImageUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-landing-hero.jpg'), ENT_QUOTES, 'UTF-8');
-$brandIconUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-icon-512.png'), ENT_QUOTES, 'UTF-8');
+$brandIconUrl = $brandBaseUrl . 'icons/light/icon-64.png';
 $loginError = '';
 $loginSuccess = '';
 $flashError = (string)($_SESSION['_flash_error'] ?? '');
@@ -114,7 +115,7 @@ unset($_SESSION['_login_username']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetailMind - Store inventory, sales, and forecasting</title>
     <meta name="description" content="RetailMind keeps Shalom Store inventory, barcode sales, purchasing, cashier shifts, and demand forecasting in one operational workspace.">
-    <link rel="icon" type="image/png" sizes="32x32" href="<?= $faviconUrl ?>">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= $faviconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/favicon-32.png">
     <link rel="stylesheet" href="<?= $styleUrl ?>">
     <link rel="stylesheet" href="<?= $landingStyleUrl ?>">
 </head>
@@ -124,9 +125,9 @@ unset($_SESSION['_login_username']);
     <header class="landing-header">
         <nav class="landing-nav" aria-label="Primary">
             <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
-                <img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" alt="RetailMind">
+                <img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="logos/STYLE/logo-header.png" alt="RetailMind">
                 <span class="landing-brand__compact" aria-hidden="true">
-                    <img src="<?= $brandIconUrl ?>" alt="">
+                    <img src="<?= $brandIconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
                 </span>
             </a>
             <div class="landing-nav__links">
@@ -233,7 +234,7 @@ unset($_SESSION['_login_username']);
             </section>
 
         <footer class="landing-footer">
-              <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>"><img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" alt="RetailMind"></a>
+              <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>"><img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="logos/STYLE/logo-header.png" alt="RetailMind"></a>
               <p>Inventory, sales, purchasing, shifts, reporting, and Demand Forecasts in one operational workspace.</p>
             </footer>
     </main>
@@ -246,7 +247,7 @@ unset($_SESSION['_login_username']);
             <div class="landing-login-modal__shell landing-login-modal__shell--login" aria-hidden="<?= $shouldOpenRecovery ? 'true' : 'false' ?>" <?= $shouldOpenRecovery ? 'inert' : '' ?>>
                 <aside class="landing-login-modal__aside" aria-label="RetailMind access">
                     <span class="landing-login-modal__logo" aria-hidden="true">
-                        <img src="<?= $brandIconUrl ?>" alt="">
+                        <img src="<?= $brandIconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
                     </span>
                     <div>
                         <h2>Welcome back</h2>
@@ -289,7 +290,7 @@ unset($_SESSION['_login_username']);
             <div class="landing-login-modal__shell landing-login-modal__shell--recovery" aria-hidden="<?= $shouldOpenRecovery ? 'false' : 'true' ?>" <?= $shouldOpenRecovery ? '' : 'inert' ?>>
                 <aside class="landing-login-modal__aside landing-login-modal__aside--recovery" aria-label="Password recovery guidance">
                     <span class="landing-login-modal__logo" aria-hidden="true">
-                        <img src="<?= $brandIconUrl ?>" alt="">
+                        <img src="<?= $brandIconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
                     </span>
                     <div>
                         <h2>Find your way back</h2>

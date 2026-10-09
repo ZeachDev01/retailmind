@@ -12,7 +12,7 @@ return [
         // its expiry could resolve itself on the next page load, so neither a
         // discard nor a closure could be held to anything.
         //
-        // This must match the `held_sales` table in sql/schema.sql so a fresh
+        // This must match the `held_sales` table in database/sql/schema.sql so a fresh
         // install and an upgraded install agree.
 
         if (!Schema::tableExists($pdo, 'held_sales')) {

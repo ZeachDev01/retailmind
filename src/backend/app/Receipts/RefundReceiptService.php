@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Services;
+namespace App\Receipts;
 
+use App\Services\CashRefundService;
 use PDO;
 use RuntimeException;
 

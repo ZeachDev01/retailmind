@@ -17,8 +17,8 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashRefundService.php';
-require_once __DIR__ . '/../../../backend/app/Services/RefundReceiptPresentation.php';
-require_once __DIR__ . '/../../../backend/app/Services/ReceiptPaperService.php';
+require_once __DIR__ . '/../../../backend/app/Receipts/RefundReceiptPresentation.php';
+require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptPaperService.php';
 
 use App\Services\CashRefundService;
 use App\Services\CashierShiftService;
@@ -105,8 +105,8 @@ try {
 }
 $refunds = $refundService->recentForCashier($actorId);
 $receiptId = (int)($_GET['refund_id'] ?? 0);
-$receipt = $receiptId > 0 ? (new \App\Services\RefundReceiptService($pdo))->forCashier($receiptId, $actorId, $storeId) : null;
-$paperWidthMm = (new \App\Services\ReceiptPaperService($pdo))->currentWidth($actorId, $actorRole);
+$receipt = $receiptId > 0 ? (new \App\Receipts\RefundReceiptService($pdo))->forCashier($receiptId, $actorId, $storeId) : null;
+$paperWidthMm = (new \App\Receipts\ReceiptPaperService($pdo))->currentWidth($actorId, $actorRole);
 if ($receiptId > 0 && $receipt === null) {
     // Missing and unauthorized receipts share one response, without exposing ownership.
     http_response_code(404);
@@ -143,7 +143,7 @@ if ($receiptId > 0 && $receipt === null) {
                 <h2>Refund Receipt</h2>
                 <p class="no-print">Review the receipt, then choose Print to select your printer.</p>
                 <button class="btn no-print" type="button" onclick="printReceiptSection(this)">Print Refund Receipt</button>
-                <?php \App\Services\RefundReceiptPresentation::render($receipt, $paperWidthMm); ?>
+                <?php \App\Receipts\RefundReceiptPresentation::render($receipt, $paperWidthMm); ?>
             </section>
             <?php elseif ($receiptId > 0): ?>
             <div class="message warning">Refund Receipt not found or unavailable for your account.</div>

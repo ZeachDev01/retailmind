@@ -13,12 +13,12 @@ require_once __DIR__ . '/CashierShiftService.php';
 // Ticket #91: a resumed held sale is completed by the checkout that pays for it,
 // so the cart and the sale it became are settled in one transaction.
 require_once __DIR__ . '/HeldSaleService.php';
-require_once __DIR__ . '/ReceiptDetailsService.php';
+require_once __DIR__ . '/../Receipts/ReceiptDetailsService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\CashierShiftService;
 use App\Services\HeldSaleService;
-use App\Services\ReceiptDetailsService;
+use App\Receipts\ReceiptDetailsService;
 
 /**
  * Sale creation, and the Cashier Shift attribution every sale carries (#89).

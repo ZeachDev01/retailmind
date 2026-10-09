@@ -8,7 +8,7 @@ if (getenv('RUN_DB_TESTS') !== '1') {
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../config/db.php';
 
-use App\Services\ReceiptTableService;
+use App\Receipts\ReceiptTableService;
 use App\Store\StoreScope;
 
 $failures = [];

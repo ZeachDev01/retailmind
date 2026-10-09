@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Services;
+namespace App\Receipts;
 
-require_once __DIR__ . '/PhilippineTime.php';
+require_once __DIR__ . '/../Services/PhilippineTime.php';
 
+use App\Services\PhilippineTime;
 use PDO;
 
 final class ReceiptDetailsService

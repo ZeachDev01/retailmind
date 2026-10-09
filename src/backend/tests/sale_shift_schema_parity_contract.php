@@ -1,7 +1,7 @@
 <?php
 // Sale Cashier Shift schema parity contract (ticket #89, AC 6).
 //
-// A fresh install (src/backend/sql/schema.sql) and an upgraded install (the
+// A fresh install (src/backend/database/sql/schema.sql) and an upgraded install (the
 // 202609290003_sale_shift_attribution migration) must produce the same sale
 // relationships and the same deployment cutoff behaviour. The two declarations
 // are compared directly so the check is deterministic and never depends on the
@@ -20,7 +20,7 @@ $assertMatches = static function (string $haystack, string $pattern, string $mes
 };
 
 $root = dirname(__DIR__, 3);
-$schema = (string)@file_get_contents($root . '/src/backend/sql/schema.sql');
+$schema = (string)@file_get_contents($root . '/src/backend/database/sql/schema.sql');
 $migration = (string)@file_get_contents($root . '/src/backend/database/migrations/202609290003_sale_shift_attribution.php');
 $assert($schema !== '' && $migration !== '', 'Sale attribution schema sources must be readable');
 

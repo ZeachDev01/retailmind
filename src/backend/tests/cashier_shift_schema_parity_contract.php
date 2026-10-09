@@ -1,7 +1,7 @@
 <?php
 // Cashier Shift / Register schema parity contract (ticket #88, criterion 6).
 //
-// A fresh install (src/backend/sql/schema.sql) and an upgraded install (the
+// A fresh install (src/backend/database/sql/schema.sql) and an upgraded install (the
 // 202609290002_cashier_shift_registers migration) must produce the same
 // relationship and the same exclusivity constraints on cashier_shifts. The two
 // declarations are compared directly so the check is deterministic and never
@@ -20,7 +20,7 @@ $assertMatches = static function (string $haystack, string $pattern, string $mes
 };
 
 $root = dirname(__DIR__, 3);
-$schema = (string)@file_get_contents($root . '/src/backend/sql/schema.sql');
+$schema = (string)@file_get_contents($root . '/src/backend/database/sql/schema.sql');
 $migration = (string)@file_get_contents($root . '/src/backend/database/migrations/202609290002_cashier_shift_registers.php');
 $assert($schema !== '' && $migration !== '', 'Cashier Shift schema sources must be readable');
 

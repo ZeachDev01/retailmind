@@ -18,8 +18,10 @@ src/frontend/components/barcodeScanner/ Barcode scanner web app assets
 
 ```text
 src/backend/app/Core/                Shared infrastructure classes
+src/backend/app/Backup/              Database backup, restore, and recovery coordination
 src/backend/app/Database/            Migration and schema helpers
-src/backend/app/Services/            Business workflows and dashboard services
+src/backend/app/Receipts/            Sale/refund receipt details, rendering, and paper layout
+src/backend/app/Services/            Inventory, sales, staff, and dashboard workflows
 src/backend/bootstrap/               Composer and environment bootstrapping
 src/backend/config/                  Configuration loaded from environment values
 src/backend/includes/                Shared legacy helpers used by existing pages
@@ -30,7 +32,7 @@ src/backend/includes/                Shared legacy helpers used by existing page
 ```text
 src/backend/database/migrations/     PHP migrations run by src/backend/scripts/migrate.php
 src/backend/database/seeds/          Product seed CSV used by local seed commands and forecast previews
-src/backend/sql/                     Fresh schema and SQL migration references
+src/backend/database/sql/            Fresh schema, consolidated upgrades, and historical SQL migrations
 src/backend/legacy/demandForcasting/ Python forecasting service and training scripts
 src/backend/scripts/                 Maintenance, backup, migration, and release commands
 src/backend/storage/                 Runtime output only; keep generated files out of Git

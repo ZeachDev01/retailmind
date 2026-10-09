@@ -32,9 +32,6 @@ class InventoryService
         return [
             'total_products' => (int)$productStmt->fetchColumn(),
             'current_stock' => (int)$stockStmt->fetchColumn(),
-            'low_stock_count' => count($this->getLowStockProducts()),
-            'expiring_soon_count' => count($this->getExpiringSoonBatches(30)),
-            'expired_batch_count' => count($this->getExpiredBatches()),
         ];
     }
 
@@ -84,7 +81,8 @@ class InventoryService
                CASE WHEN pb.expiration_date IS NULL THEN 1 ELSE 0 END,
                pb.expiration_date ASC,
                pb.date_received ASC,
-               p.product_name ASC"
+               p.product_name ASC
+             LIMIT 10"
         );
         $stmt->execute($scopeParams);
         return $stmt->fetchAll();

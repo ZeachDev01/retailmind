@@ -17,7 +17,7 @@ $can_manage_all = in_array(current_role(), ['admin', 'super_admin', 'inventory_m
 function receipt_store_info(): array {
     static $cached = null;
     if ($cached !== null) { return $cached; }
-    return $cached = (new App\Services\ReceiptDetailsService(App\Core\Database::connection()))->storeInfo();
+    return $cached = (new App\Receipts\ReceiptDetailsService(App\Core\Database::connection()))->storeInfo();
 }
 
 function receipt_money($value, ?array $store = null): string {
@@ -26,19 +26,19 @@ function receipt_money($value, ?array $store = null): string {
 }
 
 function receipt_verification_code(array $sale): string {
-    return $sale['verification_code'] ?? App\Services\ReceiptDetailsService::verificationCode($sale);
+    return $sale['verification_code'] ?? App\Receipts\ReceiptDetailsService::verificationCode($sale);
 }
 
 function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
-    return (new App\Services\ReceiptDetailsService($pdo))->fetchSale($sale_id);
+    return (new App\Receipts\ReceiptDetailsService($pdo))->fetchSale($sale_id);
 }
 
 function receipt_fetch_items(PDO $pdo, int $sale_id): array {
-    return (new App\Services\ReceiptDetailsService($pdo))->fetchItems($sale_id);
+    return (new App\Receipts\ReceiptDetailsService($pdo))->fetchItems($sale_id);
 }
 
 function receipt_render_details(array $sale, array $items): void {
-    $paperWidthMm = (new \App\Services\ReceiptPaperService(\App\Core\Database::connection()))
+    $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
         ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
     $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
@@ -48,7 +48,7 @@ function receipt_render_details(array $sale, array $items): void {
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)">Print</button>
             <button type="button" class="btn" onclick="exportReceiptPdf(this)">PDF</button>
         </div>
-        <?php \App\Services\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
+        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
     </div>
     <?php
 }

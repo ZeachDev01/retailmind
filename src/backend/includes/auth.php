@@ -427,8 +427,9 @@ function require_any_capability(
 
 function store_scope_id(PDO $pdo): int
 {
-    static $storeId;
-    return $storeId ??= (new App\Store\StoreScope($pdo))->id();
+    static $storeIds;
+    $storeIds ??= new WeakMap();
+    return $storeIds[$pdo] ??= (new App\Store\StoreScope($pdo))->id();
 }
 
 function default_profile_image_url(): string
@@ -439,7 +440,10 @@ function default_profile_image_url(): string
 function store_product_scope(string $alias = 'p'): array
 {
     global $pdo;
-    return (new App\Store\StoreScope($pdo))->productScope($alias);
+    if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
+        throw new RuntimeException('Invalid product scope alias.');
+    }
+    return [" AND {$alias}.branch_id = ?", [store_scope_id($pdo)]];
 }
 
 function logout_user(): void

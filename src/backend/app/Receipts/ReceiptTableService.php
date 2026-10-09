@@ -1,12 +1,13 @@
 <?php
 
-namespace App\Services;
+namespace App\Receipts;
 
+use App\Services\PhilippineTime;
 use App\Store\StoreScope;
 use DateTimeImmutable;
 use PDO;
 
-require_once __DIR__ . '/PhilippineTime.php';
+require_once __DIR__ . '/../Services/PhilippineTime.php';
 
 final class ReceiptTableService
 {

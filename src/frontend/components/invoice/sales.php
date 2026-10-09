@@ -6,8 +6,8 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/SaleReversalService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
-use App\Services\ReceiptTableService;
-use App\Services\ReceiptDetailsService;
+use App\Receipts\ReceiptTableService;
+use App\Receipts\ReceiptDetailsService;
 
 require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
@@ -55,7 +55,7 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
 }
 
 function receipt_render_details(array $sale, array $items, bool $canStartSale, bool $announcePayment = false): void {
-    $paperWidthMm = (new \App\Services\ReceiptPaperService(\App\Core\Database::connection()))
+    $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
         ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
     $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
@@ -74,7 +74,7 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale, b
             <?php endif; ?>
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
         </div>
-        <?php \App\Services\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
+        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
     </div>
     <?php
 }

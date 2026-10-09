@@ -2,6 +2,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
+php src/backend/scripts/build_styles.php --check
+node src/backend/tests/stylesheet_bundle_browser_test.js
 find . -type f -name '*.php' -not -path './vendor/*' -not -path './.kilo/worktrees/*' -print0 | sort -z | xargs -0 -n1 php -l >/tmp/retailmind_php_lint.log
 python -m py_compile src/backend/legacy/demandForcasting/train_model.py src/backend/legacy/demandForcasting/auto_retrain.py src/backend/legacy/demandForcasting/db.py src/backend/legacy/demandForcasting/predict_api.py
 bash src/backend/tests/javascript_syntax_check.sh
@@ -33,6 +35,7 @@ node src/backend/tests/login_redirect_test.js
 php src/backend/tests/workspace_switching_contract.php
 php src/backend/tests/cashier_workspace_authorization_contract.php
 php src/backend/tests/store_scope_contract.php
+php src/backend/tests/inventory_load_contract.php
 php src/backend/tests/user_lifecycle_contract.php
 php src/backend/tests/register_administration_contract.php
 php src/backend/tests/register_schema_parity_contract.php

@@ -6,8 +6,8 @@ require_once __DIR__ . '/../bootstrap/app.php';
 set_exception_handler(static function (Throwable $exception): void { fwrite(STDERR, $exception->getMessage()."\n"); exit(1); });
 
 use App\Core\Database;
-use App\Services\ReceiptDetailsService;
-use App\Services\ReceiptTableService;
+use App\Receipts\ReceiptDetailsService;
+use App\Receipts\ReceiptTableService;
 
 $config = require __DIR__ . '/../config/database.php';
 $server = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']), $config['username'], $config['password'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
@@ -17,7 +17,7 @@ try {
     $server->exec("CREATE DATABASE `{$database}`");
     $config['database'] = $database;
     $pdo = Database::connection($config);
-    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__.'/../sql/schema.sql'), $tables);
+    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__.'/../database/sql/schema.sql'), $tables);
     $assert(count($tables[0]) > 0, 'Canonical receipt fixture tables found');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
     foreach ($tables[0] as $ddl) $pdo->exec($ddl);

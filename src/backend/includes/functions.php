@@ -385,7 +385,7 @@ function get_forecasting_readiness(PDO $pdo): array
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $exception) {
         // The migration has not been run yet. Keep the page usable with the legacy columns.
-        error_log('Forecast readiness requires backend/sql/upgrade_random_forest_v2.sql: ' . $exception->getMessage());
+        error_log('Forecast readiness requires backend/database/sql/upgrade_random_forest_v2.sql: ' . $exception->getMessage());
         return [];
     }
 

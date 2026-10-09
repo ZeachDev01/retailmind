@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
 
 use App\Authorization\RoleCapabilityPolicy;
-use App\Services\DatabaseBackupService;
+use App\Backup\DatabaseBackupService;
 
 $message = '';
 $messageClass = '';

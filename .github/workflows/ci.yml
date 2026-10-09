@@ -13,6 +13,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Build shared stylesheet
+        run: php src/backend/scripts/build_styles.php
+
       - name: Create production environment
         env:
           DB_HOST: ${{ secrets.DB_HOST }}

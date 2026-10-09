@@ -3,6 +3,12 @@ Hi hello
 See the [documentation index](docs/README.md) for deployment, recovery,
 interface guides, architecture decisions, and release history.
 
+The shared stylesheet is built from the individual files in
+`src/frontend/assets/css/`. After editing those files, run
+`php src/backend/scripts/build_styles.php` (or `composer build:styles`).
+Release packaging and deployment rebuild it automatically; the test suite checks
+that the checked-in `style.css` is current.
+
 Fresh-install login:
 
 - Username: superadmin
@@ -139,8 +145,8 @@ Select your RetailMind database in phpMyAdmin, then use **Import** with one file
 
 | File                         | Use                                               | Existing records                                                           |
 | ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| `src/backend/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, including passwords and transaction history                      |
-| `src/backend/sql/schema.sql` | Install into an empty database                    | Drops and recreates RetailMind tables; includes seed accounts and products |
+| `src/backend/database/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, including passwords and transaction history                      |
+| `src/backend/database/sql/schema.sql` | Install into an empty database                    | Drops and recreates RetailMind tables; includes seed accounts and products |
 
 Both files include all 37 migrations through `202610040001_user_theme` (October 8,
 2026), including required operational tables, role mappings, settings defaults,

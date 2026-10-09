@@ -17,8 +17,8 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../app/Services/CashRefundService.php';
 require_once __DIR__ . '/../app/Services/SalesWorkflowService.php';
-require_once __DIR__ . '/../app/Services/RefundReceiptPresentation.php';
-require_once __DIR__ . '/../app/Services/ReceiptPaperService.php';
+require_once __DIR__ . '/../app/Receipts/RefundReceiptPresentation.php';
+require_once __DIR__ . '/../app/Receipts/ReceiptPaperService.php';
 
 use App\Services\CashierShiftService;
 use App\Services\CashRefundService;
@@ -1001,7 +1001,7 @@ try {
         'receipt failure leaves no audit for a failed refund');
     $pdo->exec('DROP TRIGGER fail_refund_receipt');
 
-    $receiptService = new \App\Services\RefundReceiptService($pdo);
+    $receiptService = new \App\Receipts\RefundReceiptService($pdo);
     // A multi-item partial refund remains available without issuing another payout.
     $reprintSale = $sales->checkout([['product_id' => 1, 'qty' => 2], ['product_id' => 2, 'qty' => 2]],
         $casey, 'cashier', 'cash', ['cash_received' => 200]);
@@ -1031,7 +1031,7 @@ try {
         'later Store, footer, product, Register, and Cashier edits cannot rewrite the receipt');
     foreach ([58, 80, 123] as $width) {
         ob_start();
-        \App\Services\RefundReceiptPresentation::render($saved, $width);
+        \App\Receipts\RefundReceiptPresentation::render($saved, $width);
         $customerHtml = ob_get_clean();
         foreach (['Refund #' . $otherRefundId, 'Original Sale Receipt #' . $saleId, 'Date/Time:', 'Cashier:', 'Register:', 'Other', 'Total refunded', 'Original payment method',
             $saved['store']['footer'], $saved['items'][0]['product_name']] as $required) {
@@ -1099,7 +1099,7 @@ try {
                 'each My refunds row opens its corresponding receipt');
         }
         ob_start();
-        \App\Services\RefundReceiptPresentation::render($receipt, $paperWidthMm);
+        \App\Receipts\RefundReceiptPresentation::render($receipt, $paperWidthMm);
         $browserFixtures[$width] = ['history' => $historyHtml, 'receipt' => ob_get_clean(), 'id' => $reprintId];
     }
     $assert($refundCount($pdo) === $refundsBeforeReprint, 'direct GET and reprint leave refund count unchanged');

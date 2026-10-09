@@ -7,7 +7,7 @@ require_once dirname(__DIR__) . '/includes/backup.php';
 require_once dirname(__DIR__) . '/includes/functions.php';
 
 use App\Authorization\RoleCapabilityPolicy;
-use App\Services\DatabaseBackupService;
+use App\Backup\DatabaseBackupService;
 
 $service = new DatabaseBackupService($pdo, new RoleCapabilityPolicy());
 $filename = 'scheduled-' . date('m-d-Y-His') . '.sql';

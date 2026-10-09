@@ -39,7 +39,7 @@ try {
     $server->exec("CREATE DATABASE `{$database}`");
     $created = true;
     $pdo = $connect($database);
-    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../sql/schema.sql'), $tables);
+    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../database/sql/schema.sql'), $tables);
     $assert(count($tables[0]) > 0, 'Canonical schema must be parsed');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
     foreach ($tables[0] as $ddl) $pdo->exec($ddl);
@@ -121,7 +121,7 @@ try {
     $assert($notifications->calls === 2, 'Both notification failures are isolated');
     $assert($saved['sale_id'] !== $results[0]['sale_id'], 'A new attempt has a new sale');
     $assert($service->recoverAttempt($atomic['checkout_attempt'], 1, 'cashier') === $saved, 'Post-commit failure still returns and recovers success');
-    $receipt = (new App\Services\ReceiptDetailsService($pdo))->fetchSale($saved['sale_id']);
+    $receipt = (new App\Receipts\ReceiptDetailsService($pdo))->fetchSale($saved['sale_id']);
     $assert(isset($receipt['receipt_items']), 'Saved customer receipt remains available');
     echo "Checkout attempts integration: passed (concurrency, replay, lost response, scope, incompatible reuse, atomic rollback, notification failure)\n";
 } catch (Throwable $e) { fwrite(STDERR, 'Checkout attempts integration failed: ' . $e->getMessage() . "\n"); $failed = true; }

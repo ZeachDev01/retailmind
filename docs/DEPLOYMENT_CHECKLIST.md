@@ -1,6 +1,6 @@
 # Production deployment checklist
 
-- Follow the [repository setup and database update instructions](../README.md). Import `src/backend/sql/schema.sql` only for an empty database; back up an existing database before importing `src/backend/sql/update.sql`.
+- Follow the [repository setup and database update instructions](../README.md). Import `src/backend/database/sql/schema.sql` only for an empty database; back up an existing database before importing `src/backend/database/sql/update.sql`.
 - Create `.env` at the repository root; set `APP_ENV=production` and `APP_DEBUG=false`.
 - Use a long random `ML_API_KEY` and keep Flask bound to `127.0.0.1`.
 - Set database credentials, `APP_URL`, timezone, and secure-cookie settings.
