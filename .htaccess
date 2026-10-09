@@ -12,6 +12,11 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    # Hosted login requires HTTPS so the browser retains the secure session cookie.
+    RewriteCond %{HTTP_HOST} ^retailmind\.infinityfreeapp\.com(?::80)?$ [NC]
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^ https://retailmind.infinityfreeapp.com%{REQUEST_URI} [R=308,L]
+
     RewriteRule (^|/)\.(?:git|svn|hg)(?:/|$) - [F,L]
     RewriteRule ^backend(?:/|$) - [F,L]
     RewriteRule ^src/(?:backend|vendor)(?:/|$) - [F,L]

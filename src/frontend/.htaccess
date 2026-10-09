@@ -6,6 +6,11 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    # This directory has its own rewrite rules, so it also needs the HTTPS redirect.
+    RewriteCond %{HTTP_HOST} ^retailmind\.infinityfreeapp\.com(?::80)?$ [NC]
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^ https://retailmind.infinityfreeapp.com%{REQUEST_URI} [R=308,L]
+
     RewriteRule ^Sidebar/(.*)$ components/$1 [L,QSA]
     RewriteRule ^admin/(.*)$ components/system_administrator/$1 [L,QSA]
     RewriteRule ^manager/(.*)$ components/inventory_management/$1 [L,QSA]
