@@ -38,6 +38,13 @@ $forecasts = $latestJobId ? $service->getForecastAggregates($latestJobId) : [];
             <?php endif; ?>
         </div>
         
+        <div class="card">
+            <form method="get" action="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php')) ?>" class="search-form">
+                <input type="number" name="product_id" placeholder="Search Product ID" required class="input-text">
+                <button type="submit" class="btn btn-secondary">Investigate</button>
+            </form>
+        </div>
+        
         <?php if (empty($forecasts)): ?>
             <div class="empty-state">
                 <i class="bi bi-graph-up-arrow empty-icon"></i>
@@ -59,7 +66,7 @@ $forecasts = $latestJobId ? $service->getForecastAggregates($latestJobId) : [];
                     <tbody>
                         <?php foreach ($forecasts as $f): ?>
                             <tr>
-                                <td><?= htmlspecialchars((string)$f['product_id']) ?></td>
+                                <td><a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>"><?= htmlspecialchars((string)$f['product_id']) ?></a></td>
                                 <td><?= htmlspecialchars((string)$f['forecast_7_day']) ?></td>
                                 <td><?= htmlspecialchars((string)$f['forecast_14_day']) ?></td>
                                 <td><?= htmlspecialchars((string)$f['forecast_28_day']) ?></td>
