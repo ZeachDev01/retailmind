@@ -166,6 +166,16 @@ class ProductService
             $productId = (int)$this->pdo->lastInsertId();
             $this->pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)")
                 ->execute([$productId, $initialStock]);
+            
+            $driverService = new \App\Store\ScheduledDemandDriverService();
+            $driverService->recordDriver(
+                $this->pdo,
+                $productId,
+                'price',
+                date('Y-m-d'),
+                date('Y-m-d H:i:s'),
+                json_encode(['unit_price' => $sellingPrice], JSON_THROW_ON_ERROR)
+            );
 
             if ($initialStock > 0) {
                 $purchaseDate = date('Y-m-d H:i:s');
@@ -259,6 +269,16 @@ class ProductService
                 if ($sellingPrice > 0) {
                     $updateParts[] = 'unit_price = ?';
                     $params[] = $sellingPrice;
+                    
+                    $driverService = new \App\Store\ScheduledDemandDriverService();
+                    $driverService->recordDriver(
+                        $this->pdo,
+                        $existingProduct['product_id'],
+                        'price',
+                        date('Y-m-d'),
+                        date('Y-m-d H:i:s'),
+                        json_encode(['unit_price' => $sellingPrice], JSON_THROW_ON_ERROR)
+                    );
                 }
                 if ($reorderLevel > 0) {
                     $updateParts[] = 'reorder_level = ?';
