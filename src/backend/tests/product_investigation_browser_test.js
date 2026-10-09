@@ -37,7 +37,7 @@ const fixtureScript = path.join(__dirname, 'support', 'scan_workflow_fixture.php
         $pdo = new PDO('sqlite:${dbPath}');
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         (new \\App\\Database\\MigrationRunner($pdo, __DIR__ . '/../../../backend/database/migrations'))->runPending();
-        $pdo->exec("INSERT INTO users (username, password_hash, role, full_name, status) VALUES ('admin', 'x', 'inventory_manager', 'Admin', 'active')");
+        $pdo->exec("INSERT INTO users (username, password_hash, role, full_name, status) VALUES ('admin', '" . password_hash('password', PASSWORD_DEFAULT) . "', 'inventory_manager', 'Admin', 'active')");
         $pdo->exec("INSERT INTO categories (category_name) VALUES ('Cat')");
         $pdo->exec("INSERT INTO products (sku, product_name, category_id, unit_price, cost_price) VALUES ('P1', 'Test Product 1', 1, 10, 5)");
         $pdo->exec("INSERT INTO products (sku, product_name, category_id, unit_price, cost_price) VALUES ('P2', 'Test Product 2', 1, 10, 5)");
@@ -52,10 +52,6 @@ const fixtureScript = path.join(__dirname, 'support', 'scan_workflow_fixture.php
 
     const routerCode = `<?php
         $_ENV['DB_NAME'] = '${dbPath}';
-        session_start();
-        $_SESSION['user_id'] = 1;
-        $_SESSION['role'] = 'admin';
-        $_SESSION['session_version'] = 1;
         require __DIR__ . '/../../../frontend/index.php';
     `;
     const routerFile = dbPath + '_router.php';
@@ -70,11 +66,16 @@ const fixtureScript = path.join(__dirname, 'support', 'scan_workflow_fixture.php
         browser = await chromium.launch();
         context = await browser.newContext();
         const page = await context.newPage();
-        
         // Log in
         await page.goto(`http://127.0.0.1:${port}/?login=1`);
+        await page.fill('input[name="username"]', 'admin');
+        await page.fill('input[name="password"]', 'password');
+        await page.click('button[type="submit"]');
         
-        // The router uses session user_id = 1, so we are logged in as admin
+        // Wait for dashboard to load
+        await page.waitForNavigation();
+        
+        // Go to predictions
         await page.goto(`http://127.0.0.1:${port}/components/report/predictions.php`);
         
         // Assert search form
