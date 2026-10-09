@@ -139,7 +139,12 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
 
                     <section class="dashboard-section" aria-labelledby="forecast-title">
                         <div class="section-header"><div><h2 id="forecast-title">Demand Forecast performance</h2><p class="section-description">Operational quality and exceptions; model controls are not available here.</p></div></div>
-                        <div class="metric-pair"><article><span>Evaluated products</span><strong><?= (int)$dashboard['forecast']['evaluated_products'] ?></strong></article><article><span>Forecast accuracy</span><strong><?= $dashboard['forecast']['accuracy_percent'] === null ? 'Not available' : $escape(number_format((float)$dashboard['forecast']['accuracy_percent'], 1) . '%') ?></strong></article></div>
+                        <div class="metric-pair">
+                            <article><span>Evaluated products</span><strong><?= (int)$dashboard['forecast']['evaluated_products'] ?></strong></article>
+                            <article><span>7-Day MAE</span><strong><?= isset($dashboard['forecast']['evaluations'][7]['mae']) ? $escape(number_format($dashboard['forecast']['evaluations'][7]['mae'], 2)) : 'N/A' ?></strong></article>
+                            <article><span>14-Day MAE</span><strong><?= isset($dashboard['forecast']['evaluations'][14]['mae']) ? $escape(number_format($dashboard['forecast']['evaluations'][14]['mae'], 2)) : 'N/A' ?></strong></article>
+                            <article><span>28-Day MAE</span><strong><?= isset($dashboard['forecast']['evaluations'][28]['mae']) ? $escape(number_format($dashboard['forecast']['evaluations'][28]['mae'], 2)) : 'N/A' ?></strong></article>
+                        </div>
                         <div class="indicator-item"><span><strong>Operational forecast exceptions</strong><span>Low-confidence or replenishment-signaled products</span></span><b class="indicator-value"><?= (int)$dashboard['forecast']['operational_exceptions'] ?></b></div>
                     </section>
 

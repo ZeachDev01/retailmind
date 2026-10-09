@@ -7,7 +7,7 @@ use App\Store\StoreCalendar;
 
 class DemandHistoryService
 {
-    public function getDailyEvidence(PDO $pdo, int $branchId, int $productId, string $startDate, string $endDate, string $cutoff): array
+    public function getDailyEvidence(PDO $pdo, int $productId, string $startDate, string $endDate, string $cutoff): array
     {
         $current = new DateTime($startDate);
         $end = new DateTime($endDate);
@@ -23,7 +23,7 @@ class DemandHistoryService
             
             // 1. Calendar Status
             // Since StoreCalendar uses the requested cutoff time for its historical reproduction:
-            $calStatus = $calendar->getCalendarDateStatusAtCutoff($pdo, $branchId, $dateStr, $cutoff);
+            $calStatus = $calendar->getCalendarDateStatusAtCutoff($pdo, $dateStr, $cutoff);
             
             // 2. End of day stock
             $stockStmt = $pdo->prepare("
@@ -107,9 +107,9 @@ class DemandHistoryService
         return $results;
     }
 
-    public function getReadinessSummary(PDO $pdo, int $branchId, int $productId, string $startDate, string $endDate, string $cutoff): array
+    public function getReadinessSummary(PDO $pdo, int $productId, string $startDate, string $endDate, string $cutoff): array
     {
-        $evidence = $this->getDailyEvidence($pdo, $branchId, $productId, $startDate, $endDate, $cutoff);
+        $evidence = $this->getDailyEvidence($pdo, $productId, $startDate, $endDate, $cutoff);
         
         $summary = [
             'usable_history_days' => 0,

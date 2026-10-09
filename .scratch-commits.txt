@@ -1,0 +1,40 @@
+bbc4579 Merge ticket-148: Verify forecasting migration and retire the legacy pipeline
+33009f5 Refactor consumers to new DemandForecaster and remove legacy pipeline
+7d37930 Merge ticket-145: Deliver the replenishment action queue
+ab8c37a Merge branch 'ml-implementation' into ticket-145
+7523f89 Merge ticket-144: Deliver the forecast product investigation workspace
+ea97e58 Implement Replenishment Action Queue (Ticket #145)
+24a7387 Fix browser test auth
+5f115e2 Merge ticket-147: Schedule and operate the forecasting worker
+316856c Implement Ticket #147: Scheduled forecasting worker and health visibility
+d5e4eaa Fix browser test
+5a19741 Implement product investigation workspace
+b9e8e79 Merge ticket-143: Generate Demand Forecasts and deliver the Store overview
+1ac8051 Cleanup inspection scripts
+493a29a WIP: Replace deterministic baseline with scikit-learn predictor in ML worker
+f518ad9 WIP: Implement Python worker stub and Demand Forecast Service/UI
+0c381ce WIP: Start implementing demand forecasts #143
+b02cfcc Merge ticket-142: Approve forecasting models and support rollback
+940dc25 Implement model promotion and rollback (ticket 142)
+0020a3d Merge ticket-141: Evaluate forecast candidates chronologically
+b00ffed Implement baseline and CandidateEvaluationService
+269857c Implement TDD evaluation calculation
+f1982fd Merge ticket-140: Train versioned direct Random Forest candidates
+c6a6802 Merge branch 'ml-implementation' into ticket-140
+2ca8ea1 Implement Random Forest candidate creation worker and tests (#140)
+17fa33b Merge ticket-146: Import isolated capstone forecasting demonstration data
+f9025a3 Implement kaggle capstone import
+26e3614 Merge ticket-138: Make Scheduled Demand Drivers reproducible
+8e5c06f Merge branch 'ml-implementation' into ticket-138
+22c2152 Implement Scheduled Demand Drivers for #138
+c1d2311 Merge ticket-137: Build reproducible demand and stock history
+f538bdd Merge branch 'ml-implementation' into ticket-137
+a0aacd0 Implement reproducible demand and stock history logic
+eff5ae6 Merge ticket-139: Queue forecasting work through PHP and the Python CLI
+aa0ee82 Implement ML job queue (Ticket #139)
+dc9acea Correct local application links for the retailmind checkout (Ticket #149)
+3399a39 Fix fatal error due to missing db_connect.php require
+01c968f chore: add newline at the end of StoreCalendar.php and migration file
+e1974a5 Implement Store business calendar recording
+417fe85 test: add newline at the end of forecast_navigation_contract.php
+a846a42 Implement separate forecasting permissions (Ticket #135)

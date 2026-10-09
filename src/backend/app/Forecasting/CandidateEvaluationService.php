@@ -41,28 +41,20 @@ class CandidateEvaluationService
      */
     public function setThresholds(array $thresholds, int $updatedBy): void
     {
-        $checkStmt = $this->pdo->prepare("SELECT COUNT(*) FROM platform_settings WHERE setting_key = :key");
-        $updateStmt = $this->pdo->prepare("UPDATE platform_settings SET setting_value = :value, updated_by = :user, updated_at = CURRENT_TIMESTAMP WHERE setting_key = :key");
-        $insertStmt = $this->pdo->prepare("INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at) VALUES (:key, :value, :user, CURRENT_TIMESTAMP)");
+        $stmt = $this->pdo->prepare("
+            INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at) 
+            VALUES (:key, :value, :user, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by), updated_at = CURRENT_TIMESTAMP
+        ");
         
         foreach (['7', '14', '28'] as $horizon) {
             $key = "ml_max_wape_{$horizon}d";
             if (isset($thresholds[$key])) {
-                $checkStmt->execute(['key' => $key]);
-                $exists = (int)$checkStmt->fetchColumn() > 0;
-                if ($exists) {
-                    $updateStmt->execute([
-                        'key' => $key,
-                        'value' => (string)$thresholds[$key],
-                        'user' => $updatedBy
-                    ]);
-                } else {
-                    $insertStmt->execute([
-                        'key' => $key,
-                        'value' => (string)$thresholds[$key],
-                        'user' => $updatedBy
-                    ]);
-                }
+                $stmt->execute([
+                    'key' => $key,
+                    'value' => (string)$thresholds[$key],
+                    'user' => $updatedBy
+                ]);
             }
         }
     }

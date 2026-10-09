@@ -29,8 +29,8 @@ class ForecastingSchedulerService {
         $weeklyDay = 'Sunday';
         $weeklyTime = '01:00';
         
-        // Fetch from ml_settings
-        $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM ml_settings WHERE setting_key IN ('schedule_daily_forecast_time', 'schedule_weekly_retrain_day', 'schedule_weekly_retrain_time')");
+        // Fetch from platform_settings
+        $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('schedule_daily_forecast_time', 'schedule_weekly_retrain_day', 'schedule_weekly_retrain_time')");
         $settings = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $settings[$row['setting_key']] = $row['setting_value'];

@@ -9,14 +9,14 @@ return [
         $pdo->exec(
             "CREATE TABLE IF NOT EXISTS `store_calendar` (
                 `calendar_id` INT AUTO_INCREMENT PRIMARY KEY,
-                `branch_id` INT NOT NULL,
+                
                 `calendar_date` DATE NOT NULL,
                 `status` ENUM('open', 'closed', 'holiday', 'exceptional-closure') NOT NULL,
                 `recorded_by` INT DEFAULT NULL,
                 `recorded_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT `fk_store_calendar_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE CASCADE,
+                
                 CONSTRAINT `fk_store_calendar_user` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
-                INDEX `idx_store_calendar_history` (`branch_id`, `calendar_date`, `recorded_at` DESC)
+                INDEX `idx_store_calendar_history` (`calendar_date`, `recorded_at` DESC)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
     },

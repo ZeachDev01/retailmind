@@ -1,7 +1,7 @@
 <?php
 // includes/functions.php
 
-require_once __DIR__ . '/../config/ml_config.php';
+
 
 function get_client_ip_address(): string
 {

@@ -17,7 +17,7 @@ class DashboardService
         );
     }
 
-    public function getAdminMetrics(string $actorRole, int $days = 30): array
+    public function getAdminMetrics(string $actorRole, int $days = 28): array
     {
         $days = max(1, min(365, $days));
         return [
@@ -95,7 +95,7 @@ class DashboardService
         ];
     }
 
-    public function getFastMovingProducts(int $limit = 5, int $days = 30): array
+    public function getFastMovingProducts(int $limit = 5, int $days = 28): array
     {
         $days = max(1, min(365, $days));
         $stmt = $this->pdo->prepare(
@@ -113,7 +113,7 @@ class DashboardService
         return $stmt->fetchAll();
     }
 
-    public function getSlowMovingProducts(int $limit = 5, int $days = 30): array
+    public function getSlowMovingProducts(int $limit = 5, int $days = 28): array
     {
         $days = max(1, min(365, $days));
         $stmt = $this->pdo->prepare(
@@ -138,7 +138,7 @@ class DashboardService
     public function getLatestForecasts(int $limit = 5): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT p.sku, p.product_name, SUM(df.predicted_units) as predicted_demand_next_30_days,
+            "SELECT p.sku, p.product_name, SUM(df.predicted_units) as predicted_demand_next_28_days,
                     0 as reorder_suggested, 0 as suggested_reorder_qty, 1.0 as confidence_score
              FROM demand_forecasts df
              JOIN products p ON p.product_id = df.product_id
@@ -148,9 +148,9 @@ class DashboardService
                 WHERE trigger_type = 'forecast_generation' AND status = 'succeeded'
                 ORDER BY completed_at DESC, job_id DESC
                 LIMIT 1
-             ) AND df.horizon_day <= 30
+             ) AND df.horizon_day <= 28
              GROUP BY p.product_id, p.sku, p.product_name
-             ORDER BY predicted_demand_next_30_days DESC
+             ORDER BY predicted_demand_next_28_days DESC
              LIMIT ?"
         );
         $stmt->bindValue(1, $limit, PDO::PARAM_INT);
@@ -173,7 +173,7 @@ class DashboardService
         return $stmt->fetchAll();
     }
 
-    public function getSalesTrend(int $days = 30, ?DateTimeImmutable $asOf = null): array
+    public function getSalesTrend(int $days = 28, ?DateTimeImmutable $asOf = null): array
     {
         $days = max(7, min(365, $days));
         $manila = new \DateTimeZone('Asia/Manila');
@@ -265,7 +265,7 @@ class DashboardService
              LEFT JOIN (
                 SELECT si.product_id, SUM(si.quantity) AS units_sold
                 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
-                WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 28 DAY)
                 GROUP BY si.product_id
              ) actual ON actual.product_id = p.product_id
              WHERE df_agg.forecast_demand IS NOT NULL OR actual.units_sold IS NOT NULL

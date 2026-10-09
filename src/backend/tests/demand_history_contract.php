@@ -54,7 +54,7 @@ $service = new DemandHistoryService();
 $cutoff = date('Y-m-d H:i:s');
 
 // Test 1: Empty state (Missing Evidence)
-$evidence = $service->getDailyEvidence($pdo, 1, 1, '2026-10-01', '2026-10-01', $cutoff);
+$evidence = $service->getDailyEvidence($pdo, 1, '2026-10-01', '2026-10-01', $cutoff);
 assert_same(1, count($evidence), 'Should return one day of evidence');
 assert_same('2026-10-01', $evidence[0]['date'], 'Date should match requested');
 assert_same(0, $evidence[0]['valid_sales_units'], 'No sales means 0 demand');
@@ -63,28 +63,28 @@ assert_same(0, $evidence[0]['end_of_day_stock'], 'No stock movements means 0 end
 assert_same('missing_evidence', $evidence[0]['classification'], 'No calendar or stock makes it missing evidence');
 
 // Setup Store Calendar and Stock
-$pdo->exec("INSERT INTO store_calendar (branch_id, calendar_date, status) VALUES (1, '2026-10-02', 'open')");
+$pdo->exec("INSERT INTO store_calendar (calendar_date, status) VALUES ('2026-10-02', 'open')");
 $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 50, 'purchase', '2026-10-02 08:00:00')");
 
 // Test 2: Genuine Zero
-$evidence = $service->getDailyEvidence($pdo, 1, 1, '2026-10-02', '2026-10-02', $cutoff);
+$evidence = $service->getDailyEvidence($pdo, 1, '2026-10-02', '2026-10-02', $cutoff);
 assert_same('genuine_zero', $evidence[0]['classification'], 'Open with stock but no sales is genuine_zero');
 assert_same(50, $evidence[0]['end_of_day_stock'], 'Stock should be 50');
 
 // Test 3: Valid Demand
 // Add a sale on 2026-10-03
-$pdo->exec("INSERT INTO store_calendar (branch_id, calendar_date, status) VALUES (1, '2026-10-03', 'open')");
+$pdo->exec("INSERT INTO store_calendar (calendar_date, status) VALUES ('2026-10-03', 'open')");
 $pdo->exec("INSERT INTO sales (sale_id, cashier_id, total_amount, sale_date) VALUES (100, 1, 10.00, '2026-10-03 10:00:00')");
 $pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, unit_price, subtotal) VALUES (100, 100, 1, 2, 10.00, 20.00)");
 $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, -2, 'sale', '2026-10-03 10:00:00')");
 
-$evidence = $service->getDailyEvidence($pdo, 1, 1, '2026-10-03', '2026-10-03', $cutoff);
+$evidence = $service->getDailyEvidence($pdo, 1, '2026-10-03', '2026-10-03', $cutoff);
 assert_same('valid_demand', $evidence[0]['classification'], 'Open with sales is valid_demand');
 assert_same(2, $evidence[0]['valid_sales_units'], 'Sold 2 units');
 assert_same(48, $evidence[0]['end_of_day_stock'], 'Stock drops to 48');
 
 // Test 4: Refund/Reversal Exclusion
-$pdo->exec("INSERT INTO store_calendar (branch_id, calendar_date, status) VALUES (1, '2026-10-04', 'open')");
+$pdo->exec("INSERT INTO store_calendar (calendar_date, status) VALUES ('2026-10-04', 'open')");
 // Sale of 3
 $pdo->exec("INSERT INTO sales (sale_id, cashier_id, total_amount, sale_date) VALUES (101, 1, 30.00, '2026-10-04 10:00:00')");
 $pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, unit_price, subtotal) VALUES (101, 101, 1, 3, 10.00, 30.00)");
@@ -93,11 +93,11 @@ $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_a
 $pdo->exec("INSERT INTO sale_reversals (reversal_id, sale_id, reversal_type, status, reason, requested_by, created_at, approved_at) VALUES (1, 101, 'cancel', 'approved', 'Test', 1, '2026-10-04 11:00:00', '2026-10-04 11:00:00')");
 $pdo->exec("INSERT INTO sale_reversal_items (reversal_id, sale_item_id, product_id, quantity, unit_price, subtotal) VALUES (1, 101, 1, 1, 10.00, 10.00)");
 
-$evidence = $service->getDailyEvidence($pdo, 1, 1, '2026-10-04', '2026-10-04', $cutoff);
+$evidence = $service->getDailyEvidence($pdo, 1, '2026-10-04', '2026-10-04', $cutoff);
 assert_same(2, $evidence[0]['valid_sales_units'], 'Sold 3, reversed 1 = 2 valid units');
 
 // Test 5: Readiness Summary
-$summary = $service->getReadinessSummary($pdo, 1, 1, '2026-10-01', '2026-10-04', $cutoff);
+$summary = $service->getReadinessSummary($pdo, 1, '2026-10-01', '2026-10-04', $cutoff);
 assert_same(3, $summary['usable_history_days'], 'Days 2, 3, and 4 are usable (genuine_zero or valid_demand)');
 assert_same(1, $summary['excluded_days']['missing_evidence'] ?? 0, 'Day 1 is missing evidence');
 assert_same(0, $summary['excluded_days']['closed'] ?? 0, 'No closed days');

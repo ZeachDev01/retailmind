@@ -254,22 +254,29 @@ final class StoreOperationsDashboardWorkspace
                 $exceptions[] = [
                     'product' => (string)$row['product_name'],
                     'reorder_suggested' => false,
-                    'confidence' => 0.0,
+                    
                 ];
             }
             
-            $evalRow = $this->row(
-                "SELECT wape FROM ml_model_evaluations ORDER BY evaluation_id DESC LIMIT 1"
+            $evaluations = $this->rows(
+                "SELECT horizon_days, mae, rmse, wape FROM ml_model_evaluations ORDER BY evaluation_id DESC LIMIT 3"
             );
-            if ($evalRow && $evalRow['wape'] !== null) {
-                $wape = (float)$evalRow['wape'];
+            $evalMetrics = [];
+            foreach ($evaluations as $eval) {
+                $evalMetrics[(int)$eval['horizon_days']] = [
+                    'mae' => $eval['mae'] !== null ? (float)$eval['mae'] : null,
+                    'rmse' => $eval['rmse'] !== null ? (float)$eval['rmse'] : null,
+                    'wape' => $eval['wape'] !== null ? (float)$eval['wape'] : null,
+                ];
+            }
+            if (!empty($evalMetrics)) {
                 $evaluatedProducts = $this->count("SELECT COUNT(DISTINCT product_id) FROM demand_forecasts WHERE job_id = ?", [$jobId]);
             }
         }
         
         return [
             'evaluated_products' => $evaluatedProducts,
-            'accuracy_percent' => $wape === null ? null : round(max(0, 100 - ($wape * 100)), 1),
+            'evaluations' => $evalMetrics ?? [],
             'operational_exceptions' => count($exceptions),
             'exceptions' => $exceptions,
         ];
