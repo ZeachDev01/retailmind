@@ -105,6 +105,7 @@ node src/backend/tests/theme_login_browser_test.js
 node src/backend/tests/theme_account_browser_test.js
 php src/backend/tests/cashier_operational_history_contract.php
 php src/backend/tests/sales_trend_integration.php
+python src/backend/tests/candidate_creation_test.py
 if [[ -n "${WHITESPACE_BASE:-}" ]] && git cat-file -e "${WHITESPACE_BASE}^{commit}" 2>/dev/null; then
   git diff --check "$WHITESPACE_BASE" HEAD
 fi
