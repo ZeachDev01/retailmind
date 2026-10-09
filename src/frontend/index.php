@@ -65,8 +65,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $_SESSION['_login_username'] = $username;
 
     if ($username && $password && login_user($pdo, $username, $password)) {
-        header('Location: ' . landing_app_url('?login_success=1'));
-        exit;
+        landing_redirect_by_role();
     }
 
     $_SESSION['_login_error'] = last_login_error();
@@ -74,7 +73,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     exit;
 }
 
-if (isset($_SESSION['user_id']) && ($_GET['login_success'] ?? '') !== '1') {
+if (isset($_SESSION['user_id'])) {
     landing_redirect_by_role();
 }
 
@@ -89,7 +88,6 @@ $heroImageUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-landing-
 $brandIconUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-icon-512.png'), ENT_QUOTES, 'UTF-8');
 $loginError = '';
 $loginSuccess = '';
-$loginSuccessRedirect = '';
 $flashError = (string)($_SESSION['_flash_error'] ?? '');
 unset($_SESSION['_flash_error']);
 $loginUsername = (string)($_SESSION['_login_username'] ?? '');
@@ -106,10 +104,6 @@ if ($shouldOpenLogin && isset($_SESSION['_login_error'])) {
 $loginError = $loginError !== '' ? $loginError : $flashError;
 $loginSuccess = (string)($_SESSION['_flash_success'] ?? '');
 unset($_SESSION['_flash_success']);
-if (($_GET['login_success'] ?? '') === '1' && isset($_SESSION['user_id'])) {
-    $loginSuccess = 'Login successful.';
-    $loginSuccessRedirect = landing_role_destination();
-}
 unset($_SESSION['_login_username']);
 ?>
 <!DOCTYPE html>
@@ -270,7 +264,7 @@ unset($_SESSION['_login_username']);
                     <?php if ($loginError !== ''): ?>
                         <div class="error-msg"><?= htmlspecialchars($loginError, ENT_QUOTES, 'UTF-8') ?></div>
                     <?php endif; ?>
-                    <?php if ($loginSuccess !== ''): ?><div id="rm-flash-messages" class="alert tag-success" data-success="<?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?>" <?php if ($loginSuccessRedirect !== ''): ?> data-redirect="<?= htmlspecialchars($loginSuccessRedirect, ENT_QUOTES, 'UTF-8') ?>" <?php endif; ?>><?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
+                    <?php if ($loginSuccess !== ''): ?><div id="rm-flash-messages" class="alert tag-success" data-success="<?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
 
                     <form method="POST" action="<?= $loginActionUrl ?>" class="landing-login-form">
                         <?= csrf_field() ?>
