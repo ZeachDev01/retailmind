@@ -69,16 +69,16 @@ try {
     </style>
 </head>
 <body>
-    <?php render_top_navigation($pdo); ?>
-    <div class="app-container">
-        <?php render_workspace_navigation('inventory_management'); ?>
-        <main class="workspace-content">
-            <header class="workspace-header">
+<div class="app-shell">
+    <?php include __DIR__ . '/../sidebar.php'; ?>
+    <main class="main-content">
+        <div class="topbar">
+            <div>
                 <h1><?= htmlspecialchars($pageTitle) ?></h1>
-                <div class="workspace-actions">
-                    <button class="btn" type="button" onclick="window.print()">Print Queue</button>
-                </div>
-            </header>
+                <p class="page-subtitle">Review products ordered by stock exposure.</p>
+            </div>
+            <button class="btn btn-secondary" type="button" onclick="window.print()">Print Queue</button>
+        </div>
 
             <?php if ($error): ?>
                 <div class="alert tag-warning"><?= htmlspecialchars($error) ?></div>
@@ -131,7 +131,7 @@ try {
                                         <?php if ($item['readiness_level'] !== 'High'): ?>
                                             <div class="text-warning"><small><i class="bi bi-exclamation-triangle"></i> Low readiness forecast.</small></div>
                                         <?php endif; ?>
-                                        <?php if (strtotime($item['forecast_origin']) < strtotime('-3 days')): ?>
+                                        <?php if ($item['forecast_origin'] && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
                                             <div class="text-warning"><small><i class="bi bi-exclamation-triangle"></i> Stale forecast.</small></div>
                                         <?php endif; ?>
                                     </div>

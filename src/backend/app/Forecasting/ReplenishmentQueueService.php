@@ -96,8 +96,8 @@ class ReplenishmentQueueService
             
             $recommendedQty = 0;
             if ($urgency === 'Urgent' || $urgency === 'Watch') {
-                // target stock: lead time demand + 14 days safety
-                $target = $leadTimeDemand + (int)$row['forecast_14_day'];
+                // target stock: lead time demand + 28 days safety
+                $target = $leadTimeDemand + (int)$row['forecast_28_day'];
                 $deficit = $target - $effectiveStock;
                 if ($deficit > 0) {
                     $recommendedQty = max($moq, (int)ceil($deficit / $moq) * $moq);
