@@ -485,7 +485,8 @@ cartWorkspace.bindNavigation();
                     menuIcon.className = 'bi ' + (isOpen ? 'bi-x-lg' : 'bi-list');
                 }
             }
-            document.body.classList.toggle('no-scroll', isOpen);
+            if (window.RetailMindUI?.syncScrollLock) RetailMindUI.syncScrollLock();
+            else document.body.classList.toggle('no-scroll', isOpen);
             updateBrandState();
         }
 

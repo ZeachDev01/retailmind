@@ -369,7 +369,6 @@ document.addEventListener('DOMContentLoaded', function () {
         input.type = input.type === 'password' ? 'text' : 'password';
     }));
     [addOverlay, drawerOverlay].forEach(overlay => overlay?.addEventListener('click', event => { if (event.target === overlay) setOpen(overlay, false); }));
-    document.addEventListener('keydown', event => { if (event.key === 'Escape') { setOpen(addOverlay, false); setOpen(drawerOverlay, false); } });
     <?php if ($createFormSubmitted && $messageClass === 'tag-warning'): ?>setOpen(addOverlay, true);<?php endif; ?>
 });
 </script>

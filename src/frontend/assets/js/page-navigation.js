@@ -62,6 +62,10 @@
 
     function cleanup(retainedAssets) {
         for (const item of page.listeners.filter(item => item.type === 'pagehide')) item.wrapped.call(item.target, new Event('pagehide'));
+        document.querySelectorAll('.command-overlay.open, .rm-modal-overlay.open, .rm-drawer-overlay.open, .checkout-modal.open, .user-modal-overlay.open, .user-drawer-overlay.open').forEach(overlay => window.RetailMindUI?.closeOverlay(overlay));
+        document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+        document.querySelectorAll('[data-rm-confirm]').forEach(overlay => overlay.remove());
+        window.RetailMindUI?.syncScrollLock();
         page.abort.abort();
         page.listeners.forEach(item => nativeRemove.call(item.target, item.type, item.wrapped, item.options));
         page.timers.forEach(cancel => cancel());
@@ -205,7 +209,7 @@
             }
             for (const attr of incoming.body.attributes) if (attr.name.startsWith('data-')) document.body.setAttribute(attr.name, attr.value);
             const replacement = document.importNode(main, true);
-            replacement.id = 'page-content';
+            if (!replacement.id) replacement.id = 'page-content';
             content.replaceWith(replacement);
             // Some legacy pages keep dialogs after </main>; move those with the page as well.
             main.remove();
@@ -305,7 +309,7 @@
     window.addEventListener('popstate', () => navigate(location.href, {history: 'none'}));
     document.addEventListener('DOMContentLoaded', () => {
         const content = document.querySelector('.main-content');
-        if (content) content.id = 'page-content';
+        if (content && !content.id) content.id = 'page-content';
         document.querySelectorAll('script[src]').forEach(script => loaded.add(script.src));
         pageAssets.push(...document.querySelectorAll('style[data-rm-page-asset], link[data-rm-page-asset][rel="stylesheet"]'));
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT);

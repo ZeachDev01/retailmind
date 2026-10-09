@@ -32,11 +32,11 @@ const render = (html, partial) => {
             <!--rm-shell-start--><script src="/navigation.js" data-workspace="admin"></script>
             <aside id="appSidebar" class="open"><a id="first" href="/first.php">First</a><a id="second" href="/second.php">Second</a><a id="slow" href="/slow.php">Slow</a><a id="error" href="/error.php">Error</a><a id="expired" href="/expired.php">Expired</a><a id="download" href="/download.php">Download</a></aside>
             <header id="navbar"><button data-fullscreen-toggle><i></i><span>Full Screen</span></button></header><script>${ui}</script><!--rm-shell-end-->
-            <${contentTag} class="main-content"><h1>${req.url}</h1><span id="deferred"></span><button id="control" onclick="changeControl()">Control</button>
+            <${contentTag} class="main-content" ${req.url.startsWith('/first.php') ? 'id="first-content"' : ''}><h1>${req.url}</h1><span id="deferred"></span><button id="control" onclick="changeControl()">Control</button>
             <form method="post" enctype="multipart/form-data"><input name="csrf" value="token"><input type="file" name="photo"><button name="action" value="save">Save</button></form>
             <form id="get-form" method="get"><input name="search" value="needle"><button>Search</button></form>
             <form id="ajax-form" method="post"><button>Existing AJAX</button></form></${contentTag}>
-            <div id="page-modal">Modal ${req.url}</div></div>
+            <div id="page-modal" class="rm-modal-overlay" aria-hidden="true">Modal ${req.url}</div></div>
             <script>
             const localValue = 'Working';
             function changeControl() { document.querySelector('#control').textContent = localValue; }
@@ -66,16 +66,23 @@ const render = (html, partial) => {
                     const errors = [];
                     page.on('pageerror', error => errors.push(error.message));
                     await page.goto(origin + '/first.php');
+                    assert.equal(await page.locator('.main-content').getAttribute('id'), 'first-content', 'Initial navigation preserves page anchors');
                     await page.evaluate(() => { window.originalDocument = document; window.originalSidebar = document.querySelector('#appSidebar'); window.originalNavbar = document.querySelector('#navbar'); });
                     if (fallback) await page.evaluate(() => Object.defineProperty(document.documentElement, 'requestFullscreen', {value: () => Promise.reject(new Error('Unavailable'))}));
                     await page.locator('[data-fullscreen-toggle]').click();
-                    await page.waitForFunction(() => !!document.fullscreenElement || !!window.rmFullscreenFallback);
+                    await page.waitForFunction(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen'));
                     const waitPage = path => page.waitForFunction(path => location.pathname + location.search === path && !document.querySelector('[data-navigation-status]'), path);
                     for (const id of ['second', 'first', 'second']) {
+                        await page.evaluate(() => RetailMindUI.openOverlay(document.querySelector('#page-modal')));
+                        await page.evaluate(() => { RetailMindUI.confirm({message: 'Pending page action'}); });
+                        assert(await page.locator('body').evaluate(node => node.classList.contains('no-scroll')));
                         await page.locator('#' + id).click();
                         await waitPage('/' + id + '.php');
+                        assert.equal(await page.locator('.main-content').getAttribute('id'), id === 'first' ? 'first-content' : 'page-content', 'Page switching preserves authored IDs and supplies a fallback');
                         assert(await page.evaluate(() => document === originalDocument && document.querySelector('#appSidebar') === originalSidebar && document.querySelector('#navbar') === originalNavbar));
-                        assert(await page.evaluate(() => !!document.fullscreenElement || !!window.rmFullscreenFallback));
+                        assert(await page.evaluate(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen')));
+                        assert.equal(await page.locator('body').evaluate(node => node.classList.contains('no-scroll')), false, 'Navigation releases removed modal scroll lock');
+                        assert.equal(await page.locator('.rm-modal-overlay').count(), 1, 'Navigation removes temporary confirmation nodes');
                         assert.equal(await page.locator('iframe').count(), 0);
                         assert.equal(await page.locator('#page-modal').count(), 1);
                         assert.equal(await page.locator('#appSidebar .active').getAttribute('id'), id);
@@ -107,7 +114,7 @@ const render = (html, partial) => {
                     await page.locator('#slow').click();
                     await page.locator('[data-navigation-status][role=status]').waitFor();
                     await page.locator('#first').click(); await waitPage('/first.php');
-                    assert(await page.evaluate(() => !!document.fullscreenElement || !!window.rmFullscreenFallback));
+                    assert(await page.evaluate(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen')));
                     assert.deepEqual(errors, []);
                     await page.locator('#expired').click();
                     await page.getByRole('heading', {name: 'Sign in'}).waitFor();

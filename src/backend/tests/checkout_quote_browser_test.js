@@ -15,8 +15,10 @@ if (!fs.existsSync(chromium.executablePath())) {
         .replace(/<\?=[\s\S]*?\?>/g, '<input name="csrf_token" value="fixture">');
     const modal = pos.match(/<div id="checkout-modal"[\s\S]*?(?=<div id="void-modal")/)[0];
     const functions = pos.slice(pos.indexOf('function validateCheckout('), pos.indexOf('async function apiHeldSale('));
+    const bindings = ['checkoutButton', 'confirmCheckoutButton'].map(name => pos.match(new RegExp(name + "\\.addEventListener\\('click', [^)]+\\);"))[0]).join('\n');
     const editGuard = pos.slice(pos.indexOf('function cartChangesAllowed()'), pos.indexOf('function addToCart('));
-    const source = fs.readFileSync('src/frontend/assets/js/checkout-attempt.js', 'utf8')
+    const source = fs.readFileSync('src/frontend/assets/js/ui.js', 'utf8')
+        + fs.readFileSync('src/frontend/assets/js/checkout-attempt.js', 'utf8')
         + fs.readFileSync('src/frontend/assets/js/checkout-quote.js', 'utf8');
     let quoteTotal = 80;
     let committed = null;
@@ -75,7 +77,7 @@ if (!fs.existsSync(chromium.executablePath())) {
             const checkoutAttempt = new CheckoutAttempt(checkoutForm, '1', {recoverUrl: '/pos', restore: value => cart = value, message: showCartMessage});
             window.loaded = checkoutAttempt.recover().then(() => checkoutButton.disabled = false);
             ${editGuard}
-            ${functions}
+            {${functions}\n${bindings}}
         </script>`);
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -84,6 +86,7 @@ if (!fs.existsSync(chromium.executablePath())) {
     try {
         const page = await browser.newPage();
         await page.goto(origin + '/pos'); await page.evaluate(() => loaded);
+        assert.equal(await page.evaluate(() => typeof checkoutNow), 'undefined', 'Scoped async handlers need bound listeners after partial navigation');
         assert(await page.locator('#cash-received').evaluate(input => input.readOnly), 'Cash collection awaits server review');
         await page.evaluate(() => {
             window.cartWorkspace = {busy:false, context:{locked:false}};
@@ -96,6 +99,11 @@ if (!fs.existsSync(chromium.executablePath())) {
         });
         await page.click('#checkout-button');
         await page.waitForFunction(() => document.getElementById('checkout-modal').classList.contains('open'));
+        assert(await page.locator('body').evaluate(body => body.classList.contains('no-scroll')), 'Checkout locks background scrolling');
+        await page.evaluate(() => { checkoutSubmitting = true; closeCheckoutConfirm(); });
+        assert(await page.locator('#checkout-modal').evaluate(modal => modal.classList.contains('open')), 'Submitting checkout keeps its page-owned close guard');
+        await page.evaluate(() => { checkoutSubmitting = false; closeCheckoutConfirm(); });
+        assert.equal(await page.locator('body').evaluate(body => body.classList.contains('no-scroll')), false, 'Closing review releases scroll lock');
         assert.equal(await page.evaluate(() => editRefusedDuringReview), true, 'Delayed review blocks intervening cart edits');
         assert.equal(quotedCart[0].qty, 2, 'Accepted stock review rebuilds the hidden quote payload');
         await page.evaluate(() => { window.cartWorkspace = null; cart[1].qty = 4; checkoutModal.classList.remove('open'); checkoutSummary.innerHTML = ''; });
@@ -140,6 +148,18 @@ if (!fs.existsSync(chromium.executablePath())) {
         assert.match(await page.textContent('body'), /Saved Receipt #42/);
         assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('retailmind.checkout.1')).id), firstAttempt, 'Quote review and lost outcome keep the retry identity');
         assert.equal(submissions, 2, 'Recovery never submits or collects payment a third time');
+        const controls = await browser.newPage();
+        const actionBindings = pos.slice(pos.indexOf("clearCartButton.addEventListener('click'"), pos.indexOf("paymentMethod.addEventListener('change'"));
+        const names = ['clearCart', 'checkoutNow', 'submitConfirmedCheckout', 'holdCurrentSale', 'confirmDiscardHeldSale', 'resumeHeldSale'];
+        await controls.setContent('<button id="clear-cart-btn">Clear</button><button id="checkout-button">Review</button><button id="confirm-checkout-button">Confirm</button><button id="hold-sale-btn">Hold</button><button id="confirm-discard-sale">Discard</button><div id="hold-list"><button data-resume-held-sale="42"><span>Resume</span></button></div>');
+        await controls.addScriptTag({content:'window.boundCalls=[]; {' +
+            ['clearCartButton:clear-cart-btn', 'checkoutButton:checkout-button', 'confirmCheckoutButton:confirm-checkout-button', 'holdSaleButton:hold-sale-btn', 'holdList:hold-list'].map(pair => {
+                const [name, id] = pair.split(':'); return `const ${name}=document.getElementById('${id}');`;
+            }).join('') + names.map(name => `async function ${name}(id){boundCalls.push(['${name}',typeof id==='number'?id:null]);}`).join('') + actionBindings + '}'});
+        for (const id of ['clear-cart-btn', 'checkout-button', 'confirm-checkout-button', 'hold-sale-btn', 'confirm-discard-sale']) await controls.locator('#' + id).click();
+        await controls.getByText('Resume', {exact:true}).click();
+        assert.deepEqual(await controls.evaluate(() => boundCalls), names.map(name => [name,name === 'resumeHeldSale' ? 42 : null]), 'All scoped asynchronous POS buttons bind, including dynamically rendered held-sale actions');
+        await controls.close();
         console.log('Reviewed quote browser: passed (review before tender, server totals/lines/promotions/change, changed cart refusal, stale quote review, lost outcome receipt recovery)');
     } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exit(1); });

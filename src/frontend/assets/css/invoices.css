@@ -21,6 +21,7 @@
     .reversal-search input,.reversal-quantity { min-height:40px;padding:.5rem .65rem;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);color:var(--text); }
     .reversal-quantity { width:5.5rem; }
     .sales-reversal-grid { align-items:start; }
+    .sales-reversal-grid > * { min-width:0; }
     .reversal-empty { min-height:260px; }
 
     .receipts-page .receipt-heading-actions {

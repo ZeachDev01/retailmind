@@ -74,16 +74,22 @@ if (!fs.existsSync(chromium.executablePath())) {
                 await page.evaluate(() => { window.printCalls = 0; window.print = () => { window.printCalls++; }; });
                 await page.addScriptTag({ content: script });
                 assert.equal(await page.evaluate(() => window.printCalls), 0, 'loading completed receipt never prints');
-                for (const width of [1440, 390]) {
+                for (const width of [1440, 390, 320]) {
                     await page.setViewportSize({ width, height: 900 });
                     // Incumbent shell mobile margins are absent in this fixture.
                     await page.addStyleTag({ content: '.main-content { margin: 0; padding: 16px; }' });
                     await page.screenshot({ path: path.join(output, `${paperWidthMm}mm-${variant}-${width}.png`), fullPage: true });
-                    const metrics = await page.locator('.sale-receipt').evaluate(el => ({
-                        width: el.getBoundingClientRect().width,
-                        overflow: Array.from(el.querySelectorAll('*')).filter(child => child.scrollWidth > child.clientWidth + 1).map(child => child.className)
-                    }));
-                    assert.ok(Math.abs(metrics.width - paperWidthMm * 96 / 25.4) < 1, 'preview measures selected paper width');
+                    const metrics = await page.locator('.sale-receipt').evaluate(el => {
+                        const parent = el.parentElement;
+                        const style = getComputedStyle(parent);
+                        return {
+                            width: el.getBoundingClientRect().width,
+                            availableWidth: parent.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+                            overflow: Array.from(el.querySelectorAll('*')).filter(child => child.scrollWidth > child.clientWidth + 1).map(child => child.className)
+                        };
+                    });
+                    assert.ok(Math.abs(metrics.width - Math.min(paperWidthMm * 96 / 25.4, metrics.availableWidth)) < 1,
+                        'preview preserves selected paper width when it fits and shrinks within narrow screens');
                     assert.deepEqual(metrics.overflow, [], 'receipt copy and numbers fit without horizontal clipping');
                 }
                 await page.locator('button').click();

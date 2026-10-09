@@ -249,11 +249,12 @@ html.overview-fefo-active::-webkit-scrollbar { display: none; }
 /* Source: frontend\modules\inventory_management\inventory_counts.php */
 .count-layout {
         display: grid;
-        grid-template-columns: minmax(280px, 420px) 1fr;
+        grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
         gap: 1.25rem;
         align-items: start;
     }
     .count-panel {
+        min-width: 0;
         background: var(--card-bg);
         border: 1px solid var(--border);
         border-radius: 14px;
@@ -400,6 +401,7 @@ html.overview-fefo-active::-webkit-scrollbar { display: none; }
 /* Source: frontend\modules\inventory_management\replenishment_requests.php */
 .tabs {
             display: flex;
+            flex-wrap: wrap;
             gap: 0;
             margin-bottom: 1.5rem;
             border-bottom: 1px solid #ddd;

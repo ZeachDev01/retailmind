@@ -13,6 +13,8 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+[hidden]:not([hidden="until-found"]) { display: none !important; }
+
 html {
     -webkit-text-size-adjust: 100%;
     scrollbar-gutter: stable;

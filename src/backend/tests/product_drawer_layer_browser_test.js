@@ -42,7 +42,8 @@ const {chromium} = require('playwright');
                 });
                 await page.screenshot({path: path.join(output, `${label}-closed.png`)});
                 await page.evaluate(() => document.getElementById('open-product').click());
-                await page.waitForFunction(() => getComputedStyle(document.getElementById('product-drawer')).opacity === '1');
+                const waitDrawer = () => page.waitForFunction(() => getComputedStyle(document.getElementById('product-drawer')).opacity === '1' && Math.abs(new DOMMatrix(getComputedStyle(document.querySelector('#product-drawer .rm-drawer')).transform).m41) < .1);
+                await waitDrawer();
                 await page.screenshot({path: path.join(output, `${label}-initial-open.png`)});
                 await page.keyboard.press('Escape');
                 await page.waitForFunction(() => getComputedStyle(document.getElementById('product-drawer')).opacity === '0');
@@ -51,7 +52,7 @@ const {chromium} = require('playwright');
                 assert.equal(await page.locator('.rm-modal-overlay button').first().evaluate(button => { button.focus(); return document.activeElement === button; }), false, `${label}: closed modal cannot receive focus`);
                 for (let cycle = 0; cycle < 3; cycle++) {
                     await page.evaluate(() => document.getElementById('open-product').click());
-                    await page.waitForFunction(() => getComputedStyle(document.getElementById('product-drawer')).opacity === '1');
+                    await waitDrawer();
                     const state = await page.evaluate(() => {
                         const overlay = document.getElementById('product-drawer');
                         const bounds = overlay.querySelector('.rm-drawer').getBoundingClientRect();

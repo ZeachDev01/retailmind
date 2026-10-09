@@ -710,7 +710,7 @@ foreach ($products as $product) {
             }
         }
 
-        @media (min-width: 641px) and (max-width: 920px) {
+        @media (min-width: 641px) and (max-width: 1100px) {
             .catalog-toolbar-primary {
                 grid-template-columns: auto minmax(0, 1fr) minmax(150px, .7fr);
             }
@@ -849,6 +849,10 @@ foreach ($products as $product) {
 
             .table-pagination {
                 align-items: stretch;
+            }
+
+            .product-table-shell .data-table {
+                min-width: 0;
             }
 
             .table-pagination label,
@@ -1274,7 +1278,6 @@ foreach ($products as $product) {
         if (addProductButton) addProductButton.addEventListener('click', () => {
             setAddMenuOpen(false);
             openModal('add-product-modal');
-            restoreFormState();
         });
         const addCategoryButton = document.getElementById('add-category-btn');
         if (addCategoryButton) addCategoryButton.addEventListener('click', () => {
@@ -1831,16 +1834,7 @@ foreach ($products as $product) {
             if (imagePreviewContainer) imagePreviewContainer.hidden = true;
         }
 
-        // Listen for modal open event
-        const originalOpenOverlay = RetailMindUI?.openOverlay;
-        if (originalOpenOverlay) {
-            RetailMindUI.openOverlay = function(overlay) {
-                originalOpenOverlay.call(this, overlay);
-                if (overlay && overlay.id === 'add-product-modal') {
-                    restoreFormState();
-                }
-            };
-        }
+        productModalOverlay.addEventListener('retailmind:overlayopen', restoreFormState);
 
         // Save form state when modal is about to close
         productModalOverlay.addEventListener('click', event => {

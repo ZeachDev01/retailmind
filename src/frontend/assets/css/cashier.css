@@ -1004,6 +1004,7 @@
 .checkout-modal {
     position: fixed;
     inset: 0;
+    width: 100vw;
     z-index: 2000;
     display: flex;
     align-items: center;
@@ -1012,17 +1013,23 @@
     background: rgba(15, 23, 42, 0.68);
     backdrop-filter: blur(3px);
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .checkout-modal.open {
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
 }
 
 .checkout-dialog {
     width: min(480px, 100%);
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     border-radius: 18px;
     background: var(--theme-surface, #fff);
@@ -1036,6 +1043,7 @@
 }
 
 .checkout-dialog-header {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -1068,10 +1076,14 @@
 }
 
 .checkout-dialog-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 1.1rem;
 }
 
 .checkout-dialog-actions {
+    flex-shrink: 0;
     display: flex;
     justify-content: flex-end;
     gap: 0.65rem;
@@ -1222,6 +1234,7 @@
 }
 
 .dashboard-panel {
+    min-width: 0;
     border: 1px solid var(--cashier-border);
     border-radius: 16px;
     background: var(--theme-surface, #fff);
@@ -2605,7 +2618,6 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 
     .cashier-page .checkout-panel .cart-table-wrap {
         max-height: none;
-        overflow: visible;
     }
 
     .cashier-page .pos-workspace::-webkit-scrollbar,

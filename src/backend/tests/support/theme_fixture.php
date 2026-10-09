@@ -21,6 +21,13 @@ if ($argv[1] === 'reports') {
     $pdo->exec("INSERT IGNORE INTO model_training_runs (training_run_id,model_name,model_version,status,metrics_json) VALUES (100,'Random Forest','theme-test','completed','{\"wape\":12,\"mean_absolute_error\":2}'),(101,'Random Forest','theme-test','completed','{\"wape\":10,\"mean_absolute_error\":1}')");
     exit;
 }
+if ($argv[1] === 'responsive') {
+    $pdo->exec("USE `{$database}`");
+    for ($index = 0; $index < 6; $index++) {
+        $pdo->exec("INSERT INTO notifications (user_id,type,title,message) VALUES (4,'system','Inventory review needed','Review the available stock and contact your Administrator if an item needs attention.')");
+    }
+    exit;
+}
 if ($argv[1] === 'inventory_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];
@@ -116,9 +123,8 @@ $pdo->exec("INSERT INTO registers (register_id,name) VALUES (1,'Theme Register')
 $pdo->exec('INSERT INTO cashier_shifts (shift_id,cashier_id,register_id,opening_cash) VALUES (1,4,1,100)');
 $pdo->prepare('INSERT INTO held_sales (cashier_id,shift_id,reference_no,customer_label,cart_json,item_count,total_amount) VALUES (4,1,?,?,?,?,?)')
     ->execute(['THEME-HELD', 'Unfinished theme customer', json_encode([1 => ['qty' => 1, 'name' => 'Theme Test Item', 'price' => 25]]), 1, 25]);
-$pdo->exec("INSERT INTO products (product_id,sku,product_name,unit_price,branch_id) VALUES (1,'THEME-ITEM','Theme Test Item',25,1)");
+$pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (1,'THEME-ITEM','THEME-BARCODE','Theme Test Item',25,3,1)");
 $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,10)');
-$pdo->exec("UPDATE products SET barcode='THEME-BARCODE' WHERE product_id=1");
 $pdo->exec("INSERT INTO suppliers (supplier_id,supplier_name,created_by) VALUES (1,'Theme Test Supplier',3)");
 $pdo->exec('INSERT INTO supplier_products (supplier_id,product_id) VALUES (1,1)');
 $pdo->exec("INSERT INTO inventory_adjustments (product_id,adjustment_qty,adjustment_type,reported_by,shift_id,reason) VALUES (1,1,'damaged',4,1,'Disposable theme Stock Issue')");
