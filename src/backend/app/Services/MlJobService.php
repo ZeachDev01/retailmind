@@ -63,6 +63,9 @@ class MlJobService
             'ip' => $ipAddress ?? '127.0.0.1'
         ]);
 
+        return $jobId;
+    }
+
     public function enqueueSystem(string $triggerType): int
     {
         $stmt = $this->pdo->prepare("

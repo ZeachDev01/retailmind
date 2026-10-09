@@ -12,6 +12,6 @@ CREATE TABLE `demand_forecasts` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_demand_forecasts_product_origin` (`product_id`, `forecast_origin`),
     INDEX `idx_demand_forecasts_job` (`job_id`),
-    FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`product_id`) REFERENCES `products`(`product_id`) ON DELETE CASCADE,
     FOREIGN KEY (`job_id`) REFERENCES `ml_jobs`(`job_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
