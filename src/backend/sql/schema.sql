@@ -2021,6 +2021,10 @@ INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('accuracy_thr
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_lower','10');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_upper','90');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('holiday_dates','');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_daily_forecast_time','23:00');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_day','Sunday');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_time','01:00');
+
 CREATE TABLE ml_jobs (
     job_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     trigger_type VARCHAR(50) NOT NULL COMMENT 'e.g. forecast_generation, model_retraining',

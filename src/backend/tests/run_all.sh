@@ -94,6 +94,7 @@ php src/backend/tests/audit_visibility_integration.php
 php src/backend/tests/database_backup_workflow_integration.php
 php src/backend/tests/philippine_time_contract.php
 php src/backend/tests/philippine_time_mysql_integration.php
+php src/backend/tests/forecasting_scheduler_service_test.php
 php src/backend/tests/receipt_history_integration.php
 php src/backend/tests/receipt_table_contract.php
 php src/backend/tests/receipt_attribution_contract.php
