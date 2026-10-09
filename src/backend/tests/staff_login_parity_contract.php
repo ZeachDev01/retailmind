@@ -273,7 +273,10 @@ try {
 
     // Glossary: Login Identifier plus Username (never @), Email Address
     // (alternate, optional, unique), Recovery exclusion restated.
-    $context = (string)@file_get_contents($root . '/CONTEXT.md');
+    $context = (string)@file_get_contents($root . '/docs/CONTEXT.md');
+    if ($context === '') {
+        $context = (string)@file_get_contents($root . '/CONTEXT.md');
+    }
     $assert(str_contains($context, 'Login Identifier'), 'Glossary must define the Login Identifier');
     $assert(str_contains($context, '**Username**'), 'Glossary must define the Username');
     $assert(str_contains($context, 'never contains `@`'), 'Glossary must state the Username never contains `@`');

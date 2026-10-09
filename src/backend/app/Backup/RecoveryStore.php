@@ -9,16 +9,26 @@ use RuntimeException;
 final class RecoveryStore
 {
     private static $requestLock = null;
+    private static ?string $availableKey = null;
+    private static ?bool $availableCache = null;
+    private static ?string $directoryKey = null;
+    private static ?string $directoryCache = null;
 
     /** Shared hosts can serve the Store while disabling recovery operations. */
     public static function isAvailable(): bool
     {
+        $cacheKey = (string)ini_get('open_basedir') . '|' . (string)Environment::get('BACKUP_STORAGE_PATH', '');
+        if (self::$availableKey === $cacheKey && self::$availableCache !== null) {
+            return self::$availableCache;
+        }
+
+        self::$availableKey = $cacheKey;
         if (trim((string)Environment::get('BACKUP_STORAGE_PATH', '')) !== '') {
-            return true;
+            return self::$availableCache = true;
         }
         $restricted = (string)ini_get('open_basedir');
         if ($restricted === '') {
-            return true;
+            return self::$availableCache = true;
         }
         $project = dirname(__DIR__, 4);
         $default = dirname($project, 2) . '/retailmind-private-' . substr(hash('sha256', $project), 0, 16);
@@ -30,10 +40,10 @@ final class RecoveryStore
             }
             $allowed = rtrim(str_replace('\\', '/', (string)$allowed), '/');
             if ($allowed !== '' && ($candidate === $allowed || str_starts_with($candidate, $allowed . '/'))) {
-                return true;
+                return self::$availableCache = true;
             }
         }
-        return false;
+        return self::$availableCache = false;
     }
 
     public static function directory(): string
@@ -41,6 +51,11 @@ final class RecoveryStore
         if (!self::isAvailable()) {
             throw new RuntimeException('Database Backup and Restore are unavailable on this hosting plan.');
         }
+        $cacheKey = (string)ini_get('open_basedir') . '|' . (string)Environment::get('BACKUP_STORAGE_PATH', '');
+        if (self::$directoryKey === $cacheKey && self::$directoryCache !== null) {
+            return self::$directoryCache;
+        }
+
         $project = dirname(__DIR__, 4);
         $configured = trim((string)Environment::get('BACKUP_STORAGE_PATH', ''));
         $path = $configured !== '' ? $configured : dirname($project, 2) . '/retailmind-private-' . substr(hash('sha256', $project), 0, 16);
@@ -61,7 +76,8 @@ final class RecoveryStore
                 }
             }
         }
-        return $real;
+        self::$directoryKey = $cacheKey;
+        return self::$directoryCache = $real;
     }
 
     public static function path(string $name): string

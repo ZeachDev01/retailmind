@@ -29,6 +29,7 @@ try {
     $statement = $pdo->prepare('UPDATE users SET theme_preference = ? WHERE user_id = ?');
     $statement->execute([$mode, (int)$_SESSION['user_id']]);
     $pdo->commit();
+    $_SESSION['theme_preference'] = $mode;
     echo json_encode(['success' => true, 'mode' => $mode]);
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();

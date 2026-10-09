@@ -540,7 +540,7 @@ function check_and_notify_low_stock(PDO $pdo): void
             $check_stmt = $pdo->prepare("SELECT notification_id FROM notifications 
                                         WHERE user_id = ? AND type = 'low_stock' 
                                         AND reference_id = ?
-                                        AND DATE(created_at) = CURDATE()");
+                                        AND created_at >= CURDATE()");
             $check_stmt->execute([$user['user_id'], $product['product_id']]);
 
             if (!$check_stmt->fetch()) {

@@ -16,22 +16,24 @@ $fefo_recommendations = $inventoryService->getFefoRecommendations();
 $lowStockProductIds = array_fill_keys(array_map('intval', array_column($low_stock, 'product_id')), true);
 $expiringProductIds = array_fill_keys(array_map('intval', array_column($expiring_batches, 'product_id')), true);
 $expiredProductIds = array_fill_keys(array_map('intval', array_column($expired_batches, 'product_id')), true);
-$summary = $inventoryService->getInventorySummary();
-$total_products = $summary['total_products'];
-$total_units = $summary['current_stock'];
+$total_products = count($products);
+$total_units = 0;
+$out_of_stock = 0;
+$out_of_stock_products = [];
+foreach ($products as $p) {
+    $qty = (int)($p['quantity_on_hand'] ?? 0);
+    $total_units += $qty;
+    if ($qty <= 0) {
+        $out_of_stock++;
+        $out_of_stock_products[] = [
+            'sku' => $p['sku'] ?? '',
+            'product_name' => $p['product_name'] ?? '',
+            'quantity_on_hand' => $qty,
+            'reorder_level' => (int)($p['reorder_level'] ?? 0),
+        ];
+    }
+}
 [$scopeSql, $scopeParams] = store_product_scope('p');
-$outOfStockStmt = $pdo->prepare("SELECT COUNT(*) FROM inventory i JOIN products p ON p.product_id = i.product_id WHERE i.quantity_on_hand = 0{$scopeSql}");
-$outOfStockStmt->execute($scopeParams);
-$out_of_stock = $outOfStockStmt->fetchColumn();
-$out_of_stock_products = $pdo->prepare(
-    "SELECT p.sku, p.product_name, i.quantity_on_hand, p.reorder_level
-     FROM products p
-     JOIN inventory i ON i.product_id = p.product_id
-    WHERE i.quantity_on_hand = 0{$scopeSql}
-     ORDER BY p.product_name"
-);
-$out_of_stock_products->execute($scopeParams);
-$out_of_stock_products = $out_of_stock_products->fetchAll();
 $recentStmt = $pdo->prepare(
     "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.product_name, u.full_name AS moved_by_name
      FROM stock_movements sm
@@ -50,8 +52,8 @@ $recent_movements = $recentStmt->fetchAll();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Inventory Overview</title>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
 </head>
 <body class="inventory-overview-page">
 <div class="app-shell">
