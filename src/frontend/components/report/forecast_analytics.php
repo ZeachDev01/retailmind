@@ -2,120 +2,280 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Forecasting\DemandForecastService;
+use App\Forecasting\CandidateEvaluationService;
 
 require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
 $storeId = store_scope_id($pdo);
 
-$metrics = get_ml_model_metrics();
-$featureImportance = $metrics['feature_importance'] ?? [];
-$productMetrics = $metrics['product_metrics'] ?? [];
-$productsById = [];
-$productStatement = $pdo->prepare('SELECT product_id, product_name FROM products WHERE branch_id = ?');
-$productStatement->execute([$storeId]);
-foreach ($productStatement->fetchAll(PDO::FETCH_ASSOC) as $product) {
-    $productsById[(int)$product['product_id']] = $product['product_name'];
-}
-$productMetrics = array_values(array_filter(
-    $productMetrics,
-    static fn(array $metric): bool => isset($productsById[(int)$metric['product_id']])
-));
+// 1. Determine currently displayed forecast and model version
+$demandService = new DemandForecastService($pdo);
+$latestJobId = $demandService->getLatestSuccessfulJobId();
 
+$displayedModelVersion = null;
+$forecastOrigin = null;
+if ($latestJobId) {
+    $stmt = $pdo->prepare("SELECT model_version, forecast_origin FROM demand_forecasts WHERE job_id = ? LIMIT 1");
+    $stmt->execute([$latestJobId]);
+    $jobMeta = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($jobMeta) {
+        $displayedModelVersion = $jobMeta['model_version'];
+        $forecastOrigin = $jobMeta['forecast_origin'];
+    }
+}
+
+if (!$displayedModelVersion) {
+    // Fallback to platform settings approved model
+    $stmt = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'");
+    $displayedModelVersion = $stmt->fetchColumn() ?: null;
+}
+
+// 2. Fetch candidate evaluations for this specific model version
+$evalService = new CandidateEvaluationService($pdo);
+$evaluations = $displayedModelVersion ? $evalService->getEvaluationsByModelVersion($displayedModelVersion) : [];
+$evalByHorizon = [];
+foreach ($evaluations as $e) {
+    $evalByHorizon[(int)$e['horizon_days']] = $e;
+}
+
+// 3. Demo status indicator
+$isDemoMode = false;
+$metaStmt = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'demo_import_metadata'");
+if ($metaStmt && $metaStmt->fetchColumn()) {
+    $isDemoMode = true;
+}
+
+// 4. Actual vs Forecast (for past completed target dates)
 $actualVsForecast = [];
 try {
-    $actualStatement = $pdo->prepare(
-        "SELECT p.product_name, SUM(df.predicted_units) AS forecast_value,
-                (
-                    SELECT COALESCE(SUM(si.quantity), 0)
-                    FROM sale_items si
-                    JOIN sales s ON s.sale_id = si.sale_id
-                    WHERE si.product_id = df.product_id
-                      AND s.sale_date >= df.forecast_origin
-                      AND s.sale_date < DATE_ADD(df.forecast_origin, INTERVAL 28 DAY)
-                ) AS actual_demand,
-                df.forecast_origin AS generated_at
-         FROM demand_forecasts df JOIN products p ON p.product_id = df.product_id
-         WHERE p.branch_id = ? AND DATE_ADD(df.forecast_origin, INTERVAL 28 DAY) <= NOW()
-         GROUP BY df.job_id, df.product_id, df.forecast_origin, p.product_name
-         ORDER BY df.forecast_origin DESC LIMIT 20"
-    );
-    $actualStatement->execute([$storeId]);
-    $actualVsForecast = $actualStatement->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare("
+        SELECT 
+            p.product_name,
+            p.sku,
+            df.target_date,
+            df.horizon_day,
+            df.predicted_units,
+            COALESCE((
+                SELECT SUM(si.quantity)
+                FROM sale_items si
+                JOIN sales s ON si.sale_id = s.sale_id
+                WHERE si.product_id = df.product_id
+                  AND DATE(s.sale_date) = df.target_date
+            ), 0) as actual_units
+        FROM demand_forecasts df
+        JOIN products p ON df.product_id = p.product_id
+        WHERE df.target_date <= CURDATE()
+        ORDER BY df.target_date DESC, df.product_id ASC
+        LIMIT 25
+    ");
+    $stmt->execute();
+    $actualVsForecast = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {}
 
-$trainingTrend = [];
-try {
-    $runs = $pdo->query("SELECT started_at, metrics_json FROM model_training_runs WHERE status = 'completed' ORDER BY started_at ASC LIMIT 30")->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($runs as $run) {
-        $runMetrics = json_decode((string)$run['metrics_json'], true) ?: [];
-        $trainingTrend[] = ['date' => $run['started_at'], 'wape' => $runMetrics['wape'] ?? null, 'mae' => $runMetrics['mean_absolute_error'] ?? null];
+// Format helpers
+function format_unit_metric(?float $val): string {
+    return $val !== null ? number_format($val, 2) . ' units' : 'N/A';
+}
+
+function format_wape_metric(?float $val, ?string $reason): string {
+    if ($val !== null) {
+        return number_format($val * 100, 1) . '%';
     }
-} catch (PDOException $e) {}
-
-usort($productMetrics, static fn(array $a, array $b): int => ($a['wape'] ?? PHP_FLOAT_MAX) <=> ($b['wape'] ?? PHP_FLOAT_MAX));
-$best = array_slice($productMetrics, 0, 5);
-$worst = array_slice(array_reverse($productMetrics), 0, 5);
+    return $reason ? htmlspecialchars($reason) : 'N/A';
+}
 ?>
-<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forecast Analytics</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>"></head>
-<body><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content"><div class="topbar"><div><h1>Forecast Analytics</h1><p class="page-subtitle">Backtesting, accuracy trends, feature importance, and product-level performance.</p></div><div class="u-flex-wrap"><a class="btn" href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>">Forecast exceptions</a><a class="btn" href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">Data readiness</a></div></div>
-<div class="card-grid"><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'mean_absolute_error')) ?></div><div class="label">Random Forest MAE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'root_mean_squared_error')) ?></div><div class="label">RMSE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'wape')) ?><?= isset($metrics['wape']) ? '%' : '' ?></div><div class="label">Random Forest WAPE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'baseline_wape')) ?><?= isset($metrics['baseline_wape']) ? '%' : '' ?></div><div class="label">7-day baseline WAPE</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'model_improvement_vs_baseline_pct')) ?><?= isset($metrics['model_improvement_vs_baseline_pct']) ? '%' : '' ?></div><div class="label">Improvement vs baseline</div></div><div class="stat-card"><div class="value"><?= !empty($metrics['model_beats_baseline']) ? 'Yes' : (array_key_exists('model_beats_baseline', $metrics) ? 'No' : '-') ?></div><div class="label">Model beats baseline</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'eligible_products', 0)) ?></div><div class="label">Eligible products</div></div><div class="stat-card"><div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'zero_sales_records', 0)) ?></div><div class="label">Zero-sales dates used</div></div></div>
-<section class="forecast-analytics-tabs" aria-labelledby="analytics-view-title">
-<div class="analytics-tab-list" role="tablist" aria-label="Forecast analytics views">
-<button class="analytics-tab is-active" id="analytics-tab-features" type="button" role="tab" aria-selected="true" aria-controls="analytics-panel-features" data-analytics-tab="features"><i class="bi bi-sliders" aria-hidden="true"></i>Feature Importance</button>
-<button class="analytics-tab" id="analytics-tab-trend" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-trend" data-analytics-tab="trend" tabindex="-1"><i class="bi bi-graph-up" aria-hidden="true"></i>Accuracy Trend</button>
-<button class="analytics-tab" id="analytics-tab-actual" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-actual" data-analytics-tab="actual" tabindex="-1"><i class="bi bi-bar-chart" aria-hidden="true"></i>Actual vs Predicted</button>
-<button class="analytics-tab" id="analytics-tab-best" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-best" data-analytics-tab="best" tabindex="-1"><i class="bi bi-trophy" aria-hidden="true"></i>Best Performers</button>
-<button class="analytics-tab" id="analytics-tab-attention" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-attention" data-analytics-tab="attention" tabindex="-1"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>Needs Attention</button>
-</div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <?php retailmind_theme_head(); ?>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Forecast Analytics</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+    <style>
+        .model-context-card {
+            background: var(--card-bg, #ffffff);
+            border: 1px solid var(--border-color, #e2e8f0);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+        .demo-badge {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-left: 0.5rem;
+        }
+        .horizon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+        .horizon-card {
+            background: var(--card-bg, #ffffff);
+            border: 1px solid var(--border-color, #e2e8f0);
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+        .horizon-card h3 {
+            margin-top: 0;
+            font-size: 1.15rem;
+            border-bottom: 1px solid var(--border-color, #e2e8f0);
+            padding-bottom: 0.5rem;
+        }
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.35rem 0;
+            font-size: 0.95rem;
+        }
+        .metric-label { color: var(--text-muted, #64748b); }
+        .metric-val { font-weight: 600; }
+        .comparison-tag {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+        .gate-passed { background: #dcfce7; color: #15803d; }
+        .gate-failed { background: #fee2e2; color: #b91c1c; }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <?php include __DIR__ . '/../sidebar.php'; ?>
+    <main class="main-content">
+        <div class="topbar">
+            <div>
+                <h1>Forecast Analytics <?php if ($isDemoMode): ?><span class="demo-badge">Demo Evidence (S001)</span><?php endif; ?></h1>
+                <p class="page-subtitle">Evaluation metrics bound directly to the active displayed model and run context.</p>
+            </div>
+            <div>
+                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">View Forecasts</a>
+            </div>
+        </div>
 
-<div class="analytics-tab-panel chart-card" id="analytics-panel-features" role="tabpanel" aria-labelledby="analytics-tab-features" data-analytics-panel="features"><h2 id="analytics-view-title">Feature importance</h2><canvas id="featureChart"></canvas></div>
-<div class="analytics-tab-panel chart-card" id="analytics-panel-trend" role="tabpanel" aria-labelledby="analytics-tab-trend" data-analytics-panel="trend" hidden><h2>Accuracy over retraining runs</h2><canvas id="trendChart"></canvas></div>
-<div class="analytics-tab-panel chart-card" id="analytics-panel-actual" role="tabpanel" aria-labelledby="analytics-tab-actual" data-analytics-panel="actual" hidden><h2>Completed forecasts: actual vs predicted</h2><canvas id="actualChart"></canvas></div>
-<div class="analytics-tab-panel" id="analytics-panel-best" role="tabpanel" aria-labelledby="analytics-tab-best" data-analytics-panel="best" hidden><h2>Best-performing products</h2><div class="table-wrap"><table><tr><th>Product</th><th>WAPE</th><th>MAE</th><th>Actual</th><th>Predicted</th></tr><?php foreach ($best as $row): ?><tr><td><?= htmlspecialchars($productsById[(int)$row['product_id']] ?? ('Product #' . $row['product_id'])) ?></td><td><?= $row['wape'] !== null ? number_format((float)$row['wape'], 2) . '%' : '-' ?></td><td><?= $row['mae'] !== null ? number_format((float)$row['mae'], 2) : '-' ?></td><td><?= number_format((float)$row['actual_total'], 0) ?></td><td><?= number_format((float)$row['predicted_total'], 0) ?></td></tr><?php endforeach; ?><?php if (!$best): ?><tr><td colspan="5">No product evaluation data yet.</td></tr><?php endif; ?></table></div></div>
-<div class="analytics-tab-panel" id="analytics-panel-attention" role="tabpanel" aria-labelledby="analytics-tab-attention" data-analytics-panel="attention" hidden><h2>Products needing attention</h2><div class="table-wrap"><table><tr><th>Product</th><th>WAPE</th><th>SMAPE</th><th>Records</th></tr><?php foreach ($worst as $row): ?><tr><td><?= htmlspecialchars($productsById[(int)$row['product_id']] ?? ('Product #' . $row['product_id'])) ?></td><td><?= $row['wape'] !== null ? number_format((float)$row['wape'], 2) . '%' : '-' ?></td><td><?= $row['smape'] !== null ? number_format((float)$row['smape'], 2) . '%' : '-' ?></td><td><?= (int)$row['evaluation_records'] ?></td></tr><?php endforeach; ?><?php if (!$worst): ?><tr><td colspan="4">No product evaluation data yet.</td></tr><?php endif; ?></table></div></div>
-</section>
-</main></div>
-<script>
-const featureData = <?= json_encode(['labels' => array_keys($featureImportance), 'values' => array_values($featureImportance)], JSON_HEX_TAG) ?>;
-const trendData = <?= json_encode($trainingTrend, JSON_HEX_TAG) ?>;
-const actualData = <?= json_encode(array_reverse($actualVsForecast), JSON_HEX_TAG) ?>;
-let analyticsPrinting = false;
-const analyticsPrintMedia = window.matchMedia('print');
-function analyticsTextColor() { return !analyticsPrinting && !analyticsPrintMedia.matches && document.documentElement.dataset.theme === 'dark' ? '#b1bfd3' : '#475569'; }
-function drawBars(canvasId, labels, series, legends) {
-  const canvas = document.getElementById(canvasId), dpr = window.devicePixelRatio || 1, width = canvas.clientWidth || 600, height = 240;
-  canvas.width = width*dpr; canvas.height = height*dpr; const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,width,height);
-  const pad={l:48,r:12,t:18,b:55}, cw=width-pad.l-pad.r, ch=height-pad.t-pad.b; const all=series.flatMap(s=>s.values).filter(v=>Number.isFinite(Number(v))).map(Number); const max=Math.max(1,...all)*1.1;
-  ctx.strokeStyle='#94a3b8'; ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,height-pad.b); ctx.lineTo(width-pad.r,height-pad.b); ctx.stroke();
-  const groups=Math.max(1,labels.length), groupW=cw/groups, barW=Math.max(3,groupW/(series.length+1));
-  series.forEach((s,si)=>{ctx.fillStyle=s.fill || (si===0?'#2563eb':'#16a34a'); s.values.forEach((value,i)=>{value=Number(value)||0; const h=value/max*ch; const x=pad.l+i*groupW+(si+.4)*barW; ctx.fillRect(x,height-pad.b-h,barW*.8,h);});});
-  ctx.fillStyle=analyticsTextColor(); ctx.font='11px sans-serif'; labels.forEach((label,i)=>{ctx.save();ctx.translate(pad.l+i*groupW+groupW/2,height-pad.b+8);ctx.rotate(-.45);ctx.fillText(String(label).slice(0,18),0,0);ctx.restore();});
-  ctx.fillText(max.toFixed(1),4,pad.t+5); if(legends){legends.forEach((x,i)=>ctx.fillText(x, pad.l+i*110, 12));}
-}
-function drawLine(canvasId, labels, values) {
- const canvas=document.getElementById(canvasId),dpr=window.devicePixelRatio||1,w=canvas.clientWidth||600,h=240;canvas.width=w*dpr;canvas.height=h*dpr;const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);const p={l:45,r:15,t:15,b:45},cw=w-p.l-p.r,ch=h-p.t-p.b;const nums=values.map(Number).filter(Number.isFinite),max=Math.max(1,...nums)*1.1;
- ctx.strokeStyle='#94a3b8';ctx.beginPath();ctx.moveTo(p.l,p.t);ctx.lineTo(p.l,h-p.b);ctx.lineTo(w-p.r,h-p.b);ctx.stroke();ctx.strokeStyle='#2563eb';ctx.lineWidth=2;ctx.beginPath();values.forEach((v,i)=>{const x=p.l+(labels.length<=1?cw/2:i*cw/(labels.length-1)),y=h-p.b-(Number(v)||0)/max*ch;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.fillStyle=analyticsTextColor();ctx.font='11px sans-serif';labels.forEach((l,i)=>{if(i%Math.max(1,Math.ceil(labels.length/6))===0)ctx.fillText(String(l).slice(5,10),p.l+(labels.length<=1?0:i*cw/(labels.length-1))-12,h-18);});ctx.fillText(max.toFixed(1),3,p.t+5);
-}
-function drawAnalyticsPanel(panel) {
-  if (panel === 'features') drawBars('featureChart', featureData.labels, [{values:featureData.values,fill:'#2563eb'}]);
-  if (panel === 'trend') drawLine('trendChart', trendData.map(x=>x.date), trendData.map(x=>x.wape));
-  if (panel === 'actual') drawBars('actualChart', actualData.map(x=>x.product_name), [{values:actualData.map(x=>x.forecast_value),fill:'#2563eb'},{values:actualData.map(x=>x.actual_demand),fill:'#16a34a'}], ['Forecast','Actual']);
-}
-const analyticsTabs = Array.from(document.querySelectorAll('[data-analytics-tab]'));
-const analyticsPanels = Array.from(document.querySelectorAll('[data-analytics-panel]'));
-function activateAnalyticsTab(tab) {
-  const target = tab.dataset.analyticsTab;
-  analyticsTabs.forEach(item => { const active=item===tab; item.classList.toggle('is-active',active); item.setAttribute('aria-selected',String(active)); item.tabIndex=active?0:-1; });
-  analyticsPanels.forEach(panel => { panel.hidden=panel.dataset.analyticsPanel!==target; });
-  drawAnalyticsPanel(target);
-}
-analyticsTabs.forEach((tab,index) => {
-  tab.addEventListener('click',()=>activateAnalyticsTab(tab));
-  tab.addEventListener('keydown',event=>{ if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return; event.preventDefault(); let next=index; if(event.key==='ArrowRight')next=(index+1)%analyticsTabs.length; if(event.key==='ArrowLeft')next=(index-1+analyticsTabs.length)%analyticsTabs.length; if(event.key==='Home')next=0; if(event.key==='End')next=analyticsTabs.length-1; analyticsTabs[next].focus(); activateAnalyticsTab(analyticsTabs[next]); });
-});
-drawAnalyticsPanel('features');
-const redrawAnalytics = () => drawAnalyticsPanel(document.querySelector('[data-analytics-tab].is-active').dataset.analyticsTab);
-window.addEventListener('retailmind:themechange', redrawAnalytics);
-analyticsPrintMedia.addEventListener('change', redrawAnalytics);
-window.addEventListener('beforeprint', () => { analyticsPrinting = true; redrawAnalytics(); });
-window.addEventListener('afterprint', () => { analyticsPrinting = false; redrawAnalytics(); });
-</script></body></html>
+        <div class="model-context-card">
+            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+                <div>
+                    <strong>Bound Model Version:</strong> 
+                    <?php if ($displayedModelVersion): ?>
+                        <code><?= htmlspecialchars($displayedModelVersion) ?></code>
+                    <?php else: ?>
+                        <em>No approved model version resolved yet</em>
+                    <?php endif; ?>
+                </div>
+                <div>
+                    <strong>Evaluation Context:</strong>
+                    <?= $isDemoMode ? 'Isolated Demo Dataset (S001, 20 Products)' : 'Store Operational Sales' ?>
+                </div>
+            </div>
+        </div>
+
+        <?php if (empty($evaluations)): ?>
+            <div class="empty-state">
+                <i class="bi bi-bar-chart empty-icon"></i>
+                <h2>No Evaluation Records Available</h2>
+                <p>Candidate evaluations have not been recorded for the current model version. Retrain a candidate model to review evaluation benchmarks.</p>
+            </div>
+        <?php else: ?>
+            <div class="horizon-grid">
+                <?php foreach ([7, 14, 28] as $h): 
+                    $data = $evalByHorizon[$h] ?? null;
+                ?>
+                    <div class="horizon-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                            <h3 style="margin:0;"><?= $h ?>-Day Horizon</h3>
+                            <?php if ($data): ?>
+                                <span class="comparison-tag gate-<?= htmlspecialchars($data['candidate_gate_outcome']) ?>">
+                                    Gate <?= ucfirst($data['candidate_gate_outcome']) ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if ($data): ?>
+                            <div class="metric-row">
+                                <span class="metric-label">Random Forest MAE</span>
+                                <span class="metric-val"><?= format_unit_metric($data['mae'] !== null ? (float)$data['mae'] : null) ?></span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Random Forest RMSE</span>
+                                <span class="metric-val"><?= format_unit_metric($data['rmse'] !== null ? (float)$data['rmse'] : null) ?></span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Random Forest WAPE</span>
+                                <span class="metric-val"><?= format_wape_metric($data['wape'] !== null ? (float)$data['wape'] : null, $data['missing_metric_reason']) ?></span>
+                            </div>
+
+                            <hr style="border:0; border-top:1px dashed var(--border-color, #e2e8f0); margin:0.75rem 0;">
+
+                            <div class="metric-row">
+                                <span class="metric-label">Weekly Baseline MAE</span>
+                                <span class="metric-val"><?= format_unit_metric($data['baseline_mae'] !== null ? (float)$data['baseline_mae'] : null) ?></span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Weekly Baseline RMSE</span>
+                                <span class="metric-val"><?= format_unit_metric($data['baseline_rmse'] !== null ? (float)$data['baseline_rmse'] : null) ?></span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Weekly Baseline WAPE</span>
+                                <span class="metric-val"><?= format_wape_metric($data['baseline_wape'] !== null ? (float)$data['baseline_wape'] : null, null) ?></span>
+                            </div>
+                        <?php else: ?>
+                            <p style="color:var(--text-muted, #64748b);">No evaluation data recorded for <?= $h ?> days.</p>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="card">
+            <h2>Actual vs Predicted Comparison (Completed Target Dates)</h2>
+            <p class="section-description" style="color:var(--text-muted, #64748b); margin-bottom:1rem;">
+                Comparing forecast predictions against observed valid sales for completed dates.
+            </p>
+            <?php if (empty($actualVsForecast)): ?>
+                <p style="color:var(--text-muted, #64748b);">No historical target dates have completed since the active forecast run.</p>
+            <?php else: ?>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>SKU</th>
+                            <th>Target Date</th>
+                            <th>Horizon Day</th>
+                            <th>Predicted Units</th>
+                            <th>Actual Valid Sales</th>
+                            <th>Difference</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($actualVsForecast as $row): 
+                            $diff = (int)$row['actual_units'] - (int)$row['predicted_units'];
+                        ?>
+                            <tr>
+                                <td><?= htmlspecialchars($row['product_name']) ?></td>
+                                <td><code><?= htmlspecialchars($row['sku']) ?></code></td>
+                                <td><?= htmlspecialchars($row['target_date']) ?></td>
+                                <td>Day <?= htmlspecialchars((string)$row['horizon_day']) ?></td>
+                                <td><strong><?= htmlspecialchars((string)$row['predicted_units']) ?></strong></td>
+                                <td><?= htmlspecialchars((string)$row['actual_units']) ?></td>
+                                <td style="color: <?= $diff >= 0 ? '#15803d' : '#b91c1c' ?>;">
+                                    <?= $diff > 0 ? "+{$diff}" : $diff ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+    </main>
+</div>
+</body>
+</html>
