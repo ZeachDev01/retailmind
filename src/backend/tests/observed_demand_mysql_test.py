@@ -65,6 +65,13 @@ class ObservedDemandMysqlTest(unittest.TestCase):
                             cursor.execute('SELECT status, diagnostic_reference FROM ml_jobs WHERE job_id = %s', (job_id,))
                             result = cursor.fetchone()
                             self.assertEqual(result['status'], 'succeeded', result['diagnostic_reference'])
+                            if trigger == 'model_retraining':
+                                cursor.execute('SELECT model_version FROM model_training_runs ORDER BY training_run_id DESC LIMIT 1')
+                                version = cursor.fetchone()['model_version']
+                                cursor.execute("""INSERT INTO platform_settings (setting_key, setting_value)
+                                    VALUES ('ml_approved_model_version', %s)
+                                    ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)""", (version,))
+                        conn.commit()
                     with conn.cursor() as cursor:
                         cursor.execute('SELECT metrics_json FROM model_training_runs ORDER BY training_run_id DESC LIMIT 1')
                         summary = json.loads(cursor.fetchone()['metrics_json'])

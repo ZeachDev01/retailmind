@@ -224,18 +224,11 @@ def run_forecast_generation(conn, cursor, job_id):
     context = dataset_context(cursor)
     cursor.execute("""
         SELECT setting_value FROM platform_settings
-        WHERE setting_key IN ('ml_approved_model_version', 'approved_forecasting_model')
+        WHERE setting_key = 'ml_approved_model_version'
           AND setting_value IS NOT NULL AND setting_value != ''
-        ORDER BY CASE WHEN setting_key = 'ml_approved_model_version' THEN 1 ELSE 2 END LIMIT 1
     """)
     row = cursor.fetchone()
     version = (row['setting_value'] if isinstance(row, dict) else row[0]) if row else None
-    if not version and context['dataset_kind'] == 'demo':
-        cursor.execute("""SELECT model_version FROM model_training_runs
-            WHERE model_version LIKE 'demo_%' AND status = 'completed'
-            ORDER BY completed_at DESC LIMIT 1""")
-        row = cursor.fetchone()
-        version = (row['model_version'] if isinstance(row, dict) else row[0]) if row else None
     if not version or not re.fullmatch(r'[A-Za-z0-9_-]{1,50}', version):
         raise ValueError("No approved forecasting model version configured")
     is_demo = 'demo' in version.lower() or 'kaggle' in version.lower()

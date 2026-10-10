@@ -133,6 +133,9 @@ class WorkerEvidenceTests(unittest.TestCase):
         self.assertTrue(all(r["data_window_start"] == "2023-01-01" for r in evaluations))
         self.assertTrue(all(r["candidate_gate_outcome"] != "passed" for r in evaluations))
 
+        conn.db.execute("INSERT INTO platform_settings VALUES ('ml_approved_model_version', ?)",
+                        (meta['model_version'],))
+        conn.commit()
         ml_worker.process_job(conn, {"job_id": 1, "trigger_type": "forecast_generation"})
         forecasts = conn.db.execute("SELECT * FROM demand_forecasts").fetchall()
         self.assertEqual(len(forecasts), 560)
@@ -141,6 +144,50 @@ class WorkerEvidenceTests(unittest.TestCase):
         features = ml_worker.build_feature_matrix(ml_worker.load_history(conn.cursor(), meta), "2023-05-20")
         expected = artifact["model"].predict(features[ml_worker.FEATURE_COLUMNS])
         self.assertEqual([r["predicted_units"] for r in forecasts], [round(float(x)) for x in expected])
+
+    def test_generation_requires_explicit_approval_even_for_evaluated_candidates(self):
+        for database in ('retailmind', 'retailmind_demo_test'):
+            for outcomes in ((), ('passed', 'failed', 'failed'), ('passed', 'passed', 'passed')):
+                with self.subTest(database=database, outcomes=outcomes):
+                    conn = Connection(database)
+                    self.addCleanup(conn.db.close)
+                    if 'demo' in database:
+                        conn.seed()
+                    version = 'demo_candidate' if 'demo' in database else 'v_candidate'
+                    if outcomes:
+                        conn.db.execute("""INSERT INTO model_training_runs
+                            (model_version, status, completed_at)
+                            VALUES (?, 'completed', CURRENT_TIMESTAMP)""", (version,))
+                        for horizon, outcome in zip((7, 14, 28), outcomes):
+                            conn.db.execute("""INSERT INTO ml_model_evaluations
+                                (model_version, horizon_days, candidate_gate_outcome)
+                                VALUES (?, ?, ?)""", (version, horizon, outcome))
+                    conn.commit()
+                    with patch.object(ml_worker.joblib, 'load') as load:
+                        ml_worker.process_job(conn, {'job_id': 1, 'trigger_type': 'forecast_generation'})
+                    job = conn.db.execute('SELECT * FROM ml_jobs').fetchone()
+                    self.assertEqual(job['status'], 'failed')
+                    self.assertIn('No approved forecasting model version configured', job['diagnostic_reference'])
+                    self.assertEqual(conn.db.execute('SELECT COUNT(*) FROM demand_forecasts').fetchone()[0], 0)
+                    load.assert_not_called()
+
+    def test_legacy_setting_cannot_replace_missing_or_empty_approval(self):
+        for approval in (None, '', ' '):
+            with self.subTest(approval=approval):
+                conn = Connection('retailmind')
+                self.addCleanup(conn.db.close)
+                conn.db.execute("INSERT INTO platform_settings VALUES ('approved_forecasting_model', 'v_legacy')")
+                if approval is not None:
+                    conn.db.execute("INSERT INTO platform_settings VALUES ('ml_approved_model_version', ?)",
+                                    (approval,))
+                conn.commit()
+                with patch.object(ml_worker.joblib, 'load') as load:
+                    ml_worker.process_job(conn, {'job_id': 1, 'trigger_type': 'forecast_generation'})
+                job = conn.db.execute('SELECT * FROM ml_jobs').fetchone()
+                self.assertEqual(job['status'], 'failed')
+                self.assertIn('No approved forecasting model version configured', job['diagnostic_reference'])
+                self.assertEqual(conn.db.execute('SELECT COUNT(*) FROM demand_forecasts').fetchone()[0], 0)
+                load.assert_not_called()
 
     def test_empty_and_mixed_history_cannot_publish_candidates(self):
         for database, seed, mutate in [
