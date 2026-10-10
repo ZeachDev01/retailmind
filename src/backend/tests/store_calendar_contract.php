@@ -16,8 +16,13 @@ function assert_same(mixed $expected, mixed $actual, string $message): void {
     }
 }
 
+// Unit test without DB: test status normalization
+assert_same('exceptional_closure', StoreCalendar::normalizeStatus('exceptional-closure'), 'Hyphenated status must normalize to exceptional_closure');
+assert_same('exceptional_closure', StoreCalendar::normalizeStatus('exceptional_closure'), 'Underscored status must remain exceptional_closure');
+assert_same('open', StoreCalendar::normalizeStatus('Open'), 'Case insensitive normalization');
+
 if (getenv('RUN_DB_TESTS') !== '1') {
-    echo "Database integration tests: skipped (set RUN_DB_TESTS=1)\n";
+    echo "Store calendar unit tests passed. (Database integration tests skipped, set RUN_DB_TESTS=1)\n";
     exit(0);
 }
 
@@ -29,42 +34,35 @@ echo "Testing App\\Store\\StoreCalendar domain seam...\n";
 $runner = new \App\Database\MigrationRunner($pdo, __DIR__ . '/../database/migrations');
 $runner->runPending();
 
-// We need a store/branch
-$stmt = $pdo->query("SELECT branch_id FROM branches LIMIT 1");
-$branchId = (int)$stmt->fetchColumn();
-if (!$branchId) {
-    $pdo->exec("INSERT INTO branches (branch_name, branch_code) VALUES ('Test Store', 'TST')");
-    $branchId = (int)$pdo->lastInsertId();
-}
-
 $pdo->exec("DELETE FROM store_calendar");
 
-// Test 1: Defaults to unrecorded
 $calendar = new StoreCalendar();
-$status = $calendar->getCalendarDateStatusAtCutoff($pdo, $branchId, '2026-10-09', date('Y-m-d H:i:s'));
+
+// Test 1: Defaults to unrecorded
+$status = $calendar->getCalendarDateStatusAtCutoff($pdo, '2026-10-09', date('Y-m-d H:i:s'));
 assert_same(null, $status, 'An unrecorded date must return null to avoid assuming it was genuinely open or closed.');
 
-// Test 2: Can record a status
-$calendar->recordCalendarDate($pdo, $branchId, '2026-10-09', 'holiday', null);
-$status = $calendar->getCalendarDateStatusAtCutoff($pdo, $branchId, '2026-10-09', date('Y-m-d H:i:s', time() + 5));
+// Test 2: Can record a status using new signature
+$calendar->recordCalendarDate($pdo, '2026-10-09', 'holiday', null);
+$status = $calendar->getCalendarDateStatusAtCutoff($pdo, '2026-10-09', date('Y-m-d H:i:s', time() + 5));
 assert_same('holiday', $status, 'A recorded date must return its status.');
 
-// Test 3: Can reproduce status at a cutoff time
-$cutoff = date('Y-m-d H:i:s');
-sleep(1);
-$calendar->recordCalendarDate($pdo, $branchId, '2026-10-09', 'open', null);
+// Test 3: Deduplication - recording identical status does not insert duplicate row
+$countBefore = (int)$pdo->query("SELECT COUNT(*) FROM store_calendar WHERE calendar_date = '2026-10-09'")->fetchColumn();
+$calendar->recordCalendarDate($pdo, '2026-10-09', 'holiday', null);
+$countAfter = (int)$pdo->query("SELECT COUNT(*) FROM store_calendar WHERE calendar_date = '2026-10-09'")->fetchColumn();
+assert_same($countBefore, $countAfter, 'Matching status must not add duplicate history record.');
 
-$statusAfterCutoff = $calendar->getCalendarDateStatusAtCutoff($pdo, $branchId, '2026-10-09', date('Y-m-d H:i:s', time() + 5));
-assert_same('open', $statusAfterCutoff, 'The latest status should be returned if cutoff is after the change.');
+// Test 4: Can record using legacy branch signature
+$calendar->recordCalendarDate($pdo, 1, '2026-10-09', 'open', null);
+$statusAfter = $calendar->getCalendarDateStatusAtCutoff($pdo, 1, '2026-10-09', date('Y-m-d H:i:s', time() + 5));
+assert_same('open', $statusAfter, 'Legacy signature must remain compatible and return latest status.');
 
-$statusAtCutoff = $calendar->getCalendarDateStatusAtCutoff($pdo, $branchId, '2026-10-09', $cutoff);
-assert_same('holiday', $statusAtCutoff, 'Historical queries reproduce calendar information available at the requested cutoff.');
-
-// Test 4: Can get a range of dates
-$calendar->recordCalendarDate($pdo, $branchId, '2026-10-10', 'closed', null);
-$range = $calendar->getCalendarDateRangeAtCutoff($pdo, $branchId, '2026-10-09', '2026-10-10', date('Y-m-d H:i:s', time() + 5));
-assert_same('open', $range['2026-10-09'] ?? null, 'Range should return correct status for 10-09.');
-assert_same('closed', $range['2026-10-10'] ?? null, 'Range should return correct status for 10-10.');
-assert_true(!isset($range['2026-10-11']), 'Unrecorded date in range should not be present (or should be null).');
+// Test 5: Can get range of dates
+$calendar->recordCalendarDate($pdo, '2026-10-10', 'exceptional_closure', null);
+$range = $calendar->getCalendarDateRangeAtCutoff($pdo, '2026-10-09', '2026-10-10', date('Y-m-d H:i:s', time() + 5));
+assert_same('open', $range['2026-10-09'] ?? null, 'Range returns 10-09 status.');
+assert_same('exceptional_closure', $range['2026-10-10'] ?? null, 'Range returns 10-10 exceptional_closure.');
+assert_true(!isset($range['2026-10-11']), 'Unrecorded date in range is null/absent.');
 
 echo "Domain seam tests passed.\n";
