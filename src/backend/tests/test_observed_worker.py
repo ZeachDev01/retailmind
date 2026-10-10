@@ -11,10 +11,21 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import joblib
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import ml_worker
+
+
+class ForecastEstimator:
+    def __init__(self, error=None):
+        self.error = error
+
+    def predict(self, features):
+        if self.error:
+            raise ValueError(self.error)
+        return np.full(len(features), 3.0)
 
 
 class Cursor:
@@ -171,6 +182,60 @@ class WorkerEvidenceTests(unittest.TestCase):
         ml_worker.process_job(conn, {"job_id": 1, "trigger_type": "forecast_generation"})
         self.assertEqual(conn.db.execute("SELECT status FROM ml_jobs").fetchone()[0], "failed")
         self.assertEqual(conn.db.execute("SELECT COUNT(*) FROM demand_forecasts").fetchone()[0], 0)
+
+    def test_failed_forecasts_preserve_last_successful_results(self):
+        conn = Connection()
+        self.addCleanup(conn.db.close)
+        conn.seed()
+        conn.db.execute("INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'demo_test')")
+        conn.db.execute("UPDATE ml_jobs SET trigger_type = 'forecast_generation'")
+        conn.commit()
+        context = ml_worker.dataset_context(conn.cursor())
+        artifact = {
+            'model': ForecastEstimator(),
+            'metadata': dict(context, model_version='demo_test',
+                             feature_version=ml_worker.FEATURE_VERSION,
+                             features=ml_worker.FEATURE_COLUMNS),
+        }
+        directory = ml_worker.artifact_directory(context)
+        directory.mkdir(parents=True)
+        path = directory / 'random_forest_candidate_demo_test.joblib'
+        joblib.dump(artifact, path)
+        ml_worker.process_job(conn, {'job_id': 1, 'trigger_type': 'forecast_generation'})
+        previous = conn.db.execute('SELECT * FROM demand_forecasts ORDER BY product_id, horizon_day').fetchall()
+        self.assertEqual(len(previous), 560)
+        self.assertTrue(all(row['predicted_units'] == 3 for row in previous))
+
+        for job_id, failure, error in [
+            (2, 'estimator', 'Estimator feature schema mismatch'),
+            (3, 'schema', 'Model feature contract is obsolete'),
+            (4, 'persistence', 'Forecast write failed'),
+        ]:
+            with self.subTest(failure=failure):
+                artifact['model'] = ForecastEstimator(error if failure == 'estimator' else None)
+                artifact['metadata']['features'] = [] if failure == 'schema' else ml_worker.FEATURE_COLUMNS
+                joblib.dump(artifact, path)
+                conn.db.execute("INSERT INTO ml_jobs VALUES (?, 'forecast_generation', 'running', NULL, NULL, NULL)",
+                                (job_id,))
+                conn.commit()
+                if failure == 'persistence':
+                    # Fail after one insert, proving the worker rolls back partial output.
+                    conn.db.executescript("""CREATE TRIGGER fail_forecast BEFORE INSERT ON demand_forecasts
+                        WHEN NEW.job_id = 4 AND NEW.horizon_day = 2
+                        BEGIN SELECT RAISE(ABORT, 'Forecast write failed'); END;""")
+                ml_worker.process_job(conn, {'job_id': job_id, 'trigger_type': 'forecast_generation'})
+                job = conn.db.execute('SELECT * FROM ml_jobs WHERE job_id = ?', (job_id,)).fetchone()
+                self.assertEqual(job['status'], 'failed')
+                self.assertIsNotNone(job['completed_at'])
+                self.assertEqual(job['operator_message'], 'Job encountered an error and could not complete.')
+                self.assertIn(error, job['diagnostic_reference'])
+                self.assertRegex(job['diagnostic_reference'], r'\[ERR-[0-9a-f]{8}\]$')
+                self.assertEqual(conn.db.execute('SELECT * FROM demand_forecasts ORDER BY product_id, horizon_day').fetchall(),
+                                 previous)
+                latest = conn.db.execute("""SELECT job_id FROM ml_jobs
+                    WHERE trigger_type = 'forecast_generation' AND status = 'succeeded'
+                    ORDER BY completed_at DESC, job_id DESC LIMIT 1""").fetchone()
+                self.assertEqual(latest['job_id'], 1)
 
     def test_midday_store_job_uses_previous_completed_day(self):
         conn = Connection("retailmind")
