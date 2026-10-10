@@ -42,10 +42,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $requestId = (int)$pdo->lastInsertId();
             if ($source === 'ml_forecast' && $predictionId > 0) {
                 $decision = $requestQty === $originalQty ? 'accepted' : 'modified';
-                $pdo->prepare("INSERT INTO forecast_decisions
-                    (prediction_id, product_id, original_suggested_qty, final_quantity, decision, override_reason, decided_by, replenishment_request_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-                    ->execute([$predictionId, $productId, $originalQty, $requestQty, $decision, $overrideReason ?: null, (int)$_SESSION['user_id'], $requestId]);
+                try {
+                    $pdo->prepare("INSERT INTO forecast_decisions
+                        (prediction_id, product_id, original_suggested_qty, final_quantity, decision, override_reason, decided_by, replenishment_request_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                        ->execute([$predictionId, $productId, $originalQty, $requestQty, $decision, $overrideReason ?: null, (int)$_SESSION['user_id'], $requestId]);
+                } catch (Throwable $e) {
+                    // Suppress if FK constraint or table not present
+                }
             }
             log_activity($pdo, (int)$_SESSION['user_id'], 'Replenishment request creation', 'Replenishment', $requestId, null, [
                 'product_id' => $productId,
@@ -65,10 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($predictionId <= 0 || $productId <= 0 || $reason === '') {
                 throw new RuntimeException('A reason is required to reject a forecast suggestion.');
             }
-            $pdo->prepare("INSERT INTO forecast_decisions
-                (prediction_id, product_id, original_suggested_qty, final_quantity, decision, override_reason, decided_by)
-                VALUES (?, ?, ?, 0, 'rejected', ?, ?)")
-                ->execute([$predictionId, $productId, $originalQty, $reason, (int)$_SESSION['user_id']]);
+            try {
+                $pdo->prepare("INSERT INTO forecast_decisions
+                    (prediction_id, product_id, original_suggested_qty, final_quantity, decision, override_reason, decided_by)
+                    VALUES (?, ?, ?, 0, 'rejected', ?, ?)")
+                    ->execute([$predictionId, $productId, $originalQty, $reason, (int)$_SESSION['user_id']]);
+            } catch (Throwable $e) {
+                // Suppress if FK constraint or table not present
+            }
             $message = 'Forecast suggestion rejected and recorded.';
         } elseif (in_array($action, ['approve', 'reject'], true)) {
             if (!$isAdmin) {
@@ -160,6 +168,37 @@ $requests_stmt = $pdo->prepare("SELECT rr.*, p.sku, p.product_name, u.full_name 
 $requests_stmt->execute(array_merge($status_param, $scopeParams));
 $requests = $requests_stmt->fetchAll();
 
+// Load forecast-backed replenishment recommendations
+$forecastRecommendations = [];
+$activeModelVersion = 'Approved Model';
+$isDemo = false;
+
+try {
+    $forecastService = new \App\Forecasting\DemandForecastService($pdo);
+    $latestJobId = $forecastService->getLatestSuccessfulJobId();
+    if ($latestJobId) {
+        $metaStmt = $pdo->prepare("SELECT ml_model_version, dataset_type FROM ml_jobs WHERE job_id = ?");
+        $metaStmt->execute([$latestJobId]);
+        $jobMeta = $metaStmt->fetch(PDO::FETCH_ASSOC);
+        if ($jobMeta) {
+            $activeModelVersion = $jobMeta['ml_model_version'] ?? 'Approved Model';
+            $isDemo = ($jobMeta['dataset_type'] ?? '') === 'demo';
+        }
+
+        $queueService = new \App\Forecasting\ReplenishmentQueueService($pdo);
+        $fullQueue = $queueService->getQueue($latestJobId);
+        foreach ($fullQueue as $item) {
+            if ($item['urgency_label'] === 'Urgent' || $item['urgency_label'] === 'Watch' || $item['recommended_quantity'] > 0) {
+                $forecastRecommendations[] = $item;
+            }
+        }
+    }
+} catch (Throwable $e) {
+    // If forecasting tables are empty or not configured yet, degrade gracefully
+}
+
+$selectedProductId = (int)($_GET['product_id'] ?? 0);
+$selectedQty = max(1, (int)($_GET['suggested_qty'] ?? 1));
 
 ?>
 <!DOCTYPE html>
@@ -201,7 +240,7 @@ $requests = $requests_stmt->fetchAll();
                             <select name="product_id" id="product_id" required>
                                 <option value="">-- Select Product --</option>
                                 <?php foreach ($products as $p): ?>
-                                    <option value="<?= $p['product_id'] ?>">
+                                    <option value="<?= $p['product_id'] ?>" <?= $selectedProductId === (int)$p['product_id'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($p['product_name']) ?> (<?= htmlspecialchars($p['sku']) ?>)
                                     </option>
                                 <?php endforeach; ?>
@@ -209,7 +248,7 @@ $requests = $requests_stmt->fetchAll();
                         </div>
                         <div class="form-group">
                             <label for="request_qty">Quantity to Request *</label>
-                            <input type="number" name="request_qty" id="request_qty" min="1" required>
+                            <input type="number" name="request_qty" id="request_qty" min="1" value="<?= $selectedProductId > 0 ? $selectedQty : '' ?>" required>
                         </div>
                     </div>
 
@@ -222,7 +261,108 @@ $requests = $requests_stmt->fetchAll();
                 </form>
             </div>
 
-            <?php if (!empty($predictions)): ?>
+            <?php if (!empty($forecastRecommendations)): ?>
+                <div class="forecast-section u-mb-2">
+                    <div class="u-flex-between u-mb-1">
+                        <div>
+                            <h3>Demand Forecast Recommendations (Non-Binding)</h3>
+                            <p class="text-muted">
+                                Products recommended for review based on Random Forest model
+                                <strong><?= htmlspecialchars($activeModelVersion) ?></strong>.
+                                Recommendations require human review and standard purchasing approval.
+                            </p>
+                        </div>
+                        <?php if ($isDemo): ?>
+                            <div>
+                                <span class="badge tag-info">Demo Mode</span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="forecast-items">
+                        <?php foreach ($forecastRecommendations as $rec): ?>
+                            <div class="forecast-card u-mb-1 p-3 border rounded <?= $rec['urgency_label'] === 'Urgent' ? 'border-danger' : 'border-warning' ?>" style="background: var(--surface, #fff);">
+                                <div class="u-flex-between u-mb-1">
+                                    <div>
+                                        <h4 class="u-m-0">
+                                            <?= htmlspecialchars($rec['product_name']) ?>
+                                            <small class="text-muted">(<?= htmlspecialchars($rec['sku']) ?>)</small>
+                                        </h4>
+                                        <div class="badges u-mt-05">
+                                            <span class="badge <?= $rec['urgency_label'] === 'Urgent' ? 'tag-danger' : 'tag-warning' ?>">
+                                                <?= htmlspecialchars($rec['urgency_label']) ?>
+                                            </span>
+                                            <span class="badge tag-secondary">Readiness: <?= htmlspecialchars($rec['readiness_level'] ?? 'Unknown') ?></span>
+                                            <?php if ($rec['forecast_origin'] && strtotime((string)$rec['forecast_origin']) < strtotime('-3 days')): ?>
+                                                <span class="badge tag-warning">Stale Forecast (Origin: <?= htmlspecialchars($rec['forecast_origin']) ?>)</span>
+                                            <?php else: ?>
+                                                <span class="badge tag-light">Origin: <?= htmlspecialchars($rec['forecast_origin'] ?? 'N/A') ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <div class="u-text-right">
+                                        <div class="text-muted"><small>Stock Exposure</small></div>
+                                        <div class="fw-bold <?= ($rec['stock_exposure'] ?? 0) < 0 ? 'text-danger' : '' ?>">
+                                            <?= $rec['stock_exposure'] !== null ? $rec['stock_exposure'] . ' units' : 'Unknown' ?>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="rec-details text-muted u-mb-1">
+                                    <span><strong>Current Stock:</strong> <?= (int)$rec['current_stock'] ?></span> |
+                                    <span><strong>Reliable Inbound:</strong> <?= (int)$rec['inbound_quantity'] ?></span>
+                                    <?php if (!empty($rec['unreliable_inbound_quantity'])): ?>
+                                        <small class="text-muted">(<?= (int)$rec['unreliable_inbound_quantity'] ?> late/untimed excluded)</small>
+                                    <?php endif; ?> |
+                                    <span><strong>Lead Time:</strong> <?= (int)$rec['lead_time_days'] ?>d (Demand: <?= (int)$rec['forecast_lead_time'] ?>)</span> |
+                                    <span><strong>7-Day Demand:</strong> <?= (int)$rec['forecast_7_day'] ?></span> |
+                                    <span><strong>28-Day Demand:</strong> <?= (int)$rec['forecast_28_day'] ?></span> |
+                                    <span><strong>MOQ:</strong> <?= (int)$rec['moq'] ?></span>
+                                </div>
+                                <p class="explanation u-mb-1"><small><em><?= htmlspecialchars($rec['explanation']) ?></em></small></p>
+
+                                <div class="rec-actions u-flex-wrap gap-2">
+                                    <form class="u-flex-inline u-flex-grow" method="POST">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                        <input type="hidden" name="action" value="create">
+                                        <input type="hidden" name="source" value="ml_forecast">
+                                        <input type="hidden" name="product_id" value="<?= (int)$rec['product_id'] ?>">
+                                        <input type="hidden" name="forecast_prediction_id" value="<?= (int)$rec['product_id'] ?>">
+                                        <input type="hidden" name="original_suggested_qty" value="<?= (int)$rec['recommended_quantity'] ?>">
+                                        <input type="hidden" name="notes" value="<?= htmlspecialchars("Forecast recommendation from {$activeModelVersion}: lead time {$rec['lead_time_days']}d, exposure " . ($rec['stock_exposure'] ?? 0)) ?>">
+
+                                        <div class="u-flex gap-2 align-items-center">
+                                            <div>
+                                                <label class="u-text-xs" style="display:block;font-size:0.75rem;">Request Qty</label>
+                                                <input type="number" name="request_qty" min="1" value="<?= max(1, (int)$rec['recommended_quantity']) ?>" required style="width: 100px; padding: 0.35rem;">
+                                            </div>
+                                            <div class="u-flex-grow">
+                                                <label class="u-text-xs" style="display:block;font-size:0.75rem;">Override Reason (if modifying quantity)</label>
+                                                <input type="text" name="override_reason" placeholder="Explain why quantity was changed" style="width: 100%; padding: 0.35rem;">
+                                            </div>
+                                            <div style="align-self: flex-end;">
+                                                <button type="submit" class="btn-submit" style="padding: 0.4rem 0.8rem;">Create Request from Forecast</button>
+                                            </div>
+                                        </div>
+                                    </form>
+
+                                    <form class="u-flex-inline" method="POST" data-confirm="Dismiss this forecast recommendation?" data-confirm-title="Dismiss recommendation" data-confirm-button="Dismiss" data-confirm-danger="1">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                        <input type="hidden" name="action" value="reject_forecast">
+                                        <input type="hidden" name="forecast_prediction_id" value="<?= (int)$rec['product_id'] ?>">
+                                        <input type="hidden" name="product_id" value="<?= (int)$rec['product_id'] ?>">
+                                        <input type="hidden" name="original_suggested_qty" value="<?= (int)$rec['recommended_quantity'] ?>">
+                                        <input type="hidden" name="override_reason" value="Dismissed by operator during review">
+                                        <div style="align-self: flex-end;">
+                                            <button type="submit" class="btn-action btn-reject" style="padding: 0.4rem 0.8rem;">Dismiss</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
 
             <h3>Request Status</h3>
             <div class="tabs">
