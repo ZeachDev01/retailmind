@@ -13,6 +13,8 @@ final class RoleCapabilityPolicy
     public const VIEW_PLATFORM_AUDIT = 'view_platform_audit';
     public const VIEW_SALES_HISTORY = 'view_sales_history';
     public const VIEW_STORE_REPORTS = 'view_store_reports';
+    public const IMPORT_FORECAST_HISTORY = 'import_forecast_history';
+    public const RESET_OPERATIONAL_DATA = 'reset_operational_data';
     public const MANAGE_SALE_REVERSALS = 'manage_sale_reversals';
     public const MANAGE_USERS = 'manage_users';
     public const ASSIGN_ROLES = 'assign_roles';
@@ -23,6 +25,8 @@ final class RoleCapabilityPolicy
 
     private const BASE_CAPABILITIES = [
         'super_admin' => [
+            self::RESET_OPERATIONAL_DATA,
+            self::IMPORT_FORECAST_HISTORY,
             self::PLATFORM_GOVERNANCE,
             self::VIEW_INVENTORY,
             self::VIEW_STORE_AUDIT,
@@ -39,6 +43,8 @@ final class RoleCapabilityPolicy
         // download a Database Backup but never restoration authority, which
         // stays exclusive to the Super Administrator (see ADR-0003).
         'admin' => [
+            self::RESET_OPERATIONAL_DATA,
+            self::IMPORT_FORECAST_HISTORY,
             self::STORE_OPERATIONS,
             self::VIEW_INVENTORY,
             self::VIEW_STORE_AUDIT,
@@ -54,6 +60,7 @@ final class RoleCapabilityPolicy
             self::MANAGE_REGISTERS,
         ],
         'inventory_manager' => [
+            self::IMPORT_FORECAST_HISTORY,
             self::VIEW_INVENTORY,
             self::MUTATE_INVENTORY,
             self::VIEW_SALES_HISTORY,

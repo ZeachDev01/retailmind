@@ -13,6 +13,9 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 };
 
 $policy = new RoleCapabilityPolicy();
+foreach (['admin', 'super_admin', 'inventory_manager', 'cashier'] as $role) {
+    $assert($policy->allows($role, RoleCapabilityPolicy::RESET_OPERATIONAL_DATA) === in_array($role, ['admin', 'super_admin'], true), "{$role} reset data authority is incorrect");
+}
 $capabilities = [
     RoleCapabilityPolicy::PLATFORM_GOVERNANCE,
     RoleCapabilityPolicy::STORE_OPERATIONS,

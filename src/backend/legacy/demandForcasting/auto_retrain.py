@@ -35,7 +35,7 @@ def should_retrain() -> tuple[bool, list[str]]:
             reasons.append("no previous training date")
 
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM sale_items")
+        cursor.execute(f"SELECT COALESCE(SUM(sales_records), 0) FROM ({train_model.DAILY_SALES_SQL}) daily_sales")
         current_records = int(cursor.fetchone()[0])
         cursor.close()
         prior_records = int(metrics.get("source_sale_item_records", metrics.get("sales_records_used", 0)) or 0)

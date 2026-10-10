@@ -33,12 +33,26 @@ from sklearn.preprocessing import OneHotEncoder
 from db import get_connection
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "demand_model.joblib"
-METRICS_PATH = BASE_DIR / "model_metrics.json"
+MODEL_DIRECTORY = Path(os.getenv('ML_MODEL_DIRECTORY', str(BASE_DIR)))
+MODEL_PATH = MODEL_DIRECTORY / "demand_model.joblib"
+METRICS_PATH = MODEL_DIRECTORY / "model_metrics.json"
 TRAIN_LOCK_PATH = BASE_DIR / ".training.lock"
 MODEL_VERSION = "rf-v2"
 MODEL_NAME = "Random Forest Regressor"
 MODEL_TYPE = "random_forest_regression"
+DAILY_SALES_SQL = """
+    SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM(si.quantity) AS qty_sold,
+           COUNT(*) AS sales_records, MAX(s.sale_date) AS changed_at
+    FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+    GROUP BY si.product_id, DATE(s.sale_date)
+    UNION ALL
+    SELECT f.product_id, f.sale_date, f.quantity, 1, f.imported_at
+    FROM forecast_sales_imports f
+    WHERE NOT EXISTS (
+        SELECT 1 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+        WHERE si.product_id = f.product_id AND DATE(s.sale_date) = f.sale_date
+    )
+"""
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "minimum_history_days": 30,
@@ -299,7 +313,7 @@ def resolve_store_id(conn) -> int:
 
 
 def load_product_catalog(conn, store_id: int) -> pd.DataFrame:
-    query = """
+    query = f"""
         SELECT
             p.product_id,
             CONCAT('P', p.product_id) AS product_key,
@@ -310,14 +324,13 @@ def load_product_catalog(conn, store_id: int) -> pd.DataFrame:
             MAX(COALESCE(p.minimum_order_quantity, 1)) AS minimum_order_quantity,
             MAX(COALESCE(p.units_per_package, 1)) AS units_per_package,
             MAX(COALESCE(NULLIF(p.preferred_supplier, ''), p.supplier, '')) AS preferred_supplier,
-            MIN(DATE(s.sale_date)) AS first_sale_day,
-            MAX(DATE(s.sale_date)) AS last_sale_day,
-            COUNT(DISTINCT DATE(s.sale_date)) AS nonzero_sales_days,
-            COUNT(si.sale_item_id) AS sale_item_records
+            MIN(si.sale_day) AS first_sale_day,
+            MAX(si.sale_day) AS last_sale_day,
+            COUNT(DISTINCT CASE WHEN si.qty_sold > 0 THEN si.sale_day END) AS nonzero_sales_days,
+            SUM(si.sales_records) AS sale_item_records
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.category_id
-        LEFT JOIN sale_items si ON si.product_id = p.product_id
-        LEFT JOIN sales s ON s.sale_id = si.sale_id
+        LEFT JOIN ({DAILY_SALES_SQL}) si ON si.product_id = p.product_id
         WHERE p.status = 'active' AND p.branch_id = %s
         GROUP BY p.product_id, c.category_name
         HAVING first_sale_day IS NOT NULL
@@ -327,13 +340,11 @@ def load_product_catalog(conn, store_id: int) -> pd.DataFrame:
 
 
 def load_sales_totals(conn, store_id: int) -> pd.DataFrame:
-    query = """
-        SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM(si.quantity) AS qty_sold
-        FROM sale_items si
-        JOIN sales s ON s.sale_id = si.sale_id
+    query = f"""
+        SELECT si.product_id, si.sale_day, si.qty_sold
+        FROM ({DAILY_SALES_SQL}) si
         JOIN products p ON p.product_id = si.product_id
         WHERE p.branch_id = %s
-        GROUP BY si.product_id, DATE(s.sale_date)
         ORDER BY si.product_id, sale_day
     """
     return pd.read_sql(query, conn, params=(store_id,))
@@ -537,9 +548,22 @@ def save_metrics(metrics: dict[str, Any]) -> None:
 def load_metrics() -> dict[str, Any]:
     try:
         value = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
+        return value if isinstance(value, dict) and training_run_exists(value) else {}
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def training_run_exists(metrics: dict[str, Any]) -> bool:
+    run_id = metrics.get('training_run_id')
+    if not run_id:
+        return False
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM model_training_runs WHERE training_run_id = %s AND status = 'completed'", (run_id,))
+        return bool(cursor.fetchone()[0])
+    finally:
+        conn.close()
 
 
 def save_artifact(model: Pipeline, settings: dict[str, Any], metrics: dict[str, Any]) -> None:
@@ -565,6 +589,8 @@ def load_artifact() -> dict[str, Any] | None:
     except (OSError, EOFError, ValueError, TypeError):
         return None
     if not isinstance(artifact, dict) or artifact.get("model_version") != MODEL_VERSION:
+        return None
+    if not training_run_exists(artifact.get('metrics', {})):
         return None
     model = artifact.get("model")
     regressor = getattr(model, "named_steps", {}).get("regressor")
@@ -734,6 +760,16 @@ def update_actual_demand(conn) -> None:
             WHERE si.product_id = sp.product_id
               AND s.sale_date > sp.generated_at
               AND s.sale_date <= DATE_ADD(sp.generated_at, INTERVAL sp.forecast_period_days DAY)
+        ) + (
+            SELECT COALESCE(SUM(f.quantity), 0)
+            FROM forecast_sales_imports f
+            WHERE f.product_id = sp.product_id
+              AND f.sale_date > DATE(sp.generated_at)
+              AND f.sale_date <= DATE(DATE_ADD(sp.generated_at, INTERVAL sp.forecast_period_days DAY))
+              AND NOT EXISTS (
+                  SELECT 1 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+                  WHERE si.product_id = f.product_id AND DATE(s.sale_date) = f.sale_date
+              )
         )
         WHERE sp.actual_demand IS NULL
           AND DATE_ADD(sp.generated_at, INTERVAL sp.forecast_period_days DAY) <= NOW()
@@ -889,8 +925,21 @@ def empty_metrics(settings: dict[str, Any], status: str) -> dict[str, Any]:
 
 
 def train_and_predict(trigger_type: str = "cli") -> dict[str, Any]:
-    started = time.monotonic()
     conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT GET_LOCK('retailmind_forecast_pipeline', 0)")
+        if cursor.fetchone()[0] != 1:
+            raise RuntimeError('Forecast training or data reset is already in progress.')
+        return _train_and_predict(conn, trigger_type)
+    finally:
+        cursor.execute("SELECT RELEASE_LOCK('retailmind_forecast_pipeline')")
+        cursor.close()
+        conn.close()
+
+
+def _train_and_predict(conn, trigger_type: str) -> dict[str, Any]:
+    started = time.monotonic()
     ensure_ml_schema(conn)
     settings = load_settings(conn)
     run_id = start_training_run(conn, trigger_type)
@@ -898,7 +947,7 @@ def train_and_predict(trigger_type: str = "cli") -> dict[str, Any]:
     try:
         update_actual_demand(conn)
         count_cursor = conn.cursor()
-        count_cursor.execute("SELECT COUNT(*) FROM sale_items")
+        count_cursor.execute(f"SELECT COALESCE(SUM(sales_records), 0) FROM ({DAILY_SALES_SQL}) daily_sales")
         source_sale_item_records = int(count_cursor.fetchone()[0])
         count_cursor.close()
         history, catalog = build_complete_daily_history(conn, settings)
@@ -972,8 +1021,6 @@ def train_and_predict(trigger_type: str = "cli") -> dict[str, Any]:
     except Exception as exc:
         finish_training_run(conn, run_id, "failed", started, error=str(exc))
         raise
-    finally:
-        conn.close()
 
 
 if __name__ == "__main__":

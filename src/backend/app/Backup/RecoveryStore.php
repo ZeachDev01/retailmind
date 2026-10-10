@@ -123,7 +123,7 @@ final class RecoveryStore
             if (is_resource($handle)) {
                 fclose($handle);
             }
-            throw new \DomainException('The Store is busy. Wait for current requests to finish, then try restoring again.');
+            throw new \DomainException('The Store is busy. Wait for current requests to finish, then try again.');
         }
         return $handle;
     }

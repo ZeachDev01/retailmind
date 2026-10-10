@@ -8,6 +8,57 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if (in_array($argv[1], ['reset_ready', 'reset_state', 'reset_failure', 'reset_allow', 'reset_fiscal_block', 'reset_fiscal_open', 'reset_forecast_lock'], true)) {
+    $pdo->exec("USE `{$database}`");
+    if ($argv[1] === 'reset_ready') {
+        $pdo->exec("UPDATE cashier_shifts SET status = 'closed', closed_at = NOW(), closed_by = 1");
+        $products = App\Database\ProductSeeder::loadProducts(__DIR__ . '/../../database/seeds/product_seed.csv');
+        App\Database\ProductSeeder::run($pdo, $products);
+        (new App\Database\DailySalesTrendSeeder($pdo))->run();
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (90000,'DELETE-TEST','DELETE-TEST','Unused deletion test',1,1,1)");
+        $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (90000,0)');
+        $pdo->exec('INSERT INTO supplier_products (supplier_id,product_id) VALUES (1,90000)');
+        $pdo->exec("INSERT INTO promotions (promotion_name,discount_type,discount_value,scope,product_id,starts_at,ends_at,created_by) VALUES ('Product reset test','fixed',1,'product',1,NOW(),DATE_ADD(NOW(),INTERVAL 1 DAY),1),('General preserved test','fixed',1,'all',NULL,NOW(),DATE_ADD(NOW(),INTERVAL 1 DAY),1)");
+        $pdo->exec("INSERT INTO forecast_sales_imports (product_id,sale_date,quantity,imported_by) VALUES (1,'2026-01-01',5,1)");
+        $pdo->exec("INSERT INTO model_training_runs (model_name,model_version,status) VALUES ('Random Forest','rf-v2','completed')");
+        $pdo->exec("INSERT INTO forecast_runs (model_name,model_version,forecast_period_days) VALUES ('Random Forest','rf-v2',30)");
+        $runId = (int)$pdo->lastInsertId();
+        $pdo->exec("INSERT INTO stock_predictions (forecast_run_id,product_id,forecast_period_days,forecast_value) VALUES ({$runId},1,30,10)");
+        $pdo->exec("INSERT INTO activity_log (user_id,action,category,module) VALUES (1,'Preserve reset audit sentinel','security','Authentication')");
+        $pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status,created_by) VALUES ('Reset Test Period','2026-01-01','2026-12-31','open',1)");
+    } elseif ($argv[1] === 'reset_failure') {
+        $pdo->exec('CREATE TABLE reset_failure_probe (id INT PRIMARY KEY, sale_id INT NOT NULL, FOREIGN KEY (sale_id) REFERENCES sales(sale_id)) ENGINE=InnoDB');
+        $pdo->exec('INSERT INTO reset_failure_probe SELECT 1, MIN(sale_id) FROM sales');
+    } elseif ($argv[1] === 'reset_allow') {
+        $pdo->exec('DROP TABLE reset_failure_probe');
+    } elseif ($argv[1] === 'reset_fiscal_block') {
+        $pdo->exec("UPDATE fiscal_periods SET status = 'closed'");
+    } elseif ($argv[1] === 'reset_fiscal_open') {
+        $pdo->exec("UPDATE fiscal_periods SET status = 'open'");
+    } elseif ($argv[1] === 'reset_forecast_lock') {
+        fclose(App\Backup\RecoveryStore::exclusive());
+        if ((int)$pdo->query("SELECT GET_LOCK('retailmind_forecast_pipeline', 0)")->fetchColumn() !== 1) throw new RuntimeException('Could not acquire test forecast lock.');
+        echo "LOCKED\n";
+        fflush(STDOUT);
+        fgets(STDIN);
+        $pdo->query("SELECT RELEASE_LOCK('retailmind_forecast_pipeline')");
+    } else {
+        $state = [];
+        foreach (App\Services\OperationalDataResetService::TABLES as $table) {
+            $state[$table] = App\Database\Schema::tableExists($pdo, $table) ? (int)$pdo->query("SELECT COUNT(*) FROM `{$table}`")->fetchColumn() : 0;
+        }
+        $state['promotions'] = (int)$pdo->query('SELECT COUNT(*) FROM promotions WHERE product_id IS NOT NULL')->fetchColumn();
+        $state['general_promotions'] = (int)$pdo->query('SELECT COUNT(*) FROM promotions WHERE product_id IS NULL')->fetchColumn();
+        $state['inventory_units'] = (int)$pdo->query('SELECT SUM(quantity_on_hand) FROM inventory')->fetchColumn();
+        foreach (['products', 'users', 'categories', 'suppliers', 'roles', 'registers', 'fiscal_periods'] as $table) {
+            $state[$table] = (int)$pdo->query("SELECT COUNT(*) FROM `{$table}`")->fetchColumn();
+        }
+        $state['preserved_audit'] = (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE action = 'Preserve reset audit sentinel'")->fetchColumn();
+        $state['reset_audits'] = (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE action = 'Operational data reset' AND category = 'recovery'")->fetchColumn();
+        echo json_encode($state);
+    }
+    exit;
+}
 if ($argv[1] === 'reports') {
     $pdo->exec("USE `{$database}`");
     $product = $pdo->prepare('INSERT IGNORE INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (?,?,?,?,?,?,1)');
@@ -96,6 +147,8 @@ $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
 $rolesMigration = require __DIR__ . '/../../database/migrations/202609250001_user_multi_roles.php';
 $rolesMigration['up']($pdo);
 $backupMigration = require __DIR__ . '/../../database/migrations/202609260001_shared_database_backups.php';
+$forecastImportMigration = require __DIR__ . '/../../database/migrations/202610100001_forecast_history_import.php';
+$forecastImportMigration['up']($pdo);
 $backupMigration['up']($pdo);
 $fresh = $pdo->query("SHOW COLUMNS FROM users LIKE 'theme_preference'")->fetch(PDO::FETCH_ASSOC);
 $pdo->exec("INSERT INTO branches (branch_id,branch_name,branch_code) VALUES (1,'Theme Test Store','THEME')");

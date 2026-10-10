@@ -87,8 +87,19 @@ arsort($categoryStats);
 $topCategories = array_slice($categoryStats, 0, 8, true);
 $categoryLabels = array_keys($topCategories);
 $categoryUnits = array_values($topCategories);
+$forecastProducts = get_stored_predictions($pdo);
+usort($forecastProducts, static fn(array $a, array $b): int =>
+    (float)$b['predicted_demand_next_30_days'] <=> (float)$a['predicted_demand_next_30_days']
+);
+$topForecastProducts = array_slice($forecastProducts, 0, 10);
 
 $chartDataJson = json_encode([
+    'forecast' => [
+        'labels' => array_column($topForecastProducts, 'product_name'),
+        'stock' => array_map('floatval', array_column($topForecastProducts, 'current_stock')),
+        'demand7' => array_map('floatval', array_column($topForecastProducts, 'predicted_demand_next_7_days')),
+        'demand30' => array_map('floatval', array_column($topForecastProducts, 'predicted_demand_next_30_days')),
+    ],
     'status' => [
         'labels' => ['Available', 'Low Stock', 'Out of Stock', 'Expiring Soon', 'Expired'],
         'values' => [
@@ -155,6 +166,35 @@ $chartDataJson = json_encode([
                 <span class="overview-metric-copy"><strong><?= number_format(count($expired_batches)) ?></strong><span>Expired batches</span></span>
                 <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
+        </section>
+
+        <section class="overview-chart-card overview-forecast-card" aria-labelledby="overview-forecast-heading">
+            <div class="overview-chart-header">
+                <div>
+                    <span class="overview-chart-icon overview-chart-icon--blue" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
+                    <div>
+                        <h3 id="overview-forecast-heading">Demand Forecast vs Current Stock</h3>
+                        <p>Top 10 products by predicted 30-day demand. Forecasts are estimates; 7-day demand is included in the 30-day total.</p>
+                    </div>
+                </div>
+                <span class="overview-chart-badge"><?= count($forecastProducts) ?> forecast-ready SKUs</span>
+            </div>
+            <?php if ($topForecastProducts): ?>
+            <div class="overview-chart-body">
+                <canvas id="overviewForecastChart" aria-label="Current stock and predicted demand for the next 7 and 30 days by product, in units" role="img"></canvas>
+            </div>
+            <details>
+                <summary>View forecast values</summary>
+                <div class="overview-table-shell"><table class="overview-table">
+                    <thead><tr><th>Product</th><th>Current stock</th><th>7-day demand</th><th>30-day demand</th></tr></thead>
+                    <tbody><?php foreach ($topForecastProducts as $forecast): ?>
+                    <tr><td><?= htmlspecialchars($forecast['product_name']) ?></td><td><?= number_format((float)$forecast['current_stock']) ?></td><td><?= number_format((float)$forecast['predicted_demand_next_7_days']) ?></td><td><?= number_format((float)$forecast['predicted_demand_next_30_days']) ?></td></tr>
+                    <?php endforeach; ?></tbody>
+                </table></div>
+            </details>
+            <?php else: ?>
+            <p class="overview-empty">No current forecasts are available. Check sales data and update forecasts on the Demand Forecasting page.</p>
+            <?php endif; ?>
         </section>
 
         <section class="overview-charts-grid" aria-label="Inventory visual analytics">
@@ -334,6 +374,7 @@ function getChartThemeColors() {
 
 let statusChartInstance = null;
 let categoryChartInstance = null;
+let forecastChartInstance = null;
 
 function initInventoryCharts() {
     if (typeof Chart === 'undefined') {
@@ -347,6 +388,31 @@ function initInventoryCharts() {
     }
 
     const colors = getChartThemeColors();
+    if (forecastChartInstance) forecastChartInstance.destroy();
+    forecastChartInstance = null;
+    const forecastCtx = document.getElementById('overviewForecastChart');
+    if (forecastCtx) {
+        forecastChartInstance = new Chart(forecastCtx, {
+            type: 'bar',
+            data: {
+                labels: inventoryChartData.forecast.labels,
+                datasets: [
+                    { label: 'Current stock', data: inventoryChartData.forecast.stock, backgroundColor: '#16a34a' },
+                    { label: '7-day demand', data: inventoryChartData.forecast.demand7, backgroundColor: '#60a5fa' },
+                    { label: '30-day demand', data: inventoryChartData.forecast.demand30, backgroundColor: '#7c3aed' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: colors.textColor } } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: colors.mutedColor } },
+                    y: { beginAtZero: true, title: { display: true, text: 'Units', color: colors.mutedColor }, grid: { color: colors.gridColor }, ticks: { color: colors.mutedColor, precision: 0 } }
+                }
+            }
+        });
+    }
     const statusCtx = document.getElementById('overviewStatusChart');
     const categoryCtx = document.getElementById('overviewCategoryChart');
 
@@ -475,6 +541,15 @@ function initInventoryCharts() {
 }
 
 window.addEventListener('retailmind:themechange', function () {
+    if (forecastChartInstance) {
+        const colors = getChartThemeColors();
+        forecastChartInstance.options.plugins.legend.labels.color = colors.textColor;
+        forecastChartInstance.options.scales.x.ticks.color = colors.mutedColor;
+        forecastChartInstance.options.scales.y.ticks.color = colors.mutedColor;
+        forecastChartInstance.options.scales.y.title.color = colors.mutedColor;
+        forecastChartInstance.options.scales.y.grid.color = colors.gridColor;
+        forecastChartInstance.update();
+    }
     if (!statusChartInstance && !categoryChartInstance) return;
     const colors = getChartThemeColors();
     if (statusChartInstance) {

@@ -19,11 +19,10 @@ final class SqlBackupFormat
             $quoted = DatabaseSnapshotWriter::identifier($table);
             $ddl = $pdo->query('SHOW CREATE TABLE ' . $quoted)->fetch(PDO::FETCH_NUM);
             $columns = $pdo->query('SHOW COLUMNS FROM ' . $quoted)->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($columns as $column) {
-                if (str_contains((string)$column['Extra'], 'GENERATED')) {
-                    throw new RuntimeException('Generated columns are not supported by this backup format.');
-                }
-            }
+            // MySQL recalculates generated values from the restored source columns.
+            $columns = array_values(array_filter($columns, static fn(array $column): bool =>
+                !preg_match('/\b(VIRTUAL|STORED) GENERATED\b/i', (string)$column['Extra'])
+            ));
             $schema[$table] = [
                 'ddl' => self::normalizeDdl((string)$ddl[1]),
                 'columns' => array_column($columns, 'Field'),

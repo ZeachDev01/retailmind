@@ -300,6 +300,7 @@ function get_store_settings(PDO $pdo): array
 
 function get_forecasting_readiness(PDO $pdo): array
 {
+    $dailySalesSql = forecast_daily_sales_sql();
     $storeId = store_scope_id($pdo);
     $settings = get_ml_settings($pdo);
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
@@ -358,12 +359,12 @@ function get_forecasting_readiness(PDO $pdo): array
             ) incoming ON incoming.product_id = p.product_id
             LEFT JOIN (
                 SELECT si.product_id,
-                       COUNT(DISTINCT DATE(s.sale_date)) AS nonzero_sales_days,
-                       MIN(DATE(s.sale_date)) AS first_sale_date,
-                       MAX(s.sale_date) AS last_sale_at,
-                       COUNT(*) AS sales_records,
-                       SUM(si.quantity) AS total_qty_sold
-                FROM sale_items si JOIN sales s ON si.sale_id = s.sale_id
+                       COUNT(DISTINCT CASE WHEN si.qty_sold > 0 THEN si.sale_day END) AS nonzero_sales_days,
+                       MIN(si.sale_day) AS first_sale_date,
+                       MAX(si.changed_at) AS last_sale_at,
+                       SUM(si.sales_records) AS sales_records,
+                       SUM(si.qty_sold) AS total_qty_sold
+                FROM ({$dailySalesSql}) si
                 GROUP BY si.product_id
             ) stats ON stats.product_id = p.product_id
             LEFT JOIN stock_predictions sp ON sp.prediction_id = (
@@ -384,8 +385,8 @@ function get_forecasting_readiness(PDO $pdo): array
         $statement->execute([$storeId]);
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $exception) {
-        // The migration has not been run yet. Keep the page usable with the legacy columns.
-        error_log('Forecast readiness requires backend/database/sql/upgrade_random_forest_v2.sql: ' . $exception->getMessage());
+        // Keep the page usable while forecasting migrations are being applied.
+        error_log('Forecast readiness requires the forecasting database migrations: ' . $exception->getMessage());
         return [];
     }
 
@@ -423,7 +424,7 @@ function get_forecasting_readiness(PDO $pdo): array
         }
         if ($lastSaleAt && $generatedAt && strtotime((string)$lastSaleAt) > strtotime((string)$generatedAt)) {
             $row['forecast_status'] = 'Model Requires Retraining';
-            $row['forecast_reason'] = 'New sales were recorded after the latest forecast.';
+            $row['forecast_reason'] = 'Sales history changed after the latest forecast.';
             continue;
         }
 
@@ -441,6 +442,21 @@ function get_forecasting_readiness(PDO $pdo): array
             ?: strcasecmp((string)$a['product_name'], (string)$b['product_name']);
     });
     return $rows;
+}
+
+function forecast_daily_sales_sql(): string
+{
+    return "SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM(si.quantity) AS qty_sold,
+                   COUNT(*) AS sales_records, MAX(s.sale_date) AS changed_at
+            FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+            GROUP BY si.product_id, DATE(s.sale_date)
+            UNION ALL
+            SELECT f.product_id, f.sale_date, f.quantity, 1, f.imported_at
+            FROM forecast_sales_imports f
+            WHERE NOT EXISTS (
+                SELECT 1 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+                WHERE si.product_id = f.product_id AND DATE(s.sale_date) = f.sale_date
+            )";
 }
 
 // ========== NOTIFICATION FUNCTIONS ==========
