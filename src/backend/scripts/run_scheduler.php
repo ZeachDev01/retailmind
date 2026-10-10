@@ -21,24 +21,25 @@ $result = $scheduler->runScheduler();
 
 $queued = $result['forecast_jobs_queued'] + $result['retrain_jobs_queued'];
 
-if ($queued > 0) {
-    echo "Scheduler queued {$queued} jobs.\n";
-    // Now trigger the worker to process the queue
-    $workerScript = dirname(__DIR__) . '/scripts/ml_worker.py';
-    if (file_exists($workerScript)) {
-        echo "Triggering ml_worker.py...\n";
-        $command = escapeshellcmd('python ' . escapeshellarg($workerScript) . ' --run-once');
+function triggerWorkerAsync(string $workerScript): void {
+    if (!file_exists($workerScript)) return;
+    $command = 'python ' . escapeshellarg($workerScript) . ' --run-once';
+    echo "Triggering ml_worker.py asynchronously...\n";
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        pclose(popen('start /B "" ' . $command . ' > NUL 2>&1', 'r'));
+    } else {
         exec($command . ' > /dev/null 2>&1 &');
     }
+}
+
+$workerScript = dirname(__DIR__) . '/scripts/ml_worker.py';
+if ($queued > 0) {
+    echo "Scheduler queued {$queued} jobs.\n";
+    triggerWorkerAsync($workerScript);
 } else {
-    // Optional: check if there are any jobs stuck in queued/running that need lease recovery,
-    // and if so, trigger the worker. The ml_worker.py --run-once handles lease recovery internally.
+    // Check for queued or stalled jobs needing worker execution
     $stmt = $pdo->query("SELECT COUNT(*) FROM ml_jobs WHERE status IN ('queued', 'running')");
     if ((int)$stmt->fetchColumn() > 0) {
-        $workerScript = dirname(__DIR__) . '/scripts/ml_worker.py';
-        if (file_exists($workerScript)) {
-            $command = escapeshellcmd('python ' . escapeshellarg($workerScript) . ' --run-once');
-            exec($command . ' > /dev/null 2>&1 &');
-        }
+        triggerWorkerAsync($workerScript);
     }
 }
