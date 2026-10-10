@@ -51,6 +51,56 @@ final class StoreCalendar
     }
 
     /**
+     * Records a calendar status across an inclusive date range [startDate, endDate].
+     * Enforces bounds order, 366-day cap, skips unchanged dates, and inserts changed dates.
+     * Returns array of changed date details: [['date' => ..., 'previous_status' => ..., 'new_status' => ...], ...]
+     */
+    public function recordCalendarRange(PDO $pdo, string $startDate, string $endDate, string $status, ?int $userId = null): array
+    {
+        $status = self::normalizeStatus($status);
+        $start = new \DateTime($startDate);
+        $end = new \DateTime($endDate);
+
+        if ($start > $end) {
+            throw new \InvalidArgumentException("Invalid date range: start date '{$startDate}' must be before or equal to through date '{$endDate}' (reversed bounds).");
+        }
+
+        // Inclusive day count
+        $diffDays = (int)$start->diff($end)->format('%a') + 1;
+        if ($diffDays > 366) {
+            throw new \InvalidArgumentException("Date range exceeds the maximum allowed limit of 366 inclusive days ({$diffDays} days requested).");
+        }
+
+        // Fetch current statuses across the range
+        $currentStatuses = $this->getCalendarDateRangeAtCutoff($pdo, $startDate, $endDate, date('Y-m-d H:i:s'));
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO store_calendar (calendar_date, status, recorded_by, recorded_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
+        );
+
+        $changed = [];
+        $cur = clone $start;
+
+        while ($cur <= $end) {
+            $curDate = $cur->format('Y-m-d');
+            $prevStatus = $currentStatuses[$curDate] ?? null;
+
+            if ($prevStatus !== $status) {
+                $stmt->execute([$curDate, $status, $userId]);
+                $changed[] = [
+                    'date' => $curDate,
+                    'previous_status' => $prevStatus,
+                    'new_status' => $status
+                ];
+            }
+
+            $cur->modify('+1 day');
+        }
+
+        return $changed;
+    }
+
+    /**
      * Reconstructs the status of a specific date at cutoff.
      * Supports both ($date, $cutoff) and legacy ($branchId, $date, $cutoff).
      * Resolves equal timestamps deterministically using calendar_id DESC.
