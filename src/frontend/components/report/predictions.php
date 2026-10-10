@@ -32,10 +32,50 @@ $latestJobId = $service->getLatestSuccessfulJobId();
 $forecasts = $latestJobId ? $service->getForecastAggregates($latestJobId) : [];
 
 // Check if there is currently a running or pending job
-$stmt = $pdo->query("SELECT status FROM ml_jobs WHERE trigger_type = 'forecast_generation' ORDER BY job_id DESC LIMIT 1");
-$latestJobStatus = $stmt->fetchColumn();
+$stmt = $pdo->query("SELECT status, operator_message, queued_at, completed_at FROM ml_jobs WHERE trigger_type = 'forecast_generation' ORDER BY job_id DESC LIMIT 1");
+$latestJob = $stmt->fetch(PDO::FETCH_ASSOC);
+$latestJobStatus = $latestJob['status'] ?? 'none';
 $isGenerating = in_array($latestJobStatus, ['queued', 'running', 'processing'], true);
 
+// Enrich forecasts with product details & stock
+$productMap = [];
+if (!empty($forecasts)) {
+    $pIds = array_column($forecasts, 'product_id');
+    $inClause = implode(',', array_map('intval', $pIds));
+    $pStmt = $pdo->query("
+        SELECT p.product_id, p.product_name, p.sku, COALESCE(i.quantity, 0) as current_stock
+        FROM products p
+        LEFT JOIN inventory i ON p.product_id = i.product_id
+        WHERE p.product_id IN ($inClause)
+    ");
+    while ($row = $pStmt->fetch(PDO::FETCH_ASSOC)) {
+        $productMap[(int)$row['product_id']] = $row;
+    }
+}
+
+// Search filter
+$searchQuery = trim($_GET['search'] ?? '');
+if ($searchQuery !== '') {
+    $filtered = [];
+    foreach ($forecasts as $f) {
+        $meta = $productMap[$f['product_id']] ?? [];
+        $name = $meta['product_name'] ?? '';
+        $sku = $meta['sku'] ?? '';
+        $idStr = (string)$f['product_id'];
+
+        if (stripos($name, $searchQuery) !== false || stripos($sku, $searchQuery) !== false || $idStr === $searchQuery) {
+            $filtered[] = $f;
+        }
+    }
+    $forecasts = $filtered;
+}
+
+// Check if demo metadata exists
+$isDemoMode = false;
+$metaStmt = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'demo_import_metadata'");
+if ($metaStmt && $metaStmt->fetchColumn()) {
+    $isDemoMode = true;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -46,6 +86,35 @@ $isGenerating = in_array($latestJobStatus, ['queued', 'running', 'processing'], 
     <title>Demand Forecast</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+    <style>
+        .forecast-header-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1.25rem;
+            background: var(--card-bg, #ffffff);
+            border: 1px solid var(--border-color, #e2e8f0);
+            border-radius: 8px;
+        }
+        .demo-badge {
+            display: inline-block;
+            background: #fef3c7;
+            color: #92400e;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            margin-left: 0.5rem;
+            text-transform: uppercase;
+        }
+        .readiness-tag-High { background: #dcfce7; color: #15803d; }
+        .readiness-tag-Medium { background: #fef3c7; color: #b45309; }
+        .readiness-tag-Low { background: #fee2e2; color: #b91c1c; }
+        .readiness-tag-Insufficient { background: #f1f5f9; color: #64748b; }
+    </style>
 </head>
 <body>
 <div class="app-shell">
@@ -53,7 +122,7 @@ $isGenerating = in_array($latestJobStatus, ['queued', 'running', 'processing'], 
     <main class="main-content">
         <div class="topbar">
             <div>
-                <h1>Demand Forecast</h1>
+                <h1>Demand Forecast <?php if ($isDemoMode): ?><span class="demo-badge">Demo Mode (S001)</span><?php endif; ?></h1>
                 <p class="page-subtitle">Expected demand, inventory exposure, and model readiness across the Store.</p>
             </div>
             
@@ -72,11 +141,29 @@ $isGenerating = in_array($latestJobStatus, ['queued', 'running', 'processing'], 
                 <?= htmlspecialchars($message) ?>
             </div>
         <?php endif; ?>
-        
-        <div class="card">
-            <form method="get" action="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php')) ?>" class="search-form">
-                <input type="number" name="product_id" placeholder="Search Product ID" required class="input-text">
-                <button type="submit" class="btn btn-secondary">Investigate</button>
+
+        <?php if ($latestJobStatus === 'failed'): ?>
+            <div class="alert tag-warning">
+                <strong>Notice:</strong> The latest forecast generation attempt did not complete. Showing the last verified forecast results below.
+            </div>
+        <?php endif; ?>
+
+        <div class="forecast-header-card">
+            <div>
+                <strong>Active Run:</strong> Job #<?= htmlspecialchars((string)($latestJobId ?? 'None')) ?> 
+                <?php if (!empty($forecasts[0]['forecast_origin'])): ?>
+                    &middot; Origin: <?= htmlspecialchars($forecasts[0]['forecast_origin']) ?>
+                <?php endif; ?>
+                <?php if (!empty($forecasts[0]['model_version'])): ?>
+                    &middot; Model: <code><?= htmlspecialchars($forecasts[0]['model_version']) ?></code>
+                <?php endif; ?>
+            </div>
+            <form method="get" action="" class="search-form" style="display:flex; gap:0.5rem;">
+                <input type="text" name="search" placeholder="Search by Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
+                <button type="submit" class="btn btn-secondary">Search</button>
+                <?php if ($searchQuery !== ''): ?>
+                    <a href="predictions.php" class="btn btn-quiet">Clear</a>
+                <?php endif; ?>
             </form>
         </div>
         
@@ -84,28 +171,50 @@ $isGenerating = in_array($latestJobStatus, ['queued', 'running', 'processing'], 
             <div class="empty-state">
                 <i class="bi bi-graph-up-arrow empty-icon"></i>
                 <h2>No Forecasts Available</h2>
-                <p>Demand forecasts have not been generated yet or the last run failed.</p>
+                <p><?= $searchQuery !== '' ? 'No matching products found in current forecast run.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
             </div>
         <?php else: ?>
             <div class="card">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Product ID</th>
-                            <th>7 Days</th>
-                            <th>14 Days</th>
-                            <th>28 Days</th>
+                            <th>Product</th>
+                            <th>SKU</th>
+                            <th>Current Stock</th>
+                            <th>7-Day Demand</th>
+                            <th>14-Day Demand</th>
+                            <th>28-Day Demand</th>
                             <th>Readiness</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($forecasts as $f): ?>
+                        <?php foreach ($forecasts as $f): 
+                            $meta = $productMap[$f['product_id']] ?? [];
+                            $name = $meta['product_name'] ?? "Product #{$f['product_id']}";
+                            $sku = $meta['sku'] ?? "PRD-{$f['product_id']}";
+                            $stock = (int)($meta['current_stock'] ?? 0);
+                            $readiness = $f['readiness_level'] ?? 'Insufficient';
+                        ?>
                             <tr>
-                                <td><a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>"><?= htmlspecialchars((string)$f['product_id']) ?></a></td>
+                                <td>
+                                    <strong><?= htmlspecialchars($name) ?></strong>
+                                </td>
+                                <td><code><?= htmlspecialchars($sku) ?></code></td>
+                                <td><?= htmlspecialchars((string)$stock) ?></td>
                                 <td><?= htmlspecialchars((string)$f['forecast_7_day']) ?></td>
                                 <td><?= htmlspecialchars((string)$f['forecast_14_day']) ?></td>
                                 <td><?= htmlspecialchars((string)$f['forecast_28_day']) ?></td>
-                                <td><?= htmlspecialchars((string)$f['readiness_level']) ?></td>
+                                <td>
+                                    <span class="status-badge readiness-tag-<?= htmlspecialchars($readiness) ?>">
+                                        <?= htmlspecialchars($readiness) ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
+                                        Investigate
+                                    </a>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
