@@ -12,7 +12,7 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             $this->databaseCheck(),
             $this->migrationCheck(),
             ...$this->storageChecks(),
-            $this->mlServiceCheck(),
+            $this->forecastingPipelineCheck(),
             $this->workerHealthCheck(),
             $this->modelArtifactCheck(),
             $this->backupCheck(),
@@ -76,34 +76,28 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         return $checks;
     }
 
-    private function mlServiceCheck(): array
+    private function forecastingPipelineCheck(): array
     {
-        $baseUrl = rtrim((string)env('ML_API_URL', 'http://127.0.0.1:5000'), '/');
-        $url = $baseUrl . '/health';
         try {
-            $body = false;
-            if (function_exists('curl_init')) {
-                $curl = curl_init($url);
-                curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 3, CURLOPT_CONNECTTIMEOUT => 2]);
-                $body = curl_exec($curl);
-                $code = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-                $error = curl_error($curl);
-                curl_close($curl);
-                if ($body === false || $code < 200 || $code >= 300) {
-                    throw new RuntimeException($error ?: "HTTP {$code}");
-                }
-            } else {
-                $context = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => true]]);
-                $body = @file_get_contents($url, false, $context);
-                if ($body === false) {
-                    throw new RuntimeException('Unable to connect to the health endpoint.');
-                }
+            $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('ml_approved_model_version', 'ml_observation_mode', 'ml_recommendations_suspended')");
+            $settings = $stmt ? $stmt->fetchAll(PDO::FETCH_KEY_PAIR) : [];
+            
+            $model = $settings['ml_approved_model_version'] ?? '';
+            $obs = ($settings['ml_observation_mode'] ?? '0') === '1';
+            $suspended = ($settings['ml_recommendations_suspended'] ?? '0') === '1';
+            
+            if ($suspended) {
+                return $this->result('Forecasting pipeline', 'warning', "Recommendations suspended. Approved model: " . ($model ?: 'none'), 'Forecasting');
             }
-            $payload = json_decode((string)$body, true) ?: [];
-            $modelState = !empty($payload['model_loaded']) ? 'Model is loaded.' : 'Service is online but no model is loaded.';
-            return $this->result('Forecast API', !empty($payload['model_loaded']) ? 'healthy' : 'warning', $baseUrl . ' — ' . $modelState, 'Forecasting');
+            if ($obs) {
+                return $this->result('Forecasting pipeline', 'healthy', "Observation mode active (evaluating Store candidate). Model: " . ($model ?: 'candidate in review'), 'Forecasting');
+            }
+            if ($model === '') {
+                return $this->result('Forecasting pipeline', 'healthy', 'No active Store model activated yet (training/observation mode pending).', 'Forecasting');
+            }
+            return $this->result('Forecasting pipeline', 'healthy', "Active Store model: {$model}.", 'Forecasting');
         } catch (Throwable $e) {
-            return $this->result('Forecast API', 'warning', $baseUrl . ' is unavailable: ' . $e->getMessage(), 'Forecasting');
+            return $this->result('Forecasting pipeline', 'warning', 'Unable to check pipeline status: ' . $e->getMessage(), 'Forecasting');
         }
     }
 

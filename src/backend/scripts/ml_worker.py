@@ -161,14 +161,17 @@ def run_forecast_generation(conn, cursor, job_id):
     if row:
         model_version = row['setting_value'] if isinstance(row, dict) else row[0]
 
+    if model_version and ('demo' in str(model_version).lower() or 'kaggle' in str(model_version).lower()):
+        raise RuntimeError(f"Refusing to load demo/kaggle model '{model_version}' for Store forecasting inference. Demo artifacts are strictly isolated from Store operations.")
+
     if not model_version:
-        # Check if there is an approved candidate recorded
-        cursor.execute("SELECT model_version FROM ml_model_evaluations WHERE candidate_gate_outcome = 'passed' ORDER BY created_at DESC LIMIT 1")
+        # Check if there is an approved candidate recorded (excluding demo models)
+        cursor.execute("SELECT model_version FROM ml_model_evaluations WHERE candidate_gate_outcome = 'passed' AND model_version NOT LIKE '%demo%' AND model_version NOT LIKE '%kaggle%' ORDER BY created_at DESC LIMIT 1")
         cand = cursor.fetchone()
         if cand:
             model_version = cand['model_version'] if isinstance(cand, dict) else cand[0]
         else:
-            raise RuntimeError("No approved forecasting model version configured. Please train and promote a candidate first.")
+            raise RuntimeError("No approved Store forecasting model version configured. Please train and activate a Store candidate first.")
 
     target_artifact = None
     potential = list(STORAGE_MODELS_DIR.glob(f"*{model_version}*.joblib"))
