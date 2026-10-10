@@ -14,34 +14,67 @@ function assert_same(mixed $expected, mixed $actual, string $message): void {
     }
 }
 
-// Ensure the script prevents importing into live DB.
-// We will test running the CLI script directly using exec().
-
 $scriptPath = __DIR__ . '/../scripts/import_kaggle_capstone.php';
-$csvPath = __DIR__ . '/kaggle_test.csv';
+$testCsvDir = __DIR__ . '/tmp_test_data';
+if (!is_dir($testCsvDir)) {
+    mkdir($testCsvDir, 0777, true);
+}
 
-// Create a dummy CSV
-file_put_contents($csvPath, "date,store,item,sales\n2013-01-01,1,1,13\n2013-01-01,1,2,11\n2013-01-02,1,1,10\n");
+$validHeader = "Date,Store ID,Product ID,Category,Region,Inventory Level,Units Sold,Units Ordered,Demand Forecast,Price,Discount,Weather Condition,Holiday/Promotion,Competitor Pricing,Seasonality\n";
 
 // Test 1: Guard against live database
+$dummyCsv = $testCsvDir . '/dummy.csv';
+file_put_contents($dummyCsv, $validHeader . "2022-01-01,S001,P0001,Groceries,North,231,127,55,135.47,33.5,20,Rainy,0,29.69,Autumn\n");
+
 $output = [];
 $returnVar = 0;
-exec("set DB_NAME=retailmind && php " . escapeshellarg($scriptPath) . " " . escapeshellarg($csvPath) . " 2>&1", $output, $returnVar);
+exec("set DB_NAME=retailmind && php " . escapeshellarg($scriptPath) . " " . escapeshellarg($dummyCsv) . " 2>&1", $output, $returnVar);
 assert_true($returnVar !== 0, "Script should fail when run against live database (DB_NAME=retailmind)");
 assert_true(str_contains(implode("\n", $output), "isolated"), "Error message should mention isolated database");
 
-// Test 2: Successful import into demo database
-if (getenv('RUN_DB_TESTS') === '1') {
-    // Setup isolated db
-    require_once __DIR__ . '/../config/db.php';
-    // Actually we can't easily switch DB connections inside this script unless we spawn another process with different env vars.
-    // The integration test runner should have an isolated db anyway, but let's test it by explicitly creating one.
-    
-    // We will drop and recreate retailmind_demo
-    $pdo = \App\Core\Database::connection();
-    $pdo->exec("CREATE DATABASE IF NOT EXISTS retailmind_demo");
-    // Actually, DB_NAME in test is usually `retailmind_test` which might pass the check if we look for `test` or `demo`.
+// Test 2: Guard against invalid / wrong headers
+$badHeaderCsv = $testCsvDir . '/bad_header.csv';
+file_put_contents($badHeaderCsv, "date,store,item,sales\n2013-01-01,1,1,13\n");
+$output = [];
+$returnVar = 0;
+exec("set DB_NAME=retailmind_test && php " . escapeshellarg($scriptPath) . " " . escapeshellarg($badHeaderCsv) . " 2>&1", $output, $returnVar);
+assert_true($returnVar !== 0, "Script should fail when CSV headers do not match expected schema");
+assert_true(str_contains(implode("\n", $output), "header") || str_contains(implode("\n", $output), "Header"), "Error message should mention invalid headers");
+
+// Test 3: Guard against duplicate daily keys
+$dupCsv = $testCsvDir . '/duplicate_keys.csv';
+file_put_contents($dupCsv, $validHeader . 
+    "2022-01-01,S001,P0001,Groceries,North,231,127,55,135.47,33.5,20,Rainy,0,29.69,Autumn\n" .
+    "2022-01-01,S001,P0001,Groceries,North,231,120,55,135.47,33.5,20,Rainy,0,29.69,Autumn\n"
+);
+$output = [];
+$returnVar = 0;
+exec("set DB_NAME=retailmind_test && php " . escapeshellarg($scriptPath) . " " . escapeshellarg($dupCsv) . " 2>&1", $output, $returnVar);
+assert_true($returnVar !== 0, "Script should reject duplicate daily keys for same store and product");
+assert_true(str_contains(implode("\n", $output), "duplicate") || str_contains(implode("\n", $output), "Duplicate"), "Error message should mention duplicate key");
+
+// Test 4: Guard against invalid numeric or date bounds
+$badBoundsCsv = $testCsvDir . '/bad_bounds.csv';
+file_put_contents($badBoundsCsv, $validHeader . 
+    "invalid-date,S001,P0001,Groceries,North,231,-5,55,135.47,33.5,20,Rainy,0,29.69,Autumn\n"
+);
+$output = [];
+$returnVar = 0;
+exec("set DB_NAME=retailmind_test && php " . escapeshellarg($scriptPath) . " " . escapeshellarg($badBoundsCsv) . " 2>&1", $output, $returnVar);
+assert_true($returnVar !== 0, "Script should reject invalid date or negative sales");
+
+// Test 5: Verify real dataset SHA-256 calculation
+$realDatasetPath = dirname(__DIR__) . '/dataset/retail_store_inventory.csv';
+if (file_exists($realDatasetPath)) {
+    $expectedHash = 'c7b6019887d85e6bb311a76da72560463e6bf269bfadbe4b326fbff3b1000468';
+    $actualHash = hash_file('sha256', $realDatasetPath);
+    assert_same($expectedHash, $actualHash, "Official dataset SHA-256 must match parent spec");
 }
 
-unlink($csvPath);
-echo "Kaggle import contract passed.\n";
+// Cleanup temp files
+foreach (glob($testCsvDir . '/*') as $f) {
+    unlink($f);
+}
+rmdir($testCsvDir);
+
+echo "All Kaggle import contract tests passed.\n";
