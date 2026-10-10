@@ -921,6 +921,7 @@ foreach ($products as $product) {
                             <div class="product-add-menu-list" id="product-add-options" role="menu" hidden>
                                 <?php if ($canManageInventory): ?><button type="button" class="product-add-menu-item" id="add-product-btn" role="menuitem"><i class="bi bi-box-seam" aria-hidden="true"></i><strong>Add Product</strong></button><button type="button" class="product-add-menu-item" id="add-category-btn" role="menuitem"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button><?php endif; ?>
                                 <a class="product-add-menu-item" role="menuitem" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>
+                                <?php if ($canManageInventory): ?><a class="product-add-menu-item" role="menuitem" href="<?= htmlspecialchars(app_url('components/inventory_management/csv_import.php')) ?>"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i><strong>CSV Import</strong></a><?php endif; ?>
                             </div>
                         </div>
                     </div>

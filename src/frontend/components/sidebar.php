@@ -165,14 +165,7 @@ $administratorSystemItems = [
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Operational Audit'],
 ];
 
-$managerInventoryItems = [
-    ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
-    ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products & Stock'],
-    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
-    ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Counts'],
-    ['path' => 'components/inventory_management/csv_import.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'CSV Import'],
-    ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
-];
+$managerInventoryItems = [];
 
 $administratorReportItems = [
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shifts'],
@@ -213,20 +206,25 @@ $roleSections = [
         [
             'items' => [
                 ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
+                ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Stock Product'],
+                ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Stock Counter'],
                 ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecast'],
                 ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
-                ['icon' => 'bi-boxes', 'label' => 'Inventory', 'items' => $managerInventoryItems],
+                ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
                 ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Exceptions'],
                 ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
                 ['path' => 'components/invoice/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
             ],
         ],
         [
-            'title' => 'Reports',
             'items' => [
-                ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
-                ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
-                ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
+                ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Reports', 'items' => [
+                    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
+                    ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
+                    ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
+                    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
+                    ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
+                ]],
             ],
         ],
     ],
