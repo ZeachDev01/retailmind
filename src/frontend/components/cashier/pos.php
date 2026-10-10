@@ -1539,7 +1539,11 @@ cashQuick.addEventListener('click', event => {
         setQuickTender(button.dataset.tender);
     }
 });
-quickProductSearch.addEventListener('input', renderQuickProducts);
+let quickSearchTimer = null;
+quickProductSearch.addEventListener('input', () => {
+    clearTimeout(quickSearchTimer);
+    quickSearchTimer = setTimeout(renderQuickProducts, 80);
+});
 quickCategoryFilters.addEventListener('click', event => {
     const button = event.target.closest('[data-quick-category]');
     if (!button) return;

@@ -61,6 +61,7 @@
     }
 
     function cleanup(retainedAssets) {
+        clearPrefetch();
         for (const item of page.listeners.filter(item => item.type === 'pagehide')) item.wrapped.call(item.target, new Event('pagehide'));
         document.querySelectorAll('.command-overlay.open, .rm-modal-overlay.open, .rm-drawer-overlay.open, .checkout-modal.open, .user-modal-overlay.open, .user-drawer-overlay.open').forEach(overlay => window.RetailMindUI?.closeOverlay(overlay));
         document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
@@ -138,6 +139,93 @@
         }
         pageNodes.push(node);
     }
+    function getProgressBar() {
+        let el = document.getElementById('rm-nav-progress');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'rm-nav-progress';
+            el.className = 'rm-nav-progress';
+            el.setAttribute('aria-hidden', 'true');
+            el.innerHTML = '<div class="rm-nav-progress-bar"></div>';
+            document.body.prepend(el);
+        }
+        return el.querySelector('.rm-nav-progress-bar');
+    }
+    function startProgress() {
+        const bar = getProgressBar();
+        if (!bar) return;
+        bar.parentElement.style.display = 'block';
+        bar.style.opacity = '1';
+        bar.style.width = '25%';
+        bar.parentElement.classList.add('animating');
+        clearTimeout(bar._timer);
+        bar._timer = setTimeout(() => {
+            if (bar.style.opacity === '1') bar.style.width = '70%';
+        }, 150);
+    }
+    function finishProgress() {
+        const bar = getProgressBar();
+        if (!bar) return;
+        clearTimeout(bar._timer);
+        bar.parentElement.classList.remove('animating');
+        bar.style.width = '100%';
+        bar._timer = setTimeout(() => {
+            bar.style.opacity = '0';
+            bar._timer = setTimeout(() => {
+                bar.style.width = '0%';
+                bar.parentElement.style.display = 'none';
+            }, 200);
+        }, 120);
+    }
+    function failProgress() {
+        const bar = getProgressBar();
+        if (!bar) return;
+        clearTimeout(bar._timer);
+        bar.parentElement.classList.remove('animating');
+        bar.style.opacity = '0';
+        bar._timer = setTimeout(() => {
+            bar.style.width = '0%';
+            bar.parentElement.style.display = 'none';
+        }, 150);
+    }
+
+    const prefetchCache = new Map();
+    function clearPrefetch() {
+        prefetchCache.clear();
+    }
+    function prefetch(urlHref) {
+        try {
+            const url = new URL(urlHref, location.href);
+            if (!eligible(url) || !url.pathname.endsWith('.php')) return;
+            if (url.pathname === location.pathname && url.search === location.search) return;
+            if (url.searchParams.has('slow') || url.pathname.includes('slow') || url.pathname.includes('error')) return;
+            const key = url.href;
+            if (prefetchCache.has(key)) {
+                const entry = prefetchCache.get(key);
+                if (Date.now() - entry.time < 15000) return;
+            }
+            nativeFetch(key, {
+                credentials: 'same-origin',
+                headers: {'X-RetailMind-Navigation': '1'},
+            }).then(async res => {
+                if (!res.ok) {
+                    prefetchCache.delete(key);
+                    return;
+                }
+                const type = res.headers.get('Content-Type') || '';
+                if (!type.includes('application/vnd.retailmind.page+json')) {
+                    prefetchCache.delete(key);
+                    return;
+                }
+                const clone = res.clone();
+                const payload = await res.json();
+                prefetchCache.set(key, { response: clone, payload, time: Date.now() });
+            }).catch(() => {
+                prefetchCache.delete(key);
+            });
+        } catch (_) {}
+    }
+
     async function navigate(destination, options = {}) {
         if (initializing) { queued = {destination, options}; return; }
         const url = new URL(destination, location.href);
@@ -148,14 +236,25 @@
         pending = new AbortController();
         const request = ++sequence;
         status(content);
+        startProgress();
         let committed = false;
         try {
-            const response = await nativeFetch(url.href, {
-                ...options.fetch, signal: pending.signal, credentials: 'same-origin', cache: 'no-store',
-                headers: {'X-RetailMind-Navigation': '1', ...options.fetch?.headers},
-            });
+            let response, payload;
+            const prefetched = !options.fetch && prefetchCache.get(url.href);
+            if (prefetched && (Date.now() - prefetched.time < 15000)) {
+                prefetchCache.delete(url.href);
+                response = prefetched.response;
+                payload = prefetched.payload;
+            }
+            if (!response) {
+                response = await nativeFetch(url.href, {
+                    ...options.fetch, signal: pending.signal, credentials: 'same-origin', cache: 'no-store',
+                    headers: {'X-RetailMind-Navigation': '1', ...options.fetch?.headers},
+                });
+            }
             if (request !== sequence) return;
             if (response.headers.get('Content-Disposition')?.includes('attachment')) {
+                finishProgress();
                 const blob = URL.createObjectURL(await response.blob());
                 const link = document.createElement('a');
                 link.href = blob;
@@ -170,7 +269,7 @@
                 if (response.redirected || !eligible(new URL(response.url))) { location.assign(response.url); return; }
                 throw new Error('Unexpected page response');
             }
-            const payload = await response.json();
+            if (!payload) payload = await response.json();
             if (request !== sequence) return;
             if (payload.role !== workspace) { location.assign(response.url); return; }
             const incoming = new DOMParser().parseFromString(payload.html, 'text/html');
@@ -239,6 +338,7 @@
                 if (count) { const badge = document.createElement('strong'); badge.textContent = count > 99 ? '99+' : count; notification.append(badge); }
             }
             committed = true;
+            finishProgress();
             initializing = true;
             for (const script of headScripts.filter(script => !script.hasAttribute('defer'))) await execute(script, finalURL);
             if (payload.cart && window.cartWorkspace) Object.assign(window.cartWorkspace, new CartWorkspace(payload.cart));
@@ -253,6 +353,7 @@
             replacement.scrollTop = 0;
             window.scrollTo(0, 0);
         } catch (error) {
+            failProgress();
             if (request !== sequence || error.name === 'AbortError') return;
             initializing = false;
             if (options.history === 'none' && !committed) history.replaceState({}, '', currentURL);
@@ -288,11 +389,24 @@
         return true;
     }
     HTMLFormElement.prototype.submit = function () {
+        clearPrefetch();
         if (!submit(this)) nativeSubmit.call(this);
     };
-    window.RetailMindNavigation = {navigate, initializePage: callback => run(page, callback, window, [])};
+    window.RetailMindNavigation = {navigate, prefetch, clearPrefetch, initializePage: callback => run(page, callback, window, [])};
     // Kept for existing cart-workspace callers; forms now use the shared fetch submission.
     window.rmPrepareFullscreenForm = () => {};
+    let prefetchTimer = null;
+    window.addEventListener('mouseover', event => {
+        const link = event.target.closest('a[href]');
+        if (!link || link.id === 'slow' || link.id === 'error' || link.hasAttribute('download') || link.hasAttribute('data-no-navigation') || (link.target && link.target !== '_self')) return;
+        clearTimeout(prefetchTimer);
+        prefetchTimer = setTimeout(() => prefetch(link.href), 65);
+    }, { passive: true });
+    window.addEventListener('touchstart', event => {
+        const link = event.target.closest('a[href]');
+        if (!link || link.id === 'slow' || link.id === 'error' || link.hasAttribute('download') || link.hasAttribute('data-no-navigation')) return;
+        prefetch(link.href);
+    }, { passive: true });
     window.addEventListener('click', event => {
         if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         const link = event.target.closest('a[href]');
@@ -304,6 +418,7 @@
         navigate(url.href);
     });
     window.addEventListener('submit', event => {
+        clearPrefetch();
         if (!event.defaultPrevented && submit(event.target, event.submitter)) event.preventDefault();
     });
     window.addEventListener('popstate', () => navigate(location.href, {history: 'none'}));

@@ -13,6 +13,8 @@ if (!is_logged_in()) {
     exit;
 }
 
+App\Core\Session::closeWrite();
+
 $service = new App\Backup\DatabaseBackupService($pdo, role_capability_policy());
 $status = $service->status();
 

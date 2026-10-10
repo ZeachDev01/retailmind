@@ -1,14 +1,78 @@
+/* Page Navigation - Progress & Status Bar */
+.rm-nav-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    z-index: 99999;
+    pointer-events: none;
+    overflow: hidden;
+    background: transparent;
+}
+.rm-nav-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--primary, #2563eb), #38bdf8);
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.6), 0 0 4px #38bdf8;
+    transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    border-radius: 0 2px 2px 0;
+}
+.rm-nav-progress.animating .rm-nav-progress-bar {
+    animation: rm-nav-pulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes rm-nav-pulse {
+    from { opacity: 0.85; }
+    to { opacity: 1; }
+}
+
+.main-content {
+    animation: rm-page-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.main-content[aria-busy="true"] {
+    opacity: 0.72;
+    transition: opacity 0.16s ease;
+}
+@keyframes rm-page-enter {
+    from {
+        opacity: 0.45;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .page-navigation-status {
     display: flex;
     align-items: center;
     gap: .65rem;
-    padding: 1rem;
+    padding: .85rem 1.1rem;
     margin-bottom: 1rem;
     color: inherit;
-    background: var(--surface, Canvas);
+    background: var(--card-bg, var(--surface, Canvas));
     border: 1px solid var(--border, #94a3b8);
-    border-radius: .5rem;
+    border-radius: .65rem;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+    animation: rm-status-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
+.page-navigation-status[role="alert"] {
+    background: var(--theme-error-surface, #fef2f2);
+    border-color: var(--danger, #ef4444);
+    color: var(--theme-error-text, #991b1b);
+}
+@keyframes rm-status-in {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .page-navigation-spinner {
     width: 1rem;
     height: 1rem;
@@ -16,8 +80,12 @@
     border-right-color: transparent;
     border-radius: 50%;
     animation: page-navigation-spin .7s linear infinite;
+    flex-shrink: 0;
 }
 @keyframes page-navigation-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
     .page-navigation-spinner { animation: none; }
+    .main-content { animation: none; }
+    .page-navigation-status { animation: none; }
+    .rm-nav-progress-bar { transition: none; }
 }
