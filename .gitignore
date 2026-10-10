@@ -29,7 +29,7 @@
 /backend/legacy/demandForcasting/.api-retrain.lock
 **/__pycache__/
 *.pyc
-*.pyo
+*.joblib
 .release/
 .agents/
 skills/
