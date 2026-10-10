@@ -147,36 +147,82 @@ def run_forecast_generation(conn, cursor, job_id):
     today = datetime.now().date()
     STORAGE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Resolve approved model artifact from settings
-    cursor.execute("SELECT setting_value FROM platform_settings WHERE setting_key = 'approved_forecasting_model'")
+    # 1. Resolve approved model artifact from settings
+    cursor.execute("""
+        SELECT setting_value 
+        FROM platform_settings 
+        WHERE setting_key IN ('ml_approved_model_version', 'approved_forecasting_model') 
+          AND setting_value IS NOT NULL AND setting_value != ''
+        ORDER BY CASE WHEN setting_key = 'ml_approved_model_version' THEN 1 ELSE 2 END
+        LIMIT 1
+    """)
     row = cursor.fetchone()
     model_version = None
     if row:
         model_version = row['setting_value'] if isinstance(row, dict) else row[0]
 
+    if not model_version:
+        # Check if there is an approved candidate recorded
+        cursor.execute("SELECT model_version FROM ml_model_evaluations WHERE candidate_gate_outcome = 'passed' ORDER BY created_at DESC LIMIT 1")
+        cand = cursor.fetchone()
+        if cand:
+            model_version = cand['model_version'] if isinstance(cand, dict) else cand[0]
+        else:
+            raise RuntimeError("No approved forecasting model version configured. Please train and promote a candidate first.")
+
     target_artifact = None
-    if model_version:
-        potential = list(STORAGE_MODELS_DIR.glob(f"*{model_version}*.joblib"))
-        if potential:
-            target_artifact = potential[0]
+    potential = list(STORAGE_MODELS_DIR.glob(f"*{model_version}*.joblib"))
+    if potential:
+        target_artifact = potential[0]
 
     if not target_artifact or not target_artifact.exists():
-        available = list(STORAGE_MODELS_DIR.glob("*.joblib"))
-        if available:
-            target_artifact = available[0]
-        else:
-            raise RuntimeError(f"No approved forecasting model artifact found in {STORAGE_MODELS_DIR}")
+        raise RuntimeError(f"Approved model artifact for version '{model_version}' not found or inaccessible in {STORAGE_MODELS_DIR}. Inference cannot proceed.")
 
     artifact = joblib.load(target_artifact)
     model = artifact.get('model')
-    artifact_version = artifact.get('metadata', {}).get('model_version', model_version or 'v_unknown')
+    if not model:
+        raise RuntimeError(f"Corrupt model artifact for '{model_version}': 'model' object is missing.")
 
+    artifact_version = artifact.get('metadata', {}).get('model_version', model_version)
+
+    # 2. Calculate Forecast Readiness from actual sales history
+    cursor.execute("SELECT COUNT(DISTINCT DATE(sale_date)) FROM sales")
+    day_row = cursor.fetchone()
+    history_days = 0
+    if day_row:
+        history_days = day_row['COUNT(DISTINCT DATE(sale_date))'] if isinstance(day_row, dict) else day_row[0]
+
+    if history_days < 56:
+        readiness_level = 'Insufficient'
+        limitation_marker = 'Usable history under 56 days (minimum required for reliable forecasting)'
+    elif history_days < 180:
+        readiness_level = 'Low'
+        limitation_marker = 'Early history (56-179 days)'
+    elif history_days < 365:
+        readiness_level = 'Medium'
+        limitation_marker = 'Standard history (180-364 days)'
+    else:
+        # Check if validation passed
+        cursor.execute("SELECT candidate_gate_outcome FROM ml_model_evaluations WHERE model_version = %s AND candidate_gate_outcome = 'passed' LIMIT 1", (model_version,))
+        val_pass = cursor.fetchone() is not None
+        if val_pass:
+            readiness_level = 'High'
+            limitation_marker = None
+        else:
+            readiness_level = 'Medium'
+            limitation_marker = 'History 365+ days but validation quality gate not satisfied for High readiness'
+
+    # 3. Query product catalog
     cursor.execute("SELECT product_id, unit_price FROM products LIMIT 50")
     products = cursor.fetchall()
     if not products:
         cursor.execute("SELECT id as product_id, price as unit_price FROM products LIMIT 50")
         products = cursor.fetchall()
 
+    if not products:
+        raise RuntimeError("No products found in catalog for forecast generation.")
+
+    # 4. Generate forecasts for exactly 28 days per eligible product
     for p in products:
         if isinstance(p, dict):
             p_id = p['product_id']
@@ -197,9 +243,9 @@ def run_forecast_generation(conn, cursor, job_id):
             predicted_units = max(0, int(round(float(pred))))
             cursor.execute("""
                 INSERT INTO demand_forecasts 
-                (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, (job_id, p_id, today, target_date, i + 1, predicted_units, artifact_version, 'Medium'))
+                (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level, limitation_marker) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (job_id, p_id, today, target_date, i + 1, predicted_units, artifact_version, readiness_level, limitation_marker))
 
     conn.commit()
 
