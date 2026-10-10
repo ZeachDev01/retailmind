@@ -8,6 +8,12 @@ The Store needs a simple, explainable forecasting feature for one location and a
 
 ## Solution
 
+### Confirmed development dataset and operational transition
+
+The user selected [Anirudh Chauhan's Retail Store Inventory Forecasting Dataset](https://www.kaggle.com/datasets/anirudhchauhan/retail-store-inventory-forecasting-dataset) on 2026-10-10. The supplied local file is `src/backend/dataset/retail_store_inventory.csv`. It is the demo-only source for current pipeline development, not operational Store history. The existing importer targets a different Kaggle dataset and must be corrected before use. Dataset profiling, feature restrictions, proposed delivery stages, and live activation gates are recorded in [the development and integration plan](forecasting-demo-to-operations.md).
+
+Integration means deploying the verified pipeline against real Store evidence and separately training and validating a Store model. It does not mean copying Kaggle sales, external product identifiers, forecasts, or demo model artifacts into live operations. The existing single-Store, Random Forest, fixed-horizon, role, and human-review boundaries remain in force.
+
 RetailMind will provide one asynchronous Random Forest forecasting pipeline. PHP will record Forecast Generation and Model Retraining jobs in MySQL. A scheduled Python CLI worker using scikit-learn will process those jobs outside interactive web requests and persist versioned daily forecasts, horizon summaries, validation metrics, readiness, and run status for the PHP application to display.
 
 The Inventory Manager will be the primary operational user. Their main navigation will expose Demand Forecast directly alongside Inventory Overview. The implemented experience will combine the accepted prototype directions: a Store overview for 7-, 14-, and 28-day exposure, a product workspace for investigation, and an action queue ordered by replenishment risk. The Administrator may review Store performance and request Forecast Generation. The Super Administrator alone may retrain, replace, or configure the model. Every recommendation remains decision support and requires human review.
