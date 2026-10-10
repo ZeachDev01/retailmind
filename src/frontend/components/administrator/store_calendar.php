@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     try {
         $date = trim($_POST['calendar_date'] ?? '');
+        $throughDate = trim($_POST['through_date'] ?? '');
         $status = trim($_POST['status'] ?? '');
         
         // Validate date
@@ -28,33 +29,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException("Invalid calendar date.");
         }
         
+        if ($throughDate !== '') {
+            try {
+                $formattedThrough = PhilippineTime::dayStart($throughDate);
+                $throughDate = substr($formattedThrough, 0, 10);
+            } catch (Throwable) {
+                throw new RuntimeException("Invalid through date.");
+            }
+        }
+        
         $status = StoreCalendar::normalizeStatus($status);
         if (!in_array($status, ['open', 'closed', 'holiday', 'exceptional_closure'], true)) {
             throw new RuntimeException("Invalid status provided.");
         }
         
-        $cutoff = date('Y-m-d H:i:s');
-        $previousStatus = $calendar->getCalendarDateStatusAtCutoff($pdo, $date, $cutoff);
-        
         $pdo->beginTransaction();
         try {
-            if ($previousStatus !== $status) {
-                $calendar->recordCalendarDate($pdo, $date, $status, (int)$_SESSION['user_id']);
-                log_activity(
-                    $pdo, 
-                    (int)$_SESSION['user_id'], 
-                    'Recorded Store calendar date', 
-                    'Store Settings', 
-                    null, 
-                    $previousStatus, 
-                    $status, 
-                    null, 
-                    null, 
-                    ['calendar_date' => $date]
-                );
+            if ($throughDate !== '' && $throughDate !== $date) {
+                // Range save
+                $changed = $calendar->recordCalendarRange($pdo, $date, $throughDate, $status, (int)$_SESSION['user_id']);
+                foreach ($changed as $item) {
+                    log_activity(
+                        $pdo, 
+                        (int)$_SESSION['user_id'], 
+                        'Recorded Store calendar date', 
+                        'Store Settings', 
+                        null, 
+                        $item['previous_status'], 
+                        $item['new_status'], 
+                        null, 
+                        null, 
+                        ['calendar_date' => $item['date']]
+                    );
+                }
+                $count = count($changed);
+                $message = "Store calendar status recorded for {$count} changed date(s) from {$date} through {$throughDate}.";
+            } else {
+                // Single date save
+                $cutoff = date('Y-m-d H:i:s');
+                $previousStatus = $calendar->getCalendarDateStatusAtCutoff($pdo, $date, $cutoff);
+                if ($previousStatus !== $status) {
+                    $calendar->recordCalendarDate($pdo, $date, $status, (int)$_SESSION['user_id']);
+                    log_activity(
+                        $pdo, 
+                        (int)$_SESSION['user_id'], 
+                        'Recorded Store calendar date', 
+                        'Store Settings', 
+                        null, 
+                        $previousStatus, 
+                        $status, 
+                        null, 
+                        null, 
+                        ['calendar_date' => $date]
+                    );
+                }
+                $message = "Store calendar status recorded for {$date}.";
             }
             $pdo->commit();
-            $message = "Store calendar status recorded for {$date}.";
             $messageClass = 'tag-success';
         } catch (Throwable $e) {
             $pdo->rollBack();
@@ -268,8 +299,13 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <?= csrf_field() ?>
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="calendar_date">Selected Date</label>
-                        <input id="calendar_date" type="date" name="calendar_date" required value="<?= htmlspecialchars($today) ?>">
+                        <label for="calendar_date">Selected Date (Start)</label>
+                        <input id="calendar_date" type="date" name="calendar_date" required value="<?= htmlspecialchars($_POST['calendar_date'] ?? $today) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="through_date">Through Date <span style="font-weight:normal; color:var(--text-muted, #64748b);">(Optional Range)</span></label>
+                        <input id="through_date" type="date" name="through_date" value="<?= htmlspecialchars($_POST['through_date'] ?? '') ?>">
+                        <small class="form-hint" id="range-preview-hint" style="display:block; margin-top:0.25rem; font-size:0.8rem; color:var(--text-muted, #64748b);">Leave empty to update only the selected date.</small>
                     </div>
                     <div class="form-group">
                         <label for="status">Trading Status</label>
@@ -290,8 +326,43 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dateInput = document.getElementById('calendar_date');
+    const throughDateInput = document.getElementById('through_date');
     const statusSelect = document.getElementById('status');
+    const hint = document.getElementById('range-preview-hint');
     const dayCells = document.querySelectorAll('.calendar-day-cell:not(.is-empty)');
+
+    function updateRangeHint() {
+        const start = dateInput.value;
+        const end = throughDateInput.value;
+        const statusText = statusSelect.options[statusSelect.selectedIndex]?.text || '';
+
+        if (!end || end === start) {
+            hint.textContent = "Updating single date: " + start + " to " + statusText + ".";
+            hint.style.color = "var(--text-muted, #64748b)";
+            return;
+        }
+
+        const d1 = new Date(start);
+        const d2 = new Date(end);
+
+        if (d2 < d1) {
+            hint.textContent = "Warning: Through date cannot be before start date.";
+            hint.style.color = "#dc2626";
+            return;
+        }
+
+        const diffTime = Math.abs(d2 - d1);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+        if (diffDays > 366) {
+            hint.textContent = "Warning: Range exceeds maximum limit of 366 days (" + diffDays + " days requested).";
+            hint.style.color = "#dc2626";
+            return;
+        }
+
+        hint.textContent = "Applying '" + statusText + "' across " + diffDays + " inclusive days (from " + start + " through " + end + ").";
+        hint.style.color = "#15803d";
+    }
 
     function selectDateCell(cell) {
         dayCells.forEach(c => c.classList.remove('selected-day'));
@@ -309,6 +380,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             statusSelect.value = 'open';
         }
+        updateRangeHint();
     }
 
     dayCells.forEach(cell => {
@@ -327,6 +399,11 @@ document.addEventListener('DOMContentLoaded', function() {
             cell.classList.add('selected-day');
         }
     });
+
+    dateInput.addEventListener('change', updateRangeHint);
+    throughDateInput.addEventListener('change', updateRangeHint);
+    statusSelect.addEventListener('change', updateRangeHint);
+    updateRangeHint();
 });
 </script>
 </body>
