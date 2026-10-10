@@ -17,6 +17,17 @@ class ReplenishmentQueueService
 
     public function getQueue(int $jobId, ?string $asOfDate = null): array
     {
+        // Check observation mode and recommendation suspension status
+        $isObservationMode = false;
+        $isSuspended = false;
+        try {
+            $evalService = new CandidateEvaluationService($this->pdo);
+            $isObservationMode = $evalService->isObservationMode();
+            $isSuspended = $evalService->isRecommendationsSuspended();
+        } catch (Throwable $e) {
+            // Degrade gracefully
+        }
+
         // 1. Fetch inbound purchase orders
         $inboundItems = [];
         try {
@@ -200,6 +211,12 @@ class ReplenishmentQueueService
                 }
             }
 
+            if ($isObservationMode) {
+                $explanation .= " (Observation Mode: recommendations are non-binding observation telemetry only).";
+            } elseif ($isSuspended) {
+                $explanation .= " (Recommendations Suspended by Administrator).";
+            }
+
             $queue[] = [
                 'product_id' => $productId,
                 'sku' => $row['sku'],
@@ -219,7 +236,10 @@ class ReplenishmentQueueService
                 'stock_exposure' => $exposure,
                 'urgency_label' => $urgency,
                 'recommended_quantity' => $recommendedQty,
-                'explanation' => $explanation
+                'explanation' => $explanation,
+                'is_observation_mode' => $isObservationMode,
+                'is_recommendations_suspended' => $isSuspended,
+                'recommendations_active' => (!$isObservationMode && !$isSuspended)
             ];
         }
 

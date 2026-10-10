@@ -6,6 +6,7 @@ namespace App\Forecasting;
 use PDO;
 use RuntimeException;
 use InvalidArgumentException;
+use Throwable;
 
 class ModelPromotionService
 {
@@ -31,6 +32,16 @@ class ModelPromotionService
             }
         }
 
+        // Quality gate check if thresholds configured
+        $thresholds = $this->evaluationService->getThresholds();
+        $hasThresholds = ($thresholds['7'] !== null || $thresholds['14'] !== null || $thresholds['28'] !== null);
+        if ($hasThresholds) {
+            $gateResult = $this->evaluationService->evaluateCandidateQuality($modelVersion);
+            if (!$gateResult['passed']) {
+                throw new InvalidArgumentException("Candidate $modelVersion failed quality gate: " . $gateResult['reason']);
+            }
+        }
+
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'");
@@ -50,10 +61,12 @@ class ModelPromotionService
             // Promote new
             $this->setSetting('ml_approved_model_version', $modelVersion, $superAdminId);
 
-            log_activity($this->pdo, $superAdminId, 'Promote Forecasting Model', 'Platform Settings', null, $current ?: null, $modelVersion);
+            if (function_exists('log_activity')) {
+                log_activity($this->pdo, $superAdminId, 'Promote Forecasting Model', 'Platform Settings', null, $current ?: null, $modelVersion);
+            }
 
             $this->pdo->commit();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
@@ -78,13 +91,93 @@ class ModelPromotionService
             // Clear previous
             $this->setSetting('ml_previous_approved_model_version', '', $superAdminId);
 
-            log_activity($this->pdo, $superAdminId, 'Rollback Forecasting Model', 'Platform Settings', null, $current ?: null, $previous);
+            if (function_exists('log_activity')) {
+                log_activity($this->pdo, $superAdminId, 'Rollback Forecasting Model', 'Platform Settings', null, $current ?: null, $previous);
+            }
 
             $this->pdo->commit();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Records Super Administrator technical evidence review.
+     */
+    public function recordTechnicalReview(string $modelVersion, string $decision, string $notes, int $superAdminId): void
+    {
+        $data = json_encode([
+            'model_version' => $modelVersion,
+            'decision' => $decision, // 'accepted' | 'rejected'
+            'notes' => $notes,
+            'reviewed_by' => $superAdminId,
+            'reviewed_at' => date('Y-m-d H:i:s')
+        ], JSON_THROW_ON_ERROR);
+
+        $this->setSetting("ml_review_technical_{$modelVersion}", $data, $superAdminId);
+
+        if (function_exists('log_activity')) {
+            log_activity($this->pdo, $superAdminId, 'Technical Evaluation Review', 'Forecasting', null, null, [
+                'model_version' => $modelVersion,
+                'decision' => $decision,
+                'notes' => $notes
+            ]);
+        }
+    }
+
+    /**
+     * Records Administrator operational usefulness review.
+     */
+    public function recordOperationalReview(string $modelVersion, string $decision, string $notes, int $adminId): void
+    {
+        $data = json_encode([
+            'model_version' => $modelVersion,
+            'decision' => $decision, // 'accepted' | 'rejected'
+            'notes' => $notes,
+            'reviewed_by' => $adminId,
+            'reviewed_at' => date('Y-m-d H:i:s')
+        ], JSON_THROW_ON_ERROR);
+
+        $this->setSetting("ml_review_operational_{$modelVersion}", $data, $adminId);
+
+        if (function_exists('log_activity')) {
+            log_activity($this->pdo, $adminId, 'Operational Usefulness Review', 'Forecasting', null, null, [
+                'model_version' => $modelVersion,
+                'decision' => $decision,
+                'notes' => $notes
+            ]);
+        }
+    }
+
+    /**
+     * Retrieves technical and operational review statuses for a model version.
+     */
+    public function getReviewStatus(string $modelVersion): array
+    {
+        $tech = null;
+        $op = null;
+
+        try {
+            $stmt = $this->pdo->prepare("SELECT setting_value FROM platform_settings WHERE setting_key = ?");
+            $stmt->execute(["ml_review_technical_{$modelVersion}"]);
+            $techRaw = $stmt->fetchColumn();
+            if ($techRaw) {
+                $tech = json_decode($techRaw, true);
+            }
+
+            $stmt->execute(["ml_review_operational_{$modelVersion}"]);
+            $opRaw = $stmt->fetchColumn();
+            if ($opRaw) {
+                $op = json_decode($opRaw, true);
+            }
+        } catch (Throwable $e) {}
+
+        return [
+            'technical_review' => $tech,
+            'operational_review' => $op,
+            'both_accepted' => (($tech['decision'] ?? '') === 'accepted' && ($op['decision'] ?? '') === 'accepted')
+        ];
     }
 
     private function setSetting(string $key, string $value, int $updatedBy): void
