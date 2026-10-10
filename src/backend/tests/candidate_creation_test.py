@@ -14,6 +14,8 @@ def assert_contract():
     conn = ml_worker.get_db_connection()
     try:
         with conn.cursor() as cursor:
+            context = ml_worker.dataset_context(cursor)
+            assert context['dataset_kind'] == 'demo', 'Run this test only against an imported isolated Demo database'
             # Setup: ensure ml_jobs table has a model_retraining job
             cursor.execute("DELETE FROM ml_jobs")
             cursor.execute("""
@@ -47,7 +49,7 @@ def assert_contract():
             model_name = run['model_name']
             model_version = run['model_version']
             
-            artifact_path = Path(__file__).resolve().parents[1] / "storage" / "ml_models" / f"{model_name}_{model_version}.joblib"
+            artifact_path = ml_worker.artifact_directory(context) / f"{model_name}_{model_version}.joblib"
             assert artifact_path.exists(), f"Candidate artifact missing at {artifact_path}"
             
             # Additional checks: K-means and ARIMA never enter this path.

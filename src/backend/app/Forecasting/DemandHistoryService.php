@@ -163,6 +163,54 @@ class DemandHistoryService
         return $results;
     }
 
+    /** Versioned daily evidence makes corrections available only to later forecast origins. */
+    public function getObservedHistory(PDO $pdo, string $throughDate): array
+    {
+        $corrections = $pdo->prepare("SELECT si.product_id, DATE(s.sale_date) AS date, DATE(cr.created_at) AS available_date
+            FROM cash_refund_items cri JOIN cash_refunds cr ON cr.refund_id = cri.refund_id
+            JOIN sale_items si ON si.sale_item_id = cri.sale_item_id JOIN sales s ON s.sale_id = si.sale_id
+            WHERE cr.created_at <= ? AND DATE(cr.created_at) > DATE(s.sale_date)
+            UNION
+            SELECT si.product_id, DATE(s.sale_date), DATE(sr.approved_at)
+            FROM sale_reversal_items sri JOIN sale_reversals sr ON sr.reversal_id = sri.reversal_id
+            JOIN sale_items si ON si.sale_item_id = sri.sale_item_id JOIN sales s ON s.sale_id = si.sale_id
+            WHERE sr.status = 'approved' AND sr.approved_at <= ? AND DATE(sr.approved_at) > DATE(s.sale_date)");
+        $corrections->execute([$throughDate . ' 23:59:59', $throughDate . ' 23:59:59']);
+        $revisions = [];
+        foreach ($corrections->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $revisions[$row['product_id']][$row['date']][] = $row['available_date'];
+        }
+        $calendar = $pdo->prepare('SELECT calendar_date, DATE(recorded_at) AS available_date FROM store_calendar
+            WHERE recorded_at <= ? AND DATE(recorded_at) > calendar_date');
+        $calendar->execute([$throughDate . ' 23:59:59']);
+        $calendarRevisions = [];
+        foreach ($calendar->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $calendarRevisions[$row['calendar_date']][] = $row['available_date'];
+        }
+        $stmt = $pdo->prepare('SELECT si.product_id, MIN(DATE(s.sale_date)) AS first_date
+            FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+            WHERE s.sale_date <= ? GROUP BY si.product_id ORDER BY si.product_id');
+        $stmt->execute([$throughDate . ' 23:59:59']);
+        $history = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $product) {
+            $day = new DateTime($product['first_date'], $this->timezone);
+            $end = new DateTime($throughDate, $this->timezone);
+            while ($day <= $end) {
+                $date = $day->format('Y-m-d');
+                $cutoffs = array_unique(array_merge([$date], $revisions[$product['product_id']][$date] ?? [], $calendarRevisions[$date] ?? []));
+                sort($cutoffs);
+                foreach ($cutoffs as $cutoff) {
+                    $evidence = $this->getDailyEvidence($pdo, (int)$product['product_id'], $date, $date, $cutoff . ' 23:59:59')[0];
+                    $known = in_array($evidence['classification'], ['valid_demand', 'genuine_zero'], true);
+                    $history[] = ['date' => $date, 'product_id' => (int)$product['product_id'],
+                        'units_sold' => $known ? $evidence['valid_sales_units'] : null, 'available_date' => $cutoff];
+                }
+                $day->modify('+1 day');
+            }
+        }
+        return $history;
+    }
+
     /**
      * Summarizes demand history readiness according to ADR-0005.
      */

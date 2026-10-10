@@ -37,8 +37,11 @@ final class Environment
             }
 
             $value = self::normalizeValue($value);
-            if (getenv($key) === false) {
+            $existing = getenv($key);
+            if ($existing === false) {
                 putenv($key . '=' . $value);
+            } else {
+                $value = $existing;
             }
 
             $_ENV[$key] = $value;

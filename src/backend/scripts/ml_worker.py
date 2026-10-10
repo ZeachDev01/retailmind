@@ -2,10 +2,14 @@ import os
 import sys
 import argparse
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 import uuid
+import hashlib
+import re
+import subprocess
+import pandas as pd
 import joblib
 import numpy as np
 
@@ -14,7 +18,8 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from ml_evaluation import calculate_metrics, seasonal_naive_forecast
+from feature_pipeline import (FEATURE_COLUMNS, FEATURE_VERSION, build_feature_matrix,
+                              history_at, normalize_history, train_and_evaluate)
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 STORAGE_MODELS_DIR = ROOT_DIR / "src" / "backend" / "storage" / "ml_models"
@@ -23,7 +28,7 @@ def get_connection():
     try:
         import pymysql
         import pymysql.cursors
-        return pymysql.connect(
+        connection = pymysql.connect(
             host=os.getenv("DB_HOST", "127.0.0.1"),
             port=int(os.getenv("DB_PORT", "3306")),
             user=os.getenv("DB_USER", "root"),
@@ -35,7 +40,7 @@ def get_connection():
         )
     except ImportError:
         import mysql.connector
-        return mysql.connector.connect(
+        connection = mysql.connector.connect(
             host=os.getenv("DB_HOST", "127.0.0.1"),
             port=int(os.getenv("DB_PORT", "3306")),
             user=os.getenv("DB_USER", "root"),
@@ -44,6 +49,9 @@ def get_connection():
             charset=os.getenv("DB_CHARSET", "utf8mb4"),
             autocommit=False,
         )
+    with connection.cursor() as cursor:
+        cursor.execute("SET time_zone = '+08:00'")
+    return connection
 
 get_db_connection = get_connection
 
@@ -99,12 +107,13 @@ def claim_job(conn):
 def process_job(conn, job):
     job_id = job['job_id']
     trigger = job['trigger_type']
+    artifact_file = None
     with conn.cursor() as cursor:
         try:
             if trigger == 'forecast_generation':
                 run_forecast_generation(conn, cursor, job_id)
             elif trigger == 'model_retraining':
-                run_model_retraining(conn, cursor, job_id)
+                artifact_file = run_model_retraining(conn, cursor, job_id)
             else:
                 raise ValueError(f"Unknown job trigger type: {trigger}")
 
@@ -118,6 +127,8 @@ def process_job(conn, job):
             conn.commit()
         except Exception as e:
             conn.rollback()
+            if artifact_file is not None:
+                artifact_file.unlink(missing_ok=True)
             diag_ref = f"ERR-{uuid.uuid4().hex[:8]}"
             err_msg = str(e)
             try:
@@ -143,216 +154,189 @@ def process_jobs():
     finally:
         conn.close()
 
-def run_forecast_generation(conn, cursor, job_id):
-    today = datetime.now().date()
-    STORAGE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+def dataset_context(cursor):
+    cursor.execute("SELECT DATABASE() AS database_name")
+    row = cursor.fetchone()
+    database = row['database_name'] if isinstance(row, dict) else row[0]
+    cursor.execute("SELECT setting_value FROM platform_settings WHERE setting_key = 'demo_import_metadata'")
+    row = cursor.fetchone()
+    imported = json.loads(row['setting_value'] if isinstance(row, dict) else row[0]) if row else None
+    isolated = any(marker in database.lower() for marker in ('demo', 'kaggle', 'test'))
+    if imported is not None:
+        if not isolated or os.getenv('APP_ENV', '').lower() in ('production', 'live', 'infinityfree'):
+            raise ValueError("Demo evidence requires an isolated non-operational database")
+        if imported.get('store_id') != 'S001' or imported.get('products_mapped') != 20:
+            raise ValueError("Demo selection must be S001 and all 20 products")
+    elif any(marker in database.lower() for marker in ('demo', 'kaggle')):
+        raise ValueError("Demo database has no imported demand provenance")
+    return {
+        'dataset_kind': 'demo' if imported is not None else 'store',
+        'dataset_database': database,
+        'dataset_host': os.getenv('DB_HOST', '127.0.0.1'),
+        'dataset_port': os.getenv('DB_PORT', '3306'),
+        'source': imported,
+        'history_cutoff': imported['date_window'][1] if imported else
+                          str(datetime.now(timezone(timedelta(hours=8))).date() - timedelta(days=1)),
+    }
 
-    # 1. Resolve approved model artifact from settings
+
+def artifact_directory(context):
+    identity = ':'.join(str(context[k]) for k in ('dataset_host', 'dataset_port', 'dataset_database'))
+    return STORAGE_MODELS_DIR / context['dataset_kind'] / hashlib.sha256(identity.encode()).hexdigest()[:16]
+
+
+def load_history(cursor, context):
+    if context['dataset_kind'] == 'demo':
+        cursor.execute("""
+            SELECT DATE(s.sale_date) AS date, si.product_id, SUM(si.quantity) AS units_sold
+            FROM sales s JOIN sale_items si ON si.sale_id = s.sale_id
+            JOIN products p ON p.product_id = si.product_id
+            WHERE s.cashier_id = 999 AND si.product_id BETWEEN 1 AND 20
+            GROUP BY DATE(s.sale_date), si.product_id
+            ORDER BY si.product_id, date
+        """)
+        rows = cursor.fetchall()
+        data = normalize_history(pd.DataFrame(rows, columns=['date', 'product_id', 'units_sold']))
+        source = context['source']
+        if set(data.product_id) != set(range(1, 21)) or len(data) != source.get('total_records'):
+            raise ValueError("Imported Demo history does not match its recorded product/row coverage")
+        if [str(data.date.min().date()), str(data.date.max().date())] != source.get('date_window'):
+            raise ValueError("Imported Demo history does not match its recorded date window")
+    else:
+        # Reuse Store calendar, stockout, and reversal rules; no guessed zero days.
+        environment = os.environ.copy()
+        environment.update({
+            'DATABASE_ENV': 'local', 'DB_NAME': context['dataset_database'],
+            'DB_HOST': context['dataset_host'], 'DB_PORT': context['dataset_port'],
+            'DB_USER': os.getenv('DB_USER', 'root'),
+            'DB_PASSWORD': os.getenv('DB_PASSWORD', os.getenv('DB_PASS', '')),
+        })
+        result = subprocess.run(
+            ['php', str(SCRIPTS_DIR / 'export_demand_history.php'), context['dataset_database'], context['history_cutoff']],
+            env=environment, capture_output=True, text=True, check=True,
+        )
+        data = normalize_history(pd.DataFrame(json.loads(result.stdout),
+                                             columns=['date', 'product_id', 'units_sold', 'available_date']))
+    return data
+
+
+def run_forecast_generation(conn, cursor, job_id):
+    context = dataset_context(cursor)
     cursor.execute("""
-        SELECT setting_value 
-        FROM platform_settings 
-        WHERE setting_key IN ('ml_approved_model_version', 'approved_forecasting_model') 
+        SELECT setting_value FROM platform_settings
+        WHERE setting_key IN ('ml_approved_model_version', 'approved_forecasting_model')
           AND setting_value IS NOT NULL AND setting_value != ''
-        ORDER BY CASE WHEN setting_key = 'ml_approved_model_version' THEN 1 ELSE 2 END
-        LIMIT 1
+        ORDER BY CASE WHEN setting_key = 'ml_approved_model_version' THEN 1 ELSE 2 END LIMIT 1
     """)
     row = cursor.fetchone()
-    model_version = None
-    if row:
-        model_version = row['setting_value'] if isinstance(row, dict) else row[0]
+    version = (row['setting_value'] if isinstance(row, dict) else row[0]) if row else None
+    if not version and context['dataset_kind'] == 'demo':
+        cursor.execute("""SELECT model_version FROM model_training_runs
+            WHERE model_version LIKE 'demo_%' AND status = 'completed'
+            ORDER BY completed_at DESC LIMIT 1""")
+        row = cursor.fetchone()
+        version = (row['model_version'] if isinstance(row, dict) else row[0]) if row else None
+    if not version or not re.fullmatch(r'[A-Za-z0-9_-]{1,50}', version):
+        raise ValueError("No approved forecasting model version configured")
+    is_demo = 'demo' in version.lower() or 'kaggle' in version.lower()
+    if is_demo != (context['dataset_kind'] == 'demo'):
+        raise ValueError("Demo/Store model artifacts cannot cross dataset boundaries")
+    artifact = joblib.load(artifact_directory(context) / f"random_forest_candidate_{version}.joblib")
+    meta = artifact['metadata']
+    for key in ('dataset_kind', 'dataset_database', 'dataset_host', 'dataset_port'):
+        if meta.get(key) != context[key]:
+            raise ValueError("Model artifact belongs to another dataset")
+    if meta.get('feature_version') != FEATURE_VERSION or meta.get('features') != FEATURE_COLUMNS:
+        raise ValueError("Model feature contract is obsolete; retraining is required")
+    if meta.get('model_version') != version:
+        raise ValueError("Model artifact version does not match the selected candidate")
+    data = load_history(cursor, context)
+    origin = data.date.max() if is_demo else pd.Timestamp(context['history_cutoff'])
+    features = build_feature_matrix(data, origin)
+    predictions = artifact['model'].predict(features[FEATURE_COLUMNS])
+    if not np.isfinite(predictions).all():
+        raise ValueError("Model produced non-finite forecasts")
+    counts = history_at(data, origin).groupby('product_id').date.nunique()
+    for row, predicted in zip(features.itertuples(), predictions):
+        days = int(counts[row.product_id])
+        readiness = 'Insufficient' if days < 56 else 'Low' if days < 180 else 'Medium'
+        limitation = 'Observed history only; calendar/stockout limitations apply'
+        if days >= 365 and meta.get('outcome') == 'passed':
+            readiness = 'High'
+        if is_demo:
+            limitation = 'Demo evidence; source authenticity unverified; not Store accuracy'
+        cursor.execute("""
+            INSERT INTO demand_forecasts
+            (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units,
+             model_version, readiness_level, limitation_marker)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (job_id, row.product_id, str(origin.date()), str(row.target_date.date()),
+              row.horizon_day, max(0, int(round(float(predicted)))), version, readiness, limitation))
 
-    if model_version and ('demo' in str(model_version).lower() or 'kaggle' in str(model_version).lower()):
-        raise RuntimeError(f"Refusing to load demo/kaggle model '{model_version}' for Store forecasting inference. Demo artifacts are strictly isolated from Store operations.")
-
-    if not model_version:
-        # Check if there is an approved candidate recorded (excluding demo models)
-        cursor.execute("SELECT model_version FROM ml_model_evaluations WHERE candidate_gate_outcome = 'passed' AND model_version NOT LIKE '%demo%' AND model_version NOT LIKE '%kaggle%' ORDER BY created_at DESC LIMIT 1")
-        cand = cursor.fetchone()
-        if cand:
-            model_version = cand['model_version'] if isinstance(cand, dict) else cand[0]
-        else:
-            raise RuntimeError("No approved Store forecasting model version configured. Please train and activate a Store candidate first.")
-
-    target_artifact = None
-    potential = list(STORAGE_MODELS_DIR.glob(f"*{model_version}*.joblib"))
-    if potential:
-        target_artifact = potential[0]
-
-    if not target_artifact or not target_artifact.exists():
-        raise RuntimeError(f"Approved model artifact for version '{model_version}' not found or inaccessible in {STORAGE_MODELS_DIR}. Inference cannot proceed.")
-
-    artifact = joblib.load(target_artifact)
-    model = artifact.get('model')
-    if not model:
-        raise RuntimeError(f"Corrupt model artifact for '{model_version}': 'model' object is missing.")
-
-    artifact_version = artifact.get('metadata', {}).get('model_version', model_version)
-
-    # 2. Calculate Forecast Readiness from actual sales history
-    cursor.execute("SELECT COUNT(DISTINCT DATE(sale_date)) FROM sales")
-    day_row = cursor.fetchone()
-    history_days = 0
-    if day_row:
-        history_days = day_row['COUNT(DISTINCT DATE(sale_date))'] if isinstance(day_row, dict) else day_row[0]
-
-    if history_days < 56:
-        readiness_level = 'Insufficient'
-        limitation_marker = 'Usable history under 56 days (minimum required for reliable forecasting)'
-    elif history_days < 180:
-        readiness_level = 'Low'
-        limitation_marker = 'Early history (56-179 days)'
-    elif history_days < 365:
-        readiness_level = 'Medium'
-        limitation_marker = 'Standard history (180-364 days)'
-    else:
-        # Check if validation passed
-        cursor.execute("SELECT candidate_gate_outcome FROM ml_model_evaluations WHERE model_version = %s AND candidate_gate_outcome = 'passed' LIMIT 1", (model_version,))
-        val_pass = cursor.fetchone() is not None
-        if val_pass:
-            readiness_level = 'High'
-            limitation_marker = None
-        else:
-            readiness_level = 'Medium'
-            limitation_marker = 'History 365+ days but validation quality gate not satisfied for High readiness'
-
-    # 3. Query product catalog
-    cursor.execute("SELECT product_id, unit_price FROM products LIMIT 50")
-    products = cursor.fetchall()
-    if not products:
-        cursor.execute("SELECT id as product_id, price as unit_price FROM products LIMIT 50")
-        products = cursor.fetchall()
-
-    if not products:
-        raise RuntimeError("No products found in catalog for forecast generation.")
-
-    # 4. Generate forecasts for exactly 28 days per eligible product
-    for p in products:
-        if isinstance(p, dict):
-            p_id = p['product_id']
-            price = float(p.get('unit_price') or 20.0)
-        else:
-            p_id = p[0]
-            price = float(p[1] or 20.0)
-
-        lag_1 = 10.0
-        X = np.array([[p_id, day, lag_1, price] for day in range(1, 29)])
-        try:
-            preds = model.predict(X)
-        except Exception:
-            preds = np.array([10.0] * 28)
-
-        for i, pred in enumerate(preds):
-            target_date = today + timedelta(days=i + 1)
-            predicted_units = max(0, int(round(float(pred))))
-            cursor.execute("""
-                INSERT INTO demand_forecasts 
-                (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level, limitation_marker) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (job_id, p_id, today, target_date, i + 1, predicted_units, artifact_version, readiness_level, limitation_marker))
-
-    conn.commit()
 
 def run_model_retraining(conn, cursor, job_id):
-    from sklearn.ensemble import RandomForestRegressor
-    STORAGE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    model_name = "random_forest_candidate"
-    model_version = f"v{timestamp}_{uuid.uuid4().hex[:6]}"
-
-    # Query thresholds from platform_settings / ml_settings
-    thresholds = {'7': 0.35, '14': 0.40, '28': 0.45}
-    try:
-        cursor.execute("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key LIKE 'ml_max_wape_%'")
-        rows = cursor.fetchall()
-        for r in rows:
-            k = r['setting_key'] if isinstance(r, dict) else r[0]
-            v = r['setting_value'] if isinstance(r, dict) else r[1]
-            if k == 'ml_max_wape_7d': thresholds['7'] = float(v)
-            elif k == 'ml_max_wape_14d': thresholds['14'] = float(v)
-            elif k == 'ml_max_wape_28d': thresholds['28'] = float(v)
-    except Exception:
-        pass
-
-    # Fit Random Forest on horizon-conditioned product rows (1 to 28 days)
-    # Feature contract: [product_id, horizon_day, lag_1, price]
-    X_train = []
-    y_train = []
-    for pid in range(1, 21):
-        for h in range(1, 29):
-            lag = float(5 + (pid * 2) % 20)
-            price = float(10 + (pid * 3) % 50)
-            target = max(0.0, lag + float(h % 5) - 2.0)
-            X_train.append([pid, h, lag, price])
-            y_train.append(target)
-
-    X_train = np.array(X_train)
-    y_train = np.array(y_train)
-
-    rf = RandomForestRegressor(n_estimators=15, max_depth=8, random_state=42)
-    rf.fit(X_train, y_train)
-
-    artifact_file = STORAGE_MODELS_DIR / f"{model_name}_{model_version}.joblib"
-    artifact_data = {
-        'model': rf,
-        'metadata': {
-            'model_name': model_name,
-            'model_version': model_version,
-            'feature_version': '1.0.0',
-            'features': ['product_id', 'horizon_day', 'lag_1', 'unit_price'],
-            'training_window_start': (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d'),
-            'training_window_end': datetime.now().strftime('%Y-%m-%d'),
-            'created_at': datetime.now().isoformat(),
-            'parameters': {'n_estimators': 15, 'max_depth': 8, 'random_state': 42}
-        }
-    }
-    joblib.dump(artifact_data, artifact_file)
-
-    # Chronological evaluation for 7, 14, 28-day horizons
-    overall_outcome = 'passed'
-    for horizon in [7, 14, 28]:
-        y_test = np.array([max(0.0, 10.0 + (d % 3)) for d in range(horizon)])
-        y_pred = rf.predict(np.array([[1, d + 1, 10.0, 25.0] for d in range(horizon)]))
-        metrics = calculate_metrics(y_test, y_pred)
-
-        history_sample = np.array([10.0] * 14)
-        baseline = seasonal_naive_forecast(history_sample, horizon, season_length=7)
-        baseline_metrics = calculate_metrics(y_test, baseline)
-
-        max_allowed_wape = thresholds.get(str(horizon), 0.40)
-        outcome = 'passed'
-        if metrics['wape'] is not None and metrics['wape'] > max_allowed_wape:
-            outcome = 'failed'
-            overall_outcome = 'failed'
-
-        try:
-            cursor.execute("""
-                INSERT INTO ml_model_evaluations 
-                (model_version, horizon_days, mae, rmse, wape, baseline_mae, baseline_rmse, baseline_wape, candidate_gate_outcome, data_window_start, data_window_end, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            """, (
-                model_version, horizon,
-                metrics['mae'], metrics['rmse'], metrics['wape'],
-                baseline_metrics['mae'], baseline_metrics['rmse'], baseline_metrics['wape'],
-                outcome,
-                (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d'),
-                datetime.now().strftime('%Y-%m-%d')
-            ))
-        except Exception as eval_err:
-            print(f"Notice: ml_model_evaluations insert: {eval_err}")
-
-    # Record in model_training_runs
-    metrics_summary = json.dumps({'model_version': model_version, 'outcome': overall_outcome})
-    try:
+    context = dataset_context(cursor)
+    data = load_history(cursor, context)
+    artifact = train_and_evaluate(data)
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    prefix = 'demo_' if context['dataset_kind'] == 'demo' else 'v'
+    version = f"{prefix}{timestamp}_{uuid.uuid4().hex[:6]}"
+    model_name = 'random_forest_candidate'
+    cursor.execute("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key LIKE 'ml_max_wape_%'")
+    thresholds = {}
+    for row in cursor.fetchall():
+        key, value = (row['setting_key'], row['setting_value']) if isinstance(row, dict) else row
+        threshold = float(value)
+        if not np.isfinite(threshold) or threshold < 0:
+            raise ValueError("Invalid forecasting quality threshold")
+        thresholds[key] = threshold
+    meta = artifact['metadata']
+    outcomes = []
+    for horizon, metrics in artifact['evaluations'].items():
+        threshold = thresholds.get(f'ml_max_wape_{horizon}d')
+        wape, baseline = metrics['wape'], metrics['baseline_wape']
+        if threshold is None or wape is None or baseline is None:
+            outcome = 'incomplete'
+        else:
+            outcome = 'passed' if wape <= threshold and wape < baseline else 'failed'
+        outcomes.append(outcome)
+        metrics['candidate_gate_outcome'] = outcome
         cursor.execute("""
-            INSERT INTO model_training_runs 
-            (model_name, model_version, trigger_type, status, metrics_json, started_at, completed_at)
-            VALUES (%s, %s, 'cli', 'completed', %s, NOW(), NOW())
-        """, (model_name, model_version, metrics_summary))
-    except Exception as run_err:
-        print(f"Notice: model_training_runs insert: {run_err}")
-
-    conn.commit()
+            INSERT INTO ml_model_evaluations
+            (model_version, horizon_days, mae, rmse, wape, baseline_mae, baseline_rmse,
+             baseline_wape, candidate_gate_outcome, missing_metric_reason,
+             data_window_start, data_window_end, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """, (version, horizon, metrics['mae'], metrics['rmse'], wape,
+              metrics['baseline_mae'], metrics['baseline_rmse'], baseline, outcome,
+              metrics['missing_metric_reason'], meta['data_window_start'], meta['data_window_end']))
+    meta.update(context)
+    meta.update({
+        'model_name': model_name, 'model_version': version, 'job_id': job_id,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'outcome': 'passed' if all(o == 'passed' for o in outcomes) else
+                   'incomplete' if 'incomplete' in outcomes else 'failed',
+        'evidence_label': 'Demo evidence; provenance unverified' if context['dataset_kind'] == 'demo'
+                          else 'Store evidence known at each completed-day cutoff',
+    })
+    cursor.execute("""
+        INSERT INTO model_training_runs
+        (model_name, model_version, trigger_type, status, metrics_json,
+         sales_records_used, eligible_products, started_at, completed_at)
+        VALUES (%s, %s, 'cli', 'completed', %s, %s, %s, NOW(), NOW())
+    """, (model_name, version, json.dumps({'metadata': meta, 'evaluations': artifact['evaluations'],
+                                          'model_version': version, 'outcome': meta['outcome']}),
+          meta['observations'], len(meta['products'])))
+    directory = artifact_directory(context)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f'{model_name}_{version}.joblib'
+    temporary = path.with_suffix('.tmp')
+    try:
+        joblib.dump(artifact, temporary)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RetailMind ML Queue Worker")

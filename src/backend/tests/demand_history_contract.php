@@ -219,6 +219,18 @@ try {
     $assert($summary['excluded_days']['stockout_censored'] === 1, "Excluded stockout censored days: 1");
     $assert($summary['excluded_days']['missing_evidence'] === 1, "Excluded missing evidence days: 1");
 
+    // Daily-close observations must not absorb later corrections during backtests.
+    $pdo->exec("INSERT INTO cash_refunds (refund_id, sale_id, created_at) VALUES (999, 101, '2026-10-05 12:00:00')");
+    $pdo->exec("INSERT INTO cash_refund_items (refund_id, sale_item_id, product_id, quantity) VALUES (999, 101, 1, 1)");
+    $observed = $service->getObservedHistory($pdo, '2026-10-04');
+    $oct4 = array_values(array_filter($observed, fn ($row) => $row['date'] === '2026-10-04' && $row['product_id'] === 1));
+    $assert(count($oct4) === 1 && $oct4[0]['units_sold'] === 2, 'Training retains demand known at daily close, excluding later refunds');
+    $revised = $service->getObservedHistory($pdo, '2026-10-05');
+    $knownRefund = array_values(array_filter($revised, fn ($row) => $row['date'] === '2026-10-04' && $row['available_date'] === '2026-10-05'));
+    $assert(count($knownRefund) === 1 && $knownRefund[0]['units_sold'] === 1, 'Later origins receive corrections once the refund is known');
+    $unknown = array_filter($observed, fn ($row) => $row['date'] === '2026-10-01');
+    $assert(count($unknown) === 0, 'Unknown calendar evidence does not become training demand');
+
     echo "\n========================================================\n";
     if (empty($failures)) {
         echo "PASS: All Demand History Contract Tests Passed (Ticket #161)\n";
@@ -232,6 +244,7 @@ try {
         echo "========================================================\n";
         exit(1);
     }
+
 } catch (Throwable $e) {
     echo "ERROR: " . $e->getMessage() . " at " . $e->getFile() . ":" . $e->getLine() . "\n";
     exit(1);
