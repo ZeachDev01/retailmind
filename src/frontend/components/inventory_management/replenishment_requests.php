@@ -14,13 +14,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $action = $_POST['action'] ?? '';
     try {
+        $forecastJobId = null;
+        if ($action === 'reject_forecast' || ($action === 'create' && ($_POST['source'] ?? '') === 'ml_forecast')) {
+            require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+            App\Store\StoreWriteGate::begin($pdo);
+            $forecastJobId = (int)($_POST['forecast_job_id'] ?? 0);
+            [$scopeSql, $scopeParams] = store_product_scope('p');
+            $forecastStmt = $pdo->prepare("SELECT df.forecast_id FROM demand_forecasts df
+                JOIN ml_jobs j ON j.job_id = df.job_id
+                JOIN products p ON p.product_id = df.product_id
+                WHERE df.job_id = ? AND df.product_id = ? AND j.trigger_type = 'forecast_generation'
+                  AND j.status = 'succeeded' AND p.status = 'active'{$scopeSql} LIMIT 1 FOR UPDATE");
+            $forecastStmt->execute(array_merge([$forecastJobId, (int)($_POST['product_id'] ?? 0)], $scopeParams));
+            if (!$forecastStmt->fetchColumn()) {
+                throw new RuntimeException('The forecast source is unavailable for this product. Refresh and try again.');
+            }
+        }
         if ($action === 'create') {
             require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
             $productId = (int)($_POST['product_id'] ?? 0);
             $requestQty = (int)($_POST['request_qty'] ?? 0);
             $notes = trim((string)($_POST['notes'] ?? ''));
             $source = ($_POST['source'] ?? '') === 'ml_forecast' ? 'ml_forecast' : 'manual';
-            $predictionId = $source === 'ml_forecast' ? (int)($_POST['forecast_prediction_id'] ?? 0) : 0;
             $originalQty = $source === 'ml_forecast' ? max(0, (int)($_POST['original_suggested_qty'] ?? 0)) : null;
             $overrideReason = trim((string)($_POST['override_reason'] ?? ''));
             if ($productId <= 0 || $requestQty <= 0) {
@@ -35,48 +50,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($source === 'ml_forecast' && $originalQty !== null && $requestQty !== $originalQty && $overrideReason === '') {
                 throw new RuntimeException('Explain why the forecast quantity was changed.');
             }
+            App\Store\StoreWriteGate::begin($pdo);
             $stmt = $pdo->prepare("INSERT INTO replenishment_requests
-                (product_id, request_qty, requested_by, source, forecast_prediction_id, original_suggested_qty, override_reason, notes)
+                (product_id, request_qty, requested_by, source, forecast_job_id, original_suggested_qty, override_reason, notes)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$productId, $requestQty, (int)$_SESSION['user_id'], $source, $predictionId ?: null, $originalQty, $overrideReason ?: null, $notes ?: null]);
+            $stmt->execute([$productId, $requestQty, (int)$_SESSION['user_id'], $source, $forecastJobId, $originalQty, $overrideReason ?: null, $notes ?: null]);
             $requestId = (int)$pdo->lastInsertId();
-            if ($source === 'ml_forecast' && $predictionId > 0) {
+            if ($source === 'ml_forecast') {
                 $decision = $requestQty === $originalQty ? 'accepted' : 'modified';
-                try {
-                    $pdo->prepare("INSERT INTO forecast_decisions
-                        (prediction_id, product_id, original_suggested_qty, final_quantity, decision, override_reason, decided_by, replenishment_request_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-                        ->execute([$predictionId, $productId, $originalQty, $requestQty, $decision, $overrideReason ?: null, (int)$_SESSION['user_id'], $requestId]);
-                } catch (Throwable $e) {
-                    // Suppress if FK constraint or table not present
-                }
+                $pdo->prepare("INSERT INTO forecast_decisions
+                    (forecast_job_id, product_id, original_suggested_qty, final_quantity, decision, override_reason, decided_by, replenishment_request_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                    ->execute([$forecastJobId, $productId, $originalQty, $requestQty, $decision, $overrideReason ?: null, (int)$_SESSION['user_id'], $requestId]);
             }
             log_activity($pdo, (int)$_SESSION['user_id'], 'Replenishment request creation', 'Replenishment', $requestId, null, [
                 'product_id' => $productId,
                 'request_qty' => $requestQty,
                 'source' => $source,
+                'forecast_job_id' => $forecastJobId,
                 'original_suggested_qty' => $originalQty,
                 'override_reason' => $overrideReason,
                 'status' => 'pending'
             ]);
+            $pdo->commit();
             $message = "Replenishment request #{$requestId} created successfully";
         } elseif ($action === 'reject_forecast') {
             require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
-            $predictionId = (int)($_POST['forecast_prediction_id'] ?? 0);
             $productId = (int)($_POST['product_id'] ?? 0);
             $originalQty = max(0, (int)($_POST['original_suggested_qty'] ?? 0));
             $reason = trim((string)($_POST['override_reason'] ?? ''));
-            if ($predictionId <= 0 || $productId <= 0 || $reason === '') {
+            if ($productId <= 0 || $reason === '') {
                 throw new RuntimeException('A reason is required to reject a forecast suggestion.');
             }
-            try {
-                $pdo->prepare("INSERT INTO forecast_decisions
-                    (prediction_id, product_id, original_suggested_qty, final_quantity, decision, override_reason, decided_by)
-                    VALUES (?, ?, ?, 0, 'rejected', ?, ?)")
-                    ->execute([$predictionId, $productId, $originalQty, $reason, (int)$_SESSION['user_id']]);
-            } catch (Throwable $e) {
-                // Suppress if FK constraint or table not present
-            }
+            $pdo->prepare("INSERT INTO forecast_decisions
+                (forecast_job_id, product_id, original_suggested_qty, final_quantity, decision, override_reason, decided_by)
+                VALUES (?, ?, ?, 0, 'rejected', ?, ?)")
+                ->execute([$forecastJobId, $productId, $originalQty, $reason, (int)$_SESSION['user_id']]);
+            $pdo->commit();
             $message = 'Forecast suggestion rejected and recorded.';
         } elseif (in_array($action, ['approve', 'reject'], true)) {
             if (!$isAdmin) {
@@ -323,7 +333,7 @@ $selectedQty = max(1, (int)($_GET['suggested_qty'] ?? 1));
                                         <input type="hidden" name="action" value="create">
                                         <input type="hidden" name="source" value="ml_forecast">
                                         <input type="hidden" name="product_id" value="<?= (int)$rec['product_id'] ?>">
-                                        <input type="hidden" name="forecast_prediction_id" value="<?= (int)$rec['product_id'] ?>">
+                                        <input type="hidden" name="forecast_job_id" value="<?= (int)$latestJobId ?>">
                                         <input type="hidden" name="original_suggested_qty" value="<?= (int)$rec['recommended_quantity'] ?>">
                                         <input type="hidden" name="notes" value="<?= htmlspecialchars("Forecast recommendation from {$activeModelVersion}: lead time {$rec['lead_time_days']}d, exposure " . ($rec['stock_exposure'] ?? 0)) ?>">
 
@@ -345,7 +355,7 @@ $selectedQty = max(1, (int)($_GET['suggested_qty'] ?? 1));
                                     <form class="u-flex-inline" method="POST" data-confirm="Dismiss this forecast recommendation?" data-confirm-title="Dismiss recommendation" data-confirm-button="Dismiss" data-confirm-danger="1">
                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                         <input type="hidden" name="action" value="reject_forecast">
-                                        <input type="hidden" name="forecast_prediction_id" value="<?= (int)$rec['product_id'] ?>">
+                                        <input type="hidden" name="forecast_job_id" value="<?= (int)$latestJobId ?>">
                                         <input type="hidden" name="product_id" value="<?= (int)$rec['product_id'] ?>">
                                         <input type="hidden" name="original_suggested_qty" value="<?= (int)$rec['recommended_quantity'] ?>">
                                         <input type="hidden" name="override_reason" value="Dismissed by operator during review">

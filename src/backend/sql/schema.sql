@@ -499,7 +499,8 @@ DROP TABLE IF EXISTS `forecast_decisions`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `forecast_decisions` (
   `forecast_decision_id` int(11) NOT NULL AUTO_INCREMENT,
-  `prediction_id` int(11) NOT NULL,
+  `prediction_id` int(11) DEFAULT NULL,
+  `forecast_job_id` bigint unsigned DEFAULT NULL,
   `product_id` int(11) NOT NULL,
   `original_suggested_qty` int(11) NOT NULL DEFAULT 0,
   `final_quantity` int(11) NOT NULL DEFAULT 0,
@@ -510,10 +511,12 @@ CREATE TABLE `forecast_decisions` (
   `replenishment_request_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`forecast_decision_id`),
   KEY `idx_forecast_decisions_prediction` (`prediction_id`),
+  KEY `fk_forecast_decisions_forecast_job` (`forecast_job_id`),
   KEY `product_id` (`product_id`),
   KEY `decided_by` (`decided_by`),
   KEY `replenishment_request_id` (`replenishment_request_id`),
   CONSTRAINT `forecast_decisions_ibfk_1` FOREIGN KEY (`prediction_id`) REFERENCES `stock_predictions` (`prediction_id`),
+  CONSTRAINT `fk_forecast_decisions_forecast_job` FOREIGN KEY (`forecast_job_id`) REFERENCES `ml_jobs` (`job_id`) ON DELETE RESTRICT,
   CONSTRAINT `forecast_decisions_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `forecast_decisions_ibfk_3` FOREIGN KEY (`decided_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `forecast_decisions_ibfk_4` FOREIGN KEY (`replenishment_request_id`) REFERENCES `replenishment_requests` (`request_id`) ON DELETE SET NULL
@@ -1140,6 +1143,7 @@ CREATE TABLE `replenishment_requests` (
   `approved_at` timestamp NULL DEFAULT NULL,
   `source` enum('manual','ml_forecast') DEFAULT 'manual',
   `forecast_prediction_id` int(11) DEFAULT NULL,
+  `forecast_job_id` bigint unsigned DEFAULT NULL,
   `original_suggested_qty` int(11) DEFAULT NULL,
   `override_reason` text DEFAULT NULL,
   `notes` text DEFAULT NULL,
@@ -1150,6 +1154,7 @@ CREATE TABLE `replenishment_requests` (
   CONSTRAINT `replenishment_requests_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `replenishment_requests_ibfk_2` FOREIGN KEY (`requested_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `replenishment_requests_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_replenishment_requests_forecast_job` FOREIGN KEY (`forecast_job_id`) REFERENCES `ml_jobs` (`job_id`) ON DELETE RESTRICT,
   CONSTRAINT `chk_replenishment_requests_quantity` CHECK (`request_qty` > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

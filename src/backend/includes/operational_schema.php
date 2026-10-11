@@ -181,7 +181,8 @@ function ensure_operational_updates_schema(PDO $pdo): void
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS forecast_decisions (
         forecast_decision_id INT AUTO_INCREMENT PRIMARY KEY,
-        prediction_id INT NOT NULL,
+        prediction_id INT NULL,
+        forecast_job_id BIGINT UNSIGNED NULL,
         product_id INT NOT NULL,
         original_suggested_qty INT NOT NULL DEFAULT 0,
         final_quantity INT NOT NULL DEFAULT 0,
@@ -232,6 +233,7 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ensure_table_column($pdo, 'stock_receiving', 'units_per_package_used', 'INT NOT NULL DEFAULT 1 AFTER received_packages');
 
     ensure_table_column($pdo, 'replenishment_requests', 'forecast_prediction_id', 'INT NULL AFTER source');
+    ensure_table_column($pdo, 'replenishment_requests', 'forecast_job_id', 'BIGINT UNSIGNED NULL AFTER forecast_prediction_id');
     ensure_table_column($pdo, 'replenishment_requests', 'original_suggested_qty', 'INT NULL AFTER forecast_prediction_id');
     ensure_table_column($pdo, 'replenishment_requests', 'override_reason', 'TEXT NULL AFTER original_suggested_qty');
 

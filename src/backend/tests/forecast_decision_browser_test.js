@@ -1,0 +1,132 @@
+const assert = require('node:assert/strict');
+const {spawn, spawnSync} = require('node:child_process');
+const {randomBytes} = require('node:crypto');
+const net = require('node:net');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const {chromium} = require('playwright');
+if (process.env.RUN_DB_TESTS !== '1') {
+    console.log('Forecast decision browser: skipped (set RUN_DB_TESTS=1; disposable MySQL database required)');
+    process.exit(0);
+}
+const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
+const php = process.env.PHP_BINARY || 'php';
+const recovery = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-forecast-decision-'));
+const testEnv = {...process.env, BACKUP_STORAGE_PATH: recovery};
+const route = '/components/inventory_management/replenishment_requests.php';
+const fixture = action => {
+    const result = spawnSync(php, ['src/backend/tests/support/forecast_decision_fixture.php', action, database], {encoding: 'utf8', env: testEnv});
+    if (result.status !== 0) throw new Error(result.stderr || result.stdout);
+    return result.stdout;
+};
+(async () => {
+    let browser, server;
+    try {
+        const data = JSON.parse(fixture('create'));
+        fixture('seed');
+        console.log('Disposable forecast database seeded.');
+        const listener = net.createServer();
+        await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
+        const port = listener.address().port;
+        await new Promise(resolve => listener.close(resolve));
+        const origin = 'http://127.0.0.1:' + port;
+        server = spawn(php, ['-S', '127.0.0.1:' + port, '-t', 'src/frontend', 'src/backend/tests/support/theme_router.php'],
+            {env: {...testEnv, RM_THEME_TEST_DATABASE: database}, stdio: ['ignore', 'ignore', 'pipe']});
+        let errors = ''; server.stderr.on('data', chunk => { errors += chunk; });
+        for (let i = 0; i < 100; i++) {
+            try { if ((await fetch(origin, {signal: AbortSignal.timeout(1000)})).ok) break; } catch {}
+            if (i === 99) throw new Error(errors);
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        browser = await chromium.launch({headless: true});
+        console.log('Browser launched.');
+        const context = await browser.newContext({baseURL: origin});
+        const page = await context.newPage();
+        await page.goto('/?login=1', {waitUntil: 'domcontentloaded'});
+        await page.waitForFunction(() => document.activeElement.id === 'landing-login-username');
+        await page.locator('#landing-login-username').fill('decision_manager');
+        await page.locator('#landing-login-password').fill(data.password);
+        await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+        await page.goto(route, {waitUntil: 'domcontentloaded'});
+        console.log('Replenishment page loaded.');
+        assert.equal(await page.locator('input[name="source"][value="ml_forecast"]').count(), 1, 'Forecast creation form rendered');
+        const create = page.locator('form').filter({has: page.locator('input[name="source"][value="ml_forecast"]')}).first();
+        assert.equal(await create.locator('input[name="forecast_job_id"]').inputValue(), '10', 'Form retains displayed forecast job');
+        assert.equal(await create.locator('input[name="forecast_prediction_id"]').count(), 0, 'Product ID never submitted as legacy prediction');
+        console.log('Forecast form source checked.');
+        fixture('upgrade');
+        console.log('Legacy schema upgraded twice.');
+        const before = JSON.parse(fixture('state'));
+        await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), create.evaluate(form => form.submit())]);
+        const after = JSON.parse(fixture('state'));
+        assert.equal(after.requests.length, before.requests.length + 1);
+        assert.equal(after.decisions.length, before.decisions.length + 1);
+        const decision = after.decisions.at(-1);
+        assert.equal(decision.decision, 'accepted');
+        assert.equal(decision.forecast_job_id, 10);
+        assert.equal(decision.product_id, 1);
+        assert.equal(decision.prediction_id, null);
+        assert.equal(after.requests.at(-1).forecast_prediction_id, null);
+        assert.equal(after.requests.at(-1).forecast_job_id, 10);
+        assert.deepEqual(after.decisions[0], {...before.decisions[0], forecast_job_id: null}, 'Migration retains legacy decision');
+        assert.equal(after.requests[0].forecast_prediction_id, 100, 'Migration retains legacy request');
+
+        const state = () => JSON.parse(fixture('state'));
+        const submit = async form => Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), form.evaluate(el => el.submit())]);
+        const dismiss = page.locator('form').filter({has: page.locator('input[name="action"][value="reject_forecast"]')}).first();
+        for (const collision of [false, true]) {
+            if (collision) fixture('collision');
+            for (const action of (collision ? ['accepted', 'modified', 'rejected'] : ['modified', 'rejected'])) {
+                await page.goto(route, {waitUntil: 'domcontentloaded'});
+                const form = action === 'rejected' ? dismiss : create;
+                assert.equal(await form.locator('input[name="forecast_job_id"]').inputValue(), '10');
+                const original = Number(await form.locator('input[name="original_suggested_qty"]').inputValue());
+                const quantity = action === 'rejected' ? 0 : original + (action === 'modified' ? 1 : 0);
+                if (action === 'modified') {
+                    await form.locator('input[name="request_qty"]').fill(String(quantity));
+                    await form.locator('input[name="override_reason"]').fill('Supplier package adjustment');
+                }
+                const prior = state();
+                // A newly completed run must not relabel an already displayed recommendation.
+                if (collision && action === 'rejected') fixture('next_run');
+                await submit(form);
+                const saved = state();
+                const record = saved.decisions.at(-1);
+                assert.equal(saved.decisions.length, prior.decisions.length + 1);
+                assert.equal(saved.requests.length, prior.requests.length + (action === 'rejected' ? 0 : 1));
+                assert.equal(record.decision, action);
+                assert.equal(record.forecast_job_id, 10);
+                assert.equal(record.product_id, 1);
+                assert.equal(record.prediction_id, null);
+                assert.equal(record.original_suggested_qty, original);
+                assert.equal(record.final_quantity, quantity);
+                assert.equal(record.decided_by, 3);
+                if (action !== 'rejected') assert.equal(record.replenishment_request_id, saved.requests.at(-1).request_id);
+            }
+        }
+        await page.goto(route, {waitUntil: 'domcontentloaded'});
+        const token = await create.locator('input[name="csrf_token"]').inputValue();
+        const prior = state();
+        for (const invalid of [{forecast_job_id: 10, product_id: 2}, {forecast_job_id: 999, product_id: 1}, {forecast_prediction_id: 1, product_id: 1}]) {
+            const response = await context.request.post(route, {form: {action: 'create', source: 'ml_forecast', request_qty: 28,
+                original_suggested_qty: 28, csrf_token: token, ...invalid}});
+            assert.match(await response.text(), /The forecast source is unavailable/);
+            assert.deepEqual(state(), prior, 'Invalid source leaves no request or decision');
+        }
+        fixture('fail');
+        for (const form of [create, dismiss]) {
+            await page.goto(route, {waitUntil: 'domcontentloaded'});
+            const prior = state();
+            await submit(form);
+            assert.match(await page.locator('.message.error').innerText(), /could not be saved/);
+            assert.equal(await page.locator('.message.success').count(), 0, 'Persistence failure has no success acknowledgment');
+            assert.deepEqual(state(), prior, 'Decision failure rolls back request and audit transaction');
+        }
+        console.log('Forecast decision browser passed.');
+    } finally {
+        await browser?.close();
+        server?.kill();
+        fixture('cleanup');
+    }
+})().catch(error => { console.error(error); process.exitCode = 1; });
