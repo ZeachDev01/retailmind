@@ -206,6 +206,7 @@ $pdo->exec("
     );
 
     CREATE TABLE supplier_products (
+        supplier_product_id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_id INTEGER,
         product_id INTEGER,
         lead_time_days INTEGER,

@@ -25,7 +25,7 @@ $pdo->exec("CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT,
     CREATE TABLE products (product_id INTEGER PRIMARY KEY, sku TEXT, product_name TEXT, status TEXT,
         supplier_lead_time_days INTEGER, minimum_order_quantity INTEGER);
     CREATE TABLE inventory (product_id INTEGER, quantity_on_hand INTEGER);
-    CREATE TABLE supplier_products (product_id INTEGER, lead_time_days INTEGER,
+    CREATE TABLE supplier_products (supplier_product_id INTEGER PRIMARY KEY, product_id INTEGER, lead_time_days INTEGER,
         minimum_order_quantity INTEGER, is_preferred INTEGER);
     CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT);
     CREATE TABLE replenishment_requests (request_id INTEGER, product_id INTEGER, requested_by INTEGER,

@@ -103,12 +103,10 @@ class ReplenishmentQueueService
             FROM products p
             LEFT JOIN inventory i ON p.product_id = i.product_id
             
-            LEFT JOIN (
-                SELECT product_id, lead_time_days, minimum_order_quantity
-                FROM supplier_products 
-                WHERE is_preferred = 1
-                GROUP BY product_id
-            ) sp_pref ON sp_pref.product_id = p.product_id
+            LEFT JOIN supplier_products sp_pref ON sp_pref.supplier_product_id = (
+                SELECT MIN(supplier_product_id) FROM supplier_products
+                WHERE product_id = p.product_id AND is_preferred = 1
+            )
             
             LEFT JOIN (
                 SELECT 
@@ -120,7 +118,7 @@ class ReplenishmentQueueService
                     SUM(CASE WHEN df.horizon_day <= 14 THEN df.predicted_units ELSE 0 END) as f14,
                     SUM(CASE WHEN df.horizon_day <= 28 THEN df.predicted_units ELSE 0 END) as f28,
                     SUM(CASE WHEN df.horizon_day <= COALESCE(
-                        (SELECT lead_time_days FROM supplier_products WHERE product_id = df.product_id AND is_preferred = 1 LIMIT 1),
+                        (SELECT lead_time_days FROM supplier_products WHERE product_id = df.product_id AND is_preferred = 1 ORDER BY supplier_product_id LIMIT 1),
                         (SELECT supplier_lead_time_days FROM products WHERE product_id = df.product_id LIMIT 1),
                         7
                     ) THEN df.predicted_units ELSE 0 END) as f_lead
