@@ -73,10 +73,12 @@ weekly baseline as well as meeting the configured threshold.
 
 Artifacts are separated under `storage/ml_models/{demo|store}/{database-identity-hash}`.
 Demo versions start with `demo_`; artifact metadata and forecast limitation
-markers identify Demo evidence. Demo generation can use the latest completed
-Demo candidate for experimentation at the dataset's final observed date. Store
-generation requires an explicitly approved Store version and matching artifact
-identity/feature contract. Old synthetic artifacts require retraining.
+markers identify Demo evidence. Both Demo and Store generation require an
+explicitly approved version in `ml_approved_model_version` and matching artifact
+identity/feature contract. Completed evaluations do not select a candidate
+automatically. Approved Demo generation uses the dataset's final observed date;
+Demo evidence cannot authorize Store activation. Old synthetic artifacts require
+retraining.
 
 Store evidence is exported through `DemandHistoryService`. Each observation
 retains availability-dated revisions for refunds, reversals, and calendar edits.
