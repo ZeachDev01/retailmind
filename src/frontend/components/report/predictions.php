@@ -43,7 +43,7 @@ if (!empty($forecasts)) {
     $pIds = array_column($forecasts, 'product_id');
     $inClause = implode(',', array_map('intval', $pIds));
     $pStmt = $pdo->query("
-        SELECT p.product_id, p.product_name, p.sku, COALESCE(i.quantity, 0) as current_stock
+        SELECT p.product_id, p.product_name, p.sku, COALESCE(i.quantity_on_hand, 0) as current_stock
         FROM products p
         LEFT JOIN inventory i ON p.product_id = i.product_id
         WHERE p.product_id IN ($inClause)

@@ -23,7 +23,7 @@ if ($productId <= 0) {
 }
 
 $stmt = $pdo->prepare("
-    SELECT p.product_id, p.sku, p.barcode, p.product_name, p.category_id, p.unit_price, COALESCE(i.quantity, 0) as current_stock 
+    SELECT p.product_id, p.sku, p.barcode, p.product_name, p.category_id, p.unit_price, COALESCE(i.quantity_on_hand, 0) as current_stock
     FROM products p
     LEFT JOIN inventory i ON p.product_id = i.product_id
     WHERE p.product_id = ?
