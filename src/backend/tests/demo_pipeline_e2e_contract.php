@@ -118,7 +118,7 @@ try {
         );
         CREATE TABLE ml_jobs (
             job_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            job_type TEXT,
+            trigger_type TEXT,
             status TEXT,
             dataset_type TEXT,
             ml_model_version TEXT,
@@ -270,7 +270,7 @@ try {
     // -------------------------------------------------------------
     echo "\n--- Step 5: Forecast Generation from Approved Model ---\n";
     $jobId = 101;
-    $pdo->prepare("INSERT INTO ml_jobs (job_id, job_type, status, dataset_type, ml_model_version) VALUES (?, 'generation', 'completed', 'demo', ?)")
+    $pdo->prepare("INSERT INTO ml_jobs (job_id, trigger_type, status, dataset_type, ml_model_version) VALUES (?, 'forecast_generation', 'succeeded', 'demo', ?)")
         ->execute([$jobId, $promotedVersion]);
 
     // Insert 28-day forecasts for product 1 to 20

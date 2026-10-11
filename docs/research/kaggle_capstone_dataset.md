@@ -80,6 +80,14 @@ automatically. Approved Demo generation uses the dataset's final observed date;
 Demo evidence cannot authorize Store activation. Old synthetic artifacts require
 retraining.
 
+For pre-approval Store observation, run `python src/backend/scripts/ml_worker.py
+--observe-model VERSION` against the intended database with its existing worker
+credentials. This explicitly selects one candidate and creates a
+`forecast_observation` job without changing approval or activation settings.
+Observation rows remain available for completed-target evaluation, but routine
+forecast readers and the replenishment queue exclude them, even when a caller
+supplies their job ID. Operational generation still requires explicit approval.
+
 Store evidence is exported through `DemandHistoryService`. Each observation
 retains availability-dated revisions for refunds, reversals, and calendar edits.
 Features use revisions known at their forecast origin; training labels use

@@ -17,6 +17,8 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $pdo->exec("
+        CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT);
+        INSERT INTO ml_jobs VALUES (10, 'forecast_generation', 'succeeded');
         CREATE TABLE products (
             product_id INTEGER PRIMARY KEY AUTOINCREMENT,
             sku TEXT,
@@ -214,6 +216,9 @@ try {
     // Check tie breaking on P1 vs P4 (both Urgent exposure -10)
     $assert($queue[0]['product_id'] === 1, "P1 should precede P4 due to tie-break on product_id");
     $assert($queue[1]['product_id'] === 4, "P4 should follow P1 due to tie-break on product_id");
+
+    $pdo->exec("UPDATE ml_jobs SET trigger_type = 'forecast_observation' WHERE job_id = 10");
+    $assert($service->getQueue(10, $asOfDate) === [], 'Observation job must not expose purchasing recommendations even with explicit job ID');
 
     if (empty($failures)) {
         echo "PASS: replenishment_queue_contract\n";

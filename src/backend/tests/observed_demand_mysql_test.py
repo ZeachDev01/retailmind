@@ -68,6 +68,15 @@ class ObservedDemandMysqlTest(unittest.TestCase):
                             if trigger == 'model_retraining':
                                 cursor.execute('SELECT model_version FROM model_training_runs ORDER BY training_run_id DESC LIMIT 1')
                                 version = cursor.fetchone()['model_version']
+                                ml_worker.observe_model(version)
+                                conn.commit()
+                                cursor.execute("SELECT job_id, status FROM ml_jobs WHERE trigger_type = 'forecast_observation'")
+                                observation = cursor.fetchone()
+                                self.assertEqual(observation['status'], 'succeeded')
+                                cursor.execute('SELECT COUNT(*) AS count FROM demand_forecasts WHERE job_id = %s', (observation['job_id'],))
+                                self.assertEqual(cursor.fetchone()['count'], 560)
+                                cursor.execute("SELECT COUNT(*) AS count FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")
+                                self.assertEqual(cursor.fetchone()['count'], 0)
                                 cursor.execute("""INSERT INTO platform_settings (setting_key, setting_value)
                                     VALUES ('ml_approved_model_version', %s)
                                     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)""", (version,))

@@ -63,6 +63,12 @@ try {
     $assert($agg['forecast_7_day'] == 14, "Expected 7-day forecast 14, got {$agg['forecast_7_day']}");
     $assert($agg['forecast_14_day'] == 28, "Expected 14-day forecast 28, got {$agg['forecast_14_day']}");
     $assert($agg['forecast_28_day'] == 56, "Expected 28-day forecast 56, got {$agg['forecast_28_day']}");
+
+    $pdo->exec("UPDATE ml_jobs SET trigger_type = 'forecast_observation' WHERE job_id = 10");
+    $assert($service->getLatestSuccessfulJobId() === null, 'Observation job must not become routine latest forecast');
+    $assert($service->getForecastAggregates(10) === [], 'Explicit observation job ID must not expose routine aggregates');
+    $investigation = $service->getProductForecast(10, 1);
+    $assert($investigation['aggregates'] === null && $investigation['daily'] === [], 'Product investigation must exclude observation forecasts');
     
     if (empty($failures)) {
         echo "PASS: test_aggregates_forecast_horizons\n";

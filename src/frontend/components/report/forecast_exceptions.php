@@ -30,7 +30,9 @@ $predictionStatement = $pdo->prepare("SELECT df.forecast_id, SUM(df.predicted_un
     WHERE p.branch_id = ?
       AND df.job_id=(
           SELECT df2.job_id FROM demand_forecasts df2 
-          WHERE df2.product_id=df.product_id 
+          JOIN ml_jobs j ON j.job_id = df2.job_id
+          WHERE df2.product_id=df.product_id
+            AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
           ORDER BY df2.forecast_origin DESC, df2.forecast_id DESC LIMIT 1
       )
     GROUP BY df.job_id, df.product_id, df.forecast_origin, p.product_name, p.product_id, p.sku, i.quantity_on_hand, s.units_30, s.nonzero_days, s.first_sale_date, df.forecast_id, df.predicted_units, df.readiness_level

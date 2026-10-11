@@ -411,6 +411,7 @@ $status = $activationService->getActivationStatus();
 assert_check($status['is_recommendations_suspended'] === true, 'Recommendations are marked suspended');
 
 // Replenishment queue reflects suspension
+$pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status) VALUES (99, 'forecast_generation', 'succeeded')");
 $queueService = new ReplenishmentQueueService($pdo);
 // Create a forecast for product 1 under current approved model
 $pdo->prepare("

@@ -28,6 +28,8 @@ class DemandForecastService
                 SUM(CASE WHEN horizon_day <= 28 THEN predicted_units ELSE 0 END) as forecast_28_day
             FROM demand_forecasts
             WHERE job_id = :job_id
+              AND EXISTS (SELECT 1 FROM ml_jobs j WHERE j.job_id = demand_forecasts.job_id
+                          AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded')
             GROUP BY product_id
         ");
         $stmt->execute(['job_id' => $jobId]);
@@ -72,6 +74,8 @@ class DemandForecastService
                 SUM(CASE WHEN horizon_day <= 28 THEN predicted_units ELSE 0 END) as forecast_28_day
             FROM demand_forecasts
             WHERE job_id = :job_id AND product_id = :product_id
+              AND EXISTS (SELECT 1 FROM ml_jobs j WHERE j.job_id = demand_forecasts.job_id
+                          AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded')
             GROUP BY product_id
         ");
         $stmt->execute(['job_id' => $jobId, 'product_id' => $productId]);
@@ -94,6 +98,8 @@ class DemandForecastService
                 limitation_marker
             FROM demand_forecasts
             WHERE job_id = :job_id AND product_id = :product_id
+              AND EXISTS (SELECT 1 FROM ml_jobs j WHERE j.job_id = demand_forecasts.job_id
+                          AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded')
             ORDER BY horizon_day ASC
         ");
         $dailyStmt->execute(['job_id' => $jobId, 'product_id' => $productId]);

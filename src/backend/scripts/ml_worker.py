@@ -112,6 +112,10 @@ def process_job(conn, job):
         try:
             if trigger == 'forecast_generation':
                 run_forecast_generation(conn, cursor, job_id)
+            elif trigger == 'forecast_observation':
+                if not job.get('observation_version'):
+                    raise ValueError("Observation generation requires an explicit candidate version")
+                run_forecast_generation(conn, cursor, job_id, job.get('observation_version'))
             elif trigger == 'model_retraining':
                 artifact_file = run_model_retraining(conn, cursor, job_id)
             else:
@@ -220,7 +224,7 @@ def load_history(cursor, context):
     return data
 
 
-def run_forecast_generation(conn, cursor, job_id):
+def run_forecast_generation(conn, cursor, job_id, observation_version=None):
     context = dataset_context(cursor)
     cursor.execute("""
         SELECT setting_value FROM platform_settings
@@ -229,8 +233,11 @@ def run_forecast_generation(conn, cursor, job_id):
     """)
     row = cursor.fetchone()
     version = (row['setting_value'] if isinstance(row, dict) else row[0]) if row else None
+    if observation_version is not None:
+        version = observation_version
     if not version or not re.fullmatch(r'[A-Za-z0-9_-]{1,50}', version):
-        raise ValueError("No approved forecasting model version configured")
+        raise ValueError("Invalid observation model version" if observation_version is not None
+                         else "No approved forecasting model version configured")
     is_demo = 'demo' in version.lower() or 'kaggle' in version.lower()
     if is_demo != (context['dataset_kind'] == 'demo'):
         raise ValueError("Demo/Store model artifacts cannot cross dataset boundaries")
@@ -258,6 +265,8 @@ def run_forecast_generation(conn, cursor, job_id):
             readiness = 'High'
         if is_demo:
             limitation = 'Demo evidence; source authenticity unverified; not Store accuracy'
+        if observation_version is not None:
+            limitation = 'Observation only; not approved for routine purchasing. ' + limitation
         cursor.execute("""
             INSERT INTO demand_forecasts
             (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units,
@@ -331,12 +340,39 @@ def run_model_retraining(conn, cursor, job_id):
         temporary.unlink(missing_ok=True)
     return path
 
+def observe_model(version):
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,50}', version):
+        raise ValueError("Invalid observation model version")
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""INSERT INTO ml_jobs
+                (trigger_type, status, queued_at, started_at, attempts, lease_expires_at)
+                VALUES ('forecast_observation', 'running', NOW(), NOW(), 3,
+                        DATE_ADD(NOW(), INTERVAL 30 MINUTE))""")
+            job_id = cursor.lastrowid
+        conn.commit()
+        process_job(conn, {'job_id': job_id, 'trigger_type': 'forecast_observation',
+                           'observation_version': version})
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT status FROM ml_jobs WHERE job_id = %s", (job_id,))
+            row = cursor.fetchone()
+        if (row['status'] if isinstance(row, dict) else row[0]) != 'succeeded':
+            raise RuntimeError(f"Observation job {job_id} failed; inspect its diagnostic reference")
+        print(f"Observation job {job_id} completed; excluded from routine purchasing")
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RetailMind ML Queue Worker")
     parser.add_argument("--once", "--run-once", dest="run_once", action="store_true", help="Process queued jobs once and exit")
+    parser.add_argument("--observe-model", metavar="VERSION", help="Generate non-operational observation evidence for an explicit candidate")
     args = parser.parse_args()
 
-    if args.run_once:
+    if args.observe_model:
+        observe_model(args.observe_model)
+    elif args.run_once:
         process_jobs()
     else:
         while True:

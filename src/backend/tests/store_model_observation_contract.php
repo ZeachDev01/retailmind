@@ -25,6 +25,8 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $pdo->exec("
+        CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT);
+        INSERT INTO ml_jobs VALUES (200, 'forecast_generation', 'succeeded');
         CREATE TABLE platform_settings (
             setting_key TEXT PRIMARY KEY,
             setting_value TEXT,

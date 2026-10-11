@@ -209,6 +209,49 @@ class WorkerEvidenceTests(unittest.TestCase):
                 self.assertEqual(conn.db.execute("SELECT COUNT(*) FROM ml_model_evaluations").fetchone()[0], 0)
                 self.assertEqual(list(self.path.rglob("*.joblib")), [])
 
+    def test_explicit_store_observation_needs_no_operational_approval(self):
+        conn = Connection('retailmind')
+        self.addCleanup(conn.db.close)
+        conn.db.execute("UPDATE ml_jobs SET trigger_type = 'forecast_observation'")
+        conn.commit()
+        context = ml_worker.dataset_context(conn.cursor())
+        data = pd.DataFrame({'date': pd.date_range(end=context['history_cutoff'], periods=140),
+                             'product_id': 1, 'units_sold': 10.0})
+        artifact = {'model': ForecastEstimator(),
+                    'metadata': dict(context, model_version='v_observation',
+                                     feature_version=ml_worker.FEATURE_VERSION,
+                                     features=ml_worker.FEATURE_COLUMNS)}
+        directory = ml_worker.artifact_directory(context)
+        directory.mkdir(parents=True)
+        joblib.dump(artifact, directory / 'random_forest_candidate_v_observation.joblib')
+        with patch.object(ml_worker, 'load_history', return_value=data):
+            ml_worker.process_job(conn, {'job_id': 1, 'trigger_type': 'forecast_observation',
+                                        'observation_version': 'v_observation'})
+        self.assertEqual(conn.db.execute('SELECT status FROM ml_jobs').fetchone()[0], 'succeeded')
+        forecasts = conn.db.execute('SELECT * FROM demand_forecasts').fetchall()
+        self.assertEqual(len(forecasts), 28)
+        self.assertTrue(all(row['limitation_marker'].startswith('Observation only;') for row in forecasts))
+        self.assertEqual(conn.db.execute('SELECT COUNT(*) FROM platform_settings').fetchone()[0], 0)
+        self.assertIsNone(conn.db.execute("SELECT job_id FROM ml_jobs WHERE trigger_type = 'forecast_generation' AND status = 'succeeded'").fetchone())
+
+    def test_observation_requires_explicit_valid_candidate_and_preserves_boundaries(self):
+        for version in (None, '../model', 'demo_candidate'):
+            with self.subTest(version=version):
+                conn = Connection('retailmind')
+                self.addCleanup(conn.db.close)
+                conn.db.execute("UPDATE ml_jobs SET trigger_type = 'forecast_observation'")
+                conn.commit()
+                with patch.object(ml_worker.joblib, 'load') as load:
+                    ml_worker.process_job(conn, {'job_id': 1, 'trigger_type': 'forecast_observation',
+                                                'observation_version': version})
+                self.assertEqual(conn.db.execute('SELECT status FROM ml_jobs').fetchone()[0], 'failed')
+                self.assertEqual(conn.db.execute('SELECT COUNT(*) FROM demand_forecasts').fetchone()[0], 0)
+                load.assert_not_called()
+        with patch.object(ml_worker, 'get_connection') as connect:
+            with self.assertRaisesRegex(ValueError, 'Invalid observation model version'):
+                ml_worker.observe_model('../model')
+            connect.assert_not_called()
+
     def test_failed_persistence_rolls_back_evaluations_and_artifact(self):
         conn = Connection()
         self.addCleanup(conn.db.close)

@@ -17,6 +17,13 @@ class ReplenishmentQueueService
 
     public function getQueue(int $jobId, ?string $asOfDate = null): array
     {
+        $job = $this->pdo->prepare("SELECT 1 FROM ml_jobs WHERE job_id = ?
+            AND trigger_type = 'forecast_generation' AND status = 'succeeded'");
+        $job->execute([$jobId]);
+        if (!$job->fetchColumn()) {
+            return [];
+        }
+
         // Check observation mode and recommendation suspension status
         $isObservationMode = false;
         $isSuspended = false;
