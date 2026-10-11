@@ -63,8 +63,10 @@ try {
                   AND DATE(s.sale_date) = df.target_date
             ), 0) as actual_units
         FROM demand_forecasts df
+        JOIN ml_jobs j ON j.job_id = df.job_id
         JOIN products p ON df.product_id = p.product_id
         WHERE df.target_date <= CURDATE()
+          AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
         ORDER BY df.target_date DESC, df.product_id ASC
         LIMIT 25
     ");

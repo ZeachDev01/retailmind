@@ -433,9 +433,11 @@ function run_report(PDO $pdo, string $report, array $filters): array
                         ) AS actual_quantity,
                         MAX(df.readiness_level) AS readiness_level
                  FROM demand_forecasts df
+                 JOIN ml_jobs j ON j.job_id = df.job_id
                  JOIN products p ON p.product_id = df.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
                  WHERE DATE_ADD(df.forecast_origin, INTERVAL 28 DAY) <= NOW()
+                   AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
                    AND DATE(DATE_ADD(df.forecast_origin, INTERVAL 28 DAY)) BETWEEN ? AND ?
                    {$productSql}
                  GROUP BY df.job_id, df.product_id, df.forecast_origin, p.barcode, p.sku, p.product_name, c.category_name, df.model_version

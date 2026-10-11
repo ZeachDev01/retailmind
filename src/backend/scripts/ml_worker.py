@@ -9,6 +9,7 @@ import uuid
 import hashlib
 import re
 import subprocess
+import getpass
 import pandas as pd
 import joblib
 import numpy as np
@@ -351,6 +352,13 @@ def observe_model(version):
                 VALUES ('forecast_observation', 'running', NOW(), NOW(), 3,
                         DATE_ADD(NOW(), INTERVAL 30 MINUTE))""")
             job_id = cursor.lastrowid
+            cursor.execute("""INSERT INTO activity_log
+                (user_id, action, category, module, record_id, new_value, ip_address, created_at)
+                VALUES (NULL, 'Enqueued Observation ML Job', 'platform_setting',
+                        'Demand Forecasting', %s, %s, '127.0.0.1', NOW())""",
+                           (job_id, json.dumps({'trigger_type': 'forecast_observation',
+                                               'model_version': version, 'origin': 'cli',
+                                               'initiating_identity': getpass.getuser()})))
         conn.commit()
         process_job(conn, {'job_id': job_id, 'trigger_type': 'forecast_observation',
                            'observation_version': version})

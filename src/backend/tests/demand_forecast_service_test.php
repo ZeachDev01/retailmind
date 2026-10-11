@@ -69,6 +69,37 @@ try {
     $assert($service->getForecastAggregates(10) === [], 'Explicit observation job ID must not expose routine aggregates');
     $investigation = $service->getProductForecast(10, 1);
     $assert($investigation['aggregates'] === null && $investigation['daily'] === [], 'Product investigation must exclude observation forecasts');
+
+    $pdo->exec("
+        CREATE TABLE products (product_id INTEGER, product_name TEXT, sku TEXT, barcode TEXT, category_id INTEGER);
+        INSERT INTO products VALUES (1, 'Product', 'P1', NULL, 1);
+        CREATE TABLE categories (category_id INTEGER, category_name TEXT);
+        CREATE TABLE sales (sale_id INTEGER, sale_date TEXT);
+        CREATE TABLE sale_items (sale_id INTEGER, product_id INTEGER, quantity INTEGER);
+        INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at) VALUES (11, 'forecast_generation', 'succeeded', '2026-10-09');
+        INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level)
+        VALUES (11, 1, '2026-10-09', '2026-10-10', 1, 7, 'approved', 'High');
+    ");
+    $pdo->sqliteCreateFunction('CURDATE', fn() => '2026-12-01');
+    $pdo->sqliteCreateFunction('NOW', fn() => '2026-12-01');
+    $reportRoot = __DIR__ . '/../../frontend/components/report/';
+    foreach (['forecast_analytics.php', 'report_generation.php'] as $reportFile) {
+        $source = file_get_contents($reportRoot . $reportFile);
+        if ($reportFile === 'report_generation.php') {
+            $source = substr($source, strpos($source, "case 'forecast_actual':"));
+        }
+        if (!preg_match('/"\s*(SELECT[^"]*FROM demand_forecasts df[^"]*)"/s', $source, $match)) {
+            throw new RuntimeException("Missing forecast report query in $reportFile");
+        }
+        $sql = str_replace(['DATE_ADD(df.forecast_origin, INTERVAL 28 DAY)', '{$productSql}'],
+                           ["DATE(df.forecast_origin, '+28 days')", ''], $match[1]);
+        $query = $pdo->prepare($sql);
+        $query->execute($reportFile === 'report_generation.php' ? ['2026-01-01', '2026-12-31'] : []);
+        $rows = $query->fetchAll(PDO::FETCH_ASSOC);
+        $assert(count($rows) === 1, "$reportFile must exclude observation forecasts");
+        $assert((int)($rows[0]['predicted_units'] ?? $rows[0]['forecast_quantity'] ?? 0) === 7,
+                "$reportFile must preserve approved forecast values");
+    }
     
     if (empty($failures)) {
         echo "PASS: test_aggregates_forecast_horizons\n";
