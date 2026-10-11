@@ -68,6 +68,13 @@ switch ($argv[1]) {
         $pdo->exec("CREATE TRIGGER fail_forecast_decision BEFORE INSERT ON forecast_decisions FOR EACH ROW
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Injected decision persistence failure'");
         break;
+    case 'observe':
+    case 'suspend':
+    case 'activate':
+        $settings = new App\Forecasting\CandidateEvaluationService($pdo);
+        $settings->setObservationMode($argv[1] === 'observe', 3);
+        $settings->setRecommendationsSuspended($argv[1] === 'suspend', 3);
+        break;
     case 'state':
         echo json_encode(['requests' => $pdo->query('SELECT * FROM replenishment_requests ORDER BY request_id')->fetchAll(PDO::FETCH_ASSOC),
             'decisions' => $pdo->query('SELECT * FROM forecast_decisions ORDER BY forecast_decision_id')->fetchAll(PDO::FETCH_ASSOC)]);

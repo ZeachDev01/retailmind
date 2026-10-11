@@ -18,6 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'reject_forecast' || ($action === 'create' && ($_POST['source'] ?? '') === 'ml_forecast')) {
             require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
             App\Store\StoreWriteGate::begin($pdo);
+            $blockedRecommendations = $pdo->query("SELECT setting_key FROM platform_settings
+                WHERE setting_key IN ('ml_observation_mode', 'ml_recommendations_suspended')
+                  AND setting_value IN ('1', 'true') FOR UPDATE");
+            if ($blockedRecommendations->fetchColumn()) {
+                throw new RuntimeException('Forecast-backed purchasing is unavailable during observation or suspension. Manual requests remain available.');
+            }
             $forecastJobId = (int)($_POST['forecast_job_id'] ?? 0);
             [$scopeSql, $scopeParams] = store_product_scope('p');
             $forecastStmt = $pdo->prepare("SELECT df.forecast_id FROM demand_forecasts df
@@ -204,7 +210,6 @@ try {
 }
 
 $selectedProductId = (int)($_GET['product_id'] ?? 0);
-$selectedQty = max(1, (int)($_GET['suggested_qty'] ?? 1));
 
 ?>
 <!DOCTYPE html>
@@ -254,7 +259,7 @@ $selectedQty = max(1, (int)($_GET['suggested_qty'] ?? 1));
                         </div>
                         <div class="form-group">
                             <label for="request_qty">Quantity to Request *</label>
-                            <input type="number" name="request_qty" id="request_qty" min="1" value="<?= $selectedProductId > 0 ? $selectedQty : '' ?>" required>
+                            <input type="number" name="request_qty" id="request_qty" min="1" required>
                         </div>
                     </div>
 
@@ -287,7 +292,7 @@ $selectedQty = max(1, (int)($_GET['suggested_qty'] ?? 1));
 
                     <div class="forecast-items">
                         <?php foreach ($forecastRecommendations as $rec): ?>
-                            <div class="forecast-card u-mb-1 p-3 border rounded <?= $rec['urgency_label'] === 'Urgent' ? 'border-danger' : 'border-warning' ?>" style="background: var(--surface, #fff);">
+                            <div id="forecast-product-<?= (int)$rec['product_id'] ?>" class="forecast-card u-mb-1 p-3 border rounded <?= $rec['urgency_label'] === 'Urgent' ? 'border-danger' : 'border-warning' ?>" style="background: var(--surface, #fff);">
                                 <div class="u-flex-between u-mb-1">
                                     <div>
                                         <h4 class="u-m-0">
@@ -327,6 +332,9 @@ $selectedQty = max(1, (int)($_GET['suggested_qty'] ?? 1));
                                 </div>
                                 <p class="explanation u-mb-1"><small><em><?= htmlspecialchars($rec['explanation']) ?></em></small></p>
 
+                                <?php if (!$rec['recommendations_active']): ?>
+                                    <p class="text-muted">Forecast-backed purchasing is unavailable during observation or suspension. Manual requests remain available.</p>
+                                <?php else: ?>
                                 <div class="rec-actions u-flex-wrap gap-2">
                                     <form class="u-flex-inline u-flex-grow" method="POST">
                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
@@ -364,6 +372,7 @@ $selectedQty = max(1, (int)($_GET['suggested_qty'] ?? 1));
                                         </div>
                                     </form>
                                 </div>
+                                <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
                     </div>

@@ -114,6 +114,46 @@ const fixture = action => {
             assert.match(await response.text(), /The forecast source is unavailable/);
             assert.deepEqual(state(), prior, 'Invalid source leaves no request or decision');
         }
+        const queueRoute = '/components/inventory_management/replenishment_queue.php';
+        for (const mode of ['observe', 'suspend']) {
+            fixture('activate');
+            await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+            const review = page.getByRole('link', {name: 'Review Request', exact: true});
+            assert.equal(await review.count(), 1, 'Active recommendation has a review link');
+            await review.click();
+            assert.equal(await page.locator('#request_qty').inputValue(), '', 'Queue must not copy forecast quantities into manual purchasing');
+            assert.equal(await create.locator('input[name="source"]').inputValue(), 'ml_forecast');
+            const staleToken = await create.locator('input[name="csrf_token"]').inputValue();
+            fixture(mode);
+            const beforeGate = state();
+            await submit(create);
+            assert.match(await page.locator('.message.error').innerText(), /Forecast-backed purchasing is unavailable/);
+            assert.deepEqual(state(), beforeGate, 'Stale forecast form cannot save requests or decisions');
+            assert.equal(await page.getByRole('button', {name: 'Create Request from Forecast', exact: true}).count(), 0);
+            assert.equal(await page.getByRole('button', {name: 'Dismiss', exact: true}).count(), 0);
+            for (const action of ['create', 'reject_forecast']) {
+                const response = await context.request.post(route, {form: {action, source: 'ml_forecast',
+                    forecast_job_id: 10, product_id: 1, request_qty: 28, original_suggested_qty: 28,
+                    override_reason: 'Direct submission', csrf_token: staleToken}});
+                assert.match(await response.text(), /Forecast-backed purchasing is unavailable/);
+                assert.deepEqual(state(), beforeGate, 'Direct submission cannot bypass recommendation gate');
+            }
+            await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+            assert.equal(await review.count(), 0, 'Inactive recommendations have no actionable review links');
+            assert.match(await page.locator('.queue-list').innerText(), /Manual requests remain available/);
+            await page.goto(route + '?product_id=1&suggested_qty=999', {waitUntil: 'domcontentloaded'});
+            assert.equal(await page.locator('#request_qty').inputValue(), '', 'Old queue URLs cannot prefill manual quantity');
+            const manual = page.locator('.create-section form');
+            await manual.locator('#product_id').selectOption('1');
+            await manual.locator('#request_qty').fill('5');
+            await submit(manual);
+            assert.match(await page.locator('.message.success').innerText(), /created successfully/);
+            assert.equal(state().requests.length, beforeGate.requests.length + 1, 'Manual purchasing stays available');
+            assert.equal(state().requests.at(-1).source, 'manual');
+            assert.equal(state().requests.at(-1).forecast_job_id, null);
+            assert.deepEqual(state().decisions, beforeGate.decisions, 'Manual request never records a forecast decision');
+        }
+        fixture('activate');
         fixture('fail');
         for (const form of [create, dismiss]) {
             await page.goto(route, {waitUntil: 'domcontentloaded'});

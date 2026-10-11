@@ -142,7 +142,11 @@ try {
                                     <div>
                                         <?php if ($item['recommended_quantity'] > 0): ?>
                                             <strong><?= $item['recommended_quantity'] ?> units</strong><br>
-                                            <a href="replenishment_requests.php?product_id=<?= $item['product_id'] ?>&suggested_qty=<?= $item['recommended_quantity'] ?>" class="btn btn-sm btn-primary mt-1" style="display:inline-block;padding:2px 8px;font-size:0.75rem;">Review Request</a>
+                                            <?php if ($item['recommendations_active']): ?>
+                                                <a href="replenishment_requests.php#forecast-product-<?= $item['product_id'] ?>" class="btn btn-sm btn-primary mt-1" style="display:inline-block;padding:2px 8px;font-size:0.75rem;">Review Request</a>
+                                            <?php else: ?>
+                                                <small class="text-muted">Forecast-backed purchasing is unavailable during observation or suspension. Manual requests remain available.</small>
+                                            <?php endif; ?>
                                         <?php else: ?>
                                             <span class="text-muted">None</span>
                                         <?php endif; ?>
