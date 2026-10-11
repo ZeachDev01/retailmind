@@ -28,17 +28,9 @@ try {
     
     $queue = [];
     if ($jobId) {
-        try {
-            $metaStmt = $pdo->prepare("SELECT ml_model_version, dataset_type FROM ml_jobs WHERE job_id = ?");
-            $metaStmt->execute([$jobId]);
-            $jobMeta = $metaStmt->fetch(PDO::FETCH_ASSOC);
-            if ($jobMeta) {
-                $activeModelVersion = $jobMeta['ml_model_version'] ?? '';
-                $isDemo = ($jobMeta['dataset_type'] ?? '') === 'demo';
-            }
-        } catch (Throwable $e) {
-            // Degrade gracefully
-        }
+        $jobMeta = $forecastService->getJobMetadata($jobId);
+        $activeModelVersion = $jobMeta['model_version'] ?? '';
+        $isDemo = $jobMeta['is_demo'] ?? false;
 
         $queueService = new ReplenishmentQueueService($pdo);
         $queue = $queueService->getQueue($jobId);

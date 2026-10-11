@@ -60,6 +60,31 @@ class DemandForecastService
         return $jobId !== false ? (int)$jobId : null;
     }
 
+    public function getJobMetadata(int $jobId): ?array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT f.model_version,
+                   (SELECT t.metrics_json FROM model_training_runs t
+                    WHERE t.model_version = f.model_version AND t.status = 'completed'
+                    ORDER BY t.training_run_id DESC LIMIT 1) AS metrics_json
+            FROM demand_forecasts f
+            JOIN ml_jobs j ON j.job_id = f.job_id
+            WHERE f.job_id = ? AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
+            ORDER BY f.forecast_id
+            LIMIT 1
+        ");
+        $stmt->execute([$jobId]);
+        $metadata = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$metadata) {
+            return null;
+        }
+        $metrics = json_decode((string)($metadata['metrics_json'] ?? ''), true);
+        return [
+            'model_version' => $metadata['model_version'],
+            'is_demo' => ($metrics['metadata']['dataset_kind'] ?? null) === 'demo',
+        ];
+    }
+
     public function getProductForecast(int $jobId, int $productId): array
     {
         $stmt = $this->pdo->prepare("

@@ -177,13 +177,9 @@ try {
     $forecastService = new \App\Forecasting\DemandForecastService($pdo);
     $latestJobId = $forecastService->getLatestSuccessfulJobId();
     if ($latestJobId) {
-        $metaStmt = $pdo->prepare("SELECT ml_model_version, dataset_type FROM ml_jobs WHERE job_id = ?");
-        $metaStmt->execute([$latestJobId]);
-        $jobMeta = $metaStmt->fetch(PDO::FETCH_ASSOC);
-        if ($jobMeta) {
-            $activeModelVersion = $jobMeta['ml_model_version'] ?? 'Approved Model';
-            $isDemo = ($jobMeta['dataset_type'] ?? '') === 'demo';
-        }
+        $jobMeta = $forecastService->getJobMetadata($latestJobId);
+        $activeModelVersion = $jobMeta['model_version'] ?? 'Approved Model';
+        $isDemo = $jobMeta['is_demo'] ?? false;
 
         $queueService = new \App\Forecasting\ReplenishmentQueueService($pdo);
         $fullQueue = $queueService->getQueue($latestJobId);

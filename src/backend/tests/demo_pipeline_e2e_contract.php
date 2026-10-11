@@ -106,7 +106,6 @@ try {
         CREATE TABLE ml_model_evaluations (
             evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
             model_version TEXT,
-            dataset_type TEXT,
             horizon_days INTEGER,
             mae REAL,
             rmse REAL,
@@ -114,15 +113,14 @@ try {
             baseline_mae REAL,
             baseline_rmse REAL,
             baseline_wape REAL,
-            evaluated_at TEXT
+            created_at TEXT
         );
         CREATE TABLE ml_jobs (
             job_id INTEGER PRIMARY KEY AUTOINCREMENT,
             trigger_type TEXT,
             status TEXT,
-            dataset_type TEXT,
-            ml_model_version TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            queued_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            completed_at TEXT
         );
         CREATE TABLE supplier_products (
             supplier_product_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -235,15 +233,15 @@ try {
         INSERT INTO model_training_runs 
         (model_name, model_version, trigger_type, status, started_at, completed_at, duration_seconds, sales_records_used, eligible_products, metrics_json)
         VALUES ('Random Forest Demo', ?, 'manual', 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 2.5, 14000, 20, ?)
-    ")->execute([$candidateVersion, json_encode(['wape_28' => 0.18, 'mae_28' => 4.2])]);
+    ")->execute([$candidateVersion, json_encode(['metadata' => ['dataset_kind' => 'demo'], 'wape_28' => 0.18, 'mae_28' => 4.2])]);
 
     $pdo->prepare("
         INSERT INTO ml_model_evaluations
-        (model_version, dataset_type, horizon_days, mae, rmse, wape, baseline_mae, baseline_rmse, baseline_wape, evaluated_at)
+        (model_version, horizon_days, mae, rmse, wape, baseline_mae, baseline_rmse, baseline_wape, created_at)
         VALUES 
-        (?, 'demo', 7, 3.1, 4.2, 0.14, 4.5, 5.8, 0.22, CURRENT_TIMESTAMP),
-        (?, 'demo', 14, 3.7, 4.9, 0.16, 5.1, 6.4, 0.25, CURRENT_TIMESTAMP),
-        (?, 'demo', 28, 4.2, 5.5, 0.18, 5.9, 7.2, 0.29, CURRENT_TIMESTAMP)
+        (?, 7, 3.1, 4.2, 0.14, 4.5, 5.8, 0.22, CURRENT_TIMESTAMP),
+        (?, 14, 3.7, 4.9, 0.16, 5.1, 6.4, 0.25, CURRENT_TIMESTAMP),
+        (?, 28, 4.2, 5.5, 0.18, 5.9, 7.2, 0.29, CURRENT_TIMESTAMP)
     ")->execute([$candidateVersion, $candidateVersion, $candidateVersion]);
 
     $evalRows = $pdo->query("SELECT * FROM ml_model_evaluations WHERE model_version = '{$candidateVersion}'")->fetchAll(PDO::FETCH_ASSOC);
@@ -270,8 +268,8 @@ try {
     // -------------------------------------------------------------
     echo "\n--- Step 5: Forecast Generation from Approved Model ---\n";
     $jobId = 101;
-    $pdo->prepare("INSERT INTO ml_jobs (job_id, trigger_type, status, dataset_type, ml_model_version) VALUES (?, 'forecast_generation', 'succeeded', 'demo', ?)")
-        ->execute([$jobId, $promotedVersion]);
+    $pdo->prepare("INSERT INTO ml_jobs (job_id, trigger_type, status) VALUES (?, 'forecast_generation', 'succeeded')")
+        ->execute([$jobId]);
 
     // Insert 28-day forecasts for product 1 to 20
     $forecastOrigin = '2026-10-09';
@@ -289,6 +287,9 @@ try {
 
     $fcCount = (int)$pdo->query("SELECT COUNT(*) FROM demand_forecasts WHERE job_id = {$jobId}")->fetchColumn();
     $assert($fcCount === 20 * 28, "Generated exactly 28 daily forecasts per product (560 total rows)");
+    $metadata = (new \App\Forecasting\DemandForecastService($pdo))->getJobMetadata($jobId);
+    $assert($metadata['model_version'] === $promotedVersion && $metadata['is_demo'],
+        "Forecast metadata uses persisted model training provenance against schema-faithful jobs");
 
     // -------------------------------------------------------------
     // Step 6: Human-Reviewed Replenishment Queue & Timing Invariants
