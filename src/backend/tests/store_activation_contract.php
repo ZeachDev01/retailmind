@@ -291,6 +291,30 @@ $readiness = $activationService->validateActivationReadiness($candidateVersion, 
 assert_check($readiness['checks']['operational_review_accepted'] === true, 'Admin operational review verified');
 assert_check($readiness['ready'] === false, 'Activation still blocked without 28 observation days');
 
+// Elapsed forecast dates without usable demand evidence must not unlock activation.
+for ($i = 1; $i <= 28; $i++) {
+    $tDate = sprintf('2026-08-%02d', $i);
+    $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version) VALUES (1, 1, '2026-07-31', ?, ?, 10, ?)")->execute([$tDate, $i, $candidateVersion]);
+    if ($i > 10) {
+        $status = $i <= 20 ? 'closed' : 'open';
+        $pdo->prepare("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES (?, ?, '2026-07-30 00:00:00')")->execute([$tDate, $status]);
+    }
+    if ($i > 20) {
+        $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 0, 'count', ? || ' 08:00:00')")->execute([$tDate]);
+    }
+}
+$readiness = $activationService->validateActivationReadiness($candidateVersion, '2026-08-28');
+assert_check($readiness['observation_details']['completed_days'] === 0, '28 missing, closed, or stockout-censored dates contribute no observation days');
+assert_check($readiness['observation_details']['metrics_by_horizon'][28]['count'] === 0, 'Unusable observations contribute no evaluation samples');
+assert_check($readiness['ready'] === false && !$readiness['checks']['observation_period_completed'], 'Passing quality and reviews cannot activate without usable observations');
+$unusableBlocked = false;
+try {
+    $activationService->activateStoreModel($candidateVersion, '2026-08-28', 1);
+} catch (InvalidArgumentException $e) {
+    $unusableBlocked = true;
+}
+assert_check($unusableBlocked, 'Activation refuses 28 elapsed dates with no usable evidence');
+
 // Seed 10 days of observation forecasts and sales (insufficient)
 for ($i = 1; $i <= 10; $i++) {
     $tDate = sprintf('2026-09-%02d', $i);
@@ -312,6 +336,17 @@ for ($i = 1; $i <= 10; $i++) {
 $readiness = $activationService->validateActivationReadiness($candidateVersion, '2026-09-10');
 assert_check($readiness['observation_details']['completed_days'] === 10, '10 completed observation days recorded');
 assert_check($readiness['checks']['observation_period_completed'] === false, 'Observation period still incomplete (< 28 days)');
+assert_check($readiness['ready'] === false, 'Mixed 28 unusable and 10 usable dates cannot activate');
+
+$pdo->exec("INSERT INTO products (product_id, sku, product_name, unit_price, cost_price, status) VALUES (2, 'STORE-P2', 'Second Store Product', 100.0, 60.0, 'active')");
+for ($i = 1; $i <= 10; $i++) {
+    $tDate = sprintf('2026-09-%02d', $i);
+    $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version) VALUES (1, 2, '2026-08-31', ?, ?, 8, ?)")->execute([$tDate, $i, $candidateVersion]);
+    $pdo->prepare("INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, total_price) VALUES (?, 2, 8, 100.0, 800.0)")->execute([$i]);
+}
+$readiness = $activationService->validateActivationReadiness($candidateVersion, '2026-09-10');
+assert_check($readiness['observation_details']['completed_days'] === 10, 'Multiple products on the same usable dates still count only 10 days');
+assert_check($readiness['observation_details']['metrics_by_horizon'][28]['count'] === 20, 'Both products contribute samples without duplicating observed days');
 
 // Seed remaining 18 days (total 28 days)
 for ($i = 11; $i <= 28; $i++) {
@@ -335,6 +370,20 @@ $readiness = $activationService->validateActivationReadiness($candidateVersion, 
 assert_check($readiness['observation_details']['completed_days'] === 28, '28 completed observation days recorded');
 assert_check($readiness['checks']['observation_period_completed'] === true, 'Observation period holdout now satisfied');
 assert_check($readiness['ready'] === true, 'All gating criteria satisfied: candidate is ready for activation');
+
+$pdo->beginTransaction();
+$pdo->exec("DELETE FROM sale_items WHERE sale_id = 28 AND product_id = 1");
+$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 10, 'delivery', '2026-09-28 08:00:00')");
+$readiness = $activationService->validateActivationReadiness($candidateVersion, '2026-09-28');
+assert_check($readiness['observation_details']['completed_days'] === 28 && $readiness['ready'], 'Genuine zero demand with known positive stock qualifies as a usable observation date');
+$pdo->rollBack();
+
+$pdo->beginTransaction();
+$pdo->prepare("UPDATE demand_forecasts SET horizon_day = 29 WHERE model_version = ?")->execute([$candidateVersion]);
+$readiness = $activationService->validateActivationReadiness($candidateVersion, '2026-09-28');
+assert_check($readiness['observation_details']['metrics_by_horizon'][28]['count'] === 0, 'Out-of-window forecasts provide no evaluation samples');
+assert_check(!$readiness['ready'] && !$readiness['checks']['observation_period_completed'], 'Activation stays blocked when every evaluation horizon lacks samples');
+$pdo->rollBack();
 
 // Execute Activation
 $evalService->setObservationMode(true, 1);

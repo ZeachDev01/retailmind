@@ -153,8 +153,7 @@ class CandidateEvaluationService
             ];
         }
 
-        $targetDates = array_unique(array_column($forecasts, 'target_date'));
-        $completedDaysCount = count($targetDates);
+        $targetDates = [];
 
         $historyService = new DemandHistoryService();
         $byHorizon = [];
@@ -173,6 +172,7 @@ class CandidateEvaluationService
                 continue;
             }
 
+            $targetDates[$date] = true;
             $actual = (float)$day['valid_sales_units'];
             $byHorizon[$h]['actuals'][] = $actual;
             $byHorizon[$h]['preds'][] = $pred;
@@ -217,10 +217,11 @@ class CandidateEvaluationService
             ];
         }
 
+        $completedDaysCount = count($targetDates);
         return [
             'completed_days' => $completedDaysCount,
             'min_required_days' => 28,
-            'observation_complete' => ($completedDaysCount >= 28),
+            'observation_complete' => ($completedDaysCount >= 28 && $metrics[28]['count'] > 0),
             'metrics_by_horizon' => $metrics
         ];
     }
