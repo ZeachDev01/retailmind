@@ -2,11 +2,15 @@
 
 ## Source and verification status
 
+Setup, explicit approval, browser review, and Store transition:
+[Demo workflow](../DEMO_FORECASTING.md).
+
 The user supplied `src/backend/dataset/retail_store_inventory.csv`, associated
 with [Anirudh Chauhan's Retail Store Inventory Forecasting Dataset](https://www.kaggle.com/datasets/anirudhchauhan/retail-store-inventory-forecasting-dataset).
 This is not the four-column Store Item Demand Forecasting Challenge dataset.
 
 On 2026-10-10, the publisher page returned no readable dataset description.
+Rechecked 2026-10-12: still no readable description or license through the web reader.
 Publisher methodology, license, redistribution rights, and whether observations
 are real or synthetic remain **unverified**. The source association is
 user-provided, not independently authenticated. All results are **Demo evidence**;

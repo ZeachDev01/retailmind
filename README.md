@@ -1,5 +1,8 @@
 Hi hello
 
+Demo forecasting before Store history is available:
+[setup, approval, browser review, and verification](docs/DEMO_FORECASTING.md).
+
 Fresh-install login:
 
 - Username: superadmin

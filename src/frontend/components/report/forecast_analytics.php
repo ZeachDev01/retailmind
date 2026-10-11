@@ -55,13 +55,13 @@ try {
             df.target_date,
             df.horizon_day,
             df.predicted_units,
-            COALESCE((
+            (
                 SELECT SUM(si.quantity)
                 FROM sale_items si
                 JOIN sales s ON si.sale_id = s.sale_id
                 WHERE si.product_id = df.product_id
                   AND DATE(s.sale_date) = df.target_date
-            ), 0) as actual_units
+            ) as actual_units
         FROM demand_forecasts df
         JOIN ml_jobs j ON j.job_id = df.job_id
         JOIN products p ON df.product_id = p.product_id
@@ -259,7 +259,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                     </thead>
                     <tbody>
                         <?php foreach ($actualVsForecast as $row): 
-                            $diff = (int)$row['actual_units'] - (int)$row['predicted_units'];
+                            $diff = $row['actual_units'] !== null ? (int)$row['actual_units'] - (int)$row['predicted_units'] : null;
                         ?>
                             <tr>
                                 <td><?= htmlspecialchars($row['product_name']) ?></td>
@@ -267,9 +267,9 @@ function format_wape_metric(?float $val, ?string $reason): string {
                                 <td><?= htmlspecialchars($row['target_date']) ?></td>
                                 <td>Day <?= htmlspecialchars((string)$row['horizon_day']) ?></td>
                                 <td><strong><?= htmlspecialchars((string)$row['predicted_units']) ?></strong></td>
-                                <td><?= htmlspecialchars((string)$row['actual_units']) ?></td>
-                                <td style="color: <?= $diff >= 0 ? '#15803d' : '#b91c1c' ?>;">
-                                    <?= $diff > 0 ? "+{$diff}" : $diff ?>
+                                <td><?= $row['actual_units'] !== null ? htmlspecialchars((string)$row['actual_units']) : 'Unknown' ?></td>
+                                <td style="color: <?= $diff === null ? 'var(--text-muted)' : ($diff >= 0 ? '#15803d' : '#b91c1c') ?>;">
+                                    <?= $diff === null ? '—' : ($diff > 0 ? "+{$diff}" : $diff) ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
