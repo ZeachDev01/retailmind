@@ -4,6 +4,10 @@ RetailMind supports one Store's inventory, purchasing, sales, and demand-forecas
 
 ## Language
 
+**Failed Sign-in Review**:
+The Super Administrator's recorded assessment of unsuccessful sign-in attempts, including the review result and supporting note. Reviewed attempts remain part of the security history while further unsuccessful attempts can require another review.
+_Avoid_: Warning deletion, automatic intent verification
+
 **Store**:
 The single retail location operated through RetailMind. RetailMind does not divide operations or records among multiple branches.
 _Avoid_: Branch, location assignment, tenant

@@ -106,7 +106,7 @@ final class AttentionRuleService
         $limit = $this->number($threshold);
 
         return match ($signal) {
-            'failed_login_count' => $current . ' failed sign-ins detected. Review threshold: ' . $limit . '.',
+            'failed_login_count' => $current . ' unreviewed failed sign-ins in the last 24 hours. Review threshold: ' . $limit . '. Review and clear in Protected Audit Records.',
             'locked_account_count' => $current . ' locked ' . ($value === 1.0 ? 'account requires' : 'accounts require') . ' review. Review threshold: ' . $limit . '.',
             'backup_age_days' => $value >= 9999
                 ? 'No successful Database Backup is recorded. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.')

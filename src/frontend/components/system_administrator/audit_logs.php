@@ -6,6 +6,31 @@ require_any_capability([
     \App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT,
 ]);
 
+$actorRole = (string)current_role();
+$signInReviews = new \App\Attention\FailedSignInReviewService($pdo, new \App\Attention\SystemClock());
+$reviewMessage = (string)($_SESSION['sign_in_review_message'] ?? '');
+unset($_SESSION['sign_in_review_message']);
+$reviewError = '';
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'review_failed_sign_ins') {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
+    try {
+        if (($_POST['review_confirmed'] ?? '') !== '1') {
+            throw new InvalidArgumentException('Confirm that you reviewed the listed attempts before clearing.');
+        }
+        $signInReviews->clearReviewed(
+            $actorRole, (int)$_SESSION['user_id'], (int)($_POST['through_attempt_id'] ?? 0),
+            (string)($_POST['review_result'] ?? ''), (string)($_POST['review_note'] ?? ''), get_client_ip_address()
+        );
+        $_SESSION['sign_in_review_message'] = 'Review saved. The listed attempts were cleared from the warning; their history is preserved. New or remaining attempts can still trigger a warning.';
+        header('Location: ' . app_url('components/system_administrator/audit_logs.php') . '#failed-sign-in-review');
+        exit;
+    } catch (Throwable $exception) {
+        $reviewError = \App\Support\OperatorAlert::message($exception, 'The review could not be saved. Reload the page and try again.');
+    }
+}
+$pendingSignIns = $actorRole === 'super_admin' ? $signInReviews->pendingAttempts($actorRole) : [];
+$pendingSignInCount = $actorRole === 'super_admin' ? $signInReviews->pendingCount() : 0;
+
 $userFilter = trim((string)($_GET['user_id'] ?? ''));
 $actionFilter = trim((string)($_GET['action'] ?? ''));
 $moduleFilter = trim((string)($_GET['module'] ?? ''));
@@ -52,9 +77,14 @@ function audit_log_display_value($value): string
         if ($key === 'status' && isset($decoded['username'], $decoded['role'])) {
             $label = 'Action';
         }
-        $displayItem = is_scalar($item)
-            ? (string)$item
-            : json_encode($item, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($key === 'attempts' && is_array($item)) {
+            $displayItem = implode('; ', array_map(static fn(array $attempt): string =>
+                format_display_datetime($attempt['attempted_at']) . ' — ' . $attempt['username'] . ' — ' . $attempt['ip_address'], $item));
+        } else {
+            $displayItem = is_scalar($item)
+                ? (string)$item
+                : json_encode($item, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
         $parts[] = $label . ': ' . $displayItem;
     }
 
@@ -85,7 +115,7 @@ function audit_log_send_csv(string $filename, array $rows): void
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Date & Time', 'User', 'Action', 'Category', 'Module', 'Record ID', 'Previous Value', 'New Value']);
+    fputcsv($output, ['Date & Time', 'User', 'Action', 'Category', 'Module', 'Record ID', 'Previous Value', 'New Value', 'IP Address', 'Reviewed Attempts']);
     foreach ($rows as $row) {
         fputcsv($output, array_map('audit_log_csv_value', $row));
     }
@@ -93,7 +123,6 @@ function audit_log_send_csv(string $filename, array $rows): void
     exit;
 }
 
-$actorRole = (string)current_role();
 $logs = $isExport
     ? $protectedAuditRecords->exportRows($actorRole, $auditFilters)
     : $protectedAuditRecords->records($actorRole, $auditFilters);
@@ -109,6 +138,8 @@ if ($isExport) {
             $log['record_id'] ?? '-',
             audit_log_display_value($log['previous_value'] ?? null),
             audit_log_display_value($log['new_value'] ?? null),
+            $log['ip_address'] ?? '-',
+            $log['action'] === \App\Attention\FailedSignInReviewService::ACTION ? audit_log_display_value($log['metadata'] ?? null) : '-',
         ];
     }, $logs);
     audit_log_send_csv('audit_log_' . date('Ymd_His') . '.csv', $rows);
@@ -169,6 +200,65 @@ $modules = $protectedAuditRecords->modules($actorRole);
                 </div>
             </div>
 
+            <?php if ($actorRole === 'super_admin'): ?>
+                <section class="dashboard-section audit-table-card" id="failed-sign-in-review" aria-labelledby="sign-in-review-title">
+                    <div class="section-header">
+                        <div>
+                            <h2 id="sign-in-review-title">Review failed sign-ins</h2>
+                            <p class="section-description"><?= $pendingSignInCount ?> unreviewed failures in the last 24 hours. Clearing records your review; it does not block further attempts.</p>
+                        </div>
+                    </div>
+                    <?php if ($reviewMessage !== ''): ?>
+                        <p class="alert tag-success" role="status"><?= htmlspecialchars($reviewMessage) ?></p>
+                    <?php endif; ?>
+                    <?php if ($reviewError !== ''): ?>
+                        <p class="alert tag-warning" role="alert"><?= htmlspecialchars($reviewError) ?></p>
+                    <?php endif; ?>
+                    <?php if ($pendingSignIns === []): ?>
+                        <p>No failed sign-ins need review.</p>
+                    <?php else: ?>
+                        <p>Check the account and time with its owner. Compare IP addresses and look for unfamiliar accounts or repeated attempts. A shared IP can belong to several people; logs cannot prove intent. Search <strong>Login failure</strong> in Record history below and open <strong>View details</strong> for the failure reason.</p>
+                        <p>If attempts look unauthorized, secure the account through <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php')) ?>">User Manager</a> before clearing. Record what you checked and any action taken.</p>
+                        <div class="table-wrap audit-log-table-wrap">
+                            <table class="audit-log-table" data-no-smart-table>
+                                <caption>Oldest <?= count($pendingSignIns) ?> unreviewed attempts. Only these listed attempts will be cleared.</caption>
+                                <thead><tr><th>Date &amp; Time</th><th>Account / Identifier</th><th>IP Address</th></tr></thead>
+                                <tbody>
+                                    <?php foreach ($pendingSignIns as $attempt): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars(format_display_datetime($attempt['attempted_at'])) ?></td>
+                                            <td><?= htmlspecialchars($attempt['username']) ?></td>
+                                            <td><?= htmlspecialchars($attempt['ip_address']) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <form method="POST" class="sign-in-review-form">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="review_failed_sign_ins">
+                            <input type="hidden" name="through_attempt_id" value="<?= (int)$pendingSignIns[array_key_last($pendingSignIns)]['attempt_id'] ?>">
+                            <div class="form-group">
+                                <label for="sign-in-review-result">Review result</label>
+                                <select id="sign-in-review-result" name="review_result" required>
+                                    <option value="">Choose a result</option>
+                                    <?php foreach (\App\Attention\FailedSignInReviewService::RESULTS as $value => $label): ?>
+                                        <option value="<?= htmlspecialchars($value) ?>" <?= ($_POST['review_result'] ?? '') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="sign-in-review-note">Review note</label>
+                                <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" required aria-describedby="sign-in-note-help"><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
+                                <p id="sign-in-note-help" class="section-description">Briefly record who confirmed the attempts, what you checked, and any account-security action taken.</p>
+                            </div>
+                            <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> I reviewed the listed attempts.</label>
+                            <button type="submit" class="btn btn-primary">Save review and clear listed attempts</button>
+                        </form>
+                    <?php endif; ?>
+                </section>
+            <?php endif; ?>
+
             <section class="dashboard-section audit-table-card" aria-labelledby="audit-table-title">
                 <div class="section-header">
                     <div>
@@ -214,8 +304,12 @@ $modules = $protectedAuditRecords->modules($actorRole);
                                         <details class="audit-details">
                                             <summary>View details</summary>
                                             <div class="audit-details-content">
+                                                <strong>IP address:</strong> <span><?= htmlspecialchars((string)($log['ip_address'] ?? '-')) ?></span>
                                                 <strong>Previous:</strong> <span class="<?= $previousValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($previousValue) ?></span>
                                                 <strong>New:</strong> <span class="<?= $newValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($newValue) ?></span>
+                                                <?php if ($log['action'] === \App\Attention\FailedSignInReviewService::ACTION): ?>
+                                                    <strong>Reviewed evidence:</strong> <span><?= htmlspecialchars(audit_log_display_value($log['metadata'] ?? null)) ?></span>
+                                                <?php endif; ?>
                                             </div>
                                         </details>
                                     </td>

@@ -14,10 +14,7 @@ final class DatabaseAttentionSignalSource
     public function platform(array $healthChecks = []): array
     {
         $dayAgo = $this->clock->now()->modify('-24 hours')->format('Y-m-d H:i:s');
-        $failedLogins = $this->scalar(
-            "SELECT COUNT(*) FROM login_attempts WHERE was_successful = 0 AND attempted_at >= ?",
-            [$dayAgo]
-        );
+        $failedLogins = (new FailedSignInReviewService($this->pdo, $this->clock))->pendingCount();
         $lockedAccounts = $this->scalar(
             "SELECT COUNT(*) FROM users WHERE status = 'active' AND locked_until > ?",
             [$this->now()]

@@ -40,12 +40,12 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     foreach ([
         'CREATE TABLE attention_settings (setting_scope TEXT, setting_key TEXT, setting_value TEXT, updated_by INTEGER, updated_at TEXT, PRIMARY KEY (setting_scope, setting_key))',
-        'CREATE TABLE login_attempts (was_successful INTEGER, attempted_at TEXT)',
+        'CREATE TABLE login_attempts (attempt_id INTEGER PRIMARY KEY AUTOINCREMENT, was_successful INTEGER, attempted_at TEXT)',
         'CREATE TABLE roles (role_id INTEGER PRIMARY KEY, role_name TEXT)',
         'CREATE TABLE users (user_id INTEGER PRIMARY KEY, role_id INTEGER, status TEXT, locked_until TEXT, is_recovery_account INTEGER)',
         'CREATE TABLE backup_history (backup_type TEXT, status TEXT, created_at TEXT)',
         'CREATE TABLE model_training_runs (status TEXT, started_at TEXT, completed_at TEXT, metrics_json TEXT)',
-        'CREATE TABLE activity_log (category TEXT, created_at TEXT)',
+        'CREATE TABLE activity_log (category TEXT, created_at TEXT, action TEXT, record_id INTEGER)',
         'CREATE TABLE emergency_access_sessions (status TEXT, expires_at TEXT)',
         'CREATE TABLE recovery_accounts (user_id INTEGER, sealed_at TEXT, last_used_at TEXT)',
         'CREATE TABLE sales (sale_date TEXT)',
@@ -64,10 +64,10 @@ try {
         (2, 1, 'active', NULL, 1),
         (3, 2, 'active', NULL, 0),
         (4, 3, 'active', NULL, 0)");
-    $pdo->exec("INSERT INTO login_attempts VALUES (0, '2026-09-18 09:00:00'), (0, '2026-09-18 09:01:00'), (0, '2026-09-18 09:02:00'), (0, '2026-09-18 09:03:00'), (0, '2026-09-18 09:04:00'), (0, '2026-09-18 09:05:00')");
+    $pdo->exec("INSERT INTO login_attempts (was_successful, attempted_at) VALUES (0, '2026-09-18 09:00:00'), (0, '2026-09-18 09:01:00'), (0, '2026-09-18 09:02:00'), (0, '2026-09-18 09:03:00'), (0, '2026-09-18 09:04:00'), (0, '2026-09-18 09:05:00')");
     $pdo->exec("INSERT INTO backup_history VALUES ('scheduled', 'completed', '2026-09-08 08:00:00'), ('scheduled', 'failed', '2026-09-18 09:30:00')");
     $pdo->exec("INSERT INTO model_training_runs VALUES ('completed', '2026-09-01 08:00:00', '2026-09-01 08:30:00', '{\"accuracy\":0.72}')");
-    $pdo->exec("INSERT INTO activity_log VALUES ('platform_setting', '2026-09-18 08:00:00')");
+    $pdo->exec("INSERT INTO activity_log (category, created_at) VALUES ('platform_setting', '2026-09-18 08:00:00')");
     $pdo->exec("INSERT INTO emergency_access_sessions VALUES ('active', '2026-09-18 10:30:00')");
     $pdo->exec("INSERT INTO recovery_accounts VALUES (2, NULL, '2026-09-10 07:00:00')");
     $pdo->exec("INSERT INTO sales VALUES ('2026-09-18 09:45:00')");
@@ -104,6 +104,14 @@ try {
         $assert(str_starts_with($item['destination'], 'components/'), 'Attention actions must use permitted component destinations');
     }
     $assert(!in_array('components/inventory_management/inventory_adjustments.php', $destinations, true), 'Routine stock actions must be absent');
+
+    $assert(in_array('platform.security.failed-logins', array_column($view['attention'], 'key'), true), 'Unreviewed failures must appear in platform attention');
+    $pdo->exec("INSERT INTO activity_log (category, created_at, action, record_id) VALUES ('security', '2026-09-18 10:00:00', 'Failed sign-ins reviewed', 6)");
+    $reviewedView = $workspace->load('super_admin', 30);
+    $assert(!in_array('platform.security.failed-logins', array_column($reviewedView['attention'], 'key'), true), 'Reviewed failures must disappear from platform attention');
+    $pdo->exec("INSERT INTO login_attempts (was_successful, attempted_at) VALUES (0, '2026-09-18 09:30:00'), (0, '2026-09-18 09:31:00'), (0, '2026-09-18 09:32:00'), (0, '2026-09-18 09:33:00'), (0, '2026-09-18 09:34:00')");
+    $newFailureView = $workspace->load('super_admin', 30);
+    $assert(in_array('platform.security.failed-logins', array_column($newFailureView['attention'], 'key'), true), 'New failures must trigger platform attention after manual review');
 
     $pdo->exec("DELETE FROM login_attempts; DELETE FROM backup_history; DELETE FROM model_training_runs; DELETE FROM activity_log; DELETE FROM emergency_access_sessions; DELETE FROM recovery_accounts; DELETE FROM sales; DELETE FROM cashier_shifts; DELETE FROM inventory; DELETE FROM sale_reversals; DELETE FROM inventory_adjustments; UPDATE users SET locked_until = NULL");
     $pdo->exec("INSERT INTO backup_history VALUES ('scheduled', 'completed', '2026-09-18 09:00:00')");

@@ -17,6 +17,33 @@
   margin-bottom: 1.5rem;
 }
 
+.audit-log-page .sign-in-review-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 640px;
+  margin-top: 1.25rem;
+}
+
+.audit-log-page .sign-in-review-form .form-group {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.audit-log-page .sign-in-review-confirm {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.audit-log-page #failed-sign-in-review .audit-log-table {
+  min-width: 560px;
+}
+
+.audit-log-page #failed-sign-in-review caption {
+  padding: 0.75rem 0;
+  text-align: left;
+}
+
 .audit-log-page .audit-log-table-wrap {
   overflow-x: auto;
   overflow-y: visible;
