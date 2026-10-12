@@ -262,7 +262,7 @@ html.overview-fefo-active::-webkit-scrollbar { display: none; }
 /* Source: frontend\modules\inventory_management\inventory_counts.php */
 .count-layout {
         display: grid;
-        grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
         gap: 1.25rem;
         align-items: start;
     }
@@ -280,6 +280,32 @@ html.overview-fefo-active::-webkit-scrollbar { display: none; }
     }
     .count-form {
         margin-top: 1rem;
+    }
+    .count-product-control { position: relative; }
+    .count-product-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 10;
+        width: 100%;
+        overflow: hidden;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    }
+    .count-product-results [role="listbox"] { max-height: 240px; overflow-y: auto; }
+    .count-product-results [role="option"],
+    .count-product-results .muted {
+        padding: 0.75rem 0.9rem;
+        overflow-wrap: anywhere;
+    }
+    .count-product-results > button { width: 100%; }
+    .count-product-results [role="option"] { cursor: pointer; }
+    .count-product-results [role="option"]:hover,
+    .count-product-results [aria-selected="true"] {
+        background: var(--theme-info-surface, #dbeafe);
+        color: var(--theme-info-text, #1d4ed8);
     }
     .count-form textarea {
         width: 100%;
@@ -373,7 +399,6 @@ html.overview-fefo-active::-webkit-scrollbar { display: none; }
     .scan-match[hidden] { display: none; }
     .scan-match strong { display: block; }
     @media (max-width: 1000px) {
-        .count-layout { grid-template-columns: 1fr; }
         .quantity-preview { grid-template-columns: 1fr; }
     }
 

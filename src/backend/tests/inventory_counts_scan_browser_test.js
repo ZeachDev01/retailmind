@@ -239,10 +239,22 @@ async function login(page, member) {
 }
 
 async function scan(page, code) {
-    const input = page.locator('#product_code_scan');
+    const input = page.locator('#product_search');
     await input.fill('');
     await page.keyboard.type(code, { delay: 8 });
     await page.keyboard.press('Enter');
+}
+
+async function selectProduct(page, productId) {
+    const label = await page.locator('#product_id option[value="' + productId + '"]').textContent();
+    await page.fill('#product_search', label.trim());
+    const acceptReplacement = (dialog) => dialog.accept();
+    page.on('dialog', acceptReplacement);
+    try {
+        await page.locator('#product_results [data-value="' + productId + '"]').click();
+    } finally {
+        page.off('dialog', acceptReplacement);
+    }
 }
 
 async function readJson(response) {
@@ -383,14 +395,101 @@ async function main() {
         check(response.status() === 405, 'the lookup endpoint refuses write methods with 405');
 
         await page.goto(countsPath);
-        check(await eventually(page, () => document.getElementById('product_code_scan') !== null),
+        check(await eventually(page, () => document.getElementById('product_search') !== null),
             'Inventory Counts renders the scan field');
 
+        console.log('Searchable product dropdown');
+        check(await page.locator('#use_system_quantity').isDisabled(),
+            'quantity shortcut is disabled without a selected product');
+        check(await page.locator('#product_code_scan').count() === 0,
+            'scan and product search use one field');
+        check(await page.locator('#product_results').isHidden(), 'initial focus shows no products');
+        await page.click('#product_search');
+        check(await page.locator('#product_results').isHidden(), 'clicking the empty field shows no products');
+        await page.press('#product_search', 'ArrowDown');
+        check(await page.locator('#product_results').isHidden(), 'ArrowDown cannot list products for a blank query');
+        await page.fill('#product_search', '   ');
+        check(await page.locator('#product_results').isHidden(), 'whitespace does not open results');
+        await page.fill('#product_search', 'Scan WF');
+        const matchingTotal = await page.locator('#product_id option').evaluateAll(options =>
+            options.filter(option => option.value && option.textContent.toLowerCase().includes('scan wf')).length);
+        check(matchingTotal > 5 && await page.locator('#product_results [role="option"]').count() === 5,
+            'search results also show only five matches');
+        await page.focus('#product_search');
+        await page.press('#product_search', 'Tab');
+        check(await page.locator('#product_show_all').evaluate(button => button === document.activeElement),
+            'Show all matches is reachable by keyboard');
+        await page.press('#product_show_all', 'Enter');
+        check(await page.locator('#product_results [role="option"]').count() === matchingTotal,
+            'keyboard Show all expands the current search');
+        await page.fill('#product_search', 'Scan W');
+        check(await page.locator('#product_results [role="option"]').count() === 5,
+            'changing the query resets the five-result limit');
+        await page.fill('#product_search', '');
+        check(await page.locator('#product_results').isHidden()
+            && await page.locator('#product_show_all').isHidden(), 'clearing the search hides results and Show all');
+        await page.fill('#product_search', 'Scan WF');
+        await page.press('#product_search', 'Escape');
+        await page.click('#product_search');
+        check(await page.locator('#product_results').isHidden(), 'click alone does not reopen a populated search');
+        const productLabel = await page.locator('#product_id option[value="' + products.countable.product_id + '"]').textContent();
+        const productName = productLabel.trim().slice(products.countable.sku.length + 3);
+        await page.fill('#product_search', products.countable.sku.slice(1).toLowerCase());
+        const searchedProduct = page.locator('#product_results [data-value="' + products.countable.product_id + '"]');
+        check(await searchedProduct.isVisible(), 'partial SKU search ignores case');
+        check(await page.locator('#product_results').evaluate((list) =>
+            list.getBoundingClientRect().top >= document.getElementById('product_search').getBoundingClientRect().bottom),
+            'matching products open below the search field');
+        await searchedProduct.click();
+        check(await page.inputValue('#product_id') === String(products.countable.product_id),
+            'clicking a result selects the existing product ID');
+        check((await page.inputValue('#product_search')) === productLabel.trim(),
+            'selected product shows SKU and name');
+        check(await page.inputValue('#physical_quantity') === '', 'product selection leaves the physical count blank');
+        check(await page.locator('#use_system_quantity').textContent() === 'Use system quantity (10)',
+            'shortcut suggests the selected product system quantity');
+        await page.click('#use_system_quantity');
+        check(await page.inputValue('#physical_quantity') === '10'
+            && await page.locator('#differenceQty').textContent() === '0',
+            'clicking the shortcut fills the count and refreshes the difference');
+        check(new URL(page.url()).pathname === countsPath, 'quantity shortcut does not submit the form');
+        await page.fill('#physical_quantity', '');
+        await page.fill('#product_search', productName.slice(1).toUpperCase());
+        check(await searchedProduct.isVisible(), 'partial product name search ignores case');
+        await page.fill('#product_search', products.countable.sku.toLowerCase());
+        check(await page.inputValue('#product_id') === String(products.countable.product_id), 'typing preserves the committed product until selection');
+        check(await page.locator('#product_search').evaluate((input) => !input.checkValidity()),
+            'matching typed text requires explicit selection');
+        await page.press('#product_search', 'ArrowDown');
+        await page.press('#product_search', 'Enter');
+        check(await page.inputValue('#product_id') === String(products.countable.product_id),
+            'keyboard selection sets the product ID');
+        check(await page.locator('#product_search').evaluate((input) => input.checkValidity()),
+            'explicit selection clears validation error');
+        await page.fill('#product_search', 'NOPE' + token + 'ZZ');
+        check(await page.locator('#product_results').innerText() === 'No products found',
+            'unmatched search shows the empty state');
+        await page.press('#product_search', 'Enter');
+        check(await page.inputValue('#product_id') === String(products.countable.product_id), 'unmatched text cannot replace the committed product');
+        await page.press('#product_search', 'Escape');
+        check(await page.locator('#product_results').isHidden(), 'Escape closes the product list');
+        await page.fill('#product_search', products.zero.sku.toLowerCase());
+        check(await page.locator('#product_results [data-value="' + products.zero.product_id + '"]').isVisible(),
+            'zero-stock products remain searchable');
+        await page.fill('#product_search', products.inactive.sku);
+        check(await page.locator('#product_results [role="option"]').count() === 0,
+            'inactive products are excluded from search');
+
         console.log('Partly filled counts protect entered work from conflicting scans');
-        await page.selectOption('#product_id', String(products.countable.product_id));
+        await selectProduct(page, String(products.countable.product_id));
         await page.fill('#physical_quantity', '12');
         await page.fill('#discrepancy_reason', 'Counted shelf and back-room units twice.');
         const previewBeforeReplacement = await page.locator('.quantity-preview').innerText();
+        await page.fill('#product_search', products.zero.sku);
+        page.once('dialog', dialog => dialog.dismiss());
+        await page.locator('#product_results [data-value="' + products.zero.product_id + '"]').click();
+        check(await page.inputValue('#product_id') === String(products.countable.product_id),
+            'cancelling a searched replacement preserves the committed product');
         let replacementPrompt = '';
         page.once('dialog', async (dialog) => {
             replacementPrompt = dialog.message();
@@ -424,6 +523,9 @@ async function main() {
         await page.fill('#discrepancy_reason', 'Separate recount correcting the approved Stock Issue.');
         const linkedPreview = await page.locator('.quantity-preview').innerText();
         const linkedAdjustmentId = await page.locator('input[name="related_adjustment_id"]').inputValue();
+        await selectProduct(page, products.zero.product_id);
+        check(await page.inputValue('#product_id') === String(approvedIssue.product_id),
+            'search selection cannot replace a linked correction product');
         await scan(page, products.zero.barcode);
         await eventually(page, () => document.getElementById('scan_status').textContent.indexOf('linked Stock Issue') !== -1);
         check(await page.inputValue('#product_id') === String(approvedIssue.product_id),
@@ -509,6 +611,11 @@ async function main() {
             'the preview reports a zero system quantity');
         check(await page.inputValue('#physical_quantity') === '',
             'a zero-stock scan still leaves the counted total empty');
+        check(await page.locator('#use_system_quantity').textContent() === 'Use system quantity (0)',
+            'shortcut updates when a zero-stock product is scanned');
+        await page.click('#use_system_quantity');
+        check(await page.inputValue('#physical_quantity') === '0', 'shortcut accepts a zero system quantity');
+        await page.fill('#physical_quantity', '');
 
         await scan(page, products.countable.case_barcode);
         check(await eventually(page, (id) => document.getElementById('product_id').value === String(id),
@@ -516,7 +623,7 @@ async function main() {
             'case barcode scan selects the product');
 
         console.log('Unknown and ambiguous codes leave the form alone');
-        await page.selectOption('#product_id', String(products.zero.product_id));
+        await selectProduct(page, String(products.zero.product_id));
         await page.fill('#physical_quantity', '7');
         await page.fill('#discrepancy_reason', 'Preserve this entered explanation.');
         const beforeUnknown = await page.inputValue('#product_id');
@@ -548,7 +655,7 @@ async function main() {
         check(await page.inputValue('#product_id') === beforeUnknown, 'an inactive product is not selected by scan');
 
         console.log('Repeated scans never touch the counted total');
-        await page.selectOption('#product_id', String(products.zero.product_id));
+        await selectProduct(page, String(products.zero.product_id));
         page.once('dialog', (dialog) => dialog.accept());
         await scan(page, products.countable.barcode);
         check(await eventually(page, (expected) =>
@@ -564,8 +671,9 @@ async function main() {
         // operator's total restored, not overwritten by the barcode digits.
         // A different product is selected first, so the assertion can only pass
         // when this scan's own answer - not the previous selection - arrives.
-        await page.selectOption('#product_id', String(products.zero.product_id));
+        await selectProduct(page, String(products.zero.product_id));
         page.once('dialog', (dialog) => dialog.accept());
+        await page.focus('#physical_quantity');
         await page.keyboard.type(products.countable.barcode, { delay: 6 });
         await page.keyboard.press('Enter');
         check(await eventually(page, (expected) =>
@@ -591,8 +699,9 @@ async function main() {
             'a short code still never sets the counted total');
 
         console.log('A short numeric code in the counted total field is still a scan');
-        await page.selectOption('#product_id', String(products.zero.product_id));
+        await selectProduct(page, String(products.zero.product_id));
         page.once('dialog', (dialog) => dialog.accept());
+        await page.focus('#physical_quantity');
         await page.keyboard.type(products.short_numeric.sku, { delay: 6 });
         await page.keyboard.press('Enter');
         check(await eventually(page, (expected) =>
@@ -614,7 +723,7 @@ async function main() {
             }
             await route.continue();
         });
-        await page.selectOption('#product_id', String(products.zero.product_id));
+        await selectProduct(page, String(products.zero.product_id));
         const delayedResponse = page.waitForResponse((candidate) =>
             new URL(candidate.url()).searchParams.get('code') === delayedCode);
         const newerResponse = page.waitForResponse((candidate) =>
@@ -633,7 +742,7 @@ async function main() {
         const lookupSettled = await eventually(page,
             () => document.getElementById('scan_status').textContent.indexOf('Checking') === -1);
         check(lookupSettled, 'the scan lookup settled before the manual selection');
-        await page.selectOption('#product_id', String(products.zero.product_id));
+        await selectProduct(page, String(products.zero.product_id));
         const dropdownPreviewReady = await eventually(page,
             () => document.getElementById('systemQty').textContent === '0');
         const dropdownSystemQty = await page.locator('#systemQty').textContent();
@@ -647,7 +756,7 @@ async function main() {
         check(snapshot.counts.length === 1, 'scanning alone adds no count beyond the linked correction');
 
         console.log('Count submission and approval');
-        await page.selectOption('#product_id', String(products.countable.product_id));
+        await selectProduct(page, String(products.countable.product_id));
         await page.fill('#physical_quantity', '15');
         await page.fill('#discrepancy_reason', 'Scan workflow reconciliation of the counted shelf.');
         await dismissBlockingDialogs(page);
@@ -702,8 +811,12 @@ async function main() {
         const adminPage = await adminContext.newPage();
         await login(adminPage, staff.admin);
         await adminPage.goto(countsPath);
-        check(await eventually(adminPage, () => document.getElementById('product_code_scan') !== null),
+        check(await eventually(adminPage, () => document.getElementById('product_search') !== null),
             'Administrators can still open Inventory Counts');
+        check(await adminPage.locator('#product_search').isEnabled(),
+            'Administrator can use the combined lookup without mutation controls');
+        check(await adminPage.locator('#use_system_quantity').isDisabled(),
+            'Administrator quantity shortcut preserves read-only access');
 
         response = await adminContext.request.get(lookupUrl + '?code=' + encodeURIComponent(products.zero.barcode));
         body = await readJson(response);

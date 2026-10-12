@@ -1,6 +1,6 @@
 <?php
 // Source contract for the Inventory Counts scan affordance (ticket #79):
-// the page wires an Enter-terminated code lookup next to the Product dropdown,
+// the page combines Enter-terminated code lookup with Product search,
 // and the shared lookup endpoint stays authenticated and read-only with no
 // mutation or paired-phone-token path.
 $failures = [];
@@ -29,19 +29,22 @@ $service = (string)file_get_contents($servicePath);
 // Matches SQL writes, not prose such as "never exposes an update operation".
 $writeStatementPattern = '/\b(INSERT\s+INTO|UPDATE\s+[A-Za-z_]+\s+SET|DELETE\s+FROM)\b/i';
 
-// The scan field sits outside the count form so Enter can never submit it.
+// The combined field sits inside the form; its Enter handler prevents submission.
 $formStart = strpos($page, '<form method="POST" class="count-form">');
-$scanField = strpos($page, 'id="product_code_scan"');
+$scanField = strpos($page, 'id="product_search"');
 $assert($formStart !== false && $scanField !== false, 'Count page renders the scan field');
-$assert($scanField < $formStart, 'Scan field must not be a value that posts with the count form');
+$assert($scanField > $formStart && strpos($page, 'event.preventDefault()') !== false,
+    'Combined product field prevents Enter from submitting the count form');
 $assert(strpos($page, 'product_code_lookup.php') !== false, 'Count page targets the shared product code lookup');
-$assert(strpos($page, "event.key !== 'Enter'") !== false, 'Scan field lookup runs on Enter');
+$assert(strpos($page, "event.key === 'Enter'") !== false && strpos($page, 'startLookup(code)') !== false,
+    'Combined field lookup runs on Enter');
 $assert(strpos($page, 'physicalInput.focus()') !== false, 'A match focuses the physical quantity field');
 $assert(strpos($page, "outcome === 'match'") !== false, 'Page handles the match outcome');
 $assert(strpos($page, "outcome === 'ambiguous'") !== false, 'Page handles the ambiguous outcome');
 $assert(strpos($page, "No product matches") !== false, 'Page shows a retry/manual-selection message for unknown codes');
 $assert(strpos($page, 'productSelect.dispatchEvent') !== false, 'A match selects the product in the existing dropdown');
-preg_match_all('/physicalInput\.value\s*=(?!=)/', $page, $assignments);
+$scanScript = substr($page, strpos($page, '// --- Barcode / SKU scan'));
+preg_match_all('/physicalInput\.value\s*=(?!=)/', $scanScript, $assignments);
 $assert(
     count($assignments[0]) === 1 && strpos($page, 'physicalInput.value = burstValue') !== false,
     'Scan handling never assigns a counted total of its own'

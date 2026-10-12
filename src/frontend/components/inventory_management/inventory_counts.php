@@ -140,26 +140,6 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         </div>
                     <?php endif; ?>
 
-                    <div class="form-group scan-group">
-                        <label for="product_code_scan">Scan product</label>
-                        <input
-                            type="text"
-                            id="product_code_scan"
-                            class="scan-input"
-                            placeholder="Scan a barcode or type a SKU, then press Enter"
-                            autocomplete="off"
-                            autocapitalize="off"
-                            autocorrect="off"
-                            spellcheck="false"
-                            autofocus
-                            aria-describedby="scan_status">
-                        <p class="scan-status" id="scan_status" role="status" aria-live="polite"></p>
-                        <div class="scan-match" id="scan_match" hidden>
-                            <strong id="scan_match_name"></strong>
-                            <small class="muted" id="scan_match_detail"></small>
-                        </div>
-                    </div>
-
                     <?php if ($canMutateInventory): ?>
                         <form method="POST" class="count-form">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
@@ -174,6 +154,18 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
 
                         <div class="form-group">
                             <label for="product_id">Product</label>
+                            <div class="count-product-control">
+                                <input type="text" id="product_search" hidden
+                                    placeholder="Scan barcode or search SKU / product name" autocomplete="off"
+                                    autocapitalize="off" autocorrect="off" spellcheck="false"
+                                    role="combobox" aria-autocomplete="list" aria-expanded="false"
+                                    aria-controls="product_results" aria-describedby="product_search_status scan_status" disabled>
+                                <div id="product_popup" class="count-product-results" hidden>
+                                    <div id="product_results" role="listbox" aria-label="Products" hidden></div>
+                                    <button type="button" id="product_show_all" class="btn btn-secondary" hidden>Show all matches</button>
+                                </div>
+                            </div>
+                            <p id="product_search_status" class="muted" role="status" aria-live="polite"></p>
                             <select name="product_id" id="product_id" required <?= $canMutateInventory ? '' : 'disabled' ?>>
                                 <option value="">Select product</option>
                                 <?php foreach ($products as $product): ?>
@@ -185,11 +177,17 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                     </option>
                                 <?php endforeach; ?>
                             </select>
+                            <p class="scan-status" id="scan_status" role="status" aria-live="polite"></p>
+                            <div class="scan-match" id="scan_match" hidden>
+                                <strong id="scan_match_name"></strong>
+                                <small class="muted" id="scan_match_detail"></small>
+                            </div>
                         </div>
 
                         <div class="form-group">
                             <label for="physical_quantity">Physically Counted Quantity</label>
                             <input type="number" name="physical_quantity" id="physical_quantity" min="0" required <?= $canMutateInventory ? '' : 'readonly' ?>>
+                            <button type="button" id="use_system_quantity" class="btn btn-small btn-secondary" disabled>Use system quantity</button>
                         </div>
 
                         <div class="quantity-preview" aria-live="polite">
@@ -324,6 +322,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
     <script>
         const productSelect = document.getElementById('product_id');
         const physicalInput = document.getElementById('physical_quantity');
+        const useSystemQuantity = document.getElementById('use_system_quantity');
         const systemQty = document.getElementById('systemQty');
         const physicalQty = document.getElementById('physicalQty');
         const differenceQty = document.getElementById('differenceQty');
@@ -333,6 +332,9 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             const hasProduct = option && option.dataset.systemQty !== undefined;
             const system = hasProduct ? parseInt(option.dataset.systemQty, 10) : null;
             const physical = physicalInput.value === '' ? null : parseInt(physicalInput.value, 10);
+            const canUseSystemQuantity = system !== null && !Number.isNaN(system) && system >= 0;
+            useSystemQuantity.disabled = physicalInput.readOnly || !canUseSystemQuantity;
+            useSystemQuantity.textContent = canUseSystemQuantity ? 'Use system quantity (' + system + ')' : 'Use system quantity';
 
             systemQty.textContent = system === null || Number.isNaN(system) ? '-' : system;
             physicalQty.textContent = physical === null || Number.isNaN(physical) ? '-' : physical;
@@ -354,13 +356,161 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
 
         productSelect.addEventListener('change', updatePreview);
         physicalInput.addEventListener('input', updatePreview);
+        useSystemQuantity.addEventListener('click', function () {
+            physicalInput.value = productSelect.selectedOptions[0].dataset.systemQty;
+            physicalInput.dispatchEvent(new Event('input', { bubbles: true }));
+            physicalInput.focus();
+        });
         updatePreview();
+
+        const productSearch = document.getElementById('product_search');
+        const productResults = document.getElementById('product_results');
+        const productPopup = document.getElementById('product_popup');
+        const productShowAll = document.getElementById('product_show_all');
+        const productSearchStatus = document.getElementById('product_search_status');
+        let activeProductIndex = -1;
+        let latestLookupRequestId = 0;
+
+        function closeProductResults() {
+            productResults.hidden = true;
+            productPopup.hidden = true;
+            productSearch.setAttribute('aria-expanded', 'false');
+            productSearch.removeAttribute('aria-activedescendant');
+            activeProductIndex = -1;
+        }
+
+        function syncProductSearch() {
+            const option = productSelect.selectedOptions[0];
+            productSearch.value = option && option.value ? option.textContent.trim() : '';
+            productSearch.setCustomValidity(productSelect.value ? '' : 'Choose a product from the matching results.');
+            productSearchStatus.textContent = '';
+            closeProductResults();
+        }
+
+        function showProductResults(showAll) {
+            const query = productSearch.value.trim().toLowerCase();
+            productResults.replaceChildren();
+            if (query === '') {
+                productSearchStatus.textContent = '';
+                closeProductResults();
+                return;
+            }
+            activeProductIndex = -1;
+            productSearch.removeAttribute('aria-activedescendant');
+            const matches = Array.from(productSelect.options).filter(function (option) {
+                return option.value && option.textContent.toLowerCase().includes(query);
+            });
+            for (const option of showAll === true ? matches : matches.slice(0, 5)) {
+                const result = document.createElement('div');
+                result.id = 'product_result_' + option.value;
+                result.setAttribute('role', 'option');
+                result.setAttribute('aria-selected', 'false');
+                result.dataset.value = option.value;
+                result.textContent = option.textContent.trim();
+                productResults.appendChild(result);
+            }
+            const count = matches.length;
+            if (count === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'muted';
+                empty.textContent = 'No products found';
+                productResults.appendChild(empty);
+            }
+            productShowAll.hidden = showAll === true || count <= 5;
+            productShowAll.textContent = 'Show all ' + count + ' matches';
+            productSearchStatus.textContent = count > 5 && showAll !== true
+                ? 'Showing 5 of ' + count + ' matches.' : count
+                ? count + (count === 1 ? ' matching product.' : ' matching products.') : 'No products found';
+            productResults.hidden = false;
+            productPopup.hidden = false;
+            productSearch.setAttribute('aria-expanded', 'true');
+        }
+
+        function chooseProductResult(result) {
+            ++latestLookupRequestId;
+            if (!confirmProductSelection(Number(result.dataset.value), result.textContent)) {
+                syncProductSearch();
+                return;
+            }
+            productSelect.value = result.dataset.value;
+            productSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        productSearch.addEventListener('input', function () {
+            ++latestLookupRequestId;
+            productSearch.setCustomValidity('Choose a product from the matching results.');
+            setScanStatus('');
+            scanMatch.hidden = true;
+            showProductResults();
+        });
+        productSearch.addEventListener('blur', function (event) {
+            if (!productPopup.contains(event.relatedTarget)) closeProductResults();
+        });
+        productPopup.addEventListener('mousedown', function (event) { event.preventDefault(); });
+        productShowAll.addEventListener('blur', function (event) {
+            if (event.relatedTarget !== productSearch) closeProductResults();
+        });
+        productShowAll.addEventListener('click', function () {
+            productSearch.focus();
+            showProductResults(true);
+        });
+        productResults.addEventListener('click', function (event) {
+            const result = event.target.closest('[role="option"]');
+            if (result) {
+                chooseProductResult(result);
+            }
+        });
+        productSearch.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeProductResults();
+                return;
+            }
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const result = productResults.querySelector('[aria-selected="true"]');
+                if (!productResults.hidden && result) {
+                    chooseProductResult(result);
+                } else {
+                    const code = productSearch.value.trim();
+                    if (code) startLookup(code);
+                    else setScanStatus('Scan a barcode or search by SKU or product name.', 'error');
+                }
+                return;
+            }
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+                return;
+            }
+            event.preventDefault();
+            if (productResults.hidden) {
+                showProductResults();
+            }
+            const results = productResults.querySelectorAll('[role="option"]');
+            if (!results.length) {
+                return;
+            }
+            activeProductIndex = activeProductIndex < 0
+                ? (event.key === 'ArrowDown' ? 0 : results.length - 1)
+                : (activeProductIndex + (event.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length;
+            results.forEach(function (result, index) {
+                result.setAttribute('aria-selected', String(index === activeProductIndex));
+            });
+            const active = results[activeProductIndex];
+            productSearch.setAttribute('aria-activedescendant', active.id);
+            active.scrollIntoView({ block: 'nearest' });
+        });
+        productSelect.addEventListener('change', syncProductSearch);
+        productSelect.required = false;
+        productSelect.hidden = true;
+        productSearch.disabled = false;
+        productSearch.required = !productSelect.disabled;
+        productSearch.hidden = false;
+        document.querySelector('label[for="product_id"]').htmlFor = 'product_search';
+        syncProductSearch();
 
         // --- Barcode / SKU scan (ticket #79) ---------------------------------
         // Identification only: a scan selects the product and moves focus to
         // the counted total. It never writes a quantity, never increments one,
         // and never submits the form.
-        const scanInput = document.getElementById('product_code_scan');
         const scanStatus = document.getElementById('scan_status');
         const scanMatch = document.getElementById('scan_match');
         const scanMatchName = document.getElementById('scan_match_name');
@@ -374,7 +524,6 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             unit_barcode: 'unit barcode',
             case_barcode: 'case barcode'
         };
-        let latestLookupRequestId = 0;
 
         function setScanStatus(message, tone) {
             scanStatus.textContent = message || '';
@@ -407,6 +556,22 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             productSelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
+        function confirmProductSelection(productId, productName) {
+            if (correctionProductId !== null && productId !== correctionProductId) {
+                setScanStatus('This count is linked to an approved Stock Issue. Choose that report\'s product.', 'error');
+                return false;
+            }
+            const reasonInput = document.getElementById('discrepancy_reason');
+            const hasEnteredWork = physicalInput.value !== '' || reasonInput.value.trim() !== '';
+            if (correctionProductId === null && Number(productSelect.value) > 0
+                && productId !== Number(productSelect.value) && hasEnteredWork
+                && !window.confirm('Replace the current product with ' + productName + '? Your entered count details will stay on the form.')) {
+                setScanStatus('Product unchanged. Your entered count details were preserved.', 'error');
+                return false;
+            }
+            return true;
+        }
+
         function runProductLookup(code) {
             const requestId = ++latestLookupRequestId;
             fetch(productCodeLookupUrl + '?code=' + encodeURIComponent(code), {
@@ -433,33 +598,14 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         return;
                     }
                     if (body.outcome === 'match' && body.product) {
-                        const matchedProductId = Number(body.product.product_id);
-                        const selectedProductId = Number(productSelect.value || 0);
-                        if (correctionProductId !== null && matchedProductId !== correctionProductId) {
-                            setScanStatus(
-                                'This count is linked to an approved Stock Issue. Scan that report\'s product or continue with the selected product.',
-                                'error'
-                            );
-                            scanInput.value = '';
-                            return;
-                        }
-
-                        const reasonInput = document.getElementById('discrepancy_reason');
-                        const hasEnteredWork = physicalInput.value !== '' || reasonInput.value.trim() !== '';
-                        if (correctionProductId === null
-                            && selectedProductId > 0
-                            && matchedProductId !== selectedProductId
-                            && hasEnteredWork
-                            && !window.confirm('Replace the current product with ' + body.product.product_name + '? Your entered count details will stay on the form.')) {
-                            setScanStatus('Product unchanged. Your entered count details were preserved.', 'error');
-                            scanInput.value = '';
+                        if (!confirmProductSelection(Number(body.product.product_id), body.product.product_name)) {
+                            syncProductSearch();
                             return;
                         }
 
                         applyProductSelection(body.product);
                         showScanMatch(body.product, body.matched_code_kind);
                         setScanStatus('Matched by ' + (kindLabels[body.matched_code_kind] || 'code') + '. Enter the counted total.', 'ok');
-                        scanInput.value = '';
                         physicalInput.focus();
                         updatePreview();
                         return;
@@ -488,20 +634,6 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             setScanStatus('Checking "' + code + '"...');
             runProductLookup(code);
         }
-
-        scanInput.addEventListener('keydown', function (event) {
-            if (event.key !== 'Enter') {
-                return;
-            }
-            // Never let Enter in the scan box submit the count form.
-            event.preventDefault();
-            const code = scanInput.value.trim();
-            if (code === '') {
-                setScanStatus('Scan a barcode or type a SKU, then press Enter.', 'error');
-                return;
-            }
-            startLookup(code);
-        });
 
         // A keyboard wedge types into whatever holds focus. When focus sits on
         // the counted total, a repeated scan would otherwise rewrite it, so an
@@ -552,6 +684,8 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             }
             burstKeys.push({ t: typedAt, key: event.key });
         });
+        productSearch.focus();
+        productSearch.select();
     </script>
 </body>
 
