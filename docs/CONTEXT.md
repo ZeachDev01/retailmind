@@ -4,6 +4,10 @@ RetailMind supports one Store's inventory, purchasing, sales, and demand-forecas
 
 ## Language
 
+**Application Log Acknowledgment**:
+The Super Administrator's recorded investigation of a specific version of the application log, including its result and verification note. Later log entries can require another review; acknowledgment does not resolve other service failures.
+_Avoid_: Log deletion, service repair, automatic fix verification
+
 **Failed Sign-in Review**:
 The Super Administrator's recorded assessment of unsuccessful sign-in attempts, including the review result and supporting note. Reviewed attempts remain part of the security history while further unsuccessful attempts can require another review.
 _Avoid_: Warning deletion, automatic intent verification

@@ -136,6 +136,14 @@
   color: var(--muted);
 }
 
+.audit-log-page .audit-details-content pre {
+  min-width: 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .audit-log-page .dt-container .dt-layout-row {
   align-items: center;
   gap: 1rem;

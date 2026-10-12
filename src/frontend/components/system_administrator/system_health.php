@@ -4,6 +4,36 @@ require_once __DIR__ . '/../../../backend/app/Services/SystemHealthService.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 
 $backendPath = $GLOBALS['app']['backend_path'] ?? dirname(__DIR__, 3) . '/backend';
+$actorRole = (string)current_role();
+$logReviews = new \App\Attention\ApplicationLogReviewService(
+    $pdo, new \App\Attention\SystemClock(), $backendPath . '/storage/logs/app.log'
+);
+$logReviewMessage = (string)($_SESSION['application_log_review_message'] ?? '');
+unset($_SESSION['application_log_review_message']);
+$logReviewError = '';
+$logSnapshot = null;
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'acknowledge_application_log') {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
+    try {
+        if (($_POST['review_confirmed'] ?? '') !== '1') {
+            throw new InvalidArgumentException('Confirm that you investigated the log entries before acknowledging.');
+        }
+        $logReviews->acknowledge(
+            $actorRole, (int)$_SESSION['user_id'], (string)($_POST['log_fingerprint'] ?? ''),
+            (string)($_POST['review_result'] ?? ''), (string)($_POST['review_note'] ?? ''), get_client_ip_address()
+        );
+        $_SESSION['application_log_review_message'] = 'Log review saved. This log version is acknowledged; new log entries and other unhealthy checks can still trigger a warning.';
+        header('Location: ' . app_url('components/system_administrator/system_health.php') . '#application-log-review');
+        exit;
+    } catch (Throwable $exception) {
+        $logReviewError = \App\Support\OperatorAlert::message($exception, 'The log review could not be saved. Refresh the page and try again.');
+    }
+}
+try {
+    $logSnapshot = $logReviews->reviewSnapshot($actorRole);
+} catch (Throwable $exception) {
+    $logReviewError = \App\Support\OperatorAlert::message($exception, 'Recent log entries could not be loaded. Check log access and refresh.');
+}
 $service = new SystemHealthService($pdo, $backendPath);
 $checks = $service->checks();
 $counts = ['healthy' => 0, 'warning' => 0, 'critical' => 0];
@@ -74,7 +104,7 @@ $checkedAt = format_display_datetime('now');
                     <div class="section-header">
                         <div>
                             <h2 id="environment-checks-title">Environment checks</h2>
-                            <p class="section-description">These checks are read-only and never modify the database.</p>
+                            <p class="section-description">Checks report current conditions. Log acknowledgment records your review without changing other checks.</p>
                         </div>
                         <span class="system-health-check-count"><?= count($checks) ?> checks</span>
                     </div>
@@ -112,15 +142,15 @@ $checkedAt = format_display_datetime('now');
                     <div class="maintenance-list">
                         <div class="maintenance-item">
                             <span class="maintenance-icon"><i class="bi bi-database-gear" aria-hidden="true"></i></span>
-                            <div><strong>Apply pending migrations</strong><code>php backend/scripts/migrate.php</code></div>
+                            <div><strong>Apply pending migrations</strong><code>php src/backend/scripts/migrate.php</code></div>
                         </div>
                         <div class="maintenance-item">
                             <span class="maintenance-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
-                            <div><strong>Run release checks</strong><code>bash backend/tests/run_all.sh</code></div>
+                            <div><strong>Run release checks</strong><code>bash src/backend/tests/run_all.sh</code></div>
                         </div>
                         <div class="maintenance-item">
                             <span class="maintenance-icon"><i class="bi bi-file-earmark-zip" aria-hidden="true"></i></span>
-                            <div><strong>Build a deployment package</strong><code>bash backend/scripts/build_release.sh</code></div>
+                            <div><strong>Build a deployment package</strong><code>bash src/backend/scripts/build_release.sh</code></div>
                         </div>
                     </div>
                     <div class="system-health-note">
@@ -129,6 +159,52 @@ $checkedAt = format_display_datetime('now');
                     </div>
                 </aside>
             </div>
+            <section class="dashboard-section application-log-review" id="application-log-review" aria-labelledby="log-review-title">
+                <div class="section-header">
+                    <div>
+                        <h2 id="log-review-title">Review application log</h2>
+                        <p class="section-description">Investigate the cause, verify the affected action, then record your review. Acknowledgment preserves the log and does not clear database or storage failures.</p>
+                    </div>
+                    <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>">Review history</a>
+                </div>
+                <?php if ($logReviewMessage !== ''): ?>
+                    <p class="alert tag-success" role="status"><?= htmlspecialchars($logReviewMessage) ?></p>
+                <?php endif; ?>
+                <?php if ($logReviewError !== ''): ?>
+                    <p class="alert tag-warning" role="alert"><?= htmlspecialchars($logReviewError) ?></p>
+                <?php endif; ?>
+                <?php if ($logSnapshot !== null && $logSnapshot['size'] === 0): ?>
+                    <p>No application log entries need review.</p>
+                <?php elseif ($logSnapshot !== null): ?>
+                    <p>Recent excerpt, up to 16 KB, from <strong>app.log</strong>. The excerpt may start mid-entry; inspect the full file if more context is needed. Do not include passwords or tokens in your review note.</p>
+                    <pre class="application-log-excerpt" tabindex="0" aria-label="Recent application log entries"><?= htmlspecialchars($logSnapshot['excerpt']) ?></pre>
+                    <?php if ($logSnapshot['acknowledged']): ?>
+                        <p class="alert tag-success" role="status">This log version has been acknowledged. New entries will require another review.</p>
+                    <?php else: ?>
+                        <form method="POST" class="application-log-review-form">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="acknowledge_application_log">
+                            <input type="hidden" name="log_fingerprint" value="<?= htmlspecialchars($logSnapshot['fingerprint']) ?>">
+                            <div class="form-group">
+                                <label for="log-review-result">Review result</label>
+                                <select id="log-review-result" name="review_result" required>
+                                    <option value="">Choose a result</option>
+                                    <?php foreach (\App\Attention\ApplicationLogReviewService::RESULTS as $value => $label): ?>
+                                        <option value="<?= htmlspecialchars($value) ?>" <?= ($_POST['review_result'] ?? '') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="log-review-note">Investigation and verification note</label>
+                                <textarea id="log-review-note" name="review_note" rows="3" maxlength="1000" required aria-describedby="log-review-note-help"><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
+                                <p id="log-review-note-help" class="section-description">Record the cause, what you fixed or why the diagnostic was expected, and how you checked it.</p>
+                            </div>
+                            <label class="application-log-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> I investigated these entries and verified the result.</label>
+                            <button type="submit" class="btn btn-primary">Save review and acknowledge log warning</button>
+                        </form>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </section>
         </main>
     </div>
 </body>

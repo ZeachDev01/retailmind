@@ -2,6 +2,40 @@
     min-width: 0;
 }
 
+.application-log-review {
+    margin-top: 1.5rem;
+}
+
+.application-log-excerpt {
+    max-height: 320px;
+    overflow: auto;
+    margin: 1rem 0;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card-bg);
+    color: var(--text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.application-log-review-form {
+    display: grid;
+    gap: 1rem;
+    max-width: 640px;
+}
+
+.application-log-review-form .form-group {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.application-log-review-confirm {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
 .system-health-heading {
     align-items: flex-start;
 }

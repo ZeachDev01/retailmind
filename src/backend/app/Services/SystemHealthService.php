@@ -47,7 +47,7 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
                 $available[] = (string)$migration['key'];
             }
             if (!Schema::tableExists($this->pdo, 'schema_migrations')) {
-                return $this->result('Database migrations', 'critical', 'Migration repository is missing. Run: php backend/scripts/migrate.php', 'Core');
+                return $this->result('Database migrations', 'critical', 'Migration repository is missing. Run: php src/backend/scripts/migrate.php', 'Core');
             }
             $applied = array_map('strval', $this->pdo->query('SELECT migration_key FROM schema_migrations')->fetchAll(PDO::FETCH_COLUMN));
             $pending = array_values(array_diff($available, $applied));
@@ -190,13 +190,8 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
 
     private function applicationLogCheck(): array
     {
-        $path = $this->backendPath . '/storage/logs/app.log';
-        if (!is_file($path) || filesize($path) === 0) {
-            return $this->result('Application log', 'healthy', 'No logged application errors are currently stored.', 'Core');
-        }
-        $size = filesize($path);
-        $modified = filemtime($path);
-        $recent = $modified >= time() - 86400;
-        return $this->result('Application log', $recent ? 'warning' : 'healthy', number_format($size / 1024, 1) . ' KB — last updated ' . date('M d, Y g:i A', $modified), 'Core');
+        return (new \App\Attention\ApplicationLogReviewService(
+            $this->pdo, new \App\Attention\SystemClock(), $this->backendPath . '/storage/logs/app.log'
+        ))->check();
     }
 }

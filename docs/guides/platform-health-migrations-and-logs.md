@@ -1,6 +1,6 @@
 # Platform health, migrations, and logs
 
-Open **Platform service is unhealthy → System Health**. By default, any one non-healthy check outside the Forecasting category triggers this dashboard warning. Forecasting checks feed separate forecast-related attention. System Health reports current conditions and has no manual-clear, migration-execution, or log-management button.
+Open **Platform service is unhealthy → System Health**. By default, any one non-healthy check outside the Forecasting category triggers this dashboard warning. Forecasting checks feed separate forecast-related attention. System Health reports current conditions and provides **Review application log** for the Super Administrator to record investigation and acknowledge a specific log version. Migrations remain a terminal operation.
 
 Resolve the check named in System Health, select **Refresh checks**, then refresh the dashboard. Examples include restoring the database connection, applying pending migrations, correcting storage permissions, configuring the email provider, or recording a current-format Database Backup. The warning clears when the number of non-healthy platform checks falls below the configured threshold; marking a notification read does not change health.
 
@@ -15,7 +15,7 @@ Set-Location C:\laragon\www\retailmind
 
 If PHP is already available on PATH, use `php src/backend/scripts/migrate.php`. The runner applies only pending migrations and records completed migration keys. Expect `Applied N migration(s) successfully.` or `Database is already up to date.` If it reports failure, retain the output and investigate before retrying; database schema changes may already have partially applied. Refresh System Health after success.
 
-The existing UI command `php backend/scripts/migrate.php` assumes the working directory is `src`; it is not the correct path from the repository root. These instructions do not execute migrations.
+The System Health maintenance command uses `src/backend/scripts/migrate.php`, relative to the repository root. These instructions do not execute migrations.
 
 ## Diagnose application errors
 
@@ -27,6 +27,17 @@ Get-Content .\src\backend\storage\logs\app.log -Tail 60
 
 Compare timestamps with the failing action, identify the first relevant error, fix its cause, then repeat that action and check for new entries. Retain useful evidence; redact credentials, tokens, and private details before sharing logs. Archive logs before maintenance rotation rather than losing diagnostic history.
 
-The Application log health check is intentionally simple in the current implementation: a non-empty log updated within the last 24 hours reports a warning. It does not interpret error severity or determine whether an error was fixed. An empty or missing log, or a log whose last update is more than 24 hours old, reports healthy. After fixing an error, this check can therefore remain in warning until 24 hours pass without another log update. Deleting the file would remove diagnostic evidence and would not resolve an ongoing failure.
+The Application log health check flags an unacknowledged, non-empty log updated within the last 24 hours. It does not interpret error severity or automatically verify a fix. An empty or missing log, or a log whose last update is more than 24 hours old, retains the previous healthy behavior. Deleting the file would remove diagnostic evidence and would not resolve an ongoing failure.
+
+## Review and acknowledge the log warning
+
+1. As Super Administrator, open **System Health → Review application log**. The page shows the latest excerpt, up to 16 KB. It may begin mid-entry; use the full file when more context is needed.
+2. Investigate the cause and repeat the affected action to verify the result. If these are expected diagnostics or test entries, confirm that context instead.
+3. Choose **Fixed and verified** or **Known diagnostic or test entry**. Enter a note describing the cause, correction or expected context, and verification. Do not put passwords or tokens in the note.
+4. Confirm the investigation, then select **Save review and acknowledge log warning**. Refresh the dashboard afterward.
+
+Acknowledgment saves the reviewer, time, result, note, log-version fingerprint, and recent excerpt as a Protected Audit Record. It never truncates or deletes the file. **Review history → Application log acknowledged → View details** shows the evidence, which is also included in CSV export.
+
+Acknowledgment affects only the reviewed log version. New writes, append operations, and rotation invalidate it; a stale form must be refreshed and reviewed again. Identification uses file statistics plus small samples from the start and end, assuming the application's append-only logging. Custom in-place edits to the middle of a file require stronger version tracking. Other unhealthy checks, including database or storage failures, remain visible and continue contributing to the platform warning.
 
 Protected Audit Records are separate from application diagnostics. They record attributable actions and review decisions, can be inspected and exported through the application, and cannot be individually edited or deleted there.

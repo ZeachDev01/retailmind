@@ -107,7 +107,7 @@ function audit_log_action_class(string $action): string
 function audit_log_csv_value($value): string
 {
     $value = (string)$value;
-    return preg_match('/^[=+\-@]/', $value) ? "'" . $value : $value;
+    return preg_match('/^\s*[=+\-@]/', $value) ? "'" . $value : $value;
 }
 
 function audit_log_send_csv(string $filename, array $rows): void
@@ -115,7 +115,7 @@ function audit_log_send_csv(string $filename, array $rows): void
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Date & Time', 'User', 'Action', 'Category', 'Module', 'Record ID', 'Previous Value', 'New Value', 'IP Address', 'Reviewed Attempts']);
+    fputcsv($output, ['Date & Time', 'User', 'Action', 'Category', 'Module', 'Record ID', 'Previous Value', 'New Value', 'IP Address', 'Reviewed Attempts', 'Reviewed Log Excerpt']);
     foreach ($rows as $row) {
         fputcsv($output, array_map('audit_log_csv_value', $row));
     }
@@ -140,6 +140,7 @@ if ($isExport) {
             audit_log_display_value($log['new_value'] ?? null),
             $log['ip_address'] ?? '-',
             $log['action'] === \App\Attention\FailedSignInReviewService::ACTION ? audit_log_display_value($log['metadata'] ?? null) : '-',
+            $log['action'] === \App\Attention\ApplicationLogReviewService::ACTION ? (json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-') : '-',
         ];
     }, $logs);
     audit_log_send_csv('audit_log_' . date('Ymd_His') . '.csv', $rows);
@@ -309,6 +310,9 @@ $modules = $protectedAuditRecords->modules($actorRole);
                                                 <strong>New:</strong> <span class="<?= $newValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($newValue) ?></span>
                                                 <?php if ($log['action'] === \App\Attention\FailedSignInReviewService::ACTION): ?>
                                                     <strong>Reviewed evidence:</strong> <span><?= htmlspecialchars(audit_log_display_value($log['metadata'] ?? null)) ?></span>
+                                                <?php endif; ?>
+                                                <?php if ($log['action'] === \App\Attention\ApplicationLogReviewService::ACTION): ?>
+                                                    <strong>Reviewed log excerpt:</strong> <pre><?= htmlspecialchars((string)(json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-')) ?></pre>
                                                 <?php endif; ?>
                                             </div>
                                         </details>
