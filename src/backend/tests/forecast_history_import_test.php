@@ -46,10 +46,10 @@ foreach ([
 }
 $policy = new RoleCapabilityPolicy();
 // The policy's plain role check does not require an Emergency Access session.
-foreach (['admin', 'super_admin', 'inventory_manager'] as $role) {
-    check($policy->allows($role, RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), "{$role} must be able to import history");
+check($policy->allows('super_admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Super Administrator must be able to import history');
+foreach (['admin', 'inventory_manager', 'cashier'] as $role) {
+    check(!$policy->allows($role, RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), "{$role} must not import forecast history");
 }
-check(!$policy->allows('cashier', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Cashiers must not import forecast history');
 
 if (in_array('--database', $argv, true)) {
     require __DIR__ . '/../config/db.php';

@@ -146,13 +146,13 @@ function sidebar_render_section(array $section): void
 }
 
 $superAdministratorSystemItems = [
-    ['path' => 'components/administrator/reset_data.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Reset Data'],
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-shield-lock', 'label' => 'Users & Access'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Protected Audit Records'],
     ['path' => 'components/system_administrator/emergency_access.php', 'icon' => 'bi-exclamation-octagon', 'label' => 'Emergency Access'],
     ['path' => 'components/system_administrator/recovery_account.php', 'icon' => 'bi-safe', 'label' => 'Recovery Account'],
     ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
     ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-cpu', 'label' => 'ML Operation'],
+    ['path' => 'components/administrator/reset_data.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Reset Data'],
     ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
     ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'Platform Settings'],
 ];
@@ -171,7 +171,6 @@ $administratorSystemItems = [
 $managerInventoryItems = [];
 
 $administratorReportItems = [
-    ['path' => 'components/report/forecast_import.php', 'icon' => 'bi-file-earmark-arrow-up', 'label' => 'Forecast Data Import'],
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shifts'],
     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Forecast Analytics'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
@@ -185,7 +184,6 @@ $superAdministratorSections = [
         'items' => [
             ['path' => 'components/super_administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Control Center'],
             ['icon' => 'bi-shield-lock', 'label' => 'Platform Administration', 'items' => $superAdministratorSystemItems],
-            ['path' => 'components/report/forecast_import.php', 'icon' => 'bi-file-earmark-arrow-up', 'label' => 'Forecast Data Import'],
         ],
     ],
 ];
@@ -225,7 +223,6 @@ $roleSections = [
                     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
                     ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecast'],
                     ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
-                    ['path' => 'components/report/forecast_import.php', 'icon' => 'bi-file-earmark-arrow-up', 'label' => 'Forecast Data Import'],
                     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
                     ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
                     ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],

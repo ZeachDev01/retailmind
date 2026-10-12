@@ -76,14 +76,25 @@ class DemandHistoryService
             // 3. Observed Sales & Historical Attribution
             // Sold units within the day up to the effective cutoff
             $soldStmt = $pdo->prepare("
-                SELECT COALESCE(SUM(si.quantity), 0)
+                SELECT COUNT(*) AS records, COALESCE(SUM(si.quantity), 0) AS units
                 FROM sale_items si
                 JOIN sales s ON si.sale_id = s.sale_id
                 WHERE si.product_id = ?
                   AND s.sale_date >= ? AND s.sale_date <= ?
             ");
             $soldStmt->execute([$productId, $startOfDay, $effectiveEnd]);
-            $sold = (int)$soldStmt->fetchColumn();
+            $sales = $soldStmt->fetch(PDO::FETCH_ASSOC);
+            $sold = (int)$sales['units'];
+            $imported = false;
+            if ((int)$sales['records'] === 0 && $endOfDay <= $cutoff) {
+                // Imported totals certify historical observations, not their upload date.
+                $importStmt = $pdo->prepare('SELECT quantity FROM forecast_sales_imports WHERE product_id = ? AND sale_date = ?
+                    AND NOT EXISTS (SELECT 1 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+                        WHERE si.product_id = ? AND s.sale_date >= ? AND s.sale_date <= ?)');
+                $importStmt->execute([$productId, $dateStr, $productId, $startOfDay, $endOfDay]);
+                $imported = $importStmt->fetchColumn();
+                if ($imported !== false) $sold = (int)$imported;
+            }
             
             // Approved sale reversals known by the cutoff
             $reversedStmt = $pdo->prepare("
@@ -126,10 +137,16 @@ class DemandHistoryService
             
             // 5. Semantic Classification: distinguish Open, Closed, Stockout, Missing
             $classification = 'missing_evidence';
-            if ($calStatus === null) {
-                $classification = 'missing_evidence';
-            } elseif ($calStatus === 'closed' || $calStatus === 'holiday' || $calStatus === 'exceptional_closure') {
+            if ($calStatus === 'closed' || $calStatus === 'holiday' || $calStatus === 'exceptional_closure') {
                 $classification = 'closed';
+            } elseif ($imported !== false) {
+                if ($validSalesUnits > 0) {
+                    $classification = 'valid_demand';
+                } elseif ($hasStockEvidence && $endOfDayStock <= 0) {
+                    $classification = 'stockout_censored';
+                } else {
+                    $classification = 'genuine_zero';
+                }
             } elseif ($calStatus === 'open') {
                 if ($validSalesUnits > 0) {
                     $classification = 'valid_demand';
@@ -187,10 +204,13 @@ class DemandHistoryService
         foreach ($calendar->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $calendarRevisions[$row['calendar_date']][] = $row['available_date'];
         }
-        $stmt = $pdo->prepare('SELECT si.product_id, MIN(DATE(s.sale_date)) AS first_date
-            FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
-            WHERE s.sale_date <= ? GROUP BY si.product_id ORDER BY si.product_id');
-        $stmt->execute([$throughDate . ' 23:59:59']);
+        $stmt = $pdo->prepare('SELECT product_id, MIN(sale_date) AS first_date FROM (
+            SELECT si.product_id, DATE(s.sale_date) AS sale_date
+            FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id WHERE s.sale_date <= ?
+            UNION ALL
+            SELECT product_id, sale_date FROM forecast_sales_imports WHERE sale_date <= ?
+            ) history GROUP BY product_id ORDER BY product_id');
+        $stmt->execute([$throughDate . ' 23:59:59', $throughDate]);
         $history = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $product) {
             $day = new DateTime($product['first_date'], $this->timezone);

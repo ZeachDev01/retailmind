@@ -39,6 +39,7 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // Initialize schema
 $pdo->exec("
+    CREATE TABLE forecast_sales_imports (product_id INT, sale_date DATE, quantity INT, PRIMARY KEY (product_id, sale_date));
     CREATE TABLE platform_settings (
         setting_key VARCHAR(100) PRIMARY KEY,
         setting_value TEXT,

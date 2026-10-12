@@ -59,7 +59,6 @@ final class RoleCapabilityPolicy
         // stays exclusive to the Super Administrator (see ADR-0003).
         'admin' => [
             self::RESET_OPERATIONAL_DATA,
-            self::IMPORT_FORECAST_HISTORY,
             self::STORE_OPERATIONS,
             self::VIEW_INVENTORY,
             self::VIEW_STORE_AUDIT,
@@ -77,7 +76,6 @@ final class RoleCapabilityPolicy
             self::GENERATE_FORECASTS,
         ],
         'inventory_manager' => [
-            self::IMPORT_FORECAST_HISTORY,
             self::VIEW_INVENTORY,
             self::MUTATE_INVENTORY,
             self::VIEW_SALES_HISTORY,

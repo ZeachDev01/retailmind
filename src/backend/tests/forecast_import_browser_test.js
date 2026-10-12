@@ -40,8 +40,13 @@ const fixture = action => {
             await page.locator('#landing-login-password').fill(data.password);
             await Promise.all([page.waitForNavigation(), page.getByRole('button', { name: 'Log in', exact: true }).click()]);
         };
-        await login('inventory_manager');
-        const importUrl = origin + '/components/report/forecast_import.php';
+        await login('super_admin');
+        await page.goto(origin + '/components/system_administrator/ml_settings.php');
+        await page.getByRole('link', { name: 'Import sales history', exact: true }).click();
+        await page.waitForURL('**/system_administrator/forecast_import.php');
+        const importUrl = origin + '/components/system_administrator/forecast_import.php';
+        const legacyImportUrl = origin + '/components/report/forecast_import.php';
+        assert.equal((await page.goto(legacyImportUrl)).status(), 200, 'Existing bookmarks remain usable');
         assert.equal((await page.goto(importUrl)).status(), 200);
         const forbidden = await context.request.post(importUrl, { form: { confirm_import: '1' } });
         assert.equal(forbidden.status(), 403, 'Missing CSRF must be denied');
@@ -63,18 +68,23 @@ const fixture = action => {
         await Promise.all([page.waitForNavigation(), page.getByRole('button', { name: 'Import 35 daily totals', exact: true }).click()]);
         assert.match(await page.locator('p[role="status"]').innerText(), /Imported 0 daily totals; skipped 35/);
         await page.goto(origin + '/components/report/data_readiness.php');
-        assert.match(await page.locator('tbody').innerText(), /36 with sales/);
+        assert.match(await page.locator('.main-content').innerText(), /Missing history is unknown, not zero sales/);
+        assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 0, 'Data imports belong in ML Operation');
         const after = JSON.parse(fixture('state'));
         assert.equal(after.sales, before.sales, 'History imports must not create receipts');
         assert.equal(after.stock, before.stock, 'History imports must not change stock');
         await context.close();
-        const cashierContext = await browser.newContext();
-        const cashier = await cashierContext.newPage();
-        await cashier.goto(origin + '/?login=1');
-        await cashier.locator('#landing-login-username').fill('theme_cashier');
-        await cashier.locator('#landing-login-password').fill(data.password);
-        await Promise.all([cashier.waitForNavigation(), cashier.getByRole('button', { name: 'Log in', exact: true }).click()]);
-        assert.equal((await cashier.goto(importUrl)).status(), 403, 'Cashier must be denied');
+        for (const role of ['admin', 'inventory_manager', 'cashier']) {
+            const deniedContext = await browser.newContext();
+            const denied = await deniedContext.newPage();
+            await denied.goto(origin + '/?login=1');
+            await denied.locator('#landing-login-username').fill('theme_' + role);
+            await denied.locator('#landing-login-password').fill(data.password);
+            await Promise.all([denied.waitForNavigation(), denied.getByRole('button', { name: 'Log in', exact: true }).click()]);
+            assert.equal((await denied.goto(importUrl)).status(), 403, role + ' must be denied');
+            assert.equal((await denied.goto(legacyImportUrl)).status(), 403, role + ' must be denied at the former route');
+            await deniedContext.close();
+        }
         console.log('Forecast import browser checks passed (upload, preview, import, readiness, duplicates, authorization, stock preservation)');
     } finally {
         if (browser) await browser.close();

@@ -61,10 +61,11 @@ try {
     $runs = [];
 }
 ?>
-<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ML Settings</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
+<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ML Operation</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
 <body><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
-<div class="topbar"><div><h1>Random Forest Settings</h1><p class="page-subtitle">Control data readiness, tree parameters, prediction ranges, and automatic retraining.</p></div><a class="btn" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Open forecasts</a></div>
+<div class="topbar"><div><h1>ML Operation</h1><p class="page-subtitle">Manage Store sales history, Random Forest settings, and training runs.</p></div><a class="btn" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Open forecasts</a></div>
 <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+<section class="dashboard-section"><h2>Forecast Data Import</h2><p>Upload this Store's historical daily sales totals, preview them, and confirm the import. Model retraining remains a separate action.</p><a class="btn" href="<?= htmlspecialchars(app_url('components/system_administrator/forecast_import.php')) ?>">Import sales history</a></section>
 <div class="dashboard-section"><form method="post"><?= csrf_field() ?><div class="form-grid">
 <?php foreach ($definitions as $key => $definition): ?><div class="form-group"><label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($definition['label']) ?></label><input id="<?= htmlspecialchars($key) ?>" name="<?= htmlspecialchars($key) ?>" type="<?= $definition['type'] ?>" value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"<?= isset($definition['min']) ? ' min="' . $definition['min'] . '"' : '' ?><?= isset($definition['max']) ? ' max="' . $definition['max'] . '"' : '' ?><?= isset($definition['step']) ? ' step="' . $definition['step'] . '"' : '' ?> required></div><?php endforeach; ?>
 </div><button type="submit" class="btn">Save ML settings</button></form></div>

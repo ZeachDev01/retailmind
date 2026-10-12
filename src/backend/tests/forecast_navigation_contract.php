@@ -30,6 +30,9 @@ $assert(!$policy->allows('cashier', RoleCapabilityPolicy::VIEW_FORECASTS), 'Cash
 $sidebar = file_get_contents(__DIR__ . '/../../frontend/components/sidebar.php');
 $assert(str_contains($sidebar, 'components/report/predictions.php'), 'Sidebar contains predictions.php entry');
 $assert(str_contains($sidebar, 'components/report/forecast_analytics.php'), 'Sidebar contains forecast analytics entry');
+$assert(!str_contains($sidebar, 'forecast_import.php'), 'Forecast Data Import is reached through ML Operation, not role sidebars');
+$operation = file_get_contents(__DIR__ . '/../../frontend/components/system_administrator/ml_settings.php');
+$assert(str_contains($operation, 'components/system_administrator/forecast_import.php'), 'ML Operation exposes Forecast Data Import');
 
 if ($failures) {
     fwrite(STDERR, "Forecast navigation contract failed:\n- " . implode("\n- ", $failures) . "\n");

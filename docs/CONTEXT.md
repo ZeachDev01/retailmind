@@ -136,6 +136,10 @@ _Avoid_: Model training, automatic ordering, retraining
 Replacing the currently approved forecasting model with a newly fitted Random Forest after chronological validation. It runs weekly after close or through a manual Super Administrator request and is recorded as a Protected Audit Record.
 _Avoid_: Forecast generation, live request training, Administrator retraining
 
+**Forecast Data Import**:
+The Super Administrator's addition of historical daily sales totals from the same Store for demand forecasting. Explicit zero sales are observations; omitted dates remain unknown. Imported history does not create receipts, change stock or revenue, or start Model Retraining.
+_Avoid_: Sales migration, public dataset upload, automatic retraining
+
 **Forecast Readiness**:
 The evidence level attached to a product forecast: Insufficient below 56 history days, Low from 56–179, Medium from 180–364, and High from 365 onward only when validation error is acceptable. The interface marks lower-readiness forecasts instead of hiding them or presenting them as equally reliable.
 _Avoid_: Guaranteed confidence, model probability, accuracy percentage

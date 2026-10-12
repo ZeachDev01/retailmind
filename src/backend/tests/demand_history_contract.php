@@ -29,6 +29,12 @@ try {
             product_name TEXT,
             status TEXT DEFAULT 'active'
         );
+        CREATE TABLE forecast_sales_imports (
+            product_id INTEGER,
+            sale_date TEXT,
+            quantity INTEGER,
+            PRIMARY KEY (product_id, sale_date)
+        );
         CREATE TABLE store_calendar (
             calendar_id INTEGER PRIMARY KEY AUTOINCREMENT,
             calendar_date TEXT NOT NULL,
@@ -230,6 +236,25 @@ try {
     $assert(count($knownRefund) === 1 && $knownRefund[0]['units_sold'] === 1, 'Later origins receive corrections once the refund is known');
     $unknown = array_filter($observed, fn ($row) => $row['date'] === '2026-10-01');
     $assert(count($unknown) === 0, 'Unknown calendar evidence does not become training demand');
+
+    $pdo->exec("INSERT INTO forecast_sales_imports VALUES
+        (2, '2026-09-01', 7), (2, '2026-09-03', 0), (2, '2026-10-11', 99),
+        (1, '2026-10-04', 999), (1, '2026-10-05', 0), (1, '2026-10-06', 20)");
+    $importedHistory = $service->getObservedHistory($pdo, '2026-09-03');
+    $assert(array_column($importedHistory, 'units_sold') === [7, null, 0], 'Import-only product preserves observed totals, unknown gaps, and explicit zero');
+    $assert(array_column($importedHistory, 'available_date') === ['2026-09-01', '2026-09-02', '2026-09-03'], 'Historical totals become available at their completed historical day');
+    $earlyImport = $service->getDailyEvidence($pdo, 2, '2026-09-01', '2026-09-01', '2026-09-01 12:00:00')[0];
+    $assert($earlyImport['classification'] === 'missing_evidence', 'Full-day CSV total cannot leak into an intraday cutoff');
+    $futureImport = $service->getDailyEvidence($pdo, 2, '2026-10-11', '2026-10-11', $cutoff)[0];
+    $assert($futureImport['classification'] === 'future_unobserved', 'Future imported totals remain unavailable');
+    $overlap = $service->getDailyEvidence($pdo, 1, '2026-10-04', '2026-10-04', '2026-10-05 23:59:59')[0];
+    $assert($overlap['valid_sales_units'] === 1 && $overlap['observed_gross_sales'] === 5, 'POS and audited corrections win over overlapping imported history');
+    $stockoutImport = $service->getDailyEvidence($pdo, 1, '2026-10-05', '2026-10-05', $cutoff)[0];
+    $assert($stockoutImport['classification'] === 'stockout_censored', 'Explicit imported zero does not override known stockout');
+    $closedImport = $service->getDailyEvidence($pdo, 1, '2026-10-06', '2026-10-06', $cutoff)[0];
+    $assert($closedImport['classification'] === 'closed', 'Imported totals do not override known closure');
+    $importSummary = $service->getReadinessSummary($pdo, 2, '2026-09-01', '2026-09-03', $cutoff);
+    $assert($importSummary['usable_history_days'] === 2 && $importSummary['excluded_days']['missing_evidence'] === 1, 'Readiness counts imports without treating absent dates as zero');
 
     echo "\n========================================================\n";
     if (empty($failures)) {
