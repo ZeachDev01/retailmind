@@ -16,6 +16,9 @@ try {
     $storeId = (new StoreScope($pdo))->id();
     foreach (['users', 'activity_log'] as $table) {
         $pdo->exec("CREATE TEMPORARY TABLE reset_fixture LIKE {$table}");
+        $ddl = $pdo->query('SHOW CREATE TABLE reset_fixture')->fetch(PDO::FETCH_NUM)[1];
+        preg_match_all('/CONSTRAINT `([^`]+)` CHECK/', $ddl, $checks);
+        foreach ($checks[1] as $check) $pdo->exec('ALTER TABLE reset_fixture DROP CHECK `' . str_replace('`', '``', $check) . '`');
         $pdo->exec("ALTER TABLE reset_fixture RENAME TO {$table}");
     }
     $insert = $pdo->prepare('INSERT INTO users (full_name, username, password_hash, role_id, branch_id, must_change_password) VALUES (?, ?, ?, ?, ?, 0)');

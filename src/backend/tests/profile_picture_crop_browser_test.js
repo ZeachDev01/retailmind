@@ -53,7 +53,7 @@ const {chromium} = require('playwright');
             const saved = await state(role);
             assert.equal(saved.width, 512); assert.equal(saved.height, 512);
             assert.equal(saved.center, 0x0000ff, 'Persisted pixels match repositioned right-hand crop');
-            assert.equal(await page.locator('.profile-avatar-image').count(), 2, 'Profile and account menu refreshed');
+            assert.equal(await page.locator('.profile-avatar-image').count(), 1, 'Account menu picture refreshed');
             await upload();
             await page.getByRole('button', {name: 'Cancel', exact: true}).click();
             assert.equal(await page.locator('#profile_image').inputValue(), '');

@@ -24,6 +24,8 @@ $valid = $wrap($prefix . "INSERT INTO `items` (`id`, `note`) VALUES (X'31', NULL
 $exit = 0;
 try {
     $assert(count(SqlBackupFormat::statements($valid, $schema)) === 3, 'Valid SQL subset should parse');
+    $assert(str_contains(SqlBackupFormat::statements($valid, $schema)[2], "CONCAT(X'31')"), 'Numeric columns must receive the decoded text value, not the hex integer');
+    $assert(SqlBackupFormat::normalizeDdl('CREATE TABLE `x` (`value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci)') === SqlBackupFormat::normalizeDdl('CREATE TABLE `x` (`value` text COLLATE utf8mb4_unicode_ci)'), 'MySQL charset declarations implied by the collation must not reject a restored schema');
     $bad = [
         'arbitrary SQL' => 'DROP DATABASE store;',
         'legacy envelope' => "RMBAK1\nanything",

@@ -26,7 +26,7 @@ if ($action === 'setup') {
     if (strlen($password) < 12) throw new RuntimeException('Set DEMO_PASSWORD to at least 12 characters.');
     // CREATE without IF NOT EXISTS prevents replacing an existing database.
     $pdo->exec("CREATE DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; USE `{$database}`; SET FOREIGN_KEY_CHECKS=0");
-    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../sql/schema.sql'), $tables);
+    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../database/sql/schema.sql'), $tables);
     foreach ($tables[0] as $ddl) $pdo->exec($ddl);
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
     $pdo->exec("INSERT INTO branches (branch_id,branch_name,branch_code) VALUES (1,'Isolated Demo','DEMO')");

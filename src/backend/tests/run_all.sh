@@ -115,10 +115,15 @@ node src/backend/tests/sale_receipt_dialog_browser_test.js
 node src/backend/tests/refund_receipt_browser_test.js
 node src/backend/tests/refund_reprint_browser_test.js
 node src/backend/tests/theme_login_browser_test.js
-node src/backend/tests/theme_account_browser_test.js
+node src/backend/tests/sidebar_theme_browser_test.js
+node src/backend/tests/fullscreen_preferences_browser_test.js
 node src/backend/tests/responsive_system_browser_test.js
 php src/backend/tests/cashier_operational_history_contract.php
 php src/backend/tests/sales_trend_integration.php
+python src/backend/tests/test_feature_pipeline.py
+python src/backend/tests/test_observed_demand.py
+python src/backend/tests/test_observed_worker.py
+python src/backend/tests/observed_demand_mysql_test.py
 if [[ -n "${WHITESPACE_BASE:-}" ]] && git cat-file -e "${WHITESPACE_BASE}^{commit}" 2>/dev/null; then
   git diff --check "$WHITESPACE_BASE" HEAD
 fi

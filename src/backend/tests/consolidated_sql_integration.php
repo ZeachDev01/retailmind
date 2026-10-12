@@ -51,7 +51,8 @@ try {
         $db->exec("SET timestamp=1791417600");
         $import($db, __DIR__ . '/../database/sql/schema.sql');
         $runner = new App\Database\MigrationRunner($db, __DIR__ . '/../database/migrations');
-        $assert($runner->pending() === [], 'Fresh import leaves pending migrations');
+        $runner->runPending();
+        $assert($runner->pending() === [], 'Fresh import plus migrations leaves pending migrations');
         $assert((int)$db->query('SELECT COUNT(*) FROM user_roles')->fetchColumn() > 0, 'Fresh import lacks assigned roles');
 
         // Reproduce an import whose ledger says applied but required structures are missing.
@@ -64,7 +65,9 @@ try {
         foreach (['access_token_hash', 'joined_ip'] as $column) {
             $db->exec("ALTER TABLE barcode_pairings DROP COLUMN `{$column}`");
         }
-        foreach (['lower_bound_7_days', 'upper_bound_7_days', 'lower_bound_30_days', 'upper_bound_30_days', 'lead_time_lower_bound', 'lead_time_upper_bound', 'forecast_explanation'] as $column) {
+        $forecastColumns = array_fill_keys(['lower_bound_7_days', 'upper_bound_7_days', 'lower_bound_30_days', 'upper_bound_30_days', 'lead_time_lower_bound', 'lead_time_upper_bound'], 'INT NULL');
+        $forecastColumns['forecast_explanation'] = 'TEXT NULL';
+        foreach ($forecastColumns as $column => $type) {
             $db->exec("ALTER TABLE stock_predictions DROP COLUMN `{$column}`");
         }
         $db->exec("UPDATE platform_settings SET setting_value='99' WHERE setting_key='dormancy_disable_days'");
@@ -101,8 +104,8 @@ try {
     $runner = new App\Database\MigrationRunner($php, __DIR__ . '/../database/migrations');
     foreach ($runner->available() as $migration) ($migration['up'])($php);
     pairing_ensure_schema($php);
-    foreach ($forecastColumns as $column) {
-        App\Database\Schema::addColumnIfMissing($php, 'stock_predictions', $column[1], $column[2]);
+    foreach ($forecastColumns as $column => $type) {
+        App\Database\Schema::addColumnIfMissing($php, 'stock_predictions', $column, $type);
     }
     $import($sql, __DIR__ . '/../database/sql/update.sql');
     $assert($structures($php) === $structures($sql), 'SQL and PHP migration schemas differ');
