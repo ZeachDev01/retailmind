@@ -1,5 +1,5 @@
 <?php
-// Requires a disposable MySQL database loaded with src/backend/sql/schema.sql and all migrations applied.
+// Requires a disposable MySQL database loaded with src/backend/database/sql/schema.sql and all migrations applied.
 if (getenv('RUN_DB_TESTS') !== '1') {
     echo "Audit visibility integration tests: skipped (set RUN_DB_TESTS=1)\n";
     exit(0);

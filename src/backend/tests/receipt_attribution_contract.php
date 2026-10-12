@@ -1,10 +1,10 @@
 <?php
 
-require_once __DIR__ . '/../app/Services/ReceiptDetailsService.php';
-require_once __DIR__ . '/../app/Services/SaleReceiptPresentation.php';
-require_once __DIR__ . '/../app/Services/ReceiptPaperService.php';
+require_once __DIR__ . '/../app/Receipts/ReceiptDetailsService.php';
+require_once __DIR__ . '/../app/Receipts/SaleReceiptPresentation.php';
+require_once __DIR__ . '/../app/Receipts/ReceiptPaperService.php';
 
-use App\Services\ReceiptDetailsService;
+use App\Receipts\ReceiptDetailsService;
 
 $pdo = new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -101,7 +101,7 @@ foreach ([
         $route . ' has a complete receipt renderer');
     $renderer = preg_replace('/^function receipt_render_details/', 'function ' . $function, $match[0]);
     if ($function === 'render_frontend_receipt') {
-        $renderer = str_replace('ReceiptDetailsService::', '\\App\\Services\\ReceiptDetailsService::', $renderer);
+        $renderer = str_replace('ReceiptDetailsService::', '\\App\\Receipts\\ReceiptDetailsService::', $renderer);
     }
     $renderer = str_replace('App\\Core\\Database::connection()', 'receipt_pdo()', $renderer);
     eval($renderer);
@@ -161,7 +161,7 @@ foreach ([58, 80] as $width) {
         $assert(!str_contains($receipt, 'Current printing Register'), 'printing Register never replaces recorded attribution');
     }
 }
-$paper = new App\Services\ReceiptPaperService($pdo);
+$paper = new App\Receipts\ReceiptPaperService($pdo);
 $assert($paper->currentWidth(99, 'cashier') === 80, 'no open shift falls back to 80 mm');
 $assert($paper->currentWidth(7, 'admin') === 80, 'an inactive Cashier workspace falls back to 80 mm');
 $pdo->exec("UPDATE cashier_shifts SET register_id = 999 WHERE shift_id = 24");

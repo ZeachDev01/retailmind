@@ -12,7 +12,7 @@ return [
         // the authoritative account of what was sold.
         //
         // This must match the `cash_refunds` and `cash_refund_items` tables in
-        // sql/schema.sql so a fresh install and an upgraded install agree.
+        // database/sql/schema.sql so a fresh install and an upgraded install agree.
 
         if (!Schema::tableExists($pdo, 'cash_refunds')) {
             $pdo->exec("CREATE TABLE cash_refunds (

@@ -8,6 +8,7 @@ const { chromium } = require('playwright');
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
+    await page.route('https://**/*', route => route.abort());
     await page.goto(process.env.LOGIN_TEST_URL || 'http://localhost/retailmind/', { waitUntil: 'domcontentloaded' });
 
     const form = page.locator('.landing-login-form').first();
@@ -17,22 +18,39 @@ const { chromium } = require('playwright');
     assert.equal(current.status(), 200);
     const { csrf_token: expectedToken } = await current.json();
 
-    await form.locator('input[name="csrf_token"]').evaluate((input) => { input.value = 'stale-token'; });
-    await page.locator('[data-login-modal-open]').first().click();
-    await form.locator('input[name="username"]').fill('test@example.invalid');
-    await form.locator('input[name="password"]').fill('test-password');
+    for (const scenario of ['refresh', 'timeout', 'invalid-json', 'network-error']) {
+      await page.goto(actionUrl, { waitUntil: 'domcontentloaded' });
+      await form.locator('input[name="csrf_token"]').evaluate((input) => { input.value = 'stale-token'; });
+      await page.locator('[data-login-modal-open]').first().click();
+      await form.locator('input[name="username"]').fill('test@example.invalid');
+      await form.locator('input[name="password"]').fill('test-password');
 
-    const submitted = new Promise((resolve) => {
-      page.route(actionUrl, async (route) => {
+      await page.route('**/*csrf_refresh=1', async (route) => {
+        if (scenario === 'timeout') {
+          await new Promise(resolve => setTimeout(resolve, 15000));
+          return route.abort().catch(() => {});
+        }
+        if (scenario === 'invalid-json') {
+          return route.fulfill({ contentType: 'text/html', body: '<html>Hosting browser check</html>' });
+        }
+        if (scenario === 'network-error') return route.abort();
+        return route.continue();
+      });
+      let submittedToken;
+      await page.route(actionUrl, async (route) => {
         if (route.request().method() !== 'POST') {
           return route.continue();
         }
-        resolve(new URLSearchParams(route.request().postData()).get('csrf_token'));
+        submittedToken = new URLSearchParams(route.request().postData()).get('csrf_token');
         await route.fulfill({ status: 200, body: 'captured' });
       });
-    });
-    await form.locator('button[type="submit"]').click();
-    assert.equal(await submitted, expectedToken, 'The browser must refresh the stale form token before POST');
+      await form.locator('button[type="submit"]').click();
+      await page.waitForURL(actionUrl, { waitUntil: 'load', timeout: 10000 });
+      await page.waitForFunction(() => document.body.textContent === 'captured', null, { timeout: 10000 });
+      assert.equal(submittedToken, scenario === 'refresh' ? expectedToken : 'stale-token',
+        'Login must submit after ' + scenario + '; the server still validates the token');
+      await page.unrouteAll({ behavior: 'wait' });
+    }
 
     const rejected = await context.request.post(actionUrl, {
       form: { csrf_token: 'stale-token', username: 'test@example.invalid', password: '' },

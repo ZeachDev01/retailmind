@@ -1,5 +1,5 @@
 <?php
-// Requires a disposable MySQL database loaded with src/backend/sql/schema.sql.
+// Requires a disposable MySQL database loaded with src/backend/database/sql/schema.sql.
 if (getenv('RUN_DB_TESTS') !== '1') {
     echo "Database integration tests: skipped (set RUN_DB_TESTS=1)\n";
     exit(0);

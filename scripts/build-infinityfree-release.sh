@@ -2,6 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+php src/backend/scripts/build_styles.php >&2
 
 release=.release
 rm -rf "$release"

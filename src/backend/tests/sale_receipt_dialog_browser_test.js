@@ -11,7 +11,9 @@ const { chromium } = require('playwright');
     fs.mkdirSync(output, {recursive: true});
     const cssDir = path.join(root, 'src/frontend/assets/css');
     const css = ['style', 'invoices', 'sale-receipt'].map(name => fs.readFileSync(path.join(cssDir, `${name}.css`), 'utf8').replace(/@import url\("([^"]+)"\);/g, (_, imported) => fs.readFileSync(path.join(cssDir, imported), 'utf8'))).join('\n');
-    const script = ['sale-receipt', 'sale-receipt-dialog'].map(name => fs.readFileSync(path.join(root, `src/frontend/assets/js/${name}.js`), 'utf8')).join('\n');
+    const script = fs.readFileSync(path.join(root, 'src/frontend/assets/js/ui.js'), 'utf8')
+        + '\nRetailMindUI.isDebug=()=>debugReceipt; RetailMindUI.toast=(message,type)=>receiptAlerts.push({message,type});\n'
+        + ['sale-receipt', 'sale-receipt-dialog'].map(name => fs.readFileSync(path.join(root, `src/frontend/assets/js/${name}.js`), 'utf8')).join('\n');
     const browser = await chromium.launch({headless: true});
     try {
         const fixturePath = path.join(output, 'http-history.json');
@@ -29,7 +31,9 @@ const { chromium } = require('playwright');
                 localStorage.removeItem('retailmind.checkout.1');
                 if (pending) localStorage.setItem('retailmind.checkout.1', JSON.stringify({id: pending}));
             }, pending);
-            const cleanup = http[variant].match(/<script>\s*(try \{[\s\S]*?)<\/script>/)[1];
+            const cleanup = [...http[variant].matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)]
+                .map(match => match[1]).find(source => source.includes('retailmind.checkout.') && source.includes('sessionStorage.removeItem'));
+            assert(cleanup, 'Production checkout cleanup script is present');
             await cleanupPage.addScriptTag({content: cleanup});
             assert.equal(await cleanupPage.evaluate(() => sessionStorage.getItem('retailmind.cart-workspace') === null), shouldClear,
                 'only the committed checkout clears its cart; old completion links preserve new work');
@@ -74,11 +78,12 @@ const { chromium } = require('playwright');
             });
             await page.goto('http://receipt.test/sales.php?sale_id=103&checkout=complete');
             assert.equal(await page.locator('dialog[open]').count(), 1, 'checkout opens only one dialog');
+            assert(await page.locator('body').evaluate(el => el.classList.contains('no-scroll')), 'Native receipt locks background scrolling');
             assert.equal(await page.locator('.receipt-print-area').count(), 1, 'no second inline preview');
             assert.equal(await page.locator('#saleReceiptTitle').evaluate(el => document.activeElement === el), true, 'focus enters labelled dialog');
             assert.ok((await page.locator('dialog').innerText()).includes('Payment completed'));
             assert.equal(await page.evaluate(() => window.printCalls), 0);
-            for (const viewport of [1440, 390]) {
+            for (const viewport of [320, 375, 425, 768, 1024, 1440]) {
                 await page.setViewportSize({width: viewport, height: 720});
                 for (let i = 0; i < 8; i++) {
                     await page.keyboard.press('Tab');
@@ -102,6 +107,8 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('dialog[open]').count(), 1, 'canceled printing leaves saved document open');
             await page.keyboard.press('Escape');
             assert.equal(await page.locator('dialog[open]').count(), 0);
+            await page.waitForFunction(() => !document.body.classList.contains('no-scroll'));
+            assert.equal(await page.locator('body').evaluate(el => el.classList.contains('no-scroll')), false, 'Closing native receipt releases background scroll lock');
             await page.waitForFunction(() => document.activeElement === document.getElementById('receipt-table-title'));
             assert.ok(!new URL(page.url()).searchParams.has('checkout'));
             await page.locator('#view').focus(); await page.keyboard.press('Enter');

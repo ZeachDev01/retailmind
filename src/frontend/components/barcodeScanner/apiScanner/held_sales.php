@@ -53,6 +53,7 @@ try {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    App\Core\Session::closeWrite();
     echo json_encode(['success' => true, 'held_sales' => $heldService->openForCashier($userId)]);
     exit;
 }

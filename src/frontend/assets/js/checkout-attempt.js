@@ -23,7 +23,8 @@ class CheckoutAttempt {
             if (outcome.sale) {
                 // Keep the identity until receipt navigation succeeds. Returning
                 // to POS recovers the same receipt if that navigation is lost.
-                window.location.replace(outcome.receipt_url);
+                if (window.RetailMindNavigation) await window.RetailMindNavigation.navigate(outcome.receipt_url, {history: 'none'});
+                else window.location.replace(outcome.receipt_url);
                 return;
             }
             for (const [name, value] of Object.entries(this.pending.fields)) {

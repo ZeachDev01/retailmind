@@ -172,9 +172,9 @@
     font-size: .88rem;
     font-weight: 700;
     text-decoration: none;
-    transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
-.landing-btn:active { transform: translateY(1px); }
+.landing-btn:active { transform: none; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12); }
 .landing-page .landing-btn--primary { background: var(--landing-blue); border-color: var(--landing-blue); color: #fff; }
 .landing-page .landing-btn--primary:hover { background: var(--landing-blue-deep); border-color: var(--landing-blue-deep); color: #fff; }
 .landing-text-link,

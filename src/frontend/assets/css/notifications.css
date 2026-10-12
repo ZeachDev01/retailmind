@@ -35,7 +35,7 @@
             padding: 1rem;
             margin-bottom: 1rem;
             display: grid;
-            grid-template-columns: auto 1fr auto;
+            grid-template-columns: auto minmax(0, 1fr) auto;
             gap: 1rem;
             align-items: start;
         }
@@ -72,6 +72,10 @@
         .notification-icon.fiscal_period {
             background: var(--theme-surface-soft, #e7e8ea);
             color: var(--theme-ink, #383d41);
+        }
+        .notification-content {
+            min-width: 0;
+            overflow-wrap: anywhere;
         }
         .notification-content h4 {
             margin: 0 0 0.5rem 0;
@@ -138,4 +142,18 @@
             background: #007bff;
             color: white;
             border-color: #007bff;
+        }
+
+        @media (max-width: 640px) {
+            .notification-item {
+                grid-template-columns: auto minmax(0, 1fr);
+            }
+            .notification-item > .u-action-summary {
+                grid-column: 2;
+                min-width: 0;
+                text-align: left;
+            }
+            .notification-time {
+                white-space: normal;
+            }
         }

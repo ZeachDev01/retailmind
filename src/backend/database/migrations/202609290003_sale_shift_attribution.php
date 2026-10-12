@@ -13,7 +13,7 @@ return [
         // shift, so there is no second copy to drift and no column a client
         // could supply.
         //
-        // This must match the `sales` table in sql/schema.sql so a fresh
+        // This must match the `sales` table in database/sql/schema.sql so a fresh
         // install and an upgraded install agree.
         //
         // The column stays NULLABLE on purpose. Sales recorded before this

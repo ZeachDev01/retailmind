@@ -523,8 +523,8 @@ body.products-page .products-quick-action strong {
     }
 
     .user-drawer {
-        height: 100svh;
-        max-height: 100svh;
+        height: 100dvh;
+        max-height: 100dvh;
         border-radius: 0;
     }
 
@@ -663,6 +663,10 @@ body.products-page .products-quick-action strong {
     .user-form,
     .user-drawer-body {
         padding: .9rem;
+    }
+
+    .user-drawer-tabs {
+        margin-inline: -.9rem;
     }
 }
 

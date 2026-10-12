@@ -23,7 +23,7 @@ function forecast_prototype_level(int $days, ?float $wape): array
 
 function forecast_prototype_fallback_rows(): array
 {
-    $path = dirname(__DIR__, 4) . '/product_seed.csv';
+    $path = dirname(__DIR__, 4) . '/src/backend/database/seeds/product_seed.csv';
     $rows = [];
     if (($handle = @fopen($path, 'rb')) !== false) {
         $headers = fgetcsv($handle);
@@ -281,7 +281,39 @@ function forecast_prototype_chart(string $points, array $daily): void
     </main>
 </div>
 
-
-
+<nav class="fp-switcher no-print" aria-label="Prototype variants" data-current-variant="<?= $prototypeVariant ?>">
+    <button type="button" data-prototype-direction="-1" aria-label="Previous variant"><i class="bi bi-arrow-left"></i></button>
+    <span><small>Prototype variant</small><strong><?= $prototypeVariant ?> · <?= htmlspecialchars($variantNames[$prototypeVariant]) ?></strong></span>
+    <button type="button" data-prototype-direction="1" aria-label="Next variant"><i class="bi bi-arrow-right"></i></button>
+</nav>
+<script>
+(function () {
+    const variants = ['A', 'B', 'C'];
+    const current = <?= json_encode($prototypeVariant) ?>;
+    function move(direction) {
+        const url = new URL(window.location.href);
+        const index = variants.indexOf(current);
+        url.searchParams.set('variant', variants[(index + direction + variants.length) % variants.length]);
+        RetailMindUI.navigate(url.toString());
+    }
+    document.querySelectorAll('[data-prototype-direction]').forEach((button) => {
+        button.addEventListener('click', () => move(Number(button.dataset.prototypeDirection)));
+    });
+    document.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        if (event.target.closest('input, select, textarea, [contenteditable]')) return;
+        move(event.key === 'ArrowLeft' ? -1 : 1);
+    });
+    const search = document.getElementById('fp-product-search');
+    if (search) {
+        search.addEventListener('input', () => {
+            const query = search.value.trim().toLowerCase();
+            document.querySelectorAll('[data-product-name]').forEach((item) => {
+                item.hidden = query !== '' && !item.dataset.productName.includes(query);
+            });
+        });
+    }
+})();
+</script>
 </body>
 </html>

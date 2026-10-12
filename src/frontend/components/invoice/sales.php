@@ -6,8 +6,8 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/SaleReversalService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
-use App\Services\ReceiptTableService;
-use App\Services\ReceiptDetailsService;
+use App\Receipts\ReceiptTableService;
+use App\Receipts\ReceiptDetailsService;
 
 require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
@@ -55,7 +55,7 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
 }
 
 function receipt_render_details(array $sale, array $items, bool $canStartSale, bool $announcePayment = false): void {
-    $paperWidthMm = (new \App\Services\ReceiptPaperService(\App\Core\Database::connection()))
+    $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
         ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
     $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
@@ -74,7 +74,7 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale, b
             <?php endif; ?>
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
         </div>
-        <?php \App\Services\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
+        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
     </div>
     <?php
 }
@@ -193,9 +193,9 @@ if ($sale_id > 0) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sales</title>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/invoices.css')) ?>">
 <?php if ($checkoutCompleted): ?>
 <script>
 try {
@@ -210,7 +210,7 @@ try {
 } catch (error) { /* Returning to POS retries recovery if browser storage is unavailable. */ }
 </script>
 <?php endif; ?>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/sale-receipt.css')) ?>">
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>" defer></script>
 </head>
@@ -387,7 +387,7 @@ try {
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Edit Receipt #<?= $sale_id ?></h2>
-                <button type="button" class="modal-close" title="Close" onclick="window.location.href='<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>'">&times;</button>
+                <button type="button" class="modal-close" title="Close" onclick="RetailMindUI.navigate('<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>')">&times;</button>
             </div>
             <div class="receipt-container">
                 <form method="POST">

@@ -63,7 +63,7 @@ try {
 
     echo "Safety confirmed: development environment, local database host, database '{$selectedDatabase}'.\n";
     ProductSeeder::assertSafeTarget($appEnv, $config, $selectedDatabase);
-    $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/product_seed.csv');
+    $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/src/backend/database/seeds/product_seed.csv');
     $productResult = ProductSeeder::run($pdo, $products);
     echo "Product dependency ready: {$productResult['inserted']} inserted, {$productResult['skipped']} already present.\n";
 

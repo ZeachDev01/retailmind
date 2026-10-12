@@ -79,6 +79,13 @@ final class Session
         unset($_SESSION[$key]);
     }
 
+    public static function closeWrite(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+    }
+
     private static function enforceTimeout(): void
     {
         // A database restore can replay old session_version values. Keep a

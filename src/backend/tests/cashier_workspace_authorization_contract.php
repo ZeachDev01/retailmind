@@ -41,7 +41,10 @@ try {
     $assert(str_contains($held, 'OPERATE_POINT_OF_SALE'), 'held sales check POS capability');
     $assert(!str_contains($held, "require_role(['admin'"), 'held sales admit no admin workspace');
 
-    $glossary = (string)@file_get_contents($root . '/CONTEXT.md');
+    $glossary = (string)@file_get_contents($root . '/docs/CONTEXT.md');
+    if ($glossary === '') {
+        $glossary = (string)@file_get_contents($root . '/CONTEXT.md');
+    }
     foreach (['**Cashier**:', '**Cashier Shift**:', '**Register**:'] as $term) {
         $assert(str_contains($glossary, $term), 'glossary defines ' . $term);
     }

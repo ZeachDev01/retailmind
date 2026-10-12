@@ -13,7 +13,9 @@ if (!is_logged_in()) {
     exit;
 }
 
-$service = new App\Services\DatabaseBackupService($pdo, role_capability_policy());
+App\Core\Session::closeWrite();
+
+$service = new App\Backup\DatabaseBackupService($pdo, role_capability_policy());
 $status = $service->status();
 
 header('Content-Type: application/json');

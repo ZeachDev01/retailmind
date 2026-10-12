@@ -13,8 +13,8 @@ require_once __DIR__ . '/../includes/backup.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\RecoveryStore;
 use App\Backup\SqlBackupFormat;
-use App\Services\DatabaseBackupService;
-use App\Services\DatabaseRestoreService;
+use App\Backup\DatabaseBackupService;
+use App\Backup\DatabaseRestoreService;
 use App\Store\StoreWriteGate;
 
 class InterruptedRestorePdo extends PDO
@@ -65,6 +65,9 @@ try {
     $source->prepare('INSERT INTO products VALUES (1, ?, NULL, ?, 42)')->execute([$text, "\x00\xff\x01"]);
     $target->exec("INSERT INTO products VALUES (9, 'Old data', NULL, NULL, 3)");
     $target->exec("INSERT INTO activity_log (note) VALUES ('Newer audit evidence')");
+    foreach ([$source, $target] as $db) {
+        $db->exec('ALTER TABLE products ADD COLUMN stock_doubled INT AS (stock * 2) STORED, ADD COLUMN stock_plus_one INT AS (stock + 1) VIRTUAL');
+    }
     $policy = new RoleCapabilityPolicy();
     $backups = new DatabaseBackupService($source, $policy, $private . '/downloads', $source);
     $targetBackups = new DatabaseBackupService($target, $policy, $private . '/target-downloads', $target);
@@ -126,6 +129,7 @@ try {
     $assert($result['statements'] > 0, 'Restore executes a real full replacement');
     $recovered = $target->query('SELECT * FROM products WHERE product_id=1')->fetch();
     $assert($recovered['product_name'] === $text && $recovered['optional_value'] === null && $recovered['binary_value'] === "\x00\xff\x01" && (int)$recovered['stock'] === 42, 'Text, binary, null, and stock values round-trip');
+    $assert((int)$recovered['stock_doubled'] === 84 && (int)$recovered['stock_plus_one'] === 43, 'Stored and virtual generated columns must be recalculated after restore');
     $assert((int)$target->query('SELECT COUNT(*) FROM products WHERE product_id=9')->fetchColumn() === 0, 'Old records are replaced, not merged');
     $assert((int)$target->query('SELECT COUNT(*) FROM activity_log')->fetchColumn() === 0, 'Newer audit records are not reconciled');
     $assert(RecoveryStore::epoch() !== $epochBefore, 'Restore invalidates sessions outside the database');
@@ -160,7 +164,7 @@ try {
     // not just the small failure-injection fixture above.
     $full = new PDO($dsn . ';dbname=' . $names[2], $config['username'], $config['password'], $options);
     $full->exec('SET FOREIGN_KEY_CHECKS=0');
-    foreach (split_sql_statements((string)file_get_contents(__DIR__ . '/../sql/schema.sql')) as $statement) {
+    foreach (split_sql_statements((string)file_get_contents(__DIR__ . '/../database/sql/schema.sql')) as $statement) {
         $full->exec($statement);
     }
     $full->exec('SET FOREIGN_KEY_CHECKS=1');

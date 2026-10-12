@@ -122,7 +122,7 @@ $before=$snapshot();
 $refused(fn()=>$service->refund(1,'cashier',11,$damaged(11),'customer_return',null,null,false,$exception));
 $assert($snapshot()===$before,'Reused exception cannot spend another remaining unit');
 $assert($service->refundableSaleForCashier(1,11)===null,'Exception does not broaden routine history');
-$assert((new \App\Services\RefundReceiptService($pdo))->forCashier($id,1,1)!==null,'Issuer retains own saved Refund Receipt');
+$assert((new \App\Receipts\RefundReceiptService($pdo))->forCashier($id,1,1)!==null,'Issuer retains own saved Refund Receipt');
 $pdo->exec('DELETE FROM fiscal_period_locks WHERE period_id=2');
 $pdo->exec("UPDATE fiscal_periods SET status='closed' WHERE period_id=2");
 $before=$snapshot();

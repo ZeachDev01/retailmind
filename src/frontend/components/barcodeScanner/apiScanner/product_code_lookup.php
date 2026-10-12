@@ -19,6 +19,8 @@ if (array_intersect(current_workspace_roles(), ['admin', 'inventory_manager']) =
     exit;
 }
 
+App\Core\Session::closeWrite();
+
 // Identification only: this endpoint never writes, never exposes an update
 // operation, and never accepts a paired-phone token as authorization.
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {

@@ -30,7 +30,7 @@
                 image.dataset.brandVariant = variants[file];
             }
             const theme = document.documentElement.dataset.theme;
-            const source = image.dataset.brandBase + image.dataset.brandVariant.replace('STYLE', theme);
+            const source = new URL(image.dataset.brandBase + image.dataset.brandVariant.replace('STYLE', theme), document.baseURI).href;
             image.setAttribute(attribute, source);
             if (image.dataset.brandVariant === 'logos/STYLE/logo-header.png') {
                 image.srcset = source + ' 1x, ' + source.replace('logo-header.png', 'logo-header@2x.png') + ' 2x';

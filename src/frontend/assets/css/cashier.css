@@ -604,7 +604,6 @@
     border-color: #93c5fd;
     background: var(--theme-surface-soft, #f8fbff);
     outline: none;
-    transform: translateY(-1px);
 }
 
 .search-result-name {
@@ -1005,28 +1004,45 @@
 .checkout-modal {
     position: fixed;
     inset: 0;
-    z-index: 1200;
-    display: none;
+    width: 100vw;
+    z-index: 2000;
+    display: flex;
     align-items: center;
     justify-content: center;
     padding: 1rem;
     background: rgba(15, 23, 42, 0.68);
-    backdrop-filter: blur(3px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .checkout-modal.open {
-    display: flex;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }
 
 .checkout-dialog {
     width: min(480px, 100%);
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     border-radius: 18px;
     background: var(--theme-surface, #fff);
     box-shadow: 0 30px 80px rgba(15, 23, 42, 0.3);
+    transform: scale(0.96);
+    transition: transform 0.2s ease;
+}
+
+.checkout-modal.open .checkout-dialog {
+    transform: scale(1);
 }
 
 .checkout-dialog-header {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -1059,10 +1075,14 @@
 }
 
 .checkout-dialog-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 1.1rem;
 }
 
 .checkout-dialog-actions {
+    flex-shrink: 0;
     display: flex;
     justify-content: flex-end;
     gap: 0.65rem;
@@ -1213,6 +1233,7 @@
 }
 
 .dashboard-panel {
+    min-width: 0;
     border: 1px solid var(--cashier-border);
     border-radius: 16px;
     background: var(--theme-surface, #fff);
@@ -1591,7 +1612,8 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 }
 
 .pos-category-button:active {
-    transform: translateY(1px);
+    transform: none;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
 /* Cashier-wide responsive overrides */
@@ -1971,7 +1993,7 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     cursor: pointer;
     font: inherit;
     text-align: left;
-    transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .frequent-product:hover,
@@ -1979,7 +2001,6 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     border-color: #93c5fd;
     outline: none;
     box-shadow: 0 5px 14px rgba(15, 23, 42, 0.07);
-    transform: translateY(-1px);
 }
 
 .frequent-product:disabled {
@@ -2046,13 +2067,12 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     border-radius: 8px;
     background: var(--theme-surface, #fff);
     box-shadow: 0 4px 12px rgba(15, 23, 42, 0.045);
-    transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .quick-product-card:hover {
     border-color: #93c5fd;
     box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
-    transform: translateY(-1px);
 }
 
 .quick-product-card.out-of-stock {
@@ -2597,7 +2617,6 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 
     .cashier-page .checkout-panel .cart-table-wrap {
         max-height: none;
-        overflow: visible;
     }
 
     .cashier-page .pos-workspace::-webkit-scrollbar,

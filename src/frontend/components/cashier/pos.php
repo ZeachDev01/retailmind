@@ -237,8 +237,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Point of Sale</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
 </head>
 <body class="cashier-page">
 <div class="app-shell">
@@ -387,7 +387,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         </div>
                         <p class="muted u-pos-hint">Review quantities before accepting payment.</p>
                     </div>
-                    <button type="button" class="btn btn-small btn-secondary" id="clear-cart-btn" onclick="clearCart()" disabled>
+                    <button type="button" class="btn btn-small btn-secondary" id="clear-cart-btn" disabled>
                         <i class="bi bi-trash3" aria-hidden="true"></i>Clear
                     </button>
                 </div>
@@ -467,13 +467,13 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         <small id="discount-summary" class="muted">No discount applied.</small>
                     </details>
 
-                    <button class="btn btn-block checkout-primary" id="checkout-button" type="button" onclick="checkoutNow()" title="Checkout (Ctrl+Enter)" disabled>
+                    <button class="btn btn-block checkout-primary" id="checkout-button" type="button" title="Checkout (Ctrl+Enter)" disabled>
                         <i class="bi bi-check2-circle" aria-hidden="true"></i>Review final quote
                     </button>
                 </form>
 
                 <div class="secondary-sale-actions">
-                    <button class="btn btn-secondary" id="hold-sale-btn" type="button" onclick="holdCurrentSale()" title="Hold sale (F4)" disabled>
+                    <button class="btn btn-secondary" id="hold-sale-btn" type="button" title="Hold sale (F4)" disabled>
                         <i class="bi bi-pause-circle" aria-hidden="true"></i>Hold sale
                     </button>
                     <button class="btn btn-danger" id="void-sale-btn" type="button" onclick="voidCurrentSale()" disabled>
@@ -513,7 +513,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
         </div>
         <div class="checkout-dialog-actions">
             <button type="button" class="btn btn-secondary" onclick="closeCheckoutConfirm()">Review cart</button>
-            <button type="button" class="btn" id="confirm-checkout-button" onclick="submitConfirmedCheckout()"><i class="bi bi-check2" aria-hidden="true"></i>Confirm payment</button>
+            <button type="button" class="btn" id="confirm-checkout-button"><i class="bi bi-check2" aria-hidden="true"></i>Confirm payment</button>
         </div>
     </div>
 </div>
@@ -561,7 +561,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
         </div>
         <div class="checkout-dialog-actions">
             <button type="button" class="btn btn-secondary" onclick="closeDiscardModal()">Keep working</button>
-            <button type="button" class="btn btn-danger" onclick="confirmDiscardHeldSale()"><i class="bi bi-trash3" aria-hidden="true"></i>Discard sale</button>
+            <button type="button" class="btn btn-danger" id="confirm-discard-sale"><i class="bi bi-trash3" aria-hidden="true"></i>Discard sale</button>
         </div>
     </div>
 </div>
@@ -1188,7 +1188,7 @@ async function checkoutNow() {
         <p><strong>Payment method:</strong> ${escapeHtml(methodLabel)}</p>
         ${paymentLine}
     `;
-    checkoutModal.classList.add('open');
+    RetailMindUI.openOverlay(checkoutModal);
     updateReviewedPayment();
     checkoutModal.querySelector('.btn:last-child').focus();
 }
@@ -1205,7 +1205,7 @@ function updateReviewedPayment() {
 
 function closeCheckoutConfirm() {
     if (checkoutSubmitting) return;
-    checkoutModal.classList.remove('open');
+    RetailMindUI.closeOverlay(checkoutModal);
     checkoutConfirmed = false;
     checkoutButton.focus();
 }
@@ -1264,6 +1264,7 @@ async function holdCurrentSale() {
     if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
     if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before holding a sale.', 'error'); return; }
     if (resumedHeldSaleId) { showCartMessage('This sale is already held. Complete checkout or discard it from Held sales before holding another sale.', 'error'); return; }
+    holdSaleButton.disabled = true;
     try {
         const data = await cartWorkspace.exclusive(() => cartWorkspace.holdRequested(cart));
         if (!data) { cartReviewUnresolved = true; persistCart(); showCartMessage('Requested lines preserved. Availability changes remain unresolved.', 'error'); return; }
@@ -1272,6 +1273,9 @@ async function holdCurrentSale() {
         resetPaymentState();
         renderCart(); renderHeldSales(); showCartMessage(`Sale ${data.reference_no} held on the server.`, 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); }
+    finally {
+        holdSaleButton.disabled = Object.keys(cart).length === 0 || !posShiftOpen;
+    }
 }
 
 async function resumeHeldSale(id) {
@@ -1308,12 +1312,12 @@ function openDiscardModal(id) {
     discardNote.value = '';
     discardError.textContent = '';
     discardError.className = 'cart-message error';
-    discardModal.classList.add('open');
+    RetailMindUI.openOverlay(discardModal);
     setTimeout(() => discardReason.focus(), 50);
 }
 
 function closeDiscardModal() {
-    discardModal.classList.remove('open');
+    RetailMindUI.closeOverlay(discardModal);
     discardingHeldSaleId = 0;
     holdSaleButton.focus();
 }
@@ -1358,7 +1362,7 @@ function renderHeldSales() {
         // to be paid for, and it still holds this shift open. Saying so is the
         // difference between "held" and "done".
         const state = held.status === 'resumed' ? ' &middot; on the till' : '';
-        return `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}${state}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" onclick="resumeHeldSale(${id})">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="openDiscardModal(${id})">Discard</button></div></div>`;
+        return `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}${state}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" data-resume-held-sale="${id}">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="openDiscardModal(${id})">Discard</button></div></div>`;
     }).join('');
 }
 
@@ -1367,7 +1371,7 @@ function voidCurrentSale() {
 }
 
 function closeVoidModal() {
-    voidModal.classList.remove('open');
+    RetailMindUI.closeOverlay(voidModal);
     voidSaleButton.focus();
 }
 
@@ -1516,6 +1520,15 @@ function updateClock() {
 startBtn.addEventListener('click', startScanner);
 stopBtn.addEventListener('click', stopScanner);
 addCodeBtn.addEventListener('click', addCodeFromInput);
+clearCartButton.addEventListener('click', clearCart);
+checkoutButton.addEventListener('click', checkoutNow);
+confirmCheckoutButton.addEventListener('click', submitConfirmedCheckout);
+holdSaleButton.addEventListener('click', holdCurrentSale);
+document.getElementById('confirm-discard-sale').addEventListener('click', confirmDiscardHeldSale);
+holdList.addEventListener('click', event => {
+    const button = event.target.closest('[data-resume-held-sale]');
+    if (button) resumeHeldSale(Number(button.dataset.resumeHeldSale));
+});
 paymentMethod.addEventListener('change', updatePaymentFields);
 cashReceived.addEventListener('input', updatePaymentFields);
 discountType.addEventListener('change', updatePaymentFields);
@@ -1526,7 +1539,11 @@ cashQuick.addEventListener('click', event => {
         setQuickTender(button.dataset.tender);
     }
 });
-quickProductSearch.addEventListener('input', renderQuickProducts);
+let quickSearchTimer = null;
+quickProductSearch.addEventListener('input', () => {
+    clearTimeout(quickSearchTimer);
+    quickSearchTimer = setTimeout(renderQuickProducts, 80);
+});
 quickCategoryFilters.addEventListener('click', event => {
     const button = event.target.closest('[data-quick-category]');
     if (!button) return;
@@ -1556,7 +1573,7 @@ document.querySelectorAll('[data-pos-focus]').forEach(button => {
             skuInput.focus();
             skuInput.select();
         } else if (target === 'find') {
-            window.location.href = findProductUrl;
+            RetailMindUI.navigate(findProductUrl);
         } else if (target === 'cash') {
             paymentMethod.value = 'cash';
             updatePaymentFields();
@@ -1608,6 +1625,7 @@ checkoutForm.addEventListener('submit', event => {
 });
 
 document.addEventListener('keydown', event => {
+    if (event.defaultPrevented) return;
     if (event.key === 'F2') {
         event.preventDefault();
         skuInput.focus();
@@ -1616,7 +1634,7 @@ document.addEventListener('keydown', event => {
     }
     if (event.key === 'F3') {
         event.preventDefault();
-        window.location.href = findProductUrl;
+        RetailMindUI.navigate(findProductUrl);
         return;
     }
     if (event.key === 'F4') {
@@ -1629,6 +1647,8 @@ document.addEventListener('keydown', event => {
             closeCheckoutConfirm();
         } else if (voidModal.classList.contains('open')) {
             closeVoidModal();
+        } else if (discardModal.classList.contains('open')) {
+            closeDiscardModal();
         }
         return;
     }

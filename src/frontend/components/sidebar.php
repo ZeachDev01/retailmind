@@ -26,8 +26,9 @@ $assignedWorkspaceRoles = array_values(array_filter(
 $avatarStylesheetPath = __DIR__ . '/../assets/css/avatars.css';
 $avatarStylesheetVersion = is_file($avatarStylesheetPath) ? (string)filemtime($avatarStylesheetPath) : '1';
 $avatarStylesheetUrl = app_url('assets/css/avatars.css') . '?v=' . rawurlencode($avatarStylesheetVersion);
-$sidebarBrandLogoUrl = app_url('assets/img/retailmind-logo-600x200.png');
-$sidebarBrandIconUrl = app_url('assets/img/retailmind-icon-512.png');
+$sidebarBrandBaseUrl = app_url('assets/img/retailmind-web-assets%20dark%20mode/');
+$sidebarBrandLogoUrl = $sidebarBrandBaseUrl . 'logos/light/logo-header.png';
+$sidebarBrandIconUrl = $sidebarBrandBaseUrl . 'icons/light/icon-64.png';
 $commandProductTarget = match ($role) {
     'super_admin' => app_url('components/inventory_management/inventory_overview.php'),
     'admin', 'inventory_manager' => app_url('components/inventory_management/products.php'),
@@ -110,7 +111,7 @@ function sidebar_render_dropdown(array $item): void
     $openClass = sidebar_dropdown_class($paths);
 ?>
     <div class="dropdown<?= $openClass ?>">
-        <button class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" type="button" title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><i class="bi bi-chevron-right dropdown-chevron" aria-hidden="true"></i></button>
+        <button type="button" class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><i class="bi bi-chevron-right dropdown-chevron" aria-hidden="true"></i></button>
         <div class="dropdown-content">
             <?php foreach ($item['items'] as $child): ?>
                 <?php sidebar_render_link($child); ?>
@@ -145,6 +146,7 @@ function sidebar_render_section(array $section): void
 }
 
 $superAdministratorSystemItems = [
+    ['path' => 'components/administrator/reset_data.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Reset Data'],
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-shield-lock', 'label' => 'Users & Access'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Protected Audit Records'],
     ['path' => 'components/system_administrator/emergency_access.php', 'icon' => 'bi-exclamation-octagon', 'label' => 'Emergency Access'],
@@ -156,6 +158,7 @@ $superAdministratorSystemItems = [
 ];
 
 $administratorSystemItems = [
+    ['path' => 'components/administrator/reset_data.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Reset Data'],
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Store Staff'],
     ['path' => 'components/administrator/registers.php', 'icon' => 'bi-upc-scan', 'label' => 'Registers'],
     ['path' => 'components/administrator/store_settings.php', 'icon' => 'bi-sliders', 'label' => 'Store Settings'],
@@ -165,17 +168,10 @@ $administratorSystemItems = [
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Operational Audit'],
 ];
 
-$managerInventoryItems = [
-    ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
-    ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products & Stock'],
-    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
-    ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Inventory Counts'],
-    ['path' => 'components/inventory_management/csv_import.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'CSV Import'],
-    ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
-    ['path' => 'components/inventory_management/replenishment_queue.php', 'icon' => 'bi-cart-plus', 'label' => 'Replenishment Queue'],
-];
+$managerInventoryItems = [];
 
 $administratorReportItems = [
+    ['path' => 'components/report/forecast_import.php', 'icon' => 'bi-file-earmark-arrow-up', 'label' => 'Forecast Data Import'],
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shifts'],
     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Forecast Analytics'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
@@ -189,6 +185,7 @@ $superAdministratorSections = [
         'items' => [
             ['path' => 'components/super_administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Control Center'],
             ['icon' => 'bi-shield-lock', 'label' => 'Platform Administration', 'items' => $superAdministratorSystemItems],
+            ['path' => 'components/report/forecast_import.php', 'icon' => 'bi-file-earmark-arrow-up', 'label' => 'Forecast Data Import'],
         ],
     ],
 ];
@@ -214,20 +211,26 @@ $roleSections = [
         [
             'items' => [
                 ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
-                ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecast'],
-                ['icon' => 'bi-boxes', 'label' => 'Inventory', 'items' => $managerInventoryItems],
+                ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Stock Product'],
+                ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Stock Counter'],
+                ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
                 ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Exceptions'],
                 ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
                 ['path' => 'components/invoice/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
-                ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
             ],
         ],
         [
-            'title' => 'Reports',
             'items' => [
-                ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
-                ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
-                ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
+                ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Reports', 'items' => [
+                    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
+                    ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecast'],
+                    ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
+                    ['path' => 'components/report/forecast_import.php', 'icon' => 'bi-file-earmark-arrow-up', 'label' => 'Forecast Data Import'],
+                    ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
+                    ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
+                    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
+                    ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
+                ]],
             ],
         ],
     ],
@@ -253,7 +256,17 @@ $roleSections = [
 ];
 
 $sections = $roleSections[$role] ?? [];
+$GLOBALS['rm_navigation_flash'] = $flashMessages;
+$GLOBALS['rm_navigation_shell'] = [
+    'name' => $sidebarUserName,
+    'avatar' => profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage, 'sidebar-avatar'),
+    'mobileAvatar' => profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage),
+    'notifications' => $notificationCount,
+];
 ?>
+<!--rm-shell-start-->
+<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/page-navigation.css')) ?>">
+<script src="<?= sidebar_e(app_url('assets/js/page-navigation.js')) ?>" data-workspace="<?= sidebar_e((string)$role) ?>"></script>
 <link rel="stylesheet" href="<?= sidebar_e($avatarStylesheetUrl) ?>" data-avatar-styles>
 <script>
     (function() {
@@ -272,7 +285,7 @@ $sections = $roleSections[$role] ?? [];
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
-            <img class="admin-mobile-logo-image" src="<?= sidebar_e($sidebarBrandIconUrl) ?>" alt="">
+            <img class="admin-mobile-logo-image" src="<?= sidebar_e($sidebarBrandIconUrl) ?>" data-brand-base="<?= sidebar_e($sidebarBrandBaseUrl) ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
             <span class="admin-mobile-logo-copy"><strong>RetailMind</strong><small>Inventory &amp; Forecasting</small></span>
         </a>
     </div>
@@ -288,7 +301,7 @@ $sections = $roleSections[$role] ?? [];
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="appSidebar">
     <button type="button" class="sidebar-brand" id="sidebarBrandToggle" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="appSidebar">
-        <span class="brand-icon" aria-hidden="true"><img src="<?= sidebar_e($sidebarBrandIconUrl) ?>" alt=""></span>
+        <span class="brand-icon" aria-hidden="true"><img src="<?= sidebar_e($sidebarBrandIconUrl) ?>" data-brand-base="<?= sidebar_e($sidebarBrandBaseUrl) ?>" data-brand-variant="icons/STYLE/icon-64.png" alt=""></span>
         <span class="sidebar-brand-copy">
             <span class="sidebar-brand-title">RetailMind</span>
             <span>Inventory &amp; Forecasting</span>
@@ -357,10 +370,9 @@ $sections = $roleSections[$role] ?? [];
                 </summary>
                 <div class="sidebar-preferences-options">
                     <div class="sidebar-theme-target" data-sidebar-theme-target></div>
-                    <button type="button" class="sidebar-account-button" data-fullscreen-toggle aria-pressed="false">
+                    <button type="button" class="sidebar-preference-option" data-fullscreen-toggle aria-pressed="false">
                         <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
                         <span>Full Screen</span>
-                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
                     </button>
                     <?php if ($role !== 'cashier'): ?>
                         <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>">
@@ -408,20 +420,23 @@ $sections = $roleSections[$role] ?? [];
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
-<script src="<?= sidebar_e(app_url('assets/js/ui.js')) ?>"></script>
+<script src="<?= sidebar_e(app_url('assets/js/ui.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/ui.js')) ?>"></script>
+<script src="<?= sidebar_e(app_url('assets/js/sidebar-loader.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/sidebar-loader.js')) ?>"></script>
 <?php
 require_once __DIR__ . '/../../backend/app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../../backend/app/Services/HeldSaleService.php';
 $cartRecoveryShift = $role === 'cashier' ? (new \App\Services\CashierShiftService($pdo))->getOpenShift((int)$_SESSION['user_id']) : null;
-?>
-<script src="<?= sidebar_e(app_url('assets/js/cart-workspace.js')) ?>"></script>
-<script>
-window.cartWorkspace = new CartWorkspace(<?= json_encode([
+$cartWorkspaceContext = [
     'cashier' => (int)$_SESSION['user_id'], 'shift' => (int)($cartRecoveryShift['shift_id'] ?? 0),
     'workspace' => $role, 'locked' => !empty($cartRecoveryShift['locked_at']),
     'endpoint' => app_url('components/barcodeScanner/apiScanner/held_sales.php'),
     'csrf' => csrf_token(), 'reasons' => \App\Services\HeldSaleService::DISCARD_REASONS,
-], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+];
+$GLOBALS['rm_navigation_cart'] = $cartWorkspaceContext;
+?>
+<script src="<?= sidebar_e(app_url('assets/js/cart-workspace.js')) ?>"></script>
+<script>
+window.cartWorkspace = new CartWorkspace(<?= json_encode($cartWorkspaceContext, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
 cartWorkspace.bindNavigation();
 </script>
 
@@ -474,7 +489,8 @@ cartWorkspace.bindNavigation();
                     menuIcon.className = 'bi ' + (isOpen ? 'bi-x-lg' : 'bi-list');
                 }
             }
-            document.body.classList.toggle('no-scroll', isOpen);
+            if (window.RetailMindUI?.syncScrollLock) RetailMindUI.syncScrollLock();
+            else document.body.classList.toggle('no-scroll', isOpen);
             updateBrandState();
         }
 
@@ -505,11 +521,6 @@ cartWorkspace.bindNavigation();
         if (sidebar && overlay) {
             overlay.addEventListener('click', function() {
                 setSidebarOpen(false);
-            });
-            sidebar.querySelectorAll('a').forEach(function(link) {
-                link.addEventListener('click', function() {
-                    setSidebarOpen(false);
-                });
             });
             window.addEventListener('resize', function() {
                 if (window.innerWidth > 900) {
@@ -548,9 +559,7 @@ cartWorkspace.bindNavigation();
                 dropdown.classList.toggle('open');
                 button.setAttribute('aria-expanded', dropdown.classList.contains('open') ? 'true' : 'false');
             });
-            button.addEventListener('mousedown', function(event) {
-                event.preventDefault();
-            });
         });
     });
 </script>
+<!--rm-shell-end-->

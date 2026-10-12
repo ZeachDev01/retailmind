@@ -2,7 +2,7 @@
 
 Status: agreed product direction, ready for specification review. Application implementation has not started.
 
-Confirmed through the Cashier workflow clarification conversation ending 2026-10-01. Evidence and current-code findings are in [the investigation](../research/cashier-workflow-investigation.md). Use the domain vocabulary in [CONTEXT.md](../../CONTEXT.md) and preserve ADR-0001's Administrator boundaries and ADR-0006's transaction-time receipt details.
+Confirmed through the Cashier workflow clarification conversation ending 2026-10-01. Evidence and current-code findings are in [the investigation](../research/cashier-workflow-investigation.md). Use the domain vocabulary in [CONTEXT.md](../CONTEXT.md) and preserve ADR-0001's Administrator boundaries and ADR-0006's transaction-time receipt details.
 
 ## Purpose
 

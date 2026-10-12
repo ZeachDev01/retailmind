@@ -11,7 +11,7 @@ require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_any_capability([\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP]);
 
 $token = (string)($_GET['token'] ?? '');
-$service = new App\Services\DatabaseBackupService($pdo, role_capability_policy());
+$service = new App\Backup\DatabaseBackupService($pdo, role_capability_policy());
 validate_current_session($pdo);
 
 try {

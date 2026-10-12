@@ -254,7 +254,7 @@ foreach ($products as $product) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Products &amp; Stock</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <style>
         /* Keep wizard actions visible while the fields scroll. */
         #add-product-modal {
@@ -710,7 +710,7 @@ foreach ($products as $product) {
             }
         }
 
-        @media (min-width: 641px) and (max-width: 920px) {
+        @media (min-width: 641px) and (max-width: 1100px) {
             .catalog-toolbar-primary {
                 grid-template-columns: auto minmax(0, 1fr) minmax(150px, .7fr);
             }
@@ -851,6 +851,10 @@ foreach ($products as $product) {
                 align-items: stretch;
             }
 
+            .product-table-shell .data-table {
+                min-width: 0;
+            }
+
             .table-pagination label,
             .product-pagination-status,
             .pagination-buttons {
@@ -917,6 +921,7 @@ foreach ($products as $product) {
                             <div class="product-add-menu-list" id="product-add-options" role="menu" hidden>
                                 <?php if ($canManageInventory): ?><button type="button" class="product-add-menu-item" id="add-product-btn" role="menuitem"><i class="bi bi-box-seam" aria-hidden="true"></i><strong>Add Product</strong></button><button type="button" class="product-add-menu-item" id="add-category-btn" role="menuitem"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button><?php endif; ?>
                                 <a class="product-add-menu-item" role="menuitem" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>
+                                <?php if ($canManageInventory): ?><a class="product-add-menu-item" role="menuitem" href="<?= htmlspecialchars(app_url('components/inventory_management/csv_import.php')) ?>"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i><strong>CSV Import</strong></a><?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -1274,7 +1279,6 @@ foreach ($products as $product) {
         if (addProductButton) addProductButton.addEventListener('click', () => {
             setAddMenuOpen(false);
             openModal('add-product-modal');
-            restoreFormState();
         });
         const addCategoryButton = document.getElementById('add-category-btn');
         if (addCategoryButton) addCategoryButton.addEventListener('click', () => {
@@ -1831,16 +1835,7 @@ foreach ($products as $product) {
             if (imagePreviewContainer) imagePreviewContainer.hidden = true;
         }
 
-        // Listen for modal open event
-        const originalOpenOverlay = RetailMindUI?.openOverlay;
-        if (originalOpenOverlay) {
-            RetailMindUI.openOverlay = function(overlay) {
-                originalOpenOverlay.call(this, overlay);
-                if (overlay && overlay.id === 'add-product-modal') {
-                    restoreFormState();
-                }
-            };
-        }
+        productModalOverlay.addEventListener('retailmind:overlayopen', restoreFormState);
 
         // Save form state when modal is about to close
         productModalOverlay.addEventListener('click', event => {

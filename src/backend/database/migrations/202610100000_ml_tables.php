@@ -5,9 +5,9 @@ return [
     'description' => 'Create ML jobs, evaluation, and demand forecasts tables',
     'up' => static function (PDO $pdo): void {
         $sqlFiles = [
-            __DIR__ . '/../../sql/migrations/004_ml_jobs.sql',
-            __DIR__ . '/../../sql/migrations/005_ml_evaluation.sql',
-            __DIR__ . '/../../sql/migrations/006_demand_forecasts.sql'
+            __DIR__ . '/../sql/migrations/004_ml_jobs.sql',
+            __DIR__ . '/../sql/migrations/005_ml_evaluation.sql',
+            __DIR__ . '/../sql/migrations/006_demand_forecasts.sql'
         ];
         
         foreach ($sqlFiles as $file) {

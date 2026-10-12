@@ -12,26 +12,28 @@ $products = $productService->getProductsForManagement();
 $low_stock = $inventoryService->getLowStockProducts();
 $expiring_batches = $inventoryService->getExpiringSoonBatches(30);
 $expired_batches = $inventoryService->getExpiredBatches();
-$fefo_recommendations = array_slice($inventoryService->getFefoRecommendations(), 0, 10);
+$fefo_recommendations = $inventoryService->getFefoRecommendations();
 $lowStockProductIds = array_fill_keys(array_map('intval', array_column($low_stock, 'product_id')), true);
 $expiringProductIds = array_fill_keys(array_map('intval', array_column($expiring_batches, 'product_id')), true);
 $expiredProductIds = array_fill_keys(array_map('intval', array_column($expired_batches, 'product_id')), true);
-$summary = $inventoryService->getInventorySummary();
-$total_products = $summary['total_products'];
-$total_units = $summary['current_stock'];
+$total_products = count($products);
+$total_units = 0;
+$out_of_stock = 0;
+$out_of_stock_products = [];
+foreach ($products as $p) {
+    $qty = (int)($p['quantity_on_hand'] ?? 0);
+    $total_units += $qty;
+    if ($qty <= 0) {
+        $out_of_stock++;
+        $out_of_stock_products[] = [
+            'sku' => $p['sku'] ?? '',
+            'product_name' => $p['product_name'] ?? '',
+            'quantity_on_hand' => $qty,
+            'reorder_level' => (int)($p['reorder_level'] ?? 0),
+        ];
+    }
+}
 [$scopeSql, $scopeParams] = store_product_scope('p');
-$outOfStockStmt = $pdo->prepare("SELECT COUNT(*) FROM inventory i JOIN products p ON p.product_id = i.product_id WHERE i.quantity_on_hand = 0{$scopeSql}");
-$outOfStockStmt->execute($scopeParams);
-$out_of_stock = $outOfStockStmt->fetchColumn();
-$out_of_stock_products = $pdo->prepare(
-    "SELECT p.sku, p.product_name, i.quantity_on_hand, p.reorder_level
-     FROM products p
-     JOIN inventory i ON i.product_id = p.product_id
-    WHERE i.quantity_on_hand = 0{$scopeSql}
-     ORDER BY p.product_name"
-);
-$out_of_stock_products->execute($scopeParams);
-$out_of_stock_products = $out_of_stock_products->fetchAll();
 $recentStmt = $pdo->prepare(
     "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.product_name, u.full_name AS moved_by_name
      FROM stock_movements sm
@@ -43,6 +45,81 @@ $recentStmt = $pdo->prepare(
 );
 $recentStmt->execute($scopeParams);
 $recent_movements = $recentStmt->fetchAll();
+
+$categoryStats = [];
+$statusCounts = [
+    'available' => 0,
+    'low' => 0,
+    'out' => 0,
+    'expiring' => 0,
+    'expired' => 0,
+];
+
+foreach ($products as $p) {
+    $cat = trim((string)($p['category_name'] ?? 'Uncategorized'));
+    if ($cat === '') {
+        $cat = 'Uncategorized';
+    }
+    $qty = (int)($p['quantity_on_hand'] ?? 0);
+    if (!isset($categoryStats[$cat])) {
+        $categoryStats[$cat] = 0;
+    }
+    $categoryStats[$cat] += $qty;
+
+    $pid = (int)($p['product_id'] ?? 0);
+    $threshold = max((int)($p['reorder_level'] ?? 0), (int)($p['safety_stock'] ?? 0));
+    $isExp = isset($expiredProductIds[$pid]);
+    $isExpiring = !$isExp && isset($expiringProductIds[$pid]);
+    if ($isExp) {
+        $statusCounts['expired']++;
+    } elseif ($isExpiring) {
+        $statusCounts['expiring']++;
+    } elseif ($qty <= 0) {
+        $statusCounts['out']++;
+    } elseif ($qty <= $threshold || isset($lowStockProductIds[$pid])) {
+        $statusCounts['low']++;
+    } else {
+        $statusCounts['available']++;
+    }
+}
+
+arsort($categoryStats);
+$topCategories = array_slice($categoryStats, 0, 8, true);
+$categoryLabels = array_keys($topCategories);
+$categoryUnits = array_values($topCategories);
+$forecastProducts = get_stored_predictions($pdo);
+usort($forecastProducts, static fn(array $a, array $b): int =>
+    (float)$b['predicted_demand_next_30_days'] <=> (float)$a['predicted_demand_next_30_days']
+);
+$topForecastProducts = array_slice($forecastProducts, 0, 10);
+
+$chartDataJson = json_encode([
+    'forecast' => [
+        'labels' => array_column($topForecastProducts, 'product_name'),
+        'stock' => array_map('floatval', array_column($topForecastProducts, 'current_stock')),
+        'demand7' => array_map('floatval', array_column($topForecastProducts, 'predicted_demand_next_7_days')),
+        'demand30' => array_map('floatval', array_column($topForecastProducts, 'predicted_demand_next_30_days')),
+    ],
+    'status' => [
+        'labels' => ['Available', 'Low Stock', 'Out of Stock', 'Expiring Soon', 'Expired'],
+        'values' => [
+            $statusCounts['available'],
+            $statusCounts['low'],
+            $statusCounts['out'],
+            $statusCounts['expiring'],
+            $statusCounts['expired'],
+        ],
+        'keys' => ['in-stock', 'low', 'out', 'expiring', 'expired'],
+    ],
+    'categories' => [
+        'labels' => $categoryLabels,
+        'values' => $categoryUnits,
+    ],
+    'totals' => [
+        'products' => $total_products,
+        'units' => $total_units,
+    ],
+], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -50,8 +127,9 @@ $recent_movements = $recentStmt->fetchAll();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Inventory Overview</title>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body class="inventory-overview-page">
 <div class="app-shell">
@@ -88,6 +166,69 @@ $recent_movements = $recentStmt->fetchAll();
                 <span class="overview-metric-copy"><strong><?= number_format(count($expired_batches)) ?></strong><span>Expired batches</span></span>
                 <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
+        </section>
+
+        <section class="overview-chart-card overview-forecast-card" aria-labelledby="overview-forecast-heading">
+            <div class="overview-chart-header">
+                <div>
+                    <span class="overview-chart-icon overview-chart-icon--blue" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
+                    <div>
+                        <h3 id="overview-forecast-heading">Demand Forecast vs Current Stock</h3>
+                        <p>Top 10 products by predicted 30-day demand. Forecasts are estimates; 7-day demand is included in the 30-day total.</p>
+                    </div>
+                </div>
+                <span class="overview-chart-badge"><?= count($forecastProducts) ?> forecast-ready SKUs</span>
+            </div>
+            <?php if ($topForecastProducts): ?>
+            <div class="overview-chart-body">
+                <canvas id="overviewForecastChart" aria-label="Current stock and predicted demand for the next 7 and 30 days by product, in units" role="img"></canvas>
+            </div>
+            <details>
+                <summary>View forecast values</summary>
+                <div class="overview-table-shell"><table class="overview-table">
+                    <thead><tr><th>Product</th><th>Current stock</th><th>7-day demand</th><th>30-day demand</th></tr></thead>
+                    <tbody><?php foreach ($topForecastProducts as $forecast): ?>
+                    <tr><td><?= htmlspecialchars($forecast['product_name']) ?></td><td><?= number_format((float)$forecast['current_stock']) ?></td><td><?= number_format((float)$forecast['predicted_demand_next_7_days']) ?></td><td><?= number_format((float)$forecast['predicted_demand_next_30_days']) ?></td></tr>
+                    <?php endforeach; ?></tbody>
+                </table></div>
+            </details>
+            <?php else: ?>
+            <p class="overview-empty">No current forecasts are available. Check sales data and update forecasts on the Demand Forecasting page.</p>
+            <?php endif; ?>
+        </section>
+
+        <section class="overview-charts-grid" aria-label="Inventory visual analytics">
+            <div class="overview-chart-card">
+                <div class="overview-chart-header">
+                    <div>
+                        <span class="overview-chart-icon" aria-hidden="true"><i class="bi bi-pie-chart-fill"></i></span>
+                        <div>
+                            <h3>Stock Health Distribution</h3>
+                            <p>Breakdown of products by inventory health state</p>
+                        </div>
+                    </div>
+                    <span class="overview-chart-badge"><?= number_format((int)$total_products) ?> SKUs</span>
+                </div>
+                <div class="overview-chart-body">
+                    <canvas id="overviewStatusChart" aria-label="Stock health distribution chart" role="img"></canvas>
+                </div>
+            </div>
+
+            <div class="overview-chart-card">
+                <div class="overview-chart-header">
+                    <div>
+                        <span class="overview-chart-icon overview-chart-icon--blue" aria-hidden="true"><i class="bi bi-bar-chart-fill"></i></span>
+                        <div>
+                            <h3>Stock Volume by Category</h3>
+                            <p>Top product categories ranked by units on hand</p>
+                        </div>
+                    </div>
+                    <span class="overview-chart-badge"><?= number_format((int)$total_units) ?> Units</span>
+                </div>
+                <div class="overview-chart-body">
+                    <canvas id="overviewCategoryChart" aria-label="Stock volume by category chart" role="img"></canvas>
+                </div>
+            </div>
         </section>
 
         <div id="overview-default-view" class="overview-tab-card">
@@ -217,7 +358,219 @@ $recent_movements = $recentStmt->fetchAll();
 <?php include __DIR__ . '/../modals/product_overview/expiredStock.php'; ?>
 <?php include __DIR__ . '/../modals/product_overview/product.php'; ?>
 <script>
+window.addEventListener('pagehide', () => document.documentElement.classList.remove('overview-fefo-active'));
+
+const inventoryChartData = <?= $chartDataJson ?>;
+
+function getChartThemeColors() {
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    return {
+        textColor: isDark ? '#cbd5e1' : '#475569',
+        mutedColor: isDark ? '#94a3b8' : '#64748b',
+        gridColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+        borderBg: isDark ? '#1e293b' : '#ffffff',
+    };
+}
+
+let statusChartInstance = null;
+let categoryChartInstance = null;
+let forecastChartInstance = null;
+
+function initInventoryCharts() {
+    if (typeof Chart === 'undefined') {
+        const fallbacks = document.querySelectorAll('.overview-chart-body');
+        fallbacks.forEach(function (body) {
+            if (!body.querySelector('.overview-chart-fallback')) {
+                body.innerHTML = '<div class="overview-chart-fallback"><i class="bi bi-bar-chart"></i> Visual chart available when online.</div>';
+            }
+        });
+        return;
+    }
+
+    const colors = getChartThemeColors();
+    if (forecastChartInstance) forecastChartInstance.destroy();
+    forecastChartInstance = null;
+    const forecastCtx = document.getElementById('overviewForecastChart');
+    if (forecastCtx) {
+        forecastChartInstance = new Chart(forecastCtx, {
+            type: 'bar',
+            data: {
+                labels: inventoryChartData.forecast.labels,
+                datasets: [
+                    { label: 'Current stock', data: inventoryChartData.forecast.stock, backgroundColor: '#16a34a' },
+                    { label: '7-day demand', data: inventoryChartData.forecast.demand7, backgroundColor: '#60a5fa' },
+                    { label: '30-day demand', data: inventoryChartData.forecast.demand30, backgroundColor: '#7c3aed' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: colors.textColor } } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: colors.mutedColor } },
+                    y: { beginAtZero: true, title: { display: true, text: 'Units', color: colors.mutedColor }, grid: { color: colors.gridColor }, ticks: { color: colors.mutedColor, precision: 0 } }
+                }
+            }
+        });
+    }
+    const statusCtx = document.getElementById('overviewStatusChart');
+    const categoryCtx = document.getElementById('overviewCategoryChart');
+
+    if (statusChartInstance) {
+        statusChartInstance.destroy();
+        statusChartInstance = null;
+    }
+    if (categoryChartInstance) {
+        categoryChartInstance.destroy();
+        categoryChartInstance = null;
+    }
+
+    if (statusCtx) {
+        statusChartInstance = new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: inventoryChartData.status.labels,
+                datasets: [{
+                    data: inventoryChartData.status.values,
+                    backgroundColor: [
+                        '#10b981',
+                        '#f59e0b',
+                        '#ef4444',
+                        '#f97316',
+                        '#991b1b',
+                    ],
+                    borderWidth: 2,
+                    borderColor: colors.borderBg,
+                    hoverOffset: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '68%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: colors.textColor,
+                            font: { size: 11, family: 'system-ui, -apple-system, sans-serif' },
+                            padding: 10,
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const val = context.raw || 0;
+                                const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+                                return ' ' + context.label + ': ' + val + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                },
+                onClick: function (event, elements) {
+                    if (!elements || !elements.length) return;
+                    const index = elements[0].index;
+                    const targetKey = inventoryChartData.status.keys[index];
+                    if (targetKey) {
+                        const metricBtn = document.querySelector('.overview-metric[data-overview-view="' + targetKey + '"]');
+                        if (metricBtn) metricBtn.click();
+                    }
+                }
+            }
+        });
+    }
+
+    if (categoryCtx) {
+        categoryChartInstance = new Chart(categoryCtx, {
+            type: 'bar',
+            data: {
+                labels: inventoryChartData.categories.labels,
+                datasets: [{
+                    label: 'Units in Stock',
+                    data: inventoryChartData.categories.values,
+                    backgroundColor: 'rgba(37, 99, 235, 0.85)',
+                    hoverBackgroundColor: '#2563eb',
+                    borderRadius: 4,
+                    borderSkipped: false,
+                    maxBarThickness: 32
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                return ' ' + context.parsed.y + ' units in stock';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            color: colors.mutedColor,
+                            font: { size: 10.5 },
+                            maxRotation: 25,
+                            minRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: colors.gridColor
+                        },
+                        ticks: {
+                            color: colors.mutedColor,
+                            font: { size: 10.5 },
+                            precision: 0
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+window.addEventListener('retailmind:themechange', function () {
+    if (forecastChartInstance) {
+        const colors = getChartThemeColors();
+        forecastChartInstance.options.plugins.legend.labels.color = colors.textColor;
+        forecastChartInstance.options.scales.x.ticks.color = colors.mutedColor;
+        forecastChartInstance.options.scales.y.ticks.color = colors.mutedColor;
+        forecastChartInstance.options.scales.y.title.color = colors.mutedColor;
+        forecastChartInstance.options.scales.y.grid.color = colors.gridColor;
+        forecastChartInstance.update();
+    }
+    if (!statusChartInstance && !categoryChartInstance) return;
+    const colors = getChartThemeColors();
+    if (statusChartInstance) {
+        statusChartInstance.options.plugins.legend.labels.color = colors.textColor;
+        statusChartInstance.data.datasets[0].borderColor = colors.borderBg;
+        statusChartInstance.update();
+    }
+    if (categoryChartInstance) {
+        categoryChartInstance.options.scales.x.ticks.color = colors.mutedColor;
+        categoryChartInstance.options.scales.y.ticks.color = colors.mutedColor;
+        categoryChartInstance.options.scales.y.grid.color = colors.gridColor;
+        categoryChartInstance.update();
+    }
+});
+
+if (document.readyState !== 'loading') {
+    initInventoryCharts();
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+    initInventoryCharts();
     const overviewTabs = Array.from(document.querySelectorAll('[data-overview-tab]'));
     const overviewTabPanels = Array.from(document.querySelectorAll('[data-overview-tab-panel]'));
 
@@ -473,14 +826,8 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-modal-target]').forEach(function (trigger) {
         const modal = document.getElementById(trigger.dataset.modalTarget);
         if (!modal) return;
-        const open = function () { RetailMindUI.openOverlay(modal); };
-        const close = function () { RetailMindUI.closeOverlay(modal); };
-        trigger.addEventListener('click', open);
-        modal.querySelectorAll('[data-close-modal]').forEach(function (button) {
-            button.addEventListener('click', close);
-        });
-        modal.addEventListener('click', function (event) {
-            if (event.target === modal) close();
+        trigger.addEventListener('click', function () {
+            RetailMindUI.openOverlay(modal);
         });
     });
 });

@@ -10,8 +10,8 @@ require_once __DIR__ . '/../includes/backup.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\RecoveryStore;
-use App\Services\DatabaseBackupService;
-use App\Services\DatabaseRestoreService;
+use App\Backup\DatabaseBackupService;
+use App\Backup\DatabaseRestoreService;
 
 try {
     $password = (string)getenv('RESTORE_PASSWORD');

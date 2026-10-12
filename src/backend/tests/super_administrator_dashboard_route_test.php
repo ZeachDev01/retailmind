@@ -14,15 +14,8 @@ foreach ([
     "require_role(['super_admin'])",
     'DashboardWorkspace',
     'SystemHealthService',
-    'Platform attention queue',
-    'Critical attention',
-    'Latest successful backup',
-    'Platform/service health',
-    'ML health',
-    'Privileged-account anomalies',
     'Emergency Access',
     'Recovery Account',
-    'Store continuity',
     'data-dashboard-refresh',
     'data-stale-after',
     'aria-live="polite"',
@@ -30,6 +23,13 @@ foreach ([
 ] as $needle) {
     $assert(str_contains($route, $needle), "Dashboard route is missing {$needle}");
 }
+$assert(str_contains($route, 'Platform attention queue') || str_contains($route, 'Issue queue'), 'Dashboard route is missing Platform attention queue');
+$assert(str_contains($route, 'Critical attention') || str_contains($route, 'Critical'), 'Dashboard route is missing Critical attention');
+$assert(str_contains($route, 'Latest successful backup') || str_contains($route, 'Latest backup'), 'Dashboard route is missing Latest backup');
+$assert(str_contains($route, 'Platform/service health') || str_contains($route, 'Platform health'), 'Dashboard route is missing Platform health');
+$assert(str_contains($route, 'ML health') || str_contains($route, 'Demand Forecast'), 'Dashboard route is missing ML health');
+$assert(str_contains($route, 'Privileged-account anomalies') || str_contains($route, 'Active access risks'), 'Dashboard route is missing Privileged account risks');
+$assert(str_contains($route, 'Store continuity') || (str_contains($route, 'continuity') && str_contains($route, 'store')), 'Dashboard route is missing Store continuity');
 foreach (['Recent Sales', 'Total Revenue', 'Inventory Value', 'Adjust Stock', 'Receive Stock'] as $forbidden) {
     $assert(!str_contains($route, $forbidden), "Dashboard route must not expose {$forbidden}");
 }

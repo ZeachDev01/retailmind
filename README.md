@@ -3,6 +3,15 @@ Hi hello
 Demo forecasting before Store history is available:
 [setup, approval, browser review, and verification](docs/DEMO_FORECASTING.md).
 
+See the [documentation index](docs/README.md) for deployment, recovery,
+interface guides, architecture decisions, and release history.
+
+The shared stylesheet is built from the individual files in
+`src/frontend/assets/css/`. After editing those files, run
+`php src/backend/scripts/build_styles.php` (or `composer build:styles`).
+Release packaging and deployment rebuild it automatically; the test suite checks
+that the checked-in `style.css` is current.
+
 Fresh-install login:
 
 - Username: superadmin
@@ -96,6 +105,25 @@ runtime storage. Set up the production `.env` directly on the host and import
 the database through phpMyAdmin; those steps are not part of the file upload.
 Change the initial Super Administrator password before exposing the site.
 
+For a manual upload, create `htdocs/.env` (beside `index.php`, named exactly
+`.env`, without `.txt`). Set `APP_ENV=production`, `APP_DEBUG=false`,
+`APP_URL` to your website's HTTPS URL, and `SESSION_SECURE_COOKIE=true`.
+Set `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` using the hosting
+account's MySQL details. The password
+is the hosting/database password, not your InfinityFree website login password.
+Enable hidden-file visibility in your FTP client if `.env` is not listed.
+The real `.env` is intentionally excluded from Git, so uploading a GitHub source
+archive alone does not supply database credentials. Never commit the filled file.
+
+If the hosted page says "RetailMind cannot reach its data", read the latest
+error in `htdocs/src/backend/storage/logs/app.log` through the hosting File
+Manager. Keep `APP_DEBUG=false` on the live site. Confirm `htdocs/.env` exists
+and its `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` match the account's
+MySQL Databases page; use the full database name and the exact MySQL hostname,
+not the website or FTP hostname. Automated deployments preserve the hosted `.env`;
+correct its credentials directly on the host.
+The environment loader supports hosting with `putenv()` disabled.
+
 ### Deploy the same code to a member's InfinityFree account
 
 In the same repository's **Settings → Secrets and variables → Actions**, add:
@@ -120,8 +148,8 @@ Select your RetailMind database in phpMyAdmin, then use **Import** with one file
 
 | File                         | Use                                               | Existing records                                                           |
 | ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| `src/backend/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, including passwords and transaction history                      |
-| `src/backend/sql/schema.sql` | Install into an empty database                    | Drops and recreates RetailMind tables; includes seed accounts and products |
+| `src/backend/database/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, including passwords and transaction history                      |
+| `src/backend/database/sql/schema.sql` | Install into an empty database                    | Drops and recreates RetailMind tables; includes seed accounts and products |
 
 Both files include all 37 migrations through `202610040001_user_theme` (October 8,
 2026), including required operational tables, role mappings, settings defaults,

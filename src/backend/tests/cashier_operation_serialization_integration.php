@@ -41,7 +41,7 @@ $server = $connect(); $created = false; $workers = [];
 $httpServer = null; $httpFiles = [];
 try {
     $server->exec("CREATE DATABASE `{$database}`"); $created = true; $pdo = $connect($database);
-    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../sql/schema.sql'), $tables);
+    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../database/sql/schema.sql'), $tables);
     $assert(count($tables[0]) > 0, 'Production schema parsed');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0'); foreach ($tables[0] as $ddl) $pdo->exec($ddl); $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
     $migration = require __DIR__ . '/../database/migrations/202609260001_shared_database_backups.php'; $migration['up']($pdo);

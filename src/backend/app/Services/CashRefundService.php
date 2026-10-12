@@ -5,6 +5,7 @@ namespace App\Services;
 
 use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
+use App\Receipts\RefundReceiptService;
 use App\Store\StoreWriteGate;
 use DomainException;
 use InvalidArgumentException;
@@ -20,7 +21,7 @@ require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 require_once __DIR__ . '/CashierShiftService.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
-require_once __DIR__ . '/RefundReceiptService.php';
+require_once __DIR__ . '/../Receipts/RefundReceiptService.php';
 require_once __DIR__ . '/RefundExceptionService.php';
 
 /**

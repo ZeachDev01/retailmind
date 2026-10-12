@@ -17,15 +17,25 @@ if (is_file($composerAutoload)) {
 }
 
 spl_autoload_register(static function (string $class) use ($backendPath): void {
-    $prefix = 'App\\';
-    if (strpos($class, $prefix) !== 0) {
+    if (strncmp($class, 'App\\', 4) !== 0) {
         return;
     }
 
-    $relativeClass = substr($class, strlen($prefix));
+    static $resolved = [];
+    if (isset($resolved[$class])) {
+        if ($resolved[$class] !== false) {
+            require_once $resolved[$class];
+        }
+        return;
+    }
+
+    $relativeClass = substr($class, 4);
     $file = $backendPath . '/app/' . str_replace('\\', '/', $relativeClass) . '.php';
     if (is_file($file)) {
+        $resolved[$class] = $file;
         require_once $file;
+    } else {
+        $resolved[$class] = false;
     }
 });
 

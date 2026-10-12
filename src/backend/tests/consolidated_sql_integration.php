@@ -49,7 +49,7 @@ try {
         $db = new PDO($dsn . ';dbname=' . $name, $config['username'], $config['password'], $options);
         $db->exec("SET time_zone='+08:00'");
         $db->exec("SET timestamp=1791417600");
-        $import($db, __DIR__ . '/../sql/schema.sql');
+        $import($db, __DIR__ . '/../database/sql/schema.sql');
         $runner = new App\Database\MigrationRunner($db, __DIR__ . '/../database/migrations');
         $assert($runner->pending() === [], 'Fresh import leaves pending migrations');
         $assert((int)$db->query('SELECT COUNT(*) FROM user_roles')->fetchColumn() > 0, 'Fresh import lacks assigned roles');
@@ -64,9 +64,9 @@ try {
         foreach (['access_token_hash', 'joined_ip'] as $column) {
             $db->exec("ALTER TABLE barcode_pairings DROP COLUMN `{$column}`");
         }
-        $forecastSource = file_get_contents(__DIR__ . '/../legacy/demandForcasting/train_model.py');
-        preg_match_all('/"(\w+)": "(INT NULL|TEXT NULL)"/', $forecastSource, $forecastColumns, PREG_SET_ORDER);
-        foreach ($forecastColumns as $column) $db->exec("ALTER TABLE stock_predictions DROP COLUMN `{$column[1]}`");
+        foreach (['lower_bound_7_days', 'upper_bound_7_days', 'lower_bound_30_days', 'upper_bound_30_days', 'lead_time_lower_bound', 'lead_time_upper_bound', 'forecast_explanation'] as $column) {
+            $db->exec("ALTER TABLE stock_predictions DROP COLUMN `{$column}`");
+        }
         $db->exec("UPDATE platform_settings SET setting_value='99' WHERE setting_key='dormancy_disable_days'");
         $db->exec("UPDATE users SET password_changed_at='2026-10-01 00:00:00'");
         $db->exec("INSERT INTO backup_history (filename,backup_type,file_size,status,notes)
@@ -104,7 +104,7 @@ try {
     foreach ($forecastColumns as $column) {
         App\Database\Schema::addColumnIfMissing($php, 'stock_predictions', $column[1], $column[2]);
     }
-    $import($sql, __DIR__ . '/../sql/update.sql');
+    $import($sql, __DIR__ . '/../database/sql/update.sql');
     $assert($structures($php) === $structures($sql), 'SQL and PHP migration schemas differ');
     foreach (array_keys($structures($php)) as $table) {
         $assert($records($php, $table) === $records($sql, $table), "SQL and PHP migration records differ: {$table}");
@@ -122,7 +122,7 @@ try {
     $before = $structures($sql);
     $rows = [];
     foreach (array_keys($before) as $table) $rows[$table] = $records($sql, $table);
-    $import($sql, __DIR__ . '/../sql/update.sql');
+    $import($sql, __DIR__ . '/../database/sql/update.sql');
     $assert($before === $structures($sql), 'Second import changed schema');
     foreach ($rows as $table => $data) $assert($data === $records($sql, $table), "Second import changed records: {$table}");
 
@@ -130,7 +130,7 @@ try {
     foreach (['barcode_scans', 'barcode_pairings', 'email_delivery_log', 'forecast_evaluations', 'model_training_runs'] as $table) {
         $sql->exec("DROP TABLE `{$table}`");
     }
-    $import($sql, __DIR__ . '/../sql/update.sql');
+    $import($sql, __DIR__ . '/../database/sql/update.sql');
     $assert($before === $structures($sql), 'Runtime dependencies differ from the fresh schema');
 
     // A migration must refuse conflicting live shifts rather than close one to make the index fit.
@@ -138,7 +138,7 @@ try {
     $cashierId = (int)$sql->query('SELECT user_id FROM users ORDER BY user_id LIMIT 1')->fetchColumn();
     $sql->exec("INSERT INTO cashier_shifts (cashier_id,status) VALUES ({$cashierId},'open'),({$cashierId},'open')");
     $refused = false;
-    try { $import($sql, __DIR__ . '/../sql/update.sql'); } catch (PDOException $exception) {
+    try { $import($sql, __DIR__ . '/../database/sql/update.sql'); } catch (PDOException $exception) {
         $refused = ($exception->errorInfo[1] ?? null) === 1062;
     }
     $assert($refused, 'SQL accepted conflicting open Cashier Shifts');

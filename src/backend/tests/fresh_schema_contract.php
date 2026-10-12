@@ -1,6 +1,6 @@
 <?php
 
-$schema = file_get_contents(__DIR__ . '/../sql/schema.sql');
+$schema = file_get_contents(__DIR__ . '/../database/sql/schema.sql');
 if ($schema === false) {
     fwrite(STDERR, "Fresh schema contract failed: schema.sql could not be read.\n");
     exit(1);

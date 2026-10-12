@@ -76,7 +76,7 @@ try {
     $created = true;
     $pdo = $connect($database);
     // Use the production DDL, without seed accounts or destructive dump commands.
-    $schema = file_get_contents(__DIR__ . '/../sql/schema.sql');
+    $schema = file_get_contents(__DIR__ . '/../database/sql/schema.sql');
     preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', $schema, $tables);
     $assert(count($tables[0]) > 0, 'Canonical table definitions must be present.');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
@@ -144,7 +144,7 @@ try {
         'Only the successful refund preserves a customer receipt.');
     $assert((float)(new CashierShiftService($pdo))->calculateShift(1)['calculated_expected_cash'] === 100.0,
         'Only one cash payout leaves the drawer.');
-    $receiptService = new \App\Services\RefundReceiptService($pdo);
+    $receiptService = new \App\Receipts\RefundReceiptService($pdo);
     $refundId = (int)$pdo->query('SELECT refund_id FROM cash_refunds')->fetchColumn();
     $savedReceipt = $receiptService->forCashier($refundId, 1, 1);
     $assert($savedReceipt !== null, 'The committed refund returns its customer receipt.');
@@ -155,7 +155,7 @@ try {
         ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
     $assert($receiptService->forCashier($refundId, 1, 1) === $savedReceipt,
         'Committed customer details survive Store, product, Cashier and Register edits.');
-    $assert((new \App\Services\ReceiptPaperService($pdo))->currentWidth(1, 'cashier') === 58,
+    $assert((new \App\Receipts\ReceiptPaperService($pdo))->currentWidth(1, 'cashier') === 58,
         'Printing uses the current Register width without rewriting preserved details.');
 
     $shifts = new CashierShiftService($pdo);

@@ -2,7 +2,7 @@
 // Shared Database Backup / Database Restore module (#69).
 //
 // The SQL capture and delivery workflow lives in
-// App\Services\DatabaseBackupService so the Administrator and the Super
+// App\Backup\DatabaseBackupService so the Administrator and the Super
 // Administrator share one workflow. The helpers below remain the shared
 // internals: the SQL statement splitter and backup history writer. All restore
 // validation and execution goes through DatabaseRestoreService/SqlBackupFormat.

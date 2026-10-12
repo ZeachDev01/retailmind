@@ -1,7 +1,7 @@
 <?php
 // Register schema parity contract (ticket #87, acceptance criterion 6).
 //
-// A fresh install (src/backend/sql/schema.sql) and an upgraded install
+// A fresh install (src/backend/database/sql/schema.sql) and an upgraded install
 // (the 202609290001_store_registers migration) must produce the same Register
 // structure. This compares the two declarations directly so the check is
 // deterministic and never depends on the state of a developer's database.
@@ -17,7 +17,7 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 };
 
 $root = dirname(__DIR__, 3);
-$schema = (string)@file_get_contents($root . '/src/backend/sql/schema.sql');
+$schema = (string)@file_get_contents($root . '/src/backend/database/sql/schema.sql');
 $migration = (string)@file_get_contents($root . '/src/backend/database/migrations/202609290001_store_registers.php');
 $assert($schema !== '' && $migration !== '', 'Register schema sources must be readable');
 
