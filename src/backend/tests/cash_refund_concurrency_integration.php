@@ -97,7 +97,7 @@ try {
         VALUES (1, 'Test Cashier', 'refund-test', 'unused', 1, 1)");
     $pdo->exec("INSERT INTO registers (register_id, name) VALUES (1, 'Test Register')");
     $pdo->exec('INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash) VALUES (1, 1, 1, 100)');
-    $pdo->exec("INSERT INTO products (product_id, sku, product_name, unit_price, branch_id) VALUES (1, 'REFUND-TEST', 'Test item', 25, 1)");
+    $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, branch_id) VALUES (1, 'REFUND-TEST', 'REFUND-TEST', 'Test item', 25, 10, 1)");
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 9)');
     $pdo->exec("INSERT INTO sales (sale_id, cashier_id, shift_id, total_amount, payment_method) VALUES (1, 1, 1, 25, 'cash')");
     $pdo->exec('INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 1, 1, 1, 25, 25)');

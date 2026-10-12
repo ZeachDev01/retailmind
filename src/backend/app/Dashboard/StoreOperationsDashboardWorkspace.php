@@ -22,7 +22,7 @@ final class StoreOperationsDashboardWorkspace
         ['label' => 'Sales Exceptions', 'description' => 'Review reversals and unusual discounts', 'icon' => 'bi-receipt-cutoff', 'destination' => 'components/invoice/sales.php?tab=reversals', 'capability' => RoleCapabilityPolicy::MANAGE_SALE_REVERSALS],
         ['label' => 'Store Approvals', 'description' => 'Resolve pending replenishment decisions', 'icon' => 'bi-check2-square', 'destination' => 'components/inventory_management/replenishment_requests.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Fiscal Periods', 'description' => 'Govern Store accounting windows', 'icon' => 'bi-calendar-check', 'destination' => 'components/system_administrator/fiscal_periods.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
-        ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_STORE_REPORTS],
+        ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_FORECASTS],
         ['label' => 'Store Settings', 'description' => 'Set operational attention thresholds', 'icon' => 'bi-sliders', 'destination' => 'components/administrator/store_settings.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Database Backup', 'description' => 'Create and download an encrypted Store copy', 'icon' => 'bi-database-check', 'destination' => 'components/administrator/database_backup.php', 'capability' => RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP],
     ];
@@ -232,34 +232,51 @@ final class StoreOperationsDashboardWorkspace
 
     private function forecast(): array
     {
-        $rows = $this->rows(
-            "SELECT sp.product_id, sp.forecast_value, sp.predicted_demand_next_30_days, sp.actual_demand,
-                    sp.reorder_suggested, sp.confidence_score, p.product_name
-             FROM stock_predictions sp JOIN products p ON p.product_id = sp.product_id
-             WHERE sp.prediction_id = (
-                SELECT MAX(sp2.prediction_id) FROM stock_predictions sp2 WHERE sp2.product_id = sp.product_id
-             )"
+        $jobRow = $this->row(
+            "SELECT job_id FROM ml_jobs WHERE trigger_type = 'forecast_generation' AND status = 'succeeded' ORDER BY completed_at DESC, job_id DESC LIMIT 1"
         );
-        $errors = [];
         $exceptions = [];
-        foreach ($rows as $row) {
-            $forecast = (float)($row['forecast_value'] ?? $row['predicted_demand_next_30_days'] ?? 0);
-            $actual = $row['actual_demand'];
-            if ($actual !== null && (float)$actual > 0) {
-                $errors[] = abs($forecast - (float)$actual) / (float)$actual * 100;
-            }
-            if ((int)$row['reorder_suggested'] === 1 || (float)$row['confidence_score'] < 0.5) {
+        $wape = null;
+        $evaluatedProducts = 0;
+        
+        if ($jobRow) {
+            $jobId = (int)$jobRow['job_id'];
+            $rows = $this->rows(
+                "SELECT p.product_name, df.readiness_level
+                 FROM demand_forecasts df
+                 JOIN products p ON p.product_id = df.product_id
+                 WHERE df.job_id = ? AND df.readiness_level IN ('Low', 'Insufficient')
+                 GROUP BY df.product_id, p.product_name, df.readiness_level",
+                [$jobId]
+            );
+            
+            foreach ($rows as $row) {
                 $exceptions[] = [
                     'product' => (string)$row['product_name'],
-                    'reorder_suggested' => (bool)$row['reorder_suggested'],
-                    'confidence' => (float)$row['confidence_score'],
+                    'reorder_suggested' => false,
+                    
                 ];
             }
+            
+            $evaluations = $this->rows(
+                "SELECT horizon_days, mae, rmse, wape FROM ml_model_evaluations ORDER BY evaluation_id DESC LIMIT 3"
+            );
+            $evalMetrics = [];
+            foreach ($evaluations as $eval) {
+                $evalMetrics[(int)$eval['horizon_days']] = [
+                    'mae' => $eval['mae'] !== null ? (float)$eval['mae'] : null,
+                    'rmse' => $eval['rmse'] !== null ? (float)$eval['rmse'] : null,
+                    'wape' => $eval['wape'] !== null ? (float)$eval['wape'] : null,
+                ];
+            }
+            if (!empty($evalMetrics)) {
+                $evaluatedProducts = $this->count("SELECT COUNT(DISTINCT product_id) FROM demand_forecasts WHERE job_id = ?", [$jobId]);
+            }
         }
-        $mape = $errors === [] ? null : array_sum($errors) / count($errors);
+        
         return [
-            'evaluated_products' => count($errors),
-            'accuracy_percent' => $mape === null ? null : round(max(0, 100 - $mape), 1),
+            'evaluated_products' => $evaluatedProducts,
+            'evaluations' => $evalMetrics ?? [],
             'operational_exceptions' => count($exceptions),
             'exceptions' => $exceptions,
         ];
@@ -292,7 +309,7 @@ final class StoreOperationsDashboardWorkspace
             : (str_contains($destination, '/sales_history.php')
                 ? RoleCapabilityPolicy::VIEW_SALES_HISTORY
                 : (str_contains($destination, '/report/')
-                    ? RoleCapabilityPolicy::VIEW_STORE_REPORTS
+                    ? RoleCapabilityPolicy::VIEW_FORECASTS
                     : (str_contains($destination, '/inventory_insights.php')
                         ? RoleCapabilityPolicy::VIEW_INVENTORY
                         : RoleCapabilityPolicy::STORE_OPERATIONS)));

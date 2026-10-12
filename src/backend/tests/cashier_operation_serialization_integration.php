@@ -50,10 +50,9 @@ try {
     $password = password_hash('fixture-password', PASSWORD_DEFAULT);
     $stmt = $pdo->prepare("INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id) VALUES (1,'Assigned Administrator','fixture-admin',?,1,1),(2,'Other Cashier','fixture-other',?,2,1),(3,'Reviewer','fixture-reviewer',?,3,1)"); $stmt->execute([$password,$password,$password]);
     $pdo->exec('UPDATE users SET must_change_password=0');
-    $pdo->exec('CREATE TABLE user_roles (user_id INT NOT NULL,role_id INT NOT NULL,is_primary TINYINT NOT NULL DEFAULT 0,PRIMARY KEY(user_id,role_id))');
     $pdo->exec('INSERT INTO user_roles (user_id,role_id,is_primary) VALUES (1,1,1),(1,2,0),(2,2,1),(3,3,1)');
     $pdo->exec("INSERT INTO registers (register_id,name) VALUES (1,'Fixture Till')");
-    $pdo->exec("INSERT INTO products (product_id,sku,product_name,unit_price,branch_id) VALUES (1,'TEST','Fixture Item',25,1)");
+    $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (1,'TEST','TEST','Fixture Item',25,10,1)");
     $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,10)');
     $shifts = new CashierShiftService($pdo); $held = new HeldSaleService($pdo,$shifts);
     $shiftId = $shifts->openShift(1,'cashier',1,100);

@@ -1,5 +1,8 @@
 Hi hello
 
+Demo forecasting before Store history is available:
+[setup, approval, browser review, and verification](docs/DEMO_FORECASTING.md).
+
 See the [documentation index](docs/README.md) for deployment, recovery,
 interface guides, architecture decisions, and release history.
 

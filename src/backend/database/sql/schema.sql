@@ -499,7 +499,8 @@ DROP TABLE IF EXISTS `forecast_decisions`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `forecast_decisions` (
   `forecast_decision_id` int(11) NOT NULL AUTO_INCREMENT,
-  `prediction_id` int(11) NOT NULL,
+  `prediction_id` int(11) DEFAULT NULL,
+  `forecast_job_id` bigint unsigned DEFAULT NULL,
   `product_id` int(11) NOT NULL,
   `original_suggested_qty` int(11) NOT NULL DEFAULT 0,
   `final_quantity` int(11) NOT NULL DEFAULT 0,
@@ -510,10 +511,12 @@ CREATE TABLE `forecast_decisions` (
   `replenishment_request_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`forecast_decision_id`),
   KEY `idx_forecast_decisions_prediction` (`prediction_id`),
+  KEY `fk_forecast_decisions_forecast_job` (`forecast_job_id`),
   KEY `product_id` (`product_id`),
   KEY `decided_by` (`decided_by`),
   KEY `replenishment_request_id` (`replenishment_request_id`),
   CONSTRAINT `forecast_decisions_ibfk_1` FOREIGN KEY (`prediction_id`) REFERENCES `stock_predictions` (`prediction_id`),
+  CONSTRAINT `fk_forecast_decisions_forecast_job` FOREIGN KEY (`forecast_job_id`) REFERENCES `ml_jobs` (`job_id`) ON DELETE RESTRICT,
   CONSTRAINT `forecast_decisions_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `forecast_decisions_ibfk_3` FOREIGN KEY (`decided_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `forecast_decisions_ibfk_4` FOREIGN KEY (`replenishment_request_id`) REFERENCES `replenishment_requests` (`request_id`) ON DELETE SET NULL
@@ -1140,6 +1143,7 @@ CREATE TABLE `replenishment_requests` (
   `approved_at` timestamp NULL DEFAULT NULL,
   `source` enum('manual','ml_forecast') DEFAULT 'manual',
   `forecast_prediction_id` int(11) DEFAULT NULL,
+  `forecast_job_id` bigint unsigned DEFAULT NULL,
   `original_suggested_qty` int(11) DEFAULT NULL,
   `override_reason` text DEFAULT NULL,
   `notes` text DEFAULT NULL,
@@ -1150,6 +1154,7 @@ CREATE TABLE `replenishment_requests` (
   CONSTRAINT `replenishment_requests_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `replenishment_requests_ibfk_2` FOREIGN KEY (`requested_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `replenishment_requests_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_replenishment_requests_forecast_job` FOREIGN KEY (`forecast_job_id`) REFERENCES `ml_jobs` (`job_id`) ON DELETE RESTRICT,
   CONSTRAINT `chk_replenishment_requests_quantity` CHECK (`request_qty` > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -2021,3 +2026,22 @@ INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('accuracy_thr
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_lower','10');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_upper','90');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('holiday_dates','');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_daily_forecast_time','23:00');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_day','Sunday');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_time','01:00');
+
+CREATE TABLE ml_jobs (
+    job_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    trigger_type VARCHAR(50) NOT NULL COMMENT 'e.g. forecast_generation, model_retraining',
+    status VARCHAR(20) NOT NULL DEFAULT 'queued' COMMENT 'queued, running, succeeded, failed',
+    requester_id INT NULL COMMENT 'User ID who requested it, NULL if scheduled',
+    queued_at DATETIME NOT NULL,
+    started_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    lease_expires_at DATETIME NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    operator_message VARCHAR(255) NULL COMMENT 'Safe user-facing message',
+    diagnostic_reference TEXT NULL COMMENT 'Technical failure details',
+    INDEX (status, queued_at),
+    FOREIGN KEY (requester_id) REFERENCES users(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

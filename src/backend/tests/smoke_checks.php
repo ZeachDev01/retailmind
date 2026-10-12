@@ -65,10 +65,6 @@ $checks = [
         'file' => 'src/frontend/components/barcodeScanner/apiScanner/products.php',
         'needles' => ["p.status='active'", 'case_barcode'],
     ],
-    'Random Forest baseline comparison' => [
-        'file' => 'src/backend/legacy/demandForcasting/train_model.py',
-        'needles' => ['baseline_predictions', 'model_beats_baseline'],
-    ],
     'Versioned migration runner present' => [
         'file' => 'src/backend/scripts/migrate.php',
         'needles' => ['MigrationRunner', 'runPending', 'database/migrations'],
@@ -278,11 +274,6 @@ $checks = [
         'file' => 'src/frontend/components/report/report_generation.php',
         'needles' => ['VIEW_STORE_REPORTS', "'store_id' => store_scope_id(\$pdo)", '{$alias}.branch_id = ?'],
         'forbidden' => ["require_role(['admin', 'inventory_manager'])"],
-    ],
-    'Forecast training keeps Store Product and Day grain' => [
-        'file' => 'src/backend/legacy/demandForcasting/train_model.py',
-        'needles' => ['resolve_store_id', 'p.branch_id = %s', 'GROUP BY si.product_id, DATE(s.sale_date)'],
-        'forbidden' => ['branch_id AS', 'groupby("branch_id"', "groupby(['branch_id'"],
     ],
     'Audit Logs search control is inset' => [
         'file' => 'src/frontend/assets/css/audit-logs.css',

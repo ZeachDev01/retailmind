@@ -10,12 +10,16 @@ if ($path === false) {
 }
 
 try {
-    file_put_contents($path, "RETAILMIND_TEST_DB_HOST=sql.example.test\nRETAILMIND_TEST_DB_PASSWORD=\"test=value#123\"\n");
+    if (function_exists('putenv')) {
+        putenv('RETAILMIND_TEST_OVERRIDE=process-value');
+    }
+    file_put_contents($path, "RETAILMIND_TEST_DB_HOST=sql.example.test\nRETAILMIND_TEST_DB_PASSWORD=\"test=value#123\"\nRETAILMIND_TEST_OVERRIDE=file-value\n");
     Environment::load($path);
 
     foreach ([
         'RETAILMIND_TEST_DB_HOST' => 'sql.example.test',
         'RETAILMIND_TEST_DB_PASSWORD' => 'test=value#123',
+        'RETAILMIND_TEST_OVERRIDE' => function_exists('putenv') ? 'process-value' : 'file-value',
     ] as $key => $expected) {
         if (Environment::get($key) !== $expected || ($_SERVER[$key] ?? null) !== $expected) {
             throw new RuntimeException('Environment file value was not loaded: ' . $key);

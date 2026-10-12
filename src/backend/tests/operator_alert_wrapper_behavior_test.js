@@ -40,7 +40,7 @@ const TECH_SAMPLES = [
 function loadWrapper(debug) {
   const consoleCalls = [];
   const sandbox = {
-    window: { RM_DEBUG: debug },
+    window: { RM_DEBUG: debug, addEventListener() {} },
     document: {
       addEventListener() {},
     },

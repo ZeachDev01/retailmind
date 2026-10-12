@@ -115,4 +115,3 @@ const path = require('node:path');
         console.log('PASS: In-page fullscreen still toggles when storage is unavailable');
     } finally { await browser.close(); }
 })().catch(error => {console.error(error);process.exitCode=1;});
-

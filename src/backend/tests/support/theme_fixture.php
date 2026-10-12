@@ -189,4 +189,5 @@ App\Store\StoreWriteGate::begin($pdo); $pdo->commit();
 $pdo->exec("INSERT INTO sales (sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES (1,4,1,25,'cash')");
 $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (1,1,1,1,25,25)');
 $pdo->beginTransaction(); (new App\Receipts\ReceiptDetailsService($pdo))->preserveSale(1); $pdo->commit();
+(new App\Database\MigrationRunner($pdo, __DIR__ . '/../../database/migrations'))->runPending();
 echo json_encode(['database'=>$database,'password'=>$password]);

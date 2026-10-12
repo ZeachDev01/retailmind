@@ -50,7 +50,7 @@ try {
     $pdo->exec('UPDATE users SET must_change_password=0');
     $pdo->exec("INSERT INTO registers(register_id,name) VALUES(1,'Fixture Register')");
     $pdo->exec('INSERT INTO cashier_shifts(shift_id,cashier_id,register_id,opening_cash) VALUES(1,1,1,100)');
-    $pdo->exec("INSERT INTO products(product_id,sku,product_name,unit_price,branch_id,quantity_sold) VALUES(1,'LEGACY114','Item',100,1,100)");
+    $pdo->exec("INSERT INTO products(product_id,sku,barcode,product_name,unit_price,cost_price,branch_id,quantity_sold) VALUES(1,'LEGACY114','LEGACY114','Item',100,50,1,100)");
     $pdo->exec('INSERT INTO inventory(product_id,quantity_on_hand) VALUES(1,10)');
     $seed=static function(int $id,string $method='cash',string $settlement='cash',float $amount=200) use($pdo):void {
         $pdo->prepare('INSERT INTO sales(sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES(?,1,1,500,?)')->execute([$id,$method]);

@@ -12,7 +12,8 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             $this->databaseCheck(),
             $this->migrationCheck(),
             ...$this->storageChecks(),
-            $this->mlServiceCheck(),
+            $this->forecastingPipelineCheck(),
+            $this->workerHealthCheck(),
             $this->modelArtifactCheck(),
             $this->backupCheck(),
             $this->mailCheck(),
@@ -75,40 +76,69 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         return $checks;
     }
 
-    private function mlServiceCheck(): array
+    private function forecastingPipelineCheck(): array
     {
-        $baseUrl = rtrim((string)env('ML_API_URL', 'http://127.0.0.1:5000'), '/');
-        $url = $baseUrl . '/health';
         try {
-            $body = false;
-            if (function_exists('curl_init')) {
-                $curl = curl_init($url);
-                curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 3, CURLOPT_CONNECTTIMEOUT => 2]);
-                $body = curl_exec($curl);
-                $code = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-                $error = curl_error($curl);
-                curl_close($curl);
-                if ($body === false || $code < 200 || $code >= 300) {
-                    throw new RuntimeException($error ?: "HTTP {$code}");
-                }
-            } else {
-                $context = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => true]]);
-                $body = @file_get_contents($url, false, $context);
-                if ($body === false) {
-                    throw new RuntimeException('Unable to connect to the health endpoint.');
-                }
+            $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('ml_approved_model_version', 'ml_observation_mode', 'ml_recommendations_suspended')");
+            $settings = $stmt ? $stmt->fetchAll(PDO::FETCH_KEY_PAIR) : [];
+            
+            $model = $settings['ml_approved_model_version'] ?? '';
+            $obs = ($settings['ml_observation_mode'] ?? '0') === '1';
+            $suspended = ($settings['ml_recommendations_suspended'] ?? '0') === '1';
+            
+            if ($suspended) {
+                return $this->result('Forecasting pipeline', 'warning', "Recommendations suspended. Approved model: " . ($model ?: 'none'), 'Forecasting');
             }
-            $payload = json_decode((string)$body, true) ?: [];
-            $modelState = !empty($payload['model_loaded']) ? 'Model is loaded.' : 'Service is online but no model is loaded.';
-            return $this->result('Forecast API', !empty($payload['model_loaded']) ? 'healthy' : 'warning', $baseUrl . ' — ' . $modelState, 'Forecasting');
+            if ($obs) {
+                return $this->result('Forecasting pipeline', 'healthy', "Observation mode active (evaluating Store candidate). Model: " . ($model ?: 'candidate in review'), 'Forecasting');
+            }
+            if ($model === '') {
+                return $this->result('Forecasting pipeline', 'healthy', 'No active Store model activated yet (training/observation mode pending).', 'Forecasting');
+            }
+            return $this->result('Forecasting pipeline', 'healthy', "Active Store model: {$model}.", 'Forecasting');
         } catch (Throwable $e) {
-            return $this->result('Forecast API', 'warning', $baseUrl . ' is unavailable: ' . $e->getMessage(), 'Forecasting');
+            return $this->result('Forecasting pipeline', 'warning', 'Unable to check pipeline status: ' . $e->getMessage(), 'Forecasting');
+        }
+    }
+
+    private function workerHealthCheck(): array
+    {
+        try {
+            $stmt = $this->pdo->query("SELECT status, queued_at, completed_at FROM ml_jobs ORDER BY job_id DESC LIMIT 1");
+            $job = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$job) {
+                return $this->result('Background Worker', 'healthy', 'No scheduled or manual background ML tasks have been recorded yet.', 'Forecasting');
+            }
+
+            if ($job['status'] === 'failed') {
+                return $this->result('Background Worker', 'critical', 'The worker encountered an error during its last task. Check diagnostic logs.', 'Forecasting');
+            }
+            if ($job['status'] === 'running' || $job['status'] === 'queued') {
+                $queuedAt = $job['queued_at'];
+                $ageMinutes = (time() - strtotime((string)$queuedAt)) / 60;
+                if ($ageMinutes > 120) {
+                    return $this->result('Background Worker', 'warning', 'A background task has been queued for over 2 hours without completion.', 'Forecasting');
+                }
+                return $this->result('Background Worker', 'healthy', 'The worker is currently processing a background task.', 'Forecasting');
+            }
+
+            $completedAt = $job['completed_at'];
+            $ageHours = (time() - strtotime((string)$completedAt)) / 3600;
+
+            if ($ageHours > 48) {
+                return $this->result('Background Worker', 'warning', 'No worker activity in ' . round($ageHours) . ' hours. A scheduled task may have been missed.', 'Forecasting');
+            }
+
+            return $this->result('Background Worker', 'healthy', 'Worker completed its last task ' . round($ageHours, 1) . ' hours ago.', 'Forecasting');
+        } catch (Throwable $e) {
+            return $this->result('Background Worker', 'warning', 'Unable to check worker health status.', 'Forecasting');
         }
     }
 
     private function modelArtifactCheck(): array
     {
-        $paths = glob($this->backendPath . '/legacy/demandForcasting/models/*') ?: [];
+        $paths = glob($this->backendPath . '/storage/ml_models/*') ?: [];
         $files = array_values(array_filter($paths, 'is_file'));
         if (!$files) {
             return $this->result('Forecast model artifact', 'warning', 'No trained model artifact was found.', 'Forecasting');

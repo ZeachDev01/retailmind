@@ -12,11 +12,10 @@ node src/backend/tests/account_menu_position_browser_test.js
 node src/backend/tests/notification_responsive_browser_test.js
 node src/backend/tests/page_navigation_browser_test.js
 find . -type f -name '*.php' -not -path './vendor/*' -not -path './.kilo/worktrees/*' -print0 | sort -z | xargs -0 -n1 php -l >/tmp/retailmind_php_lint.log
-python -m py_compile src/backend/legacy/demandForcasting/train_model.py src/backend/legacy/demandForcasting/auto_retrain.py src/backend/legacy/demandForcasting/db.py src/backend/legacy/demandForcasting/predict_api.py
+python -m py_compile src/backend/scripts/ml_worker.py src/backend/scripts/ml_evaluation.py src/backend/scripts/ml_cv.py src/backend/scripts/feature_pipeline.py
 bash src/backend/tests/javascript_syntax_check.sh
 python src/backend/tests/css_balance_check.py
 python src/backend/tests/infinityfree_deploy_contract.py
-python src/backend/tests/forecast_regression.py
 php src/backend/tests/smoke_checks.php
 php src/backend/tests/daily_sales_range_contract.php
 php src/backend/tests/environment_loading_test.php
@@ -116,10 +115,15 @@ node src/backend/tests/sale_receipt_dialog_browser_test.js
 node src/backend/tests/refund_receipt_browser_test.js
 node src/backend/tests/refund_reprint_browser_test.js
 node src/backend/tests/theme_login_browser_test.js
-node src/backend/tests/theme_account_browser_test.js
+node src/backend/tests/sidebar_theme_browser_test.js
+node src/backend/tests/fullscreen_preferences_browser_test.js
 node src/backend/tests/responsive_system_browser_test.js
 php src/backend/tests/cashier_operational_history_contract.php
 php src/backend/tests/sales_trend_integration.php
+python src/backend/tests/test_feature_pipeline.py
+python src/backend/tests/test_observed_demand.py
+python src/backend/tests/test_observed_worker.py
+python src/backend/tests/observed_demand_mysql_test.py
 if [[ -n "${WHITESPACE_BASE:-}" ]] && git cat-file -e "${WHITESPACE_BASE}^{commit}" 2>/dev/null; then
   git diff --check "$WHITESPACE_BASE" HEAD
 fi

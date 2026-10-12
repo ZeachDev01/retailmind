@@ -52,7 +52,7 @@ try {
     $pdo->exec("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id) VALUES (1, 'Fixture Cashier', 'checkout-test', 'unused', 1, 1), (2, 'Other Cashier', 'other-test', 'unused', 1, 1)");
     $pdo->exec("INSERT INTO registers (register_id, name) VALUES (1, 'Fixture Till')");
     $pdo->exec('INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash) VALUES (1, 1, 1, 100)');
-    $pdo->exec("INSERT INTO products (product_id, sku, product_name, unit_price, branch_id) VALUES (1, 'CHECKOUT-TEST', 'Fixture Item', 25, 1)");
+    $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, branch_id) VALUES (1, 'CHECKOUT-TEST', 'CHECKOUT-TEST', 'Fixture Item', 25, 10, 1)");
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 10)');
     $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, date_received) VALUES (1, 1, 'TEST-BATCH', 10, 10, NOW())");
     $pdo->exec("INSERT INTO held_sales (held_sale_id, cashier_id, shift_id, reference_no, cart_json, item_count, total_amount, status) VALUES (1, 1, 1, 'TEST-HELD', '[]', 2, 50, 'resumed')");
@@ -116,7 +116,7 @@ try {
     $changedPassword = array_replace($approved, ['discount_approver_password' => 'changed-secret']);
     $refuse(static fn() => $save($quote, $changedPassword), 'Review the final quote again');
     $quote = $review($changedPassword);
-    $pdo->exec("UPDATE users SET status='inactive' WHERE user_id=3");
+    $pdo->exec("UPDATE users SET status='disabled' WHERE user_id=3");
     $refuse(static fn() => $save($quote, $changedPassword), 'Administrator approval failed');
     $pdo->exec("UPDATE users SET status='active' WHERE user_id=3");
     $quote = $review($changedPassword);

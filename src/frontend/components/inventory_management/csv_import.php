@@ -124,6 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         ]);
                         $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
                         $afterStmt->execute([(int)$prod['product_id'], $import_store_id]);
+                        $afterProduct = $afterStmt->fetch();
                         log_activity(
                             $pdo,
                             (int)$_SESSION['user_id'],
@@ -131,7 +132,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             'Products',
                             (int)$prod['product_id'],
                             $beforeProduct,
-                            $afterStmt->fetch()
+                            $afterProduct
+                        );
+                        
+                        $driverService = new \App\Store\ScheduledDemandDriverService();
+                        $driverService->recordDriver(
+                            $pdo,
+                            (int)$prod['product_id'],
+                            'price',
+                            date('Y-m-d'),
+                            date('Y-m-d H:i:s'),
+                            json_encode(['unit_price' => $unit_price], JSON_THROW_ON_ERROR)
                         );
                     } else {
                         // Insert new
@@ -163,6 +174,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         // Create inventory record
                         $inv_ins = $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, 0)");
                         App\Store\StoreWriteGate::execute($pdo, $inv_ins, [$product_id]);
+                        
+                        $driverService = new \App\Store\ScheduledDemandDriverService();
+                        $driverService->recordDriver(
+                            $pdo,
+                            (int)$product_id,
+                            'price',
+                            date('Y-m-d'),
+                            date('Y-m-d H:i:s'),
+                            json_encode(['unit_price' => $unit_price], JSON_THROW_ON_ERROR)
+                        );
+
 
                         $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
                         $afterStmt->execute([(int)$product_id, $import_store_id]);

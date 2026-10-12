@@ -34,6 +34,7 @@ final class SqlBackupFormat
 
     public static function normalizeDdl(string $ddl): string
     {
+        $ddl = preg_replace('/ CHARACTER SET ([a-z0-9]+)(?= COLLATE \1_)/i', '', $ddl);
         return (string)preg_replace('/ AUTO_INCREMENT=\d+/', '', trim($ddl));
     }
 
@@ -75,6 +76,8 @@ final class SqlBackupFormat
                 if (!preg_match($pattern, $values)) {
                     throw new RuntimeException('The backup contains unsupported data statements.');
                 }
+                // MySQL otherwise coerces X'31' to integer 49 instead of decoded text "1".
+                $statements[$index] = $prefix . preg_replace("/X'([a-f0-9]*)'/", "CONCAT(X'$1')", $values);
                 $index++;
             }
         }

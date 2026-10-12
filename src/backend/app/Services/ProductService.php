@@ -166,6 +166,8 @@ class ProductService
             $productId = (int)$this->pdo->lastInsertId();
             $this->pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)")
                 ->execute([$productId, $initialStock]);
+            
+
 
             if ($initialStock > 0) {
                 $purchaseDate = date('Y-m-d H:i:s');
@@ -259,6 +261,8 @@ class ProductService
                 if ($sellingPrice > 0) {
                     $updateParts[] = 'unit_price = ?';
                     $params[] = $sellingPrice;
+                    
+
                 }
                 if ($reorderLevel > 0) {
                     $updateParts[] = 'reorder_level = ?';

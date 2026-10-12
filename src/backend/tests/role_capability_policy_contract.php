@@ -32,16 +32,23 @@ $capabilities = [
     RoleCapabilityPolicy::VIEW_STORE_REPORTS,
     RoleCapabilityPolicy::MANAGE_SALE_REVERSALS,
     RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP,
+    RoleCapabilityPolicy::VIEW_FORECASTS,
+    RoleCapabilityPolicy::GENERATE_FORECASTS,
+    RoleCapabilityPolicy::RETRAIN_MODELS,
+    RoleCapabilityPolicy::CONFIGURE_MODELS,
+    RoleCapabilityPolicy::APPROVE_MODELS,
+    RoleCapabilityPolicy::REPLACE_MODELS,
+    RoleCapabilityPolicy::ROLL_BACK_MODELS,
 ];
 
 // Shared preservation authority only: both administrator roles may create and
 // download a Database Backup, while Database Restore stays exclusive to the
 // Super Administrator (ADR-0003).
 $expected = [
-    'super_admin' => [true, false, true, false, false, true, true, true, true, true, true, true, true, false, true],
-    'admin' => [false, true, true, false, false, true, false, true, true, false, false, true, true, true, true],
-    'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, false, true, true, false, false],
-    'cashier' => [false, false, true, false, true, false, false, false, false, false, false, true, false, false, false],
+    'super_admin' => [true, false, true, false, false, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true],
+    'admin' => [false, true, true, false, false, true, false, true, true, false, false, true, true, true, true, true, true, false, false, false, false, false],
+    'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, false, true, true, false, false, true, false, false, false, false, false, false],
+    'cashier' => [false, false, true, false, true, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
 ];
 
 foreach ($expected as $role => $decisions) {
