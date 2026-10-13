@@ -19,7 +19,6 @@ final class RoleCapabilityPolicy
     public const MANAGE_USERS = 'manage_users';
     public const ASSIGN_ROLES = 'assign_roles';
     public const ASSIGN_PRIVILEGES = 'assign_privileges';
-    public const ACTIVATE_EMERGENCY_ACCESS = 'activate_emergency_access';
     public const MANAGE_DATABASE_BACKUP = 'manage_database_backup';
     public const MANAGE_REGISTERS = 'manage_registers';
 
@@ -44,7 +43,6 @@ final class RoleCapabilityPolicy
             self::MANAGE_USERS,
             self::ASSIGN_ROLES,
             self::ASSIGN_PRIVILEGES,
-            self::ACTIVATE_EMERGENCY_ACCESS,
             self::MANAGE_DATABASE_BACKUP,
             self::VIEW_FORECASTS,
             self::GENERATE_FORECASTS,
@@ -90,7 +88,6 @@ final class RoleCapabilityPolicy
     ];
 
     private const ADMIN_DELEGATED_ROLES = ['inventory_manager', 'cashier'];
-    private const EMERGENCY_CAPABILITIES = [self::STORE_OPERATIONS, self::MUTATE_INVENTORY, self::MANAGE_SALE_REVERSALS];
 
     public function allows(
         string $actorRole,
@@ -101,13 +98,6 @@ final class RoleCapabilityPolicy
     ): bool {
         if (!isset(self::BASE_CAPABILITIES[$actorRole])) {
             return false;
-        }
-
-        if ($actorRole === 'super_admin'
-            && ($context ?? AuthorizationContext::standard())->hasActiveEmergencyAccess($actorUserId)
-            && in_array($capability, self::EMERGENCY_CAPABILITIES, true)
-        ) {
-            return true;
         }
 
         if (!in_array($capability, self::BASE_CAPABILITIES[$actorRole], true)) {

@@ -30,6 +30,11 @@ if (!preg_match('/function audit_log_csv_value\(.*?\n\}/s', $auditPage, $csvFunc
 eval($csvFunction[0]);
 $assert(audit_log_csv_value(" \t=1+1") === "' \t=1+1", 'Exported log text must not execute spreadsheet formulas after whitespace');
 $assert(audit_log_csv_value('Ordinary diagnostic') === 'Ordinary diagnostic', 'Ordinary log text should export unchanged');
+$healthPage = file_get_contents(__DIR__ . '/../../frontend/components/system_administrator/system_health.php');
+$assert(
+    (bool)preg_match('/<\?php if \(\$logSnapshot\[\'acknowledged\'\]\): \?>\s*<p[^>]*\bdata-rm-alert-processed="1"[^>]*>This log version has been acknowledged\. New entries will require another review\.<\/p>/', (string)$healthPage),
+    'Acknowledged log status on System Health must stay inline without triggering a modal popup on every visit'
+);
 $pdo = new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->exec('CREATE TABLE activity_log (log_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, action TEXT,

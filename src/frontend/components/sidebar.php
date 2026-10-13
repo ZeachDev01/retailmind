@@ -148,7 +148,6 @@ function sidebar_render_section(array $section): void
 $superAdministratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-shield-lock', 'label' => 'Users & Access'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Protected Audit Records'],
-    ['path' => 'components/system_administrator/emergency_access.php', 'icon' => 'bi-exclamation-octagon', 'label' => 'Emergency Access'],
     ['path' => 'components/system_administrator/recovery_account.php', 'icon' => 'bi-safe', 'label' => 'Recovery Account'],
     ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
     ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-cpu', 'label' => 'ML Operation'],

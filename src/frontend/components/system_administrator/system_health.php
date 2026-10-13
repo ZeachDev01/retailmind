@@ -179,7 +179,7 @@ $checkedAt = format_display_datetime('now');
                     <p>Recent excerpt, up to 16 KB, from <strong>app.log</strong>. The excerpt may start mid-entry; inspect the full file if more context is needed. Do not include passwords or tokens in your review note.</p>
                     <pre class="application-log-excerpt" tabindex="0" aria-label="Recent application log entries"><?= htmlspecialchars($logSnapshot['excerpt']) ?></pre>
                     <?php if ($logSnapshot['acknowledged']): ?>
-                        <p class="alert tag-success" role="status">This log version has been acknowledged. New entries will require another review.</p>
+                        <p class="alert tag-success" role="status" data-rm-alert-processed="1">This log version has been acknowledged. New entries will require another review.</p>
                     <?php else: ?>
                         <form method="POST" class="application-log-review-form">
                             <?= csrf_field() ?>

@@ -1,6 +1,5 @@
 <?php
 
-use App\Authorization\EmergencyAccessService;
 use App\Database\Schema;
 
 return [
@@ -20,7 +19,7 @@ return [
         );
         $setting->execute([
             'emergency_access_duration_minutes',
-            (string)EmergencyAccessService::DEFAULT_DURATION_MINUTES,
+            '15',
         ]);
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS emergency_access_sessions (

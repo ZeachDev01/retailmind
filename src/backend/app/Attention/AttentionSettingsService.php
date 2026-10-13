@@ -16,7 +16,6 @@ final class AttentionSettingsService
         'service_unhealthy_count' => 1.0,
         'ml_model_age_days' => 7.0,
         'platform_setting_change_count' => 1.0,
-        'emergency_access_count' => 1.0,
         'recovery_account_active_count' => 1.0,
         'store_reversal_count_max' => 10.0,
         'store_unusual_discount_percent_max' => 50.0,

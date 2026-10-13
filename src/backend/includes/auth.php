@@ -358,26 +358,9 @@ function role_capability_policy(): App\Authorization\RoleCapabilityPolicy
     return $policy ??= new App\Authorization\RoleCapabilityPolicy();
 }
 
-function emergency_access_service(PDO $pdo): App\Authorization\EmergencyAccessService
-{
-    static $services = [];
-    $key = spl_object_id($pdo);
-    return $services[$key] ??= new App\Authorization\EmergencyAccessService($pdo);
-}
-
 function current_authorization_context(PDO $pdo): App\Authorization\AuthorizationContext
 {
-    $role = current_role();
-    $actorUserId = (int)($_SESSION['user_id'] ?? 0);
-    if ($role === null || $actorUserId <= 0) {
-        return App\Authorization\AuthorizationContext::standard();
-    }
-    try {
-        return emergency_access_service($pdo)->authorizationContext($actorUserId, $role);
-    } catch (PDOException $exception) {
-        error_log('Emergency Access schema is unavailable: ' . $exception->getMessage());
-        return App\Authorization\AuthorizationContext::standard();
-    }
+    return App\Authorization\AuthorizationContext::standard();
 }
 
 function has_capability(

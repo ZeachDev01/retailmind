@@ -17,7 +17,7 @@ The single retail location operated through RetailMind. RetailMind does not divi
 _Avoid_: Branch, location assignment, tenant
 
 **Super Administrator**:
-The single technical owner responsible for platform security, Platform Settings, recovery, access policy, system health, and demand-forecasting model operation. It owns privileged-account lifecycle and may create, maintain, secure, or revoke any user account. One primary account is used routinely; a sealed Recovery Account exists only for lockout or disaster recovery. It may inspect Store operations for oversight but does not perform routine operational work.
+The single technical owner responsible for platform security, Platform Settings, recovery, access policy, system health, and demand-forecasting model operation. It owns privileged-account lifecycle and may create, maintain, secure, or revoke any user account. One primary account is used routinely; a sealed Recovery Account exists only for lockout or disaster recovery. While in the Super Administrator workspace it may inspect Store operations for oversight but does not perform operational mutations; stepping into Store administration, inventory execution, or point-of-sale work requires switching into the corresponding active workspace.
 _Avoid_: Superadmin, unrestricted operator, Store operator
 
 **Recovery Account**:
@@ -112,12 +112,8 @@ _Avoid_: Receipt history, Store-wide report
 A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Other, moving through pending, returned, cancelled, approved, or rejected. Inventory Managers decide reports; only an approval deducts stock through a linked stock movement. Approved and rejected reports are immutable, and an erroneous approval is corrected only through a separate Inventory Manager inventory count linked back to the report. Administrators hold read-only oversight.
 _Avoid_: Damage report, damage claim, reopen an approval
 
-**Emergency Access**:
-A temporary, reason-bound, fully audited elevation that permits the Super Administrator to perform otherwise-isolated Store operations.
-_Avoid_: Role bypass, master access
-
 **Fiscal Period**:
-A time-bounded operational accounting window for the Store. The Administrator reviews and governs its closure; the Super Administrator may intervene only through Emergency Access.
+A time-bounded operational accounting window for the Store. It is reviewed and governed from the Administrator workspace.
 _Avoid_: Branch fiscal period, system period
 
 **Platform Setting**:

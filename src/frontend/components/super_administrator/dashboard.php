@@ -46,14 +46,9 @@ $headlineOrder = [
     'privileged_accounts' => ['Active access risks', 'bi-person-lock'],
 ];
 $accessOrder = [
-    'emergency' => 'Emergency Access',
     'recovery' => 'Recovery Account',
 ];
 $accessActionLabels = [
-    'emergency' => [
-        'active' => 'Review active session',
-        'inactive' => 'Review access',
-    ],
     'recovery' => [
         'not_configured' => 'Set up recovery account',
         'unsealed' => 'Review recovery account',
@@ -67,7 +62,6 @@ $attentionCategoryLabels = [
     'system_health' => 'System Health',
     'ml_health' => 'Demand Forecast',
     'platform_setting' => 'Platform Settings',
-    'emergency_access' => 'Emergency Access',
     'recovery_account' => 'Recovery Account',
 ];
 $attentionActionLabels = [
@@ -77,7 +71,6 @@ $attentionActionLabels = [
     'system_health' => 'Review System Health',
     'ml_health' => 'Review Demand Forecast',
     'platform_setting' => 'Review Platform Settings',
-    'emergency_access' => 'Review Emergency Access',
     'recovery_account' => 'Review Recovery Account',
 ];
 $privilegedActionCount = count(array_filter(

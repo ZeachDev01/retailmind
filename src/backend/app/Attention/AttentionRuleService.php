@@ -117,7 +117,6 @@ final class AttentionRuleService
                 ? 'No recent successful Demand Forecast model run is recorded. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.')
                 : 'The Demand Forecast model is ' . $current . ' ' . ($value === 1.0 ? 'day' : 'days') . ' old. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.'),
             'platform_setting_change_count' => $current . ' recent Platform Setting ' . ($value === 1.0 ? 'change requires' : 'changes require') . ' review. Review threshold: ' . $limit . '.',
-            'emergency_access_count' => $current . ' active Emergency Access ' . ($value === 1.0 ? 'session requires' : 'sessions require') . ' review. Review threshold: ' . $limit . '.',
             'recovery_account_active_count' => $current . ' unsealed Recovery ' . ($value === 1.0 ? 'Account requires' : 'Accounts require') . ' review. Review threshold: ' . $limit . '.',
             default => 'Current value: ' . $current . '. Review threshold: ' . $limit . '.',
         };

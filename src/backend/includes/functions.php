@@ -90,19 +90,6 @@ function log_activity(
     $category = $category === null
         ? App\Audit\AuditRecordCategory::classify($module, $action, $new_value, $previous_value)
         : App\Audit\AuditRecordCategory::requireValid($category);
-    if ($category === App\Audit\AuditRecordCategory::STORE_OPERATION
-        && function_exists('current_role')
-        && current_role() === 'super_admin'
-        && function_exists('emergency_access_service')) {
-        try {
-            $session = emergency_access_service($pdo)->status((int)$user_id);
-            if ($session !== null && $session['status'] === 'active') {
-                $metadata['emergency_access_session_id'] = $session['session_id'];
-            }
-        } catch (Throwable $exception) {
-            error_log('Could not correlate Emergency Access audit metadata: ' . $exception->getMessage());
-        }
-    }
     $data = [
         'user_id' => $user_id,
         'action' => $action,

@@ -193,6 +193,94 @@ try {
     substrCount(uiSource, "sanitizeAlert") >= 4,
     "toast, alert, and confirm must all apply the safety net",
   );
+
+  // --- Persistent acknowledged log status on System Health must not trigger a modal on every visit ---
+  {
+    const healthSource = fs.readFileSync(
+      path.join(root, "src/frontend/components/system_administrator/system_health.php"),
+      "utf8",
+    );
+    const ackBlock = healthSource.match(
+      /<\?php if \(\$logSnapshot\['acknowledged'\]\): \?>([\s\S]*?)<\?php else: \?>/,
+    );
+    check(Boolean(ackBlock), "system_health.php must contain the acknowledged log status block");
+    if (ackBlock) {
+      const ackHtml = ackBlock[1].trim();
+      const tagMatch = ackHtml.match(/^<(\w+)([^>]*)>([\s\S]*?)<\/\1>$/);
+      check(Boolean(tagMatch), "acknowledged log status block must render a status element");
+      if (tagMatch) {
+        const [, tagName, rawAttrs, textContent] = tagMatch;
+        const classMatch = rawAttrs.match(/\bclass="([^"]*)"/);
+        const classes = classMatch ? classMatch[1].trim().split(/\s+/).filter(Boolean) : [];
+        const dataset = {};
+        for (const dataAttr of rawAttrs.matchAll(/\bdata-([a-z0-9-]+)="([^"]*)"/gi)) {
+          const camel = dataAttr[1].replace(/-([a-z0-9])/gi, (_, c) => c.toUpperCase());
+          dataset[camel] = dataAttr[2];
+        }
+        const ackNode = {
+          tagName: tagName.toUpperCase(),
+          className: classes.join(" "),
+          textContent,
+          hidden: false,
+          dataset,
+          matches(selector) {
+            return selector.split(",").some((part) => {
+              const needed = part.trim().split(".").filter(Boolean);
+              return needed.length > 0 && needed.every((c) => classes.includes(c));
+            });
+          },
+        };
+        const queuedAlerts = [];
+        const pageSandbox = {
+          window: {
+            RM_DEBUG: false,
+            location: { search: "", pathname: "/components/system_administrator/system_health.php", hash: "" },
+            history: { replaceState() {} },
+            Swal: { fire() { return Promise.resolve({}); } },
+            addEventListener() {},
+          },
+          document: {
+            head: { appendChild() {} },
+            body: { classList: { toggle() {} }, appendChild() {} },
+            querySelector() { return null; },
+            querySelectorAll(sel) {
+              if (sel === ".alert, .error-msg, .message, .pos-alert") {
+                return ackNode.matches(sel) ? [ackNode] : [];
+              }
+              return [];
+            },
+            createElement() {
+              return { style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, appendChild() {}, addEventListener() {} };
+            },
+            addEventListener() {},
+          },
+          console: { error() {} },
+          Promise,
+          URLSearchParams,
+          setTimeout,
+          clearTimeout,
+        };
+        pageSandbox.window.document = pageSandbox.document;
+        vm.createContext(pageSandbox);
+        vm.runInContext(uiSource, pageSandbox, { filename: "ui.js" });
+        const origQueueAlert = pageSandbox.window.RetailMindUI.queueAlert;
+        pageSandbox.window.RetailMindUI.queueAlert = function (msg, kind, title) {
+          queuedAlerts.push({ msg, kind, title });
+          return origQueueAlert.apply(this, arguments);
+        };
+        pageSandbox.window.RetailMindUI.initPageContent();
+        check(
+          queuedAlerts.length === 0,
+          "visiting System Health with an acknowledged log must not pop up a modal alert, got: " +
+            JSON.stringify(queuedAlerts),
+        );
+        check(
+          ackNode.hidden === false,
+          "visiting System Health with an acknowledged log must keep the inline status visible",
+        );
+      }
+    }
+  }
 } catch (exception) {
   failures.push("Operator alert wrapper behavior test threw: " + exception.message);
 }

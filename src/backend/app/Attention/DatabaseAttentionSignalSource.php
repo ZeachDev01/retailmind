@@ -35,10 +35,6 @@ final class DatabaseAttentionSignalSource
             "SELECT COUNT(*) FROM activity_log WHERE category = 'platform_setting' AND created_at >= ?",
             [$dayAgo]
         );
-        $emergencyAccess = $this->scalar(
-            "SELECT COUNT(*) FROM emergency_access_sessions WHERE status = 'active' AND expires_at > ?",
-            [$this->now()]
-        );
         $recoveryAccount = $this->scalar(
             "SELECT COUNT(*) FROM recovery_accounts ra JOIN users u ON u.user_id = ra.user_id WHERE u.status = 'active' AND ra.sealed_at IS NULL"
         );
@@ -64,7 +60,6 @@ final class DatabaseAttentionSignalSource
             'service_unhealthy_count' => $this->signal($serviceFailures, $serviceFailures),
             'ml_model_age_days' => $this->signal(max($modelAge, $mlFailures > 0 ? 9999 : 0)),
             'platform_setting_change_count' => $this->signal($platformChanges, (int)$platformChanges),
-            'emergency_access_count' => $this->signal($emergencyAccess, (int)$emergencyAccess),
             'recovery_account_active_count' => $this->signal($recoveryAccount, (int)$recoveryAccount),
         ];
     }
