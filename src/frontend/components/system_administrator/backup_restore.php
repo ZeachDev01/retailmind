@@ -21,24 +21,28 @@ if (!RecoveryStore::isAvailable()) {
     $dashboardUrl = htmlspecialchars(app_url('components/super_administrator/dashboard.php'), ENT_QUOTES, 'UTF-8');
     $logoutUrl = htmlspecialchars(app_url('components/auth/logout.php'), ENT_QUOTES, 'UTF-8');
     $stylesheetUrl = htmlspecialchars(app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
+    $restoreStylesheetUrl = htmlspecialchars(app_url('assets/css/backup_restore.css'), ENT_QUOTES, 'UTF-8');
     echo '<!doctype html><html lang="en"><head>';
     require_once __DIR__ . '/../../../backend/includes/theme.php';
     retailmind_theme_head();
     echo '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-        . '<title>Backup &amp; Restore unavailable</title><link rel="stylesheet" href="' . $stylesheetUrl . '"></head>'
-        . '<body><main style="max-width:44rem;margin:4rem auto;padding:1.5rem">'
+        . '<title>Backup &amp; Restore unavailable</title><link rel="stylesheet" href="' . $stylesheetUrl . '">'
+        . '<link rel="stylesheet" href="' . $restoreStylesheetUrl . '"></head>'
+        . '<body class="database-backup-page database-restore-page"><main class="main-content recovery-standalone">'
+        . '<section class="dashboard-section">'
         . '<h1>Backup &amp; Restore</h1>'
         . '<p role="alert">Database Backup and Restore are unavailable on this hosting plan.</p>'
-        . '<p>You can continue using your other workspaces.</p>'
-        . '<p><a class="btn" href="' . $workspaceUrl . '">Change workspace</a> '
-        . '<a href="' . $dashboardUrl . '">Return to dashboard</a></p>'
-        . '<p><a href="' . $logoutUrl . '">Log out</a></p>'
-        . '</main></body></html>';
+        . '<p class="recovery-intro">You can continue using your other workspaces.</p>'
+        . '<p class="recovery-standalone-actions"><a class="btn btn-primary" href="' . $workspaceUrl . '">Change workspace</a> '
+        . '<a class="btn btn-secondary" href="' . $dashboardUrl . '">Return to dashboard</a> '
+        . '<a class="recovery-standalone-link" href="' . $logoutUrl . '">Log out</a></p>'
+        . '</section></main></body></html>';
     return;
 }
 
 $message = '';
 $messageClass = '';
+$invalidField = '';
 // Operator Alert boundary lines. The full exception text always goes to the log and the
 // Protected Audit Record trail; the operator only ever sees these easy sentences.
 $backupFailureLine = 'The backup could not be created. Check free space and your connection, then try again. Tell your Super Administrator if this keeps happening.';
@@ -49,6 +53,23 @@ $restorer = new DatabaseRestoreService($pdo, role_capability_policy(), $service)
 $actorUserId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
 $maxUploadBytes = $restorer->supportedUploadBytes();
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$renderStandalonePage = static function (string $title, string $heading, string $bodyHtml) use ($escape): void {
+    header('Content-Type: text/html; charset=utf-8');
+    $stylesheetUrl = $escape(app_url('assets/css/style.css'));
+    $restoreStylesheetUrl = $escape(app_url('assets/css/backup_restore.css'));
+    echo '<!doctype html><html lang="en"><head>';
+    require_once __DIR__ . '/../../../backend/includes/theme.php';
+    retailmind_theme_head();
+    echo '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<title>' . $escape($title) . '</title>'
+        . '<link rel="stylesheet" href="' . $stylesheetUrl . '">'
+        . '<link rel="stylesheet" href="' . $restoreStylesheetUrl . '"></head>'
+        . '<body class="database-backup-page database-restore-page"><main class="main-content recovery-standalone">'
+        . '<section class="dashboard-section"><h1>' . $escape($heading) . '</h1>'
+        . $bodyHtml
+        . '</section></main></body></html>';
+};
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
@@ -84,41 +105,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
             $message = 'Select a valid RetailMind SQL backup file.';
             $messageClass = 'tag-warning';
+            $invalidField = 'file';
         } elseif ((int)$file['size'] > $maxUploadBytes) {
             $message = 'The restore file is larger than this server accepts. ' . $restorer->supportedSizeLine();
             $messageClass = 'tag-warning';
+            $invalidField = 'file';
         } else {
             $filename = basename((string)$file['name']);
             try {
                 $outcome = $restorer->restore($actorUserId, $actorRole, (string)$file['tmp_name'], $filename, (string)($_POST['restore_password'] ?? ''));
                 \App\Core\Session::destroy();
-                header('Content-Type: text/html; charset=utf-8');
-                echo '<p>' . htmlspecialchars($outcome['message'], ENT_QUOTES, 'UTF-8') . '</p><p><a href="'
-                    . htmlspecialchars(app_url('?login=1'), ENT_QUOTES, 'UTF-8') . '">Sign in</a></p>';
+                $renderStandalonePage(
+                    'Database restored',
+                    'Database restored',
+                    '<p class="recovery-intro" role="status">' . $escape($outcome['message']) . '</p>'
+                    . '<p class="recovery-standalone-actions"><a class="btn btn-primary" href="' . $escape(app_url('?login=1')) . '">Sign in</a></p>'
+                );
                 exit;
             } catch (Throwable $e) {
                 if (RecoveryStore::isPaused()) {
                     error_log('Incomplete restore: ' . $e->getMessage());
                     http_response_code(503);
-                    header('Content-Type: text/plain; charset=utf-8');
-                    echo 'Restoration stopped before completion. Store access remains blocked. Use the offline restore command to recover with the retained safety backup. See docs/BACKUP_RECOVERY.md.';
+                    $renderStandalonePage(
+                        'Database recovery required',
+                        'Database recovery required',
+                        '<div class="alert tag-warning" role="alert">Restoration stopped before completion. Store access remains blocked. Use the offline restore command to recover with the retained safety backup. See docs/BACKUP_RECOVERY.md.</div>'
+                    );
                     exit;
                 }
                 if (!RecoveryStore::admitRequest()) {
                     http_response_code(503);
-                    exit('Database recovery is in progress. Try again later.');
+                    $renderStandalonePage(
+                        'Database recovery in progress',
+                        'Database recovery in progress',
+                        '<div class="alert tag-warning" role="alert">Database recovery is in progress. Try again later.</div>'
+                    );
+                    exit;
                 }
                 $message = \App\Support\OperatorAlert::message($e, $restoreFailureLine);
                 $messageClass = 'tag-warning';
+                $invalidField = 'restore';
             }
         }
     }
 }
 
-ensure_backup_schema($pdo);
 $service->cleanupStrandedArtifacts();
-$history = $service->history($actorRole);
-$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+try {
+    $history = $service->history($actorRole);
+} catch (PDOException) {
+    ensure_backup_schema($pdo);
+    $history = $service->history($actorRole);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -128,7 +166,6 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Backup &amp; Restore</title>
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup_restore.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup_restore.css')) ?>">
 </head>
 
@@ -143,13 +180,13 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 <a class="recovery-history-link" href="#backup-history">View backup history</a>
             </header>
 
-            <?php if ($message): ?><div class="alert <?= $escape($messageClass) ?>" role="status"><?= $escape($message) ?></div><?php endif; ?>
+            <?php if ($message): ?><div id="recovery-feedback" class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-warning' ? 'alert' : 'status' ?>"><?= $escape($message) ?></div><?php endif; ?>
 
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
                     <h2 id="backup-ready-title">Your backup is ready</h2>
                     <p class="section-description">Save <?= $escape($download['filename']) ?> on separate storage and verify the file.</p>
-                    <p><a class="btn" href="<?= $escape($download['url']) ?>" data-backup-download>Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
+                    <p class="backup-ready-actions"><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" data-backup-download>Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
                 </section>
             <?php endif; ?>
 
@@ -165,7 +202,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                         <div><dt>During capture</dt><dd>Saving pauses briefly, then resumes</dd></div>
                         <div><dt>After capture</dt><dd>Download the file to separate storage</dd></div>
                     </dl>
-                    <form method="post" class="backup-create-form"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn" data-backup-create>Create SQL backup</button></form>
+                    <form method="post" class="backup-create-form"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn btn-primary" data-backup-create>Create SQL backup</button></form>
                     <div class="backup-storage-note"><strong>Keep this file private.</strong><p>This unencrypted backup includes password hashes and restricted audit history. Save it somewhere other than the application server.</p></div>
                     <?php if (is_file(RecoveryStore::path('latest-safety.sql'))): ?>
                         <div class="backup-safety"><strong>Pre-restore safety copy</strong><p>Retained before the latest database replacement.</p><a href="<?= $escape(app_url('components/backup/safety_download.php')) ?>">Download safety backup</a></div>
@@ -175,10 +212,10 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                     <div class="recovery-panel-heading"><h2 id="restore-title">Restore backup</h2><span class="restore-access">Super Administrator only</span></div>
                     <p class="recovery-intro">Return the Store database to a previously saved state.</p>
                     <div class="restore-warning" id="restore-warning"><strong>This replaces the entire database.</strong><p>Accounts, passwords, settings and audit history return to the backup's state. Newer records are lost. Undo requires another restore.</p></div>
-                    <form method="post" enctype="multipart/form-data"><?= csrf_field() ?><input type="hidden" name="action" value="restore">
-                        <div class="form-group"><label for="backup-file">RetailMind SQL backup <span class="field-required">Required</span></label><div class="restore-file-field"><input id="backup-file" type="file" name="backup_file" accept=".sql" aria-describedby="restore-file-help" required><p id="restore-file-help">Choose a trusted .sql file, up to <?= number_format($maxUploadBytes / 1048576, 1) ?> MB. Older .rmbak files are not supported.</p></div></div>
-                        <div class="form-group"><label for="restore-password">Your current password <span class="field-required">Required</span></label><input id="restore-password" type="password" name="restore_password" autocomplete="current-password" aria-describedby="restore-password-help" required><p class="backup-hint" id="restore-password-help">Verifies your identity before replacing the database.</p></div>
-                        <button type="submit" class="btn btn-danger" aria-describedby="restore-warning">Verify password &amp; restore</button>
+                    <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="restore">
+                        <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>"><label for="backup-file">RetailMind SQL backup <span class="field-required">Required</span></label><div class="restore-file-field"><input id="backup-file" type="file" name="backup_file" accept=".sql" aria-describedby="restore-file-help<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required><p id="restore-file-help">Choose a trusted .sql file, up to <?= number_format($maxUploadBytes / 1048576, 1) ?> MB. Older .rmbak files are not supported.</p></div></div>
+                        <div class="form-group<?= $invalidField === 'restore' ? ' invalid' : '' ?>"><label for="restore-password">Your current password <span class="field-required">Required</span></label><input id="restore-password" type="password" name="restore_password" autocomplete="current-password" aria-describedby="restore-password-help<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?> required><p class="backup-hint" id="restore-password-help">Verifies your identity before replacing the database.</p></div>
+                        <button type="submit" class="btn btn-danger" data-backup-restore aria-describedby="restore-warning">Verify password &amp; restore</button>
                     </form>
                     <details class="restore-details"><summary>What happens during a restore?</summary><ul class="backup-guidance"><li>A safety backup is saved before replacement.</li><li>Store access is blocked during replacement.</li><li>Everyone signs in again with the backup's credentials.</li><li>A failed restore blocks Store access until offline recovery.</li></ul></details>
                 </section>
@@ -194,7 +231,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                         <thead><tr><th scope="col">File / activity</th><th scope="col">Created</th><th scope="col">Outcome</th><th scope="col">Size</th><th scope="col">Requested by</th></tr></thead>
                         <tbody><?php foreach ($history as $row): ?>
                             <tr data-history-row data-outcome="<?= $escape($row['status']) ?>">
-                                <td class="history-file"><span class="history-filename"><?= $escape($row['filename']) ?></span><span class="history-type"><?= $escape(ucfirst((string)$row['backup_type'])) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="history-notes"><summary>View notes</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
+                                <td class="history-file"><span class="history-filename"><?= $escape($row['filename']) ?></span><span class="history-type"><?= $escape(ucfirst((string)$row['backup_type'])) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="history-notes"><summary aria-label="View notes for <?= $escape($row['filename']) ?> (<?= $escape(format_display_datetime((string)$row['created_at'])) ?>)">View notes</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
                                 <td class="history-date"><?= $escape(format_display_datetime((string)$row['created_at'])) ?></td>
                                 <td><span class="history-status <?= $row['status'] === 'completed' ? 'is-completed' : ($row['status'] === 'failed' ? 'is-failed' : '') ?>"><?= $escape(ucfirst((string)$row['status'])) ?></span></td>
                                 <td class="history-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
@@ -208,7 +245,6 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             </section>
         </main>
     </div>
-    <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_restore.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_restore.js')) ?>"></script>
 </body>
 

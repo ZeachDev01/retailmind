@@ -73,7 +73,7 @@ $assert($original===$pdo->query('SELECT * FROM sales WHERE sale_id=10')->fetch(P
 $assert($pdo->query('SELECT status FROM fiscal_periods WHERE period_id=1')->fetchColumn()==='closed','Historical fiscal period remains closed');
 $exceptions=new \App\Services\RefundExceptionService($pdo);
 $assert($service->refundableSaleForCashier(1,11)===null,'Other seller remains hidden without exception');
-foreach ([['refund-admin','wrong'],['refund-super','fixture-password'],['refund-other','fixture-password']] as [$user,$password]) {
+foreach ([['refund-admin','wrong'],['refund-super','wrong'],['refund-other','fixture-password']] as [$user,$password]) {
     $refused(fn()=>$exceptions->openSale(1,'cashier',11,$user,$password,'Original Cashier disabled'));
 }
 $token=$exceptions->openSale(1,'cashier',11,'refund-admin','fixture-password','Original Cashier disabled');

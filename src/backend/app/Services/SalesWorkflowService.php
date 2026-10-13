@@ -137,7 +137,6 @@ class SalesWorkflowService
                     ->execute([$discount['discount_authorized_by'], $saleId, json_encode([
                         'cashier_id' => $userId, 'quote_hash' => $quote['state_hash'],
                         'discount_amount' => $discount['discount_amount'],
-                        'emergency_access_session_id' => $discount['approval_state']['emergency_session_id'] ?? null,
                     ], JSON_THROW_ON_ERROR)]);
             }
 
@@ -579,17 +578,6 @@ class SalesWorkflowService
         $supervisor = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$supervisor || !password_verify($password, (string)$supervisor['password_hash'])) {
             throw new RuntimeException('Administrator approval failed.');
-        }
-        if ($supervisor['role_name'] === 'super_admin') {
-            $emergency = $this->pdo->prepare("SELECT session_id, reason, expires_at, status FROM emergency_access_sessions WHERE actor_user_id = ? ORDER BY session_id DESC LIMIT 1" . $this->rowLock());
-            $emergency->execute([$supervisor['user_id']]);
-            $session = $emergency->fetch(PDO::FETCH_ASSOC);
-            if (!$session || $session['status'] !== 'active' || $session['expires_at'] <= gmdate('Y-m-d H:i:s')) {
-                throw new DomainException('Super Administrator approval requires active Emergency Access.');
-            }
-            $supervisor['emergency_session_id'] = (int)$session['session_id'];
-            $supervisor['emergency_reason'] = $session['reason'];
-            $supervisor['emergency_expires_at'] = $session['expires_at'];
         }
         return $supervisor;
     }

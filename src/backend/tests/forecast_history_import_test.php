@@ -45,7 +45,6 @@ foreach ([
     check($rejected, 'Invalid CSV was accepted: ' . $invalid);
 }
 $policy = new RoleCapabilityPolicy();
-// The policy's plain role check does not require an Emergency Access session.
 check($policy->allows('super_admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Super Administrator must be able to import history');
 foreach (['admin', 'inventory_manager', 'cashier'] as $role) {
     check(!$policy->allows($role, RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), "{$role} must not import forecast history");

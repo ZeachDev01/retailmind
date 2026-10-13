@@ -23,18 +23,7 @@ final class RefundExceptionService
         if (!$actor || $password === '' || !password_verify($password, (string)$actor['password_hash'])) {
             throw new DomainException('An Administrator must authorize this specific refund.');
         }
-        $approval = ['approved_by' => (int)$actor['user_id']];
-        if ($actor['role_name'] === 'super_admin') {
-            $stmt = $this->pdo->prepare('SELECT session_id, reason, expires_at, status FROM emergency_access_sessions
-                WHERE actor_user_id=? ORDER BY session_id DESC LIMIT 1' . $this->lock());
-            $stmt->execute([$actor['user_id']]);
-            $access = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$access || $access['status'] !== 'active' || $access['expires_at'] <= gmdate('Y-m-d H:i:s') || trim($access['reason']) === '') {
-                throw new DomainException('Super Administrator authorization requires active, reason-bound Emergency Access.');
-            }
-            $approval += ['emergency_session_id' => (int)$access['session_id'], 'emergency_reason' => $access['reason']];
-        }
-        return $approval;
+        return ['approved_by' => (int)$actor['user_id']];
     }
 
     public function openSale(int $cashierId, string $workspace, int $saleId, string $username, string $password, string $reason): string

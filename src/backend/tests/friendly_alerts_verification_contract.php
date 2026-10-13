@@ -284,7 +284,6 @@ try {
         'src/frontend/components/system_administrator/fiscal_periods.php',
         'src/frontend/components/modals/fiscal_periods.php',
         'src/backend/legacy/routes/admin/fiscal_periods.php',
-        'src/frontend/components/system_administrator/emergency_access.php',
         'src/frontend/components/system_administrator/recovery_account.php',
         'src/backend/scripts/recovery_account.php',
     ];

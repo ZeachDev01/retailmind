@@ -26,7 +26,7 @@ final class ProtectedAuditRecordService
                 {$whereSql}
                 ORDER BY al.created_at DESC, al.log_id DESC";
         if (isset($filters['limit'])) {
-            $sql .= ' LIMIT ' . max(1, min(100, (int)$filters['limit']));
+            $sql .= ' LIMIT ' . max(1, min(2000, (int)$filters['limit']));
         }
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
@@ -87,8 +87,17 @@ final class ProtectedAuditRecordService
         }
         if (($filters['search'] ?? '') !== '') {
             $search = '%' . (string)$filters['search'] . '%';
-            $clauses[] = '(al.action LIKE ? OR al.module LIKE ? OR CAST(al.record_id AS CHAR) LIKE ? OR u.full_name LIKE ? OR (u.is_recovery_account = 0 AND u.username LIKE ?))';
-            array_push($params, $search, $search, $search, $search, $search);
+            $clauses[] = '(al.action LIKE ? OR al.category LIKE ? OR REPLACE(al.category, \'_\', \' \') LIKE ? OR COALESCE(al.module, \'\') LIKE ? OR CAST(al.record_id AS CHAR) LIKE ? OR COALESCE(al.ip_address, \'\') LIKE ? OR CAST(al.created_at AS CHAR) LIKE ? OR COALESCE(al.previous_value, \'\') LIKE ? OR COALESCE(al.new_value, \'\') LIKE ? OR COALESCE(al.metadata, \'\') LIKE ? OR COALESCE(u.full_name, \'\') LIKE ? OR (COALESCE(u.is_recovery_account, 0) = 0 AND COALESCE(u.username, \'\') LIKE ?))';
+            array_push($params, $search, $search, $search, $search, $search, $search, $search, $search, $search, $search, $search, $search);
+        }
+        if (isset($filters['log_ids']) && is_array($filters['log_ids'])) {
+            $validIds = array_values(array_unique(array_filter(array_map('intval', $filters['log_ids']), static fn(int $id): bool => $id > 0)));
+            if ($validIds === []) {
+                $clauses[] = '1 = 0';
+            } else {
+                $clauses[] = 'al.log_id IN (' . implode(', ', array_fill(0, count($validIds), '?')) . ')';
+                array_push($params, ...$validIds);
+            }
         }
         if (($filters['critical_only'] ?? false) === true) {
             $criticalTerms = ['void', 'delete', 'reversal', 'refund', 'fiscal', 'locked', 'toggled', 'adjustment', 'count'];

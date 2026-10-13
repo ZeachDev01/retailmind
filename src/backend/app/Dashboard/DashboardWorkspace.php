@@ -107,7 +107,6 @@ final class DashboardWorkspace
         $nowValue = $now->format('Y-m-d H:i:s');
         $signals = (new DatabaseAttentionSignalSource($this->pdo, $this->clock))->platform($healthChecks);
         $backup = $this->row("SELECT created_at FROM backup_history WHERE status = 'completed' AND backup_type <> 'restore' ORDER BY created_at DESC LIMIT 1");
-        $emergency = $this->count("SELECT COUNT(*) FROM emergency_access_sessions WHERE status = 'active' AND expires_at > ?", [$nowValue]);
         $recovery = $this->row(
             "SELECT ra.sealed_at, ra.last_used_at, u.status
              FROM recovery_accounts ra JOIN users u ON u.user_id = ra.user_id
@@ -120,7 +119,7 @@ final class DashboardWorkspace
             "SELECT COUNT(*) FROM users u JOIN roles r ON r.role_id = u.role_id
              WHERE r.role_name IN ('super_admin', 'admin') AND u.status = 'active' AND u.locked_until > ?",
             [$nowValue]
-        ) + $unsealedRecovery + $emergency;
+        ) + $unsealedRecovery;
 
         return [
             'signals' => $signals,
@@ -138,17 +137,9 @@ final class DashboardWorkspace
                 'label' => 'Active access risks',
                 'value' => $privilegedAnomalies,
                 'status' => $privilegedAnomalies > 0 ? 'critical' : 'healthy',
-                'detail' => $privilegedAnomalies > 0 ? 'Locked, elevated, or unsealed privileged access requires review.' : 'No active, locked, or unsealed privileged access detected.',
+                'detail' => $privilegedAnomalies > 0 ? 'Locked or unsealed privileged access requires review.' : 'No locked or unsealed privileged access detected.',
             ],
             'access' => [
-                'emergency' => [
-                    'label' => 'Emergency Access',
-                    'status' => $emergency > 0 ? 'active' : 'inactive',
-                    'detail' => $emergency > 0
-                        ? $emergency . ' active reason-bound ' . ($emergency === 1 ? 'session.' : 'sessions.')
-                        : 'No active Emergency Access sessions.',
-                    'destination' => 'components/system_administrator/emergency_access.php',
-                ],
                 'recovery' => [
                     'label' => 'Recovery Account',
                     'status' => $recovery === [] ? 'not_configured' : ($unsealedRecovery > 0 ? 'unsealed' : 'sealed'),

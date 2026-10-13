@@ -69,9 +69,9 @@ $labels = [
 </head><body><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content reset-page">
-<header class="reset-heading"><div><h1>Reset Data</h1><p class="page-subtitle">Manage product removal and reset the Store’s operational records.</p></div><a class="reset-jump" href="#store-reset">Review whole-store reset &darr;</a></header>
-<?php if ($message): ?><p class="alert tag-success" role="status"><?= htmlspecialchars($message) ?></p><?php endif; ?>
-<?php if ($error): ?><p class="alert tag-warning" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>
+<header class="reset-heading"><div><h1>Reset Data</h1><p class="page-subtitle">Manage product removal and reset the Store’s operational records.</p></div><a class="reset-jump" href="#store-reset"><span>Review whole-store reset</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"/></svg></a></header>
+<?php if ($message): ?><p class="alert tag-success" role="status" data-rm-alert-processed="1"><?= htmlspecialchars($message) ?></p><?php endif; ?>
+<?php if ($error): ?><p class="alert tag-warning alert-danger" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($error) ?></p><?php endif; ?>
 <section class="reset-panel reset-product" aria-labelledby="product-title">
     <div class="reset-product-intro">
         <h2 id="product-title">Delete one product</h2><p>Remove a single item without resetting the Store.</p>
@@ -82,16 +82,16 @@ $labels = [
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="delete_product">
         <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
-        <div class="form-group"><label for="delete-product">Product</label><select id="delete-product" name="product_id" required><option value="">Choose a product</option><?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= htmlspecialchars($product['product_name'] . ' — ' . $product['sku'] . ' (' . $product['status'] . ')') ?></option><?php endforeach; ?></select></div>
-        <?php if (!$products): ?><p class="reset-note" role="status">The product catalog is empty. There are no products to delete.</p><?php endif; ?>
+        <div class="form-group"><label for="delete-product">Product</label><select id="delete-product" name="product_id" <?= !$products ? 'aria-describedby="delete-product-empty" ' : '' ?>required><option value="">Choose a product</option><?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= htmlspecialchars($product['product_name'] . ' — ' . $product['sku'] . ' (' . $product['status'] . ')') ?></option><?php endforeach; ?></select></div>
+        <?php if (!$products): ?><p id="delete-product-empty" class="reset-note">The product catalog is empty. There are no products to delete.</p><?php endif; ?>
         <div class="reset-fields">
             <div class="form-group"><label for="delete-password">Current password</label><input type="password" id="delete-password" name="current_password" autocomplete="current-password" required></div>
-            <div class="form-group"><label for="delete-confirmation">Type <strong>DELETE PRODUCT</strong></label><input id="delete-confirmation" name="confirmation" pattern="DELETE PRODUCT" autocomplete="off" spellcheck="false" required></div>
+            <div class="form-group"><label for="delete-confirmation">Type <strong>DELETE PRODUCT</strong></label><input type="text" id="delete-confirmation" name="confirmation" pattern="DELETE PRODUCT" title="Type DELETE PRODUCT in uppercase to confirm" maxlength="32" autocomplete="off" spellcheck="false" required></div>
         </div>
         <button type="submit" class="btn reset-delete" <?= !$products ? 'disabled' : '' ?>>Delete selected product</button>
     </form>
 </section>
-<?php if ($backupToken): ?><section class="reset-panel reset-backup" aria-labelledby="backup-title"><div><h2 id="backup-title">Your pre-reset backup</h2><p>Keep this SQL backup. A Super Administrator can restore it; the forecasting model must then be retrained.</p></div><a class="btn" href="<?= htmlspecialchars(app_url('components/backup/backup_download.php?token=' . rawurlencode($backupToken))) ?>">Download backup before reset</a></section><?php endif; ?>
+<?php if ($backupToken): ?><section class="reset-panel reset-backup" aria-labelledby="backup-title"><div><h2 id="backup-title">Your pre-reset backup</h2><p>Keep this SQL backup. A Super Administrator can restore it; the forecasting model must then be retrained.</p></div><a class="btn" href="<?= htmlspecialchars(app_url('components/backup/backup_download.php?token=' . rawurlencode($backupToken))) ?>" download>Download backup before reset</a></section><?php endif; ?>
 <section id="store-reset" class="reset-store" aria-labelledby="store-title">
     <header class="reset-section-heading"><h2 id="store-title">Reset the whole Store</h2><p>Review what will be removed before confirming. This empties the product catalog and removes the trained forecasting model.</p></header>
     <div class="reset-layout">
@@ -115,13 +115,13 @@ $labels = [
             <p class="reset-note">The reset runs as one database transaction. Sales and receipt details, refunds, reversals, and the operational records listed here are deleted.</p>
             <div class="reset-confirmation">
                 <h3>Confirm reset</h3>
-                <?php if ($blockers): ?><div class="alert tag-warning" role="alert"><strong>Reset unavailable</strong><ul><?php foreach ($blockers as $blocker): ?><li><?= htmlspecialchars($blocker) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+                <?php if ($blockers): ?><div class="alert tag-warning" role="alert" data-rm-alert-processed="1"><strong>Reset unavailable</strong><ul><?php foreach ($blockers as $blocker): ?><li><?= htmlspecialchars($blocker) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
                 <p>Enter your current password and the exact confirmation phrase to delete the Store’s operational data.</p>
                 <form method="post">
                     <?= csrf_field() ?>
                     <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
                     <div class="form-group"><label for="reset-password">Current password</label><input type="password" id="reset-password" name="current_password" autocomplete="current-password" required></div>
-                    <div class="form-group"><label for="reset-confirmation">Type <strong>RESET ALL DATA</strong></label><input type="text" id="reset-confirmation" name="confirmation" autocomplete="off" pattern="RESET ALL DATA" spellcheck="false" required></div>
+                    <div class="form-group"><label for="reset-confirmation">Type <strong>RESET ALL DATA</strong></label><input type="text" id="reset-confirmation" name="confirmation" autocomplete="off" pattern="RESET ALL DATA" title="Type RESET ALL DATA in uppercase to confirm" maxlength="32" spellcheck="false" required></div>
                     <button type="submit" class="btn btn-danger" <?= $blockers ? 'disabled' : '' ?>>Reset all operational data</button>
                 </form>
             </div>

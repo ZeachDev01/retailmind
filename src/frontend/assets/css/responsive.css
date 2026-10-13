@@ -27,16 +27,18 @@
         display: inline-flex;
         align-items: center;
         min-width: 0;
-        gap: .85rem;
+        gap: .65rem;
     }
 
     .admin-mobile-menu,
     .admin-mobile-search {
         display: grid;
-        width: 28px;
-        height: 28px;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
         place-items: center;
         border: 0;
+        border-radius: 8px;
         background: transparent;
         color: var(--theme-ink, #020617);
         cursor: pointer;
@@ -66,21 +68,21 @@
         display: flex;
         flex: 0 0 auto;
         align-items: center;
-        gap: 1rem;
+        gap: .65rem;
     }
 
     .admin-mobile-avatar {
         display: grid;
-        width: 34px;
-        height: 34px;
-        flex: 0 0 34px;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
         place-items: center;
         border: 0;
         border-radius: 999px;
         background: #3b82f6;
         color: #ffffff;
         cursor: pointer;
-        font-size: .67rem;
+        font-size: .72rem;
         font-weight: 700;
         text-decoration: none;
         overflow: hidden;
@@ -161,12 +163,11 @@
 
     /* Make every table horizontally scrollable instead of squeezing/breaking layout */
     table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+    .manage-users-page .table-wrap > .users-table { display: table; width: 100%; }
     th, td { padding: 0.6rem 0.75rem; font-size: 0.85rem; }
 
     .login-card { width: 92vw; max-width: 380px; padding: 1.75rem; }
-}
 
-@media (max-width: 900px) {
     body.inventory-overview-page .u-grid-two-spaced {
         grid-template-columns: minmax(0, 1fr);
         gap: 1.15rem;
@@ -272,12 +273,26 @@
     .detail-grid,
     .form-grid,
     .drawer-action-grid { grid-template-columns: 1fr; }
+    .ml-settings-group { padding: .85rem .9rem .65rem; }
+    .ml-settings-actions .btn { width: 100%; }
     .account-hero { align-items: flex-start; }
     .account-avatar { width: 56px; height: 56px; flex-basis: 56px; border-radius: 14px; font-size: 1.05rem; }
     .profile-picture-settings { grid-template-columns: 72px minmax(0, 1fr); }
     .profile-picture-preview { width: 72px; height: 72px; border-radius: 14px; }
     .detail-item.full,
     .form-grid .full { grid-column: auto; }
+    .form-inline-action {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .form-inline-action .form-inline-field {
+        flex-basis: auto;
+        width: 100%;
+    }
+    .form-inline-action > .btn {
+        width: 100%;
+        text-align: center;
+    }
     .wizard-step-indicator { font-size: 0; }
     .wizard-progress { gap: .15rem; }
     .rm-modal-actions { flex-direction: column-reverse; }
@@ -464,6 +479,7 @@ body.products-page .products-quick-action strong {
     .bulk-bar,
     .table-pagination,
     .modal-actions,
+    .drawer-modal-actions,
     .rm-drawer-footer {
         align-items: stretch;
         flex-direction: column;
@@ -475,6 +491,7 @@ body.products-page .products-quick-action strong {
     .bulk-bar > *,
     .table-pagination > *,
     .modal-actions > *,
+    .drawer-modal-actions > *,
     .rm-drawer-footer > * {
         width: 100%;
     }
@@ -529,7 +546,7 @@ body.products-page .products-quick-action strong {
     }
 
     .user-drawer-tabs {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
@@ -599,9 +616,9 @@ body.products-page .products-quick-action strong {
     }
 
     .menu-toggle {
-        flex-basis: 40px;
-        width: 40px;
-        height: 40px;
+        flex-basis: 44px;
+        width: 44px;
+        height: 44px;
     }
 
 
@@ -741,21 +758,23 @@ body.admin-dashboard-page .mobile-role-label {
 
     body.admin-dashboard-page .admin-mobile-brand {
         min-width: 0;
-        gap: .85rem;
+        gap: .65rem;
     }
 
     body.admin-dashboard-page .admin-mobile-tools {
         flex: 0 0 auto;
-        gap: 1rem;
+        gap: .65rem;
     }
 
     body.admin-dashboard-page .admin-mobile-menu,
     body.admin-dashboard-page .admin-mobile-search {
-        width: 28px;
-        height: 28px;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
         display: grid;
         place-items: center;
         border: 0;
+        border-radius: 8px;
         background: transparent;
         color: var(--theme-ink, #020617);
         cursor: pointer;
@@ -776,9 +795,9 @@ body.admin-dashboard-page .mobile-role-label {
     }
 
     body.admin-dashboard-page .admin-mobile-avatar {
-        width: 34px;
-        height: 34px;
-        flex: 0 0 34px;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
         display: grid;
         place-items: center;
         border: 0;
@@ -786,7 +805,7 @@ body.admin-dashboard-page .mobile-role-label {
         background: #3b82f6;
         color: #fff;
         cursor: pointer;
-        font-size: .67rem;
+        font-size: .72rem;
         font-weight: 700;
         text-decoration: none;
     }

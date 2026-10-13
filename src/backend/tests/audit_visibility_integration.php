@@ -131,6 +131,27 @@ if (!$failures) {
             $service->records('admin', $filters + ['category' => AuditRecordCategory::SECURITY]) === [],
             'Administrator must not retrieve a security record by filtering directly for its category'
         );
+        $securityLogIds = array_values(array_column(
+            array_filter($superRecords, static fn(array $r): bool => $r['category'] === AuditRecordCategory::SECURITY),
+            'log_id'
+        ));
+        $storeLogIds = array_values(array_column($adminRecords, 'log_id'));
+        $assert(
+            count($service->exportRows('super_admin', $filters + ['log_ids' => $securityLogIds])) === 1,
+            'Super Administrator export with matched log_ids should return the exact matched rows'
+        );
+        $assert(
+            $service->exportRows('admin', $filters + ['log_ids' => $securityLogIds]) === [],
+            'Administrator must not export a protected record by supplying its log_id'
+        );
+        $assert(
+            count($service->exportRows('admin', $filters + ['log_ids' => $storeLogIds])) === 1,
+            'Administrator export with permitted log_ids should return the matched Store-operational row'
+        );
+        $assert(
+            count($service->exportRows('admin', $filters + ['search' => 'Store Operation'])) === 1,
+            'Search filter should match human-readable category labels displayed in the table'
+        );
 
         $denied = false;
         try {

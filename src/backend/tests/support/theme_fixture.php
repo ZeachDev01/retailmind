@@ -183,8 +183,6 @@ $pdo->exec('INSERT INTO supplier_products (supplier_id,product_id) VALUES (1,1)'
 $pdo->exec("INSERT INTO inventory_adjustments (product_id,adjustment_qty,adjustment_type,reported_by,shift_id,reason) VALUES (1,1,'damaged',4,1,'Disposable theme Stock Issue')");
 $pdo->exec("INSERT INTO purchase_orders (po_number,supplier_id,status,created_by) VALUES ('THEME-PO',1,'draft',3)");
 $pdo->exec("INSERT INTO replenishment_requests (product_id,request_qty,requested_by,status,approved_by) VALUES (1,5,3,'approved',1)");
-$pdo->prepare("INSERT INTO emergency_access_sessions (actor_user_id,reason,activated_at,expires_at,duration_minutes,status) VALUES (2,'Disposable appearance coverage',?,?,30,'active')")
-    ->execute([date('Y-m-d H:i:s'),date('Y-m-d H:i:s',time()+1800)]);
 App\Store\StoreWriteGate::begin($pdo); $pdo->commit();
 $pdo->exec("INSERT INTO sales (sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES (1,4,1,25,'cash')");
 $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (1,1,1,1,25,25)');

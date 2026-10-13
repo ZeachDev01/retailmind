@@ -124,17 +124,10 @@ try {
     $assert(abs($saved['total'] - 89.99) < 0.001, 'Applied approved manual discount recorded');
     $assert((int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE action='Approved sale discount'")->fetchColumn() === 1, 'Approval is audited against saved sale and reviewed hash');
     $technical = array_replace($above, ['discount_approver_username' => 'technical', 'discount_approver_password' => 'fixture-secret']);
-    $refuse(static fn() => $review($technical), 'requires active Emergency Access');
-    $pdo->prepare("INSERT INTO emergency_access_sessions (actor_user_id, reason, activated_at, expires_at, duration_minutes) VALUES (4, 'Fixture operational emergency', ?, ?, 15)")
-        ->execute([gmdate('Y-m-d H:i:s'), gmdate('Y-m-d H:i:s', time()+900)]);
-    $quote = $review($technical);
-    $pdo->exec("UPDATE emergency_access_sessions SET status='revoked'");
-    $refuse(static fn() => $save($quote, $technical), 'requires active Emergency Access');
-    $pdo->exec("UPDATE emergency_access_sessions SET status='active'");
     $quote = $review($technical);
     $save($quote, $technical);
     $metadata = json_decode($pdo->query("SELECT metadata FROM activity_log ORDER BY log_id DESC LIMIT 1")->fetchColumn(), true);
-    $assert($metadata['emergency_access_session_id'] === (int)$pdo->query('SELECT session_id FROM emergency_access_sessions')->fetchColumn(), 'Emergency approval retains session attribution');
+    $assert(isset($metadata['quote_hash'], $metadata['discount_amount']), 'Super Administrator discount approval records quote hash and discount amount');
     $quote = $review();
     $refuse(static fn() => $save($quote, ['cash_received' => 99.99]), 'less than the sale total');
     $refuse(static fn() => $save($quote, ['cash_received' => 'bad']), 'valid cash amount');
@@ -178,7 +171,7 @@ try {
     }
     $workers = [];
     $assert($outcomes[0] === $outcomes[1], 'Concurrent same-quote submissions return identical outcome after stock moves');
-    echo "Reviewed checkout integration: passed (price, physical/batch stock, promotions including same amount, boundaries, displaced manual, approval misuse/revocation/Emergency Access, cash/reference/verification, changed quote, lost-response retry, concurrent reviewed submission)\n";
+    echo "Reviewed checkout integration: passed (price, physical/batch stock, promotions including same amount, boundaries, displaced manual, approval misuse/revocation/super_admin, cash/reference/verification, changed quote, lost-response retry, concurrent reviewed submission)\n";
 } catch (Throwable $e) { fwrite(STDERR, 'Reviewed checkout integration failed: ' . $e->getMessage() . "\n"); $failed = true; }
 finally {
     foreach ($workers as [$process, $pipes]) { foreach ($pipes as $pipe) if (is_resource($pipe)) fclose($pipe); proc_terminate($process); proc_close($process); }

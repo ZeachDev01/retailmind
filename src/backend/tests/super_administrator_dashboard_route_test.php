@@ -14,7 +14,6 @@ foreach ([
     "require_role(['super_admin'])",
     'DashboardWorkspace',
     'SystemHealthService',
-    'Emergency Access',
     'Recovery Account',
     'data-dashboard-refresh',
     'data-stale-after',

@@ -29,23 +29,6 @@ function display_person_name(string $value): string
     return $value === strtoupper($value) ? ucwords(strtolower($value)) : $value;
 }
 
-function user_last_active_label(?string $lastLogin): string
-{
-    if (!$lastLogin) {
-        return 'Active: Never';
-    }
-    $timestamp = strtotime($lastLogin);
-    if (!$timestamp) {
-        return 'Active: Unknown';
-    }
-    $diff = max(0, time() - $timestamp);
-    if ($diff < 60) return 'Active: Just now';
-    if ($diff < 3600) return 'Active: ' . floor($diff / 60) . 'm ago';
-    if ($diff < 86400) return 'Active: ' . floor($diff / 3600) . 'h ago';
-    if ($diff < 172800) return 'Active: Yesterday';
-    return 'Active: ' . format_display_date(date('Y-m-d', $timestamp));
-}
-
 function role_name_for_id(PDO $pdo, int $roleId): ?string
 {
     $statement = $pdo->prepare("SELECT role_name FROM roles WHERE role_id = ? AND role_name <> 'seller'");
@@ -221,7 +204,9 @@ $disabledCount = count($users) - $activeCount;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Store Staff</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" data-bootstrap-icons>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/avatars.css')) ?>?v=<?= (int)@filemtime(__DIR__ . '/../../assets/css/avatars.css') ?>" data-avatar-styles>
 </head>
 <body class="manage-users-page">
 <div class="app-shell">
@@ -232,19 +217,22 @@ $disabledCount = count($users) - $activeCount;
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <div class="card-grid">
-            <article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill"></i></span><div class="value"><?= count($users) ?></div><div class="label">Total Users</div></article>
-            <article class="stat-card with-icon success"><span class="stat-icon"><i class="bi bi-person-check-fill"></i></span><div class="value"><?= $activeCount ?></div><div class="label">Active Users</div></article>
-            <article class="stat-card with-icon <?= $disabledCount ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-person-x-fill"></i></span><div class="value"><?= $disabledCount ?></div><div class="label">Disabled Users</div></article>
+            <article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill" aria-hidden="true"></i></span><div class="value"><?= count($users) ?></div><div class="label">Total Users</div></article>
+            <article class="stat-card with-icon success"><span class="stat-icon"><i class="bi bi-person-check-fill" aria-hidden="true"></i></span><div class="value"><?= $activeCount ?></div><div class="label">Active Users</div></article>
+            <article class="stat-card with-icon <?= $disabledCount ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-person-x-fill" aria-hidden="true"></i></span><div class="value"><?= $disabledCount ?></div><div class="label">Disabled Users</div></article>
         </div>
         <section class="dashboard-section manage-users-list" id="usersPanel">
             <div class="section-header">
                 <div><h2>Store accounts</h2><p class="section-description">Every operational account is scoped to this Store automatically.</p></div>
-                <button type="button" class="btn manage-users-primary manage-users-section-action" id="openUserModal"><i class="bi bi-person-plus"></i> Add Staff User</button>
+                <button type="button" class="btn manage-users-primary manage-users-section-action" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
             </div>
             <div class="table-wrap">
                 <table class="users-table">
-                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Password</th><th>Action</th></tr></thead>
+                    <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Password</th><th scope="col">Action</th></tr></thead>
                     <tbody>
+                    <?php if ($users === []): ?>
+                        <tr class="table-empty-row"><td colspan="6" class="text-muted">No staff accounts are registered in this Store yet.</td></tr>
+                    <?php endif; ?>
                     <?php foreach ($users as $user):
                         $pictureTarget = $user;
                         $pictureTarget['roles'] = explode(',', (string)($user['assigned_roles'] ?? $user['role_name']));
@@ -253,19 +241,22 @@ $disabledCount = count($users) - $activeCount;
                         $isSelf = (int)$user['user_id'] === $actorId;
                         $isSuper = $user['role_name'] === 'super_admin';
                         $hasImage = !empty($user['profile_image']) && profile_image_storage()->exists((string)$user['profile_image']);
+                        $canViewImage = $hasImage && $lifecycle->canViewPicture($actorId, $actorRole, $pictureTarget);
                         $statusView = $dormancyStatusTab->view($user);
+                        $displayName = display_person_name((string)$user['full_name']);
                     ?>
                         <tr>
-                            <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['full_name'], $lifecycle->canViewPicture($actorId, $actorRole, $pictureTarget) ? ($user['profile_image'] ?? null) : null, 'user-avatar') ?><strong><?= htmlspecialchars(display_person_name((string)$user['full_name'])) ?></strong></div></td>
+                            <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['full_name'], $canViewImage ? ($user['profile_image'] ?? null) : null, 'user-avatar') ?><strong><?= htmlspecialchars($displayName) ?></strong></div></td>
                             <td><?= htmlspecialchars((string)($user['email'] ?: $user['username'])) ?></td>
                             <td><?= htmlspecialchars(implode(', ', array_map('display_label', array_filter(explode(',', (string)($user['assigned_roles'] ?? $user['role_name'])))))) ?></td>
-                            <td><?= htmlspecialchars(display_label((string)$user['status'])) ?></td>
+                            <td><span class="<?= $user['status'] === 'active' ? 'tag-success' : 'tag-warning' ?>"><?= htmlspecialchars(display_label((string)$user['status'])) ?></span></td>
                             <td><?= ((int)($user['must_change_password'] ?? 0) === 1) ? '<span class="tag-warning">Change required</span>' : '<span class="tag-success">Current</span>' ?></td>
                             <td class="action-cell">
                                 <?php if (!$canManage): ?>
-                                    <span class="user-protected-label"><i class="bi bi-lock-fill"></i> Protected</span>
+                                    <span class="user-protected-label"><i class="bi bi-lock-fill" aria-hidden="true"></i> Protected</span>
                                 <?php else: ?>
                                     <button type="button" class="btn btn-small open-user-drawer"
+                                        aria-label="Manage <?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?>"
                                         data-user-id="<?= (int)$user['user_id'] ?>"
                                         data-full-name="<?= htmlspecialchars((string)$user['full_name'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-username="<?= htmlspecialchars((string)$user['username'], ENT_QUOTES, 'UTF-8') ?>"
@@ -278,7 +269,7 @@ $disabledCount = count($users) - $activeCount;
                                         data-policy-disabled="<?= htmlspecialchars((string)($statusView['policy_disabled_line'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-is-self="<?= $isSelf ? '1' : '0' ?>" data-is-super-admin="<?= $isSuper ? '1' : '0' ?>"
                                         data-profile-initials="<?= htmlspecialchars(profile_initials((string)$user['full_name'])) ?>"
-                                        data-profile-url="<?= $hasImage ? htmlspecialchars(profile_image_url((int)$user['user_id'])) : '' ?>"
+                                        data-profile-url="<?= $canViewImage ? htmlspecialchars(profile_image_url((int)$user['user_id'])) : '' ?>"
                                         data-has-profile-image="<?= $hasImage ? '1' : '0' ?>">Manage</button>
                                 <?php endif; ?>
                             </td>
@@ -298,8 +289,22 @@ $disabledCount = count($users) - $activeCount;
 document.addEventListener('DOMContentLoaded', function () {
     const addOverlay = document.getElementById('userModalOverlay');
     const drawerOverlay = document.getElementById('userDrawerOverlay');
+    const resetPasswordToggles = (root) => {
+        (root || document).querySelectorAll('[data-password-toggle]').forEach(toggle => {
+            const input = document.getElementById(toggle.dataset.passwordToggle);
+            if (input) input.type = 'password';
+            toggle.setAttribute('aria-label', 'Show password');
+            toggle.setAttribute('aria-pressed', 'false');
+            const icon = toggle.querySelector('i');
+            if (icon) {
+                icon.classList.remove('bi-eye-slash');
+                icon.classList.add('bi-eye');
+            }
+        });
+    };
     const setOpen = (overlay, open) => {
         if (!overlay) return;
+        if (!open) resetPasswordToggles(overlay);
         if (open) {
             if (window.RetailMindUI?.openOverlay) {
                 RetailMindUI.openOverlay(overlay);
@@ -322,13 +327,43 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('#closeUserModal, #cancelUserModal').forEach(button => button.addEventListener('click', () => setOpen(addOverlay, false)));
     document.querySelectorAll('#closeUserDrawer, #cancelUserDrawer').forEach(button => button.addEventListener('click', () => setOpen(drawerOverlay, false)));
 
-    const drawerTabs = document.querySelectorAll('[data-user-drawer-tab]');
-    const drawerPanels = document.querySelectorAll('[data-user-drawer-panel]');
-    function selectDrawerTab(name) {
-        drawerTabs.forEach(tab => { const selected = tab.dataset.userDrawerTab === name; tab.classList.toggle('is-active', selected); tab.setAttribute('aria-selected', selected ? 'true' : 'false'); });
-        drawerPanels.forEach(panel => { panel.hidden = panel.dataset.userDrawerPanel !== name; panel.classList.toggle('is-active', !panel.hidden); });
+    const drawerTabs = Array.from(document.querySelectorAll('[data-user-drawer-tab]'));
+    const drawerPanels = Array.from(document.querySelectorAll('[data-user-drawer-panel]'));
+    function selectDrawerTab(name, focusTab = false) {
+        drawerTabs.forEach(tab => {
+            const selected = tab.dataset.userDrawerTab === name;
+            tab.classList.toggle('is-active', selected);
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+            tab.setAttribute('tabindex', selected ? '0' : '-1');
+            if (selected && focusTab) tab.focus();
+        });
+        drawerPanels.forEach(panel => {
+            panel.hidden = panel.dataset.userDrawerPanel !== name;
+            panel.classList.toggle('is-active', !panel.hidden);
+        });
     }
-    drawerTabs.forEach(tab => tab.addEventListener('click', () => selectDrawerTab(tab.dataset.userDrawerTab)));
+    drawerTabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => selectDrawerTab(tab.dataset.userDrawerTab));
+        tab.addEventListener('keydown', (event) => {
+            let nextIndex = -1;
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % drawerTabs.length;
+            else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + drawerTabs.length) % drawerTabs.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = drawerTabs.length - 1;
+            if (nextIndex >= 0) {
+                event.preventDefault();
+                selectDrawerTab(drawerTabs[nextIndex].dataset.userDrawerTab, true);
+            }
+        });
+    });
+
+    const drawerForm = document.getElementById('userDrawerForm');
+    drawerForm?.addEventListener('invalid', (event) => {
+        const panel = event.target instanceof HTMLElement ? event.target.closest('[data-user-drawer-panel]') : null;
+        if (panel && panel.hidden) {
+            selectDrawerTab(panel.dataset.userDrawerPanel);
+        }
+    }, true);
 
     document.querySelectorAll('.open-user-drawer').forEach(button => button.addEventListener('click', function () {
         const parts = (button.dataset.fullName || '').trim().split(/\s+/).filter(Boolean);
@@ -338,6 +373,32 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('drawerFirstName').value = parts.shift() || '';
         document.getElementById('drawerLastName').value = parts.join(' ');
         document.getElementById('drawerEmail').value = button.dataset.email || '';
+        const drawerPassword = document.getElementById('drawerPassword');
+        if (drawerPassword) {
+            drawerPassword.value = '';
+            drawerPassword.setCustomValidity('');
+            drawerPassword.dispatchEvent(new Event('input'));
+        }
+        const drawerProfileImage = document.getElementById('drawerProfileImage');
+        if (drawerProfileImage) drawerProfileImage.value = '';
+        resetPasswordToggles(drawerOverlay);
+        const avatar = document.getElementById('drawerProfileAvatar');
+        if (avatar) {
+            const fallback = avatar.querySelector('.profile-avatar-fallback');
+            if (fallback) fallback.textContent = button.dataset.profileInitials || 'RM';
+            const existingImg = avatar.querySelector('.profile-avatar-image');
+            if (existingImg) existingImg.remove();
+            if (button.dataset.profileUrl) {
+                const img = document.createElement('img');
+                img.className = 'profile-avatar-image';
+                img.src = button.dataset.profileUrl;
+                img.alt = '';
+                img.loading = 'lazy';
+                img.decoding = 'async';
+                img.onerror = function () { this.remove(); };
+                avatar.appendChild(img);
+            }
+        }
         const selectedRoleIds = (button.dataset.roleIds || button.dataset.roleId || '').split(',').filter(Boolean);
         document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => {
             input.checked = selectedRoleIds.includes(input.value);
@@ -366,9 +427,19 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-password-toggle]').forEach(button => button.addEventListener('click', function () {
         const input = document.getElementById(button.dataset.passwordToggle);
         if (!input) return;
-        input.type = input.type === 'password' ? 'text' : 'password';
+        const showing = input.type === 'password';
+        input.type = showing ? 'text' : 'password';
+        button.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+        button.setAttribute('aria-pressed', showing ? 'true' : 'false');
+        const icon = button.querySelector('i');
+        if (icon) {
+            icon.classList.toggle('bi-eye', !showing);
+            icon.classList.toggle('bi-eye-slash', showing);
+        }
     }));
-    [addOverlay, drawerOverlay].forEach(overlay => overlay?.addEventListener('click', event => { if (event.target === overlay) setOpen(overlay, false); }));
+    if (!window.RetailMindUI?.openOverlay) {
+        [addOverlay, drawerOverlay].forEach(overlay => overlay?.addEventListener('click', event => { if (event.target === overlay) setOpen(overlay, false); }));
+    }
     <?php if ($createFormSubmitted && $messageClass === 'tag-warning'): ?>setOpen(addOverlay, true);<?php endif; ?>
 });
 </script>

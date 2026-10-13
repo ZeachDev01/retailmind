@@ -46,7 +46,6 @@ try {
         'CREATE TABLE backup_history (backup_type TEXT, status TEXT, created_at TEXT)',
         'CREATE TABLE model_training_runs (status TEXT, started_at TEXT, completed_at TEXT, metrics_json TEXT)',
         'CREATE TABLE activity_log (category TEXT, created_at TEXT, action TEXT, record_id INTEGER)',
-        'CREATE TABLE emergency_access_sessions (status TEXT, expires_at TEXT)',
         'CREATE TABLE recovery_accounts (user_id INTEGER, sealed_at TEXT, last_used_at TEXT)',
         'CREATE TABLE sales (sale_date TEXT)',
         'CREATE TABLE cashier_shifts (status TEXT, reviewed_at TEXT, cash_variance REAL)',
@@ -68,7 +67,6 @@ try {
     $pdo->exec("INSERT INTO backup_history VALUES ('scheduled', 'completed', '2026-09-08 08:00:00'), ('scheduled', 'failed', '2026-09-18 09:30:00')");
     $pdo->exec("INSERT INTO model_training_runs VALUES ('completed', '2026-09-01 08:00:00', '2026-09-01 08:30:00', '{\"accuracy\":0.72}')");
     $pdo->exec("INSERT INTO activity_log (category, created_at) VALUES ('platform_setting', '2026-09-18 08:00:00')");
-    $pdo->exec("INSERT INTO emergency_access_sessions VALUES ('active', '2026-09-18 10:30:00')");
     $pdo->exec("INSERT INTO recovery_accounts VALUES (2, NULL, '2026-09-10 07:00:00')");
     $pdo->exec("INSERT INTO sales VALUES ('2026-09-18 09:45:00')");
     $pdo->exec("INSERT INTO cashier_shifts VALUES ('open', NULL, NULL)");
@@ -89,7 +87,7 @@ try {
     $assert(($view['headline']['platform_health']['status'] ?? '') === 'critical', 'Platform health must reflect critical services');
     $assert(($view['headline']['ml_health']['status'] ?? '') === 'warning', 'ML health must be independently visible');
     $assert(($view['headline']['privileged_accounts']['value'] ?? 0) >= 1, 'Privileged-account anomalies must be visible');
-    $assert(($view['access']['emergency']['status'] ?? '') === 'active', 'Emergency Access status must be visible');
+    $assert(!isset($view['access']['emergency']), 'Retired Emergency Access card must be absent');
     $assert(($view['access']['recovery']['status'] ?? '') === 'unsealed', 'Recovery Account seal status must be visible');
     $assert(!array_key_exists('activation_secret_hash', $view['access']['recovery']), 'Recovery Account credentials must never be returned');
     $assert($view['continuity']['sales_flowing']['ok'] === true, 'Store continuity must show whether sales are flowing');
@@ -113,7 +111,7 @@ try {
     $newFailureView = $workspace->load('super_admin', 30);
     $assert(in_array('platform.security.failed-logins', array_column($newFailureView['attention'], 'key'), true), 'New failures must trigger platform attention after manual review');
 
-    $pdo->exec("DELETE FROM login_attempts; DELETE FROM backup_history; DELETE FROM model_training_runs; DELETE FROM activity_log; DELETE FROM emergency_access_sessions; DELETE FROM recovery_accounts; DELETE FROM sales; DELETE FROM cashier_shifts; DELETE FROM inventory; DELETE FROM sale_reversals; DELETE FROM inventory_adjustments; UPDATE users SET locked_until = NULL");
+    $pdo->exec("DELETE FROM login_attempts; DELETE FROM backup_history; DELETE FROM model_training_runs; DELETE FROM activity_log; DELETE FROM recovery_accounts; DELETE FROM sales; DELETE FROM cashier_shifts; DELETE FROM inventory; DELETE FROM sale_reversals; DELETE FROM inventory_adjustments; UPDATE users SET locked_until = NULL");
     $pdo->exec("INSERT INTO backup_history VALUES ('scheduled', 'completed', '2026-09-18 09:00:00')");
     $pdo->exec("INSERT INTO model_training_runs VALUES ('completed', '2026-09-18 09:00:00', '2026-09-18 09:30:00', '{\"accuracy\":0.95}')");
     $healthy = new DashboardContractHealth([

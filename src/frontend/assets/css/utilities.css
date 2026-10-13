@@ -1,4 +1,5 @@
 /* Reusable utility classes for formerly inline static styles. */
+.muted,
 .u-text-muted { color: var(--muted); }
 .u-text-muted-legacy { color: var(--theme-muted, #666); }
 .u-text-muted-help { color: var(--theme-muted, #666); font-size: 0.85rem; }

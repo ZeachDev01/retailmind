@@ -270,7 +270,7 @@ const fixture = action => {
                 ] : [
                     'super_administrator/dashboard', 'system_administrator/system_settings', 'user_manager/user_manager',
                     'system_administrator/audit_logs', 'system_administrator/backup_restore', 'system_administrator/database_updates',
-                    'system_administrator/emergency_access', 'system_administrator/recovery_account',
+                    'system_administrator/recovery_account',
                     'system_administrator/system_health', 'system_administrator/ml_settings',
                 ];
                 for (const route of routes) {
@@ -332,9 +332,6 @@ const fixture = action => {
                 assert.deepEqual(JSON.parse(fixture('governance_state')),governanceState,'Appearance does not change governance or Store records');
             }
             if(role === 'super_admin') {
-                await page.goto('/components/system_administrator/emergency_access.php');
-                await contrast(page.locator('.emergency-action-note')); await contrast(page.locator('.emergency-expiry strong'));
-                await select('light'); await select('dark'); assert(await page.locator('.emergency-expiry').isVisible(),'Appearance retains Emergency Access state');
                 await page.goto('/components/auth/workspace.php');
                 await page.locator('form').filter({has:page.locator('input[value="inventory_manager"]')}).getByRole('button',{name:'Open'}).click();
                 await page.waitForURL('**/inventory_overview.php');

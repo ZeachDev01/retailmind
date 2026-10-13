@@ -11,6 +11,9 @@
   "use strict";
 
   const RM = (window.RetailMindUI = window.RetailMindUI || {});
+  if (RM.backupStatus) {
+    return;
+  }
 
   const IDLE_INTERVAL_MS = 20000;
   const ACTIVE_INTERVAL_MS = 4000;

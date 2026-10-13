@@ -850,9 +850,9 @@
       const toolbar = document.createElement("div");
       toolbar.className = "table-toolbar auto-table-toolbar";
       toolbar.innerHTML =
-        '<label class="toolbar-search"><i class="bi bi-search"></i><input type="search" placeholder="Search this table" aria-label="Search table"></label>' +
-        '<button type="button" class="btn btn-quiet btn-icon auto-table-clear"><i class="bi bi-x-circle"></i>Clear</button>' +
-        '<span class="toolbar-count"></span>';
+        '<label class="toolbar-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" placeholder="Search this table" aria-label="Search table"></label>' +
+        '<button type="button" class="btn btn-quiet btn-icon auto-table-clear"><i class="bi bi-x-circle" aria-hidden="true"></i>Clear</button>' +
+        '<span class="toolbar-count" aria-live="polite"></span>';
       wrap.parentNode.insertBefore(toolbar, wrap);
       const footer = document.createElement("div");
       footer.className = "table-pagination auto-table-pagination";
@@ -864,14 +864,18 @@
       const pageSize = qs("select", footer);
       const summary = qs(".auto-page-summary", footer);
       const buttons = qs(".pagination-buttons", footer);
+      const rowSearchText = new Map(
+        rows.map((row) => [row, (row.textContent || "").toLowerCase()]),
+      );
       let page = 1;
       let filtered = rows.slice();
+      let searchTimer = null;
 
       function render(reset = false) {
         if (reset) page = 1;
         const term = search.value.trim().toLowerCase();
         filtered = rows.filter(
-          (row) => !term || row.textContent.toLowerCase().includes(term),
+          (row) => !term || (rowSearchText.get(row) || "").includes(term),
         );
         const size = Number(pageSize.value || 25);
         const pages = Math.max(1, Math.ceil(filtered.length / size));
@@ -885,11 +889,13 @@
           ? `Showing ${start + 1}–${Math.min(start + size, filtered.length)} of ${filtered.length}`
           : "Showing 0 results";
         buttons.innerHTML = "";
-        const add = (label, target, disabled, active) => {
+        const add = (label, target, disabled, active, ariaLabel) => {
           const button = document.createElement("button");
           button.type = "button";
           button.textContent = label;
           button.disabled = disabled;
+          if (ariaLabel) button.setAttribute("aria-label", ariaLabel);
+          if (active) button.setAttribute("aria-current", "page");
           button.classList.toggle("active", !!active);
           button.addEventListener("click", () => {
             page = target;
@@ -897,18 +903,22 @@
           });
           buttons.appendChild(button);
         };
-        add("‹", Math.max(1, page - 1), page === 1, false);
+        add("‹", Math.max(1, page - 1), page === 1, false, "Previous page");
         for (
           let p = Math.max(1, page - 2);
           p <= Math.min(pages, Math.max(1, page - 2) + 4);
           p++
         )
-          add(String(p), p, false, p === page);
-        add("›", Math.min(pages, page + 1), page === pages, false);
+          add(String(p), p, false, p === page, `Page ${p}`);
+        add("›", Math.min(pages, page + 1), page === pages, false, "Next page");
       }
-      search.addEventListener("input", () => render(true));
+      search.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => render(true), 120);
+      });
       pageSize.addEventListener("change", () => render(true));
       qs(".auto-table-clear", toolbar).addEventListener("click", () => {
+        clearTimeout(searchTimer);
         search.value = "";
         render(true);
         search.focus();

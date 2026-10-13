@@ -92,7 +92,6 @@ try {
         'service_unhealthy_count' => ['value' => 1, 'count' => 1],
         'ml_model_age_days' => ['value' => 10],
         'platform_setting_change_count' => ['value' => 1, 'count' => 1],
-        'emergency_access_count' => ['value' => 1, 'count' => 1],
         'recovery_account_active_count' => ['value' => 1, 'count' => 1],
     ];
     $platformItems = $center->refresh(1, 'super_admin', $platformSignals);
@@ -106,7 +105,6 @@ try {
     $assert(in_array('platform.service.unhealthy', $platformKeys, true), 'Service health should produce attention');
     $assert(in_array('platform.ml.stale-model', $platformKeys, true), 'ML health should produce attention');
     $assert(in_array('platform.settings.changed', $platformKeys, true), 'Platform Setting changes should produce attention');
-    $assert(in_array('platform.emergency-access.active', $platformKeys, true), 'Emergency Access should produce attention');
     $assert(in_array('platform.recovery-account.active', $platformKeys, true), 'Recovery Account state should produce attention');
     foreach ($platformItems as $item) {
         $assert(isset($item['key'], $item['severity'], $item['category'], $item['title'], $item['explanation'], $item['detected_at'], $item['destination']), 'Every attention item should expose the stable contract');

@@ -42,7 +42,7 @@ final class LegacyReversalTransitionService
 
     private function authorize(int $actor): array
     {
-        if ((int)($_SESSION['user_id'] ?? 0) !== $actor || !in_array($_SESSION['role'] ?? '', ['admin', 'super_admin'], true)) {
+        if ((int)($_SESSION['user_id'] ?? 0) !== $actor || ($_SESSION['role'] ?? '') !== 'admin') {
             throw new DomainException('Only an authenticated Administrator workspace may decide a Legacy Reversal.');
         }
         $stmt = $this->pdo->prepare("SELECT r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id
@@ -50,16 +50,7 @@ final class LegacyReversalTransitionService
         $stmt->execute([$actor]);
         $primary = $stmt->fetchColumn();
         if (!in_array($primary, ['admin', 'super_admin'], true)) throw new DomainException('Administrator authority is required.');
-        $authorization = ['actor_id' => $actor, 'workspace' => $_SESSION['role']];
-        if ($primary === 'super_admin') {
-            $stmt = $this->pdo->prepare("SELECT session_id,reason FROM emergency_access_sessions WHERE actor_user_id=?
-                AND status='active' AND expires_at>UTC_TIMESTAMP() ORDER BY session_id DESC LIMIT 1 FOR UPDATE");
-            $stmt->execute([$actor]);
-            $access = $stmt->fetch();
-            if (!$access || trim($access['reason']) === '') throw new DomainException('Active, reason-bound Emergency Access is required.');
-            $authorization['emergency_access'] = $access;
-        }
-        return $authorization;
+        return ['actor_id' => $actor, 'workspace' => $_SESSION['role']];
     }
 
     private function transition(int $id, int $actor, string $outcome, string $reason, array $evidence): void

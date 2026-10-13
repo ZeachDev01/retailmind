@@ -100,16 +100,11 @@ try {
     $check((float)$service->calculateShift(20)['calculated_expected_cash'] === 0.0, 'real recorded top-up permits exactly funded payout');
     $pdo->exec("UPDATE users SET status='disabled' WHERE user_id=3");
     $refused(fn() => $service->addDrawerMovement(1, 'cashier', 'cash_out', 1, 'petty_cash', null, 'owner', 'owner-password'), 'disabled approver authorizes spending');
-    $pdo->exec("CREATE TABLE emergency_access_sessions (session_id INTEGER PRIMARY KEY,actor_user_id INTEGER,reason TEXT,expires_at TEXT,status TEXT)");
     $pdo->exec("UPDATE users SET status='active',role_id=2 WHERE user_id=3");
     $service->addDrawerMovement(1,'cashier','cash_in',10,'additional_float');
-    $refused(fn() => $service->addDrawerMovement(1,'cashier','cash_out',1,'supplier_payment',null,'owner','owner-password'), 'Super Administrator authorizes without Emergency Access');
-    $pdo->exec("INSERT INTO emergency_access_sessions VALUES (1,3,'Emergency Store continuity','2099-01-01 00:00:00','active')");
     $service->addDrawerMovement(1,'cashier','cash_out',1,'supplier_payment',null,'owner','owner-password');
     $audit=json_decode($pdo->query('SELECT new_value FROM activity_log ORDER BY log_id DESC LIMIT 1')->fetchColumn(),true);
-    $check($audit['authorization']['emergency_session_id']===1 && $audit['amount']===1 && $audit['shift_id']===20 && $audit['reason']==='supplier_payment', 'Emergency approval binds identity, session, amount, reason and shift');
-    $pdo->exec("UPDATE emergency_access_sessions SET expires_at='2000-01-01 00:00:00'");
-    $refused(fn() => $service->addDrawerMovement(1,'cashier','cash_out',1,'supplier_payment',null,'owner','owner-password'), 'Expired Emergency Access authorizes spending');
+    $check($audit['authorization']['approved_by']===3 && $audit['amount']===1 && $audit['shift_id']===20 && $audit['reason']==='supplier_payment', 'Super Administrator approval binds identity, amount, reason and shift');
 } catch (Throwable $error) {
     $failures[] = $error->getMessage();
 }

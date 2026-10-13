@@ -34,23 +34,28 @@ final class OperationalDataResetService
     public function summary(): array
     {
         $existing = $this->tables();
-        $counts = [];
+        $expressions = [];
         foreach (self::TABLES as $table) {
             $filter = $table === 'promotions' ? ' WHERE product_id IS NOT NULL' : '';
-            $counts[$table] = isset($existing[$table]) ? (int)$this->pdo->query("SELECT COUNT(*) FROM `{$table}`{$filter}")->fetchColumn() : 0;
+            $expressions[] = (isset($existing[$table]) ? "(SELECT COUNT(*) FROM `{$table}`{$filter})" : '0') . " AS `{$table}`";
         }
-        $counts['inventory_units'] = (int)$this->pdo->query('SELECT COALESCE(SUM(quantity_on_hand), 0) FROM inventory')->fetchColumn();
-        return $counts;
+        $expressions[] = (isset($existing['inventory']) ? '(SELECT COALESCE(SUM(quantity_on_hand), 0) FROM inventory)' : '0') . ' AS `inventory_units`';
+        $row = $this->pdo->query('SELECT ' . implode(', ', $expressions))->fetch(PDO::FETCH_ASSOC) ?: [];
+        return array_map('intval', $row);
     }
 
     public function blockers(): array
     {
+        $row = $this->pdo->query(
+            "SELECT (SELECT COUNT(*) FROM cashier_shifts WHERE status <> 'closed') AS open_shifts,
+                    (SELECT COUNT(*) FROM fiscal_periods WHERE status IN ('closed', 'locked'))
+                    + (SELECT COUNT(*) FROM fiscal_period_locks) AS protected_periods"
+        )->fetch(PDO::FETCH_ASSOC) ?: [];
         $blockers = [];
-        if ((int)$this->pdo->query("SELECT COUNT(*) FROM cashier_shifts WHERE status <> 'closed'")->fetchColumn() > 0) {
+        if ((int)($row['open_shifts'] ?? 0) > 0) {
             $blockers[] = 'Close all cashier shifts before resetting data.';
         }
-        if ((int)$this->pdo->query("SELECT COUNT(*) FROM fiscal_periods WHERE status IN ('closed', 'locked')")->fetchColumn() > 0
-            || (int)$this->pdo->query('SELECT COUNT(*) FROM fiscal_period_locks')->fetchColumn() > 0) {
+        if ((int)($row['protected_periods'] ?? 0) > 0) {
             $blockers[] = 'Fiscal records are protected. Reopen and unlock fiscal periods before resetting data.';
         }
         return $blockers;

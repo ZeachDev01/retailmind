@@ -16,7 +16,6 @@ final class AttentionRuleService
         ['key' => 'platform.service.unhealthy', 'signal' => 'service_unhealthy_count', 'threshold' => 'service_unhealthy_count', 'severity' => 'critical', 'category' => 'system_health', 'title' => 'Platform service is unhealthy', 'destination' => 'components/system_administrator/system_health.php'],
         ['key' => 'platform.ml.stale-model', 'signal' => 'ml_model_age_days', 'threshold' => 'ml_model_age_days', 'severity' => 'warning', 'category' => 'ml_health', 'title' => 'Demand Forecast model is stale', 'destination' => 'components/system_administrator/ml_settings.php'],
         ['key' => 'platform.settings.changed', 'signal' => 'platform_setting_change_count', 'threshold' => 'platform_setting_change_count', 'severity' => 'info', 'category' => 'platform_setting', 'title' => 'Platform Settings changed', 'destination' => 'components/system_administrator/system_settings.php'],
-        ['key' => 'platform.emergency-access.active', 'signal' => 'emergency_access_count', 'threshold' => 'emergency_access_count', 'severity' => 'critical', 'category' => 'emergency_access', 'title' => 'Emergency Access is active', 'destination' => 'components/system_administrator/emergency_access.php'],
         ['key' => 'platform.recovery-account.active', 'signal' => 'recovery_account_active_count', 'threshold' => 'recovery_account_active_count', 'severity' => 'critical', 'category' => 'recovery_account', 'title' => 'Recovery Account is unsealed', 'destination' => 'components/system_administrator/recovery_account.php'],
     ];
 

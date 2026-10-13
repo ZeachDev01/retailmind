@@ -37,6 +37,7 @@ $moduleFilter = trim((string)($_GET['module'] ?? ''));
 $dateFrom = trim((string)($_GET['date_from'] ?? ''));
 $dateTo = trim((string)($_GET['date_to'] ?? ''));
 $tableSearch = '';
+$matchedLogIds = null;
 $isExport = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
     && ($_POST['action'] ?? '') === 'export_csv';
 
@@ -48,6 +49,12 @@ if ($isExport) {
     $dateFrom = trim((string)($_POST['date_from'] ?? ''));
     $dateTo = trim((string)($_POST['date_to'] ?? ''));
     $tableSearch = trim((string)($_POST['table_search'] ?? ''));
+    $rawMatchedIds = trim((string)($_POST['matched_log_ids'] ?? ''));
+    if ($rawMatchedIds === 'none') {
+        $matchedLogIds = [];
+    } elseif ($rawMatchedIds !== '') {
+        $matchedLogIds = array_values(array_filter(array_map('intval', explode(',', $rawMatchedIds)), static fn(int $id): bool => $id > 0));
+    }
 }
 
 $protectedAuditRecords = new \App\Audit\ProtectedAuditRecordService($pdo, role_capability_policy());
@@ -59,6 +66,9 @@ $auditFilters = [
     'date_to' => $dateTo,
     'search' => $tableSearch,
 ];
+if ($matchedLogIds !== null) {
+    $auditFilters['log_ids'] = $matchedLogIds;
+}
 
 function audit_log_display_value($value): string
 {
@@ -125,7 +135,7 @@ function audit_log_send_csv(string $filename, array $rows): void
 
 $logs = $isExport
     ? $protectedAuditRecords->exportRows($actorRole, $auditFilters)
-    : $protectedAuditRecords->records($actorRole, $auditFilters);
+    : $protectedAuditRecords->records($actorRole, $auditFilters + ['limit' => 1000]);
 
 if ($isExport) {
     $rows = array_map(static function (array $log): array {
@@ -148,13 +158,24 @@ if ($isExport) {
 
 $activeUserCount = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status = 'active'")->fetchColumn();
 $modules = $protectedAuditRecords->modules($actorRole);
+$canViewPlatformAudit = current_user_can(\App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT);
+$pageTitle = $canViewPlatformAudit ? 'Protected Audit Records' : 'Operational Audit';
+$pageSubtitle = $canViewPlatformAudit
+    ? 'Review immutable account, platform, recovery, and Store-operational records.'
+    : 'Review immutable Store-operational activity across inventory, sales, settings, and delegated staff.';
+$emptyTableCopy = $canViewPlatformAudit
+    ? 'No Protected Audit Records match the selected filters.'
+    : 'No Operational Audit records match the selected filters.';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protected Audit Records</title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://cdn.datatables.net" crossorigin>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/columncontrol/2.0.2/css/columnControl.dataTables.min.css">
@@ -167,10 +188,10 @@ $modules = $protectedAuditRecords->modules($actorRole);
         <main class="main-content">
             <div class="topbar">
                 <div>
-                    <h1>Protected Audit Records</h1>
-                    <p class="page-subtitle">Review immutable account, platform, recovery, and Store-operational records.</p>
+                    <h1><?= htmlspecialchars($pageTitle) ?></h1>
+                    <p class="page-subtitle"><?= htmlspecialchars($pageSubtitle) ?></p>
                 </div>
-                <form method="POST" class="audit-log-export-form" id="auditLogExportForm" target="_blank">
+                <form method="POST" class="audit-log-export-form" id="auditLogExportForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="export_csv">
                     <input type="hidden" name="user_id" id="exportUserFilter" value="<?= htmlspecialchars($userFilter) ?>">
@@ -179,6 +200,7 @@ $modules = $protectedAuditRecords->modules($actorRole);
                     <input type="hidden" name="date_from" id="exportDateFrom" value="<?= htmlspecialchars($dateFrom) ?>">
                     <input type="hidden" name="date_to" id="exportDateTo" value="<?= htmlspecialchars($dateTo) ?>">
                     <input type="hidden" name="table_search" id="exportTableSearch" value="">
+                    <input type="hidden" name="matched_log_ids" id="exportMatchedLogIds" value="">
                     <button type="submit" class="btn btn-quiet"><i class="bi bi-download" aria-hidden="true"></i> Export CSV</button>
                 </form>
             </div>
@@ -186,7 +208,7 @@ $modules = $protectedAuditRecords->modules($actorRole);
             <div class="card-grid audit-log-stats">
                 <div class="stat-card with-icon">
                     <span class="stat-icon" aria-hidden="true"><i class="bi bi-card-checklist"></i></span>
-                    <div class="value" id="matchingRecordsCount"><?= count($logs) ?></div>
+                    <div class="value" id="matchingRecordsCount" aria-live="polite" aria-atomic="true"><?= count($logs) ?></div>
                     <div class="label">Matching Records</div>
                 </div>
                 <div class="stat-card with-icon success">
@@ -213,7 +235,7 @@ $modules = $protectedAuditRecords->modules($actorRole);
                         <p class="alert tag-success" role="status"><?= htmlspecialchars($reviewMessage) ?></p>
                     <?php endif; ?>
                     <?php if ($reviewError !== ''): ?>
-                        <p class="alert tag-warning" role="alert"><?= htmlspecialchars($reviewError) ?></p>
+                        <p class="alert tag-danger" role="alert"><?= htmlspecialchars($reviewError) ?></p>
                     <?php endif; ?>
                     <?php if ($pendingSignIns === []): ?>
                         <p>No failed sign-ins need review.</p>
@@ -235,12 +257,12 @@ $modules = $protectedAuditRecords->modules($actorRole);
                                 </tbody>
                             </table>
                         </div>
-                        <form method="POST" class="sign-in-review-form">
+                        <form method="POST" class="sign-in-review-form" id="signInReviewForm">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="review_failed_sign_ins">
                             <input type="hidden" name="through_attempt_id" value="<?= (int)$pendingSignIns[array_key_last($pendingSignIns)]['attempt_id'] ?>">
                             <div class="form-group">
-                                <label for="sign-in-review-result">Review result</label>
+                                <label for="sign-in-review-result">Review result <span class="required-mark" aria-hidden="true">*</span></label>
                                 <select id="sign-in-review-result" name="review_result" required>
                                     <option value="">Choose a result</option>
                                     <?php foreach (\App\Attention\FailedSignInReviewService::RESULTS as $value => $label): ?>
@@ -249,11 +271,11 @@ $modules = $protectedAuditRecords->modules($actorRole);
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="sign-in-review-note">Review note</label>
+                                <label for="sign-in-review-note">Review note <span class="required-mark" aria-hidden="true">*</span></label>
                                 <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" required aria-describedby="sign-in-note-help"><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
                                 <p id="sign-in-note-help" class="section-description">Briefly record who confirmed the attempts, what you checked, and any account-security action taken.</p>
                             </div>
-                            <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> I reviewed the listed attempts.</label>
+                            <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> <span>I reviewed the listed attempts. <span class="required-mark" aria-hidden="true">*</span></span></label>
                             <button type="submit" class="btn btn-primary">Save review and clear listed attempts</button>
                         </form>
                     <?php endif; ?>
@@ -263,7 +285,7 @@ $modules = $protectedAuditRecords->modules($actorRole);
             <section class="dashboard-section audit-table-card" aria-labelledby="audit-table-title">
                 <div class="section-header">
                     <div>
-                        <h3 id="audit-table-title">Record history</h3>
+                        <h2 id="audit-table-title">Record history</h2>
                         <p class="section-description">Use the table search for quick matching across the filtered records.</p>
                     </div>
                 </div>
@@ -286,9 +308,10 @@ $modules = $protectedAuditRecords->modules($actorRole);
                                 $previousValue = audit_log_display_value($log['previous_value'] ?? null);
                                 $newValue = audit_log_display_value($log['new_value'] ?? null);
                                 $timestamp = strtotime((string)$log['created_at']) ?: 0;
+                                $formattedTimestamp = format_display_datetime($log['created_at']);
                                 ?>
-                                <tr>
-                                    <td data-order="<?= htmlspecialchars(date('Y-m-d\TH:i:s', $timestamp)) ?>" data-search="<?= htmlspecialchars(date('Y-m-d', $timestamp)) ?>"><?= htmlspecialchars(format_display_datetime($log['created_at'])) ?></td>
+                                <tr data-log-id="<?= (int)($log['log_id'] ?? 0) ?>">
+                                    <td data-order="<?= htmlspecialchars(date('Y-m-d\TH:i:s', $timestamp)) ?>" data-search="<?= htmlspecialchars(date('Y-m-d', $timestamp)) ?>"><?= htmlspecialchars($formattedTimestamp) ?></td>
                                     <td data-search="<?= htmlspecialchars(trim((string)($log['full_name'] ?? '') . ' ' . (string)($log['username'] ?? ''))) ?>">
                                         <?php if ($log['user_id']): ?>
                                             <strong><?= htmlspecialchars((string)($log['full_name'] ?: $log['username'])) ?></strong>
@@ -297,24 +320,29 @@ $modules = $protectedAuditRecords->modules($actorRole);
                                             <em>System / Unknown</em>
                                         <?php endif; ?>
                                     </td>
-                                    <td><span class="audit-action-badge <?= audit_log_action_class((string)$log['action']) ?>"><?= htmlspecialchars($log['action']) ?></span></td>
+                                    <td><span class="audit-action-badge <?= audit_log_action_class((string)$log['action']) ?>" title="<?= htmlspecialchars((string)$log['action']) ?>"><?= htmlspecialchars($log['action']) ?></span></td>
                                     <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string)$log['category']))) ?></td>
                                     <td><?= htmlspecialchars((string)($log['module'] ?? '-')) ?></td>
                                     <td><?= htmlspecialchars((string)($log['record_id'] ?? '-')) ?></td>
                                     <td>
                                         <details class="audit-details">
-                                            <summary>View details</summary>
-                                            <div class="audit-details-content">
-                                                <strong>IP address:</strong> <span><?= htmlspecialchars((string)($log['ip_address'] ?? '-')) ?></span>
-                                                <strong>Previous:</strong> <span class="<?= $previousValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($previousValue) ?></span>
-                                                <strong>New:</strong> <span class="<?= $newValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($newValue) ?></span>
+                                            <summary aria-label="<?= htmlspecialchars('View details for ' . $log['action'] . ' at ' . $formattedTimestamp) ?>">View details</summary>
+                                            <dl class="audit-details-content">
+                                                <dt>IP address:</dt>
+                                                <dd class="audit-code"><?= htmlspecialchars((string)($log['ip_address'] ?? '-')) ?></dd>
+                                                <dt>Previous:</dt>
+                                                <dd class="<?= $previousValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($previousValue) ?></dd>
+                                                <dt>New:</dt>
+                                                <dd class="<?= $newValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($newValue) ?></dd>
                                                 <?php if ($log['action'] === \App\Attention\FailedSignInReviewService::ACTION): ?>
-                                                    <strong>Reviewed evidence:</strong> <span><?= htmlspecialchars(audit_log_display_value($log['metadata'] ?? null)) ?></span>
+                                                    <dt>Reviewed evidence:</dt>
+                                                    <dd><?= htmlspecialchars(audit_log_display_value($log['metadata'] ?? null)) ?></dd>
                                                 <?php endif; ?>
                                                 <?php if ($log['action'] === \App\Attention\ApplicationLogReviewService::ACTION): ?>
-                                                    <strong>Reviewed log excerpt:</strong> <pre><?= htmlspecialchars((string)(json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-')) ?></pre>
+                                                    <dt>Reviewed log excerpt:</dt>
+                                                    <dd><pre><?= htmlspecialchars((string)(json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-')) ?></pre></dd>
                                                 <?php endif; ?>
-                                            </div>
+                                            </dl>
                                         </details>
                                     </td>
                                 </tr>
@@ -326,17 +354,29 @@ $modules = $protectedAuditRecords->modules($actorRole);
         </main>
     </div>
 
-    <script src="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.js"></script>
-    <script src="https://cdn.datatables.net/columncontrol/2.0.2/js/dataTables.columnControl.min.js"></script>
-    <script src="https://cdn.datatables.net/datetime/2.0.0/js/dataTables.dateTime.min.js"></script>
+    <script defer src="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.js"></script>
+    <script defer src="https://cdn.datatables.net/columncontrol/2.0.2/js/dataTables.columnControl.min.js"></script>
+    <script defer src="https://cdn.datatables.net/datetime/2.0.0/js/dataTables.dateTime.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            var reviewForm = document.getElementById('signInReviewForm');
+            if (reviewForm) {
+                reviewForm.addEventListener('submit', function() {
+                    var submitBtn = reviewForm.querySelector('button[type="submit"]');
+                    if (submitBtn && reviewForm.checkValidity()) {
+                        submitBtn.classList.add('btn-loading');
+                        submitBtn.setAttribute('aria-busy', 'true');
+                    }
+                });
+            }
+
             if (typeof DataTable === 'undefined') {
                 return;
             }
 
             var matchingRecords = document.getElementById('matchingRecordsCount');
             var exportForm = document.getElementById('auditLogExportForm');
+            var exportMatchedIds = document.getElementById('exportMatchedLogIds');
 
             var table = new DataTable('#auditLogsTable', {
                 pageLength: 25,
@@ -392,13 +432,35 @@ $modules = $protectedAuditRecords->modules($actorRole);
                     bottomEnd: null
                 },
                 language: {
-                    emptyTable: 'No Protected Audit Records match the selected filters.',
+                    emptyTable: <?= json_encode($emptyTableCopy, JSON_UNESCAPED_UNICODE) ?>,
                     search: 'Search:'
                 }
             });
 
             function syncExportFilters() {
                 document.getElementById('exportTableSearch').value = table.search();
+                if (!exportMatchedIds) {
+                    return;
+                }
+                var totalCount = table.rows().count();
+                var appliedRows = table.rows({ search: 'applied', order: 'applied' });
+                var appliedCount = appliedRows.count();
+                if (appliedCount === totalCount && table.search() === '') {
+                    exportMatchedIds.value = '';
+                    return;
+                }
+                if (appliedCount === 0) {
+                    exportMatchedIds.value = 'none';
+                    return;
+                }
+                var ids = [];
+                appliedRows.nodes().each(function(rowNode) {
+                    var logId = rowNode && rowNode.getAttribute ? rowNode.getAttribute('data-log-id') : '';
+                    if (logId) {
+                        ids.push(logId);
+                    }
+                });
+                exportMatchedIds.value = ids.join(',');
             }
             table.on('draw', function() {
                 matchingRecords.textContent = table.rows({ search: 'applied' }).count();

@@ -569,18 +569,7 @@ class CashierShiftService
         if (!$approver || $password === '' || !password_verify($password, (string)$approver['password_hash'])) {
             throw new DomainException('Administrator authorization is required for supplier payments and petty cash.');
         }
-        $approval = ['approved_by' => (int)$approver['user_id']];
-        if ($approver['role_name'] === 'super_admin') {
-            $stmt = $this->pdo->prepare("SELECT session_id, reason, expires_at, status FROM emergency_access_sessions WHERE actor_user_id=? ORDER BY session_id DESC LIMIT 1" . $locking);
-            $stmt->execute([$approver['user_id']]);
-            $emergency = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$emergency || $emergency['status'] !== 'active' || $emergency['expires_at'] <= gmdate('Y-m-d H:i:s')) {
-                throw new DomainException('Super Administrator authorization requires active Emergency Access.');
-            }
-            $approval['emergency_session_id'] = (int)$emergency['session_id'];
-            $approval['emergency_reason'] = $emergency['reason'];
-        }
-        return $approval;
+        return ['approved_by' => (int)$approver['user_id']];
     }
 
     public function calculateShift(int $shiftId): array

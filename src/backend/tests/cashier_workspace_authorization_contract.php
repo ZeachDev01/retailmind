@@ -29,8 +29,6 @@ try {
     $assert($policy->allows('admin', $pos) === false, 'admin workspace lacks POS');
     $assert($policy->allows('super_admin', $pos) === false, 'super_admin workspace lacks POS');
     $assert($policy->allows('inventory_manager', $pos) === false, 'inventory workspace lacks POS');
-    $emergency = AuthorizationContext::emergencyAccess(701, 42, 'Restore Store operations during an incident');
-    $assert($policy->allows('super_admin', $pos, null, $emergency, 42) === false, 'emergency never grants POS');
 
     $root = dirname(__DIR__, 3);
     $posPage = (string)@file_get_contents($root . '/src/frontend/components/cashier/pos.php');

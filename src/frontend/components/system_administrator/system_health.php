@@ -52,6 +52,8 @@ $overall = $counts['critical'] > 0 ? 'critical' : ($counts['warning'] > 0 ? 'war
 $labels = ['healthy' => 'Healthy', 'warning' => 'Needs attention', 'critical' => 'Critical'];
 $icons = ['healthy' => 'bi-check-circle-fill', 'warning' => 'bi-exclamation-triangle-fill', 'critical' => 'bi-x-octagon-fill'];
 $checkedAt = format_display_datetime('now');
+$styleCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/style.css') ?: '1');
+$systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/system-health.css') ?: '1');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -59,8 +61,9 @@ $checkedAt = format_display_datetime('now');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>System Health</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/system-health.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . rawurlencode($styleCssVersion)) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/system-health.css') . '?v=' . rawurlencode($systemHealthCssVersion)) ?>">
 </head>
 <body class="system-health-page">
     <div class="app-shell">
@@ -74,7 +77,7 @@ $checkedAt = format_display_datetime('now');
                 </div>
                 <div class="page-heading-actions">
                     <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/system_administrator/system_health.php')) ?>"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh checks</a>
-                    <span class="decision-pill <?= $overall === 'healthy' ? 'ok' : 'action' ?>"><?= htmlspecialchars($labels[$overall]) ?></span>
+                    <span class="decision-pill <?= $overall === 'healthy' ? 'ok' : ($overall === 'critical' ? 'critical' : 'action') ?>"><i class="bi <?= htmlspecialchars($icons[$overall]) ?>" aria-hidden="true"></i> <?= htmlspecialchars($labels[$overall]) ?></span>
                 </div>
             </header>
 
@@ -142,15 +145,15 @@ $checkedAt = format_display_datetime('now');
                     <div class="maintenance-list">
                         <div class="maintenance-item">
                             <span class="maintenance-icon"><i class="bi bi-database-gear" aria-hidden="true"></i></span>
-                            <div><strong>Apply pending migrations</strong><code>php src/backend/scripts/migrate.php</code></div>
+                            <div><strong>Apply pending migrations</strong><code tabindex="0" aria-label="Apply pending migrations command">php src/backend/scripts/migrate.php</code></div>
                         </div>
                         <div class="maintenance-item">
                             <span class="maintenance-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
-                            <div><strong>Run release checks</strong><code>bash src/backend/tests/run_all.sh</code></div>
+                            <div><strong>Run release checks</strong><code tabindex="0" aria-label="Run release checks command">bash src/backend/tests/run_all.sh</code></div>
                         </div>
                         <div class="maintenance-item">
                             <span class="maintenance-icon"><i class="bi bi-file-earmark-zip" aria-hidden="true"></i></span>
-                            <div><strong>Build a deployment package</strong><code>bash src/backend/scripts/build_release.sh</code></div>
+                            <div><strong>Build a deployment package</strong><code tabindex="0" aria-label="Build a deployment package command">bash src/backend/scripts/build_release.sh</code></div>
                         </div>
                     </div>
                     <div class="system-health-note">
@@ -168,26 +171,35 @@ $checkedAt = format_display_datetime('now');
                     <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>">Review history</a>
                 </div>
                 <?php if ($logReviewMessage !== ''): ?>
-                    <p class="alert tag-success" role="status"><?= htmlspecialchars($logReviewMessage) ?></p>
+                    <p class="alert tag-success" role="status" data-rm-alert-processed="1"><?= htmlspecialchars($logReviewMessage) ?></p>
                 <?php endif; ?>
                 <?php if ($logReviewError !== ''): ?>
-                    <p class="alert tag-warning" role="alert"><?= htmlspecialchars($logReviewError) ?></p>
+                    <p id="log-review-error" class="alert tag-warning" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($logReviewError) ?></p>
                 <?php endif; ?>
-                <?php if ($logSnapshot !== null && $logSnapshot['size'] === 0): ?>
-                    <p>No application log entries need review.</p>
-                <?php elseif ($logSnapshot !== null): ?>
+                <?php if ($logSnapshot === null): ?>
+                    <p class="system-health-empty">Application log details are currently unavailable. Check storage permissions for <strong>storage/logs/app.log</strong> and refresh checks.</p>
+                <?php elseif ($logSnapshot['size'] === 0): ?>
+                    <p class="system-health-empty">No application log entries need review.</p>
+                <?php else: ?>
                     <p>Recent excerpt, up to 16 KB, from <strong>app.log</strong>. The excerpt may start mid-entry; inspect the full file if more context is needed. Do not include passwords or tokens in your review note.</p>
                     <pre class="application-log-excerpt" tabindex="0" aria-label="Recent application log entries"><?= htmlspecialchars($logSnapshot['excerpt']) ?></pre>
                     <?php if ($logSnapshot['acknowledged']): ?>
                         <p class="alert tag-success" role="status" data-rm-alert-processed="1">This log version has been acknowledged. New entries will require another review.</p>
                     <?php else: ?>
+                        <?php
+                        $hasFormError = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $logReviewError !== '');
+                        $resultErrorAttr = $hasFormError && ($_POST['review_result'] ?? '') === '' ? ' aria-invalid="true" aria-describedby="log-review-error"' : '';
+                        $noteDescribedBy = $hasFormError && trim((string)($_POST['review_note'] ?? '')) === '' ? 'log-review-error log-review-note-help' : 'log-review-note-help';
+                        $noteInvalidAttr = $hasFormError && trim((string)($_POST['review_note'] ?? '')) === '' ? ' aria-invalid="true"' : '';
+                        $confirmErrorAttr = $hasFormError && ($_POST['review_confirmed'] ?? '') !== '1' ? ' aria-invalid="true" aria-describedby="log-review-error"' : '';
+                        ?>
                         <form method="POST" class="application-log-review-form">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="acknowledge_application_log">
                             <input type="hidden" name="log_fingerprint" value="<?= htmlspecialchars($logSnapshot['fingerprint']) ?>">
                             <div class="form-group">
-                                <label for="log-review-result">Review result</label>
-                                <select id="log-review-result" name="review_result" required>
+                                <label for="log-review-result">Review result <span class="required-indicator" aria-hidden="true">*</span></label>
+                                <select id="log-review-result" name="review_result" required<?= $resultErrorAttr ?>>
                                     <option value="">Choose a result</option>
                                     <?php foreach (\App\Attention\ApplicationLogReviewService::RESULTS as $value => $label): ?>
                                         <option value="<?= htmlspecialchars($value) ?>" <?= ($_POST['review_result'] ?? '') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
@@ -195,11 +207,11 @@ $checkedAt = format_display_datetime('now');
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="log-review-note">Investigation and verification note</label>
-                                <textarea id="log-review-note" name="review_note" rows="3" maxlength="1000" required aria-describedby="log-review-note-help"><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
-                                <p id="log-review-note-help" class="section-description">Record the cause, what you fixed or why the diagnostic was expected, and how you checked it.</p>
+                                <label for="log-review-note">Investigation and verification note <span class="required-indicator" aria-hidden="true">*</span></label>
+                                <textarea id="log-review-note" name="review_note" rows="3" maxlength="1000" required placeholder="Describe the root cause, the fix or why the entry was expected, and how you verified it." aria-describedby="<?= $noteDescribedBy ?>"<?= $noteInvalidAttr ?>><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
+                                <p id="log-review-note-help" class="section-description">Record the cause, what you fixed or why the diagnostic was expected, and how you checked it (up to 1,000 characters).</p>
                             </div>
-                            <label class="application-log-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> I investigated these entries and verified the result.</label>
+                            <label class="application-log-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required<?= ($_POST['review_confirmed'] ?? '') === '1' ? ' checked' : '' ?><?= $confirmErrorAttr ?>> <span>I investigated these entries and verified the result. <span class="required-indicator" aria-hidden="true">*</span></span></label>
                             <button type="submit" class="btn btn-primary">Save review and acknowledge log warning</button>
                         </form>
                     <?php endif; ?>

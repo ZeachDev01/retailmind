@@ -81,9 +81,26 @@ html.rm-app-fullscreen body {
 html.rm-app-fullscreen body:not(.no-scroll) { overflow-y: auto; }
 html.rm-app-fullscreen .app-shell { min-height: 100%; }
 html.rm-app-fullscreen .sidebar { min-height: 100vh; min-height: 100dvh; height: 100vh; height: 100dvh; }
-body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after {
+    animation: none !important;
+    transition-property: opacity, color, background-color, border-color, box-shadow !important;
+    transition-duration: 120ms !important;
+    scroll-behavior: auto !important;
+}
+body.reduce-motion :is(.stat-card-link:hover .stat-card, .attention-action:hover, .access-readiness-action:hover, .user-modal, .user-drawer) {
+    transform: none !important;
+}
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation: none !important;
+        transition-property: opacity, color, background-color, border-color, box-shadow !important;
+        transition-duration: 120ms !important;
+        scroll-behavior: auto !important;
+    }
+    :is(.stat-card-link:hover .stat-card, .attention-action:hover, .access-readiness-action:hover, .user-modal, .user-drawer) {
+        transform: none !important;
+    }
 }
 
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {

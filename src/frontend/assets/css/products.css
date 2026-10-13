@@ -10,7 +10,7 @@
 .status-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .status-badge.good { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); }
 .status-badge.low { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); }
-.status-badge.out { background: var(--theme-surface-soft, #fee2e2); color: var(--theme-danger-text, #991b1b); }
+.status-badge.out { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #991b1b); }
 .status-badge.inactive { background: var(--theme-surface-soft, #e5e7eb); color: var(--theme-muted, #4b5563); }
 .status-badge.expiring { background: var(--theme-warning-surface, #ffedd5); color: var(--theme-warning-text, #9a3412); }
 .row-actions { display: flex; justify-content: flex-end; gap: .35rem; }

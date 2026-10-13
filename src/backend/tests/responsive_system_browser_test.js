@@ -24,7 +24,7 @@ const routes = {
         'invoice/sales?tab=reversals&sale_id=1', 'invoice/legacy_reversals?sale_id=1'],
     super_admin: ['super_administrator/dashboard', 'system_administrator/system_settings',
         'user_manager/user_manager', 'system_administrator/audit_logs', 'system_administrator/backup_restore',
-        'system_administrator/database_updates', 'system_administrator/emergency_access',
+        'system_administrator/database_updates',
         'system_administrator/recovery_account', 'system_administrator/system_health', 'system_administrator/ml_settings', 'auth/workspace'],
     inventory_manager: ['inventory_management/inventory_overview', 'inventory_management/inventory_insights',
         'inventory_management/products', 'inventory_management/csv_import', 'inventory_management/reorder_planner',
