@@ -43,14 +43,14 @@ $effective = $service->thresholdsFor('admin');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Store Settings</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 </head>
 <body>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <div><p class="page-kicker">Administrator workspace</p><h1>Store Settings</h1><p class="page-subtitle">Govern sales, cash, approval, inventory, and Fiscal Period attention thresholds within Platform safety limits.</p></div>
+            <div><h1>Store Settings</h1><p class="page-subtitle">Govern sales, cash, approval, inventory, and Fiscal Period attention thresholds within Platform safety limits.</p></div>
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <section class="dashboard-section">

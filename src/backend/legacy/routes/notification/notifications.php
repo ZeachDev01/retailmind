@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'mark_read') {
         $notification_id = (int)($_POST['notification_id'] ?? 0);
         if ($notification_id > 0) {
-            mark_notification_read($pdo, $notification_id);
+            mark_notification_read($pdo, $notification_id, (int)$_SESSION['user_id']);
         }
     } elseif ($_POST['action'] === 'mark_all_read') {
         $stmt = $pdo->prepare("UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE");

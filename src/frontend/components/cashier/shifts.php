@@ -130,7 +130,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Cashier Shifts</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier-pages.css')) ?>">
 </head>
 
@@ -142,8 +142,8 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                     <p class="page-subtitle">Open the register, record drawer cash changes, and reconcile cash at closing. Dates use Philippine time (Asia/Manila).</p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
             </div>
-            <?php if ($message): ?><div class="message success"><?= htmlspecialchars($message) ?></div><?php endif; ?><?php if ($error): ?><div class="message error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-            <?php if ($ownRegisterLocked): ?><div class="message error"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?> <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock it at the point of sale</a> to carry on with this same shift.</div><?php endif; ?>
+            <?php if ($message): ?><div class="message success" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?><?php if ($error): ?><div class="message error" role="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($ownRegisterLocked): ?><div class="message error" role="note" data-rm-alert-processed="1"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?> <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock it at the point of sale</a> to carry on with this same shift.</div><?php endif; ?>
             <?php if (!$isCashier): ?><section class="dashboard-section shift-selector">
                     <form method="get"><label for="shift-cashier">View open shift</label><select id="shift-cashier" name="cashier_id" onchange="this.form.submit()" <?= !$cashiers ? 'disabled' : '' ?>><?php if (!$cashiers): ?><option>No open shifts</option><?php endif; ?><?php foreach ($cashiers as $c): ?><option value="<?= (int)$c['user_id'] ?>" <?= $targetCashierId === (int)$c['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['full_name']) ?></option><?php endforeach; ?></select><noscript><button class="btn" type="submit">View shift</button></noscript></form>
                 </section><?php endif; ?>
@@ -207,7 +207,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section">
                         <h2>Close and reconcile</h2>
                         <?php if (!$isCashier): ?><p>Intervention for <?= htmlspecialchars($openShift['full_name']) ?> on <?= htmlspecialchars($openShift['register_name'] ?? 'Unassigned Register') ?>. Count the drawer before viewing its expected balance.</p><?php endif; ?>
-                        <?php if ($unresolvedHeldSales): ?><div class="message error">
+                        <?php if ($unresolvedHeldSales): ?><div class="message error" role="note" data-rm-alert-processed="1">
                             This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
                             <ul><?php foreach ($unresolvedHeldSales as $unresolved): ?>
                                     <li><?= htmlspecialchars($unresolved['reference_no']) ?> &middot; <?= (int)$unresolved['item_count'] ?> item(s) &middot; &#8369;<?= number_format((float)$unresolved['total_amount'], 2) ?> &middot; <?= $unresolved['status'] === 'resumed' ? 'resumed' : 'held' ?> since <?= htmlspecialchars(format_display_datetime($unresolved['created_at'])) ?> Philippine time</li>
@@ -219,7 +219,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <div class="stat-card"><div class="value">₱<?= number_format((float)$countPreview['expected_cash'], 2) ?></div><div class="label">Expected cash</div></div>
                                 <div class="stat-card"><div class="value">₱<?= number_format((float)$countPreview['cash_variance'], 2) ?></div><div class="label">Variance</div></div>
                             </div>
-                            <?php if ($countPreview['variance_review_required']): ?><p class="message error">This variance exceeds ₱<?= number_format((float)$countPreview['variance_threshold'], 2) ?>. Add a reason; the Administrator will review it after closure.</p><?php endif; ?>
+                            <?php if ($countPreview['variance_review_required']): ?><p class="message error" role="note" data-rm-alert-processed="1">This variance exceeds ₱<?= number_format((float)$countPreview['variance_threshold'], 2) ?>. Add a reason; the Administrator will review it after closure.</p><?php endif; ?>
                             <form method="POST" data-confirm="Close this Cashier Shift with the submitted count?" data-confirm-title="Close cashier shift" data-confirm-button="Close shift">
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                 <input type="hidden" name="action" value="close">

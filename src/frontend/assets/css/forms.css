@@ -362,15 +362,17 @@ textarea {
 
 .password-toggle {
     position: absolute;
-    top: 50%;
+    top: 0;
+    bottom: 0;
     right: 0.45rem;
     min-width: 3.55rem;
-    height: 2.15rem;
-    transform: translateY(-50%);
+    min-height: 44px;
+    height: 44px;
+    margin-block: auto;
     border: none;
     border-radius: 8px;
     background: var(--auth-control-soft);
-    color: var(--auth-accent);
+    color: var(--theme-info-text, var(--auth-accent));
     cursor: pointer;
     font-size: 0.82rem;
     font-weight: 800;
@@ -379,7 +381,7 @@ textarea {
 
 .password-toggle:hover,
 .password-toggle:focus-visible {
-    background: var(--auth-control-soft-hover);
+    background: var(--theme-surface-soft, var(--auth-control-soft-hover));
 }
 
 .btn {

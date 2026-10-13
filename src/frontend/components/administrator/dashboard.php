@@ -54,7 +54,7 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Store Operations</title>
-    <link rel="stylesheet" href="<?= $escape(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
 </head>
 <body class="admin-dashboard-page administrator-workspace">
     <div class="app-shell">
@@ -62,7 +62,6 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
         <main class="main-content" data-dashboard-refresh data-stale-after="<?= $escape($dashboard['freshness']['stale_after'] ?? '') ?>">
             <header class="page-heading control-center-heading">
                 <div>
-                    <p class="page-kicker">Administrator workspace</p>
                     <h1>Store Operations</h1>
                     <p class="page-subtitle">Welcome, <?= $escape($displayName) ?>. Resolve Store exceptions, approvals, staff oversight, and operational risks.</p>
                     <p class="dashboard-freshness"><i class="bi bi-clock" aria-hidden="true"></i> Last updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?></p>
@@ -84,7 +83,7 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
 
             <section class="dashboard-section governance-queue store-attention-queue" aria-labelledby="store-attention-title">
                 <div class="section-header">
-                    <div><p class="section-eyebrow">Act first</p><h2 id="store-attention-title">Store attention queue</h2><p class="section-description">Actionable reversals, cash variances, unusual discounts, approvals, and inventory escalations.</p></div>
+                    <div><h2 id="store-attention-title">Store attention queue</h2><p class="section-description">Actionable reversals, cash variances, unusual discounts, approvals, and inventory escalations.</p></div>
                 </div>
                 <?php if ($dashboard['state'] === 'error'): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><div><strong>Store status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div><a class="btn btn-quiet" href="<?= $escape($rangeUrl) ?>">Try again</a></div>

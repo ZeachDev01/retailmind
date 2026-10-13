@@ -13,6 +13,7 @@ $lifecycle = new UserLifecycleService($pdo, role_capability_policy(), new StoreS
 $dormancyStatusTab = new DormancyStatusTab($pdo);
 $actorId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
+$pageTitle = $actorRole === 'super_admin' ? 'Users & Access' : 'Store Staff';
 $message = '';
 $messageClass = '';
 $createFormSubmitted = false;
@@ -203,9 +204,9 @@ $disabledCount = count($users) - $activeCount;
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Store Staff</title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" data-bootstrap-icons>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/avatars.css')) ?>?v=<?= (int)@filemtime(__DIR__ . '/../../assets/css/avatars.css') ?>" data-avatar-styles>
 </head>
 <body class="manage-users-page">
@@ -213,7 +214,7 @@ $disabledCount = count($users) - $activeCount;
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="topbar">
-            <div><h1>Store Staff</h1><p class="page-subtitle">Manage fixed role templates and account access for the single Store.</p></div>
+            <div><h1><?= htmlspecialchars($pageTitle) ?></h1><p class="page-subtitle">Manage fixed role templates and account access for the single Store.</p></div>
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <div class="card-grid">

@@ -444,6 +444,7 @@
       RM.openOverlay(overlay);
       input.value = "";
       render();
+      input.focus({preventScroll: true});
     }
     function close() {
       RM.closeOverlay(overlay);

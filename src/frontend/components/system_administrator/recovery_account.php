@@ -13,7 +13,7 @@ $statusLabel = ucwords(str_replace('_', ' ', (string)$status['status']));
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recovery Account Status</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -36,7 +36,7 @@ $statusLabel = ucwords(str_replace('_', ' ', (string)$status['status']));
                     <div class="label">Last use</div>
                 </article>
             </div>
-            <div class="alert tag-warning">
+            <div class="alert tag-warning" role="note" data-rm-alert-processed="1">
                 Activation, credential rotation, and resealing are available only through the documented offline procedure. No credentials or activation controls are exposed here.
             </div>
         </section>

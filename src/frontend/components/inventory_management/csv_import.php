@@ -330,18 +330,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSV Bulk Import</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
 </head>
 <body>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <div class="main-content">
+    <main class="main-content">
         <div class="topbar">
             <h1>CSV Bulk Import</h1>
         </div>
@@ -355,7 +355,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
         <?php endif; ?>
 
         <div class="template-links">
-            <h4>📋 CSV Format Guide</h4>
+            <h2>CSV Format Guide</h2>
             <ul>
                 <li><strong>Products Import:</strong> sku, barcode, product_name, brand, category_name, unit_price, cost_price, reorder_level, preferred_supplier, supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package</li>
                 <li><strong>Inventory Import:</strong> sku, quantity_to_add</li>
@@ -365,7 +365,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
         </div>
 
         <div class="import-section">
-            <h3>Upload CSV File</h3>
+            <h2>Upload CSV File</h2>
             <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
 
@@ -389,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
         <?php if ($import_results): ?>
             <div class="results-section">
-                <h3>Import Results</h3>
+                <h2>Import Results</h2>
                 <p><strong>File:</strong> <?= htmlspecialchars($import_results['filename']) ?> |
                    <strong>Type:</strong> <?= htmlspecialchars(ucfirst($import_results['type'])) ?></p>
 
@@ -410,7 +410,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
                 <?php if (!empty($import_results['errors'])): ?>
                     <div class="errors-list">
-                        <h4>⚠️ Error Details</h4>
+                        <h4>Error Details</h4>
                         <?php foreach ($import_results['errors'] as $err): ?>
                             <div class="error-item"><?= htmlspecialchars($err) ?></div>
                         <?php endforeach; ?>
@@ -418,7 +418,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 <?php endif; ?>
             </div>
         <?php endif; ?>
-    </div>
+    </main>
 </div>
 </body>
 </html>

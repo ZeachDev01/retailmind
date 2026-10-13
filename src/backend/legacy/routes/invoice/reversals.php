@@ -58,11 +58,11 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head><?php retailmind_theme_head(); ?>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Legacy Reversals</title>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 <style>
     .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem; margin-bottom: 1rem; }
     .grid-two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr); gap: 1rem; align-items: start; }
@@ -84,7 +84,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
 <body>
 <div class="app-shell">
     <?php include __DIR__ . '/../../../../frontend/components/sidebar.php'; ?>
-    <div class="main-content">
+    <main class="main-content">
         <div class="topbar">
             <div>
                 <h1>Legacy Reversals</h1>
@@ -207,7 +207,7 @@ $pendingReversals = array_values(array_filter($reversals, fn($row) => $row['stat
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 </div>
 </body>
 </html>

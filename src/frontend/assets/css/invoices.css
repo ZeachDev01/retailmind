@@ -220,6 +220,8 @@
 
     .receipts-page .dt-container .dt-paging .dt-paging-button {
         border-radius: 8px;
+        min-width: 44px;
+        min-height: 44px;
     }
 
     .receipt-id {
@@ -234,6 +236,7 @@
     }
 
     .btn-small {
+        min-height: 44px;
         padding: 0.5rem 0.75rem;
         font-size: 0.85rem;
         border: none;
@@ -246,7 +249,7 @@
     }
 
     .btn-view {
-        background: #3b82f6;
+        background: #2563eb;
         color: white;
     }
 
@@ -612,3 +615,9 @@
     .actions-row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
     .muted { color: var(--muted); font-size: 0.9rem; }
     @media (max-width: 980px) { .grid-two { grid-template-columns: 1fr; } }
+
+.receipts-page div.dt-container .dt-paging .dt-paging-button.current {
+    background: var(--theme-info-surface, #dbeafe) !important;
+    color: var(--theme-info-text, #1d4ed8) !important;
+    border-color: var(--border) !important;
+}

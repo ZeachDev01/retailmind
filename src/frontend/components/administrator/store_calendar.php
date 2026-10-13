@@ -15,12 +15,12 @@ $today = substr(PhilippineTime::dayStart(date('Y-m-d')), 0, 10);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
-    
+
     try {
         $date = trim($_POST['calendar_date'] ?? '');
         $throughDate = trim($_POST['through_date'] ?? '');
         $status = trim($_POST['status'] ?? '');
-        
+
         // Validate date
         try {
             $formattedDate = PhilippineTime::dayStart($date);
@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable) {
             throw new RuntimeException("Invalid calendar date.");
         }
-        
+
         if ($throughDate !== '') {
             try {
                 $formattedThrough = PhilippineTime::dayStart($throughDate);
@@ -37,12 +37,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException("Invalid through date.");
             }
         }
-        
+
         $status = StoreCalendar::normalizeStatus($status);
         if (!in_array($status, ['open', 'closed', 'holiday', 'exceptional_closure'], true)) {
             throw new RuntimeException("Invalid status provided.");
         }
-        
+
         $pdo->beginTransaction();
         try {
             if ($throughDate !== '' && $throughDate !== $date) {
@@ -50,15 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $changed = $calendar->recordCalendarRange($pdo, $date, $throughDate, $status, (int)$_SESSION['user_id']);
                 foreach ($changed as $item) {
                     log_activity(
-                        $pdo, 
-                        (int)$_SESSION['user_id'], 
-                        'Recorded Store calendar date', 
-                        'Store Settings', 
-                        null, 
-                        $item['previous_status'], 
-                        $item['new_status'], 
-                        null, 
-                        null, 
+                        $pdo,
+                        (int)$_SESSION['user_id'],
+                        'Recorded Store calendar date',
+                        'Store Settings',
+                        null,
+                        $item['previous_status'],
+                        $item['new_status'],
+                        null,
+                        null,
                         ['calendar_date' => $item['date']]
                     );
                 }
@@ -71,15 +71,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($previousStatus !== $status) {
                     $calendar->recordCalendarDate($pdo, $date, $status, (int)$_SESSION['user_id']);
                     log_activity(
-                        $pdo, 
-                        (int)$_SESSION['user_id'], 
-                        'Recorded Store calendar date', 
-                        'Store Settings', 
-                        null, 
-                        $previousStatus, 
-                        $status, 
-                        null, 
-                        null, 
+                        $pdo,
+                        (int)$_SESSION['user_id'],
+                        'Recorded Store calendar date',
+                        'Store Settings',
+                        null,
+                        $previousStatus,
+                        $status,
+                        null,
+                        null,
                         ['calendar_date' => $date]
                     );
                 }
@@ -135,7 +135,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Store Calendar</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <style>
         .calendar-controls {
             display: flex;
@@ -153,6 +153,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, minmax(0, 1fr));
+            min-width: 640px;
             gap: 0.5rem;
             margin-bottom: 1.5rem;
         }
@@ -163,14 +164,18 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: var(--text-muted, #64748b);
+            color: var(--muted);
         }
         .calendar-day-cell {
+            min-width: 44px;
+            font: inherit;
+            color: var(--text);
+            text-align: left;
             min-height: 85px;
-            padding: 0.5rem;
-            border: 1px solid var(--border-color, #e2e8f0);
+            padding: 0.35rem;
+            border: 1px solid var(--border);
             border-radius: 6px;
-            background: var(--card-bg, #ffffff);
+            background: var(--theme-surface, #ffffff);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -185,7 +190,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         .calendar-day-cell.selected-day {
             border-color: var(--primary-color, #2563eb);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
-            background: var(--bg-hover, #f8fafc);
+            background: var(--theme-surface-soft, #eff6ff);
         }
         .calendar-day-cell.is-today {
             font-weight: 700;
@@ -203,23 +208,35 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             font-size: 0.75rem;
             margin-top: 0.25rem;
         }
-        .status-badge {
+        .calendar-status-badge {
             display: inline-block;
-            padding: 0.2rem 0.45rem;
+            padding: 0.2rem 0.25rem;
             border-radius: 4px;
             font-size: 0.75rem;
             font-weight: 500;
             line-height: 1.2;
-            word-break: break-word;
+            overflow-wrap: anywhere;
+            white-space: normal;
+            max-width: 100%;
         }
-        .status-open { background: #dcfce7; color: #15803d; }
-        .status-closed { background: #f1f5f9; color: #475569; }
-        .status-holiday { background: #fef3c7; color: #b45309; }
-        .status-exceptional_closure { background: #fee2e2; color: #b91c1c; }
-        .status-unrecorded { background: #e2e8f0; color: #64748b; }
-        .editor-container {
-            max-width: 650px;
+        .status-open { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); }
+        .status-closed, .status-unrecorded { background: var(--theme-surface-soft, #f1f5f9); color: var(--muted); }
+        .status-holiday { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); }
+        .status-exceptional_closure { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #991b1b); }
+        .calendar-status-badge::before {
+            content: '';
+            display: inline-block;
+            width: .5rem;
+            height: .5rem;
+            margin-right: .35rem;
+            border-radius: 50%;
+            background: currentColor;
         }
+        .status-unrecorded::before { background: transparent; border: 1px solid currentColor; }
+        .calendar-legend { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+        .calendar-scroll { overflow-x: auto; }
+        .calendar-scroll-hint { margin-bottom: .75rem; color: var(--muted); }
+        @media (min-width: 640px) { .calendar-scroll-hint { display: none; } }
     </style>
 </head>
 <body>
@@ -228,10 +245,10 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
     <main class="main-content">
         <header class="page-heading">
             <div>
-                <p class="page-kicker">Administrator workspace</p>
                 <h1>Store Calendar</h1>
                 <p class="page-subtitle">Monthly trading status, holidays, and exceptional closures.</p>
             </div>
+            <button type="button" class="btn" id="record-date-btn">Record date status</button>
         </header>
 
         <?php if ($message): ?>
@@ -248,11 +265,21 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <h2><?= htmlspecialchars($monthTitle) ?></h2>
             </div>
 
-            <div class="calendar-grid" role="grid" aria-label="Store calendar for <?= htmlspecialchars($monthTitle) ?>">
+            <p>Select a date to record or change its status.</p>
+            <div class="calendar-legend" aria-label="Calendar status legend">
+                <span class="calendar-status-badge status-open">Open</span>
+                <span class="calendar-status-badge status-closed">Closed</span>
+                <span class="calendar-status-badge status-holiday">Holiday</span>
+                <span class="calendar-status-badge status-exceptional_closure">Exceptional closure</span>
+                <span class="calendar-status-badge status-unrecorded">Not recorded</span>
+            </div>
+            <p class="calendar-scroll-hint" id="calendar-scroll-hint">Scroll across to see every date.</p>
+            <div class="calendar-scroll" tabindex="0" role="region" aria-label="Store calendar for <?= htmlspecialchars($monthTitle) ?>">
+            <div class="calendar-grid">
                 <?php
                 $weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                 foreach ($weekDays as $wDay): ?>
-                    <div class="calendar-header-day" role="columnheader"><?= $wDay ?></div>
+                    <div class="calendar-header-day" aria-hidden="true"><?= $wDay ?></div>
                 <?php endforeach; ?>
 
                 <?php
@@ -278,49 +305,60 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                     ];
                     $label = $statusLabels[$statusKey] ?? 'Not recorded';
                 ?>
-                    <div class="calendar-day-cell <?= $isToday ? 'is-today' : '' ?>" 
-                         data-date="<?= htmlspecialchars($dateStr) ?>" 
-                         data-status="<?= htmlspecialchars($statusKey) ?>" 
-                         tabindex="0" 
-                         role="gridcell" 
+                    <button type="button" class="calendar-day-cell <?= $isToday ? 'is-today' : '' ?>"
+                         data-date="<?= htmlspecialchars($dateStr) ?>"
+                         data-status="<?= htmlspecialchars($statusKey) ?>"
+                         aria-haspopup="dialog" aria-controls="calendar-editor"
+                         aria-pressed="false"
                          aria-label="<?= htmlspecialchars($dateStr) ?>: <?= htmlspecialchars($label) ?>">
                         <span class="day-number"><?= $day ?></span>
                         <span class="day-status">
-                            <span class="status-badge status-<?= htmlspecialchars($statusKey) ?>"><?= htmlspecialchars($label) ?></span>
+                            <span class="calendar-status-badge status-<?= htmlspecialchars($statusKey) ?>"><?= htmlspecialchars($label) ?></span>
                         </span>
-                    </div>
+                    </button>
                 <?php endfor; ?>
+            </div>
             </div>
         </section>
 
-        <section class="dashboard-section editor-container">
-            <h2>Record Date Status</h2>
+    </main>
+</div>
+
+<div class="rm-modal-overlay" id="calendar-editor" aria-hidden="true">
+        <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-editor-title">
+            <header class="rm-modal-header">
+                <div><h2 id="calendar-editor-title">Record date status</h2><p>Choose the trading status for this date or a date range.</p></div>
+                <button type="button" class="rm-close" aria-label="Close date editor"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            </header>
             <form method="post" id="calendar-form">
                 <?= csrf_field() ?>
+                <div class="rm-modal-body">
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="calendar_date">Selected Date (Start)</label>
                         <input id="calendar_date" type="date" name="calendar_date" required value="<?= htmlspecialchars($_POST['calendar_date'] ?? $today) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="through_date">Through Date <span style="font-weight:normal; color:var(--text-muted, #64748b);">(Optional Range)</span></label>
+                        <label for="through_date">Through Date <span class="muted">(Optional Range)</span></label>
                         <input id="through_date" type="date" name="through_date" value="<?= htmlspecialchars($_POST['through_date'] ?? '') ?>">
-                        <small class="form-hint" id="range-preview-hint" style="display:block; margin-top:0.25rem; font-size:0.8rem; color:var(--text-muted, #64748b);">Leave empty to update only the selected date.</small>
+                        <small class="form-hint" id="range-preview-hint" role="status">Leave empty to update only the selected date.</small>
                     </div>
                     <div class="form-group">
                         <label for="status">Trading Status</label>
                         <select id="status" name="status" required>
-                            <option value="open">Open</option>
-                            <option value="closed">Closed</option>
-                            <option value="holiday">Holiday</option>
-                            <option value="exceptional_closure">Exceptional closure</option>
+                            <?php foreach (['open' => 'Open', 'closed' => 'Closed', 'holiday' => 'Holiday', 'exceptional_closure' => 'Exceptional closure'] as $value => $text): ?>
+                                <option value="<?= $value ?>" <?= ($_POST['status'] ?? 'open') === $value ? 'selected' : '' ?>><?= $text ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                 </div>
-                <button class="btn" type="submit" id="save-status-btn">Save Status</button>
+                </div>
+                <footer class="rm-modal-actions">
+                    <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+                    <button class="btn" type="submit" id="save-status-btn">Save Status</button>
+                </footer>
             </form>
         </section>
-    </main>
 </div>
 
 <script>
@@ -330,6 +368,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusSelect = document.getElementById('status');
     const hint = document.getElementById('range-preview-hint');
     const dayCells = document.querySelectorAll('.calendar-day-cell:not(.is-empty)');
+    const editor = document.getElementById('calendar-editor');
 
     function updateRangeHint() {
         const start = dateInput.value;
@@ -338,7 +377,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!end || end === start) {
             hint.textContent = "Updating single date: " + start + " to " + statusText + ".";
-            hint.style.color = "var(--text-muted, #64748b)";
+            hint.style.color = "var(--muted)";
             return;
         }
 
@@ -347,7 +386,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (d2 < d1) {
             hint.textContent = "Warning: Through date cannot be before start date.";
-            hint.style.color = "#dc2626";
+            hint.style.color = "var(--theme-danger-text, #991b1b)";
             return;
         }
 
@@ -356,17 +395,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (diffDays > 366) {
             hint.textContent = "Warning: Range exceeds maximum limit of 366 days (" + diffDays + " days requested).";
-            hint.style.color = "#dc2626";
+            hint.style.color = "var(--theme-danger-text, #991b1b)";
             return;
         }
 
         hint.textContent = "Applying '" + statusText + "' across " + diffDays + " inclusive days (from " + start + " through " + end + ").";
-        hint.style.color = "#15803d";
+        hint.style.color = "var(--theme-success-text, #166534)";
     }
 
     function selectDateCell(cell) {
-        dayCells.forEach(c => c.classList.remove('selected-day'));
+        dayCells.forEach(c => { c.classList.remove('selected-day'); c.setAttribute('aria-pressed', 'false'); });
         cell.classList.add('selected-day');
+        cell.setAttribute('aria-pressed', 'true');
 
         const cellDate = cell.getAttribute('data-date');
         const cellStatus = cell.getAttribute('data-status');
@@ -374,6 +414,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cellDate) {
             dateInput.value = cellDate;
         }
+        throughDateInput.value = '';
 
         if (cellStatus && cellStatus !== 'unrecorded') {
             statusSelect.value = cellStatus;
@@ -381,6 +422,7 @@ document.addEventListener('DOMContentLoaded', function() {
             statusSelect.value = 'open';
         }
         updateRangeHint();
+        RetailMindUI.openOverlay(editor);
     }
 
     dayCells.forEach(cell => {
@@ -388,22 +430,22 @@ document.addEventListener('DOMContentLoaded', function() {
             selectDateCell(cell);
         });
 
-        cell.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                selectDateCell(cell);
-            }
-        });
-
         if (cell.getAttribute('data-date') === dateInput.value) {
             cell.classList.add('selected-day');
+            cell.setAttribute('aria-pressed', 'true');
         }
     });
 
+    document.getElementById('record-date-btn').addEventListener('click', function() {
+        RetailMindUI.openOverlay(editor);
+    });
     dateInput.addEventListener('change', updateRangeHint);
     throughDateInput.addEventListener('change', updateRangeHint);
     statusSelect.addEventListener('change', updateRangeHint);
     updateRangeHint();
+    <?php if ($messageClass === 'tag-warning'): ?>
+    RetailMindUI.openOverlay(editor);
+    <?php endif; ?>
 });
 </script>
 </body>

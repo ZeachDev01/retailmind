@@ -59,8 +59,8 @@ span.tag-success, span.tag-warning, span.tag-danger { display: inline-flex; alig
 
 .table-pagination { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding: .75rem .9rem; border-top: 1px solid var(--border); background: var(--theme-surface-soft, #f8fafc); }
 .pagination-buttons { display: flex; gap: .35rem; }
-.pagination-buttons button { min-width: 36px; height: 36px; border: 1px solid var(--border); background: var(--theme-surface, #fff); border-radius: 8px; cursor: pointer; }
-.pagination-buttons button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.pagination-buttons button { min-width: 44px; height: 44px; border: 1px solid var(--border); background: var(--theme-surface, #fff); color: var(--text); border-radius: 8px; cursor: pointer; }
+.pagination-buttons button.active { background: var(--theme-info-surface, var(--primary)); color: var(--theme-info-text, #fff); border-color: var(--primary); }
 .pagination-buttons button:disabled { opacity: .45; cursor: not-allowed; }
 .empty-state { min-height: 230px; display: grid; place-items: center; padding: 2rem; text-align: center; color: var(--muted); }
 .empty-state i { display: block; font-size: 2.1rem; margin-bottom: .65rem; color: #94a3b8; }

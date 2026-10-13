@@ -240,10 +240,11 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
 </head>
-<body class="cashier-page">
+<body class="cashier-page cashier-pos-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
+        <h1 class="sr-only">Point of Sale</h1>
         <?php if ($posRegisterLocked): ?>
             <?php // Ticket #90: a locked Register shows a lock screen instead of the point of sale. The sidebar stays, so the Cashier can still log out — logging out leaves the shift open. ?>
             <section class="pos-lock" aria-labelledby="pos-lock-title">
@@ -298,7 +299,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
             </div>
         <?php endif; ?>
         <?php if (!$posShiftOpen): ?>
-            <div class="pos-alert error" role="alert"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a Cashier Shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
+            <div class="pos-alert error" role="note" data-rm-alert-processed="1"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a Cashier Shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
         <?php endif; ?>
 
         <div class="pos-grid">
@@ -359,13 +360,13 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     </div>
 
                     <div class="quick-category-filters" id="quick-category-filters" aria-label="Product categories">
-                        <button type="button" class="quick-category-filter active" data-quick-category="all">
+                        <button type="button" class="quick-category-filter active" aria-pressed="true" data-quick-category="all">
                             <span class="quick-category-icon"><i class="bi bi-grid" aria-hidden="true"></i></span>
                             <strong>All</strong>
                             <small><?= count($quickProducts) ?> items</small>
                         </button>
                         <?php foreach ($quickCategories as $categoryId => $category): ?>
-                            <button type="button" class="quick-category-filter" data-quick-category="<?= (int)$categoryId ?>">
+                            <button type="button" class="quick-category-filter" aria-pressed="false" data-quick-category="<?= (int)$categoryId ?>">
                                 <span class="quick-category-icon"><i class="bi <?= htmlspecialchars($quickCategoryIcon($category['name'])) ?>" aria-hidden="true"></i></span>
                                 <strong><?= htmlspecialchars($category['name']) ?></strong>
                                 <small><?= (int)$category['count'] ?> item<?= (int)$category['count'] === 1 ? '' : 's' ?></small>
@@ -373,7 +374,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         <?php endforeach; ?>
                     </div>
 
-                    <div id="quick-product-grid" class="quick-product-grid" aria-live="polite"></div>
+                    <div id="quick-product-grid" class="quick-product-grid" role="region" aria-label="Quick add products" tabindex="0" aria-live="polite"></div>
                 </section>
 
             </section>
@@ -1547,7 +1548,10 @@ quickProductSearch.addEventListener('input', () => {
 quickCategoryFilters.addEventListener('click', event => {
     const button = event.target.closest('[data-quick-category]');
     if (!button) return;
-    quickCategoryFilters.querySelectorAll('[data-quick-category]').forEach(item => item.classList.toggle('active', item === button));
+    quickCategoryFilters.querySelectorAll('[data-quick-category]').forEach(item => {
+        item.classList.toggle('active', item === button);
+        item.setAttribute('aria-pressed', String(item === button));
+    });
     renderQuickProducts();
 });
 quickProductGrid.addEventListener('click', event => {

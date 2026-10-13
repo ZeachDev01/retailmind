@@ -127,7 +127,7 @@ foreach ($periods as $period) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fiscal Periods</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/fiscal-periods.css')) ?>">
 </head>
 <body class="fiscal-period-page">
@@ -173,7 +173,7 @@ foreach ($periods as $period) {
             <section class="dashboard-section fiscal-period-create" aria-labelledby="create-period-title">
                 <div class="section-header">
                     <div>
-                        <h3 id="create-period-title">Create a fiscal period</h3>
+                        <h2 id="create-period-title">Create a fiscal period</h2>
                         <p class="section-description">Define the date range in which transactions can be recorded.</p>
                     </div>
                 </div>

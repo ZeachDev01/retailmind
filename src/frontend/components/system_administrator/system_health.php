@@ -62,7 +62,7 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>System Health</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . rawurlencode($styleCssVersion)) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css') . '?v=' . rawurlencode($styleCssVersion)) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/system-health.css') . '?v=' . rawurlencode($systemHealthCssVersion)) ?>">
 </head>
 <body class="system-health-page">

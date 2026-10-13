@@ -315,8 +315,8 @@ function get_forecasting_readiness(PDO $pdo): array
                 sp.supplier_lead_time_days AS prediction_supplier_lead_time_days,
                 sp.safety_stock_used, sp.current_stock_used, sp.incoming_stock_used,
                 sp.minimum_order_quantity_used, sp.units_per_package_used,
-                sp.reorder_suggested, sp.suggested_reorder_qty, df.readiness_level,
-                sp.forecast_explanation, sp.model_version, df.forecast_origin,
+                sp.reorder_suggested, sp.suggested_reorder_qty, sp.confidence_score,
+                sp.forecast_explanation, sp.model_version, sp.generated_at,
                 fe.mae AS product_mae, fe.rmse AS product_rmse,
                 fe.wape AS product_wape, fe.smape AS product_smape
             FROM products p
@@ -480,10 +480,10 @@ function get_notification_count(PDO $pdo, int $user_id): int
 /**
  * Mark notification as read
  */
-function mark_notification_read(PDO $pdo, int $notification_id): void
+function mark_notification_read(PDO $pdo, int $notification_id, int $user_id): void
 {
-    $stmt = $pdo->prepare("UPDATE notifications SET is_read = TRUE WHERE notification_id = ?");
-    $stmt->execute([$notification_id]);
+    $stmt = $pdo->prepare("UPDATE notifications SET is_read = TRUE WHERE notification_id = ? AND user_id = ?");
+    $stmt->execute([$notification_id, $user_id]);
 }
 
 /**

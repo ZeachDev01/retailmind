@@ -97,14 +97,14 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Counts</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
 </head>
 
 <body>
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <div class="main-content">
+        <main class="main-content">
             <div class="topbar">
                 <div>
                     <h1>Inventory Counts</h1>
@@ -166,7 +166,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                 </div>
                             </div>
                             <p id="product_search_status" class="muted" role="status" aria-live="polite"></p>
-                            <select name="product_id" id="product_id" required <?= $canMutateInventory ? '' : 'disabled' ?>>
+                            <select name="product_id" id="product_id" aria-label="Selected product" required <?= $canMutateInventory ? '' : 'disabled' ?>>
                                 <option value="">Select product</option>
                                 <?php foreach ($products as $product): ?>
                                     <option
@@ -316,7 +316,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
     </div>
 
     <script>

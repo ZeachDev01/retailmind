@@ -488,9 +488,9 @@
 .landing-login-form .password-input input { padding-right: 4.5rem; }
 .landing-login-form .password-toggle {
     position: absolute;
-    top: 50%;
+    top: 0;
     right: .45rem;
-    min-height: 34px;
+    min-height: 44px;
     padding: 0 .55rem;
     border: 0;
     border-radius: 7px;
@@ -498,7 +498,6 @@
     color: var(--theme-muted, #475569);
     font-size: .72rem;
     font-weight: 700;
-    transform: translateY(-50%);
     cursor: pointer;
 }
 .landing-login-modal__actions {

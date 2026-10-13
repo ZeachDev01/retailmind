@@ -70,7 +70,7 @@ $availableCount = count($registers->available());
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Registers</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -78,7 +78,6 @@ $availableCount = count($registers->available());
     <main class="main-content">
         <header class="page-heading">
             <div>
-                <p class="page-kicker">Administrator workspace</p>
                 <h1>Registers</h1>
                 <p class="page-subtitle">Create and maintain the Store's physical tills. Renaming a Register keeps the identity that earlier records already reference, and disabling one keeps its history intact.</p>
             </div>

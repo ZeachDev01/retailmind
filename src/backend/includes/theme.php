@@ -4,7 +4,11 @@ require_once __DIR__ . '/csrf.php';
 
 function theme_url(string $path): string
 {
-    return function_exists('app_url') ? app_url($path) : landing_app_url($path);
+    $url = function_exists('app_url') ? app_url($path) : landing_app_url($path);
+    if (in_array($path, ['assets/css/style.css', 'assets/css/theme.css', 'assets/js/theme.js'], true)) {
+        $url .= '?v=' . filemtime(dirname(__DIR__, 2) . '/frontend/' . $path);
+    }
+    return $url;
 }
 
 function retailmind_theme_head(): void

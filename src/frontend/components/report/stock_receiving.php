@@ -72,13 +72,13 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Receiving</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
 </head>
 <body>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <div class="main-content">
+    <main class="main-content">
         <div class="topbar">
             <h1>Stock Receiving</h1>
         </div>
@@ -301,7 +301,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                 </table>
             </div>
         <?php endif; ?>
-    </div>
+    </main>
 </div>
 
 <script>

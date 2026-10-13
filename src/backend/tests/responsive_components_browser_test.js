@@ -58,6 +58,7 @@ const html = `<!doctype html><meta name="viewport" content="width=device-width, 
                 await page.locator('.auto-table-pagination .pagination-buttons button').nth(2).click();
                 check(await page.locator('.table-wrap tbody tr:visible').first().locator('td').first().textContent() === 'SKU-10', `Pagination fails at ${label}`);
                 await page.locator('.auto-table-toolbar input').fill('SKU-179');
+                await page.waitForFunction(() => document.querySelectorAll('.table-wrap tbody tr:not([hidden])').length === 1);
                 check(await page.locator('.table-wrap tbody tr:visible').count() === 1, `Filtering fails at ${label}`);
                 await page.locator('.auto-table-clear').click();
                 for (const [id, panel, scroll, footer] of families) {

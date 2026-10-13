@@ -2,7 +2,7 @@
 .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; min-width: 0; margin-bottom: 1.5rem; gap: 1rem; }
 .topbar > * { min-width: 0; }
 .topbar h1 { font-size: 1.6rem; font-weight: 700; }
-.badge-role { max-width: 100%; background: var(--primary); color: #fff; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; overflow-wrap: anywhere; text-align: center; }
+.badge-role { max-width: 100%; background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; overflow-wrap: anywhere; text-align: center; }
 
 .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 1rem; margin-bottom: 2rem; }
 .stat-card { min-width: 0; background: var(--card-bg); padding: 1.2rem; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04); }
@@ -21,6 +21,9 @@
 .dashboard-section h2,
 .dashboard-section h3 { margin-bottom: 0.9rem; font-size: 1.05rem; line-height: 1.3; letter-spacing: -0.01em; }
 .dashboard-section > .section-description { margin-top: -0.45rem; margin-bottom: 1rem; max-width: 72ch; line-height: 1.5; }
+.forecast-import-page .dashboard-section > p { max-width: 72ch; margin-bottom: 1rem; }
+.forecast-import-page .dashboard-section > p a { display: inline-flex; align-items: center; min-height: 44px; }
+.forecast-import-page input[type="file"]::file-selector-button { min-height: 44px; margin-right: .75rem; padding: .5rem .75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); font: inherit; cursor: pointer; }
 .dashboard-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(100%, 320px), 0.85fr); gap: 1.5rem; margin-top: 1.5rem; align-items: start; }
 .dashboard-layout.equal { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .indicator-list { display: grid; gap: 0.75rem; }
@@ -257,7 +260,7 @@ body.super-administrator-workspace {
     --control-blue: #2563eb;
     --control-canvas: var(--theme-surface-soft, #f4f6f9);
     --control-line: #dce2ea;
-    --control-muted: #667085;
+    --control-muted: #586577;
     background: var(--control-canvas);
     color: var(--control-navy);
     accent-color: var(--control-blue);
@@ -445,6 +448,9 @@ body.super-administrator-workspace {
 @media (max-width: 1180px) {
     .triage-workspace { grid-template-columns: 1fr; }
     .resolution-workbench { position: static; }
+    .risk-horizon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .horizon-signal:nth-child(2) { border-right: 0; }
+    .horizon-signal:nth-child(-n + 2) { border-bottom: 1px solid var(--control-line); }
 }
 @media (max-width: 760px) {
     .risk-horizon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

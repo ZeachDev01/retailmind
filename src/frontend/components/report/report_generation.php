@@ -673,19 +673,18 @@ $totalRows = count($reportData['rows']);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Report Generation</title>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
 </head>
 <body>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <div class="main-content">
+    <main class="main-content">
         <div class="topbar">
             <div>
                 <h1>Report Generation</h1>
                 <p class="page-subtitle">Sales, inventory, stock movement, replenishment, forecast, and variance reporting.</p>
             </div>
-            <span class="badge-role">Manager: <?= htmlspecialchars($_SESSION['full_name']) ?></span>
         </div>
 
         <div class="dashboard-section report-filters">
@@ -808,7 +807,7 @@ $totalRows = count($reportData['rows']);
                 <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
             </div>
         </div>
-    </div>
+    </main>
 </div>
 <script>
 const reportSelect = document.getElementById('report');

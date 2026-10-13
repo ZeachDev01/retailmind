@@ -41,7 +41,7 @@ const fixture = action => {
         }
         browser = await chromium.launch({ headless: true });
         const login = async role => {
-            const context = await browser.newContext();
+            const context = await browser.newContext({ reducedMotion: 'reduce' });
             const page = await context.newPage();
             await page.goto(origin + '/?login=1');
             await page.locator('#landing-login-username').fill('theme_' + role);
@@ -55,6 +55,47 @@ const fixture = action => {
         assert.equal((await manager.page.goto(resetUrl)).status(), 403, 'Inventory Managers must not reset data');
         assert.equal((await page.goto(resetUrl)).status(), 200);
         assert.equal(await page.locator('#reset-password').count(), 1, await page.locator('body').innerText());
+        const resetDisclosure = page.locator('#store-reset');
+        const resetSummary = page.locator('#store-reset > summary');
+        assert.equal(await resetDisclosure.getAttribute('open'), null, 'Whole-Store reset starts collapsed');
+        await resetSummary.focus();
+        await page.keyboard.press('Enter');
+        assert.equal(await resetDisclosure.getAttribute('open'), '', 'Keyboard opens the reset review');
+        assert.equal(await page.locator('.reset-record-group').count(), 4);
+        for (const group of await page.locator('.reset-record-group').all()) {
+            await group.locator('summary').click();
+        }
+        assert.equal(await page.locator('.reset-record:visible').count(), 21, 'All original record totals remain available');
+        for (const width of [320, 390, 768, 1024, 1440]) {
+            await page.setViewportSize({ width, height: 960 });
+            assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), `Reset page must fit ${width}px`);
+            for (const selector of ['#delete-product', '#delete-password', '#delete-confirmation', '#reset-password', '#reset-confirmation']) {
+                const bounds = await page.locator(selector).boundingBox();
+                assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.height >= 44, `${selector} must fit and remain usable at ${width}px`);
+            }
+        }
+        for (const group of await page.locator('.reset-record-group').all()) await group.locator('summary').click();
+        await resetSummary.click();
+        if (process.env.RESET_UI_CAPTURE_DIR) {
+            fs.mkdirSync(process.env.RESET_UI_CAPTURE_DIR, { recursive: true });
+            for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
+                await page.setViewportSize({ width, height: 960 });
+                await page.evaluate(() => window.scrollTo(0, 0));
+                await page.screenshot({ path: path.join(process.env.RESET_UI_CAPTURE_DIR, name + '.png'), fullPage: true, animations: 'disabled' });
+                await resetSummary.click();
+                await page.evaluate(() => window.scrollTo(0, 0));
+                await page.screenshot({ path: path.join(process.env.RESET_UI_CAPTURE_DIR, name + '-expanded.png'), fullPage: true, animations: 'disabled' });
+                await resetSummary.click();
+            }
+            await page.setViewportSize({ width: 1440, height: 960 });
+            await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+            await resetSummary.click();
+            await page.evaluate(() => window.scrollTo(0, 0));
+            assert(await page.locator('.reset-delete').evaluate(el => getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0)'), 'Dark-mode product deletion keeps its outlined danger style');
+            await page.screenshot({ path: path.join(process.env.RESET_UI_CAPTURE_DIR, 'desktop-dark.png'), fullPage: true, animations: 'disabled' });
+            await resetSummary.click();
+            await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        }
         assert.equal(await page.locator('form:has(#reset-password) button[type="submit"]').isDisabled(), true, 'An open shift must block reset');
         assert.equal((await context.request.post(resetUrl, { form: { confirmation: 'RESET ALL DATA', current_password: data.password } })).status(), 403, 'CSRF must be required');
         fixture('reset_ready');
@@ -120,6 +161,7 @@ const fixture = action => {
         await page.goto(resetUrl);
         const staleNonce = await page.locator('form:has(#reset-password) input[name="reset_nonce"]').inputValue();
         const csrf = await page.locator('input[name="csrf_token"]').first().inputValue();
+        await page.locator('#store-reset > summary').click();
         await page.locator('#reset-password').fill(data.password);
         await page.locator('#reset-confirmation').fill('RESET ALL DATA');
         await Promise.all([page.waitForNavigation(), page.locator('form:has(#reset-password) button[type="submit"]').click()]);
@@ -138,7 +180,7 @@ const fixture = action => {
         assert.deepEqual(JSON.parse(fixture('reset_state')), after, 'A replay must not reset again');
         await page.goto(resetUrl);
         const downloadEvent = page.waitForEvent('download');
-        await page.getByRole('link', { name: 'Download backup before reset' }).click();
+        await page.getByRole('link', { name: 'Download pre-reset backup' }).click();
         const download = await downloadEvent;
         const backup = fs.readFileSync(await download.path(), 'utf8');
         assert(backup.includes('INSERT INTO `products`'), 'The downloadable backup must preserve products');
@@ -147,7 +189,9 @@ const fixture = action => {
         assert(backup.includes('-- SHA256:'), 'The backup must have its integrity checksum');
         await manager.page.goto(origin + '/components/report/forecast_import.php');
         assert(!manager.page.url().endsWith('/components/report/forecast_import.php'), 'Other sessions must be invalidated');
-        console.log('Operational reset browser checks passed (authorization, confirmation, rollback, backup, full reset, preserved definitions/audit, sessions, isolated model cleanup)');
+        assert.equal(await page.locator('.reset-delete').isDisabled(), true, 'Empty catalog disables product removal');
+        assert.equal(await page.locator('#delete-product-empty').isVisible(), true, 'Empty catalog explains why removal is unavailable');
+        console.log('Operational reset browser checks passed (keyboard disclosures, 21 totals, 320–1440px layouts, empty catalog, authorization, confirmation, rollback, backup, full reset, preserved definitions/audit, sessions, isolated model cleanup)');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

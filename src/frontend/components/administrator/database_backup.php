@@ -63,7 +63,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Database Backup</title>
-    <link rel="stylesheet" href="<?= $escape(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css')) ?>">
 </head>
 
@@ -81,7 +81,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
-                    <h3 id="backup-ready-title">Your backup is ready</h3>
+                    <h2 id="backup-ready-title">Your backup is ready</h2>
                     <p class="section-description">A completed download is not proof that the file was saved. Keep <?= $escape($download['filename']) ?> on separate storage, and give it to your Super Administrator if you ever need it restored.</p>
                     <p><a class="btn" href="<?= $escape($download['url']) ?>" data-backup-download>Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
                 </section>
@@ -89,12 +89,12 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 
             <div class="card-grid">
                 <section class="dashboard-section">
-                    <h3>Create backup</h3>
+                    <h2>Create backup</h2>
                     <p class="section-description">Saving changes pauses briefly while a consistent point-in-time copy is captured, then resumes automatically. You can keep browsing and your unsaved work is not lost.</p>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn" data-backup-create>Create backup</button></form>
                 </section>
                 <section class="dashboard-section">
-                    <h3>Keeping your copy safe</h3>
+                    <h2>Keeping your copy safe</h2>
                     <ul class="backup-guidance">
                         <li>The file is not encrypted. It exposes all records, including password hashes and restricted audit history. Keep it private.</li>
                         <li>Store it somewhere other than the application server, such as removable storage or your own cloud folder.</li>
@@ -107,7 +107,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             </div>
 
             <div class="dashboard-section">
-                <h3>Backup history</h3>
+                <h2>Backup history</h2>
                 <p class="section-description">Recent backup activity. A completed entry means the server created the backup; it does not confirm the file reached your device.</p>
                 <div class="table-wrap">
                     <table>

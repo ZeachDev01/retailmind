@@ -8,10 +8,10 @@
 .theme-options button[aria-pressed="true"] { background:var(--theme-info-surface,#eff6ff); color:var(--theme-info-text,#1d4ed8); box-shadow:inset 0 0 0 2px var(--primary,#2563eb); border-radius:9px; }
 .theme-options button:focus-visible { outline:2px solid var(--primary,#2563eb); outline-offset:-4px; }
 .header-display-tools { display:flex; align-items:center; gap:1rem; margin-left:auto; flex-shrink:0; }
-.header-display-tools .global-notification-button { min-height:42px; white-space:nowrap; }
+.header-display-tools .global-notification-button { min-height:44px; white-space:nowrap; }
 .global-notification-button svg { width:22px; height:22px; flex-shrink:0; }
 .global-topbar:has(.header-display-tools) { height:76px; }
-.global-topbar:has(.header-display-tools) .global-search-trigger { flex:0 1 490px; min-width:0; height:42px; }
+.global-topbar:has(.header-display-tools) .global-search-trigger { flex:0 1 490px; min-width:0; height:44px; }
 .command-footer:has(.theme-control) { flex-wrap:wrap; align-items:center; }
 .command-footer .theme-control { margin-left:auto; }
 @media(min-width:901px) { body:has(.global-topbar .header-display-tools) .main-content { padding-top:6rem; } }
@@ -41,7 +41,7 @@
 .theme-mobile-menu .theme-options button[aria-pressed="true"]::after { content:""; width:6px; height:12px; margin-left:auto; border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(45deg); }
 .theme-mobile-menu .theme-options small { display:block; font-size:.7rem; color:var(--muted,#6b7280); }
 .sidebar-theme-target .theme-control { display:block; width:100%; color:#dbeafe; }
-.sidebar-theme-target .theme-trigger { width:100%; min-width:0; min-height:42px; padding:.55rem .65rem; border-color:transparent; background:transparent; color:inherit; font-size:.82rem; font-weight:700; }
+.sidebar-theme-target .theme-trigger { width:100%; min-width:0; min-height:44px; padding:.55rem .65rem; border-color:transparent; background:transparent; color:inherit; font-size:.82rem; font-weight:700; }
 .sidebar-theme-target .theme-trigger:hover,
 .sidebar-theme-target .theme-trigger:focus-visible { background:rgba(37,99,235,.18); color:#fff; box-shadow:none; }
 .sidebar-theme-target .theme-trigger svg { width:18px; height:18px; color:#93c5fd; }
@@ -49,27 +49,34 @@
 .sidebar-theme-target .theme-trigger::after { transform:rotate(225deg); }
 .sidebar-theme-target .theme-mobile-menu[open] .theme-trigger::after { transform:rotate(45deg); }
 .sidebar-theme-target .theme-mobile-menu:not([open]) .theme-menu-panel { display:none; }
-.sidebar-theme-target .theme-mobile-menu .theme-options button { min-height:40px; color:#dbeafe; border-top-color:rgba(148,163,184,.12); background:transparent; font-size:.8rem; }
+.sidebar-theme-target .theme-mobile-menu .theme-options button { min-height:44px; color:#dbeafe; border-top-color:rgba(148,163,184,.12); background:transparent; font-size:.8rem; }
 .sidebar-theme-target .theme-mobile-menu .theme-options button:hover,
 .sidebar-theme-target .theme-mobile-menu .theme-options button:focus-visible { background:rgba(37,99,235,.18); color:#fff; }
 .sidebar-theme-target .theme-mobile-menu .theme-options button[aria-pressed="true"] { background:rgba(37,99,235,.28); color:#fff; }
 @media(max-width:900px) {
     .theme-options button { min-height:44px; }
-    .admin-mobile-topbar:has(.theme-mobile-menu) { height:auto; flex-wrap:wrap; gap:.5rem; padding:.5rem; }
-    .admin-mobile-topbar:has(.theme-mobile-menu) .admin-mobile-brand { gap:.5rem; }
-    .admin-mobile-topbar:has(.theme-mobile-menu) .admin-mobile-tools { display:none; }
-    .admin-mobile-topbar:has(.theme-mobile-menu) .admin-mobile-menu { width:44px; height:44px; border:1px solid var(--border,#cbd5e1); border-radius:8px; }
-    .admin-mobile-topbar:has(.theme-mobile-menu) .admin-mobile-logo { gap:.25rem; }
-    .admin-mobile-topbar:has(.theme-mobile-menu) .admin-mobile-logo-image { width:24px; }
-    .admin-mobile-logo-copy { width:60px; }
-    .admin-mobile-logo-copy strong { display:block; font-size:.65rem; }
-    .admin-mobile-logo-copy small { display:block; font-size:.45rem; white-space:nowrap; color:var(--muted,#6b7280); }
+    .admin-mobile-topbar:has(.header-display-tools) { height:auto; flex-wrap:wrap; gap:.5rem; padding:.5rem; }
+    .admin-mobile-topbar:has(.header-display-tools) .admin-mobile-brand { flex:1; gap:.5rem; }
+    body .admin-mobile-topbar:has(.header-display-tools) .admin-mobile-tools { display:none; }
+    .admin-mobile-topbar:has(.header-display-tools) .admin-mobile-menu { width:44px; height:44px; min-width:44px; border:1px solid var(--border,#cbd5e1); border-radius:8px; }
+    .admin-mobile-topbar:has(.header-display-tools) .admin-mobile-logo { gap:.375rem; min-height:44px; }
+    .admin-mobile-topbar:has(.header-display-tools) .admin-mobile-logo-image { width:28px; flex:0 0 28px; }
+    .admin-mobile-logo-copy { min-width:0; }
+    .admin-mobile-logo-copy strong { display:block; font-size:.875rem; }
+    .admin-mobile-logo-copy small { display:block; font-size:.625rem; white-space:nowrap; color:var(--muted,#6b7280); }
     .admin-mobile-topbar .header-display-tools { gap:.5rem; }
     .admin-mobile-topbar .global-notification-button { position:relative; justify-content:center; width:44px; min-height:44px; padding:0; }
     .admin-mobile-topbar .global-notification-button>span { display:none; }
     .admin-mobile-topbar .global-notification-button strong { position:absolute; top:-4px; right:-4px; font-size:.6rem; }
     .admin-mobile-topbar .mobile-header-search { display:inline-flex; flex:1 0 100%; width:100%; height:44px; }
-    body:has(.admin-mobile-topbar .header-display-tools) .main-content { padding-top:9rem; }
+    body:has(.admin-mobile-topbar .header-display-tools) .main-content { padding-top:8rem; }
+    body.admin-dashboard-page.super-administrator-workspace:has(.admin-mobile-topbar .header-display-tools) .main-content { padding-top:8rem; }
+}
+@media(max-width:360px) {
+    .admin-mobile-topbar:has(.header-display-tools) .admin-mobile-logo-image { display:none; }
+}
+@media(max-width:480px) {
+    .admin-mobile-topbar:has(.theme-mobile-menu) .admin-mobile-logo-image { display:none; }
 }
 @media(max-width:480px) {
     .admin-mobile-topbar .header-display-tools { gap:.5rem; }

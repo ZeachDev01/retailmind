@@ -81,35 +81,36 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Report Stock Issue</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier-pages.css')) ?>">
 </head>
 
-<body>
+<body class="cashier-stock-issues-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <div class="main-content">
+        <main class="main-content">
             <div class="topbar">
                 <h1>Report Stock Issue</h1><p class="page-subtitle">Your Stock Issue report history remains separate. Dates use Philippine time (Asia/Manila).</p>
             </div>
 
             <?php if ($message): ?>
-                <div class="message success"><?= htmlspecialchars($message) ?></div>
+                <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
 
             <?php if ($error): ?>
-                <div class="message error"><?= htmlspecialchars($error) ?></div>
+                <div class="message error" role="alert"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
             <?php if (!$openShift): ?>
-                <div class="message warning">
+                <div class="message warning" role="note" data-rm-alert-processed="1">
                     You do not have an active cashier shift. Open a shift before reporting stock issues.
                     <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Go to Cashier Shift</a>
                 </div>
             <?php endif; ?>
 
             <div class="report-form">
-                <h3>New Stock Issue Report</h3>
+                <h2>New Stock Issue Report</h2>
                 <?php if ($openShift): ?>
                     <p>Reporting from shift #<?= (int)$openShift['shift_id'] ?>. Reported units stay sellable until review.</p>
                 <?php endif; ?>
@@ -118,7 +119,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                     <input type="hidden" name="product_id" id="product_id" value="">
 
                     <div class="form-section">
-                        <h4>1. Identify the product</h4>
+                        <h3>1. Identify the product</h3>
                         <p>Scan the barcode or search by name, SKU, or barcode. Only active, sellable products can be reported.</p>
                         <div class="form-grid">
                             <div class="form-group">
@@ -146,7 +147,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                     </div>
 
                     <div class="form-section">
-                        <h4>2. Describe the issue</h4>
+                        <h3>2. Describe the issue</h3>
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="category" class="required">Issue type</label>
@@ -177,17 +178,18 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
 
             <?php if (!empty($history)): ?>
                 <div class="history-section u-mt-2">
-                    <h3>My Report History</h3>
+                    <h2>My Report History</h2>
 
-                    <div class="tabs">
-                        <button type="button" class="tab-link active" onclick="filterByStatus('all', event)">All</button>
-                        <button type="button" class="tab-link" onclick="filterByStatus('pending', event)">Pending</button>
-                        <button type="button" class="tab-link" onclick="filterByStatus('returned', event)">Returned</button>
-                        <button type="button" class="tab-link" onclick="filterByStatus('approved', event)">Approved</button>
-                        <button type="button" class="tab-link" onclick="filterByStatus('rejected', event)">Rejected</button>
-                        <button type="button" class="tab-link" onclick="filterByStatus('cancelled', event)">Cancelled</button>
+                    <div class="tabs" role="group" aria-label="Filter report status">
+                        <button type="button" class="tab-link active" aria-pressed="true" onclick="filterByStatus('all', event)">All</button>
+                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('pending', event)">Pending</button>
+                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('returned', event)">Returned</button>
+                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('approved', event)">Approved</button>
+                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('rejected', event)">Rejected</button>
+                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('cancelled', event)">Cancelled</button>
                     </div>
 
+                    <p id="report-filter-status" role="status" hidden>No reports match this status. Choose All to see your reports.</p>
                     <div id="adjustments-list">
                         <?php foreach ($history as $adj): ?>
                             <div class="adjustment-card <?= htmlspecialchars($adj['status']) ?>" data-status="<?= htmlspecialchars($adj['status']) ?>">
@@ -264,7 +266,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                     </div>
                 </div>
             <?php endif; ?>
-        </div>
+        </main>
     </div>
 
     <script>
@@ -380,13 +382,19 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         });
 
         function filterByStatus(status, event) {
-            document.querySelectorAll('.tab-link').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-link').forEach(btn => {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            });
             if (event && event.target) {
                 event.target.classList.add('active');
+                event.target.setAttribute('aria-pressed', 'true');
             }
-            document.querySelectorAll('[data-status]').forEach(card => {
-                card.style.display = (status === 'all' || card.getAttribute('data-status') === status) ? 'block' : 'none';
+            const cards = [...document.querySelectorAll('[data-status]')];
+            cards.forEach(card => {
+                card.hidden = status !== 'all' && card.getAttribute('data-status') !== status;
             });
+            document.getElementById('report-filter-status').hidden = cards.some(card => !card.hidden);
         }
     </script>
 </body>

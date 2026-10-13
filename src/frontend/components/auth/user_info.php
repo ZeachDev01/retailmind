@@ -172,7 +172,7 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Info</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/user-info.css')) ?>">
 </head>
 
@@ -196,7 +196,6 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
 
             <section class="account-hero user-info-hero">
                 <div class="account-hero-copy">
-                    <span class="user-info-eyebrow">Signed-in account</span>
                     <h2><?= htmlspecialchars($account['full_name']) ?></h2>
                     <p>@<?= htmlspecialchars($account['username']) ?></p>
                     <div class="account-badges">

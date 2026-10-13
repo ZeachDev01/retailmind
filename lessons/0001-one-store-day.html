@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RetailMind — Follow one Store day</title><link rel="stylesheet" href="../assets/teaching.css"></head>
+<body><main>
+<p class="label">Lesson 01 · 5 minutes · Client demo preparation</p>
+<h1>Follow one product through a Store day.</h1>
+<p>Your win: explain what changes when stock arrives, a customer buys, and the Cashier closes the drawer. RetailMind connects those events through one Store record.</p>
+<p class="flow">Approved purchasing → receive accepted stock → complete a sale → review remaining stock → plan replenishment → approve purchasing → receive the next delivery.</p>
+<p><a href="../reference/daily-operations.html">Printable demo reference</a> · <a href="../docs/PRODUCT.md">Primary source: product purpose</a></p>
+<h2>Who does each part?</h2>
+<div class="scroll"><table><thead><tr><th>Workspace</th><th>Daily responsibility</th></tr></thead><tbody>
+<tr><td>Cashier</td><td>Open a Register shift, sell, issue receipts, handle authorized refunds, report Stock Issues, reconcile cash.</td></tr>
+<tr><td>Inventory Manager</td><td>Receive stock, count inventory, decide Stock Issues, review restocking needs and supplier terms.</td></tr>
+<tr><td>Administrator</td><td>Oversee Store performance, staff, purchasing approvals, operational exceptions, and Fiscal Periods.</td></tr>
+<tr><td>Super Administrator</td><td>Manage technical security, recovery, system health, and forecasting models. Routine Store work requires switching to its corresponding active workspace.</td></tr>
+</tbody></table></div>
+<p class="muted">One person may hold several roles. The active workspace determines the work permitted. <a href="../docs/CONTEXT.md">Role definitions</a>.</p>
+<h2>Example: one sachet product</h2>
+<p>Illustrative only: start with 20 sellable units, price ₱10 each, and ₱200 opening drawer cash. No discounts, refunds, drawer movements, or legacy corrections in this example.</p>
+<ol>
+<li><strong>Receive 12 good units.</strong> Inventory Manager records delivery against approved purchasing. Stock becomes <strong>32</strong>. Receiving also records a batch and stock movement. An order alone does not add inventory. <a href="../src/backend/app/Services/ReceivingService.php">Receiving source</a>.</li>
+<li><strong>Open the Cashier Shift.</strong> Cashier selects an available Register and records ₱200 opening cash. This money is the starting float, not sales revenue. <a href="../src/backend/app/Services/CashierShiftService.php">Shift source</a>.</li>
+<li><strong>Scan two units.</strong> The cart shows ₱20. Recorded stock stays <strong>32</strong> until checkout succeeds. A barcode identifies the product; it does not prove payment. <a href="../src/frontend/components/cashier/pos.php">POS source</a>.</li>
+<li><strong>Complete cash checkout.</strong> Customer gives ₱50; Cashier returns ₱30. The recorded sale is ₱20, stock becomes <strong>30</strong>, and expected drawer cash becomes <strong>₱220</strong>. The sale is linked to the Cashier Shift and a Sale Receipt is available. <a href="../src/backend/app/Services/SalesWorkflowService.php">Checkout source</a>.</li>
+<li><strong>Review and close.</strong> Show remaining inventory and the sale record. Count physical drawer cash and compare it with expected cash. Resolve Held Sales before closing; logging out or locking the Register does not close its shift. <a href="../src/backend/app/Services/CashierShiftService.php">Reconciliation source</a>.</li>
+</ol>
+<h2>Exceptions have different effects</h2>
+<p><strong>Damaged shelf item:</strong> Cashier reports a Stock Issue. Submission leaves stock unchanged; Inventory Manager approval deducts it. <a href="../src/backend/app/Services/StockIssueService.php">Stock Issue source</a>.</p>
+<p><strong>Customer refund:</strong> keep the original sale and add a separate refund record. Restockable returns add inventory; damaged returns do not. Only a cash refund reduces expected drawer cash. Do not also deduct a damaged customer return as a shelf Stock Issue. <a href="../docs/CONTEXT.md">Refund definitions</a>.</p>
+<p><strong>Restocking:</strong> forecasts estimate demand; they do not order or move stock. Inventory Manager reviews, Administrator approves purchasing, and accepted delivery increases inventory. Manual operations can run without an active forecasting model. Demo data cannot prove Store forecast accuracy. <a href="../docs/DEMO_FORECASTING.md">Forecasting limits</a>.</p>
+<h2>Try recalling before revealing</h2>
+<p>Say your answer aloud, then open the answer. Each correct explanation is one step toward presenting without memorizing a script.</p>
+<details><summary>You scanned two units but have not completed checkout. What is recorded stock?</summary><p><strong>32 units.</strong> Scanning builds a cart. Successful checkout makes the stock deduction.</p></details>
+<details><summary>Customer gives ₱50 for a ₱20 purchase. How much does expected drawer cash increase?</summary><p><strong>₱20.</strong> ₱50 received minus ₱30 change. Expected cash becomes ₱220; opening cash is not revenue.</p></details>
+<details><summary>A Cashier reports one damaged shelf unit. When should stock decrease?</summary><p><strong>When Inventory Manager approves the Stock Issue.</strong> A pending report is awaiting a decision.</p></details>
+<h2>Say this to the client</h2>
+<blockquote><p>“Kapag may delivery, itinatala natin ang tinanggap na stock. Kapag natapos ang benta, nababawasan ang inventory at may record ng sale at resibo. Sa closing, ikinukumpara natin ang aktuwal na cash sa inaasahang cash. Makikita rin kung ano ang kailangang i-restock, pero may review at approval bago bumili.”</p></blockquote>
+<p>Ask the owner to explain their actual routine and try the same task. Capture where their workflow differs. Return tomorrow and explain the cart-versus-sale distinction from memory.</p>
+<p>Ask the agent follow-up questions about any unclear step. Next lesson can trace one real demo product through the screens after your setup is verified.</p>
+<p class="muted">Grounded in repository files inspected October 14, 2026. Live deployment and devices were not tested.</p>
+</main></body></html>

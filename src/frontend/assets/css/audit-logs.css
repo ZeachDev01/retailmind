@@ -342,10 +342,15 @@
   border-radius: 8px;
   font-variant-numeric: tabular-nums;
 }
+.audit-log-page .dt-container .dt-paging .dt-paging-button.current {
+  background: var(--theme-info-surface, var(--primary)) !important;
+  color: var(--theme-info-text, #fff) !important;
+  border-color: var(--primary);
+}
 
 .audit-log-page .dtcc-button {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 6px;
 }
 

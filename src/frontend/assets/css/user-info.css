@@ -66,16 +66,6 @@
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.13);
 }
 
-.user-info-eyebrow {
-    display: block;
-    margin-bottom: 0.12rem;
-    color: var(--primary-dark);
-    font-size: 0.7rem;
-    font-weight: 800;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-}
-
 .user-info-page .account-hero-copy h2 {
     font-size: clamp(1.35rem, 2vw, 1.65rem);
 }

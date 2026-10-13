@@ -5,7 +5,7 @@
     --bg: #f4f6f9;
     --card-bg: var(--theme-surface-soft, #ffffff);
     --text: #1f2937;
-    --muted: #6b7280;
+    --muted: #626b7a;
     --danger: #dc2626;
     --success: #16a34a;
     --border: #e5e7eb;
@@ -104,9 +104,17 @@ body.reduce-motion :is(.stat-card-link:hover .stat-card, .attention-action:hover
 }
 
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-    outline: none;
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
     box-shadow: var(--focus-ring);
 }
+
+input, textarea { caret-color: var(--primary); }
+body { accent-color: var(--primary); }
+::selection { background: var(--theme-info-surface, #dbeafe); color: var(--theme-ink, #1f2937); }
+a { text-underline-offset: .18em; }
+.table-wrap { scrollbar-color: var(--muted) var(--surface-soft); }
+td, .stat-card .value { font-variant-numeric: tabular-nums; }
 
 :where(button, .btn, [role="button"]):active {
     transform: none !important;

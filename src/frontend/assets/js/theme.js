@@ -80,6 +80,8 @@
             desktop.append(tools);
             if (mobile) {
                 const mobileTools = tools.cloneNode(true);
+                const account = mobile.querySelector('[data-account-menu-open]');
+                if (sidebarThemeTarget && account) mobileTools.append(account);
                 mobile.append(mobileTools);
                 const search = desktop.querySelector('.global-search-trigger').cloneNode(true);
                 search.classList.add('mobile-header-search');

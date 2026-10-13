@@ -217,7 +217,8 @@ try {
 <body class="receipts-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <div class="main-content">
+    <main class="main-content">
+            <header class="page-heading"><h1>Sales</h1></header>
         <div class="receipts-container">
             <nav class="sales-tabs" aria-label="Sales views">
                 <a class="sales-tab<?= $activeTab === 'transactions' ? ' is-active' : '' ?>" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">
@@ -365,7 +366,7 @@ try {
                 </div>
             <?php endif; ?>
         </div>
-    </div>
+    </main>
 </div>
 
 <?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>

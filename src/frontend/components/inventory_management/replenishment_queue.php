@@ -47,18 +47,18 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle) ?> - RetailMind</title>
-    <link rel="stylesheet" href="../../assets/css/style.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="../../assets/css/print.css" media="print">
     <style>
-        .queue-urgent { border-left: 4px solid var(--danger); }
-        .queue-watch { border-left: 4px solid var(--warning); }
-        .queue-unknown { border-left: 4px solid var(--muted, #6c757d); }
-        .queue-covered { border-left: 4px solid var(--success); }
+        .queue-urgent { border: 1px solid var(--border); }
+        .queue-watch { border: 1px solid var(--border); }
+        .queue-unknown { border: 1px solid var(--border); }
+        .queue-covered { border: 1px solid var(--border); }
         
-        .urgency-badge.urgent { background: var(--danger); color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;}
-        .urgency-badge.watch { background: var(--warning); color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;}
-        .urgency-badge.unknown { background: var(--muted, #6c757d); color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;}
-        .urgency-badge.covered { background: var(--success); color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;}
+        .urgency-badge.urgent { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #991b1b); padding: 2px 6px; border-radius: 4px; font-weight: bold;}
+        .urgency-badge.watch { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); padding: 2px 6px; border-radius: 4px; font-weight: bold;}
+        .urgency-badge.unknown { background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); padding: 2px 6px; border-radius: 4px; font-weight: bold;}
+        .urgency-badge.covered { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); padding: 2px 6px; border-radius: 4px; font-weight: bold;}
         
         .queue-grid {
             display: grid;
@@ -66,13 +66,13 @@ try {
             gap: 1rem;
             align-items: center;
         }
-        @media (max-width: 768px) {
+        @media (max-width: 1100px) {
             .queue-grid {
                 grid-template-columns: 1fr;
                 gap: 0.5rem;
             }
             .queue-grid-header { display: none; }
-            .queue-item { padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+            .queue-item { padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
         }
     </style>
 </head>
@@ -170,6 +170,5 @@ try {
             </section>
         </main>
     </div>
-    <script src="../../assets/js/ui.js"></script>
 </body>
 </html>

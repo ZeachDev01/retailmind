@@ -219,14 +219,14 @@ $selectedProductId = (int)($_GET['product_id'] ?? 0);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Replenishment Requests</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
 </head>
 
 <body>
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <div class="main-content">
+        <main class="main-content">
             <div class="topbar">
                 <h1>Replenishment Requests</h1>
             </div>
@@ -348,11 +348,11 @@ $selectedProductId = (int)($_GET['product_id'] ?? 0);
                                         <div class="u-flex gap-2 align-items-center">
                                             <div>
                                                 <label class="u-text-xs" style="display:block;font-size:0.75rem;">Request Qty</label>
-                                                <input type="number" name="request_qty" min="1" value="<?= max(1, (int)$rec['recommended_quantity']) ?>" required style="width: 100px; padding: 0.35rem;">
+                                                <input type="number" aria-label="Request quantity" name="request_qty" min="1" value="<?= max(1, (int)$rec['recommended_quantity']) ?>" required style="width: 100px; padding: 0.35rem;">
                                             </div>
                                             <div class="u-flex-grow">
                                                 <label class="u-text-xs" style="display:block;font-size:0.75rem;">Override Reason (if modifying quantity)</label>
-                                                <input type="text" name="override_reason" placeholder="Explain why quantity was changed" style="width: 100%; padding: 0.35rem;">
+                                                <input type="text" aria-label="Reason for changing quantity" name="override_reason" placeholder="Explain why quantity was changed" style="width: 100%; padding: 0.35rem;">
                                             </div>
                                             <div style="align-self: flex-end;">
                                                 <button type="submit" class="btn-submit" style="padding: 0.4rem 0.8rem;">Create Request from Forecast</button>
@@ -449,7 +449,7 @@ $selectedProductId = (int)($_GET['product_id'] ?? 0);
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
-        </div>
+        </main>
     </div>
 </body>
 

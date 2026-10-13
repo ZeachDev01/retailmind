@@ -135,6 +135,7 @@ $chartDataJson = json_encode([
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
+        <header class="page-heading"><div><h1>Inventory Overview</h1><p class="page-subtitle">Review stock levels, expiry risks, and recent movements. Select a summary to inspect products.</p></div></header>
         <section class="overview-metrics" aria-label="Inventory summary">
             <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
@@ -311,6 +312,7 @@ $chartDataJson = json_encode([
         </div>
 
         <section class="overview-product-view" id="overview-product-view" aria-label="Filtered products" hidden>
+            <div class="overview-product-view-header"><button type="button" class="btn btn-quiet" id="overview-back">Back to stock movements</button></div>
             <div class="overview-product-table-shell">
                 <table class="overview-product-table">
                     <thead><tr><th class="overview-select-cell"><input type="checkbox" id="overview-select-all" aria-label="Select all visible products"></th><th>Product <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>SKU / Barcode <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Current Stock <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Status</th></tr></thead>
@@ -719,6 +721,15 @@ document.addEventListener('DOMContentLoaded', function () {
         productView.hidden = false;
         productView.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+
+    document.getElementById('overview-back').addEventListener('click', function () {
+        productView.hidden = true;
+        defaultView.hidden = false;
+        document.querySelectorAll('[data-overview-view]').forEach(function (button) {
+            button.classList.remove('is-active');
+        });
+        document.querySelector('[data-overview-view="' + activeProductView + '"]').focus();
+    });
 
     function renderProductPage() {
         const matchingRows = productRows.filter(function (row) {

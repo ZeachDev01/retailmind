@@ -13,8 +13,8 @@ $posCategories = $pdo->query("SELECT category_id, category_name FROM categories 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Find Product</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
 </head>
 <body class="cashier-page">
 <div class="app-shell">
@@ -42,6 +42,7 @@ $posCategories = $pdo->query("SELECT category_id, category_name FROM categories 
                 <span class="cashier-chip" id="search-count">0 results</span>
             </div>
 
+            <label class="pos-field-label" for="product-search">Product name, SKU, or barcode</label>
             <div class="search-bar-wrap">
                 <i class="bi bi-search" aria-hidden="true"></i>
                 <input id="product-search" class="pos-input" type="search" placeholder="Start typing a product name or code" autocomplete="off" autofocus>
@@ -52,7 +53,7 @@ $posCategories = $pdo->query("SELECT category_id, category_name FROM categories 
                     <div class="pos-category-heading"><strong>Quick categories</strong><span>Tap a category to show available products.</span></div>
                     <div class="pos-category-buttons" id="pos-category-buttons">
                         <?php foreach ($posCategories as $category): ?>
-                            <button type="button" class="pos-category-button" data-category-id="<?= (int)$category['category_id'] ?>"><i class="bi bi-grid" aria-hidden="true"></i><?= htmlspecialchars($category['category_name']) ?></button>
+                            <button type="button" class="pos-category-button" aria-pressed="false" data-category-id="<?= (int)$category['category_id'] ?>"><i class="bi bi-grid" aria-hidden="true"></i><?= htmlspecialchars($category['category_name']) ?></button>
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -112,7 +113,7 @@ function renderProductButtons(products, emptyMessage = 'No matching active produ
             </span>
             <span class="product-result-actions">
                 <strong class="search-result-price">&#8369;${money(product.price)}</strong>
-                <a class="btn btn-small" href="${posUrl}?q=${encodeURIComponent(code)}"><i class="bi bi-cart-plus" aria-hidden="true"></i>POS</a>
+                <a class="btn btn-small" href="${posUrl}?q=${encodeURIComponent(code)}"><i class="bi bi-cart-plus" aria-hidden="true"></i>Open in POS</a>
             </span>
         </article>`;
     }).join('');
@@ -121,6 +122,10 @@ function renderProductButtons(products, emptyMessage = 'No matching active produ
 let currentFetchController = null;
 
 async function renderSearchResults() {
+    if (categoryButtons) categoryButtons.querySelectorAll('.pos-category-button').forEach(button => {
+        button.classList.remove('active');
+        button.setAttribute('aria-pressed', 'false');
+    });
     const term = productSearchInput.value.trim();
     if (term === '') {
         if (currentFetchController) currentFetchController.abort();
@@ -133,17 +138,22 @@ async function renderSearchResults() {
     if (currentFetchController) currentFetchController.abort();
     currentFetchController = new AbortController();
 
+    searchResults.innerHTML = '<div class="search-empty">Searching products…</div>';
+
     try {
         const response = await fetch(`${productsApiUrl}?q=${encodeURIComponent(term)}&limit=20`, { signal: currentFetchController.signal });
+        if (!response.ok) throw new Error('Product lookup unavailable');
         const data = await response.json();
+        if (!data.success) throw new Error('Product lookup unavailable');
         renderProductButtons(data.success ? (data.products || []) : []);
     } catch (error) {
         if (error.name === 'AbortError') return;
-        renderProductButtons([], 'Unable to load products.');
+        renderProductButtons([], 'Unable to load products. Type again to retry.');
     }
 }
 
 productSearchInput.addEventListener('input', () => {
+    if (currentFetchController) currentFetchController.abort();
     clearTimeout(searchTimer);
     searchTimer = setTimeout(renderSearchResults, 250);
 });
@@ -152,27 +162,27 @@ if (categoryButtons) {
     categoryButtons.addEventListener('click', async event => {
         const button = event.target.closest('[data-category-id]');
         if (!button) return;
-        categoryButtons.querySelectorAll('.pos-category-button').forEach(item => item.classList.toggle('active', item === button));
+        clearTimeout(searchTimer);
+        categoryButtons.querySelectorAll('.pos-category-button').forEach(item => {
+            item.classList.toggle('active', item === button);
+            item.setAttribute('aria-pressed', String(item === button));
+        });
         productSearchInput.value = '';
-        searchResults.innerHTML = '<div class="search-empty"><span class="skeleton u-skeleton-inline">Loading</span></div>';
+        searchResults.innerHTML = '<div class="search-empty">Loading category products…</div>';
         if (currentFetchController) currentFetchController.abort();
         currentFetchController = new AbortController();
         try {
             const response = await fetch(`${productsApiUrl}?category=${encodeURIComponent(button.dataset.categoryId)}&limit=20`, { signal: currentFetchController.signal });
+            if (!response.ok) throw new Error('Category lookup unavailable');
             const data = await response.json();
+            if (!data.success) throw new Error('Category lookup unavailable');
             renderProductButtons(data.success ? (data.products || []) : [], 'No available products in this category.');
         } catch (error) {
             if (error.name === 'AbortError') return;
-            renderProductButtons([], 'Unable to load category products.');
+            renderProductButtons([], 'Unable to load category products. Tap the category to retry.');
         }
     });
 }
-
-document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') {
-        RetailMindUI.navigate(posUrl);
-    }
-});
 
 const initialQuery = new URLSearchParams(window.location.search).get('q');
 if (initialQuery) {

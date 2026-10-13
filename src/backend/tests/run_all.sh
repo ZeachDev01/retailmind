@@ -116,7 +116,12 @@ node src/backend/tests/refund_reprint_browser_test.js
 node src/backend/tests/theme_login_browser_test.js
 node src/backend/tests/sidebar_theme_browser_test.js
 node src/backend/tests/fullscreen_preferences_browser_test.js
+node src/backend/tests/notification_list_browser_test.js
 node src/backend/tests/responsive_system_browser_test.js
+node src/backend/tests/superadmin_ui_browser_test.js
+node src/backend/tests/cashier_ui_browser_test.js
+node src/backend/tests/superadmin_ui_browser_test.js --inventory
+  node src/backend/tests/superadmin_ui_browser_test.js --admin
 php src/backend/tests/cashier_operational_history_contract.php
 php src/backend/tests/sales_trend_integration.php
 python src/backend/tests/test_feature_pipeline.py

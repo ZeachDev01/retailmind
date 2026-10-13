@@ -100,14 +100,14 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Issue Reviews</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
 </head>
 
 <body>
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <div class="main-content">
+        <main class="main-content">
             <div class="topbar">
                 <div>
                     <h1>Stock Issue Reviews</h1>
@@ -290,7 +290,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-        </div>
+        </main>
     </div>
 </body>
 

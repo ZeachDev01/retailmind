@@ -20,8 +20,8 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cashier Dashboard</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
 </head>
 
 <body class="cashier-page">
@@ -34,7 +34,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <p><?= htmlspecialchars((new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('l, M j, Y')) ?> performance and recent activity. Philippine time (Asia/Manila).</p>
                 </div>
                 <div class="cashier-meta">
-                    <span class="cashier-chip online">Register ready</span>
+                    <a class="cashier-chip" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">View Cashier Shift</a>
                     <span class="cashier-chip"><i class="bi bi-person" aria-hidden="true"></i><?= htmlspecialchars($_SESSION['full_name']) ?></span>
                 </div>
             </header>
@@ -95,7 +95,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 <section class="dashboard-panel" aria-labelledby="recent-transactions-title">
                     <div class="dashboard-panel-header">
                         <div>
-                            <h3 id="recent-transactions-title">Recent transactions</h3>
+                            <h2 id="recent-transactions-title">Recent transactions</h2>
                             <p class="section-description">Your latest completed checkouts.</p>
                         </div>
                         <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">View all</a>
@@ -140,7 +140,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 <aside class="dashboard-panel" aria-labelledby="stock-alerts-title">
                     <div class="dashboard-panel-header">
                         <div>
-                            <h3 id="stock-alerts-title">Stock alerts</h3>
+                            <h2 id="stock-alerts-title">Stock alerts</h2>
                             <p class="section-description">Warnings triggered by products you sold.</p>
                         </div>
                     </div>

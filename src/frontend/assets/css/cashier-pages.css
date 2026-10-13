@@ -1,5 +1,65 @@
 /* cashier-pages.css - extracted view-specific styles. */
 
+.cashier-history-page .actions-row > label { display: grid; gap: 0.5rem; }
+.cashier-history-page :is(input:not([type="hidden"]), button, a.btn),
+.cashier-stock-issues-page :is(button, input:not([type="hidden"]), select, textarea) {
+    min-height: 44px;
+    min-width: 44px;
+    max-width: 100%;
+}
+.cashier-history-page input[type="date"] {
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card-bg);
+    color: var(--text);
+    font: inherit;
+}
+.cashier-history-page .history-details { padding: 1.25rem; }
+.cashier-history-page .history-details dl {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr);
+    gap: 0.75rem 1rem;
+    margin-top: 1rem;
+}
+.cashier-history-page .history-details dt { color: var(--muted); }
+.cashier-history-page .history-details dd { margin: 0; overflow-wrap: anywhere; }
+.cashier-history-page :is(td a, nav[aria-label="History pages"] a) {
+    display: inline-flex;
+    align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    text-underline-offset: 3px;
+}
+.cashier-stock-issues-page .topbar { display: block; }
+.cashier-stock-issues-page .form-section h3 { font-size: 1rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+.cashier-stock-issues-page .tabs { flex-wrap: wrap; }
+.cashier-stock-issues-page .btn-submit { background: #2563eb; color: #fff; border-radius: 10px; }
+.cashier-stock-issues-page .btn-submit:hover { background: #1d4ed8; }
+.cashier-stock-issues-page .tab-link.active { color: var(--theme-info-text, #1d4ed8); border-bottom-color: var(--primary); }
+.cashier-stock-issues-page :is(.report-form, .adjustment-card) {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+.cashier-stock-issues-page :is(.adjustment-product, .adjustment-reason, .adjustment-details) { overflow-wrap: anywhere; }
+.cashier-stock-issues-page .form-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.cashier-stock-issues-page :is(input, select, textarea) { color: var(--text); background: var(--card-bg); border-color: var(--border); }
+:is(.cashier-history-page, .cashier-stock-issues-page) :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+}
+@media (max-width: 480px) {
+    .cashier-history-page .actions-row > label { flex: 1 1 100%; }
+    .cashier-history-page input[type="date"] { width: 100%; }
+    .cashier-history-page .history-details dl { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
+    .cashier-history-page .history-details dd { margin-bottom: 0.75rem; }
+    .cashier-stock-issues-page .report-form { padding: 1rem; }
+}
+@media (max-width: 900px), (pointer: coarse) {
+    :is(.cashier-history-page, .cashier-stock-issues-page, .cashier-shifts-page, .cashier-refunds-page) :is(input, select, textarea) { font-size: 1rem; }
+}
+
 /* Source: frontend\cashier\shifts.php */
 .shift-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.metric{font-size:1.35rem;font-weight:700}.positive{color: var(--theme-success-text, #15803d)}.negative{color: var(--theme-danger-text, #b91c1c)}
 

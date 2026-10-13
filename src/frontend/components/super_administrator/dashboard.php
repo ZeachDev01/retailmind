@@ -101,7 +101,7 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform Control Center</title>
-    <link rel="stylesheet" href="<?= $escape(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/dashboard.css')) ?>?v=<?= $escape((string) filemtime(__DIR__ . '/../../assets/css/dashboard.css')) ?>">
 </head>
 <body class="admin-dashboard-page super-administrator-workspace">

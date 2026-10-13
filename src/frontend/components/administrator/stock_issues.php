@@ -94,20 +94,20 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Issue Oversight</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
 </head>
 
 <body>
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <div class="main-content">
+        <main class="main-content">
             <div class="topbar">
                 <div>
                     <h1>Stock Issue Oversight</h1>
                     <p class="page-subtitle">Read-only review of every Stock Issue report: Damaged, Missing/Lost, Expired, and Other. Administrators cannot approve, reject, edit, or delete reports from this page.</p>
                 </div>
-                <span class="badge-role"><?= count($reports) ?> Reports</span>
+                <span class="muted"><?= count($reports) ?> Reports</span>
             </div>
 
             <?php if ($error): ?>
@@ -115,7 +115,7 @@ try {
             <?php endif; ?>
 
             <div class="history-section">
-                <h3>Filters</h3>
+                <h2>Filters</h2>
                 <form method="GET" class="review-form">
                     <div class="form-grid">
                         <div class="form-group">
@@ -176,7 +176,7 @@ try {
                         </div>
                     </div>
                     <div class="review-actions">
-                        <button type="submit" class="btn-submit">Apply filters</button>
+                        <button type="submit" class="btn">Apply filters</button>
                         <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php')) ?>">Clear</a>
                     </div>
                 </form>
@@ -187,7 +187,7 @@ try {
                 <div class="history-section u-mt-2">
                     <div class="section-header">
                         <div>
-                            <h3>Report #<?= (int)$report['adjustment_id'] ?> — Stock Issue detail</h3>
+                            <h2>Report #<?= (int)$report['adjustment_id'] ?> — Stock Issue detail</h2>
                             <p class="section-description">Complete lifecycle history. Approved and rejected reports are immutable; corrections happen through a separate Inventory Manager inventory count.</p>
                         </div>
                         <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php' . ($filterQuery !== '' ? '?' . rtrim($filterQuery, '&') : ''))) ?>">Back to list</a>
@@ -317,7 +317,7 @@ try {
             <?php endif; ?>
 
             <div class="history-section u-mt-2">
-                <h3>Stock Issue reports (<?= count($reports) ?>)</h3>
+                <h2>Stock Issue reports (<?= count($reports) ?>)</h2>
                 <?php if (empty($reports)): ?>
                     <p>No stock issue reports match the current filters.</p>
                 <?php else: ?>
@@ -364,7 +364,7 @@ try {
                     </div>
                 <?php endif; ?>
             </div>
-        </div>
+        </main>
     </div>
 </body>
 

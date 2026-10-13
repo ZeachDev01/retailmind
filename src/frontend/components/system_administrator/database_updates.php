@@ -40,29 +40,23 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Database Updates | RetailMind</title>
-    <style>
-        body { font: 16px/1.5 system-ui, sans-serif; background: var(--bg, #f7f8fb); color: var(--text, #202638); margin: 0; }
-        main { max-width: 42rem; margin: 7vh auto; padding: 2rem; background: var(--card-bg, white); border: 1px solid var(--border, #dce2ea); border-radius: .75rem; }
-        h1 { margin-top: 0; }
-        .success { color: var(--theme-success-text, #166534); }
-        .error { color: var(--theme-danger-text, #b91c1c); }
-        button { background: #263b74; color: white; border: 0; border-radius: .4rem; padding: .75rem 1rem; font: inherit; cursor: pointer; }
-        button:disabled { opacity: .5; cursor: default; }
-    </style>
+    <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
 </head>
 <body>
-<main>
-    <h1>Database Updates</h1>
-    <?php if ($message !== ''): ?><p class="success" role="status"><?= $escape($message) ?></p><?php endif; ?>
-    <?php if ($error !== ''): ?><p class="error" role="alert"><?= $escape($error) ?></p><?php endif; ?>
-    <p><?= count($pending) ?> update(s) pending.</p>
+<main class="u-auth-main">
+  <section class="dashboard-section u-auth-card">
+    <header class="topbar"><div><h1>Database Updates</h1><p class="page-subtitle">Review and apply pending database updates.</p></div></header>
+    <?php if ($message !== ''): ?><p class="alert tag-success" role="status"><?= $escape($message) ?></p><?php endif; ?>
+    <?php if ($error !== ''): ?><p class="alert tag-danger" role="alert"><?= $escape($error) ?></p><?php endif; ?>
+    <p class="section-description"><?= count($pending) ?> update(s) pending.</p>
     <?php if ($pending !== []): ?>
         <form method="post">
             <?= csrf_field() ?>
-            <button type="submit">Apply database updates</button>
+            <button type="submit" class="btn">Apply database updates</button>
         </form>
     <?php endif; ?>
-    <p><a href="<?= $escape(app_url('components/user_manager/user_manager.php')) ?>">Go to Users &amp; Access</a></p>
+    <a class="btn btn-quiet" href="<?= $escape(app_url('components/super_administrator/dashboard.php')) ?>">Back to Control Center</a>
+  </section>
 </main>
 </body>
 </html>

@@ -67,7 +67,8 @@ function sidebar_is_active(string $path): bool
 function sidebar_active_attr(string $path, string $extraClass = ''): string
 {
     $classes = trim(($extraClass ? $extraClass . ' ' : '') . (sidebar_is_active($path) ? 'active' : ''));
-    return $classes !== '' ? ' class="' . htmlspecialchars($classes, ENT_QUOTES, 'UTF-8') . '"' : '';
+    return ($classes !== '' ? ' class="' . htmlspecialchars($classes, ENT_QUOTES, 'UTF-8') . '"' : '')
+        . (sidebar_is_active($path) ? ' aria-current="page"' : '');
 }
 
 function sidebar_dropdown_class(array $paths): string
@@ -404,7 +405,7 @@ $GLOBALS['rm_navigation_shell'] = [
     <section class="command-dialog" role="dialog" aria-modal="true" aria-label="Search RetailMind">
         <div class="command-search-row">
             <i class="bi bi-search" aria-hidden="true"></i>
-            <input type="search" id="commandSearch" placeholder="Search products, reports, settings, and pages..." autocomplete="off">
+            <input type="search" id="commandSearch" aria-label="Search RetailMind" placeholder="Search products, reports, settings, and pages..." autocomplete="off">
             <button type="button" class="command-close" data-command-close aria-label="Close search"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="command-results" id="commandResults"></div>
@@ -462,6 +463,9 @@ cartWorkspace.bindNavigation();
             var isOpen = sidebar && sidebar.classList.contains('open');
             var isCollapsed = document.body.classList.contains('sidebar-collapsed');
             var expanded = isMobileDrawer() ? isOpen : !isCollapsed;
+            if (sidebar) sidebar.inert = isMobileDrawer() && !isOpen;
+            var main = document.querySelector('.main-content');
+            if (main) main.inert = isMobileDrawer() && isOpen;
 
             if (brandToggle) {
                 brandToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
@@ -474,6 +478,7 @@ cartWorkspace.bindNavigation();
         }
 
         function setSidebarOpen(isOpen) {
+            var restoreFocus = !isOpen && sidebar.contains(document.activeElement);
             sidebar.classList.toggle('open', isOpen);
             overlay.classList.toggle('open', isOpen);
             if (menuToggle) {
@@ -488,6 +493,8 @@ cartWorkspace.bindNavigation();
             if (window.RetailMindUI?.syncScrollLock) RetailMindUI.syncScrollLock();
             else document.body.classList.toggle('no-scroll', isOpen);
             updateBrandState();
+            if (isOpen) sidebar.querySelector('.sidebar-nav a, .sidebar-nav button')?.focus();
+            else if (restoreFocus) menuToggle?.focus();
         }
 
         function setSidebarCollapsed(isCollapsed) {
@@ -515,6 +522,9 @@ cartWorkspace.bindNavigation();
             });
         }
         if (sidebar && overlay) {
+            sidebar.addEventListener('click', function(event) {
+                if (isMobileDrawer() && event.target.closest('a[href]')) setSidebarOpen(false);
+            });
             overlay.addEventListener('click', function() {
                 setSidebarOpen(false);
             });
@@ -523,6 +533,12 @@ cartWorkspace.bindNavigation();
                     setSidebarOpen(false);
                 }
                 updateBrandState();
+            });
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && !event.defaultPrevented && sidebar.classList.contains('open')) {
+                    setSidebarOpen(false);
+                    menuToggle?.focus();
+                }
             });
         }
         if (brandToggle) {

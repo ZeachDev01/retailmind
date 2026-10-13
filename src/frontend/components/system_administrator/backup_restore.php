@@ -20,7 +20,7 @@ if (!RecoveryStore::isAvailable()) {
     $workspaceUrl = htmlspecialchars(app_url('components/auth/workspace.php'), ENT_QUOTES, 'UTF-8');
     $dashboardUrl = htmlspecialchars(app_url('components/super_administrator/dashboard.php'), ENT_QUOTES, 'UTF-8');
     $logoutUrl = htmlspecialchars(app_url('components/auth/logout.php'), ENT_QUOTES, 'UTF-8');
-    $stylesheetUrl = htmlspecialchars(app_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
+    $stylesheetUrl = htmlspecialchars(theme_url('assets/css/style.css'), ENT_QUOTES, 'UTF-8');
     $restoreStylesheetUrl = htmlspecialchars(app_url('assets/css/backup_restore.css'), ENT_QUOTES, 'UTF-8');
     echo '<!doctype html><html lang="en"><head>';
     require_once __DIR__ . '/../../../backend/includes/theme.php';
@@ -56,7 +56,7 @@ $maxUploadBytes = $restorer->supportedUploadBytes();
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $renderStandalonePage = static function (string $title, string $heading, string $bodyHtml) use ($escape): void {
     header('Content-Type: text/html; charset=utf-8');
-    $stylesheetUrl = $escape(app_url('assets/css/style.css'));
+    $stylesheetUrl = $escape(theme_url('assets/css/style.css'));
     $restoreStylesheetUrl = $escape(app_url('assets/css/backup_restore.css'));
     echo '<!doctype html><html lang="en"><head>';
     require_once __DIR__ . '/../../../backend/includes/theme.php';
@@ -165,7 +165,7 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Backup &amp; Restore</title>
-    <link rel="stylesheet" href="<?= $escape(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup_restore.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup_restore.css')) ?>">
 </head>
 

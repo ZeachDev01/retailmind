@@ -141,8 +141,8 @@ unset($row);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reorder Planning</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
 </head>
 
 <body>
@@ -208,7 +208,7 @@ unset($row);
                                 <tbody>
                                     <?php foreach ($items as $item): ?>
                                         <tr>
-                                            <td><input type="checkbox" name="product_ids[]" value="<?= (int)$item['product_id'] ?>" <?= $item['has_open_request'] || $item['planned_qty'] <= 0 ? 'disabled' : 'checked' ?>></td>
+                                            <td><input type="checkbox" aria-label="<?= htmlspecialchars('Select ' . $item['product_name']) ?>" name="product_ids[]" value="<?= (int)$item['product_id'] ?>" <?= $item['has_open_request'] || $item['planned_qty'] <= 0 ? 'disabled' : 'checked' ?>></td>
                                             <td><strong><?= htmlspecialchars($item['product_name']) ?></strong><br><small><?= htmlspecialchars($item['sku']) ?> · Lead <?= (int)$item['lead_time_days'] ?> day(s)</small></td>
                                             <td><?= (int)$item['quantity_on_hand'] ?><br><small>Reorder <?= (int)$item['reorder_level'] ?> · Safety <?= (int)$item['safety_stock'] ?></small></td>
                                             <td><?= $item['suggested_reorder_qty'] !== null ? (int)$item['suggested_reorder_qty'] : 'Low-stock rule' ?><br><small><?= $item['generated_at'] ? 'Forecast ' . htmlspecialchars(format_display_date($item['generated_at'])) : 'No recent forecast' ?></small></td>

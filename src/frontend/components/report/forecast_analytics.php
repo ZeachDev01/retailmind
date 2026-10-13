@@ -93,7 +93,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Forecast Analytics</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
     <style>
         .model-context-card {
@@ -137,7 +137,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             padding: 0.35rem 0;
             font-size: 0.95rem;
         }
-        .metric-label { color: var(--text-muted, #64748b); }
+        .metric-label { color: var(--muted); }
         .metric-val { font-weight: 600; }
         .comparison-tag {
             font-size: 0.8rem;
@@ -230,7 +230,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                                 <span class="metric-val"><?= format_wape_metric($data['baseline_wape'] !== null ? (float)$data['baseline_wape'] : null, null) ?></span>
                             </div>
                         <?php else: ?>
-                            <p style="color:var(--text-muted, #64748b);">No evaluation data recorded for <?= $h ?> days.</p>
+                            <p style="color:var(--muted);">No evaluation data recorded for <?= $h ?> days.</p>
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
@@ -239,11 +239,11 @@ function format_wape_metric(?float $val, ?string $reason): string {
 
         <div class="card">
             <h2>Actual vs Predicted Comparison (Completed Target Dates)</h2>
-            <p class="section-description" style="color:var(--text-muted, #64748b); margin-bottom:1rem;">
+            <p class="section-description" style="color:var(--muted); margin-bottom:1rem;">
                 Comparing forecast predictions against observed valid sales for completed dates.
             </p>
             <?php if (empty($actualVsForecast)): ?>
-                <p style="color:var(--text-muted, #64748b);">No historical target dates have completed since the active forecast run.</p>
+                <p style="color:var(--muted);">No historical target dates have completed since the active forecast run.</p>
             <?php else: ?>
                 <table class="data-table">
                     <thead>
@@ -268,7 +268,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                                 <td>Day <?= htmlspecialchars((string)$row['horizon_day']) ?></td>
                                 <td><strong><?= htmlspecialchars((string)$row['predicted_units']) ?></strong></td>
                                 <td><?= $row['actual_units'] !== null ? htmlspecialchars((string)$row['actual_units']) : 'Unknown' ?></td>
-                                <td style="color: <?= $diff === null ? 'var(--text-muted)' : ($diff >= 0 ? '#15803d' : '#b91c1c') ?>;">
+                                <td style="color: <?= $diff === null ? 'var(--muted)' : ($diff >= 0 ? 'var(--theme-success-text, #15803d)' : 'var(--theme-danger-text, #b91c1c)') ?>;">
                                     <?= $diff === null ? '—' : ($diff > 0 ? "+{$diff}" : $diff) ?>
                                 </td>
                             </tr>

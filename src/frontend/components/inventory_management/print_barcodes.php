@@ -74,11 +74,11 @@ $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Printable Barcode Labels</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
 </head>
 <body>
-<div class="barcode-page">
+<main class="barcode-page" style="--label-width: <?= (int)$labelSize['width'] ?>mm; --label-height: <?= (int)$labelSize['height'] ?>mm;">
     <section class="toolbar no-print">
         <h1>Printable Barcode Labels</h1>
         <p>Create labels for one product or print a bulk selection from Products &amp; Stock.</p>
@@ -88,7 +88,7 @@ $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
             <div><label for="size">Label size</label><select name="size" id="size"><?php foreach ($allowedSizes as $key => $size): ?><option value="<?= htmlspecialchars($key) ?>" <?= $key === $sizeKey ? 'selected' : '' ?>><?= htmlspecialchars($size['label']) ?></option><?php endforeach; ?></select></div>
             <button class="btn" type="submit"><i class="bi bi-upc-scan"></i>Create Labels</button>
         </form>
-        <div class="toolbar-actions"><a class="btn u-button-slate" href="products.php"><i class="bi bi-arrow-left"></i>Back to Products</a><?php if ($printableProducts): ?><button class="btn u-button-orange" type="button" onclick="window.print()"><i class="bi bi-printer"></i>Print <?= count($printableProducts) * $quantity ?> Label(s)</button><?php endif; ?></div>
+        <div class="toolbar-actions"><a class="btn btn-secondary" href="products.php"><i class="bi bi-arrow-left"></i>Back to Products</a><?php if ($printableProducts): ?><button class="btn" type="button" onclick="window.print()"><i class="bi bi-printer"></i>Print <?= count($printableProducts) * $quantity ?> Label(s)</button><?php endif; ?></div>
         <?php if (count($selectedProducts) > 1): ?><div class="selection-summary"><strong><?= count($selectedProducts) ?> products selected.</strong> Each printable product will receive <?= $quantity ?> label(s).</div><?php endif; ?>
         <?php if (!empty($_GET['error'])): ?><div class="message error"><?= htmlspecialchars($_GET['error']) ?></div><?php endif; ?>
         <?php if ($missingBarcodeProducts): ?><div class="message"><strong><?= count($missingBarcodeProducts) ?> product(s) were skipped because they have no barcode:</strong> <?= htmlspecialchars(implode(', ', array_column($missingBarcodeProducts, 'product_name'))) ?>. Generate their internal barcodes from Products &amp; Stock.</div><?php endif; ?>
@@ -97,7 +97,7 @@ $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
     </section>
 
     <?php if ($printableProducts): ?>
-        <main class="sheet" aria-label="Barcode label sheet">
+        <section class="sheet" aria-label="Barcode label sheet">
             <?php foreach ($printableProducts as $item): ?>
                 <?php for ($index = 0; $index < $quantity; $index++): ?>
                     <article class="barcode-label">
@@ -108,11 +108,11 @@ $autoPrint = !empty($_GET['autoprint']) && $printableProducts;
                     </article>
                 <?php endfor; ?>
             <?php endforeach; ?>
-        </main>
+        </section>
     <?php else: ?>
-        <main class="sheet empty-sheet"><div><i class="bi bi-upc-scan u-icon-large"></i><br>Select a product with a barcode to create printable labels.</div></main>
+        <section class="sheet empty-sheet"><div><i class="bi bi-upc-scan u-icon-large"></i><br>Select a product with a barcode to create printable labels.</div></section>
     <?php endif; ?>
-</div>
+</main>
 <?php if ($autoPrint): ?><script>window.addEventListener('load',()=>window.print());</script><?php endif; ?>
 </body>
 </html>

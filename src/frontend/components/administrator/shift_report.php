@@ -50,13 +50,13 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cashier Shift Report</title>
-    <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= shift_report_e(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/reports.css')) ?>">
 </head>
 <body><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
-    <header class="page-heading"><p class="page-kicker">Administrator workspace</p><h1>Cashier Shift Report</h1>
+    <header class="page-heading"><h1>Cashier Shift Report</h1>
         <p class="page-subtitle">Store-wide drawer accountability. Dates select shifts by opening date; each shift shows its full activity. Unassigned sales use sale date.</p></header>
     <?php if ($error !== ''): ?><div class="alert tag-warning"><?= shift_report_e($error) ?></div><?php endif; ?>
     <section class="dashboard-section report-filters"><h2>Filters</h2>

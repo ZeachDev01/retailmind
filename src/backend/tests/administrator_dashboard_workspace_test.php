@@ -35,7 +35,9 @@ try {
         'CREATE TABLE inventory (product_id INTEGER, quantity_on_hand INTEGER)',
         'CREATE TABLE inventory_adjustments (adjustment_id INTEGER PRIMARY KEY, product_id INTEGER, adjustment_qty INTEGER, adjustment_type TEXT, reported_at TEXT, status TEXT)',
         'CREATE TABLE fiscal_periods (period_id INTEGER PRIMARY KEY, period_name TEXT, start_date TEXT, end_date TEXT, status TEXT)',
-        'CREATE TABLE stock_predictions (prediction_id INTEGER PRIMARY KEY, product_id INTEGER, forecast_value INTEGER, predicted_demand_next_30_days INTEGER, actual_demand INTEGER, reorder_suggested INTEGER, confidence_score REAL, generated_at TEXT)',
+        'CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT, completed_at TEXT)',
+        'CREATE TABLE demand_forecasts (product_id INTEGER, job_id INTEGER, readiness_level TEXT)',
+        'CREATE TABLE ml_model_evaluations (evaluation_id INTEGER PRIMARY KEY, horizon_days INTEGER, mae REAL, rmse REAL, wape REAL)',
     ] as $sql) {
         $pdo->exec($sql);
     }
@@ -54,7 +56,9 @@ try {
     $pdo->exec("INSERT INTO replenishment_requests VALUES (1, 10, 12, '2026-09-16 08:00:00', 'pending')");
     $pdo->exec("INSERT INTO inventory_adjustments VALUES (1, 10, -3, 'missing', '2026-09-16 09:00:00', 'pending')");
     $pdo->exec("INSERT INTO fiscal_periods VALUES (1, 'September 2026', '2026-09-01', '2026-09-20', 'open')");
-    $pdo->exec("INSERT INTO stock_predictions VALUES (1, 10, 100, 100, 80, 1, 0.45, '2026-09-17 07:00:00')");
+    $pdo->exec("INSERT INTO ml_jobs VALUES (1, 'forecast_generation', 'succeeded', '2026-09-17 07:00:00')");
+    $pdo->exec("INSERT INTO demand_forecasts VALUES (10, 1, 'Low')");
+    $pdo->exec('INSERT INTO ml_model_evaluations VALUES (1, 7, 2, 3, 20)');
 
     $clock = new StoreDashboardContractClock(new DateTimeImmutable('2026-09-18 10:00:00'));
     $workspace = new StoreOperationsDashboardWorkspace($pdo, $clock, new RoleCapabilityPolicy());
@@ -90,7 +94,7 @@ try {
     $fallbackRange = $workspace->load('admin', 365);
     $assert($fallbackRange['range_days'] === 30, 'Unsupported ranges must fall back to 30 days');
 
-    $pdo->exec("DELETE FROM sale_reversals; DELETE FROM cashier_shifts; DELETE FROM replenishment_requests; DELETE FROM inventory_adjustments; DELETE FROM sales; DELETE FROM stock_predictions");
+    $pdo->exec("DELETE FROM sale_reversals; DELETE FROM cashier_shifts; DELETE FROM replenishment_requests; DELETE FROM inventory_adjustments; DELETE FROM sales; DELETE FROM demand_forecasts; DELETE FROM ml_jobs; DELETE FROM ml_model_evaluations");
     $empty = $workspace->load('admin', 7);
     $assert($empty['state'] === 'empty', 'No actionable conditions must produce an explicit empty state');
     $assert($empty['exceptions'] === [], 'Empty state must have no exception rows');

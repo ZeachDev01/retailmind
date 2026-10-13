@@ -74,11 +74,11 @@ try {
         'Checkout failure must render in the red Unable to continue container'
     );
     $assert(
-        (bool)preg_match('/<div class="message error">.*\$error/', $stock),
+        (bool)preg_match('/<div class="message error" role="alert">.*\$error/', $stock),
         'Stock report save failure must render in the red Unable to continue container'
     );
     $assert(
-        (bool)preg_match('/<div class="message error">.*\$error/', $shifts),
+        (bool)preg_match('/<div class="message error" role="alert">.*\$error/', $shifts),
         'Shift failure must render in the red Unable to continue container'
     );
     $assert(

@@ -42,9 +42,10 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Operational History</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier-pages.css')) ?>">
 </head>
-<body>
+<body class="cashier-history-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
@@ -67,14 +68,14 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
             <?php if ($record === null): ?>
                 <p>This record is unavailable.</p>
             <?php else: ?>
-                <div class="card" style="padding:1rem"><h2><?= htmlspecialchars($tabs[$type]) ?> #<?= (int)$record[$idColumn] ?></h2>
+                <div class="card history-details"><h2><?= htmlspecialchars($tabs[$type]) ?> #<?= (int)$record[$idColumn] ?></h2>
                     <dl><?php foreach ($columns as $column => $label): ?>
                         <dt><?= htmlspecialchars($label) ?></dt><dd><?= $display($column, $record[$column] ?? null) ?></dd>
                     <?php endforeach; ?></dl>
                 </div>
             <?php endif; ?>
         <?php else: ?>
-            <div style="overflow-x:auto"><table><thead><tr>
+            <div class="table-wrap" role="region" aria-label="Operational history records" tabindex="0"><table><thead><tr>
                 <?php foreach ($columns as $label): ?><th><?= htmlspecialchars($label) ?></th><?php endforeach; ?>
             </tr></thead><tbody>
                 <?php foreach ($rows as $row): ?><tr>

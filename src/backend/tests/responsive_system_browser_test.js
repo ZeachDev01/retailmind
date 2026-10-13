@@ -133,7 +133,8 @@ const fixture = action => {
                 await page.locator('#sidebarOverlay').evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
                 const bounds = await page.locator('#sidebarOverlay').boundingBox();
                 assert.equal(Math.round(bounds.width), await page.evaluate(() => innerWidth), 'Sidebar backdrop covers viewport');
-                await page.locator('#sidebarOverlay').click({position: {x: bounds.width - 4, y: 80}});
+                const contentWidth = await page.evaluate(() => document.documentElement.clientWidth);
+                await page.locator('#sidebarOverlay').click({position: {x: Math.min(bounds.width, contentWidth) - 24, y: 150}});
                 assert.equal(await page.locator('body').evaluate(el => el.classList.contains('no-scroll')), false);
             }
             const account = page.locator('[data-account-menu-open]').filter({visible: true}).first();

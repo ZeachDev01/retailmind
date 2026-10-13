@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Change Password</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 </head>
 
 <body>
@@ -79,7 +79,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <section class="dashboard-section u-auth-card">
             <div class="section-header">
                 <div>
-                    <p class="u-text-muted u-m-0">Account security</p>
                     <h1 class="u-auth-title"><?= $isMandatory ? 'Create a new password' : 'Change password' ?></h1>
                     <?php if ($isMandatory): ?>
                     <p class="section-description">The temporary password must be replaced before you can access RetailMind.</p>
@@ -88,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
                 </div>
             </div>
-            <?php if ($message): ?><div class="alert tag-warning"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+            <?php if ($message): ?><div class="alert tag-warning" role="alert"><?= htmlspecialchars($message) ?></div><?php endif; ?>
             <form method="POST" class="form-grid" autocomplete="off">
                 <?= csrf_field() ?>
                 <div class="form-group u-grid-full"><label for="current_password">Current password</label>

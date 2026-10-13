@@ -84,7 +84,7 @@ if ($metaStmt && $metaStmt->fetchColumn()) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Demand Forecast</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
     <style>
         .forecast-header-card {
@@ -159,7 +159,7 @@ if ($metaStmt && $metaStmt->fetchColumn()) {
                 <?php endif; ?>
             </div>
             <form method="get" action="" class="search-form" style="display:flex; gap:0.5rem;">
-                <input type="text" name="search" placeholder="Search by Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
+                <input type="search" name="search" aria-label="Search products by name, SKU, or ID" placeholder="Search by Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
                 <button type="submit" class="btn btn-secondary">Search</button>
                 <?php if ($searchQuery !== ''): ?>
                     <a href="predictions.php" class="btn btn-quiet">Clear</a>

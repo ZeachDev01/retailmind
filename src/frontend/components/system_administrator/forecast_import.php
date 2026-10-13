@@ -64,8 +64,8 @@ $preview = $_SESSION['forecast_import_preview'] ?? null;
 if ($preview && ($preview['store_id'] !== $storeId || time() - $preview['created_at'] > 1800)) $preview = null;
 ?>
 <!DOCTYPE html>
-<html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forecast Data Import</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
-<body><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
+<html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forecast Data Import</title><link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>"></head>
+<body class="forecast-import-page"><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
     <div class="topbar"><div><h1>Forecast Data Import</h1><p class="page-subtitle">Upload this Store's past daily sales totals for model retraining.</p></div><a class="btn" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">ML Operation</a></div>
     <?php if ($message): ?><p class="tag-success" role="status"><?= htmlspecialchars($message) ?></p><?php endif; ?>
     <?php if ($error): ?><p class="tag-warning" role="alert"><?= htmlspecialchars($error) ?></p><?php endif; ?>
@@ -77,8 +77,8 @@ if ($preview && ($preview['store_id'] !== $storeId || time() - $preview['created
         <p><a href="?template=1">Download CSV template</a> · <a href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">Check data readiness</a></p>
         <form method="post" enctype="multipart/form-data">
             <?= csrf_field() ?>
-            <label for="forecast-csv">Sales history CSV (up to 2 MB / 10000 rows)</label>
-            <input type="file" id="forecast-csv" name="csv_file" accept=".csv,text/csv" required>
+            <div class="form-group"><label for="forecast-csv">Sales history CSV (up to 2 MB / 10000 rows)</label>
+            <input type="file" id="forecast-csv" name="csv_file" accept=".csv,text/csv" required></div>
             <button type="submit" class="btn">Preview CSV</button>
         </form>
     </section>

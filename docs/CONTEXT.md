@@ -4,6 +4,14 @@ RetailMind supports one Store's inventory, purchasing, sales, and demand-forecas
 
 ## Language
 
+**Notification**:
+A user-addressed update about Store activity or a condition requiring attention. Reading it does not resolve the underlying condition.
+_Avoid_: Resolved issue, global announcement
+
+**Notification Category**:
+The subject classification of a Notification, such as low stock or replenishment. Selecting a category narrows the updates being viewed; it does not enable or disable their delivery.
+_Avoid_: Notification preference, severity
+
 **Application Log Acknowledgment**:
 The Super Administrator's recorded investigation of a specific version of the application log, including its result and verification note. Later log entries can require another review; acknowledgment does not resolve other service failures.
 _Avoid_: Log deletion, service repair, automatic fix verification

@@ -2,7 +2,7 @@
 <div class="sale-receipt receipt-print-area" data-paper-width-mm="<?= $paperWidthMm ?>" aria-label="Refund Receipt">
     <div class="receipt-header">
         <div class="receipt-brand">
-            <h1><?= $escape($store['name']) ?></h1>
+            <h3><?= $escape($store['name']) ?></h3>
             <div class="receipt-store-line">Refund Receipt</div>
             <div><?= $escape($store['address']) ?></div>
             <div><?= $escape($store['contact']) ?></div>

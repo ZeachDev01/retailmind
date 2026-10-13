@@ -2,7 +2,9 @@
 
 namespace App\Store;
 
+use App\Database\Schema;
 use PDO;
+use PDOStatement;
 use RuntimeException;
 
 final class StoreCalendar
@@ -44,10 +46,8 @@ final class StoreCalendar
             return;
         }
 
-        $stmt = $pdo->prepare(
-            'INSERT INTO store_calendar (calendar_date, status, recorded_by, recorded_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
-        );
-        $stmt->execute([$date, $status, $userId]);
+        $stmt = $this->prepareCalendarInsert($pdo);
+        $stmt->execute([$date, str_replace('_', '-', $status), $userId]);
     }
 
     /**
@@ -74,9 +74,7 @@ final class StoreCalendar
         // Fetch current statuses across the range
         $currentStatuses = $this->getCalendarDateRangeAtCutoff($pdo, $startDate, $endDate, date('Y-m-d H:i:s'));
 
-        $stmt = $pdo->prepare(
-            'INSERT INTO store_calendar (calendar_date, status, recorded_by, recorded_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
-        );
+        $stmt = $this->prepareCalendarInsert($pdo);
 
         $changed = [];
         $cur = clone $start;
@@ -86,7 +84,7 @@ final class StoreCalendar
             $prevStatus = $currentStatuses[$curDate] ?? null;
 
             if ($prevStatus !== $status) {
-                $stmt->execute([$curDate, $status, $userId]);
+                $stmt->execute([$curDate, str_replace('_', '-', $status), $userId]);
                 $changed[] = [
                     'date' => $curDate,
                     'previous_status' => $prevStatus,
@@ -98,6 +96,18 @@ final class StoreCalendar
         }
 
         return $changed;
+    }
+
+    private function prepareCalendarInsert(PDO $pdo): PDOStatement
+    {
+        $columns = 'calendar_date, status, recorded_by, recorded_at';
+        $values = '?, ?, ?, CURRENT_TIMESTAMP';
+        // Retain the internal Store identity on legacy schemas without requiring it on fresh installs.
+        if (Schema::columnExists($pdo, 'store_calendar', 'branch_id')) {
+            $columns .= ', branch_id';
+            $values .= ', ' . (new StoreScope($pdo))->id();
+        }
+        return $pdo->prepare("INSERT INTO store_calendar ({$columns}) VALUES ({$values})");
     }
 
     /**

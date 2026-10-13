@@ -431,7 +431,7 @@ foreach ($products as $product) {
         }
 
         .product-drawer-tab {
-            min-height: 42px;
+            min-height: 44px;
             padding: .5rem .65rem;
             color: var(--muted);
             background: transparent;
@@ -501,11 +501,11 @@ foreach ($products as $product) {
         }
 
         .catalog-icon-button {
-            width: 42px;
-            height: 42px;
+            width: 44px;
+            height: 44px;
             display: inline-grid;
             place-items: center;
-            flex: 0 0 42px;
+            flex: 0 0 44px;
             padding: 0;
             color: var(--muted);
             background: var(--card-bg, #fff);
@@ -537,7 +537,7 @@ foreach ($products as $product) {
 
         .catalog-search input {
             width: 100%;
-            min-height: 42px;
+            min-height: 44px;
             padding: .65rem .8rem .65rem 2.25rem;
             border: 1px solid var(--border);
             border-radius: 6px;
@@ -558,7 +558,7 @@ foreach ($products as $product) {
 
         .catalog-field select {
             width: 100%;
-            min-height: 42px;
+            min-height: 44px;
             padding: .55rem 2rem .55rem .7rem;
             border: 1px solid var(--border);
             border-radius: 6px;
@@ -572,7 +572,7 @@ foreach ($products as $product) {
         }
 
         .catalog-filter-button {
-            min-height: 42px;
+            min-height: 44px;
             white-space: nowrap;
         }
 
@@ -582,7 +582,7 @@ foreach ($products as $product) {
         }
 
         .catalog-toolbar .product-add-trigger {
-            min-height: 42px;
+            min-height: 44px;
             background: #2563eb;
         }
 
@@ -597,7 +597,7 @@ foreach ($products as $product) {
 
         .catalog-utility-controls select {
             min-width: 130px;
-            min-height: 42px;
+            min-height: 44px;
             padding: .55rem .7rem;
             border: 1px solid var(--border);
             border-radius: 6px;
@@ -899,6 +899,7 @@ foreach ($products as $product) {
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content" id="product-table">
+            <header class="page-heading"><div><h1>Products &amp; Stock</h1><p class="page-subtitle">Find products, review stock, and maintain the Store catalog.</p></div></header>
                 <div class="catalog-toolbar" aria-label="Product catalog controls">
                     <div class="catalog-toolbar-primary">
                         <div class="catalog-view-controls" aria-label="Table view controls">
@@ -1458,7 +1459,7 @@ foreach ($products as $product) {
                 container.appendChild(input);
             });
         }
-        document.getElementById('bulk-category').addEventListener('click', () => {
+        document.getElementById('bulk-category')?.addEventListener('click', () => {
             appendSelectedInputs(document.getElementById('bulk-category-ids'));
             openModal('bulk-category-modal');
         });
@@ -1474,9 +1475,9 @@ foreach ($products as $product) {
             document.getElementById('bulk-status-value').value = status;
             document.getElementById('bulk-status-form').submit();
         }
-        document.getElementById('bulk-activate').addEventListener('click', () => submitBulkStatus('active'));
-        document.getElementById('bulk-deactivate').addEventListener('click', () => submitBulkStatus('inactive'));
-        document.getElementById('bulk-print').addEventListener('click', () => {
+        document.getElementById('bulk-activate')?.addEventListener('click', () => submitBulkStatus('active'));
+        document.getElementById('bulk-deactivate')?.addEventListener('click', () => submitBulkStatus('inactive'));
+        document.getElementById('bulk-print')?.addEventListener('click', () => {
             const ids = selectedValues();
             if (!ids.length) return;
             window.open(`print_barcodes.php?product_ids=${encodeURIComponent(ids.join(','))}&quantity=1`, '_blank');

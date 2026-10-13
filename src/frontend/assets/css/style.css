@@ -8,7 +8,7 @@
     --bg: #f4f6f9;
     --card-bg: var(--theme-surface-soft, #ffffff);
     --text: #1f2937;
-    --muted: #6b7280;
+    --muted: #626b7a;
     --danger: #dc2626;
     --success: #16a34a;
     --border: #e5e7eb;
@@ -107,9 +107,17 @@ body.reduce-motion :is(.stat-card-link:hover .stat-card, .attention-action:hover
 }
 
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-    outline: none;
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
     box-shadow: var(--focus-ring);
 }
+
+input, textarea { caret-color: var(--primary); }
+body { accent-color: var(--primary); }
+::selection { background: var(--theme-info-surface, #dbeafe); color: var(--theme-ink, #1f2937); }
+a { text-underline-offset: .18em; }
+.table-wrap { scrollbar-color: var(--muted) var(--surface-soft); }
+td, .stat-card .value { font-variant-numeric: tabular-nums; }
 
 :where(button, .btn, [role="button"]):active {
     transform: none !important;
@@ -484,15 +492,17 @@ textarea {
 
 .password-toggle {
     position: absolute;
-    top: 50%;
+    top: 0;
+    bottom: 0;
     right: 0.45rem;
     min-width: 3.55rem;
-    height: 2.15rem;
-    transform: translateY(-50%);
+    min-height: 44px;
+    height: 44px;
+    margin-block: auto;
     border: none;
     border-radius: 8px;
     background: var(--auth-control-soft);
-    color: var(--auth-accent);
+    color: var(--theme-info-text, var(--auth-accent));
     cursor: pointer;
     font-size: 0.82rem;
     font-weight: 800;
@@ -501,7 +511,7 @@ textarea {
 
 .password-toggle:hover,
 .password-toggle:focus-visible {
-    background: var(--auth-control-soft-hover);
+    background: var(--theme-surface-soft, var(--auth-control-soft-hover));
 }
 
 .btn {
@@ -852,6 +862,7 @@ body.no-scroll { overflow: hidden; }
     flex-direction: column;
 }
 .sidebar-nav { flex: 1; }
+.sidebar-nav :is(a, .dropbtn) { min-height: 44px; }
 .sidebar-brand { position: relative; padding-right: 2.3rem; }
 .sidebar-brand-copy { min-width: 0; }
 .sidebar-brand-title { font-size: 1.08rem; letter-spacing: -.01em; color: #f9fafb; }
@@ -1188,6 +1199,7 @@ button.sidebar-workspace-option:focus-visible {
 .sidebar-theme-target {
     min-width: 0;
 }
+.sidebar-account-actions :is(a, button, summary) { min-height: 44px; }
 
 html.rm-fullscreen-fallback {
     min-height: 100%;
@@ -1226,7 +1238,7 @@ body.sidebar-collapsed .global-topbar { left: var(--sidebar-collapsed-width); }
 .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; min-width: 0; margin-bottom: 1.5rem; gap: 1rem; }
 .topbar > * { min-width: 0; }
 .topbar h1 { font-size: 1.6rem; font-weight: 700; }
-.badge-role { max-width: 100%; background: var(--primary); color: #fff; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; overflow-wrap: anywhere; text-align: center; }
+.badge-role { max-width: 100%; background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; overflow-wrap: anywhere; text-align: center; }
 
 .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 1rem; margin-bottom: 2rem; }
 .stat-card { min-width: 0; background: var(--card-bg); padding: 1.2rem; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04); }
@@ -1245,6 +1257,9 @@ body.sidebar-collapsed .global-topbar { left: var(--sidebar-collapsed-width); }
 .dashboard-section h2,
 .dashboard-section h3 { margin-bottom: 0.9rem; font-size: 1.05rem; line-height: 1.3; letter-spacing: -0.01em; }
 .dashboard-section > .section-description { margin-top: -0.45rem; margin-bottom: 1rem; max-width: 72ch; line-height: 1.5; }
+.forecast-import-page .dashboard-section > p { max-width: 72ch; margin-bottom: 1rem; }
+.forecast-import-page .dashboard-section > p a { display: inline-flex; align-items: center; min-height: 44px; }
+.forecast-import-page input[type="file"]::file-selector-button { min-height: 44px; margin-right: .75rem; padding: .5rem .75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); font: inherit; cursor: pointer; }
 .dashboard-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(100%, 320px), 0.85fr); gap: 1.5rem; margin-top: 1.5rem; align-items: start; }
 .dashboard-layout.equal { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .indicator-list { display: grid; gap: 0.75rem; }
@@ -1481,7 +1496,7 @@ body.super-administrator-workspace {
     --control-blue: #2563eb;
     --control-canvas: var(--theme-surface-soft, #f4f6f9);
     --control-line: #dce2ea;
-    --control-muted: #667085;
+    --control-muted: #586577;
     background: var(--control-canvas);
     color: var(--control-navy);
     accent-color: var(--control-blue);
@@ -1669,6 +1684,9 @@ body.super-administrator-workspace {
 @media (max-width: 1180px) {
     .triage-workspace { grid-template-columns: 1fr; }
     .resolution-workbench { position: static; }
+    .risk-horizon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .horizon-signal:nth-child(2) { border-right: 0; }
+    .horizon-signal:nth-child(-n + 2) { border-bottom: 1px solid var(--control-line); }
 }
 @media (max-width: 760px) {
     .risk-horizon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1765,8 +1783,8 @@ span.tag-success, span.tag-warning, span.tag-danger { display: inline-flex; alig
 
 .table-pagination { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding: .75rem .9rem; border-top: 1px solid var(--border); background: var(--theme-surface-soft, #f8fafc); }
 .pagination-buttons { display: flex; gap: .35rem; }
-.pagination-buttons button { min-width: 36px; height: 36px; border: 1px solid var(--border); background: var(--theme-surface, #fff); border-radius: 8px; cursor: pointer; }
-.pagination-buttons button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.pagination-buttons button { min-width: 44px; height: 44px; border: 1px solid var(--border); background: var(--theme-surface, #fff); color: var(--text); border-radius: 8px; cursor: pointer; }
+.pagination-buttons button.active { background: var(--theme-info-surface, var(--primary)); color: var(--theme-info-text, #fff); border-color: var(--primary); }
 .pagination-buttons button:disabled { opacity: .45; cursor: not-allowed; }
 .empty-state { min-height: 230px; display: grid; place-items: center; padding: 2rem; text-align: center; color: var(--muted); }
 .empty-state i { display: block; font-size: 2.1rem; margin-bottom: .65rem; color: #94a3b8; }
@@ -2020,7 +2038,7 @@ span.tag-success, span.tag-warning, span.tag-danger { display: inline-flex; alig
 }
 .password-field .password-toggle {
   position: absolute;
-  top: 50%;
+  top: 0;
   right: 0.15rem;
   width: 44px;
   min-width: 44px;
@@ -2678,7 +2696,6 @@ body.system-health-open {
   height: 2.75rem;
   flex: 0 0 2.75rem;
   border-radius: 12px;
-  background: var(--primary, #2563eb);
   color: #ffffff;
   font-size: 0.88rem;
   font-weight: 800;
@@ -3208,6 +3225,8 @@ body.system-health-open {
   visibility: visible;
   pointer-events: auto;
 }
+/* Search must be focusable during the opening tap. */
+.command-overlay.open { transition-property: opacity; }
 .command-overlay {
   display: grid;
   place-items: start center;
@@ -3535,6 +3554,7 @@ body.system-health-open {
    Responsive layout (tablet & mobile)
    ============================ */
 @media (max-width: 900px) {
+    input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 1rem; }
     .sidebar-account-menu {
         top: 64px;
         right: .75rem;
@@ -3638,12 +3658,13 @@ body.system-health-open {
         width: 260px;
         max-width: 80vw;
         transform: translateX(-100%);
+        visibility: hidden;
         transition: transform 0.25s ease;
         z-index: 1000;
         overflow-y: auto;
         padding-top: 4rem;
     }
-    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
+    .sidebar.open { visibility: visible; transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
 
     .main-content {
         margin-left: 0;
@@ -4779,3 +4800,5 @@ body.admin-dashboard-page .mobile-role-label {
         gap: .15rem;
     }
 }
+
+body.products-page .catalog-icon-button { min-width:44px; min-height:44px; height:44px; }

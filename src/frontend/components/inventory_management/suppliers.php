@@ -35,8 +35,8 @@ $preferredTermCount = count(array_filter($mappings, static fn(array $mapping): b
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Suppliers</title>
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -44,7 +44,7 @@ $preferredTermCount = count(array_filter($mappings, static fn(array $mapping): b
 <main class="main-content suppliers-page">
     <header class="page-heading">
         <div>
-            <span class="eyebrow">Inventory partners</span>
+
             <h1>Supplier management</h1>
             <p class="page-subtitle">Keep supplier contacts, purchasing terms, and product relationships ready for your next order.</p>
         </div>
@@ -65,7 +65,7 @@ $preferredTermCount = count(array_filter($mappings, static fn(array $mapping): b
 
     <div class="supplier-workflows">
         <section class="dashboard-section supplier-form-card">
-            <div class="section-header"><div><span class="section-kicker">01 / Directory</span><h3>Add supplier</h3><p class="section-description">Create a purchasing partner profile and set its default terms.</p></div></div>
+            <div class="section-header"><div><h3>Add supplier</h3><p class="section-description">Create a purchasing partner profile and set its default terms.</p></div></div>
             <form method="post" class="supplier-form">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                 <input type="hidden" name="action" value="save">
@@ -83,7 +83,7 @@ $preferredTermCount = count(array_filter($mappings, static fn(array $mapping): b
         </section>
 
         <section class="dashboard-section supplier-form-card">
-            <div class="section-header"><div><span class="section-kicker">02 / Purchasing terms</span><h3>Map product terms</h3><p class="section-description">Record supplier-specific costs, quantities, and lead times.</p></div></div>
+            <div class="section-header"><div><h3>Map product terms</h3><p class="section-description">Record supplier-specific costs, quantities, and lead times.</p></div></div>
             <form method="post" class="supplier-form">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                 <input type="hidden" name="action" value="map_product">
@@ -103,12 +103,12 @@ $preferredTermCount = count(array_filter($mappings, static fn(array $mapping): b
     </div>
 
     <section class="dashboard-section supplier-list-card">
-        <div class="section-header"><div><span class="section-kicker">Supplier directory</span><h3>Suppliers</h3><p class="section-description">A quick view of partner availability and linked products.</p></div><span class="table-count"><?= count($suppliers) ?> record<?= count($suppliers) === 1 ? '' : 's' ?></span></div>
+        <div class="section-header"><div><h3>Suppliers</h3><p class="section-description">A quick view of partner availability and linked products.</p></div><span class="table-count"><?= count($suppliers) ?> record<?= count($suppliers) === 1 ? '' : 's' ?></span></div>
         <?php if (!$suppliers): ?><div class="empty-state"><div><i class="bi bi-building"></i><strong>No suppliers yet</strong><span>Add your first supplier above to start mapping product terms.</span></div></div><?php else: ?><div class="table-wrap"><table class="supplier-table"><thead><tr><th>Name</th><th>Contact</th><th>Lead time</th><th>Products</th><th>Status</th></tr></thead><tbody><?php foreach ($suppliers as $s): ?><tr><td><strong><?= htmlspecialchars($s['supplier_name']) ?></strong><span class="table-secondary"><?= htmlspecialchars(trim(($s['email'] ?? '') . ' ' . ($s['phone'] ?? '')) ?: 'No contact details') ?></span></td><td><?= htmlspecialchars($s['contact_person'] ?? '-') ?></td><td><?= (int) $s['standard_lead_time_days'] ?> days</td><td><span class="count-badge"><?= (int) $s['product_count'] ?></span></td><td><span class="status-badge <?= $s['status'] === 'active' ? 'status-badge--active' : 'status-badge--inactive' ?>"><?= htmlspecialchars(ucfirst($s['status'])) ?></span></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
     </section>
 
     <section class="dashboard-section supplier-list-card">
-        <div class="section-header"><div><span class="section-kicker">Product coverage</span><h3>Product supply terms</h3><p class="section-description">Compare the commercial terms used when creating replenishment requests.</p></div><span class="table-count"><?= count($mappings) ?> mapping<?= count($mappings) === 1 ? '' : 's' ?></span></div>
+        <div class="section-header"><div><h3>Product supply terms</h3><p class="section-description">Compare the commercial terms used when creating replenishment requests.</p></div><span class="table-count"><?= count($mappings) ?> mapping<?= count($mappings) === 1 ? '' : 's' ?></span></div>
         <?php if (!$mappings): ?><div class="empty-state"><div><i class="bi bi-link-45deg"></i><strong>No product terms mapped</strong><span>Choose a supplier and product above to add purchasing terms.</span></div></div><?php else: ?><div class="table-wrap"><table class="supplier-table terms-table"><thead><tr><th>Supplier</th><th>Product</th><th>Cost</th><th>MOQ</th><th>Lead</th><th>Preferred</th></tr></thead><tbody><?php foreach ($mappings as $m): ?><tr><td><?= htmlspecialchars($m['supplier_name']) ?></td><td><strong><?= htmlspecialchars($m['product_name']) ?></strong><span class="table-secondary"><?= htmlspecialchars($m['sku']) ?></span></td><td><?= $m['last_unit_cost'] !== null ? '₱' . number_format((float) $m['last_unit_cost'], 2) : '-' ?></td><td><?= (int) $m['minimum_order_quantity'] ?></td><td><?= (int) $m['lead_time_days'] ?> days</td><td><?= $m['is_preferred'] ? '<span class="status-badge status-badge--preferred">Preferred</span>' : '<span class="table-secondary">Standard</span>' ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
     </section>
 </main>

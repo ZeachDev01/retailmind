@@ -15,7 +15,7 @@
 .sale-receipt *, .sale-receipt *::before, .sale-receipt *::after { box-sizing: border-box; }
 .sale-receipt .receipt-header { display: block; margin: 0; padding: 0 0 3mm; border-bottom: 1px dashed #555; }
 .sale-receipt .receipt-brand { text-align: center; }
-.sale-receipt .receipt-brand h1 { margin: 0 0 1mm; font-size: 16px; line-height: 1.2; }
+.sale-receipt .receipt-brand :is(h1, h3) { margin: 0 0 1mm; font-size: 16px; line-height: 1.2; }
 .sale-receipt .receipt-store-line, .sale-receipt .receipt-brand div { color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }
 .sale-receipt .receipt-meta { margin-top: 3mm; text-align: left; color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }
 .sale-receipt .receipt-historical-notice { margin: 0 0 3mm; font-size: 11px; }

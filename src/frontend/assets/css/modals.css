@@ -240,7 +240,7 @@
 }
 .password-field .password-toggle {
   position: absolute;
-  top: 50%;
+  top: 0;
   right: 0.15rem;
   width: 44px;
   min-width: 44px;
@@ -898,7 +898,6 @@ body.system-health-open {
   height: 2.75rem;
   flex: 0 0 2.75rem;
   border-radius: 12px;
-  background: var(--primary, #2563eb);
   color: #ffffff;
   font-size: 0.88rem;
   font-weight: 800;
@@ -1428,6 +1427,8 @@ body.system-health-open {
   visibility: visible;
   pointer-events: auto;
 }
+/* Search must be focusable during the opening tap. */
+.command-overlay.open { transition-property: opacity; }
 .command-overlay {
   display: grid;
   place-items: start center;
