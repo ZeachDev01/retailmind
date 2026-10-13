@@ -83,27 +83,37 @@ PHP requires Fileinfo and GD with JPEG, PNG, and WebP support. The release ships
 locked settings must permit those limits, including multipart request overhead.
 Check the effective web PHP settings after deployment; CLI settings may differ.
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` runs the full checks on
-pushes and pull requests. On a push to `main`, a separate deployment job builds
-the production PHP release, checks its PHP syntax and file sizes, then uploads
-it to InfinityFree using explicit FTPS. The upload can proceed when an unrelated
-full-suite test fails. It does not upload
-the database, `.env`, runtime storage, tests, Python service, or development files.
+On a push to `main`, `.github/workflows/ci.yml` installs production Composer
+dependencies and runs `scripts/build-infinityfree-release.sh`. It checks file
+sizes and the deployment contract, then uploads only `.release/` using explicit
+FTPS with strict certificate verification. The package includes PHP runtime code,
+frontend assets, dependencies, and database migration files. It excludes runtime
+storage, logs, tests, the Python service, and development files. Database migration
+files are not imported automatically.
+
+The separate Playwright workflow currently runs example tests against
+`playwright.dev`; it does not verify RetailMind or gate deployment.
 
 Before the first deployment, configure these in the GitHub repository under
 **Settings → Secrets and variables → Actions**:
 
 | Type     | Name                          | Value                                                                                                                      |
 | -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Secret   | `INFINITYFREE_FTP_USERNAME`   | The FTP username from the InfinityFree account dashboard                                                                   |
-| Secret   | `INFINITYFREE_FTP_PASSWORD`   | The FTP password from that dashboard                                                                                       |
-| Variable | `INFINITYFREE_FTP_SERVER_DIR` | The exact FTP website directory, ending in `/htdocs/` (usually `/htdocs/`, or `/your-domain/htdocs/` for an add-on domain) |
+| Secret   | `FTP_SERVER`                 | FTP hostname matching the TLS certificate, normally `ftpupload.net` |
+| Secret   | `FTP_USERNAME`               | FTP username from the InfinityFree account dashboard |
+| Secret   | `FTP_PASSWORD`               | FTP password from that dashboard |
+| Secret   | `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Production MySQL connection details |
 
-The FTPS server is `ftpupload.net` on port 21. The workflow fails with a clear
-message until these values are configured. It never deletes the remote `.env` or
-runtime storage. Set up the production `.env` directly on the host and import
-the database through phpMyAdmin; those steps are not part of the file upload.
-Change the initial Super Administrator password before exposing the site.
+Deployment targets `/htdocs/` on port 21. Missing database secrets stop the job
+before upload. The sync excludes hosted `.env`, storage, logs, and the legacy
+root `backend/` tree from deletion. After the code sync, a separate verified FTPS
+upload replaces `.env` using the database secrets and production settings for
+`retailmind.infinityfreeapp.com`. Import the database through phpMyAdmin. Change
+the initial Super Administrator password before exposing the site.
+
+Earlier repository-wide deployments could upload development files such as
+`.scratch` scripts. Packaging prevents new uploads but does not guarantee removal
+of files left by failed syncs. Inspect existing hosted files before deleting any.
 
 For a manual upload, create `htdocs/.env` (beside `index.php`, named exactly
 `.env`, without `.txt`). Set `APP_ENV=production`, `APP_DEBUG=false`,
@@ -120,27 +130,9 @@ error in `htdocs/src/backend/storage/logs/app.log` through the hosting File
 Manager. Keep `APP_DEBUG=false` on the live site. Confirm `htdocs/.env` exists
 and its `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` match the account's
 MySQL Databases page; use the full database name and the exact MySQL hostname,
-not the website or FTP hostname. Automated deployments preserve the hosted `.env`;
-correct its credentials directly on the host.
+not the website or FTP hostname. For automated deployments, correct the GitHub
+database secrets: the final upload replaces the hosted `.env`.
 The environment loader supports hosting with `putenv()` disabled.
-
-### Deploy the same code to a member's InfinityFree account
-
-In the same repository's **Settings → Secrets and variables → Actions**, add:
-
-| Type     | Name                                 | Value                                                     |
-| -------- | ------------------------------------ | --------------------------------------------------------- |
-| Secret   | `INFINITYFREE_MEMBER_FTP_USERNAME`   | Your member's InfinityFree FTP username                   |
-| Secret   | `INFINITYFREE_MEMBER_FTP_PASSWORD`   | Your member's InfinityFree FTP password                   |
-| Variable | `INFINITYFREE_MEMBER_FTP_SERVER_DIR` | Their website's exact FTP directory, ending in `/htdocs/` |
-| Variable | `INFINITYFREE_MEMBER_DEPLOY_ENABLED` | `true` to enable the second deployment                    |
-
-Once enabled, every push to `main` deploys the same commit to both accounts in
-independent jobs. A failed deployment to one account does not cancel the other.
-Leave the enable variable unset or set it to `false` to deploy only to the
-original account. The member must configure their own hosted `.env` (including
-`APP_URL` and database credentials), import the schema, and apply the database
-updates described below. Each account keeps its own database and runtime storage.
 
 ### Single-run database imports
 

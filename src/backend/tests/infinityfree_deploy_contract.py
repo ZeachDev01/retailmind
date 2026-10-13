@@ -6,7 +6,13 @@ root = Path(__file__).resolve().parents[3]
 workflow = (root / '.github/workflows/ci.yml').read_text()
 assert re.search(r'on:\s+push:\s+branches:\s+- main\b', workflow), 'Only main pushes deploy'
 deploy = workflow.split('\n  deploy:\n', 1)[1]
-assert 'php src/backend/scripts/build_styles.php' in deploy
+assert 'composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader' in deploy
+assert 'bash scripts/build-infinityfree-release.sh' in deploy
+assert 'local-dir: .release/' in deploy, 'Upload the production package, never the repository root'
+assert 'python src/backend/tests/infinityfree_deploy_contract.py' in deploy
+assert 'dangerous-clean-slate: true' not in deploy
+for pattern in ['**/.env', 'backend/', 'backend/**', '**/storage/', '**/storage/**', '**/*.log']:
+    assert re.search(r'^\s+' + re.escape(pattern) + r'\s*$', deploy, re.M), f'Preserve hosted {pattern}'
 for secret in ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']:
     assert '${{ secrets.' + secret + ' }}' in deploy
     assert f'test -n "${secret}"' in deploy, f'{secret} must be validated before deployment'

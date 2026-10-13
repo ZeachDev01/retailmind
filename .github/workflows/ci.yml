@@ -13,8 +13,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build shared stylesheet
-        run: php src/backend/scripts/build_styles.php
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: fileinfo, gd
+          tools: composer:v2
+          coverage: none
+
+      - name: Build production release
+        run: |
+          composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+          bash scripts/build-infinityfree-release.sh
+          python src/backend/tests/infinityfree_deploy_contract.py
 
       - name: Create production environment
         env:
@@ -52,7 +63,19 @@ jobs:
           protocol: ftps
           port: 21
           security: strict
+          local-dir: .release/
           server-dir: /htdocs/
+          # Preserve hosted data even if the old repository-wide sync tracked it.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.env
+            backend/
+            backend/**
+            **/storage/
+            **/storage/**
+            **/*.log
 
       # The sync cache can skip .env even if it was removed from the server.
       - name: Upload production environment
