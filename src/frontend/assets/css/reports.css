@@ -304,6 +304,12 @@
             padding: 1.5rem;
             margin-bottom: 2rem;
         }
+        .receiving-form fieldset {
+            border: 0;
+            margin: 0;
+            padding: 0;
+            min-width: 0;
+        }
         .form-section {
             margin-bottom: 1.5rem;
         }

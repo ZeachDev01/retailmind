@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../bootstrap/app.php';
 
 use App\Core\Database;
 
-$options = getopt('', ['token:', 'create', 'cleanup', 'state']);
+$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase']);
 
 $token = preg_replace('/[^A-Za-z0-9]/', '', (string)($options['token'] ?? ''));
 if (strlen($token) < 4 || strlen($token) > 12) {
@@ -36,6 +36,25 @@ $roleId = static function (PDO $pdo, string $name): int {
 };
 
 $products = [
+    'direct' => [
+        'sku' => 'SCN' . $token . 'D',
+        'barcode' => '840' . $token . '00008',
+        'case_barcode' => 'CS' . $token . '0008',
+        'product_name' => 'Scan WF Direct Receiving',
+        'status' => 'active',
+        'quantity_on_hand' => 8,
+        'units_per_package' => 24,
+        'receiving_unit' => 'case',
+    ],
+    'invalid_pack' => [
+        'sku' => 'SCN' . $token . 'I',
+        'barcode' => '840' . $token . '00009',
+        'case_barcode' => null,
+        'product_name' => 'Scan WF Invalid Pack',
+        'status' => 'active',
+        'quantity_on_hand' => 8,
+        'units_per_package' => 0,
+    ],
     'countable' => [
         'sku' => 'SCN' . $token . 'A',
         'barcode' => '840' . $token . '00001',
@@ -100,6 +119,12 @@ $products = [
 ];
 
 $staff = [
+    'super_admin' => [
+        'username' => 'scnsup' . $token,
+        'email' => 'scnsup' . $token . '@example.test',
+        'full_name' => 'Scan WF Super Administrator',
+        'role' => 'super_admin',
+    ],
     'manager' => [
         'username' => 'scnmgr' . $token,
         'email' => 'scnmgr' . $token . '@example.test',
@@ -125,7 +150,45 @@ $staffByUsername = [];
 $approvedIssue = null;
 $receivingDocuments = [];
 
-$cleanup = static function () use ($pdo, $products, $staff, &$productByName, &$staffByUsername): void {
+if (array_key_exists('fail-purchase', $options) || array_key_exists('allow-purchase', $options)) {
+    $pdo->exec("DROP TRIGGER IF EXISTS `receiving_wf_{$token}`");
+    if (array_key_exists('fail-purchase', $options)) {
+        $stmt = $pdo->prepare('SELECT product_id FROM products WHERE sku = ?');
+        $stmt->execute([$products['direct']['sku']]);
+        $productId = (int)$stmt->fetchColumn();
+        if ($productId <= 0) throw new RuntimeException('Direct receiving fixture product is missing.');
+        $pdo->exec("CREATE TRIGGER `receiving_wf_{$token}` BEFORE INSERT ON purchase_history FOR EACH ROW
+            BEGIN IF NEW.product_id = {$productId} THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Receiving fixture failure'; END IF; END");
+    }
+    echo json_encode(['ok' => true]) . PHP_EOL;
+    exit(0);
+}
+
+if (array_key_exists('hold-gate', $options)) {
+    $pdo->beginTransaction();
+    $pdo->query("SELECT gate_key FROM store_write_gate WHERE gate_key = 'store_writes' FOR UPDATE")->fetch();
+    echo json_encode(['ready' => true]) . PHP_EOL;
+    flush();
+    fgets(STDIN);
+    $pdo->rollBack();
+    exit(0);
+}
+
+if (array_key_exists('close-period', $options) || array_key_exists('open-period', $options)) {
+    $name = 'Receiving WF ' . $token;
+    $pdo->prepare('DELETE FROM fiscal_periods WHERE period_name = ?')->execute([$name]);
+    if (array_key_exists('close-period', $options)) {
+        $stmt = $pdo->prepare('SELECT user_id FROM users WHERE username = ?');
+        $stmt->execute([$staff['admin']['username']]);
+        $pdo->prepare("INSERT INTO fiscal_periods (period_name, start_date, end_date, status, created_by)
+            VALUES (?, CURRENT_DATE, CURRENT_DATE, 'closed', ?)")->execute([$name, $stmt->fetchColumn()]);
+    }
+    echo json_encode(['ok' => true]) . PHP_EOL;
+    exit(0);
+}
+
+$cleanup = static function () use ($pdo, $products, $staff, $token, &$productByName, &$staffByUsername): void {
+    $pdo->exec("DROP TRIGGER IF EXISTS `receiving_wf_{$token}`");
     $productIds = [];
     $userIds = [];
     foreach ($products as $product) {
@@ -215,7 +278,7 @@ if (array_key_exists('state', $options)) {
     $placeholders = implode(',', array_fill(0, count($skus), '?'));
     $stmt = $pdo->prepare(
         "SELECT p.sku, p.product_id, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
-                p.status
+                p.status, p.cost_price, p.preferred_supplier, p.supplier, p.quantity_purchased
          FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id
          WHERE p.sku IN ({$placeholders})"
     );
@@ -237,7 +300,8 @@ if (array_key_exists('state', $options)) {
                 sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,
                 sr.purchase_order_item_id, sr.replenishment_request_id,
                 sr.supplier, sr.po_number, sr.invoice_number, sr.batch_number,
-                sr.expiration_date, sr.discrepancy_type, sr.discrepancy_notes
+                sr.expiration_date, sr.discrepancy_type, sr.discrepancy_notes,
+                sr.cost_price, sr.total_cost, sr.received_by, sr.received_at
          FROM stock_receiving sr JOIN products p ON p.product_id = sr.product_id
          WHERE p.sku IN ({$placeholders}) ORDER BY sr.receiving_id"
     );
@@ -262,6 +326,13 @@ if (array_key_exists('state', $options)) {
     $stmt->execute($skus);
     $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    $details = [];
+    foreach (['product_batches', 'purchase_history', 'stock_movements', 'inventory_adjustments'] as $table) {
+        $stmt = $pdo->prepare("SELECT t.*, p.sku FROM {$table} t JOIN products p ON p.product_id = t.product_id
+            WHERE p.sku IN ({$placeholders})");
+        $stmt->execute($skus);
+        $details[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
     echo json_encode([
         'ok' => true,
         'products' => $catalog,
@@ -269,6 +340,7 @@ if (array_key_exists('state', $options)) {
         'receipts' => $receipts,
         'purchase_order_items' => $purchaseOrderItems,
         'requests' => $requests,
+        ...$details,
     ]) . PHP_EOL;
     exit(0);
 }
@@ -302,6 +374,8 @@ try {
             $product['status'],
         ]);
         $productId = (int)$pdo->lastInsertId();
+        $pdo->prepare("UPDATE products SET preferred_supplier = 'Original preferred supplier', supplier = 'Original supplier' WHERE product_id = ?")
+            ->execute([$productId]);
         $insertInventory->execute([$productId, $product['quantity_on_hand']]);
         $productByName[$key] = [
             'product_id' => $productId,
@@ -422,6 +496,13 @@ try {
         return (int)$pdo->lastInsertId();
     };
     $purchaseOrderItemId = $createPurchaseOrderItem($poRequestId, 12, 2, 5.50);
+    $pdo->prepare("INSERT INTO stock_receiving
+        (product_id, received_qty, accepted_qty, received_by, replenishment_request_id,
+         purchase_order_id, purchase_order_item_id, supplier, po_number, invoice_number, cost_price, total_cost)
+        VALUES (?, 2, 2, ?, ?, ?, ?, ?, ?, ?, 5.50, 11.00)")->execute([
+            $productByName['countable']['product_id'], $staffByUsername['manager']['user_id'],
+            $poRequestId, $purchaseOrderId, $purchaseOrderItemId, $supplierName, $poNumber, 'HISTORICAL-' . $token,
+        ]);
 
     $alternatePoRequestId = $createApprovedRequest(
         $productByName['countable']['product_id'],

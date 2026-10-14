@@ -24,27 +24,40 @@ class ReceivingService
         if (function_exists('require_capability')) {
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
-        $productId = (int)($data['product_id'] ?? 0);
-        $quantityMode = ($data['quantity_mode'] ?? 'units') === 'packages' ? 'packages' : 'units';
-        $receivedPackages = max(0, (int)($data['received_packages'] ?? 0));
-        $receivedQtyInput = max(0, (int)($data['received_qty'] ?? 0));
-        $damagedQty = max(0, (int)($data['damaged_qty'] ?? 0));
-        $purchaseOrderItemId = (int)($data['purchase_order_item_id'] ?? 0);
-        $emergencyReason = trim((string)($data['emergency_reason'] ?? ''));
+        $productId = $this->wholeNumber($data['product_id'] ?? 0, 'Product');
+        $quantityMode = $data['quantity_mode'] ?? 'units';
+        if (!in_array($quantityMode, ['units', 'packages'], true)) {
+            throw new RuntimeException('Choose Base units or Packages / cases.');
+        }
+        $receivedPackages = $this->wholeNumber($data['received_packages'] ?? 0, 'Package quantity');
+        $receivedQtyInput = $this->wholeNumber($data['received_qty'] ?? 0, 'Received quantity');
+        $damagedQty = $this->wholeNumber($data['damaged_qty'] ?? 0, 'Damaged quantity');
+        $purchaseOrderItemId = $this->wholeNumber($data['purchase_order_item_id'] ?? '', 'Purchase-order line', true);
         $receivedQty = $receivedQtyInput;
         $acceptedQty = 0;
         $unitsPerPackageUsed = 1;
-        $costPrice = (float)($data['cost_price'] ?? 0);
-        $supplier = trim((string)($data['supplier'] ?? ''));
-        $poNumber = trim((string)($data['po_number'] ?? ''));
-        $invoiceNumber = trim((string)($data['invoice_number'] ?? ''));
-        $batchNumber = trim((string)($data['batch_number'] ?? ''));
-        $expirationDate = trim((string)($data['expiration_date'] ?? ''));
-        $discrepancyType = trim((string)($data['discrepancy_type'] ?? 'none'));
-        $discrepancyQty = max(0, (int)($data['discrepancy_qty'] ?? 0));
-        $discrepancyNotes = trim((string)($data['discrepancy_notes'] ?? ''));
-        $notes = trim((string)($data['notes'] ?? ''));
-        $replenishmentRequestId = (int)($data['replenishment_request_id'] ?? 0);
+        $costInput = $this->text($data['cost_price'] ?? '', 'Purchase cost', 20);
+        if ($costInput !== '' && !preg_match('/^\d{1,8}(?:\.\d{1,2})?$/D', $costInput)) {
+            throw new RuntimeException('Purchase cost must be a non-negative amount with at most two decimal places.');
+        }
+        $costPrice = $costInput === '' ? null : (float)$costInput;
+        $supplier = $this->text($data['supplier'] ?? '', 'Supplier / shopping store', 150);
+        $poNumber = $this->text($data['po_number'] ?? '', 'PO number', 100);
+        $invoiceNumber = $this->text($data['invoice_number'] ?? '', 'Receipt reference', 100);
+        $batchNumber = $this->text($data['batch_number'] ?? '', 'Batch number', 100);
+        $expirationDate = $this->text($data['expiration_date'] ?? '', 'Expiration date', 10);
+        if ($expirationDate !== '') {
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $expirationDate);
+            if (!$date || $date->format('Y-m-d') !== $expirationDate || $expirationDate < '1000-01-01') {
+                throw new RuntimeException('Enter a valid expiration date.');
+            }
+        }
+        $discrepancyType = $data['discrepancy_type'] ?? 'none';
+        $discrepancyQty = $this->wholeNumber($data['discrepancy_qty'] ?? 0, 'Discrepancy quantity');
+        $discrepancyNotes = $this->text($data['discrepancy_notes'] ?? '', 'Discrepancy details', 65535);
+        $notes = $this->text($data['notes'] ?? '', 'Notes', 65535);
+        $replenishmentRequestId = $this->wholeNumber($data['replenishment_request_id'] ?? '', 'Replenishment request', true);
+        $direct = $purchaseOrderItemId === 0 && $replenishmentRequestId === 0;
         $purchaseOrderId = 0;
 
         if ($productId <= 0) {
@@ -62,18 +75,25 @@ class ReceivingService
             $requestStatus = null;
 
             [$scopeSql, $scopeParams] = $this->productScope();
-            $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, cost_price, preferred_supplier FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
+            $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, quantity_purchased FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
             $productStmt->execute(array_merge([$productId], $scopeParams));
             $product = $productStmt->fetch(PDO::FETCH_ASSOC);
             if (!$product) {
                 throw new RuntimeException('Active product not found.');
             }
-            $unitsPerPackageUsed = max(1, (int)($product['units_per_package'] ?? 1));
+            $unitsPerPackageUsed = $quantityMode === 'packages'
+                ? $this->wholeNumber($product['units_per_package'] ?? 0, 'Saved pack size') : 1;
             if ($quantityMode === 'packages') {
+                if ($unitsPerPackageUsed <= 0) {
+                    throw new RuntimeException('Set a positive whole-number pack size on the product before receiving packages.');
+                }
                 if ($receivedPackages <= 0) {
                     throw new RuntimeException('Package quantity must be greater than zero.');
                 }
                 $receivedQty = $receivedPackages * $unitsPerPackageUsed;
+                if ($receivedQty > 2147483647) {
+                    throw new RuntimeException('Resulting unit quantity is too large.');
+                }
             } else {
                 if ($receivedQtyInput <= 0) {
                     throw new RuntimeException('Received quantity must be greater than zero.');
@@ -85,6 +105,16 @@ class ReceivingService
                 throw new RuntimeException('Damaged quantity cannot exceed quantity received.');
             }
             $acceptedQty = $receivedQty - $damagedQty;
+            $inventoryStmt = $this->pdo->prepare('SELECT quantity_on_hand FROM inventory WHERE product_id = ? FOR UPDATE');
+            $inventoryStmt->execute([$productId]);
+            $currentStock = $inventoryStmt->fetchColumn();
+            if ($currentStock === false) {
+                throw new RuntimeException('This product has no inventory record. Ask your Administrator to check the product.');
+            }
+            if ((int)$currentStock + $acceptedQty > 2147483647
+                || (int)$product['quantity_purchased'] + $acceptedQty > 2147483647) {
+                throw new RuntimeException('Accepted quantity would exceed the supported stock total. Enter a smaller quantity.');
+            }
             if ($acceptedQty <= 0 && $damagedQty <= 0) {
                 throw new RuntimeException('At least one delivered unit must be accepted or reported damaged.');
             }
@@ -116,7 +146,7 @@ class ReceivingService
                 $replenishmentRequestId = (int)($poItem['replenishment_request_id'] ?? 0);
                 $poNumber = (string)$poItem['po_number'];
                 if ($supplier === '') $supplier = trim((string)($poItem['supplier_name'] ?? ''));
-                if ($costPrice <= 0) $costPrice = (float)($poItem['unit_cost'] ?? 0);
+                if ($costPrice === null) $costPrice = (float)($poItem['unit_cost'] ?? 0);
                 $remainingPo = max(0, (int)$poItem['ordered_qty'] - (int)$poItem['received_qty']);
                 if ($remainingPo <= 0) {
                     throw new RuntimeException('Only purchase-order lines with remaining quantity can be received.');
@@ -125,16 +155,6 @@ class ReceivingService
                     $discrepancyType = 'over';
                     $discrepancyQty = $acceptedQty - $remainingPo;
                 }
-            }
-
-            if ($purchaseOrderItemId <= 0 && $replenishmentRequestId <= 0) {
-                $roleStmt = $this->pdo->prepare("SELECT r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=?");
-                $roleStmt->execute([$userId]);
-                $role = (string)$roleStmt->fetchColumn();
-                if (!in_array($role, ['admin','super_admin'], true) || $emergencyReason === '') {
-                    throw new RuntimeException('Receiving must reference an approved request or purchase order. Administrators may use emergency receiving with a reason.');
-                }
-                $notes = trim('Emergency receiving: ' . $emergencyReason . ($notes !== '' ? ' | ' . $notes : ''));
             }
 
             if ($replenishmentRequestId > 0) {
@@ -161,7 +181,10 @@ class ReceivingService
                 $discrepancyQty = $damagedQty;
             }
 
-            $totalCost = $costPrice > 0 ? $costPrice * $acceptedQty : 0;
+            $totalCost = $costPrice !== null ? $costPrice * $acceptedQty : 0;
+            if ($totalCost > 99999999.99) {
+                throw new RuntimeException('Total purchase cost is too large.');
+            }
 
             $stmt = $this->pdo->prepare("INSERT INTO stock_receiving (
                                        product_id, received_qty, received_packages, units_per_package_used, accepted_qty, damaged_qty, cost_price, total_cost, received_by,
@@ -171,7 +194,7 @@ class ReceivingService
                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $productId, $receivedQty, $receivedPackages, $unitsPerPackageUsed, $acceptedQty, $damagedQty,
-                $costPrice > 0 ? $costPrice : null, $totalCost, $userId,
+                $costPrice, $totalCost, $userId,
                 $replenishmentRequestId > 0 ? $replenishmentRequestId : null,
                 $purchaseOrderId > 0 ? $purchaseOrderId : null,
                 $purchaseOrderItemId > 0 ? $purchaseOrderItemId : null,
@@ -205,11 +228,11 @@ class ReceivingService
 
                 $productUpdateParts = ['quantity_purchased = quantity_purchased + ?'];
                 $productUpdateParams = [$acceptedQty];
-                if ($costPrice > 0) {
+                if ($costPrice !== null) {
                     $productUpdateParts[] = 'cost_price = ?';
                     $productUpdateParams[] = $costPrice;
                 }
-                if ($supplier !== '') {
+                if (!$direct && $supplier !== '') {
                     $productUpdateParts[] = 'supplier = ?';
                     $productUpdateParams[] = $supplier;
                     $productUpdateParts[] = 'preferred_supplier = ?';
@@ -223,7 +246,7 @@ class ReceivingService
                 $this->pdo->prepare('UPDATE products SET ' . implode(', ', $productUpdateParts) . ' WHERE product_id = ?')
                     ->execute($productUpdateParams);
 
-                if ($costPrice > 0) {
+                if ($costPrice !== null) {
                     $this->pdo->prepare(
                         "INSERT INTO purchase_history (product_id, supplier, quantity_purchased, cost_price, total_cost, recorded_by)
                          VALUES (?, ?, ?, ?, ?, ?)"
@@ -239,10 +262,13 @@ class ReceivingService
                 if ($discrepancyNotes !== '') {
                     $damageReason .= ': ' . $discrepancyNotes;
                 }
+                // Bought damage was excluded before stock was added; no later deduction is due.
                 $this->pdo->prepare(
-                    "INSERT INTO inventory_adjustments (product_id, adjustment_qty, adjustment_type, reported_by, reason, status)
-                     VALUES (?, ?, 'damaged', ?, ?, 'pending')"
-                )->execute([$productId, -$damagedQty, $userId, $damageReason]);
+                    "INSERT INTO inventory_adjustments (product_id, adjustment_qty, adjustment_type, reported_by, reason, status, review_notes)
+                     VALUES (?, ?, 'damaged', ?, ?, ?, ?)"
+                )->execute([$productId, -$damagedQty, $userId, $damageReason,
+                    $direct ? 'cancelled' : 'pending',
+                    $direct ? "Receiving #{$receivingId}: excluded from accepted stock; no stock deduction required." : null]);
             }
 
             if ($purchaseOrderItemId > 0) {
@@ -266,10 +292,20 @@ class ReceivingService
                     ->execute([$requestStatus, $replenishmentRequestId]);
             }
 
+            $recordingStmt = $this->pdo->prepare('SELECT sr.received_at, u.full_name FROM stock_receiving sr JOIN users u ON u.user_id = sr.received_by WHERE sr.receiving_id = ?');
+            $recordingStmt->execute([$receivingId]);
+            $recording = $recordingStmt->fetch(PDO::FETCH_ASSOC);
             $this->pdo->commit();
-            $this->notificationService->checkAndNotifyLowStock();
-            $this->notificationService->checkAndNotifyExpiringStock();
+            try {
+                $this->notificationService->checkAndNotifyLowStock();
+                $this->notificationService->checkAndNotifyExpiringStock();
+            } catch (Throwable $e) {
+                error_log('Receiving notifications failed: ' . $e->getMessage());
+            }
             return [
+                'product_name' => $product['product_name'],
+                'recorded_by' => $recording['full_name'],
+                'received_at' => $recording['received_at'],
                 'receiving_id' => $receivingId,
                 'received_qty' => $receivedQty,
                 'accepted_qty' => $acceptedQty,
@@ -333,7 +369,7 @@ class ReceivingService
     {
         $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.received_qty, sr.accepted_qty, sr.damaged_qty,
                                sr.cost_price, sr.received_packages, sr.units_per_package_used, sr.batch_number, sr.expiration_date, sr.discrepancy_type,
-                               sr.discrepancy_qty, sr.received_at, sr.supplier, sr.po_number,
+                               sr.discrepancy_qty, sr.received_at, sr.supplier, sr.po_number, sr.invoice_number,
                                p.sku, p.product_name, u.full_name
                         FROM stock_receiving sr
                         JOIN products p ON sr.product_id = p.product_id
@@ -343,6 +379,26 @@ class ReceivingService
                         LIMIT 20");
         $stmt->execute([$userId]);
         return $stmt->fetchAll();
+    }
+
+    private function wholeNumber($value, string $label, bool $optional = false): int
+    {
+        if ($optional && $value === '') return 0;
+        if ((!is_string($value) && !is_int($value))
+            || !preg_match('/^\d+$/D', (string)$value)
+            || strlen((string)$value) > 10 || (float)$value > 2147483647) {
+            throw new RuntimeException("{$label} must be a non-negative whole number within range.");
+        }
+        return (int)$value;
+    }
+
+    private function text($value, string $label, int $maxLength): string
+    {
+        if ((!is_string($value) && !is_int($value) && !is_float($value))
+            || strlen((string)$value) > $maxLength) {
+            throw new RuntimeException("{$label} must be text no longer than {$maxLength} bytes.");
+        }
+        return trim((string)$value);
     }
 
     private function productScope(): array

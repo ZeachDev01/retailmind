@@ -92,6 +92,17 @@ async function scan(page, code) {
     await input.press('Enter');
 }
 
+async function receivingForm(page, fields = {}) {
+    await page.goto(receivingPath, { waitUntil: 'domcontentloaded' });
+    return {
+        csrf_token: await page.inputValue('input[name="csrf_token"]'),
+        receiving_nonce: await page.inputValue('input[name="receiving_nonce"]'),
+        product_id: '', quantity_mode: 'units', received_qty: '1',
+        received_packages: '0', damaged_qty: '0', discrepancy_qty: '0',
+        ...fields
+    };
+}
+
 const failures = [];
 function check(condition, message) {
     console.log((condition ? '  ok - ' : '  FAIL - ') + message);
@@ -112,6 +123,7 @@ async function main() {
             cwd: repoRoot,
             stdio: ['ignore', 'ignore', 'pipe']
         });
+        server.stderr.resume();
         await waitForHttp(baseURL + '/?login=1');
 
         browser = await playwright.chromium.launch({ headless: true, args: ['--no-sandbox'] });
@@ -121,6 +133,7 @@ async function main() {
         await page.goto(receivingPath);
 
         const before = runFixture('--state', '--token', token);
+        const historicalReceipt = before.receipts.find(item => item.invoice_number === 'HISTORICAL-' + token);
         const beforeZero = before.products.find((product) => product.sku === fixture.products.zero.sku);
 
         console.log('Scan-only identification');
@@ -254,8 +267,8 @@ async function main() {
             'a unique SKU selects its product');
         check(await page.locator('#scan_document_review .scan-document-choice').count() === 0,
             'a pending replenishment request is not offered');
-        check((await page.locator('#scan_document_review').innerText()).includes('No eligible document'),
-            'no eligible document gives a clear routine-receiving message');
+        check((await page.locator('#scan_document_review').innerText()).includes('optional'),
+            'receiving documents are explicitly optional');
         check(await page.inputValue('#replenishment_request_id') === ''
             && await page.inputValue('#purchase_order_item_id') === '',
             'scanning a product without an eligible document clears document references');
@@ -265,10 +278,11 @@ async function main() {
             page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
             page.locator('.btn-submit').click()
         ]);
-        check((await page.locator('.message.error').innerText()).includes('approved request or purchase order'),
-            'an Inventory Manager cannot submit a routine receipt without an eligible document');
-        check(runFixture('--state', '--token', token).receipts.length === receiptsBeforeBlockedRoutine,
-            'the blocked no-document submission writes no receipt');
+        check((await page.locator('.message.success').innerText()).includes('1 accepted units'),
+            'an Inventory Manager can receive directly without an approved document');
+        const directState = runFixture('--state', '--token', token);
+        check(directState.receipts.length === receiptsBeforeBlockedRoutine + 1,
+            'direct receiving writes one receipt');
         await dismissBlockingDialog(page);
 
         console.log('CSRF and role boundaries');
@@ -278,8 +292,7 @@ async function main() {
                 csrf_token: 'invalid-token',
                 product_id: fixture.products.zero.product_id,
                 quantity_mode: 'units',
-                received_qty: 1,
-                replenishment_request_id: fixture.receiving_documents.approved_request.request_id
+                received_qty: 1
             }
         });
         check(csrfResponse.status() === 403, 'a receiving submission with an invalid CSRF token is refused');
@@ -300,9 +313,208 @@ async function main() {
         const adminPage = await adminContext.newPage();
         await login(adminPage, fixture.staff.admin);
         await adminPage.goto(receivingPath);
-        check(await adminPage.locator('#emergency_reason').count() === 1,
-            'the existing Administrator emergency-receiving control remains distinct');
+        check(await adminPage.locator('#emergency_reason').count() === 0
+            && await adminPage.locator('.btn-submit').isDisabled(),
+            'Administrator receiving view has no emergency bypass and cannot submit');
         await adminContext.close();
+
+        console.log('Direct bought stock without purchasing history');
+        await page.goto(receivingPath);
+        await scan(page, fixture.products.direct.case_barcode);
+        check(await eventually(page, id => document.getElementById('product_id').value === String(id),
+            fixture.products.direct.product_id), 'a case barcode selects a product without purchasing history');
+        check(await page.inputValue('#cost_price') === '', 'unknown purchase cost stays blank');
+        await page.fill('#received_packages', '2');
+        check((await page.locator('#package_conversion').innerText()).includes('2 × 24 = 48'),
+            'two saved cases display 48 units before saving');
+        const duplicateForm = {
+            csrf_token: await page.inputValue('input[name="csrf_token"]'),
+            receiving_nonce: await page.inputValue('input[name="receiving_nonce"]'),
+            product_id: fixture.products.direct.product_id, quantity_mode: 'packages',
+            received_packages: '2', received_qty: '0'
+        };
+        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('.btn-submit').click()]);
+        let state = runFixture('--state', '--token', token);
+        let directProduct = state.products.find(item => item.sku === fixture.products.direct.sku);
+        let directReceipt = state.receipts.find(item => item.sku === fixture.products.direct.sku);
+        check(Number(directProduct.quantity_on_hand) === 56, '8 + two cases of 24 = 56 units');
+        check(directReceipt.cost_price === null && directReceipt.supplier === null
+            && directReceipt.invoice_number === null && directReceipt.replenishment_request_id === null
+            && directReceipt.purchase_order_item_id === null && Number(directProduct.cost_price) === 5
+            && directProduct.preferred_supplier === 'Original preferred supplier',
+            'missing optional details preserve cost and preferred supplier without purchasing links');
+        check(state.purchase_history.filter(item => item.sku === fixture.products.direct.sku).length === 0,
+            'unknown cost creates no invented purchase-cost history');
+        const historyRow = page.locator('.history-table tbody tr').filter({ hasText: fixture.products.direct.sku });
+        check((await historyRow.innerText()).includes('Scan WF Manager')
+            && (await historyRow.innerText()).includes(directReceipt.received_at),
+            'history identifies recording staff and time');
+        const successText = await page.locator('.message.success').innerText();
+        check(successText.includes(fixture.products.direct.product_name)
+            && successText.includes('Scan WF Manager') && successText.includes(directReceipt.received_at),
+            'success identifies product, recording staff and time');
+        await context.request.post(receivingPath, { form: duplicateForm });
+        check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(state),
+            'replaying the same form cannot record a second receipt');
+
+        console.log('Supplied cost and damage');
+        const costForm = await receivingForm(page, {
+            product_id: fixture.products.direct.product_id, received_qty: '5', damaged_qty: '2',
+            cost_price: '7.25', supplier: 'Shopping store', invoice_number: 'DIRECT-' + token,
+            batch_number: 'DIRECT-BATCH-' + token, expiration_date: '2027-12-31'
+        });
+        const costResponse = await context.request.post(receivingPath, { form: costForm });
+        check((await costResponse.text()).includes('3 accepted units'), 'direct damage excludes two of five bought units');
+        state = runFixture('--state', '--token', token);
+        directProduct = state.products.find(item => item.sku === fixture.products.direct.sku);
+        directReceipt = state.receipts.filter(item => item.sku === fixture.products.direct.sku).at(-1);
+        const purchase = state.purchase_history.find(item => item.sku === fixture.products.direct.sku);
+        const batch = state.product_batches.find(item => Number(item.receiving_id) === Number(directReceipt.receiving_id));
+        const damage = state.inventory_adjustments.find(item => item.sku === fixture.products.direct.sku);
+        check(Number(directProduct.quantity_on_hand) === 59 && Number(directProduct.cost_price) === 7.25
+            && directProduct.preferred_supplier === 'Original preferred supplier'
+            && directProduct.supplier === 'Original supplier', 'accepted units add to stock; cost updates without replacing supplier');
+        check(Number(purchase.quantity_purchased) === 3 && Number(purchase.cost_price) === 7.25
+            && Number(purchase.total_cost) === 21.75 && purchase.supplier === 'Shopping store',
+            'supplied cost uses the displayed base-unit basis and retains purchase history');
+        check(directReceipt.supplier === 'Shopping store' && directReceipt.invoice_number === 'DIRECT-' + token
+            && Number(batch.remaining_quantity) === 3 && batch.expiration_date === '2027-12-31',
+            'receipt and saleable batch retain shopping, receipt, batch and expiry details');
+        check(Number(damage.adjustment_qty) === -2 && damage.status === 'cancelled'
+            && Number(damage.reported_by) === fixture.staff.manager.user_id
+            && damage.review_notes.includes('excluded from accepted stock'),
+            'bought damage is attributable and closed without a pending deduction');
+        check(state.stock_movements.filter(item => item.sku === fixture.products.direct.sku)
+            .reduce((sum, item) => sum + Number(item.change_qty), 0) === 51,
+            'movements account only for accepted units');
+
+        console.log('Strict validation saves nothing');
+        const invalidEntries = [
+            { received_qty: '0' }, { received_qty: '-1' }, { received_qty: '1.5' },
+            { received_qty: 'abc' }, { received_qty: '1e2' }, { received_qty: '2147483648' },
+            { received_qty: '2147483640' },
+            { quantity_mode: 'invalid' }, { damaged_qty: '-1' }, { damaged_qty: '1.5' },
+            { damaged_qty: '2' }, { cost_price: '-1' }, { cost_price: 'oops' },
+            { cost_price: '1.234' }, { expiration_date: '2027-02-30' },
+            { supplier: 's'.repeat(151) }, { invoice_number: 'r'.repeat(101) },
+            { discrepancy_qty: '1x' }, { discrepancy_type: 'invalid' },
+            { product_id: fixture.products.inactive.product_id },
+            { product_id: fixture.products.invalid_pack.product_id, quantity_mode: 'packages', received_packages: '2' },
+            { quantity_mode: 'packages', received_packages: '0' },
+            { quantity_mode: 'packages', received_packages: '1.5' },
+            { received_qty: '2147483647', cost_price: '99999999.99' }
+        ];
+        const beforeInvalid = JSON.stringify(state);
+        for (const invalid of invalidEntries) {
+            const form = await receivingForm(page, { product_id: fixture.products.direct.product_id, ...invalid });
+            const response = await context.request.post(receivingPath, { form });
+            check((await response.text()).includes('message error'), 'invalid entry rejected: ' + JSON.stringify(invalid));
+            check(JSON.stringify(runFixture('--state', '--token', token)) === beforeInvalid,
+                'invalid entry rolls back every stock, cost, batch and history change');
+        }
+        await page.goto(receivingPath);
+        await page.selectOption('#product_id', String(fixture.products.direct.product_id));
+        await page.fill('#received_qty', 'bad quantity');
+        await page.fill('#supplier', 'Keep entered store');
+        await page.evaluate(() => {
+            document.getElementById('receiving_form').noValidate = true;
+            const expiry = document.getElementById('expiration_date');
+            expiry.type = 'text';
+            expiry.value = '2027-02-30';
+        });
+        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('.btn-submit').click()]);
+        check(await page.inputValue('#received_qty') === 'bad quantity'
+            && await page.inputValue('#supplier') === 'Keep entered store'
+            && await page.inputValue('#expiration_date') === '2027-02-30'
+            && await page.inputValue('#product_id') === String(fixture.products.direct.product_id),
+            'validation errors preserve product, malformed quantity, invalid date and optional details');
+
+        const failedPurchase = await receivingForm(page, {
+            product_id: fixture.products.direct.product_id, received_qty: '3', cost_price: '8.50'
+        });
+        try {
+            runFixture('--fail-purchase', '--token', token);
+            const response = await context.request.post(receivingPath, { form: failedPurchase });
+            check((await response.text()).includes('message error'), 'a late purchase-history DB failure reports a failed save');
+            check(JSON.stringify(runFixture('--state', '--token', token)) === beforeInvalid,
+                'late DB failure rolls back receipt, inventory, batches, movement and product cost together');
+        } finally {
+            runFixture('--allow-purchase', '--token', token);
+        }
+
+        console.log('Fiscal Period and Store write gates');
+        const gatedForm = await receivingForm(page, { product_id: fixture.products.direct.product_id });
+        try {
+            runFixture('--close-period', '--token', token);
+            const response = await context.request.post(receivingPath, { form: gatedForm });
+            check((await response.text()).includes('fiscal period'), 'a closed Fiscal Period blocks direct receiving');
+        } finally {
+            runFixture('--open-period', '--token', token);
+        }
+        const gate = spawn(phpBinary, [fixtureScript, '--hold-gate', '--token', token], { cwd: repoRoot });
+        try {
+            await new Promise((resolve, reject) => {
+                gate.stdout.once('data', resolve);
+                gate.once('exit', code => reject(new Error('Gate fixture exited: ' + code)));
+            });
+            const response = await context.request.post(receivingPath, { form: gatedForm });
+            check((await response.text()).includes('message error'), 'the locked Store write gate blocks direct receiving');
+        } finally {
+            gate.stdin.end('\n');
+            await new Promise(resolve => gate.once('exit', resolve));
+        }
+        check(JSON.stringify(runFixture('--state', '--token', token)) === beforeInvalid,
+            'Fiscal Period and Store rejection leave all receiving data unchanged');
+
+        console.log('Direct HTTP workspace boundaries');
+        for (const role of ['cashier', 'admin', 'super_admin']) {
+            const deniedContext = await browser.newContext({ baseURL });
+            const deniedPage = await deniedContext.newPage();
+            await login(deniedPage, fixture.staff[role]);
+            await deniedPage.goto('/components/auth/workspace.php');
+            const csrf = await deniedPage.inputValue('input[name="csrf_token"]');
+            const response = await deniedContext.request.post(receivingPath, {
+                form: { ...gatedForm, csrf_token: csrf, emergency_reason: 'Must not bypass workspace policy' }
+            });
+            check(response.status() === 403, role + ' workspace cannot mutate receiving through HTTP');
+            if (role === 'super_admin') {
+                await deniedContext.request.post('/components/auth/workspace.php', {
+                    form: { csrf_token: csrf, workspace: 'inventory_manager' }
+                });
+                const privilegedForm = await receivingForm(deniedPage, {
+                    product_id: fixture.products.direct.product_id, received_qty: '2'
+                });
+                const privilegedResponse = await deniedContext.request.post(receivingPath, { form: privilegedForm });
+                check((await privilegedResponse.text()).includes('2 accepted units'),
+                    'privileged identity can receive when operating in Inventory Manager workspace');
+            }
+            await deniedContext.close();
+        }
+
+        const concurrentPage = await context.newPage();
+        const firstForm = await receivingForm(page, { product_id: fixture.products.direct.product_id, received_qty: '3' });
+        const secondForm = await receivingForm(concurrentPage, { product_id: fixture.products.direct.product_id, received_qty: '4' });
+        const simultaneous = await Promise.all([
+            context.request.post(receivingPath, { form: firstForm }),
+            context.request.post(receivingPath, { form: secondForm })
+        ]);
+        check((await simultaneous[0].text()).includes('3 accepted units')
+            && (await simultaneous[1].text()).includes('4 accepted units'),
+            'two distinct forms submitted together both record their quantities');
+        check(Number(runFixture('--state', '--token', token).products.find(item => item.sku === fixture.products.direct.sku).quantity_on_hand) === 68,
+            'distinct receipts add to existing stock rather than overwriting it');
+        await concurrentPage.close();
+
+        // Capture both device classes during the same browser verification pass.
+        await page.goto(receivingPath);
+        check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+            'receiving history stays inside the desktop viewport');
+        await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving-177-desktop.png'), fullPage: true });
+        await page.setViewportSize({ width: 390, height: 844 });
+        check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+            'receiving history scrolls within the mobile viewport');
+        await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving-177-mobile.png'), fullPage: true });
+        await page.setViewportSize({ width: 1280, height: 720 });
 
         console.log('Explicit submission and accepted-stock outcome');
         await page.goto(receivingPath);
@@ -361,7 +573,7 @@ async function main() {
 
         const finalState = runFixture('--state', '--token', token);
         const finalProduct = finalState.products.find((product) => product.sku === fixture.products.countable.sku);
-        const receipt = finalState.receipts.find((item) => item.sku === fixture.products.countable.sku);
+        const receipt = finalState.receipts.filter((item) => item.sku === fixture.products.countable.sku).at(-1);
         const poItem = finalState.purchase_order_items.find((item) =>
             Number(item.purchase_order_item_id) === fixture.receiving_documents.po.purchase_order_item_id);
         check(Number(finalProduct.quantity_on_hand) === Number(fixture.products.countable.quantity_on_hand) + 10,
@@ -377,6 +589,9 @@ async function main() {
             'the receipt retains reviewed invoice, batch and expiry details');
         check(poItem && Number(poItem.received_qty) === 12,
             'the existing document validation updates the chosen PO line by accepted units');
+        check(historicalReceipt && JSON.stringify(finalState.receipts.find(item =>
+            Number(item.receiving_id) === Number(historicalReceipt.receiving_id))) === JSON.stringify(historicalReceipt),
+            'historical linked receiving records retain their quantities, cost, staff, time and document references');
 
         await context.close();
         if (failures.length) {

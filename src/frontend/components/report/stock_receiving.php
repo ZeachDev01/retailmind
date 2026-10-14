@@ -10,6 +10,8 @@ $receivingService = new ReceivingService($pdo);
 
 $message = '';
 $error = '';
+$canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+$formValues = [];
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -17,13 +19,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     try {
+        $nonce = $_POST['receiving_nonce'] ?? '';
+        if (!is_string($nonce) || !isset($_SESSION['receiving_nonces'][$nonce])) {
+            throw new RuntimeException('This receiving form has already been saved or expired. Review a new entry before saving.');
+        }
         $result = $receivingService->receiveStock([
             'product_id' => $_POST['product_id'] ?? 0,
             'quantity_mode' => $_POST['quantity_mode'] ?? 'units',
             'received_qty' => $_POST['received_qty'] ?? 0,
             'received_packages' => $_POST['received_packages'] ?? 0,
             'damaged_qty' => $_POST['damaged_qty'] ?? 0,
-            'cost_price' => $_POST['cost_price'] ?? 0,
+            'cost_price' => $_POST['cost_price'] ?? '',
             'supplier' => $_POST['supplier'] ?? '',
             'po_number' => $_POST['po_number'] ?? '',
             'invoice_number' => $_POST['invoice_number'] ?? '',
@@ -35,23 +41,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'notes' => $_POST['notes'] ?? '',
             'replenishment_request_id' => $_POST['replenishment_request_id'] ?? 0,
             'purchase_order_item_id' => $_POST['purchase_order_item_id'] ?? 0,
-            'emergency_reason' => $_POST['emergency_reason'] ?? '',
         ], $_SESSION['user_id']);
+        unset($_SESSION['receiving_nonces'][$nonce]);
 
-        $message = "Stock received successfully (ID: {$result['receiving_id']}). Inventory updated with {$result['accepted_qty']} accepted units.";
+        $message = "{$result['product_name']}: stock received successfully (ID: {$result['receiving_id']}). Inventory updated with {$result['accepted_qty']} accepted units.";
         if ($result['damaged_qty'] > 0) {
             $message .= " {$result['damaged_qty']} damaged units were reported.";
         }
         if ($result['remaining_qty'] !== null) {
             $message .= " Remaining request quantity: {$result['remaining_qty']}.";
         }
+        $message .= " Recorded by {$result['recorded_by']} at {$result['received_at']}.";
         $productId = $_POST['product_id'] ?? 0;
-        $receivedQty = $_POST['received_qty'] ?? 0;
-        log_activity($pdo, $_SESSION['user_id'], 'Received stock: Product #' . $productId . ', Qty: ' . $receivedQty);
+        try {
+            log_activity($pdo, $_SESSION['user_id'], 'Received stock: Product #' . $productId . ', Accepted units: ' . $result['accepted_qty']);
+        } catch (Throwable $e) {
+            error_log('Receiving activity log failed: ' . $e->getMessage());
+        }
     } catch (Throwable $e) {
+        $formValues = array_filter($_POST, 'is_string');
         $error = \App\Support\OperatorAlert::message($e, 'The receiving record could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.');
     }
 }
+
+$receivingNonce = bin2hex(random_bytes(24));
+$_SESSION['receiving_nonces'][$receivingNonce] = true;
+$_SESSION['receiving_nonces'] = array_slice($_SESSION['receiving_nonces'], -20, null, true);
 
 $po_items = $receivingService->getReceivablePurchaseOrderItems();
 $pending_requests = $receivingService->getPendingReplenishmentRequests();
@@ -84,13 +99,15 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
         </div>
 
         <?php if ($message): ?>
-            <div class="message success"><?= htmlspecialchars($message) ?></div>
+            <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
         <?php endif; ?>
 
         <?php if ($error): ?>
-            <div class="message error"><?= htmlspecialchars($error) ?></div>
+            <div class="message error"><span role="alert"><?= htmlspecialchars($error) ?></span></div>
         <?php endif; ?>
 
+        <details>
+            <summary>Optional: receive against an existing approved document</summary>
         <?php if (!empty($po_items)): ?>
             <div class="pending-requests">
                 <h4>Approved Purchase Orders</h4>
@@ -113,7 +130,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 
         <?php if (!empty($pending_requests)): ?>
             <div class="pending-requests">
-                <h4>📦 Pending Replenishment Requests</h4>
+                <h4>Pending Replenishment Requests</h4>
                 <p>These approved requests are waiting for stock to be received:</p>
                 <?php foreach ($pending_requests as $req): ?>
                     <div class="request-item">
@@ -132,9 +149,13 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
+        </details>
 
         <div class="receiving-form">
             <h3>Record Stock Receipt</h3>
+            <p>Record goods bought for the Store. No supplier, request, purchase order, or approval is required.</p>
+            <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
+            <fieldset <?= !$canReceive ? 'disabled' : '' ?>>
             <div class="form-section">
                 <h4>Scan Product</h4>
                 <div class="form-group">
@@ -144,8 +165,9 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                 </div>
                 <div id="scan_document_review" class="pending-requests" hidden aria-live="polite"></div>
             </div>
-            <form method="POST">
+            <form method="POST" id="receiving_form">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                <input type="hidden" name="receiving_nonce" value="<?= htmlspecialchars($receivingNonce) ?>">
                 <input type="hidden" id="replenishment_request_id" name="replenishment_request_id" value="">
                 <input type="hidden" id="purchase_order_item_id" name="purchase_order_item_id" value="">
 
@@ -169,38 +191,39 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                         </div>
                         <div class="form-group" id="units_qty_group">
                             <label for="received_qty">Base units received</label>
-                            <input type="number" name="received_qty" id="received_qty" min="0" value="0">
+                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_qty" id="received_qty" value="0">
                         </div>
                         <div class="form-group" id="packages_qty_group" style="display:none">
                             <label for="received_packages">Packages received</label>
-                            <input type="number" name="received_packages" id="received_packages" min="0" value="0">
+                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_packages" id="received_packages" value="0">
                             <small id="package_conversion">Select a product to view conversion.</small>
                         </div>
                         <div class="form-group">
-                            <label for="damaged_qty">Damaged on Delivery</label>
-                            <input type="number" name="damaged_qty" id="damaged_qty" min="0" value="0">
+                            <label for="damaged_qty">Damaged base units on delivery</label>
+                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_qty" id="damaged_qty" value="0">
                         </div>
                         <div class="form-group">
-                            <label for="cost_price">Purchase Cost / Unit</label>
-                            <input type="number" name="cost_price" id="cost_price" min="0" step="0.01" placeholder="0.00">
+                            <label for="cost_price">Purchase cost per base unit (optional)</label>
+                            <input type="text" inputmode="decimal" name="cost_price" id="cost_price" placeholder="Leave blank if unknown">
+                            <small>Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
                         </div>
                     </div>
                 </div>
 
                 <div class="form-section">
-                    <h4>Supplier & Document Information</h4>
+                    <h4>Optional supplier & receipt details</h4>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="supplier">Supplier</label>
-                            <input type="text" name="supplier" id="supplier" placeholder="Supplier name">
+                            <label for="supplier">Supplier / shopping store (optional)</label>
+                            <input type="text" name="supplier" id="supplier" maxlength="150" placeholder="Where the goods were bought">
                         </div>
                         <div class="form-group">
                             <label for="po_number">PO Number</label>
                             <input type="text" name="po_number" id="po_number" placeholder="Purchase order #">
                         </div>
                         <div class="form-group">
-                            <label for="invoice_number">Invoice Number</label>
-                            <input type="text" name="invoice_number" id="invoice_number" placeholder="Invoice #">
+                            <label for="invoice_number">Receipt / invoice reference (optional)</label>
+                            <input type="text" name="invoice_number" id="invoice_number" maxlength="100" placeholder="Receipt reference">
                         </div>
                     </div>
                 </div>
@@ -235,7 +258,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                         </div>
                         <div class="form-group">
                             <label for="discrepancy_qty">Discrepancy Quantity</label>
-                            <input type="number" name="discrepancy_qty" id="discrepancy_qty" min="0" value="0">
+                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="discrepancy_qty" id="discrepancy_qty" value="0">
                         </div>
                     </div>
                     <div class="form-group">
@@ -243,10 +266,6 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                         <textarea name="discrepancy_notes" id="discrepancy_notes" placeholder="Shortage, overage, damage condition, or document mismatch details..."></textarea>
                     </div>
                 </div>
-
-                <?php if (in_array(current_role(), ['admin','super_admin'], true)): ?>
-                <div class="form-section"><h4>Emergency receiving</h4><div class="form-group"><label for="emergency_reason">Reason when no approved request or PO is selected</label><input type="text" name="emergency_reason" id="emergency_reason" placeholder="Required only for administrator emergency receiving"></div></div>
-                <?php endif; ?>
 
                 <div class="form-section">
                     <div class="form-group">
@@ -257,11 +276,13 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 
                 <button type="submit" class="btn-submit">Record Receipt & Update Inventory</button>
             </form>
+            </fieldset>
         </div>
 
         <?php if (!empty($history)): ?>
             <div class="history-section">
                 <h3>Recent Receipt History (My Receipts)</h3>
+                <div class="u-table-scroll" tabindex="0" role="region" aria-label="Recent receiving history">
                 <table class="history-table">
                     <thead>
                         <tr>
@@ -275,6 +296,8 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                             <th>Cost</th>
                             <th>Supplier</th>
                             <th>PO #</th>
+                            <th>Receipt reference</th>
+                            <th>Recorded by</th>
                             <th>Date & Time</th>
                         </tr>
                     </thead>
@@ -294,11 +317,14 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
                                 <td><?= $h['cost_price'] !== null ? number_format((float)$h['cost_price'], 2) : '-' ?></td>
                                 <td><?= htmlspecialchars($h['supplier'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($h['po_number'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($h['invoice_number'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($h['full_name']) ?></td>
                                 <td><?= htmlspecialchars($h['received_at']) ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                </div>
             </div>
         <?php endif; ?>
     </main>
@@ -359,18 +385,18 @@ function showScannedDocumentReview(productId) {
     scanDocumentReview.hidden = false;
 
     const heading = document.createElement('h4');
-    heading.textContent = 'Choose the receiving document';
+    heading.textContent = 'Receiving document (optional)';
     scanDocumentReview.appendChild(heading);
 
     if (eligible.length === 0) {
         const message = document.createElement('p');
-        message.textContent = 'No eligible document is available. An Inventory Manager cannot record a routine receipt for this product; choose a product manually or arrange an approved request or purchase order.';
+        message.textContent = 'Receiving documents are optional. Enter the actual bought quantity to receive this product directly.';
         scanDocumentReview.appendChild(message);
         return;
     }
 
     const guidance = document.createElement('p');
-    guidance.textContent = 'Review the remaining quantity, then explicitly choose the document. Delivered quantity stays unchanged until you enter it.';
+    guidance.textContent = 'Receive directly, or choose a document to update its received quantity. Enter actual delivered quantities yourself.';
     scanDocumentReview.appendChild(guidance);
     for (const documentOption of eligible) {
         const row = document.createElement('div');
@@ -428,7 +454,7 @@ function hasEnteredReceivingDetails() {
 
     const textFields = [
         'supplier', 'po_number', 'invoice_number', 'batch_number', 'expiration_date',
-        'discrepancy_notes', 'notes', 'emergency_reason'
+        'discrepancy_notes', 'notes'
     ];
     if (textFields.some((id) => {
         const field = document.getElementById(id);
@@ -501,7 +527,7 @@ async function identifyReceivingProduct(code) {
 
         productSelect.value = String(product.product_id);
         resetReferences();
-        fillProductCost();
+        updatePackageConversion();
         document.getElementById('quantity_mode').value = quantityMode;
         if (!hasEnteredDetails) {
             document.getElementById('received_qty').value = '0';
@@ -512,7 +538,7 @@ async function identifyReceivingProduct(code) {
         const matchedBy = result.matched_code_kind === 'sku'
             ? 'SKU'
             : (matchedCase ? 'case barcode' : 'unit barcode');
-        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Review and choose an eligible document, then enter delivered ${matchedCase ? 'packages / cases' : 'Base units'}.`;
+        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Enter actual delivered ${matchedCase ? 'packages / cases' : 'Base units'}. Linking a document is optional.`;
         productCodeScan.value = '';
     } catch (error) {
         if (error.name === 'AbortError' || lookupId !== activeScanLookup) return;
@@ -553,7 +579,7 @@ function applyReceivingDocument(documentOption, copyRemainingQuantity, quantityM
         document.getElementById('supplier').value = '';
         document.getElementById('cost_price').value = '';
         costPriceWasEdited = false;
-        fillProductCost();
+        updatePackageConversion();
     }
     updateQuantityMode();
     updatePackageConversion();
@@ -565,7 +591,7 @@ function populateForm(productId, qty, requestId) {
         replenishment_request_id: requestId,
         remaining_qty: qty
     }, true);
-    fillProductCost();
+    updatePackageConversion();
     document.getElementById('received_qty').focus();
     window.scrollTo(0, document.querySelector('.receiving-form').offsetTop - 100);
 }
@@ -585,14 +611,11 @@ function populatePO(item) {
 function selectedProductOption() {
     const select=document.getElementById('product_id'); return select.options[select.selectedIndex];
 }
-function fillProductCost() {
-    const option=selectedProductOption();
-    if (option && option.dataset.cost && !document.getElementById('cost_price').value) document.getElementById('cost_price').value=Number(option.dataset.cost).toFixed(2);
-    updatePackageConversion();
-}
 function updatePackageConversion() {
     const option=selectedProductOption(); const units=Number(option?.dataset.unitsPerPackage||1); const receiving=option?.dataset.receivingUnit||'package'; const base=option?.dataset.baseUnit||'piece';
-    document.getElementById('package_conversion').textContent=`1 ${receiving} = ${units} ${base}(s)`;
+    const packages = Number(document.getElementById('received_packages').value || 0);
+    const damaged = Number(document.getElementById('damaged_qty').value || 0);
+    document.getElementById('package_conversion').textContent=`1 ${receiving} = ${units} ${base}(s). ${packages} × ${units} = ${packages * units} units received; ${Math.max(0, packages * units - damaged)} accepted units.`;
 }
 function updateQuantityMode() {
     const packages=document.getElementById('quantity_mode').value==='packages';
@@ -604,20 +627,45 @@ function updateQuantityMode() {
 }
 document.getElementById('product_id').addEventListener('change', (event)=>{
     resetReferences();
-    fillProductCost();
+    updatePackageConversion();
     if (event.isTrusted) {
         activeScanLookup++;
         if (scanLookupController) scanLookupController.abort();
         hideScannedDocumentReview();
-        scanStatus.textContent = 'Product selected manually. Review an eligible document above or choose one from the lists on this page.';
+        scanStatus.textContent = 'Product selected manually. Enter actual bought quantities. No receiving document is required.';
     }
 });
 document.getElementById('quantity_mode').addEventListener('change', updateQuantityMode);
+document.getElementById('received_packages').addEventListener('input', updatePackageConversion);
 document.getElementById('cost_price').addEventListener('input', () => {
     costPriceWasEdited = true;
 });
 document.getElementById('damaged_qty').addEventListener('input', function () {
     const damagedQty=Number(this.value||0); if(damagedQty>0&&document.getElementById('discrepancy_type').value==='none'){document.getElementById('discrepancy_type').value='damaged';document.getElementById('discrepancy_qty').value=damagedQty;}
+    updatePackageConversion();
+});
+const form = document.getElementById('receiving_form');
+const retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+for (const [name, value] of Object.entries(retainedValues)) {
+    if (['csrf_token', 'receiving_nonce'].includes(name)) continue;
+    const field = form.elements.namedItem(name);
+    if (!field) continue;
+    if (field.tagName === 'SELECT' && !Array.from(field.options).some(option => option.value === value)) {
+        field.add(new Option(value, value));
+    }
+    field.value = value;
+    if (field.type === 'date' && value !== '' && field.value !== value) {
+        field.type = 'text';
+        field.placeholder = 'YYYY-MM-DD';
+        field.value = value;
+    }
+}
+let saving = false;
+form.addEventListener('submit', event => {
+    if (saving) { event.preventDefault(); return; }
+    saving = true;
+    form.querySelector('.btn-submit').disabled = true;
+    form.querySelector('.btn-submit').textContent = 'Saving receipt…';
 });
 updateQuantityMode();
 </script>
