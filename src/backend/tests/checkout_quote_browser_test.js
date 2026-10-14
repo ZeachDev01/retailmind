@@ -101,6 +101,11 @@ if (!fs.existsSync(chromium.executablePath())) {
         assert.equal(await page.evaluate(() => typeof checkoutNow), 'undefined', 'Scoped async handlers need bound listeners after partial navigation');
         assert.equal(await page.locator('#cash-received').evaluate(input => input.readOnly), false, 'Cashier can type cash received before quote review');
         const mainPresets = page.locator('#cash-field').getByRole('group', {name: 'Quick cash amounts'});
+        assert.deepEqual(await mainPresets.getByRole('button').allTextContents(), ['Exact', '₱20', '₱50', '₱100']);
+        await page.fill('#cash-received', '125.50');
+        await mainPresets.getByRole('button', {name: 'Exact', exact: true}).click();
+        assert.equal(await page.locator('#cash-received').inputValue(), '100.00', 'Exact replaces entered cash with the current net total');
+        assert.equal(await page.locator('#change-due').inputValue(), '0.00', 'Exact payment has no change');
         for (const amount of [20, 50, 100]) {
             const button = mainPresets.getByRole('button', {name: `₱${amount}`, exact: true});
             assert.equal(await button.count(), 1, `₱${amount} option appears below the main Cash received input`);
@@ -150,6 +155,12 @@ if (!fs.existsSync(chromium.executablePath())) {
         assert.equal(await total.locator('strong').textContent(), '₱80.00');
         const changeOutput = page.getByRole('status', {name: 'Change due', exact: true});
         assert.equal(await changeOutput.count(), 1, 'Change has a labeled live output');
+        const reviewPresets = page.locator('#checkout-summary').getByRole('group', {name: 'Quick cash amounts'});
+        assert.deepEqual(await reviewPresets.getByRole('button').allTextContents(), ['Exact', '₱20', '₱50', '₱100']);
+        await reviewPresets.getByRole('button', {name: 'Exact', exact: true}).click();
+        assert.equal(await page.locator('#review-cash').inputValue(), '80.00', 'Exact uses the discounted server quote instead of the cached total');
+        assert.equal(await page.locator('#cash-received').inputValue(), '80.00', 'Reviewed Exact payment carries into checkout');
+        assert.equal(await page.locator('#review-change').textContent(), '0.00', 'Reviewed Exact payment has no change');
         assert(await total.locator('strong').evaluate(amount => parseFloat(getComputedStyle(amount).fontSize) > parseFloat(getComputedStyle(document.querySelector('.review-items td')).fontSize)), 'Total amount is larger than item text');
         assert(await changeOutput.evaluate(amount => parseFloat(getComputedStyle(amount).fontSize) > parseFloat(getComputedStyle(document.querySelector('.review-items td')).fontSize)), 'Change amount is larger than item text');
         for (const width of [320, 375, 1440]) {
