@@ -28,7 +28,7 @@ const screens = inventory ? [
 ] : admin ? [
     'administrator/dashboard', 'administrator/registers', 'administrator/store_settings',
     'administrator/store_calendar', 'system_administrator/fiscal_periods',
-    'administrator/database_backup', 'administrator/reset_data', 'user_manager/user_manager',
+    'administrator/database_backup', 'user_manager/user_manager',
     'system_administrator/audit_logs', 'invoice/sales', 'invoice/sales?tab=reversals&sale_id=1',
     'invoice/legacy_reversals?sale_id=1', 'inventory_management/promotions',
     'administrator/stock_issues', 'administrator/shift_report', 'report/forecast_analytics',

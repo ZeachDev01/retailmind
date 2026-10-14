@@ -56,7 +56,6 @@ final class RoleCapabilityPolicy
         // download a Database Backup but never restoration authority, which
         // stays exclusive to the Super Administrator (see ADR-0003).
         'admin' => [
-            self::RESET_OPERATIONAL_DATA,
             self::STORE_OPERATIONS,
             self::VIEW_INVENTORY,
             self::VIEW_STORE_AUDIT,

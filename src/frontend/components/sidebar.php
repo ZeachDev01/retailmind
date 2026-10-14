@@ -158,7 +158,6 @@ $superAdministratorSystemItems = [
 ];
 
 $administratorSystemItems = [
-    ['path' => 'components/administrator/reset_data.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Reset Data'],
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Store Staff'],
     ['path' => 'components/administrator/registers.php', 'icon' => 'bi-upc-scan', 'label' => 'Registers'],
     ['path' => 'components/administrator/store_settings.php', 'icon' => 'bi-sliders', 'label' => 'Store Settings'],

@@ -64,7 +64,7 @@ final class OperationalDataResetService
     public function deleteProduct(int $actorId, string $role, int $productId, string $password, string $confirmation): string
     {
         if (!$this->policy->allows($role, RoleCapabilityPolicy::RESET_OPERATIONAL_DATA)) {
-            throw new DomainException('Only an Administrator or Super Administrator can delete products.');
+            throw new DomainException('Only a Super Administrator can delete products.');
         }
         if ($confirmation !== 'DELETE PRODUCT') throw new DomainException('Type DELETE PRODUCT to confirm.');
         $actor = $this->pdo->prepare("SELECT password_hash FROM users WHERE user_id = ? AND status = 'active'");
@@ -109,7 +109,7 @@ final class OperationalDataResetService
     public function reset(int $actorId, string $role, string $password, string $confirmation): array
     {
         if (!$this->policy->allows($role, RoleCapabilityPolicy::RESET_OPERATIONAL_DATA)) {
-            throw new DomainException('Only an Administrator or Super Administrator can reset data.');
+            throw new DomainException('Only a Super Administrator can reset data.');
         }
         if ($confirmation !== 'RESET ALL DATA') throw new DomainException('Type RESET ALL DATA to confirm.');
         $actor = $this->pdo->prepare("SELECT password_hash FROM users WHERE user_id = ? AND status = 'active'");
