@@ -332,7 +332,7 @@ $checks = [
     'Cashier navigation offers one direct Report Stock Issue destination' => [
         'file' => 'src/frontend/components/sidebar.php',
         'needles' => ["'path' => 'components/cashier/stock_issues.php'", "'label' => 'Report Stock Issue'", "'path' => 'components/inventory_management/stock_issues.php'"],
-        'forbidden' => ["'label' => 'Warehouse'", 'components/report/stock_receiving.php', 'components/report/inventory_adjustments.php'],
+        'forbidden' => ["'label' => 'Warehouse'", 'components/report/inventory_adjustments.php'],
     ],
     'Stock receiving stays closed to cashiers server-side' => [
         'file' => 'src/frontend/components/report/stock_receiving.php',

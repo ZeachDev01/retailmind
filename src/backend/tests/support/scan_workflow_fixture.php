@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../bootstrap/app.php';
 
 use App\Core\Database;
 
-$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
+$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'seed-guidance', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
 
 $token = preg_replace('/[^A-Za-z0-9]/', '', (string)($options['token'] ?? ''));
 if (strlen($token) < 4 || strlen($token) > 12) {
@@ -163,6 +163,20 @@ $staffByUsername = [];
 $approvedIssue = null;
 $receivingDocuments = [];
 
+if (array_key_exists('seed-guidance', $options)) {
+    $pdo->prepare("UPDATE products SET reorder_level = 10, safety_stock = 5, supplier_lead_time_days = 7,
+        minimum_order_quantity = 1 WHERE sku IN (?, ?)")->execute([$products['bulk_units']['sku'], $products['bulk_pack']['sku']]);
+    $pdo->prepare("INSERT INTO ml_jobs (trigger_type, status, queued_at, completed_at, diagnostic_reference)
+        VALUES ('forecast_generation', 'succeeded', NOW(), NOW(), ?)")->execute(['receiving-wf-' . $token]);
+    $jobId = (int)$pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO demand_forecasts
+        (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level)
+        SELECT ?, product_id, CURRENT_DATE, CURRENT_DATE + INTERVAL 7 DAY, 7, 20, ?, 'High'
+        FROM products WHERE sku = ?")->execute([$jobId, 'receiving-wf-' . $token, $products['bulk_pack']['sku']]);
+    echo json_encode(['job_id' => $jobId]) . PHP_EOL;
+    exit(0);
+}
+
 if (array_key_exists('fail-purchase', $options) || array_key_exists('allow-purchase', $options) || array_key_exists('delay-purchase', $options)) {
     $pdo->exec("DROP TRIGGER IF EXISTS `receiving_wf_{$token}`");
     if (array_key_exists('fail-purchase', $options) || array_key_exists('delay-purchase', $options)) {
@@ -206,6 +220,7 @@ if (array_key_exists('close-period', $options) || array_key_exists('open-period'
 
 $cleanup = static function () use ($pdo, $products, $staff, $token, &$productByName, &$staffByUsername): void {
     $pdo->exec("DROP TRIGGER IF EXISTS `receiving_wf_{$token}`");
+    $pdo->prepare('DELETE FROM ml_jobs WHERE diagnostic_reference = ?')->execute(['receiving-wf-' . $token]);
     $productIds = [];
     $userIds = [];
     foreach ($products as $product) {
@@ -357,6 +372,13 @@ if (array_key_exists('state', $options)) {
         'receipts' => $receipts,
         'purchase_order_items' => $purchaseOrderItems,
         'requests' => $requests,
+        'recommendations' => array_values(array_filter(
+            (new App\Forecasting\ReplenishmentQueueService($pdo))->getRecommendations(
+                (new App\Forecasting\DemandForecastService($pdo))->getLatestSuccessfulJobId()
+            ), static fn(array $item): bool => in_array($item['sku'], $skus, true)
+        )),
+        'forecast_jobs' => $pdo->query('SELECT * FROM ml_jobs ORDER BY job_id')->fetchAll(PDO::FETCH_ASSOC),
+        'forecasts' => $pdo->query('SELECT * FROM demand_forecasts ORDER BY forecast_id')->fetchAll(PDO::FETCH_ASSOC),
         ...$details,
     ]) . PHP_EOL;
     exit(0);

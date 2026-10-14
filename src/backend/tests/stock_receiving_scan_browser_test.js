@@ -139,6 +139,16 @@ async function main() {
         const context = await browser.newContext({ baseURL });
         const page = await context.newPage();
         await login(page, fixture.staff.manager);
+        await page.goto('/components/inventory_management/inventory_overview.php');
+        await page.locator('main').getByRole('link', { name: 'Review recommendations', exact: true }).click();
+        await page.waitForURL('**/inventory_management/replenishment_queue.php', { waitUntil: 'domcontentloaded' });
+        check(page.url().endsWith('/inventory_management/replenishment_queue.php'),
+            'stock monitoring leads to non-binding replenishment guidance');
+        await page.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).click();
+        await page.waitForURL('**/report/stock_receiving.php');
+        check(page.url().endsWith(receivingPath), 'recommendations lead directly to bought-stock entry');
+        check(await page.locator('.sidebar').getByRole('link', { name: 'Stock Receiving', exact: true }).count() === 1,
+            'Stock Receiving is available from Inventory Manager navigation');
         await page.goto(receivingPath);
 
         console.log('Shopping trip entry');
@@ -316,6 +326,8 @@ async function main() {
         const cashierContext = await browser.newContext({ baseURL });
         const cashierPage = await cashierContext.newPage();
         await login(cashierPage, fixture.staff.cashier);
+        check(await cashierPage.locator('#appSidebar').getByRole('link', { name: 'Stock Receiving', exact: true }).count() === 0,
+            'Cashier navigation has no Stock Receiving destination');
         const cashierResponse = await cashierPage.goto(receivingPath);
         check(cashierResponse.status() === 403 || !cashierPage.url().includes(receivingPath),
             'a Cashier cannot open Stock Receiving');
@@ -608,7 +620,19 @@ async function main() {
             'historical linked receiving records retain their quantities, cost, staff, time and document references');
 
         console.log('Reviewed mixed-product shopping trip');
-        await page.goto(receivingPath);
+        runFixture('--seed-guidance', '--token', token);
+        await page.goto('/components/inventory_management/replenishment_queue.php');
+        const packGuidance = page.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku });
+        const unitGuidance = page.locator('.queue-item').filter({ hasText: fixture.products.bulk_units.sku });
+        check((await packGuidance.innerText()).includes('Demand Forecast')
+            && (await packGuidance.innerText()).includes('48 units'),
+            'saved forecast and eight on hand suggest 48 units rounded to cases');
+        check((await unitGuidance.innerText()).includes('Stock rules')
+            && (await unitGuidance.innerText()).includes('7 units')
+            && (await unitGuidance.innerText()).includes('Forecast unavailable'),
+            'a product without a forecast uses honest stock-rule guidance');
+        await page.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).click();
+        await page.waitForURL('**/report/stock_receiving.php');
         const beforeTrip = runFixture('--state', '--token', token);
         await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
         await page.fill('#received_qty', '5');
@@ -658,6 +682,52 @@ async function main() {
             && tripState.products.filter(item => [fixture.products.bulk_units.sku, fixture.products.bulk_pack.sku].includes(item.sku))
                 .every(item => item.preferred_supplier === 'Original preferred supplier'),
             'mixed optional costs preserve unknown cost and preferred suppliers');
+        const unitBatch = tripState.product_batches.find(item => item.batch_number === 'SHOP-UNITS-' + token);
+        const unitPurchase = tripState.purchase_history.filter(item => item.sku === fixture.products.bulk_units.sku).at(-1);
+        check(Number(unitBatch.remaining_quantity) === 3 && unitBatch.expiration_date === '2028-12-31'
+            && Number(unitPurchase.quantity_purchased) === 3 && Number(unitPurchase.cost_price) === 7.25
+            && Number(unitPurchase.total_cost) === 21.75 && tripReceipts.every(item => item.received_at),
+            'bulk receiving preserves accepted batch quantities, expiry, per-unit costs and recording time');
+        check(JSON.stringify(tripState.forecasts) === JSON.stringify(beforeTrip.forecasts)
+            && JSON.stringify(tripState.forecast_jobs) === JSON.stringify(beforeTrip.forecast_jobs),
+            'bulk receiving preserves saved forecasts and starts no generation or retraining jobs');
+        check(Number(tripState.recommendations.find(item => item.sku === fixture.products.bulk_pack.sku).recommended_quantity) === 0
+            && Number(tripState.recommendations.find(item => item.sku === fixture.products.bulk_units.sku).recommended_quantity) === 0,
+            'committed stock updates forecast-backed and stock-rule buying guidance');
+        check(tripState.requests.length === beforeTrip.requests.length
+            && JSON.stringify(tripState.purchase_order_items) === JSON.stringify(beforeTrip.purchase_order_items),
+            'receiving actual quantities differing from guidance creates no purchasing documents');
+        await page.getByRole('link', { name: 'Review updated recommendations', exact: true }).click();
+        await page.waitForURL('**/inventory_management/replenishment_queue.php');
+        check((await packGuidance.innerText()).includes('56 units')
+            && (await packGuidance.innerText()).includes('0 units suggested')
+            && (await packGuidance.innerText()).includes('Demand Forecast'),
+            'success action reloads forecast guidance using 56 committed units');
+        check((await unitGuidance.innerText()).includes('11 units')
+            && (await unitGuidance.innerText()).includes('0 units suggested')
+            && (await unitGuidance.innerText()).includes('Stock rules'),
+            'stock-rule view reflects the actual unplanned quantity and accepted damage');
+        check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),
+            'reviewing refreshed recommendations changes no inventory, purchasing or forecast records');
+        await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving180-guidance-desktop.png') });
+        await page.setViewportSize({ width: 390, height: 844 });
+        check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+            'guidance and daily-path actions fit the mobile viewport');
+        await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving180-guidance-mobile.png') });
+        await page.setViewportSize({ width: 1280, height: 720 });
+
+        const oversightContext = await browser.newContext({ baseURL });
+        const oversightPage = await oversightContext.newPage();
+        await login(oversightPage, fixture.staff.admin);
+        await oversightPage.goto('/components/inventory_management/replenishment_queue.php');
+        check((await oversightPage.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku }).innerText()).includes('56 units')
+            && await oversightPage.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
+            'Administrator sees refreshed guidance without an inventory execution action');
+        await oversightPage.goto(receivingPath);
+        check(await oversightPage.locator('.btn-submit').isDisabled()
+            && (await oversightPage.locator('main').innerText()).includes('SHOP-' + token),
+            'Administrator retains read-only oversight of direct bulk receiving history');
+        await oversightContext.close();
 
         console.log('Add/remove and empty shopping entries');
         await page.goto(receivingPath);
@@ -712,6 +782,11 @@ async function main() {
             'invalid later line identifies the line and retains all lines and shared optional details');
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),
             'invalid later line rolls back earlier inventory, batch, cost, damage, history and movement writes');
+        const guidancePage = await context.newPage();
+        await guidancePage.goto('/components/inventory_management/replenishment_queue.php');
+        check((await guidancePage.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku }).innerText()).includes('56 units'),
+            'failed receiving leaves visible guidance at committed stock');
+        await guidancePage.close();
 
         console.log('Later-line database failure rolls back the entire entry');
         await dismissBlockingDialog(page);
@@ -789,6 +864,10 @@ async function main() {
         await context.request.post(receivingPath, { form: firstTrip });
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(concurrentState),
             'replaying a multi-line shopping entry records no additional lines');
+        await page.goto(receivingPath);
+        const ownHistory = await page.locator('.history-section').innerText();
+        check(ownHistory.includes('CONCURRENT-A-' + token) && !ownHistory.includes('CONCURRENT-B-' + token),
+            'Inventory Manager receiving history remains scoped to their own receipts');
         await concurrentContext.close();
 
         await page.goto(receivingPath);

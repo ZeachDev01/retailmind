@@ -23,10 +23,10 @@ RetailMind is purpose-built around one Store rather than multi-branch administra
 ## Operating Context
 
 - Cashiers scan products, process and hold sales, print receipts, manage shifts, and report Stock Issues.
-- Inventory Managers monitor stock and expiry risk, perform counts, receive stock, manage suppliers and Supplier Product Terms, review forecasts, and plan replenishment.
+- Inventory Managers check stock, review non-binding Replenishment Recommendations, and record bought goods through direct bulk Stock Receiving. They also monitor expiry risk and perform counts; supplier administration and legacy purchasing remain secondary workflows.
 - The Administrator oversees Store performance, operational staff, approvals, Fiscal Periods, Store Settings, compliance, and operational exceptions.
 - The Super Administrator manages platform security, recovery, system health, technical settings, privileged identities, and demand-forecasting model operation.
-- Sales activity updates stock movement and forecast history; reviewed demand recommendations inform purchase orders and receiving.
+- Sales activity updates stock movement and forecast history. Receiving adds accepted goods to stock; recommendations reload using committed stock and existing forecast outputs without generating forecasts or retraining models.
 - The application handles Philippine-peso retail operations at Shalom Store.
 
 ## Capabilities and Constraints

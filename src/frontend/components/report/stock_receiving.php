@@ -90,7 +90,7 @@ $scan_pending_requests = array_values(array_filter(
     static fn(array $request): bool => !isset($po_request_ids[(int)$request['request_id']])
 ));
 $products = $receivingService->getActiveProducts();
-$history = $receivingService->getReceivingHistory($_SESSION['user_id']);
+$history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['user_id'] : null);
 ?>
 <!DOCTYPE html>
 <html>
@@ -108,9 +108,14 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
         <div class="topbar">
             <h1>Stock Receiving</h1>
         </div>
+        <nav class="u-flex-wrap mb-3" aria-label="Stock replenishment">
+            <a class="btn btn-secondary" href="../inventory_management/inventory_overview.php">Check stock</a>
+            <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a>
+        </nav>
 
         <?php if ($message): ?>
             <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
+            <p>Stock is updated. <a href="../inventory_management/replenishment_queue.php">Review updated recommendations</a> using current stock and existing forecast outputs.</p>
         <?php endif; ?>
 
         <?php if ($error): ?>
@@ -303,7 +308,7 @@ $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
 
         <?php if (!empty($history)): ?>
             <div class="history-section">
-                <h3>Recent Receipt History (My Receipts)</h3>
+                <h3>Recent Receipt History (<?= $canReceive ? 'My Receipts' : 'Store Receipts' ?>)</h3>
                 <div class="u-table-scroll" tabindex="0" role="region" aria-label="Recent receiving history">
                 <table class="history-table">
                     <thead>

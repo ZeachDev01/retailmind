@@ -66,7 +66,6 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle) ?> - RetailMind</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="../../assets/css/print.css" media="print">
     <style>
         .queue-urgent { border: 1px solid var(--border); }
         .queue-watch { border: 1px solid var(--border); }
@@ -124,6 +123,12 @@ try {
 
             <section class="panel">
                 <div class="panel-body">
+                    <nav class="u-flex-wrap mb-3" aria-label="Stock replenishment">
+                        <a class="btn btn-secondary" href="inventory_overview.php">Check stock</a>
+                        <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY)): ?>
+                            <a class="btn btn-primary" href="../report/stock_receiving.php">Record bought stock</a>
+                        <?php endif; ?>
+                    </nav>
                     <p>Non-binding buying guidance. No supplier configuration is required. Reviewing these suggestions does not create purchase requests, place orders, or change stock. The owner buys outside RetailMind and may choose different products, stores, or quantities.</p>
                     <details><summary>Purchasing history and legacy workflows</summary>
                         <a href="replenishment_requests.php">Replenishment requests</a> ·

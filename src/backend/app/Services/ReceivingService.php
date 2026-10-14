@@ -412,7 +412,7 @@ class ReceivingService
                 ORDER BY po.created_at, p.product_name")->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function getReceivingHistory(int $userId): array
+    public function getReceivingHistory(?int $userId): array
     {
         $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.received_qty, sr.accepted_qty, sr.damaged_qty,
                                sr.cost_price, sr.received_packages, sr.units_per_package_used, sr.batch_number, sr.expiration_date, sr.discrepancy_type,
@@ -421,10 +421,10 @@ class ReceivingService
                         FROM stock_receiving sr
                         JOIN products p ON sr.product_id = p.product_id
                         JOIN users u ON sr.received_by = u.user_id
-                        WHERE sr.received_by = ?
-                        ORDER BY sr.received_at DESC
+                        WHERE (? IS NULL OR sr.received_by = ?)
+                        ORDER BY sr.received_at DESC, sr.receiving_id DESC
                         LIMIT 20");
-        $stmt->execute([$userId]);
+        $stmt->execute([$userId, $userId]);
         return $stmt->fetchAll();
     }
 

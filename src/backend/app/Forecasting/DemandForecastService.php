@@ -63,10 +63,7 @@ class DemandForecastService
     public function getJobMetadata(int $jobId): ?array
     {
         $stmt = $this->pdo->prepare("
-            SELECT f.model_version,
-                   (SELECT t.metrics_json FROM model_training_runs t
-                    WHERE t.model_version = f.model_version AND t.status = 'completed'
-                    ORDER BY t.training_run_id DESC LIMIT 1) AS metrics_json
+            SELECT f.model_version
             FROM demand_forecasts f
             JOIN ml_jobs j ON j.job_id = f.job_id
             WHERE f.job_id = ? AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
@@ -78,7 +75,12 @@ class DemandForecastService
         if (!$metadata) {
             return null;
         }
-        $metrics = json_decode((string)($metadata['metrics_json'] ?? ''), true);
+        // Legacy training and forecast tables can use different collations.
+        $stmt = $this->pdo->prepare("SELECT metrics_json FROM model_training_runs
+            WHERE model_version = ? AND status = 'completed'
+            ORDER BY training_run_id DESC LIMIT 1");
+        $stmt->execute([$metadata['model_version']]);
+        $metrics = json_decode((string)($stmt->fetchColumn() ?: ''), true);
         return [
             'model_version' => $metadata['model_version'],
             'is_demo' => ($metrics['metadata']['dataset_kind'] ?? null) === 'demo',
