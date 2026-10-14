@@ -1556,6 +1556,25 @@ body.system-health-open {
   transform: none;
   opacity: 1;
 }
+.rm-toast.rm-toast-centered {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: min(480px, calc(100vw - 2rem));
+  padding: 1.25rem 1.4rem;
+  gap: 1rem;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+}
+.rm-toast-centered .rm-toast-icon {
+  font-size: 1.5rem;
+}
+.rm-toast-centered .rm-toast-copy strong {
+  font-size: 1.1rem;
+}
+.rm-toast-centered .rm-toast-copy span {
+  font-size: 1rem;
+}
 .rm-toast.success {
   border-color: var(--success);
 }

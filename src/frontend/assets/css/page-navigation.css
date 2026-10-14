@@ -26,24 +26,6 @@
     to { opacity: 1; }
 }
 
-.main-content {
-    animation: rm-page-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.main-content[aria-busy="true"] {
-    opacity: 0.72;
-    transition: opacity 0.16s ease;
-}
-@keyframes rm-page-enter {
-    from {
-        opacity: 0.45;
-        transform: translateY(4px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 .page-navigation-status {
     display: flex;
     align-items: center;
@@ -85,7 +67,6 @@
 @keyframes page-navigation-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
     .page-navigation-spinner { animation: none; }
-    .main-content { animation: none; }
     .page-navigation-status { animation: none; }
     .rm-nav-progress-bar { transition: none; }
 }

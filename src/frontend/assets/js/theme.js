@@ -4,16 +4,22 @@
     const device = window.matchMedia('(prefers-color-scheme: dark)');
     const modes = ['light', 'dark', 'system'];
     let mode = config.mode;
-    if (!config.authenticated) {
-        try {
-            const local = localStorage.getItem('retailmind.login-theme');
+    try {
+        if (!config.authenticated) {
+            const local = localStorage.getItem('retailmind.login-theme') || localStorage.getItem('retailmind.theme');
             if (modes.includes(local)) mode = local;
-        } catch (_) { /* Storage is optional on shared/private browsers. */ }
-    }
+        } else {
+            const user = String(config.user);
+            if (localStorage.getItem('retailmind.theme-user') === user) {
+                const local = localStorage.getItem('retailmind.theme');
+                if (modes.includes(local)) mode = local;
+            }
+        }
+    } catch (_) { /* Storage is optional on shared/private browsers. */ }
     const apply = () => {
         document.documentElement.dataset.theme = mode === 'system' ? (device.matches ? 'dark' : 'light') : mode;
         document.documentElement.style.colorScheme = document.documentElement.dataset.theme;
-        document.documentElement.style.backgroundColor = document.documentElement.dataset.theme === 'dark' ? '#0b1220' : '';
+        document.documentElement.style.backgroundColor = document.documentElement.dataset.theme === 'dark' ? '#0b1220' : '#f4f6f9';
         document.querySelectorAll('img[src*="/assets/img/retailmind-"], link[rel="icon"][href*="retailmind-favicon-"], [data-brand-base]').forEach(image => {
             const attribute = image.tagName === 'LINK' ? 'href' : 'src';
             if (!image.dataset.brandBase) {
@@ -42,14 +48,26 @@
             button.setAttribute('aria-pressed', String(button.dataset.themeMode === mode));
         });
         document.querySelectorAll('[data-theme-current]').forEach(trigger => {
-            const selected = trigger.parentElement.querySelector(`[data-theme-mode="${mode}"]`);
+            const selected = trigger.parentElement?.querySelector(`[data-theme-mode="${mode}"]`);
             trigger.dataset.themeCurrent = mode;
-            trigger.innerHTML = selected.querySelector('svg').outerHTML + `<span>${mode[0].toUpperCase() + mode.slice(1)}</span>`;
+            const icon = selected?.querySelector('svg');
+            if (icon) trigger.innerHTML = icon.outerHTML + `<span>${mode[0].toUpperCase() + mode.slice(1)}</span>`;
             trigger.setAttribute('aria-label', 'Appearance: ' + mode);
         });
         window.dispatchEvent(new Event('retailmind:themechange'));
     };
     apply();
+    window.addEventListener('retailmind:pagechange', apply);
+    window.addEventListener('storage', event => {
+        const key = config.authenticated ? 'retailmind.theme' : 'retailmind.login-theme';
+        if (event.key !== key || !modes.includes(event.newValue)) return;
+        try {
+            if (config.authenticated && localStorage.getItem('retailmind.theme-user') !== String(config.user)) return;
+        } catch (_) { return; }
+        mode = event.newValue;
+        config.mode = mode;
+        apply();
+    });
     device.addEventListener('change', () => { if (mode === 'system') apply(); });
     document.addEventListener('DOMContentLoaded', () => {
         const wrapper = document.createElement('details');
@@ -128,7 +146,14 @@
             });
             const button = event.target.closest('[data-theme-mode]');
             if (!button) return;
+            if (!modes.includes(button.dataset.themeMode)) return;
             mode = button.dataset.themeMode;
+            config.mode = mode;
+            try {
+                localStorage.setItem('retailmind.theme-user', config.authenticated ? String(config.user) : '');
+                localStorage.setItem('retailmind.theme', mode);
+                if (!config.authenticated) localStorage.setItem('retailmind.login-theme', mode);
+            } catch (_) { /* Storage is optional on shared/private browsers. */ }
             apply();
             const menu = button.closest('.theme-mobile-menu');
             if (menu) {
@@ -136,7 +161,6 @@
                 menu.querySelector('summary').focus();
             }
             if (!config.authenticated) {
-                try { localStorage.setItem('retailmind.login-theme', mode); } catch (_) {}
                 return;
             }
             const selected = mode;

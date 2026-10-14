@@ -203,6 +203,7 @@ function user_role_names(PDO $pdo, int $userId, ?string $fallbackRole = null): a
 
 function login_user(PDO $pdo, string $identifier, string $password): bool
 {
+    unset($_SESSION['_flash_login_success']);
     $identifier = trim($identifier);
 
     $resolved = resolve_login_user($pdo, $identifier);
@@ -262,6 +263,7 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
             null,
             ['username' => $user['username'], 'role' => $user['role_name'], 'action' => 'success', 'identifier_type' => $identifierType]
         );
+        $_SESSION['_flash_login_success'] = 'Login successful! Welcome, ' . $user['username'] . '!';
         return true;
     }
 

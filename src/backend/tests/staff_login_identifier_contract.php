@@ -152,6 +152,14 @@ try {
     $assert(($_SESSION['user_id'] ?? null) === $cashierId, 'Username sign-in must establish the cashier session');
     $assert(($_SESSION['role'] ?? null) === 'cashier', 'Username sign-in must establish the cashier role');
     $assert(!isset($_SESSION['_login_error']), 'Successful sign-in must clear the login error');
+    $assert(($_SESSION['_flash_login_success'] ?? '') === 'Login successful! Welcome, shopcashier!', 'Welcome must use the verified username');
+    $sidebarSource = file_get_contents($root . '/src/frontend/components/sidebar.php');
+    preg_match('/\$loginSuccess = .*?;\s*unset\(\$_SESSION\[\x27_flash_login_success\x27\]\);/s', $sidebarSource, $welcomeConsumer);
+    $assert(isset($welcomeConsumer[0]), 'Shared workspace must consume the welcome flash');
+    eval($welcomeConsumer[0]);
+    $assert($loginSuccess === 'Login successful! Welcome, shopcashier!', 'First workspace request receives the welcome');
+    eval($welcomeConsumer[0]);
+    $assert($loginSuccess === '', 'Refresh must not receive the welcome again');
     $successAudit = $lastAudit();
     $assert($successAudit['action'] === 'Login success' && (int)$successAudit['user_id'] === $cashierId, 'Username sign-in must write a success audit for the resolved user');
     $assert($auditPayload($successAudit)['identifier_type'] === 'username', 'Username sign-in audit must record the username identifier type');
@@ -161,6 +169,7 @@ try {
     $resetSession();
     $assert(login_user($pdo, '  CASHIER@store.TEST  ', 'CashierPass123') === true, 'Email sign-in with mixed case and padding must succeed');
     $assert(($_SESSION['user_id'] ?? null) === $cashierId, 'Email sign-in must establish the same cashier session');
+    $assert(($_SESSION['_flash_login_success'] ?? '') === 'Login successful! Welcome, shopcashier!', 'Email sign-in must welcome the actual username');
     $emailAudit = $lastAudit();
     $assert($emailAudit['action'] === 'Login success' && (int)$emailAudit['user_id'] === $cashierId, 'Email sign-in must write a success audit for the resolved user');
     $assert($auditPayload($emailAudit)['identifier_type'] === 'email', 'Email sign-in audit must record the email identifier type');
@@ -174,7 +183,9 @@ try {
 
     // Bad password shows exactly the generic sentence with no existence leak.
     $resetSession();
+    $_SESSION['_flash_login_success'] = 'Stale welcome';
     $assert(login_user($pdo, 'shopcashier', 'NotThePassword123') === false, 'Bad password must fail');
+    $assert(!isset($_SESSION['_flash_login_success']), 'Failed sign-in must clear any welcome');
     $assert(last_login_error() === 'Invalid username or password.', 'Bad password must show exactly the generic sentence');
     $badPasswordAudit = $lastAudit();
     $assert($badPasswordAudit['action'] === 'Login failure' && (int)$badPasswordAudit['user_id'] === $cashierId, 'Bad password must audit the resolved user');

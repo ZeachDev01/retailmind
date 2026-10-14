@@ -1,6 +1,8 @@
 (() => {
     'use strict';
 
+    if (window.RetailMindNavigation?.prefetch) return;
+
     // Keep legacy page scripts in their own document so globals and listeners reset on navigation.
     const host = window.parent !== window && window.parent.RetailMindNavigation
         ? window.parent : window;
@@ -21,8 +23,13 @@
             const notice = source.document.createElement('div');
             lastNotice = notice;
             notice.setAttribute('role', 'status');
+            const isDark = document.documentElement.dataset.theme === 'dark' || document.documentElement.style.backgroundColor === '#0b1220';
+            const bg = isDark ? '#0b1220' : '#f4f6f9';
+            const text = isDark ? '#e2e8f0' : '#1e293b';
+            const cardBg = isDark ? '#111c33' : '#ffffff';
+            const border = isDark ? '#1e293b' : '#cbd5e1';
             notice.textContent = 'Loading page…';
-            notice.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:100000;padding:1rem;background:Canvas;color:CanvasText;border:1px solid;border-radius:.5rem';
+            notice.style.cssText = `position:fixed;top:1rem;right:1rem;z-index:100000;padding:1rem;background:${cardBg};color:${text};border:1px solid ${border};border-radius:.5rem;color-scheme:${isDark ? 'dark' : 'light'}`;
             source.document.body.append(notice);
             try {
                 const response = await fetch(url, {credentials: 'same-origin', signal: request.signal});
@@ -38,7 +45,7 @@
                 currentUrl = target.href;
                 const next = document.createElement('iframe');
                 next.title = 'RetailMind workspace';
-                next.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;background:Canvas;z-index:10000';
+                next.style.cssText = `position:fixed;inset:0;width:100%;height:100%;border:0;background:${bg};color-scheme:${isDark ? 'dark' : 'light'};z-index:10000`;
                 // Preserve the fullscreen element (the outer document root).
                 document.body.replaceChildren(next);
                 frame = next;

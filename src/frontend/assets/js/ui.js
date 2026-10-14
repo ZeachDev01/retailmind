@@ -140,7 +140,47 @@
     return toast;
   };
 
+  // A modal <dialog> sits in the browser top layer; a SweetAlert mounted on
+  // <body> underneath it is visible but cannot receive clicks.
+  function activeSwalTarget() {
+    let modal = null;
+    try {
+      modal = [...document.querySelectorAll("dialog:modal")].pop() || null;
+    } catch (error) {
+      modal = [...document.querySelectorAll("dialog[open]")].pop() || null;
+    }
+    return modal || document.body;
+  }
+  RM.swalTarget = activeSwalTarget;
+
+  // Direct Swal.fire callers (cart workspace prompts, page scripts) get the
+  // same top-layer target as RM.alert unless they choose their own.
+  function installSwalTargetDefault() {
+    const swal = window.Swal;
+    if (!swal || typeof swal.fire !== "function" || swal.fire.__rmTargeted) return;
+    const nativeFire = swal.fire.bind(swal);
+    const fire = function (...args) {
+      if (args.length === 1 && args[0] && typeof args[0] === "object" && !args[0].target) {
+        args[0] = Object.assign({}, args[0], { target: activeSwalTarget() });
+      } else if (typeof args[0] === "string") {
+        // Swal.fire(title, html, icon) shorthand
+        args = [{ title: args[0], html: args[1], icon: args[2], target: activeSwalTarget() }];
+      }
+      return nativeFire(...args);
+    };
+    fire.__rmTargeted = true;
+    swal.fire = fire;
+  }
+  installSwalTargetDefault();
+
   RM.alert = function (message, type, title) {
+    // Accept RM.alert({title, message, type}) as well as positional arguments.
+    if (message && typeof message === "object") {
+      const opts = message;
+      message = opts.message != null ? opts.message : opts.text != null ? opts.text : "";
+      type = opts.type || opts.icon || type;
+      title = opts.title || title;
+    }
     const kind = type || "info";
     const labels = {
       success: "Success",
@@ -153,7 +193,7 @@
         const layerStyle = document.createElement("style");
         layerStyle.id = "rm-swal-layer-style";
         layerStyle.textContent =
-          ".swal2-container { z-index: 10000 !important; }";
+          ".swal2-container { z-index: 20000 !important; }";
         document.head.appendChild(layerStyle);
       }
       const clean = RM.sanitizeAlert(message, kind);
@@ -171,14 +211,23 @@
         (clean.tech
           ? '<div class="rm-swal-tech">' + escapeHtml(clean.tech) + "</div>"
           : "");
-      return window.Swal.fire({
+      // Shared alerts must not inherit the current page's disposable handlers and timers.
+      return Promise.resolve().then(() => window.Swal.fire({
+        target: activeSwalTarget(),
         icon: kind,
         title: title || labels[kind] || labels.info,
         html: html,
         confirmButtonText: "OK",
+        showCloseButton: true,
+        // Release the backdrop immediately instead of waiting for a closing animation.
+        hideClass: { popup: "", backdrop: "" },
         buttonsStyling: false,
-        customClass: { confirmButton: "btn rm-swal-confirm" },
-      });
+        customClass: {
+          confirmButton: "btn btn-primary rm-swal-confirm",
+          cancelButton: "btn btn-quiet rm-swal-cancel",
+          denyButton: "btn btn-danger rm-swal-deny",
+        },
+      }));
     }
     return Promise.resolve(RM.toast(message, kind, title));
   };
@@ -313,6 +362,10 @@
 
   function initServerNotifications() {
     const flash = qs("#rm-flash-messages");
+    if (flash && flash.dataset.loginSuccess) {
+      RM.toast(flash.dataset.loginSuccess, "success").classList.add("rm-toast-centered");
+      delete flash.dataset.loginSuccess;
+    }
     const hasSwal = window.Swal && typeof window.Swal.fire === "function";
     const notices = [];
     if (flash && hasSwal) {

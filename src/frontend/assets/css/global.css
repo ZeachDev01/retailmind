@@ -123,3 +123,6 @@ td, .stat-card .value { font-variant-numeric: tabular-nums; }
 .swal2-container {
     z-index: 10000 !important;
 }
+
+/* SweetAlert must not wait for a reduced-motion transition that never starts. */
+.swal2-popup { transition: none !important; }

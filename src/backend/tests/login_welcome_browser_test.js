@@ -1,0 +1,52 @@
+// Run with: node src/backend/tests/login_welcome_browser_test.js
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require('playwright');
+
+(async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../frontend/assets/js/ui.js'), 'utf8');
+  const toast = source.slice(source.indexOf('  RM.toast ='), source.indexOf('  RM.alert ='));
+  const notifications = source.slice(source.indexOf('  function initServerNotifications()'), source.indexOf('  function initCommandPalette()'));
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<div id="rm-flash-messages" hidden></div>');
+    await page.addStyleTag({ path: path.join(__dirname, '../../frontend/assets/css/style.css') });
+    await page.addStyleTag({ content: '.bi-x-lg::before { content: "×"; }' });
+    await page.evaluate(() => {
+      document.querySelector('#rm-flash-messages').dataset.loginSuccess = 'Login successful! Welcome, <img src=x onerror=alert(1)>!';
+    });
+    await page.addScriptTag({ content: `
+      const qs = (selector, root = document) => root.querySelector(selector);
+      const qsa = selector => [...document.querySelectorAll(selector)];
+      const RM = { sanitizeAlert: message => ({ message }) };
+      ${toast}
+      ${notifications}
+      initServerNotifications();
+      initServerNotifications();
+    ` });
+    assert.equal(await page.locator('.rm-toast.success').count(), 1, 'Welcome appears once even if initialization repeats');
+    assert.equal(await page.locator('.rm-toast-copy span').textContent(), 'Login successful! Welcome, <img src=x onerror=alert(1)>!');
+    assert.equal(await page.locator('.rm-toast img').count(), 0, 'Username is rendered as text');
+    assert.equal(await page.locator('.bi-check-circle-fill').count(), 1);
+    await page.locator('.rm-toast').evaluate(async node => {
+      await new Promise(requestAnimationFrame);
+      await Promise.all(node.getAnimations().map(animation => animation.finished));
+    });
+    for (const viewport of [{ width: 1280, height: 720 }, { width: 375, height: 667 }]) {
+      await page.setViewportSize(viewport);
+      const bounds = await page.locator('.rm-toast').boundingBox();
+      const visibleWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      assert.ok(Math.abs(bounds.x + bounds.width / 2 - visibleWidth / 2) < 1, 'Welcome is horizontally centered');
+      assert.ok(Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2) < 1, 'Welcome is vertically centered');
+    }
+    await page.getByRole('button', { name: 'Dismiss notification' }).click();
+    await page.locator('.rm-toast').waitFor({ state: 'detached' });
+    await page.evaluate(() => RM.toast('Login successful! Welcome, cashier!', 'success'));
+    await page.locator('.rm-toast').waitFor({ state: 'detached', timeout: 7000 });
+    console.log('Login welcome toast: passed');
+  } finally {
+    await browser.close();
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });

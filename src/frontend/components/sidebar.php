@@ -41,6 +41,8 @@ $mobileHomeTarget = match ($role) {
     default => 'components/cashier/pos.php',
 };
 $flashMessages = [];
+$loginSuccess = (string)($_SESSION['_flash_login_success'] ?? '');
+unset($_SESSION['_flash_login_success']);
 foreach (['success', 'error', 'warning', 'info'] as $flashType) {
     $flashKey = '_flash_' . $flashType;
     if (!empty($_SESSION[$flashKey])) {
@@ -262,8 +264,8 @@ $GLOBALS['rm_navigation_shell'] = [
 ];
 ?>
 <!--rm-shell-start-->
-<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/page-navigation.css')) ?>">
-<script src="<?= sidebar_e(app_url('assets/js/page-navigation.js')) ?>" data-workspace="<?= sidebar_e((string)$role) ?>"></script>
+<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/page-navigation.css') . '?v=' . filemtime(__DIR__ . '/../assets/css/page-navigation.css')) ?>">
+<script src="<?= sidebar_e(app_url('assets/js/page-navigation.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/page-navigation.js')) ?>" data-workspace="<?= sidebar_e((string)$role) ?>"></script>
 <link rel="stylesheet" href="<?= sidebar_e($avatarStylesheetUrl) ?>" data-avatar-styles>
 <script>
     (function() {
@@ -413,7 +415,7 @@ $GLOBALS['rm_navigation_shell'] = [
     </section>
 </div>
 
-<div id="rm-flash-messages" hidden<?php foreach ($flashMessages as $flashType => $flashMessage): ?> data-<?= sidebar_e($flashType) ?>="<?= sidebar_e($flashMessage) ?>" <?php endforeach; ?>></div>
+<div id="rm-flash-messages" hidden data-login-success="<?= sidebar_e($loginSuccess) ?>"<?php foreach ($flashMessages as $flashType => $flashMessage): ?> data-<?= sidebar_e($flashType) ?>="<?= sidebar_e($flashMessage) ?>" <?php endforeach; ?>></div>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>

@@ -27,7 +27,7 @@ const render = (html, partial) => {
         if (req.method === 'POST') { submitted = ''; for await (const chunk of req) submitted += chunk; }
         const partial = req.headers['x-retailmind-navigation'] === '1';
         const contentTag = req.url.startsWith('/second.php') ? 'div' : 'main';
-        const html = `<!doctype html><html><head><title>${req.url}</title><link rel="stylesheet" href="/shared.css"><style>${css}</style><script src="/deferred.js" defer></script></head>
+        const html = `<!doctype html><html><head><title>${req.url}</title><script data-rm-persistent>document.documentElement.dataset.theme = 'light';</script><link rel="stylesheet" href="/shared.css"><style>${css}</style><script src="/deferred.js" defer></script></head>
             <body class="page-${req.url.split('.')[0].slice(1)}"><div class="app-shell">
             <!--rm-shell-start--><script src="/navigation.js" data-workspace="admin"></script>
             <aside id="appSidebar" class="open"><a id="first" href="/first.php">First</a><a id="second" href="/second.php">Second</a><a id="slow" href="/slow.php">Slow</a><a id="error" href="/error.php">Error</a><a id="expired" href="/expired.php">Expired</a><a id="download" href="/download.php">Download</a></aside>
@@ -66,18 +66,31 @@ const render = (html, partial) => {
                     const errors = [];
                     page.on('pageerror', error => errors.push(error.message));
                     await page.goto(origin + '/first.php');
+                    await page.addStyleTag({content: fs.readFileSync('src/frontend/assets/css/theme.css', 'utf8')});
+                    const theme = fallback ? 'dark' : 'light';
+                    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
                     assert.equal(await page.locator('.main-content').getAttribute('id'), 'first-content', 'Initial navigation preserves page anchors');
                     await page.evaluate(() => { window.originalDocument = document; window.originalSidebar = document.querySelector('#appSidebar'); window.originalNavbar = document.querySelector('#navbar'); });
                     if (fallback) await page.evaluate(() => Object.defineProperty(document.documentElement, 'requestFullscreen', {value: () => Promise.reject(new Error('Unavailable'))}));
                     await page.locator('[data-fullscreen-toggle]').click();
                     await page.waitForFunction(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen'));
                     const waitPage = path => page.waitForFunction(path => location.pathname + location.search === path && !document.querySelector('[data-navigation-status]'), path);
+                    await page.evaluate(() => {
+                        window.navigationFrames = [];
+                        new MutationObserver(() => {
+                            const main = document.querySelector('.main-content');
+                            if (main) navigationFrames.push({opacity: getComputedStyle(main).opacity, transform: getComputedStyle(main).transform});
+                        }).observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: ['aria-busy']});
+                    });
                     for (const id of ['second', 'first', 'second']) {
                         await page.evaluate(() => RetailMindUI.openOverlay(document.querySelector('#page-modal')));
                         await page.evaluate(() => { RetailMindUI.confirm({message: 'Pending page action'}); });
                         assert(await page.locator('body').evaluate(node => node.classList.contains('no-scroll')));
+                        await page.evaluate(() => { navigationFrames.length = 0; });
                         await page.locator('#' + id).click();
                         await waitPage('/' + id + '.php');
+                        assert(await page.evaluate(() => navigationFrames.length > 0 && navigationFrames.every(frame => frame.opacity === '1' && frame.transform === 'none')), 'Sidebar navigation keeps outgoing and incoming content opaque and stationary');
+                        assert.equal(await page.locator('html').getAttribute('data-theme'), theme, 'Sidebar navigation preserves the active theme');
                         assert.equal(await page.locator('.main-content').getAttribute('id'), id === 'first' ? 'first-content' : 'page-content', 'Page switching preserves authored IDs and supplies a fallback');
                         assert(await page.evaluate(() => document === originalDocument && document.querySelector('#appSidebar') === originalSidebar && document.querySelector('#navbar') === originalNavbar));
                         assert(await page.evaluate(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen')));

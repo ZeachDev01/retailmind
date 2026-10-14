@@ -62,6 +62,7 @@
 
     function cleanup(retainedAssets) {
         clearPrefetch();
+        window.Swal?.close();
         for (const item of page.listeners.filter(item => item.type === 'pagehide')) item.wrapped.call(item.target, new Event('pagehide'));
         document.querySelectorAll('.command-overlay.open, .rm-modal-overlay.open, .rm-drawer-overlay.open, .checkout-modal.open, .user-modal-overlay.open, .user-drawer-overlay.open').forEach(overlay => window.RetailMindUI?.closeOverlay(overlay));
         document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
@@ -117,6 +118,7 @@
         return url.origin !== location.origin || /\/(?:theme|ui|page-navigation|cart-workspace|backup_status|checkout-attempt|checkout-quote)\.js$/.test(url.pathname);
     }
     async function execute(script, url) {
+        if (script.hasAttribute('data-rm-persistent')) return;
         if (script.type && !['text/javascript', 'application/javascript', 'module'].includes(script.type)) return;
         const source = script.getAttribute('src');
         const assetURL = source && new URL(source, url);

@@ -35,9 +35,39 @@ function retailmind_theme_head(): void
             }
         }
     }
-    $config = ['mode' => $mode, 'authenticated' => $authenticated,
+    $config = ['mode' => $mode, 'authenticated' => $authenticated, 'user' => (int)($_SESSION['user_id'] ?? 0),
         'endpoint' => theme_url('components/auth/theme.php'), 'csrf' => csrf_token()];
-    echo '<script>window.retailmindTheme=' . json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';
+    echo '<script data-rm-persistent>window.retailmindTheme=' . json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';
+    echo <<<'HTML'
+<script data-rm-persistent>
+(() => {
+    const config = window.retailmindTheme;
+    const modes = ['light', 'dark', 'system'];
+    let mode = modes.includes(config.mode) ? config.mode : 'system';
+    try {
+        let saved;
+        if (config.authenticated) {
+            const user = String(config.user);
+            if (localStorage.getItem('retailmind.theme-user') === user) {
+                saved = localStorage.getItem('retailmind.theme');
+            } else {
+                localStorage.setItem('retailmind.theme', mode);
+                localStorage.setItem('retailmind.theme-user', user);
+            }
+        } else {
+            saved = localStorage.getItem('retailmind.login-theme') || localStorage.getItem('retailmind.theme');
+        }
+        if (modes.includes(saved)) mode = saved;
+    } catch (_) { /* Account and device preferences work without storage. */ }
+    config.mode = mode;
+    const dark = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const root = document.documentElement;
+    root.dataset.theme = dark ? 'dark' : 'light';
+    root.style.colorScheme = root.dataset.theme;
+    root.style.backgroundColor = dark ? '#0b1220' : '#f4f6f9';
+})();
+</script>
+HTML;
     echo '<script src="' . htmlspecialchars(theme_url('assets/js/theme.js'), ENT_QUOTES, 'UTF-8') . '"></script>';
     echo '<link rel="stylesheet" href="' . htmlspecialchars(theme_url('assets/css/theme.css'), ENT_QUOTES, 'UTF-8') . '">';
     echo '<link rel="manifest" crossorigin="use-credentials" href="' . htmlspecialchars(theme_url('manifest.webmanifest'), ENT_QUOTES, 'UTF-8') . '">';
