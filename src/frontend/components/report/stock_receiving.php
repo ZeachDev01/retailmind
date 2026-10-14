@@ -26,7 +26,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $entry = [
             'supplier' => $_POST['supplier'] ?? '',
             'invoice_number' => $_POST['invoice_number'] ?? '',
-            'po_number' => $_POST['po_number'] ?? '',
         ];
         if (isset($_POST['entry_mode']) || array_key_exists('lines', $_POST)) {
             $lines = $_POST['lines'] ?? [];
@@ -40,7 +39,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'damaged_qty' => $_POST['damaged_qty'] ?? 0,
             'cost_price' => $_POST['cost_price'] ?? '',
             'supplier' => $_POST['supplier'] ?? '',
-            'po_number' => $_POST['po_number'] ?? '',
             'invoice_number' => $_POST['invoice_number'] ?? '',
             'batch_number' => $_POST['batch_number'] ?? '',
             'expiration_date' => $_POST['expiration_date'] ?? '',
@@ -48,8 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'discrepancy_qty' => $_POST['discrepancy_qty'] ?? 0,
             'discrepancy_notes' => $_POST['discrepancy_notes'] ?? '',
             'notes' => $_POST['notes'] ?? '',
-            'replenishment_request_id' => $_POST['replenishment_request_id'] ?? 0,
-            'purchase_order_item_id' => $_POST['purchase_order_item_id'] ?? 0,
             ]];
         }
         $results = $receivingService->receiveShoppingTrip($lines, $entry, (int)$_SESSION['user_id']);
@@ -59,7 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($results as $result) {
             $summary = "{$result['product_name']}: {$result['accepted_qty']} accepted units";
             if ($result['damaged_qty'] > 0) $summary .= ", {$result['damaged_qty']} damaged units excluded";
-            if ($result['remaining_qty'] !== null) $summary .= ". Remaining request quantity: {$result['remaining_qty']}";
             $summaries[] = $summary;
         }
         $message = 'Shopping entry saved. ' . implode('; ', $summaries)
@@ -79,21 +74,11 @@ $receivingNonce = bin2hex(random_bytes(24));
 $_SESSION['receiving_nonces'][$receivingNonce] = true;
 $_SESSION['receiving_nonces'] = array_slice($_SESSION['receiving_nonces'], -20, null, true);
 
-$po_items = $receivingService->getReceivablePurchaseOrderItems();
-$pending_requests = $receivingService->getPendingReplenishmentRequests();
-$po_request_ids = array_fill_keys(array_map(
-    'intval',
-    array_filter(array_column($po_items, 'replenishment_request_id'))
-), true);
-$scan_pending_requests = array_values(array_filter(
-    $pending_requests,
-    static fn(array $request): bool => !isset($po_request_ids[(int)$request['request_id']])
-));
 $products = $receivingService->getActiveProducts();
 $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['user_id'] : null);
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -122,67 +107,23 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
             <div class="message error"><span role="alert"><?= htmlspecialchars($error) ?></span></div>
         <?php endif; ?>
 
-        <details>
-            <summary>Optional: receive against an existing approved document</summary>
-        <?php if (!empty($po_items)): ?>
-            <div class="pending-requests">
-                <h4>Approved Purchase Orders</h4>
-                <p>Receive against a purchase-order line to keep ordered and received quantities synchronized.</p>
-                <?php foreach ($po_items as $item): ?>
-                    <div class="request-item">
-                        <div class="info"><strong><?= htmlspecialchars($item['po_number']) ?> — <?= htmlspecialchars($item['product_name']) ?></strong><br>
-                            <span class="sku"><?= htmlspecialchars($item['sku']) ?> · <?= htmlspecialchars($item['supplier_name'] ?? 'Supplier not assigned') ?></span>
-                            <div class="progress">Received <?= (int)$item['received_qty'] ?> · Remaining <?= (int)$item['remaining_qty'] ?> <?= htmlspecialchars($item['base_unit'] ?? 'piece') ?>(s)</div>
-                        </div>
-                        <button type="button" class="request-item btn-link" onclick='populatePO(<?= json_encode([
-                            "item_id"=>(int)$item["purchase_order_item_id"],"request_id"=>(int)($item["replenishment_request_id"]??0),
-                            "product_id"=>(int)$item["product_id"],"remaining"=>(int)$item["remaining_qty"],"cost"=>(float)$item["unit_cost"],
-                            "po_number"=>$item["po_number"],"supplier"=>$item["supplier_name"]??"","units_per_package"=>(int)$item["units_per_package"]
-                        ], JSON_HEX_APOS|JSON_HEX_QUOT) ?>)'>Receive PO</button>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if (!empty($pending_requests)): ?>
-            <div class="pending-requests">
-                <h4>Pending Replenishment Requests</h4>
-                <p>These approved requests are waiting for stock to be received:</p>
-                <?php foreach ($pending_requests as $req): ?>
-                    <div class="request-item">
-                        <div class="info">
-                            <strong><?= htmlspecialchars($req['product_name']) ?></strong> - Qty: <?= $req['request_qty'] ?> units<br>
-                            <span class="sku"><?= htmlspecialchars($req['sku']) ?></span>
-                            <div class="progress">
-                                Received: <?= (int)$req['received_to_date'] ?> |
-                                Remaining: <?= (int)$req['remaining_qty'] ?>
-                            </div>
-                        </div>
-                        <button type="button" class="request-item btn-link" onclick="populateForm(<?= (int)$req['product_id'] ?>, <?= (int)$req['remaining_qty'] ?>, <?= (int)$req['request_id'] ?>)">
-                            Receive Now
-                        </button>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-        </details>
-
-        <div class="receiving-form">
-            <h3>Record a shopping trip</h3>
-            <p>Add bought products, review every line, then save once. Supplier and receipt details apply to the whole entry; no request, purchase order, or approval is required.</p>
+        <div class="receiving-form" data-step="1">
+            <h2 id="receiving_step_title" tabindex="-1">1. Select products</h2>
+            <ol class="receiving-steps" aria-label="Receiving progress"><li aria-current="step">1. Select products</li><li>2. Enter quantities</li><li>3. Review</li></ol>
+            <p>Select what was bought, enter actual quantities, then review and save once. Shopping store and receipt details are optional.</p>
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
             <fieldset <?= !$canReceive ? 'disabled' : '' ?>>
-            <div class="form-section">
-                <h4>Scan Product</h4>
+            <div class="form-section" id="receiving_selection">
+                <h3>Find products</h3>
+                <div class="form-group"><label for="product_search">Search products by name or SKU</label><input type="search" id="product_search" autocomplete="off" placeholder="Search active products"></div>
                 <div class="form-group">
                     <label for="product_code_scan">Barcode or SKU</label>
                     <input type="text" id="product_code_scan" autocomplete="off" inputmode="text" placeholder="Scan or type a code, then press Enter">
                     <small id="scan_target" role="status">Scanning product line 1. Focus another line to scan into it.</small>
                     <small id="scan_status" role="status" aria-live="polite">You can also choose a product manually below.</small>
                 </div>
-                <div id="scan_document_review" class="pending-requests" hidden aria-live="polite"></div>
             </div>
-            <form method="POST" id="receiving_form">
+            <form method="POST" id="receiving_form" novalidate>
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                 <input type="hidden" name="receiving_nonce" value="<?= htmlspecialchars($receivingNonce) ?>">
                 <input type="hidden" name="entry_mode" value="shopping_trip">
@@ -190,11 +131,8 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
                 <section class="receiving-line" aria-label="Product line 1">
                     <div class="receiving-line-heading"><h4>Product line <span class="line-number">1</span></h4>
                         <button type="button" class="btn btn-quiet remove-receiving-line">Remove product</button></div>
-                <input type="hidden" id="replenishment_request_id" data-field="replenishment_request_id" name="replenishment_request_id" value="">
-                <input type="hidden" id="purchase_order_item_id" data-field="purchase_order_item_id" name="purchase_order_item_id" value="">
 
                 <div class="form-section">
-                    <h4>Product Information</h4>
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="product_id" class="required">Product</label>
@@ -207,33 +145,33 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group receiving-quantity">
                             <label for="quantity_mode">Receiving quantity type</label>
                             <select name="quantity_mode" id="quantity_mode" data-field="quantity_mode"><option value="units">Base units</option><option value="packages">Packages / cases</option></select>
                         </div>
-                        <div class="form-group" id="units_qty_group" data-field="units_qty_group">
+                        <div class="form-group receiving-quantity" id="units_qty_group" data-field="units_qty_group">
                             <label for="received_qty">Base units received</label>
-                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_qty" id="received_qty" data-field="received_qty" value="0">
+                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_qty" id="received_qty" data-field="received_qty" value="">
                         </div>
-                        <div class="form-group" id="packages_qty_group" data-field="packages_qty_group" style="display:none">
+                        <div class="form-group receiving-quantity" id="packages_qty_group" data-field="packages_qty_group" style="display:none">
                             <label for="received_packages">Packages received</label>
-                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_packages" id="received_packages" data-field="received_packages" value="0">
+                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_packages" id="received_packages" data-field="received_packages" value="">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group receiving-quantity">
                             <label for="damaged_qty">Damaged base units on delivery</label>
                             <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_qty" id="damaged_qty" data-field="damaged_qty" value="0">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group receiving-quantity">
                             <label for="cost_price">Purchase cost per base unit (optional)</label>
                             <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" placeholder="Leave blank if unknown">
                             <small>Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
                         </div>
                     </div>
-                    <small id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
+                    <small class="receiving-quantity" id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
                 </div>
 
-                <div class="form-section">
-                    <h4>Product Details</h4>
+                <div class="form-section receiving-quantity">
+                    <h4>Optional batch & expiry</h4>
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="batch_number">Batch/Lot Number</label>
@@ -246,32 +184,11 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
                     </div>
                 </div>
 
-                <div class="form-section">
-                    <h4>Delivery Discrepancy</h4>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="discrepancy_type">Discrepancy Type</label>
-                            <select name="discrepancy_type" id="discrepancy_type" data-field="discrepancy_type">
-                                <option value="none">None</option>
-                                <option value="short">Short Delivery</option>
-                                <option value="over">Over Delivery</option>
-                                <option value="damaged">Damaged Items</option>
-                                <option value="documentation">Document Mismatch</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="discrepancy_qty">Discrepancy Quantity</label>
-                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="discrepancy_qty" id="discrepancy_qty" data-field="discrepancy_qty" value="0">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="discrepancy_notes">Discrepancy Details</label>
-                        <textarea name="discrepancy_notes" id="discrepancy_notes" data-field="discrepancy_notes" placeholder="Shortage, overage, damage condition, or document mismatch details..."></textarea>
-                    </div>
+                <div class="form-section receiving-quantity">
+                    <div class="form-group"><label for="discrepancy_notes">Damage details (optional)</label><textarea name="discrepancy_notes" id="discrepancy_notes" data-field="discrepancy_notes"></textarea></div>
                 </div>
 
-                <div class="form-section">
+                <div class="form-section receiving-quantity">
                     <div class="form-group">
                         <label for="notes">Notes / Comments</label>
                         <textarea name="notes" id="notes" data-field="notes" placeholder="Any additional notes about this receipt..."></textarea>
@@ -282,16 +199,12 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
                 </div>
                 <button type="button" class="btn btn-quiet" id="add_receiving_line">Add another product</button>
                 <p id="entry_status" role="alert"></p>
-                <div class="form-section">
-                    <h4>Optional supplier & receipt details</h4>
+                <div class="form-section receiving-quantity">
+                    <h3>Optional shopping details</h3>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="supplier">Supplier / shopping store (optional)</label>
+                            <label for="supplier">Shopping store (optional)</label>
                             <input type="text" name="supplier" id="supplier" maxlength="150" placeholder="Where the goods were bought">
-                        </div>
-                        <div class="form-group">
-                            <label for="po_number">PO Number</label>
-                            <input type="text" name="po_number" id="po_number" placeholder="Purchase order #">
                         </div>
                         <div class="form-group">
                             <label for="invoice_number">Receipt / invoice reference (optional)</label>
@@ -300,15 +213,19 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
                     </div>
                 </div>
 
-                <p>Review all product quantities, costs, damage, batch and expiry details before saving.</p>
-                <button type="submit" class="btn-submit">Save shopping entry & update inventory</button>
+                <section id="receiving_review" hidden aria-label="Review shopping entry"></section>
+                <div class="u-flex-wrap receiving-actions">
+                    <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Back</button>
+                    <button type="button" class="btn btn-primary" id="receiving_next">Continue to quantities</button>
+                    <button type="submit" class="btn-submit" hidden>Save shopping entry & update inventory</button>
+                </div>
             </form>
             </fieldset>
         </div>
 
         <?php if (!empty($history)): ?>
             <div class="history-section">
-                <h3>Recent Receipt History (<?= $canReceive ? 'My Receipts' : 'Store Receipts' ?>)</h3>
+                <h3>Recent Receiving History (<?= $canReceive ? 'My Receipts' : 'Store Receipts' ?>)</h3>
                 <div class="u-table-scroll" tabindex="0" role="region" aria-label="Recent receiving history">
                 <table class="history-table">
                     <thead>
@@ -321,8 +238,7 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
                             <th>Damaged</th>
                             <th>Batch / Expiry</th>
                             <th>Cost</th>
-                            <th>Supplier</th>
-                            <th>PO #</th>
+                            <th>Shopping store</th>
                             <th>Receipt reference</th>
                             <th>Recorded by</th>
                             <th>Date & Time</th>
@@ -343,7 +259,6 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
                                 </td>
                                 <td><?= $h['cost_price'] !== null ? number_format((float)$h['cost_price'], 2) : '-' ?></td>
                                 <td><?= htmlspecialchars($h['supplier'] ?? '-') ?></td>
-                                <td><?= htmlspecialchars($h['po_number'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($h['invoice_number'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($h['full_name']) ?></td>
                                 <td><?= htmlspecialchars($h['received_at']) ?></td>
@@ -360,140 +275,11 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
 <script>
 const productCodeScan = document.getElementById('product_code_scan');
 const scanStatus = document.getElementById('scan_status');
-const scanDocumentReview = document.getElementById('scan_document_review');
-const receivableDocuments = <?= json_encode(array_merge(
-    array_map(static fn(array $item): array => [
-        'type' => 'purchase_order',
-        'product_id' => (int)$item['product_id'],
-        'purchase_order_item_id' => (int)$item['purchase_order_item_id'],
-        'replenishment_request_id' => (int)($item['replenishment_request_id'] ?? 0),
-        'po_number' => (string)$item['po_number'],
-        'choice_label' => (string)$item['po_number'] . ' · Line #' . (int)$item['purchase_order_item_id'],
-        'supplier' => (string)($item['supplier_name'] ?? ''),
-        'cost' => (float)$item['unit_cost'],
-        'remaining_qty' => (int)$item['remaining_qty'],
-        'unit' => (string)($item['base_unit'] ?? 'unit'),
-    ], $po_items),
-    array_map(static fn(array $request): array => [
-        'type' => 'replenishment_request',
-        'product_id' => (int)$request['product_id'],
-        'replenishment_request_id' => (int)$request['request_id'],
-        'choice_label' => 'Request #' . (int)$request['request_id'],
-        'supplier' => '',
-        'cost' => 0,
-        'remaining_qty' => (int)$request['remaining_qty'],
-        'unit' => 'unit',
-    ], $scan_pending_requests)
-), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 let activeScanLookup = 0;
 let scanLookupController = null;
 let activeLine = document.querySelector('.receiving-line');
 function receivingField(id) {
     return activeLine?.querySelector('[data-field="' + id + '"]') || null;
-}
-
-function hideScannedDocumentReview() {
-    scanDocumentReview.replaceChildren();
-    scanDocumentReview.hidden = true;
-}
-
-function chooseScannedDocument(documentOption, button) {
-    const quantityMode = receivingField('quantity_mode').value;
-    applyReceivingDocument(documentOption, false, quantityMode);
-    for (const choice of scanDocumentReview.querySelectorAll('.scan-document-choice')) {
-        choice.setAttribute('aria-pressed', choice === button ? 'true' : 'false');
-        choice.textContent = choice === button ? 'Selected' : 'Choose this document';
-    }
-    const packages = quantityMode === 'packages';
-    scanStatus.textContent = `${documentOption.choice_label} selected. Enter the delivered ${packages ? 'packages / cases' : 'Base units'} and review every delivery detail before submitting.`;
-    receivingField(packages ? 'received_packages' : 'received_qty').focus();
-}
-
-function showScannedDocumentReview(productId) {
-    const eligible = receivableDocuments.filter((documentOption) => documentOption.product_id === Number(productId));
-    scanDocumentReview.replaceChildren();
-    scanDocumentReview.hidden = false;
-
-    const heading = document.createElement('h4');
-    heading.textContent = 'Receiving document (optional)';
-    scanDocumentReview.appendChild(heading);
-
-    if (eligible.length === 0) {
-        const message = document.createElement('p');
-        message.textContent = 'Receiving documents are optional. Enter the actual bought quantity to receive this product directly.';
-        scanDocumentReview.appendChild(message);
-        return;
-    }
-
-    const guidance = document.createElement('p');
-    guidance.textContent = 'Receive directly, or choose a document to update its received quantity. Enter actual delivered quantities yourself.';
-    scanDocumentReview.appendChild(guidance);
-    for (const documentOption of eligible) {
-        const row = document.createElement('div');
-        row.className = 'request-item';
-        const info = document.createElement('div');
-        info.className = 'info';
-        const title = document.createElement('strong');
-        title.textContent = documentOption.type === 'purchase_order'
-            ? `Purchase order ${documentOption.choice_label}`
-            : documentOption.choice_label;
-        const progress = document.createElement('div');
-        progress.className = 'progress';
-        progress.textContent = `Remaining ${documentOption.remaining_qty} ${documentOption.unit}(s)`;
-        info.append(title, document.createElement('br'), progress);
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'request-item btn-link scan-document-choice';
-        button.textContent = 'Choose this document';
-        button.setAttribute('aria-label', `Choose ${documentOption.choice_label}`);
-        button.setAttribute('aria-pressed', 'false');
-        button.addEventListener('click', () => chooseScannedDocument(documentOption, button));
-        row.append(info, button);
-        scanDocumentReview.appendChild(row);
-    }
-}
-
-function selectedReceivingDocument() {
-    const purchaseOrderItemId = Number(receivingField('purchase_order_item_id').value || 0);
-    if (purchaseOrderItemId > 0) {
-        return receivableDocuments.find((documentOption) =>
-            Number(documentOption.purchase_order_item_id || 0) === purchaseOrderItemId
-        ) || null;
-    }
-
-    const requestId = Number(receivingField('replenishment_request_id').value || 0);
-    if (requestId > 0) {
-        return receivableDocuments.find((documentOption) =>
-            documentOption.type === 'replenishment_request'
-                && Number(documentOption.replenishment_request_id || 0) === requestId
-        ) || null;
-    }
-
-    return null;
-}
-
-function hasEnteredReceivingDetails() {
-    if (activeLine.dataset.costEdited === 'true' || receivingField('quantity_mode').value !== 'units') {
-        return true;
-    }
-
-    const numberFields = ['received_qty', 'received_packages', 'damaged_qty', 'discrepancy_qty'];
-    if (numberFields.some((id) => Number(receivingField(id).value || 0) !== 0)) {
-        return true;
-    }
-
-    const textFields = [
-        'supplier', 'po_number', 'invoice_number', 'batch_number', 'expiration_date',
-        'discrepancy_notes', 'notes'
-    ];
-    if (textFields.some((id) => {
-        const field = receivingField(id) || document.getElementById(id);
-        return field && field.value.trim() !== '';
-    })) {
-        return true;
-    }
-
-    return receivingField('discrepancy_type').value !== 'none';
 }
 
 async function identifyReceivingProduct(code) {
@@ -523,58 +309,20 @@ async function identifyReceivingProduct(code) {
             return;
         }
         const product = result.product;
-        if (!activeLine) addReceivingLine();
-        if (Array.from(document.querySelectorAll('.receiving-line')).some(row => row !== activeLine
-            && row.querySelector('[data-field="product_id"]').value === String(product.product_id))) {
+        if (Array.from(lineContainer.children).some(row => row.querySelector('[data-field="product_id"]').value === String(product.product_id))) {
             scanStatus.textContent = 'This product is already in the shopping entry. Edit its existing line or choose another product.';
             return;
         }
+        if (!activeLine || receivingField('product_id').value) addReceivingLine();
         const matchedCase = result.matched_code_kind === 'case_barcode';
-        const quantityMode = matchedCase ? 'packages' : 'units';
-        const productSelect = receivingField('product_id');
-        const selectedProductId = Number(productSelect.value || 0);
-        const linkedDocument = selectedReceivingDocument();
-        if (linkedDocument) {
-            const documentName = linkedDocument.type === 'purchase_order'
-                ? 'purchase-order line'
-                : 'replenishment request';
-            if (Number(product.product_id) !== Number(linkedDocument.product_id)) {
-                scanStatus.textContent = `This receipt is linked to a ${documentName}. Scan that document's product or continue with the selected product.`;
-                productCodeScan.value = '';
-                return;
-            }
-
-            receivingField('quantity_mode').value = quantityMode;
-            updateQuantityMode();
-            scanStatus.textContent = `${product.product_name} (${product.sku}) is already linked to the selected ${documentName}. Entered delivery quantities and details were preserved.`;
-            productCodeScan.value = '';
-            receivingField(matchedCase ? 'received_packages' : 'received_qty').focus();
-            return;
-        }
-
-        const hasEnteredDetails = selectedProductId > 0 && hasEnteredReceivingDetails();
-        if (hasEnteredDetails
-            && Number(product.product_id) !== selectedProductId
-            && !window.confirm(`Replace the current product with ${product.product_name}? Your entered receiving details will stay on the form.`)) {
-            scanStatus.textContent = 'Product unchanged. Your entered receiving details were preserved.';
-            productCodeScan.value = '';
-            return;
-        }
-
-        productSelect.value = String(product.product_id);
-        resetReferences();
-        updatePackageConversion();
-        receivingField('quantity_mode').value = quantityMode;
-        if (!hasEnteredDetails) {
-            receivingField('received_qty').value = '0';
-            receivingField('received_packages').value = '0';
-        }
+        receivingField('product_id').value = String(product.product_id);
+        activeLine.dataset.productId = String(product.product_id);
+        receivingField('quantity_mode').value = matchedCase ? 'packages' : 'units';
         updateQuantityMode();
-        showScannedDocumentReview(product.product_id);
         const matchedBy = result.matched_code_kind === 'sku'
             ? 'SKU'
             : (matchedCase ? 'case barcode' : 'unit barcode');
-        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Enter actual delivered ${matchedCase ? 'packages / cases' : 'Base units'}. Linking a document is optional.`;
+        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Enter actual delivered ${matchedCase ? 'packages / cases' : 'Base units'}.`;
         productCodeScan.value = '';
     } catch (error) {
         if (error.name === 'AbortError' || lookupId !== activeScanLookup) return;
@@ -591,70 +339,16 @@ productCodeScan.addEventListener('keydown', function (event) {
     if (code !== '') identifyReceivingProduct(code);
 });
 
-function resetReferences() {
-    receivingField('replenishment_request_id').value = '';
-    receivingField('purchase_order_item_id').value = '';
-}
-function applyReceivingDocument(documentOption, copyRemainingQuantity, quantityMode = 'units') {
-    if (!activeLine) addReceivingLine();
-    resetReferences();
-    receivingField('product_id').value = documentOption.product_id;
-    receivingField('quantity_mode').value = quantityMode;
-    if (copyRemainingQuantity) {
-        receivingField('received_qty').value = documentOption.remaining_qty;
-        receivingField('received_packages').value = '0';
-    }
-    if (documentOption.type === 'purchase_order') {
-        receivingField('purchase_order_item_id').value = documentOption.purchase_order_item_id;
-        receivingField('replenishment_request_id').value = documentOption.replenishment_request_id || '';
-        receivingField('cost_price').value = Number(documentOption.cost || 0).toFixed(2);
-        document.getElementById('po_number').value = documentOption.po_number || '';
-        document.getElementById('supplier').value = documentOption.supplier || '';
-    } else {
-        receivingField('replenishment_request_id').value = documentOption.replenishment_request_id;
-        document.getElementById('po_number').value = '';
-        document.getElementById('supplier').value = '';
-        receivingField('cost_price').value = '';
-        activeLine.dataset.costEdited = 'false';
-        updatePackageConversion();
-    }
-    updateQuantityMode();
-    updatePackageConversion();
-}
-function populateForm(productId, qty, requestId) {
-    applyReceivingDocument({
-        type: 'replenishment_request',
-        product_id: productId,
-        replenishment_request_id: requestId,
-        remaining_qty: qty
-    }, true);
-    updatePackageConversion();
-    receivingField('received_qty').focus();
-    window.scrollTo(0, document.querySelector('.receiving-form').offsetTop - 100);
-}
-function populatePO(item) {
-    applyReceivingDocument({
-        type: 'purchase_order',
-        product_id: item.product_id,
-        purchase_order_item_id: item.item_id,
-        replenishment_request_id: item.request_id,
-        remaining_qty: item.remaining,
-        cost: item.cost,
-        po_number: item.po_number,
-        supplier: item.supplier
-    }, true);
-    window.scrollTo(0, document.querySelector('.receiving-form').offsetTop - 100);
-}
 function selectedProductOption() {
     const select=receivingField('product_id'); return select.options[select.selectedIndex];
 }
 function updatePackageConversion() {
-    const option=selectedProductOption(); const units=Number(option?.dataset.unitsPerPackage||1); const receiving=option?.dataset.receivingUnit||'package'; const base=option?.dataset.baseUnit||'piece';
+    const option=selectedProductOption(); const units=Number(option?.dataset.unitsPerPackage||0); const receiving=option?.dataset.receivingUnit||'package'; const base=option?.dataset.baseUnit||'piece';
     const packages = Number(receivingField('received_packages').value || 0);
     const damaged = Number(receivingField('damaged_qty').value || 0);
     const packageMode = receivingField('quantity_mode').value === 'packages';
     const total = packageMode ? packages * units : Number(receivingField('received_qty').value || 0);
-    receivingField('package_conversion').textContent=`1 ${receiving} = ${units} ${base}(s). ${packageMode ? `${packages} × ${units} = ` : ''}${total} units received; ${Math.max(0, total - damaged)} accepted units.`;
+    receivingField('package_conversion').textContent=`1 ${receiving} = ${units} ${base}(s). ${packageMode ? `${packages} × ${units} = ` : ''}${total} units received; ${damaged} damaged units; ${Math.max(0, total - damaged)} accepted units.`;
 }
 function updateQuantityMode() {
     const packages=receivingField('quantity_mode').value==='packages';
@@ -664,6 +358,7 @@ function updateQuantityMode() {
     receivingField('received_packages').required=packages;
     updatePackageConversion();
 }
+let step = 1;
 const form = document.getElementById('receiving_form');
 const lineContainer = document.getElementById('receiving_lines');
 const lineTemplate = activeLine.cloneNode(true);
@@ -689,7 +384,6 @@ function activateLine(row) {
     if (activeLine !== row) {
         activeScanLookup++;
         if (scanLookupController) scanLookupController.abort();
-        hideScannedDocumentReview();
     }
     activeLine = row;
     document.getElementById('scan_target').textContent = 'Scanning product line ' + row.querySelector('.line-number').textContent
@@ -714,34 +408,27 @@ function connectLine(row) {
         document.getElementById('entry_status').textContent = '';
         activeLine = lineContainer.lastElementChild;
         renumberLines();
-        hideScannedDocumentReview();
         (activeLine?.querySelector('[data-field="product_id"]') || document.getElementById('add_receiving_line')).focus();
     });
     row.querySelector('[data-field="product_id"]').addEventListener('change', () => {
         activateLine(row);
-        resetReferences();
-        updatePackageConversion();
         activeScanLookup++;
         if (scanLookupController) scanLookupController.abort();
-        hideScannedDocumentReview();
         const duplicate = Array.from(lineContainer.children).some(other => other !== row
             && other.querySelector('[data-field="product_id"]').value === receivingField('product_id').value);
+        if (duplicate) receivingField('product_id').value = row.dataset.productId || '';
+        else row.dataset.productId = receivingField('product_id').value;
+        updatePackageConversion();
         document.getElementById('entry_status').textContent = duplicate ? 'Duplicate product: remove this line or choose another product.' : '';
-        scanStatus.textContent = 'Product selected manually. Enter actual bought quantities. No receiving document is required.';
+        scanStatus.textContent = 'Product selected manually. Enter actual bought quantities.';
     });
     row.querySelector('[data-field="quantity_mode"]').addEventListener('change', () => { activateLine(row); updateQuantityMode(); });
     for (const name of ['received_qty', 'received_packages', 'damaged_qty']) {
         row.querySelector('[data-field="' + name + '"]').addEventListener('input', () => {
             activateLine(row);
-            const damage = Number(receivingField('damaged_qty').value || 0);
-            if (damage > 0 && receivingField('discrepancy_type').value === 'none') {
-                receivingField('discrepancy_type').value = 'damaged';
-                receivingField('discrepancy_qty').value = damage;
-            }
             updatePackageConversion();
         });
     }
-    row.querySelector('[data-field="cost_price"]').addEventListener('input', () => row.dataset.costEdited = 'true');
 }
 function addReceivingLine(values = {}) {
     const row = lineTemplate.cloneNode(true);
@@ -750,14 +437,122 @@ function addReceivingLine(values = {}) {
     activateLine(row);
     renumberLines();
     for (const [name, value] of Object.entries(values)) restoreField(receivingField(name), value);
+    row.dataset.productId = receivingField('product_id').value;
     updateQuantityMode();
+    showStep(1, false);
     receivingField('product_id').focus();
 }
+function showStep(next, focus = true) {
+    step = next;
+    document.querySelector('.receiving-form').dataset.step = String(step);
+    const titles = ['1. Select products', '2. Enter quantities', '3. Review'];
+    document.getElementById('receiving_step_title').textContent = titles[step - 1];
+    document.querySelectorAll('.receiving-steps li').forEach((item, index) => {
+        if (index === step - 1) item.setAttribute('aria-current', 'step');
+        else item.removeAttribute('aria-current');
+    });
+    document.getElementById('receiving_selection').hidden = step !== 1;
+    lineContainer.hidden = step === 3;
+    document.getElementById('add_receiving_line').hidden = step !== 1;
+    document.getElementById('receiving_review').hidden = step !== 3;
+    document.getElementById('receiving_back').hidden = step === 1;
+    document.getElementById('receiving_next').hidden = step === 3;
+    document.getElementById('receiving_next').textContent = step === 1 ? 'Continue to quantities' : 'Review shopping entry';
+    form.querySelector('.btn-submit').hidden = step !== 3;
+    if (focus) document.getElementById('receiving_step_title').focus();
+}
+function validateProducts() {
+    const products = Array.from(lineContainer.children).map(row => row.querySelector('[data-field="product_id"]').value);
+    const valid = products.length > 0 && products.every(Boolean) && new Set(products).size === products.length;
+    document.getElementById('entry_status').textContent = valid ? '' : 'Select at least one product. Each line must have a different product.';
+    return valid;
+}
+function validateQuantities() {
+    for (const [index, row] of Array.from(lineContainer.children).entries()) {
+        const field = name => row.querySelector('[data-field="' + name + '"]');
+        const packages = field('quantity_mode').value === 'packages';
+        const quantity = field(packages ? 'received_packages' : 'received_qty');
+        const pack = packages ? Number(field('product_id').selectedOptions[0]?.dataset.unitsPerPackage) : 1;
+        const total = Number(quantity.value) * pack;
+        const damage = field('damaged_qty');
+        let invalid = null;
+        let message = '';
+        if (!/^\d+$/.test(quantity.value) || Number(quantity.value) <= 0 || !Number.isInteger(pack) || pack <= 0 || total > 2147483647) {
+            invalid = quantity;
+            message = 'Enter a positive whole-number bought quantity within range and use a valid saved pack size.';
+        } else if (!/^\d+$/.test(damage.value) || Number(damage.value) > total) {
+            invalid = damage;
+            message = 'Damaged units must be a whole number from zero to the received units.';
+        } else {
+            invalid = Array.from(row.querySelectorAll('input, select, textarea')).find(input => !input.checkValidity());
+            message = invalid?.validationMessage || '';
+            const cost = field('cost_price');
+            if (!invalid && cost.value.trim() !== '' && !/^\d{1,8}(?:\.\d{1,2})?$/.test(cost.value.trim())) {
+                invalid = cost;
+                message = 'Enter a non-negative purchase cost with at most two decimal places, or leave it blank.';
+            }
+        }
+        if (invalid) {
+            showStep(2, false);
+            document.getElementById('entry_status').textContent = 'Line ' + (index + 1) + ': ' + message;
+            invalid.focus();
+            return false;
+        }
+    }
+    for (const name of ['supplier', 'invoice_number']) {
+        const input = form.elements.namedItem(name);
+        if (!input.checkValidity()) { showStep(2, false); input.reportValidity(); return false; }
+    }
+    document.getElementById('entry_status').textContent = '';
+    return true;
+}
+function renderReview() {
+    const review = document.getElementById('receiving_review');
+    review.replaceChildren();
+    const shared = document.createElement('p');
+    shared.textContent = 'Shopping store: ' + (form.elements.supplier.value || 'Not supplied')
+        + ' · Receipt reference: ' + (form.elements.invoice_number.value || 'Not supplied');
+    review.append(shared);
+    for (const [index, row] of Array.from(lineContainer.children).entries()) {
+        const field = name => row.querySelector('[data-field="' + name + '"]');
+        const section = document.createElement('section');
+        section.className = 'receiving-line';
+        const title = document.createElement('h3');
+        title.textContent = field('product_id').selectedOptions[0].textContent.trim();
+        const mode = document.createElement('p');
+        mode.textContent = field('quantity_mode').selectedOptions[0].textContent + ' · ' + field('package_conversion').textContent;
+        const details = document.createElement('p');
+        details.textContent = 'Purchase cost per base unit: ' + (field('cost_price').value || 'Unknown; current cost preserved')
+            + ' · Batch: ' + (field('batch_number').value || 'Not supplied')
+            + ' · Expiry: ' + (field('expiration_date').value || 'Not supplied');
+        const notes = document.createElement('p');
+        notes.textContent = [field('discrepancy_notes').value, field('notes').value].filter(Boolean).join(' · ');
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'btn btn-secondary';
+        edit.textContent = 'Edit line ' + (index + 1);
+        edit.addEventListener('click', () => { showStep(2, false); field('quantity_mode').focus(); });
+        section.append(title, mode, details, notes, edit);
+        review.append(section);
+    }
+}
+document.getElementById('receiving_back').addEventListener('click', () => showStep(step - 1));
+document.getElementById('receiving_next').addEventListener('click', () => {
+    if (!validateProducts()) return;
+    if (step === 1) { showStep(2); return; }
+    if (validateQuantities()) { renderReview(); showStep(3); }
+});
+document.getElementById('product_search').addEventListener('input', event => {
+    const query = event.target.value.trim().toLowerCase();
+    for (const select of lineContainer.querySelectorAll('[data-field="product_id"]')) {
+        for (const option of select.options) option.hidden = Boolean(option.value) && !option.textContent.toLowerCase().includes(query);
+    }
+});
 connectLine(activeLine);
 renumberLines();
 document.getElementById('add_receiving_line').addEventListener('click', () => addReceivingLine());
 const retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-for (const name of ['supplier', 'invoice_number', 'po_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);
+for (const name of ['supplier', 'invoice_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);
 if (Array.isArray(retainedValues.lines)) {
     lineContainer.replaceChildren();
     activeLine = null;
@@ -769,6 +564,7 @@ if (Array.isArray(retainedValues.lines)) {
 let saving = false;
 form.addEventListener('submit', event => {
     if (saving) { event.preventDefault(); return; }
+    if (step !== 3) { event.preventDefault(); document.getElementById('receiving_next').click(); return; }
     const products = Array.from(lineContainer.children).map(row => row.querySelector('[data-field="product_id"]').value);
     if (products.length === 0 || new Set(products).size !== products.length) {
         event.preventDefault();
@@ -776,11 +572,13 @@ form.addEventListener('submit', event => {
             ? 'Add at least one product before saving.' : 'Duplicate product: remove the duplicate line or choose another product.';
         return;
     }
+    if (!validateQuantities()) { event.preventDefault(); return; }
     saving = true;
     form.querySelector('.btn-submit').disabled = true;
     form.querySelector('.btn-submit').textContent = 'Saving receipt…';
 });
 if (activeLine) updateQuantityMode();
+showStep(Object.keys(retainedValues).length ? 2 : 1);
 </script>
 </body>
 </html>

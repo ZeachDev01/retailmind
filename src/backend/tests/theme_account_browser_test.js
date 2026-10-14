@@ -635,6 +635,7 @@ const fixture = action => {
                         const productField = route.includes('inventory_counts') ? '#product_search' : '#product_code_scan';
                         await page.goto(route); await page.locator(productField).fill('THEME-BARCODE'); await page.locator(productField).press('Enter');
                         await page.waitForFunction(()=>document.getElementById('product_id').value==='1');
+                        if (route.includes('stock_receiving')) await page.locator('#receiving_next').click();
                         const field=route.includes('inventory_counts') ? '#physical_quantity' : '#received_qty';
                         const notes=page.locator(route.includes('inventory_counts') ? '#discrepancy_reason' : '#notes');
                         await page.locator(field).fill('7'); await notes.fill('Unsubmitted inventory work');

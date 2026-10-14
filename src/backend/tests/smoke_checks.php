@@ -50,10 +50,6 @@ $checks = [
         'file' => 'src/frontend/components/inventory_management/replenishment_requests.php',
         'needles' => ["requested_by <> ?", "status = 'pending'"],
     ],
-    'Accepted stock drives request completion' => [
-        'file' => 'src/backend/app/Services/ReceivingService.php',
-        'needles' => ['SUM(accepted_qty)', 'LEAST(ordered_qty, received_qty + ?)'],
-    ],
     'Server-held sales enabled' => [
         // Ticket #91 moved the rules out of the endpoint and into
         // HeldSaleService, so the parking INSERT and the unresolved statuses now

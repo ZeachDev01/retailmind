@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../bootstrap/app.php';
 
 use App\Core\Database;
 
-$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'seed-guidance', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
+$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'checkout-setup', 'seed-guidance', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
 
 $token = preg_replace('/[^A-Za-z0-9]/', '', (string)($options['token'] ?? ''));
 if (strlen($token) < 4 || strlen($token) > 12) {
@@ -163,6 +163,17 @@ $staffByUsername = [];
 $approvedIssue = null;
 $receivingDocuments = [];
 
+if (array_key_exists('checkout-setup', $options)) {
+    $pdo->prepare('INSERT INTO registers (name) VALUES (?)')->execute(['Scan WF ' . $token]);
+    $registerId = (int)$pdo->lastInsertId();
+    $stmt = $pdo->prepare('SELECT user_id FROM users WHERE username = ?');
+    $stmt->execute([$staff['cashier']['username']]);
+    $pdo->prepare('INSERT INTO cashier_shifts (cashier_id, register_id, opening_cash) VALUES (?, ?, 100)')
+        ->execute([(int)$stmt->fetchColumn(), $registerId]);
+    echo json_encode(['ok' => true]) . PHP_EOL;
+    exit;
+}
+
 if (array_key_exists('seed-guidance', $options)) {
     $pdo->prepare("UPDATE products SET reorder_level = 10, safety_stock = 5, supplier_lead_time_days = 7,
         minimum_order_quantity = 1 WHERE sku IN (?, ?)")->execute([$products['bulk_units']['sku'], $products['bulk_pack']['sku']]);
@@ -288,7 +299,15 @@ $cleanup = static function () use ($pdo, $products, $staff, $token, &$productByN
         ) . ")");
     }
 
+    if ($productIds !== []) {
+        $pdo->exec('DELETE sib FROM sale_item_batches sib JOIN sale_items si ON si.sale_item_id = sib.sale_item_id WHERE si.product_id IN (' . $in($productIds) . ')');
+    }
     $deleteReferencing('products', $productIds);
+    if ($userIds !== []) {
+        $saleIds = $pdo->query("SELECT sale_id FROM sales WHERE cashier_id IN ({$userList})")->fetchAll(PDO::FETCH_COLUMN);
+        $deleteReferencing('sales', $saleIds);
+        $pdo->exec("DELETE FROM sales WHERE cashier_id IN ({$userList})");
+    }
     $deleteReferencing('users', $userIds);
 
     if ($productIds !== []) {
@@ -297,6 +316,7 @@ $cleanup = static function () use ($pdo, $products, $staff, $token, &$productByN
     if ($userIds !== []) {
         $pdo->exec("DELETE FROM users WHERE user_id IN ({$userList})");
     }
+    $pdo->prepare('DELETE FROM registers WHERE name = ?')->execute(['Scan WF ' . $token]);
 };
 
 if (array_key_exists('cleanup', $options)) {

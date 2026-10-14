@@ -297,6 +297,47 @@
 .formula{font-family:ui-monospace,monospace;font-size:.85rem;white-space:nowrap}.range{font-size:.82rem;color:var(--muted)}
 
 /* Source: frontend\report\stock_receiving.php */
+.receiving-form[data-step="1"] .receiving-quantity,
+.receiving-form[data-step="3"] .receiving-quantity,
+.receiving-form [hidden] {
+    display: none !important;
+}
+.receiving-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+    padding: 0;
+    list-style: none;
+    margin: 1rem 0 1.5rem;
+    color: var(--muted);
+}
+.receiving-steps [aria-current="step"] {
+    color: var(--primary);
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 0.4rem;
+}
+.receiving-form .form-group,
+.receiving-form .form-grid {
+    min-width: 0;
+}
+.receiving-form input,
+.receiving-form select,
+.receiving-form textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+.receiving-form section,
+.receiving-form p {
+    overflow-wrap: anywhere;
+}
+.receiving-actions {
+    margin-top: 1.5rem;
+}
+.receiving-form .btn-submit:hover {
+    background: var(--primary-dark);
+}
 .receiving-form {
             background: var(--theme-surface, white);
             border: 1px solid #ddd;

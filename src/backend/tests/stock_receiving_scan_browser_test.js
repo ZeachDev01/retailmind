@@ -1,5 +1,5 @@
 'use strict';
-// Browser-to-HTTP workflow for barcode-assisted Stock Receiving (tickets #81-#84).
+// Browser-to-HTTP guided direct receiving, with persisted stock and checkout assertions (#182).
 
 const { spawn, spawnSync } = require('node:child_process');
 const net = require('node:net');
@@ -28,7 +28,7 @@ try {
 
 function runFixture(...args) {
     const result = spawnSync(phpBinary, [fixtureScript, ...args], { encoding: 'utf8', cwd: repoRoot });
-    if (result.error || result.status !== 0) {
+    if (result.error || result.status !== 0 || !result.stdout.trim()) {
         throw new Error('Fixture failed: ' + (result.error?.message || result.stderr || result.stdout || result.status));
     }
     return JSON.parse(result.stdout.trim().split('\n').at(-1));
@@ -86,7 +86,23 @@ async function eventually(page, expression, argument) {
     }
 }
 
+async function selectProducts(page) {
+    while (await page.locator('.receiving-form').getAttribute('data-step') !== '1') await page.locator('#receiving_back').click();
+}
+async function enterQuantities(page) {
+    if (await page.locator('.receiving-form').getAttribute('data-step') === '1') await page.locator('#receiving_next').click();
+}
+async function saveEntry(page, double = false) {
+    await enterQuantities(page);
+    if (await page.locator('.receiving-form').getAttribute('data-step') === '2') await page.locator('#receiving_next').click();
+    if (await page.locator('.receiving-form').getAttribute('data-step') !== '3') throw new Error('Cannot review: ' + await page.locator('#entry_status').innerText());
+    await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}), double
+        ? page.evaluate(() => { const button = document.querySelector('.btn-submit'); button.click(); button.click(); })
+        : page.locator('.btn-submit').click()]);
+}
+
 async function scan(page, code) {
+    await selectProducts(page);
     const input = page.locator('#product_code_scan');
     await input.fill(code);
     await input.press('Enter');
@@ -152,6 +168,11 @@ async function main() {
         await page.goto(receivingPath);
 
         console.log('Shopping trip entry');
+        check(await page.getByRole('heading', { name: '1. Select products', exact: true }).isVisible(),
+            'receiving starts at product selection');
+        if (!await page.locator('#receiving_next').count()) throw new Error('Guided receiving steps are unavailable.');
+        check(await page.locator('#purchase_order_item_id, #replenishment_request_id, #scan_document_review').count() === 0,
+            'receiving exposes no document selectors or resolution');
         check(await page.locator('#add_receiving_line').count() === 1,
             'Stock Receiving offers another product line before one reviewed save');
         if (!await page.locator('#add_receiving_line').count()) throw new Error('Multi-product receiving is unavailable.');
@@ -171,7 +192,7 @@ async function main() {
             'the matched product is visibly identified');
         check(await page.inputValue('#quantity_mode') === 'units',
             'a scan selects Base units');
-        check(await page.inputValue('#received_qty') === '0',
+        check(await page.inputValue('#received_qty') === '',
             'a scan does not infer a delivered quantity');
 
         const after = runFixture('--state', '--token', token);
@@ -181,133 +202,50 @@ async function main() {
         check(after.receipts.length === before.receipts.length,
             'a scan alone creates no receiving record');
 
-        console.log('Explicit eligible-document review');
-        check(await page.locator('#scan_document_review .scan-document-choice').count() === 1,
-            'the product\'s one eligible document is offered for review');
-        check((await page.locator('#scan_document_review').innerText()).includes('8'),
-            'the eligible request shows its remaining quantity for review');
-        check(await page.inputValue('#replenishment_request_id') === '',
-            'the scan does not choose the replenishment request');
-        await page.locator('#scan_document_review .scan-document-choice').click();
-        check(await page.inputValue('#replenishment_request_id') === String(fixture.receiving_documents.approved_request.request_id),
-            'the operator explicitly chooses the replenishment request');
-        check(await page.inputValue('#received_qty') === '0',
-            'choosing a document still does not copy its remaining quantity');
-
-        console.log('Linked requests reject conflicting rescans');
+        console.log('Guided selection and retained draft');
+        await scan(page, fixture.products.zero.barcode);
+        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('already in the shopping entry'));
+        check(await page.locator('.receiving-line').count() === 1 && await page.inputValue('#received_qty') === '',
+            'duplicate scan preserves the existing line and never infers quantity');
+        await page.locator('#receiving_next').focus();
+        await page.keyboard.press('Enter');
+        check(await page.getByRole('heading', {name: '2. Enter quantities', exact: true}).isVisible(),
+            'keyboard continues to quantities');
+        await page.locator('#receiving_next').click();
+        check((await page.locator('#entry_status').innerText()).includes('positive whole-number'),
+            'blank bought quantity cannot reach review');
+        await enterQuantities(page);
         await page.fill('#received_qty', '5');
-        await page.fill('#supplier', 'Reviewed supplier detail');
+        await page.fill('#supplier', 'Reviewed shopping store');
         await page.fill('#invoice_number', 'INV-REVIEW-' + token);
         await page.fill('#batch_number', 'BATCH-REVIEW-' + token);
-        await page.fill('#discrepancy_notes', 'Preserve this reviewed discrepancy detail.');
-        await scan(page, fixture.products.countable.barcode);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('linked to a replenishment request'));
-        check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id)
-            && await page.inputValue('#replenishment_request_id') === String(fixture.receiving_documents.approved_request.request_id)
-            && await page.inputValue('#received_qty') === '5',
-            'a conflicting linked-request scan preserves product, link and quantity');
-
-        console.log('Unknown and ambiguous codes preserve entered delivery details');
+        await page.locator('#receiving_next').click();
+        check((await page.locator('#receiving_review').innerText()).includes('5 accepted units')
+            && (await page.locator('#receiving_review').innerText()).includes('Unknown; current cost preserved'),
+            'review shows accepted quantities and unknown cost');
+        check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(before),
+            'selection, quantities and review never write stock');
+        await page.getByRole('button', {name: 'Edit line 1', exact: true}).click();
+        await page.locator('#receiving_back').click();
+        check(await page.inputValue('#received_qty') === '5' && await page.inputValue('#supplier') === 'Reviewed shopping store',
+            'edit and back preserve all draft values');
         await scan(page, 'UNKNOWN-' + token);
         await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('No product matches'));
-        check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id),
-            'an unknown code preserves the selected product');
-        check(await page.inputValue('#received_qty') === '5'
-            && await page.inputValue('#supplier') === 'Reviewed supplier detail'
-            && await page.inputValue('#batch_number') === 'BATCH-REVIEW-' + token,
-            'an unknown code leaves the controlled form intact');
         await scan(page, fixture.products.ambiguous_a.barcode);
         await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('more than one product'));
         check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id)
-            && await page.inputValue('#replenishment_request_id') === String(fixture.receiving_documents.approved_request.request_id),
-            'an ambiguous code preserves the product and chosen document');
-
-        console.log('Case scanning and multiple eligible documents');
+            && await page.inputValue('#received_qty') === '5', 'unknown and ambiguous scans preserve the draft');
         await page.goto(receivingPath);
-        await scan(page, fixture.products.countable.case_barcode);
-        check(await eventually(page, (productId) =>
-            document.getElementById('product_id').value === String(productId), fixture.products.countable.product_id),
-            'a case barcode selects its product');
-        check(await page.inputValue('#quantity_mode') === 'packages',
-            'a case barcode selects Packages / cases');
-        check((await page.locator('#package_conversion').innerText()).includes('1 case = 6 piece(s)'),
-            'the product-specific package conversion is visible');
-        check(await page.inputValue('#received_packages') === '0',
-            'a case scan does not infer a package quantity');
-        check(await page.locator('#scan_document_review .scan-document-choice').count() === 3,
-            'all eligible PO lines and the standalone request are offered');
-        const multipleChoiceText = await page.locator('#scan_document_review').innerText();
-        check(multipleChoiceText.includes('Line #' + fixture.receiving_documents.po.purchase_order_item_id)
-            && multipleChoiceText.includes('Line #' + fixture.receiving_documents.alternate_po_line.purchase_order_item_id)
-            && multipleChoiceText.includes('Request #' + fixture.receiving_documents.standalone_request.request_id),
-            'eligible documents expose distinct identities');
-        check(!multipleChoiceText.includes('Line #' + fixture.receiving_documents.fully_received_po_line.purchase_order_item_id),
-            'a fully received PO line is not offered');
-        await scan(page, fixture.products.countable.case_barcode);
-        await page.waitForFunction(() => !document.getElementById('scan_status').textContent.includes('Checking'));
-        check(await page.inputValue('#received_packages') === '0',
-            'repeated case scans do not increment package quantity');
-
-        const firstPoChoice = page.locator(
-            `.scan-document-choice[aria-label*="Line #${fixture.receiving_documents.po.purchase_order_item_id}"]`
-        );
-        await firstPoChoice.click();
-        await page.fill('#received_packages', '2');
-        await scan(page, fixture.products.zero.barcode);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('linked to a purchase-order line'));
-        check(await page.inputValue('#product_id') === String(fixture.products.countable.product_id)
-            && await page.inputValue('#purchase_order_item_id') === String(fixture.receiving_documents.po.purchase_order_item_id)
-            && await page.inputValue('#received_packages') === '2',
-            'a conflicting linked-PO scan preserves product, link and package quantity');
-
-        console.log('Partly filled unlinked receipts require confirmation');
-        await page.goto(receivingPath);
-        await page.selectOption('#product_id', String(fixture.products.zero.product_id));
-        await page.fill('#received_qty', '4');
-        await page.fill('#supplier', 'Rescan supplier ' + token);
-        await page.fill('#invoice_number', 'RESCAN-' + token);
-        page.once('dialog', (dialog) => dialog.dismiss());
-        await scan(page, fixture.products.countable.barcode);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('Product unchanged'));
-        check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id)
-            && await page.inputValue('#received_qty') === '4'
-            && await page.inputValue('#supplier') === 'Rescan supplier ' + token,
-            'cancelling replacement preserves every entered field');
-        page.once('dialog', (dialog) => dialog.accept());
-        await scan(page, fixture.products.countable.barcode);
-        check(await eventually(page, (productId) =>
-            document.getElementById('product_id').value === String(productId), fixture.products.countable.product_id),
-            'confirming replacement selects the scanned product');
-        check(await page.inputValue('#received_qty') === '4'
-            && await page.inputValue('#invoice_number') === 'RESCAN-' + token
-            && await page.inputValue('#purchase_order_item_id') === '',
-            'confirmed replacement preserves details without choosing a document');
-
-        console.log('Ineligible documents are not offered');
-        await page.goto(receivingPath);
+        await page.fill('#product_search', fixture.products.short.sku);
+        check(await page.locator('#product_id option:not([hidden])').count() === 2, 'search filters active products by SKU');
         await scan(page, fixture.products.short.sku);
-        check(await eventually(page, (productId) =>
-            document.getElementById('product_id').value === String(productId), fixture.products.short.product_id),
-            'a unique SKU selects its product');
-        check(await page.locator('#scan_document_review .scan-document-choice').count() === 0,
-            'a pending replenishment request is not offered');
-        check((await page.locator('#scan_document_review').innerText()).includes('optional'),
-            'receiving documents are explicitly optional');
-        check(await page.inputValue('#replenishment_request_id') === ''
-            && await page.inputValue('#purchase_order_item_id') === '',
-            'scanning a product without an eligible document clears document references');
-        const receiptsBeforeBlockedRoutine = runFixture('--state', '--token', token).receipts.length;
+        await page.waitForFunction(id => document.getElementById('product_id').value === String(id), fixture.products.short.product_id);
+        await enterQuantities(page);
+        await enterQuantities(page);
         await page.fill('#received_qty', '1');
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-            page.locator('.btn-submit').click()
-        ]);
+        await saveEntry(page);
         check((await page.locator('.message.success').innerText()).includes('1 accepted units'),
-            'an Inventory Manager can receive directly without an approved document');
-        const directState = runFixture('--state', '--token', token);
-        check(directState.receipts.length === receiptsBeforeBlockedRoutine + 1,
-            'direct receiving writes one receipt');
-        await dismissBlockingDialog(page);
+            'an Inventory Manager can receive directly without purchasing documents');
 
         console.log('CSRF and role boundaries');
         const receiptsBeforeCsrf = runFixture('--state', '--token', token).receipts.length;
@@ -350,6 +288,7 @@ async function main() {
         check(await eventually(page, id => document.getElementById('product_id').value === String(id),
             fixture.products.direct.product_id), 'a case barcode selects a product without purchasing history');
         check(await page.inputValue('#cost_price') === '', 'unknown purchase cost stays blank');
+        await enterQuantities(page);
         await page.fill('#received_packages', '2');
         check((await page.locator('#package_conversion').innerText()).includes('2 × 24 = 48'),
             'two saved cases display 48 units before saving');
@@ -359,7 +298,7 @@ async function main() {
             product_id: fixture.products.direct.product_id, quantity_mode: 'packages',
             received_packages: '2', received_qty: '0'
         };
-        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('.btn-submit').click()]);
+        await saveEntry(page);
         let state = runFixture('--state', '--token', token);
         let directProduct = state.products.find(item => item.sku === fixture.products.direct.sku);
         let directReceipt = state.receipts.find(item => item.sku === fixture.products.direct.sku);
@@ -440,6 +379,7 @@ async function main() {
         }
         await page.goto(receivingPath);
         await page.selectOption('#product_id', String(fixture.products.direct.product_id));
+        await enterQuantities(page);
         await page.fill('#received_qty', 'bad quantity');
         await page.fill('#supplier', 'Keep entered store');
         await page.evaluate(() => {
@@ -448,7 +388,7 @@ async function main() {
             expiry.type = 'text';
             expiry.value = '2027-02-30';
         });
-        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('.btn-submit').click()]);
+        await Promise.all([page.waitForNavigation(), page.evaluate(() => document.getElementById('receiving_form').submit())]);
         check(await page.inputValue('#received_qty') === 'bad quantity'
             && await page.inputValue('#supplier') === 'Keep entered store'
             && await page.inputValue('#expiration_date') === '2027-02-30'
@@ -550,18 +490,6 @@ async function main() {
             'the PO product is selected by case barcode');
         check(await page.inputValue('#quantity_mode') === 'packages',
             'the submission path remains in Packages / cases mode');
-        check(await page.locator('#scan_document_review .scan-document-choice').count() === 3,
-            'all eligible documents remain available for explicit review');
-        check(await page.inputValue('#purchase_order_item_id') === '',
-            'the scan does not choose the purchase-order line');
-        await page.locator(
-            `.scan-document-choice[aria-label*="Line #${fixture.receiving_documents.po.purchase_order_item_id}"]`
-        ).click();
-        check(await page.inputValue('#purchase_order_item_id') === String(fixture.receiving_documents.po.purchase_order_item_id),
-            'the operator explicitly chooses the purchase-order line');
-        check(await page.inputValue('#received_packages') === '0',
-            'the PO remaining quantity is not copied into delivered packages');
-
         console.log('Newest scan outcome wins');
         let releaseDelayedLookup;
         const delayedLookup = new Promise((resolve) => { releaseDelayedLookup = resolve; });
@@ -580,20 +508,16 @@ async function main() {
         await page.waitForTimeout(250);
         check(await page.inputValue('#product_id') === String(fixture.products.countable.product_id),
             'an older delayed match cannot replace the newer unknown result');
-        check(await page.inputValue('#purchase_order_item_id') === String(fixture.receiving_documents.po.purchase_order_item_id),
-            'an older delayed match cannot clear the chosen PO line');
         await page.unroute('**/product_code_lookup.php?code=*');
 
+        await enterQuantities(page);
         await page.fill('#received_packages', '2');
         await page.fill('#damaged_qty', '2');
         await page.fill('#invoice_number', 'INV-' + token);
         await page.fill('#batch_number', 'BATCH-' + token);
         await page.fill('#expiration_date', '2027-12-31');
         await page.fill('#discrepancy_notes', 'Two delivered pieces were damaged.');
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-            page.locator('.btn-submit').click()
-        ]);
+        await saveEntry(page);
         check((await page.locator('.message.success').innerText()).includes('10 accepted units'),
             'the controlled form reports only accepted units added');
 
@@ -613,8 +537,8 @@ async function main() {
             && receipt.batch_number === 'BATCH-' + token
             && receipt.expiration_date === '2027-12-31',
             'the receipt retains reviewed invoice, batch and expiry details');
-        check(poItem && Number(poItem.received_qty) === 12,
-            'the existing document validation updates the chosen PO line by accepted units');
+        check(poItem && Number(poItem.received_qty) === 2,
+            'direct receiving does not update a legacy purchase-order line');
         check(historicalReceipt && JSON.stringify(finalState.receipts.find(item =>
             Number(item.receiving_id) === Number(historicalReceipt.receiving_id))) === JSON.stringify(historicalReceipt),
             'historical linked receiving records retain their quantities, cost, staff, time and document references');
@@ -635,6 +559,7 @@ async function main() {
         await page.waitForURL('**/report/stock_receiving.php');
         const beforeTrip = runFixture('--state', '--token', token);
         await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await enterQuantities(page);
         await page.fill('#received_qty', '5');
         await page.fill('#damaged_qty', '2');
         await page.fill('#cost_price', '7.25');
@@ -642,12 +567,14 @@ async function main() {
         await page.fill('#expiration_date', '2028-12-31');
         await page.fill('#supplier', 'Shopping trip store');
         await page.fill('#invoice_number', 'SHOP-' + token);
+        await selectProducts(page);
         await page.locator('#add_receiving_line').focus();
         await page.keyboard.press('Enter');
         check(await page.locator('.receiving-line').count() === 2, 'keyboard action adds a second product line');
         await scan(page, fixture.products.bulk_pack.case_barcode);
         check(await eventually(page, id => document.getElementById('product_id_1').value === String(id),
             fixture.products.bulk_pack.product_id), 'case lookup selects the active second line without replacing the first');
+        await enterQuantities(page);
         await page.fill('#received_packages_1', '2');
         check((await page.locator('#package_conversion_1').innerText()).includes('2 × 24 = 48')
             && (await page.locator('#package_conversion').innerText()).includes('3 accepted units'),
@@ -659,10 +586,7 @@ async function main() {
             && await page.inputValue('#product_id_1') === String(fixture.products.bulk_pack.product_id)
             && await page.inputValue('#received_packages_1') === '2',
             'scanning an existing product explains duplicates and preserves both reviewed lines');
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-            page.evaluate(() => { const button = document.querySelector('.btn-submit'); button.click(); button.click(); })
-        ]);
+        await saveEntry(page, true);
         const tripState = runFixture('--state', '--token', token);
         const tripReceipts = tripState.receipts.filter(item => item.invoice_number === 'SHOP-' + token);
         const tripSuccess = await page.locator('.message.success').innerText();
@@ -732,7 +656,9 @@ async function main() {
         console.log('Add/remove and empty shopping entries');
         await page.goto(receivingPath);
         await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await enterQuantities(page);
         await page.fill('#received_qty', '7');
+        await selectProducts(page);
         await page.locator('#add_receiving_line').click();
         await page.selectOption('#product_id_1', String(fixture.products.bulk_units.product_id));
         check((await page.locator('#entry_status').innerText()).includes('Duplicate product'),
@@ -741,23 +667,17 @@ async function main() {
         check(await page.locator('.receiving-line').count() === 1 && await page.inputValue('#received_qty') === '7',
             'removing a line preserves the other entered product and quantity');
         await page.locator('.remove-receiving-line').click();
-        await page.locator('.btn-submit').click();
-        check((await page.locator('#entry_status').innerText()).includes('Add at least one product'),
+        await page.locator('#receiving_next').click();
+        check((await page.locator('#entry_status').innerText()).includes('Select at least one product'),
             'empty shopping entries show a correction message');
-        await page.locator('summary').filter({ hasText: 'Optional: receive against' }).click();
-        await page.getByRole('button', { name: 'Receive PO', exact: true }).first().click();
-        check(await page.locator('.receiving-line').count() === 1
-            && await page.inputValue('#purchase_order_item_id') !== '',
-            'choosing a legacy PO creates a product line after all lines were removed');
-        await page.locator('.remove-receiving-line').click();
-        await page.getByRole('button', { name: 'Receive Now', exact: true }).first().click();
-        check(await page.locator('.receiving-line').count() === 1
-            && await page.inputValue('#replenishment_request_id') !== '',
-            'choosing an approved request creates a line after all lines were removed');
+        await scan(page, fixture.products.zero.barcode);
+        await page.waitForFunction(() => document.querySelectorAll('.receiving-line').length === 1);
+        check(await page.inputValue('#received_qty') === '', 'scanning after removal starts an empty bought quantity');
 
         console.log('Later-line validation retains the complete entry');
         await page.goto(receivingPath);
         await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await enterQuantities(page);
         await page.fill('#received_qty', '7');
         await page.fill('#damaged_qty', '1');
         await page.fill('#cost_price', '11.25');
@@ -765,13 +685,16 @@ async function main() {
         await page.fill('#expiration_date', '2029-01-31');
         await page.fill('#supplier', 'Retain trip store');
         await page.fill('#invoice_number', 'RETAIN-' + token);
+        await selectProducts(page);
         await page.locator('#add_receiving_line').click();
         await page.selectOption('#product_id_1', String(fixture.products.bulk_pack.product_id));
+        await enterQuantities(page);
         await page.selectOption('#quantity_mode_1', 'packages');
+        await enterQuantities(page);
         await page.fill('#received_packages_1', '1.5');
         await page.fill('#batch_number_1', 'RETAIN-SECOND-' + token);
         await page.evaluate(() => document.getElementById('receiving_form').noValidate = true);
-        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('.btn-submit').click()]);
+        await Promise.all([page.waitForNavigation(), page.evaluate(() => document.getElementById('receiving_form').submit())]);
         check((await page.locator('.message.error').innerText()).includes('Line 2')
             && await page.inputValue('#received_packages_1') === '1.5'
             && await page.inputValue('#received_qty') === '7' && await page.inputValue('#damaged_qty') === '1'
@@ -790,6 +713,7 @@ async function main() {
 
         console.log('Later-line database failure rolls back the entire entry');
         await dismissBlockingDialog(page);
+        await enterQuantities(page);
         await page.fill('#received_packages_1', '2');
         await page.fill('#cost_price_1', '3.25');
         const invalidControls = await page.evaluate(() => Array.from(document.getElementById('receiving_form').elements)
@@ -798,7 +722,7 @@ async function main() {
         if (invalidControls.length) throw new Error('Corrected shopping form remains invalid: ' + JSON.stringify(invalidControls));
         try {
             runFixture('--fail-purchase', '--purchase-product', 'bulk_pack', '--token', token);
-            await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('.btn-submit').click()]);
+            await saveEntry(page);
             check(await page.locator('.message.error').count() === 1
                 && await page.inputValue('#received_qty') === '7' && await page.inputValue('#received_packages_1') === '2'
                 && await page.inputValue('#cost_price_1') === '3.25', 'later DB failure retains both reviewed lines for correction');
@@ -872,18 +796,112 @@ async function main() {
 
         await page.goto(receivingPath);
         await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await enterQuantities(page);
         await page.fill('#received_qty', '5');
+        await selectProducts(page);
         await page.locator('#add_receiving_line').click();
         await page.selectOption('#product_id_1', String(fixture.products.bulk_pack.product_id));
+        await enterQuantities(page);
         await page.selectOption('#quantity_mode_1', 'packages');
+        await enterQuantities(page);
         await page.fill('#received_packages_1', '2');
-        await page.evaluate(() => window.scrollTo(0, 0));
-        await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving-178-desktop.png'), fullPage: true });
+        require('node:fs').mkdirSync(path.join(repoRoot, '.impeccable', 'review'), {recursive:true});
+        await page.evaluate(() => window.scrollTo({top:0, left:0, behavior:'instant'}));
+        await page.screenshot({ path: path.join(repoRoot, '.impeccable', 'review', 'desktop.png'), fullPage: true });
         await page.setViewportSize({ width: 390, height: 844 });
         check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
             'multi-line entry fits the mobile viewport');
-        await page.evaluate(() => window.scrollTo(0, 0));
-        await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving-178-mobile.png'), fullPage: true });
+        require('node:fs').mkdirSync(path.join(repoRoot, '.impeccable', 'review'), {recursive:true});
+        await page.evaluate(() => window.scrollTo({top:0, left:0, behavior:'instant'}));
+        await page.screenshot({ path: path.join(repoRoot, '.impeccable', 'review', 'mobile.png'), fullPage: true });
+        await page.locator('#receiving_next').click();
+        check(await page.locator('.btn-submit').isVisible() && !await page.locator('#supplier').isVisible()
+            && (await page.locator('#receiving_review').innerText()).includes('2 × 24 = 48'),
+            'only review exposes final save and summarizes saved case conversion');
+        for (const [name, width, height] of [['mobile', 390, 844], ['desktop', 1280, 720]]) {
+            await page.setViewportSize({width, height});
+            check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), name + ' review has no page overflow');
+            await page.evaluate(() => window.scrollTo({top:0, left:0, behavior:'instant'}));
+            await page.screenshot({animations:'disabled', path: path.join(repoRoot, '.impeccable', 'review', 'review-' + name + '.png'), fullPage:true});
+        }
+        await selectProducts(page);
+        for (const [name, width, height] of [['desktop', 1280, 720], ['mobile', 390, 844]]) {
+            await page.setViewportSize({width, height});
+            check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), name + ' selection has no page overflow');
+            await page.evaluate(() => window.scrollTo({top:0, left:0, behavior:'instant'}));
+            await page.screenshot({animations:'disabled', path: path.join(repoRoot, '.impeccable', 'review', 'selection-' + name + '.png'), fullPage:true});
+        }
+
+        console.log('Received goods through the shared Cashier checkout boundary');
+        runFixture('--checkout-setup', '--token', token);
+        const checkoutContext = await browser.newContext({baseURL: secondURL});
+        const checkoutPage = await checkoutContext.newPage();
+        await login(checkoutPage, fixture.staff.cashier);
+        const posPath = '/components/cashier/pos.php';
+        await checkoutPage.goto(posPath);
+        const checkoutCsrf = await checkoutPage.inputValue('#checkout-form input[name="csrf_token"]');
+        const payment = (product, quantity) => ({csrf_token: checkoutCsrf,
+            cart: JSON.stringify([{product_id: product.product_id, qty: quantity}]), payment_method: 'cash', cash_received: '1000'});
+        const quote = async fields => checkoutContext.request.post(posPath, {form: {...fields, action: 'review_quote'}});
+        const pay = async (fields, token) => checkoutContext.request.post(posPath, {form: {...fields, action: 'checkout',
+            quote_token: token, checkout_attempt: require('node:crypto').randomBytes(16).toString('hex')}});
+        const zeroFields = payment(fixture.products.zero, 1);
+        const damagedForm = await receivingForm(page, {product_id: fixture.products.zero.product_id,
+            received_qty: '4', damaged_qty: '4', cost_price: '6.50'});
+        await context.request.post(receivingPath, {form: damagedForm});
+        let saleState = runFixture('--state', '--token', token);
+        check(Number(saleState.products.find(item => item.sku === fixture.products.zero.sku).quantity_on_hand) === 0
+            && saleState.product_batches.every(item => item.sku !== fixture.products.zero.sku)
+            && saleState.inventory_adjustments.filter(item => item.sku === fixture.products.zero.sku)
+                .every(item => item.status === 'cancelled'), 'fully damaged bought goods add no stock or saleable batch and leave no later deduction');
+        check((await quote(zeroFields)).status() === 409, 'damaged-only receiving cannot be sold');
+        const expiredForm = await receivingForm(page, {product_id: fixture.products.zero.product_id,
+            received_qty: '4', expiration_date: '2020-01-01'});
+        await context.request.post(receivingPath, {form: expiredForm});
+        check((await quote(zeroFields)).status() === 409, 'expired received goods cannot be sold as usable stock');
+        const freshForm = await receivingForm(page, {product_id: fixture.products.zero.product_id,
+            received_qty: '3', expiration_date: '2030-12-31', cost_price: '5.00'});
+        await context.request.post(receivingPath, {form: freshForm});
+        const freshQuote = await (await quote(zeroFields)).json();
+        const staleQuote = await (await quote(zeroFields)).json();
+        check(Boolean(freshQuote.token), 'accepted nonexpired receiving is saleable by a Cashier with an open shift');
+        const sold = await pay(zeroFields, freshQuote.token);
+        check(sold.url().includes('checkout=complete'), 'received goods complete shared checkout');
+        saleState = runFixture('--state', '--token', token);
+        const freshReceipt = saleState.receipts.filter(item => item.sku === fixture.products.zero.sku).at(-1);
+        check(Number(saleState.products.find(item => item.sku === fixture.products.zero.sku).quantity_on_hand) === 6
+            && Number(saleState.product_batches.find(item => Number(item.receiving_id) === Number(freshReceipt.receiving_id)).remaining_quantity) === 2,
+            'checkout deducts accepted nonexpired batch and shared inventory exactly once');
+        await pay(zeroFields, staleQuote.token);
+        check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(saleState),
+            'stale checkout cannot deduct from a changed received batch');
+        check((await quote(payment(fixture.products.zero, 3))).status() === 409,
+            'checkout cannot oversell the remaining nonexpired units');
+
+        const overlapForm = await receivingForm(page, {product_id: fixture.products.zero.product_id,
+            received_qty: '3', cost_price: '5.00', expiration_date: '2030-12-31'});
+        const overlapQuote = await (await quote(zeroFields)).json();
+        try {
+            runFixture('--delay-purchase', '--purchase-product', 'zero', '--token', token);
+            const receiving = context.request.post(receivingPath, {form: overlapForm});
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const results = await Promise.all([receiving, pay(zeroFields, overlapQuote.token)]);
+            check((await results[0].text()).includes('Shopping entry saved'), 'overlapping receiving commits the whole entry');
+            const afterOverlap = runFixture('--state', '--token', token);
+            const stock = Number(afterOverlap.products.find(item => item.sku === fixture.products.zero.sku).quantity_on_hand);
+            check(stock === (results[1].url().includes('checkout=complete') ? 8 : 9),
+                'overlapping checkout preserves committed additions and deducts only a completed sale');
+            if (!results[1].url().includes('checkout=complete')) {
+                const retryQuote = await (await quote(zeroFields)).json();
+                check((await pay(zeroFields, retryQuote.token)).url().includes('checkout=complete'),
+                    'checkout succeeds after reviewing stock committed by overlapping receiving');
+            }
+            check(Number(runFixture('--state', '--token', token).products.find(item => item.sku === fixture.products.zero.sku).quantity_on_hand) === 8,
+                'receiving plus checkout finishes at prior stock plus three minus one');
+        } finally {
+            runFixture('--allow-purchase', '--token', token);
+        }
+        await checkoutContext.close();
 
         await context.close();
         if (failures.length) {
