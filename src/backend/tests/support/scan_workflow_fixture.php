@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../bootstrap/app.php';
 
 use App\Core\Database;
 
-$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase']);
+$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
 
 $token = preg_replace('/[^A-Za-z0-9]/', '', (string)($options['token'] ?? ''));
 if (strlen($token) < 4 || strlen($token) > 12) {
@@ -36,6 +36,15 @@ $roleId = static function (PDO $pdo, string $name): int {
 };
 
 $products = [
+    'bulk_units' => [
+        'sku' => 'SCN' . $token . 'U', 'barcode' => '840' . $token . '00010', 'case_barcode' => null,
+        'product_name' => 'Scan WF Shopping Units', 'status' => 'active', 'quantity_on_hand' => 8,
+    ],
+    'bulk_pack' => [
+        'sku' => 'SCN' . $token . 'C', 'barcode' => '840' . $token . '00011', 'case_barcode' => 'CS' . $token . '0011',
+        'product_name' => 'Scan WF Shopping Cases', 'status' => 'active', 'quantity_on_hand' => 8,
+        'units_per_package' => 24, 'receiving_unit' => 'case',
+    ],
     'direct' => [
         'sku' => 'SCN' . $token . 'D',
         'barcode' => '840' . $token . '00008',
@@ -119,6 +128,10 @@ $products = [
 ];
 
 $staff = [
+    'manager_two' => [
+        'username' => 'scnmgrtwo' . $token, 'email' => 'scnmgrtwo' . $token . '@example.test',
+        'full_name' => 'Scan WF Second Manager', 'role' => 'inventory_manager',
+    ],
     'super_admin' => [
         'username' => 'scnsup' . $token,
         'email' => 'scnsup' . $token . '@example.test',
@@ -150,15 +163,19 @@ $staffByUsername = [];
 $approvedIssue = null;
 $receivingDocuments = [];
 
-if (array_key_exists('fail-purchase', $options) || array_key_exists('allow-purchase', $options)) {
+if (array_key_exists('fail-purchase', $options) || array_key_exists('allow-purchase', $options) || array_key_exists('delay-purchase', $options)) {
     $pdo->exec("DROP TRIGGER IF EXISTS `receiving_wf_{$token}`");
-    if (array_key_exists('fail-purchase', $options)) {
+    if (array_key_exists('fail-purchase', $options) || array_key_exists('delay-purchase', $options)) {
+        $key = $options['purchase-product'] ?? 'direct';
+        if (!isset($products[$key])) throw new RuntimeException('Unknown fixture purchase product.');
         $stmt = $pdo->prepare('SELECT product_id FROM products WHERE sku = ?');
-        $stmt->execute([$products['direct']['sku']]);
+        $stmt->execute([$products[$key]['sku']]);
         $productId = (int)$stmt->fetchColumn();
         if ($productId <= 0) throw new RuntimeException('Direct receiving fixture product is missing.');
+        $effect = array_key_exists('fail-purchase', $options)
+            ? "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Receiving fixture failure'" : 'DO SLEEP(0.5)';
         $pdo->exec("CREATE TRIGGER `receiving_wf_{$token}` BEFORE INSERT ON purchase_history FOR EACH ROW
-            BEGIN IF NEW.product_id = {$productId} THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Receiving fixture failure'; END IF; END");
+            BEGIN IF NEW.product_id = {$productId} THEN {$effect}; END IF; END");
     }
     echo json_encode(['ok' => true]) . PHP_EOL;
     exit(0);

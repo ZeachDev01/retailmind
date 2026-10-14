@@ -21,9 +21,73 @@ class ReceivingService
 
     public function receiveStock(array $data, int $userId): array
     {
+        return $this->receiveShoppingTrip([$data], $data, $userId)[0];
+    }
+
+    public function receiveShoppingTrip(array $lines, array $entry, int $userId): array
+    {
         if (function_exists('require_capability')) {
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
+        if ($lines === [] || !array_is_list($lines)) {
+            throw new RuntimeException('Add at least one product line before saving the shopping entry.');
+        }
+        $products = [];
+        foreach ($lines as $index => $line) {
+            if (!is_array($line)) {
+                throw new RuntimeException('Each product line must contain receiving details.');
+            }
+            $productId = $this->wholeNumber($line['product_id'] ?? 0, 'Product on line ' . ($index + 1));
+            if ($productId <= 0) throw new RuntimeException('Choose a product on line ' . ($index + 1) . '.');
+            if (isset($products[$productId])) {
+                throw new RuntimeException('Duplicate product on line ' . ($index + 1) . '. Remove the duplicate line or choose another product.');
+            }
+            $products[$productId] = true;
+        }
+        $shared = [
+            'supplier' => $entry['supplier'] ?? '',
+            'invoice_number' => $entry['invoice_number'] ?? '',
+            'po_number' => $entry['po_number'] ?? '',
+        ];
+        $this->fiscalPeriodGuard->assertOpenNow('stock_receiving', 'stock receiving');
+        // Serialize receipts before the fail-fast Store gate; overlapping receipts can both finish.
+        $lockSql = "CONCAT('receiving:', LEFT(SHA2(DATABASE(), 256), 48))";
+        if ((int)$this->pdo->query("SELECT GET_LOCK({$lockSql}, 10)")->fetchColumn() !== 1) {
+            throw new RuntimeException('Another receiving entry is still saving. Wait a moment, then try again.');
+        }
+        try {
+            StoreWriteGate::begin($this->pdo);
+            $results = [];
+            foreach ($lines as $index => $line) {
+                try {
+                    $results[] = $this->receiveLine(array_replace($line, $shared), $userId);
+                } catch (RuntimeException $e) {
+                    if ($e instanceof PDOException) throw $e;
+                    throw new RuntimeException('Line ' . ($index + 1) . ': ' . $e->getMessage(), 0, $e);
+                }
+            }
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
+        } finally {
+            try {
+                $this->pdo->query("SELECT RELEASE_LOCK({$lockSql})");
+            } catch (Throwable $e) {
+                error_log('Receiving lock release failed: ' . $e->getMessage());
+            }
+        }
+        try {
+            $this->notificationService->checkAndNotifyLowStock();
+            $this->notificationService->checkAndNotifyExpiringStock();
+        } catch (Throwable $e) {
+            error_log('Receiving notifications failed: ' . $e->getMessage());
+        }
+        return $results;
+    }
+
+    private function receiveLine(array $data, int $userId): array
+    {
         $productId = $this->wholeNumber($data['product_id'] ?? 0, 'Product');
         $quantityMode = $data['quantity_mode'] ?? 'units';
         if (!in_array($quantityMode, ['units', 'packages'], true)) {
@@ -67,261 +131,244 @@ class ReceivingService
             throw new RuntimeException('Invalid delivery discrepancy type.');
         }
 
-        $this->fiscalPeriodGuard->assertOpenNow('stock_receiving', 'stock receiving');
+        $remainingBefore = null;
+        $requestStatus = null;
 
-        StoreWriteGate::begin($this->pdo);
-        try {
-            $remainingBefore = null;
-            $requestStatus = null;
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, quantity_purchased FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
+        $productStmt->execute(array_merge([$productId], $scopeParams));
+        $product = $productStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$product) {
+            throw new RuntimeException('Active product not found.');
+        }
+        $unitsPerPackageUsed = $quantityMode === 'packages'
+            ? $this->wholeNumber($product['units_per_package'] ?? 0, 'Saved pack size') : 1;
+        if ($quantityMode === 'packages') {
+            if ($unitsPerPackageUsed <= 0) {
+                throw new RuntimeException('Set a positive whole-number pack size on the product before receiving packages.');
+            }
+            if ($receivedPackages <= 0) {
+                throw new RuntimeException('Package quantity must be greater than zero.');
+            }
+            $receivedQty = $receivedPackages * $unitsPerPackageUsed;
+            if ($receivedQty > 2147483647) {
+                throw new RuntimeException('Resulting unit quantity is too large.');
+            }
+        } else {
+            if ($receivedQtyInput <= 0) {
+                throw new RuntimeException('Received quantity must be greater than zero.');
+            }
+            $receivedQty = $receivedQtyInput;
+            $receivedPackages = 0;
+        }
+        if ($damagedQty > $receivedQty) {
+            throw new RuntimeException('Damaged quantity cannot exceed quantity received.');
+        }
+        $acceptedQty = $receivedQty - $damagedQty;
+        $inventoryStmt = $this->pdo->prepare('SELECT quantity_on_hand FROM inventory WHERE product_id = ? FOR UPDATE');
+        $inventoryStmt->execute([$productId]);
+        $currentStock = $inventoryStmt->fetchColumn();
+        if ($currentStock === false) {
+            throw new RuntimeException('This product has no inventory record. Ask your Administrator to check the product.');
+        }
+        if ((int)$currentStock + $acceptedQty > 2147483647
+            || (int)$product['quantity_purchased'] + $acceptedQty > 2147483647) {
+            throw new RuntimeException('Accepted quantity would exceed the supported stock total. Enter a smaller quantity.');
+        }
+        if ($acceptedQty <= 0 && $damagedQty <= 0) {
+            throw new RuntimeException('At least one delivered unit must be accepted or reported damaged.');
+        }
+        if ($acceptedQty > 0) {
+            $this->fiscalPeriodGuard->assertOpenNow('purchase_history', 'purchase history');
+            $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
+        }
+        if ($damagedQty > 0) {
+            $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
+        }
 
-            [$scopeSql, $scopeParams] = $this->productScope();
-            $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, quantity_purchased FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
-            $productStmt->execute(array_merge([$productId], $scopeParams));
-            $product = $productStmt->fetch(PDO::FETCH_ASSOC);
-            if (!$product) {
-                throw new RuntimeException('Active product not found.');
+        if ($purchaseOrderItemId > 0) {
+            $poStmt = $this->pdo->prepare("SELECT poi.*, po.purchase_order_id, po.po_number, po.status AS po_status,
+                    s.supplier_name, rr.request_id
+                FROM purchase_order_items poi
+                JOIN purchase_orders po ON po.purchase_order_id = poi.purchase_order_id
+                LEFT JOIN suppliers s ON s.supplier_id = po.supplier_id
+                LEFT JOIN replenishment_requests rr ON rr.request_id = poi.replenishment_request_id
+                WHERE poi.purchase_order_item_id = ? FOR UPDATE");
+            $poStmt->execute([$purchaseOrderItemId]);
+            $poItem = $poStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$poItem || !in_array($poItem['po_status'], ['approved','sent','partially_received'], true)) {
+                throw new RuntimeException('Only approved or sent purchase-order items can be received.');
             }
-            $unitsPerPackageUsed = $quantityMode === 'packages'
-                ? $this->wholeNumber($product['units_per_package'] ?? 0, 'Saved pack size') : 1;
-            if ($quantityMode === 'packages') {
-                if ($unitsPerPackageUsed <= 0) {
-                    throw new RuntimeException('Set a positive whole-number pack size on the product before receiving packages.');
-                }
-                if ($receivedPackages <= 0) {
-                    throw new RuntimeException('Package quantity must be greater than zero.');
-                }
-                $receivedQty = $receivedPackages * $unitsPerPackageUsed;
-                if ($receivedQty > 2147483647) {
-                    throw new RuntimeException('Resulting unit quantity is too large.');
-                }
-            } else {
-                if ($receivedQtyInput <= 0) {
-                    throw new RuntimeException('Received quantity must be greater than zero.');
-                }
-                $receivedQty = $receivedQtyInput;
-                $receivedPackages = 0;
+            if ((int)$poItem['product_id'] !== $productId) {
+                throw new RuntimeException('Product does not match the selected purchase-order item.');
             }
-            if ($damagedQty > $receivedQty) {
-                throw new RuntimeException('Damaged quantity cannot exceed quantity received.');
+            $purchaseOrderId = (int)$poItem['purchase_order_id'];
+            $replenishmentRequestId = (int)($poItem['replenishment_request_id'] ?? 0);
+            $poNumber = (string)$poItem['po_number'];
+            if ($supplier === '') $supplier = trim((string)($poItem['supplier_name'] ?? ''));
+            if ($costPrice === null) $costPrice = (float)($poItem['unit_cost'] ?? 0);
+            $remainingPo = max(0, (int)$poItem['ordered_qty'] - (int)$poItem['received_qty']);
+            if ($remainingPo <= 0) {
+                throw new RuntimeException('Only purchase-order lines with remaining quantity can be received.');
             }
-            $acceptedQty = $receivedQty - $damagedQty;
-            $inventoryStmt = $this->pdo->prepare('SELECT quantity_on_hand FROM inventory WHERE product_id = ? FOR UPDATE');
-            $inventoryStmt->execute([$productId]);
-            $currentStock = $inventoryStmt->fetchColumn();
-            if ($currentStock === false) {
-                throw new RuntimeException('This product has no inventory record. Ask your Administrator to check the product.');
+            if ($acceptedQty > $remainingPo && $discrepancyType === 'none') {
+                $discrepancyType = 'over';
+                $discrepancyQty = $acceptedQty - $remainingPo;
             }
-            if ((int)$currentStock + $acceptedQty > 2147483647
-                || (int)$product['quantity_purchased'] + $acceptedQty > 2147483647) {
-                throw new RuntimeException('Accepted quantity would exceed the supported stock total. Enter a smaller quantity.');
-            }
-            if ($acceptedQty <= 0 && $damagedQty <= 0) {
-                throw new RuntimeException('At least one delivered unit must be accepted or reported damaged.');
-            }
-            if ($acceptedQty > 0) {
-                $this->fiscalPeriodGuard->assertOpenNow('purchase_history', 'purchase history');
-                $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
-            }
-            if ($damagedQty > 0) {
-                $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
-            }
+        }
 
-            if ($purchaseOrderItemId > 0) {
-                $poStmt = $this->pdo->prepare("SELECT poi.*, po.purchase_order_id, po.po_number, po.status AS po_status,
-                        s.supplier_name, rr.request_id
-                    FROM purchase_order_items poi
-                    JOIN purchase_orders po ON po.purchase_order_id = poi.purchase_order_id
-                    LEFT JOIN suppliers s ON s.supplier_id = po.supplier_id
-                    LEFT JOIN replenishment_requests rr ON rr.request_id = poi.replenishment_request_id
-                    WHERE poi.purchase_order_item_id = ? FOR UPDATE");
-                $poStmt->execute([$purchaseOrderItemId]);
-                $poItem = $poStmt->fetch(PDO::FETCH_ASSOC);
-                if (!$poItem || !in_array($poItem['po_status'], ['approved','sent','partially_received'], true)) {
-                    throw new RuntimeException('Only approved or sent purchase-order items can be received.');
-                }
-                if ((int)$poItem['product_id'] !== $productId) {
-                    throw new RuntimeException('Product does not match the selected purchase-order item.');
-                }
-                $purchaseOrderId = (int)$poItem['purchase_order_id'];
-                $replenishmentRequestId = (int)($poItem['replenishment_request_id'] ?? 0);
-                $poNumber = (string)$poItem['po_number'];
-                if ($supplier === '') $supplier = trim((string)($poItem['supplier_name'] ?? ''));
-                if ($costPrice === null) $costPrice = (float)($poItem['unit_cost'] ?? 0);
-                $remainingPo = max(0, (int)$poItem['ordered_qty'] - (int)$poItem['received_qty']);
-                if ($remainingPo <= 0) {
-                    throw new RuntimeException('Only purchase-order lines with remaining quantity can be received.');
-                }
-                if ($acceptedQty > $remainingPo && $discrepancyType === 'none') {
-                    $discrepancyType = 'over';
-                    $discrepancyQty = $acceptedQty - $remainingPo;
-                }
+        if ($replenishmentRequestId > 0) {
+            $request = $this->getRequestForReceiving($replenishmentRequestId);
+            if (!$request) {
+                throw new RuntimeException('Replenishment request not found.');
             }
-
-            if ($replenishmentRequestId > 0) {
-                $request = $this->getRequestForReceiving($replenishmentRequestId);
-                if (!$request) {
-                    throw new RuntimeException('Replenishment request not found.');
-                }
-                if ((int)$request['product_id'] !== $productId) {
-                    throw new RuntimeException('Selected product does not match the replenishment request.');
-                }
-                if (!in_array($request['status'], ['approved', 'partially_received'], true)) {
-                    throw new RuntimeException('Only approved replenishment requests can receive stock.');
-                }
-
-                $remainingBefore = max(0, (int)$request['request_qty'] - (int)$request['received_to_date']);
-                if ($receivedQty > $remainingBefore && $discrepancyType === 'none') {
-                    $discrepancyType = 'over';
-                    $discrepancyQty = $receivedQty - $remainingBefore;
-                }
+            if ((int)$request['product_id'] !== $productId) {
+                throw new RuntimeException('Selected product does not match the replenishment request.');
+            }
+            if (!in_array($request['status'], ['approved', 'partially_received'], true)) {
+                throw new RuntimeException('Only approved replenishment requests can receive stock.');
             }
 
-            if ($damagedQty > 0 && $discrepancyType === 'none') {
-                $discrepancyType = 'damaged';
-                $discrepancyQty = $damagedQty;
+            $remainingBefore = max(0, (int)$request['request_qty'] - (int)$request['received_to_date']);
+            if ($receivedQty > $remainingBefore && $discrepancyType === 'none') {
+                $discrepancyType = 'over';
+                $discrepancyQty = $receivedQty - $remainingBefore;
             }
+        }
 
-            $totalCost = $costPrice !== null ? $costPrice * $acceptedQty : 0;
-            if ($totalCost > 99999999.99) {
-                throw new RuntimeException('Total purchase cost is too large.');
-            }
+        if ($damagedQty > 0 && $discrepancyType === 'none') {
+            $discrepancyType = 'damaged';
+            $discrepancyQty = $damagedQty;
+        }
 
-            $stmt = $this->pdo->prepare("INSERT INTO stock_receiving (
-                                       product_id, received_qty, received_packages, units_per_package_used, accepted_qty, damaged_qty, cost_price, total_cost, received_by,
-                                       replenishment_request_id, purchase_order_id, purchase_order_item_id, supplier, po_number, invoice_number,
-                                       batch_number, expiration_date, discrepancy_type, discrepancy_qty,
-                                       discrepancy_notes, notes
-                                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([
-                $productId, $receivedQty, $receivedPackages, $unitsPerPackageUsed, $acceptedQty, $damagedQty,
-                $costPrice, $totalCost, $userId,
-                $replenishmentRequestId > 0 ? $replenishmentRequestId : null,
-                $purchaseOrderId > 0 ? $purchaseOrderId : null,
-                $purchaseOrderItemId > 0 ? $purchaseOrderItemId : null,
-                $supplier !== '' ? $supplier : null, $poNumber !== '' ? $poNumber : null,
-                $invoiceNumber !== '' ? $invoiceNumber : null, $batchNumber !== '' ? $batchNumber : null,
-                $expirationDate !== '' ? $expirationDate : null, $discrepancyType, $discrepancyQty,
-                $discrepancyNotes !== '' ? $discrepancyNotes : null, $notes,
+        $totalCost = $costPrice !== null ? $costPrice * $acceptedQty : 0;
+        if ($totalCost > 99999999.99) {
+            throw new RuntimeException('Total purchase cost is too large.');
+        }
+
+        $stmt = $this->pdo->prepare("INSERT INTO stock_receiving (
+                                   product_id, received_qty, received_packages, units_per_package_used, accepted_qty, damaged_qty, cost_price, total_cost, received_by,
+                                   replenishment_request_id, purchase_order_id, purchase_order_item_id, supplier, po_number, invoice_number,
+                                   batch_number, expiration_date, discrepancy_type, discrepancy_qty,
+                                   discrepancy_notes, notes
+                               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([
+            $productId, $receivedQty, $receivedPackages, $unitsPerPackageUsed, $acceptedQty, $damagedQty,
+            $costPrice, $totalCost, $userId,
+            $replenishmentRequestId > 0 ? $replenishmentRequestId : null,
+            $purchaseOrderId > 0 ? $purchaseOrderId : null,
+            $purchaseOrderItemId > 0 ? $purchaseOrderItemId : null,
+            $supplier !== '' ? $supplier : null, $poNumber !== '' ? $poNumber : null,
+            $invoiceNumber !== '' ? $invoiceNumber : null, $batchNumber !== '' ? $batchNumber : null,
+            $expirationDate !== '' ? $expirationDate : null, $discrepancyType, $discrepancyQty,
+            $discrepancyNotes !== '' ? $discrepancyNotes : null, $notes,
+        ]);
+
+        $receivingId = (int)$this->pdo->lastInsertId();
+        if ($acceptedQty > 0) {
+            $this->pdo->prepare(
+                "INSERT INTO product_batches
+                    (product_id, receiving_id, batch_number, quantity, remaining_quantity, expiration_date, date_received, supplier)
+                 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)"
+            )->execute([
+                $productId,
+                $receivingId,
+                $batchNumber !== '' ? $batchNumber : null,
+                $acceptedQty,
+                $acceptedQty,
+                $expirationDate !== '' ? $expirationDate : null,
+                $supplier !== '' ? $supplier : null,
             ]);
 
-            $receivingId = (int)$this->pdo->lastInsertId();
-            if ($acceptedQty > 0) {
+            $this->pdo->prepare("UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?")
+                ->execute([$acceptedQty, $productId]);
+            $this->pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
+                                       VALUES (?, ?, 'purchase', ?)")
+                ->execute([$productId, $acceptedQty, $userId]);
+
+            $productUpdateParts = ['quantity_purchased = quantity_purchased + ?'];
+            $productUpdateParams = [$acceptedQty];
+            if ($costPrice !== null) {
+                $productUpdateParts[] = 'cost_price = ?';
+                $productUpdateParams[] = $costPrice;
+            }
+            if (!$direct && $supplier !== '') {
+                $productUpdateParts[] = 'supplier = ?';
+                $productUpdateParams[] = $supplier;
+                $productUpdateParts[] = 'preferred_supplier = ?';
+                $productUpdateParams[] = $supplier;
+            }
+            if ($expirationDate !== '') {
+                $productUpdateParts[] = 'expiration_date = ?';
+                $productUpdateParams[] = $expirationDate;
+            }
+            $productUpdateParams[] = $productId;
+            $this->pdo->prepare('UPDATE products SET ' . implode(', ', $productUpdateParts) . ' WHERE product_id = ?')
+                ->execute($productUpdateParams);
+
+            if ($costPrice !== null) {
                 $this->pdo->prepare(
-                    "INSERT INTO product_batches
-                        (product_id, receiving_id, batch_number, quantity, remaining_quantity, expiration_date, date_received, supplier)
-                     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)"
-                )->execute([
-                    $productId,
-                    $receivingId,
-                    $batchNumber !== '' ? $batchNumber : null,
-                    $acceptedQty,
-                    $acceptedQty,
-                    $expirationDate !== '' ? $expirationDate : null,
-                    $supplier !== '' ? $supplier : null,
-                ]);
-
-                $this->pdo->prepare("UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?")
-                    ->execute([$acceptedQty, $productId]);
-                $this->pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
-                                           VALUES (?, ?, 'purchase', ?)")
-                    ->execute([$productId, $acceptedQty, $userId]);
-
-                $productUpdateParts = ['quantity_purchased = quantity_purchased + ?'];
-                $productUpdateParams = [$acceptedQty];
-                if ($costPrice !== null) {
-                    $productUpdateParts[] = 'cost_price = ?';
-                    $productUpdateParams[] = $costPrice;
-                }
-                if (!$direct && $supplier !== '') {
-                    $productUpdateParts[] = 'supplier = ?';
-                    $productUpdateParams[] = $supplier;
-                    $productUpdateParts[] = 'preferred_supplier = ?';
-                    $productUpdateParams[] = $supplier;
-                }
-                if ($expirationDate !== '') {
-                    $productUpdateParts[] = 'expiration_date = ?';
-                    $productUpdateParams[] = $expirationDate;
-                }
-                $productUpdateParams[] = $productId;
-                $this->pdo->prepare('UPDATE products SET ' . implode(', ', $productUpdateParts) . ' WHERE product_id = ?')
-                    ->execute($productUpdateParams);
-
-                if ($costPrice !== null) {
-                    $this->pdo->prepare(
-                        "INSERT INTO purchase_history (product_id, supplier, quantity_purchased, cost_price, total_cost, recorded_by)
-                         VALUES (?, ?, ?, ?, ?, ?)"
-                    )->execute([$productId, $supplier !== '' ? $supplier : null, $acceptedQty, $costPrice, $totalCost, $userId]);
-                }
+                    "INSERT INTO purchase_history (product_id, supplier, quantity_purchased, cost_price, total_cost, recorded_by)
+                     VALUES (?, ?, ?, ?, ?, ?)"
+                )->execute([$productId, $supplier !== '' ? $supplier : null, $acceptedQty, $costPrice, $totalCost, $userId]);
             }
-
-            if ($damagedQty > 0) {
-                $damageReason = 'Damaged upon delivery';
-                if ($batchNumber !== '') {
-                    $damageReason .= " (batch {$batchNumber})";
-                }
-                if ($discrepancyNotes !== '') {
-                    $damageReason .= ': ' . $discrepancyNotes;
-                }
-                // Bought damage was excluded before stock was added; no later deduction is due.
-                $this->pdo->prepare(
-                    "INSERT INTO inventory_adjustments (product_id, adjustment_qty, adjustment_type, reported_by, reason, status, review_notes)
-                     VALUES (?, ?, 'damaged', ?, ?, ?, ?)"
-                )->execute([$productId, -$damagedQty, $userId, $damageReason,
-                    $direct ? 'cancelled' : 'pending',
-                    $direct ? "Receiving #{$receivingId}: excluded from accepted stock; no stock deduction required." : null]);
-            }
-
-            if ($purchaseOrderItemId > 0) {
-                $this->pdo->prepare("UPDATE purchase_order_items SET received_qty = LEAST(ordered_qty, received_qty + ?) WHERE purchase_order_item_id = ?")
-                    ->execute([$acceptedQty, $purchaseOrderItemId]);
-                $poTotalsStmt = $this->pdo->prepare("SELECT COALESCE(SUM(ordered_qty),0) ordered_qty, COALESCE(SUM(received_qty),0) received_qty FROM purchase_order_items WHERE purchase_order_id=?");
-                $poTotalsStmt->execute([$purchaseOrderId]);
-                $poTotals = $poTotalsStmt->fetch(PDO::FETCH_ASSOC);
-                $poStatus = (int)$poTotals['received_qty'] >= (int)$poTotals['ordered_qty'] ? 'fully_received' : 'partially_received';
-                $this->pdo->prepare("UPDATE purchase_orders SET status=? WHERE purchase_order_id=? AND status<>'cancelled'")
-                    ->execute([$poStatus, $purchaseOrderId]);
-            }
-
-            if ($replenishmentRequestId > 0) {
-                $requestAfter = $this->getRequestForReceiving($replenishmentRequestId);
-                $receivedToDate = (int)($requestAfter['received_to_date'] ?? 0);
-                $requestQty = (int)($requestAfter['request_qty'] ?? 0);
-                $requestStatus = $receivedToDate >= $requestQty ? 'received' : 'partially_received';
-
-                $this->pdo->prepare("UPDATE replenishment_requests SET status = ? WHERE request_id = ?")
-                    ->execute([$requestStatus, $replenishmentRequestId]);
-            }
-
-            $recordingStmt = $this->pdo->prepare('SELECT sr.received_at, u.full_name FROM stock_receiving sr JOIN users u ON u.user_id = sr.received_by WHERE sr.receiving_id = ?');
-            $recordingStmt->execute([$receivingId]);
-            $recording = $recordingStmt->fetch(PDO::FETCH_ASSOC);
-            $this->pdo->commit();
-            try {
-                $this->notificationService->checkAndNotifyLowStock();
-                $this->notificationService->checkAndNotifyExpiringStock();
-            } catch (Throwable $e) {
-                error_log('Receiving notifications failed: ' . $e->getMessage());
-            }
-            return [
-                'product_name' => $product['product_name'],
-                'recorded_by' => $recording['full_name'],
-                'received_at' => $recording['received_at'],
-                'receiving_id' => $receivingId,
-                'received_qty' => $receivedQty,
-                'accepted_qty' => $acceptedQty,
-                'damaged_qty' => $damagedQty,
-                'received_packages' => $receivedPackages,
-                'units_per_package_used' => $unitsPerPackageUsed,
-                'purchase_order_id' => $purchaseOrderId ?: null,
-                'remaining_qty' => $replenishmentRequestId > 0 ? $this->getRemainingQuantity($replenishmentRequestId) : null,
-                'request_status' => $requestStatus,
-            ];
-        } catch (Throwable $e) {
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-            throw $e;
         }
+
+        if ($damagedQty > 0) {
+            $damageReason = 'Damaged upon delivery';
+            if ($batchNumber !== '') {
+                $damageReason .= " (batch {$batchNumber})";
+            }
+            if ($discrepancyNotes !== '') {
+                $damageReason .= ': ' . $discrepancyNotes;
+            }
+            // Bought damage was excluded before stock was added; no later deduction is due.
+            $this->pdo->prepare(
+                "INSERT INTO inventory_adjustments (product_id, adjustment_qty, adjustment_type, reported_by, reason, status, review_notes)
+                 VALUES (?, ?, 'damaged', ?, ?, ?, ?)"
+            )->execute([$productId, -$damagedQty, $userId, $damageReason,
+                $direct ? 'cancelled' : 'pending',
+                $direct ? "Receiving #{$receivingId}: excluded from accepted stock; no stock deduction required." : null]);
+        }
+
+        if ($purchaseOrderItemId > 0) {
+            $this->pdo->prepare("UPDATE purchase_order_items SET received_qty = LEAST(ordered_qty, received_qty + ?) WHERE purchase_order_item_id = ?")
+                ->execute([$acceptedQty, $purchaseOrderItemId]);
+            $poTotalsStmt = $this->pdo->prepare("SELECT COALESCE(SUM(ordered_qty),0) ordered_qty, COALESCE(SUM(received_qty),0) received_qty FROM purchase_order_items WHERE purchase_order_id=?");
+            $poTotalsStmt->execute([$purchaseOrderId]);
+            $poTotals = $poTotalsStmt->fetch(PDO::FETCH_ASSOC);
+            $poStatus = (int)$poTotals['received_qty'] >= (int)$poTotals['ordered_qty'] ? 'fully_received' : 'partially_received';
+            $this->pdo->prepare("UPDATE purchase_orders SET status=? WHERE purchase_order_id=? AND status<>'cancelled'")
+                ->execute([$poStatus, $purchaseOrderId]);
+        }
+
+        if ($replenishmentRequestId > 0) {
+            $requestAfter = $this->getRequestForReceiving($replenishmentRequestId);
+            $receivedToDate = (int)($requestAfter['received_to_date'] ?? 0);
+            $requestQty = (int)($requestAfter['request_qty'] ?? 0);
+            $requestStatus = $receivedToDate >= $requestQty ? 'received' : 'partially_received';
+
+            $this->pdo->prepare("UPDATE replenishment_requests SET status = ? WHERE request_id = ?")
+                ->execute([$requestStatus, $replenishmentRequestId]);
+        }
+
+        $recordingStmt = $this->pdo->prepare('SELECT sr.received_at, u.full_name FROM stock_receiving sr JOIN users u ON u.user_id = sr.received_by WHERE sr.receiving_id = ?');
+        $recordingStmt->execute([$receivingId]);
+        $recording = $recordingStmt->fetch(PDO::FETCH_ASSOC);
+        return [
+            'product_name' => $product['product_name'],
+            'recorded_by' => $recording['full_name'],
+            'received_at' => $recording['received_at'],
+            'receiving_id' => $receivingId,
+            'received_qty' => $receivedQty,
+            'accepted_qty' => $acceptedQty,
+            'damaged_qty' => $damagedQty,
+            'received_packages' => $receivedPackages,
+            'units_per_package_used' => $unitsPerPackageUsed,
+            'purchase_order_id' => $purchaseOrderId ?: null,
+            'remaining_qty' => $replenishmentRequestId > 0 ? $this->getRemainingQuantity($replenishmentRequestId) : null,
+            'request_status' => $requestStatus,
+        ];
     }
 
     public function getPendingReplenishmentRequests(): array

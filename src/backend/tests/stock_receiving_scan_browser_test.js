@@ -103,6 +103,14 @@ async function receivingForm(page, fields = {}) {
     };
 }
 
+async function shoppingForm(page, lines, entry = {}) {
+    const form = await receivingForm(page, { entry_mode: 'shopping_trip', ...entry });
+    lines.forEach((line, index) => {
+        for (const [name, value] of Object.entries(line)) form[`lines[${index}][${name}]`] = String(value);
+    });
+    return form;
+}
+
 const failures = [];
 function check(condition, message) {
     console.log((condition ? '  ok - ' : '  FAIL - ') + message);
@@ -112,6 +120,7 @@ function check(condition, message) {
 async function main() {
     const token = 'rcv' + Math.random().toString(36).slice(2, 8);
     let server;
+    let secondServer;
     let browser;
     let fixture;
 
@@ -131,6 +140,11 @@ async function main() {
         const page = await context.newPage();
         await login(page, fixture.staff.manager);
         await page.goto(receivingPath);
+
+        console.log('Shopping trip entry');
+        check(await page.locator('#add_receiving_line').count() === 1,
+            'Stock Receiving offers another product line before one reviewed save');
+        if (!await page.locator('#add_receiving_line').count()) throw new Error('Multi-product receiving is unavailable.');
 
         const before = runFixture('--state', '--token', token);
         const historicalReceipt = before.receipts.find(item => item.invoice_number === 'HISTORICAL-' + token);
@@ -593,6 +607,205 @@ async function main() {
             Number(item.receiving_id) === Number(historicalReceipt.receiving_id))) === JSON.stringify(historicalReceipt),
             'historical linked receiving records retain their quantities, cost, staff, time and document references');
 
+        console.log('Reviewed mixed-product shopping trip');
+        await page.goto(receivingPath);
+        const beforeTrip = runFixture('--state', '--token', token);
+        await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await page.fill('#received_qty', '5');
+        await page.fill('#damaged_qty', '2');
+        await page.fill('#cost_price', '7.25');
+        await page.fill('#batch_number', 'SHOP-UNITS-' + token);
+        await page.fill('#expiration_date', '2028-12-31');
+        await page.fill('#supplier', 'Shopping trip store');
+        await page.fill('#invoice_number', 'SHOP-' + token);
+        await page.locator('#add_receiving_line').focus();
+        await page.keyboard.press('Enter');
+        check(await page.locator('.receiving-line').count() === 2, 'keyboard action adds a second product line');
+        await scan(page, fixture.products.bulk_pack.case_barcode);
+        check(await eventually(page, id => document.getElementById('product_id_1').value === String(id),
+            fixture.products.bulk_pack.product_id), 'case lookup selects the active second line without replacing the first');
+        await page.fill('#received_packages_1', '2');
+        check((await page.locator('#package_conversion_1').innerText()).includes('2 × 24 = 48')
+            && (await page.locator('#package_conversion').innerText()).includes('3 accepted units'),
+            'every line displays its pack basis and actual accepted units before saving');
+        check(await page.locator('.receiving-line').nth(1).getByLabel('Product', { exact: true }).inputValue()
+            === String(fixture.products.bulk_pack.product_id), 'cloned line labels remain associated with their fields');
+        await scan(page, fixture.products.bulk_units.barcode);
+        check(await eventually(page, () => document.getElementById('scan_status').textContent.includes('already in the shopping entry'))
+            && await page.inputValue('#product_id_1') === String(fixture.products.bulk_pack.product_id)
+            && await page.inputValue('#received_packages_1') === '2',
+            'scanning an existing product explains duplicates and preserves both reviewed lines');
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+            page.evaluate(() => { const button = document.querySelector('.btn-submit'); button.click(); button.click(); })
+        ]);
+        const tripState = runFixture('--state', '--token', token);
+        const tripReceipts = tripState.receipts.filter(item => item.invoice_number === 'SHOP-' + token);
+        const tripSuccess = await page.locator('.message.success').innerText();
+        check(tripSuccess.includes(fixture.products.bulk_units.product_name) && tripSuccess.includes('3 accepted units')
+            && tripSuccess.includes(fixture.products.bulk_pack.product_name) && tripSuccess.includes('48 accepted units'),
+            'one success summary identifies every product and actual accepted quantity');
+        check(tripState.receipts.length === beforeTrip.receipts.length + 2 && tripReceipts.length === 2,
+            'ordinary repeated clicks record one two-line shopping entry');
+        check(Number(tripState.products.find(item => item.sku === fixture.products.bulk_pack.sku).quantity_on_hand) === 56
+            && Number(tripState.products.find(item => item.sku === fixture.products.bulk_units.sku).quantity_on_hand) === 11,
+            'mixed unit/package lines add accepted units; eight plus two cases of 24 is 56');
+        check(tripReceipts.every(item => item.supplier === 'Shopping trip store'
+            && Number(item.received_by) === fixture.staff.manager.user_id)
+            && Number(tripReceipts.find(item => item.sku === fixture.products.bulk_pack.sku).units_per_package_used) === 24,
+            'shared shopping details, staff attribution and saved pack size persist on each receiving line');
+        check(tripReceipts.find(item => item.sku === fixture.products.bulk_pack.sku).cost_price === null
+            && tripState.products.filter(item => [fixture.products.bulk_units.sku, fixture.products.bulk_pack.sku].includes(item.sku))
+                .every(item => item.preferred_supplier === 'Original preferred supplier'),
+            'mixed optional costs preserve unknown cost and preferred suppliers');
+
+        console.log('Add/remove and empty shopping entries');
+        await page.goto(receivingPath);
+        await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await page.fill('#received_qty', '7');
+        await page.locator('#add_receiving_line').click();
+        await page.selectOption('#product_id_1', String(fixture.products.bulk_units.product_id));
+        check((await page.locator('#entry_status').innerText()).includes('Duplicate product'),
+            'manual duplicate selection gives a clear correction message');
+        await page.locator('.receiving-line').nth(1).getByRole('button', { name: 'Remove product' }).click();
+        check(await page.locator('.receiving-line').count() === 1 && await page.inputValue('#received_qty') === '7',
+            'removing a line preserves the other entered product and quantity');
+        await page.locator('.remove-receiving-line').click();
+        await page.locator('.btn-submit').click();
+        check((await page.locator('#entry_status').innerText()).includes('Add at least one product'),
+            'empty shopping entries show a correction message');
+        await page.locator('summary').filter({ hasText: 'Optional: receive against' }).click();
+        await page.getByRole('button', { name: 'Receive PO', exact: true }).first().click();
+        check(await page.locator('.receiving-line').count() === 1
+            && await page.inputValue('#purchase_order_item_id') !== '',
+            'choosing a legacy PO creates a product line after all lines were removed');
+        await page.locator('.remove-receiving-line').click();
+        await page.getByRole('button', { name: 'Receive Now', exact: true }).first().click();
+        check(await page.locator('.receiving-line').count() === 1
+            && await page.inputValue('#replenishment_request_id') !== '',
+            'choosing an approved request creates a line after all lines were removed');
+
+        console.log('Later-line validation retains the complete entry');
+        await page.goto(receivingPath);
+        await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await page.fill('#received_qty', '7');
+        await page.fill('#damaged_qty', '1');
+        await page.fill('#cost_price', '11.25');
+        await page.fill('#batch_number', 'RETAIN-FIRST-' + token);
+        await page.fill('#expiration_date', '2029-01-31');
+        await page.fill('#supplier', 'Retain trip store');
+        await page.fill('#invoice_number', 'RETAIN-' + token);
+        await page.locator('#add_receiving_line').click();
+        await page.selectOption('#product_id_1', String(fixture.products.bulk_pack.product_id));
+        await page.selectOption('#quantity_mode_1', 'packages');
+        await page.fill('#received_packages_1', '1.5');
+        await page.fill('#batch_number_1', 'RETAIN-SECOND-' + token);
+        await page.evaluate(() => document.getElementById('receiving_form').noValidate = true);
+        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('.btn-submit').click()]);
+        check((await page.locator('.message.error').innerText()).includes('Line 2')
+            && await page.inputValue('#received_packages_1') === '1.5'
+            && await page.inputValue('#received_qty') === '7' && await page.inputValue('#damaged_qty') === '1'
+            && await page.inputValue('#cost_price') === '11.25'
+            && await page.inputValue('#batch_number_1') === 'RETAIN-SECOND-' + token
+            && await page.inputValue('#supplier') === 'Retain trip store'
+            && await page.inputValue('#invoice_number') === 'RETAIN-' + token,
+            'invalid later line identifies the line and retains all lines and shared optional details');
+        check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),
+            'invalid later line rolls back earlier inventory, batch, cost, damage, history and movement writes');
+
+        console.log('Later-line database failure rolls back the entire entry');
+        await dismissBlockingDialog(page);
+        await page.fill('#received_packages_1', '2');
+        await page.fill('#cost_price_1', '3.25');
+        const invalidControls = await page.evaluate(() => Array.from(document.getElementById('receiving_form').elements)
+            .filter(field => field.willValidate && !field.validity.valid)
+            .map(field => ({ name: field.name, value: field.value, message: field.validationMessage })));
+        if (invalidControls.length) throw new Error('Corrected shopping form remains invalid: ' + JSON.stringify(invalidControls));
+        try {
+            runFixture('--fail-purchase', '--purchase-product', 'bulk_pack', '--token', token);
+            await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('.btn-submit').click()]);
+            check(await page.locator('.message.error').count() === 1
+                && await page.inputValue('#received_qty') === '7' && await page.inputValue('#received_packages_1') === '2'
+                && await page.inputValue('#cost_price_1') === '3.25', 'later DB failure retains both reviewed lines for correction');
+            check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),
+                'later persistence failure rolls back all earlier cost, damage, batch, history, movement and inventory effects');
+        } finally {
+            runFixture('--allow-purchase', '--token', token);
+        }
+
+        const validFirst = { product_id: fixture.products.bulk_units.product_id, received_qty: '4', cost_price: '8.50', damaged_qty: '1', batch_number: 'ROLLBACK' };
+        for (const invalidSecond of [
+            { product_id: fixture.products.bulk_units.product_id, received_qty: '2' },
+            { product_id: fixture.products.bulk_pack.product_id, received_qty: 'malformed' },
+            { product_id: fixture.products.bulk_pack.product_id, received_qty: '1.5' },
+            { product_id: fixture.products.inactive.product_id, received_qty: '2' },
+            { product_id: fixture.products.invalid_pack.product_id, quantity_mode: 'packages', received_packages: '1' }
+        ]) {
+            const invalidForm = await shoppingForm(page, [validFirst, invalidSecond], { supplier: 'Keep shopping details' });
+            const response = await context.request.post(receivingPath, { form: invalidForm });
+            check((await response.text()).includes('message error'), 'invalid shopping line refused: ' + JSON.stringify(invalidSecond));
+            check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),
+                'invalid shopping entry saves nothing');
+        }
+        const emptyForm = await shoppingForm(page, []);
+        check((await (await context.request.post(receivingPath, { form: emptyForm })).text()).includes('Add at least one product line'),
+            'direct HTTP cannot save an empty shopping entry');
+
+        console.log('Overlapping shopping receipts across independent HTTP servers');
+        const secondPort = await freePort();
+        const secondURL = 'http://127.0.0.1:' + secondPort;
+        secondServer = spawn(phpBinary, ['-S', '127.0.0.1:' + secondPort, '-t', path.join(repoRoot, 'src', 'frontend')], {
+            cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe']
+        });
+        secondServer.stderr.resume();
+        await waitForHttp(secondURL + '/?login=1');
+        const concurrentContext = await browser.newContext({ baseURL: secondURL });
+        const concurrentPage2 = await concurrentContext.newPage();
+        await login(concurrentPage2, fixture.staff.manager_two);
+        const firstTrip = await shoppingForm(page, [
+            { product_id: fixture.products.bulk_units.product_id, received_qty: '3', cost_price: '8.50' },
+            { product_id: fixture.products.bulk_pack.product_id, received_qty: '4' }
+        ], { invoice_number: 'CONCURRENT-A-' + token });
+        const reverseTrip = await shoppingForm(concurrentPage2, [
+            { product_id: fixture.products.bulk_pack.product_id, received_qty: '5' },
+            { product_id: fixture.products.bulk_units.product_id, received_qty: '2', cost_price: '8.50' }
+        ], { invoice_number: 'CONCURRENT-B-' + token });
+        try {
+            runFixture('--delay-purchase', '--purchase-product', 'bulk_units', '--token', token);
+            const responses = await Promise.all([
+                context.request.post(receivingPath, { form: firstTrip }),
+                concurrentContext.request.post(receivingPath, { form: reverseTrip })
+            ]);
+            check((await responses[0].text()).includes('Shopping entry saved')
+                && (await responses[1].text()).includes('Shopping entry saved'),
+                'simultaneous overlapping receipts in different product orders both save');
+        } finally {
+            runFixture('--allow-purchase', '--token', token);
+        }
+        const concurrentState = runFixture('--state', '--token', token);
+        check(Number(concurrentState.products.find(item => item.sku === fixture.products.bulk_units.sku).quantity_on_hand) === 16
+            && Number(concurrentState.products.find(item => item.sku === fixture.products.bulk_pack.sku).quantity_on_hand) === 65,
+            'both simultaneous receipts contribute to current stock without overwriting quantities');
+        await context.request.post(receivingPath, { form: firstTrip });
+        check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(concurrentState),
+            'replaying a multi-line shopping entry records no additional lines');
+        await concurrentContext.close();
+
+        await page.goto(receivingPath);
+        await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await page.fill('#received_qty', '5');
+        await page.locator('#add_receiving_line').click();
+        await page.selectOption('#product_id_1', String(fixture.products.bulk_pack.product_id));
+        await page.selectOption('#quantity_mode_1', 'packages');
+        await page.fill('#received_packages_1', '2');
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving-178-desktop.png'), fullPage: true });
+        await page.setViewportSize({ width: 390, height: 844 });
+        check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+            'multi-line entry fits the mobile viewport');
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving-178-mobile.png'), fullPage: true });
+
         await context.close();
         if (failures.length) {
             throw new Error(failures.join('\n'));
@@ -601,6 +814,7 @@ async function main() {
     } finally {
         if (browser) await browser.close().catch(() => {});
         if (server) server.kill();
+        if (secondServer) secondServer.kill();
         if (fixture) runFixture('--cleanup', '--token', token);
     }
 }

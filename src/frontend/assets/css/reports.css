@@ -310,6 +310,19 @@
             padding: 0;
             min-width: 0;
         }
+        .receiving-line {
+            border-bottom: 1px solid var(--border, #e5e7eb);
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+        }
+        .receiving-line-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
         .form-section {
             margin-bottom: 1.5rem;
         }
