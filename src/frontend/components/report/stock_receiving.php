@@ -80,6 +80,11 @@ $scan_pending_requests = array_values(array_filter(
 ));
 $products = $receivingService->getActiveProducts();
 $history = $receivingService->getReceivingHistory($_SESSION['user_id']);
+// Throwaway #176 rendering only; existing authentication and read-only loading stay above.
+if (getenv('RECEIVING_PROTOTYPE') === '1' && $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['variant'])) {
+    require __DIR__ . '/stock_receiving.prototype.php';
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html>
@@ -671,3 +676,4 @@ updateQuantityMode();
 </script>
 </body>
 </html>
+
