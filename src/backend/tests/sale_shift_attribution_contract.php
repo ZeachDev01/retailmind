@@ -578,8 +578,8 @@ try {
     $assert($service !== '' && $page !== '', 'Cashier Shift presentation sources must be readable');
     $assert(
         preg_match('/private const ORDER_COLUMNS = \[(.*?)\];/s', $service, $matches) === 1
-            && preg_match('/3 => \'item_count\',.*?4 => \'s\.total_amount\',.*?5 => \'s\.payment_method\',.*?6 => \'reversal_count\',.*?7 => \'s\.shift_id\',/s', $matches[1]) === 1,
-        'the Cashier Shift column is appended at index 7, leaving the existing order indices in place'
+            && preg_match('/3 => \'item_count\',.*?4 => \'s\.total_amount\',.*?5 => \'s\.payment_method\',.*?6 => \'s\.shift_id\',/s', $matches[1]) === 1,
+        'the Cashier Shift column sits at index 6, leaving item, total, and payment indices in place'
     );
     $headerOrder = [];
     if (preg_match('/<th>Receipt #<\/th>(.*?)<th>Actions<\/th>/s', $page, $matches) === 1) {
@@ -587,8 +587,8 @@ try {
         $headerOrder = $headers[1];
     }
     $assert(
-        $headerOrder === ['Date', 'Cashier', 'Items', 'Original paid', 'Payment', 'Legacy Reversals', 'Cashier Shift', 'Cash Refunds', 'Refunded', 'Remaining net'],
-        'the Cashier Shift header sits after Legacy Reversals so the rendered columns match ORDER_COLUMNS'
+        $headerOrder === ['Date', 'Cashier', 'Items', 'Original paid', 'Payment', 'Cashier Shift', 'Cash Refunds', 'Refunded', 'Remaining net'],
+        'the Cashier Shift header sits after Payment so the rendered columns match ORDER_COLUMNS'
     );
 } catch (Throwable $exception) {
     $failures[] = 'Sale Cashier Shift attribution contract threw: ' . $exception->getMessage();

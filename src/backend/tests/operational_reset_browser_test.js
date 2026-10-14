@@ -49,9 +49,14 @@ const fixture = action => {
             await Promise.all([page.waitForNavigation(), page.getByRole('button', { name: 'Log in', exact: true }).click()]);
             return { context, page };
         };
-        const { context, page } = await login('admin');
+        const administrator = await login('admin');
+        assert.equal(await administrator.page.locator('a[href$="/components/administrator/reset_data.php"]').count(), 0, 'Administrator navigation must not offer Reset Data');
+        const { context, page } = await login('super_admin');
+        assert.equal(await page.locator('a[href$="/components/administrator/reset_data.php"]').count(), 1, 'Super Administrator navigation must retain Reset Data');
         const manager = await login('inventory_manager');
         const resetUrl = origin + '/components/administrator/reset_data.php';
+        assert.equal((await administrator.page.goto(resetUrl)).status(), 403, 'Administrators must not access Reset Data directly');
+        assert.equal((await administrator.context.request.post(resetUrl, { form: { confirmation: 'RESET ALL DATA', current_password: data.password } })).status(), 403, 'Administrators must not submit resets directly');
         assert.equal((await manager.page.goto(resetUrl)).status(), 403, 'Inventory Managers must not reset data');
         assert.equal((await page.goto(resetUrl)).status(), 200);
         assert.equal(await page.locator('#reset-password').count(), 1, await page.locator('body').innerText());

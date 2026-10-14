@@ -23,10 +23,9 @@ final class ReceiptTableService
         3 => 'item_count',
         4 => 's.total_amount',
         5 => 's.payment_method',
-        6 => 'reversal_count',
-        7 => 's.shift_id',
-        9 => 'refunded_amount',
-        10 => 'remaining_net_amount',
+        6 => 's.shift_id',
+        8 => 'refunded_amount',
+        9 => 'remaining_net_amount',
     ];
     private const REVERSAL_STATUSES = ['pending', 'approved', 'rejected', 'none'];
 

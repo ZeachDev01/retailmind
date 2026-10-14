@@ -54,13 +54,13 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <span class="action-icon"><i class="bi bi-upc-scan" aria-hidden="true"></i></span>
                     <span><strong>New sale</strong><span>Scan items and collect payment</span></span>
                 </a>
-                <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">
+                <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/invoice/sales.php')) ?>">
                     <span class="action-icon"><i class="bi bi-receipt" aria-hidden="true"></i></span>
-                    <span><strong>Sales history</strong><span>Find receipts and transactions</span></span>
+                    <span><strong>Receipt history</strong><span>Find receipts and reprints</span></span>
                 </a>
-                <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>">
+                <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">
                     <span class="action-icon"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></span>
-                    <span><strong>Returns and reversals</strong><span>Review cancellation requests</span></span>
+                    <span><strong>Cash refunds</strong><span>Process returns and refunds</span></span>
                 </a>
             </nav>
 

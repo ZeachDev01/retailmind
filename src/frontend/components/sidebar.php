@@ -160,7 +160,6 @@ $superAdministratorSystemItems = [
 ];
 
 $administratorSystemItems = [
-    ['path' => 'components/administrator/reset_data.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Reset Data'],
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Store Staff'],
     ['path' => 'components/administrator/registers.php', 'icon' => 'bi-upc-scan', 'label' => 'Registers'],
     ['path' => 'components/administrator/store_settings.php', 'icon' => 'bi-sliders', 'label' => 'Store Settings'],
@@ -196,7 +195,7 @@ $administratorSections = [
         'items' => [
             ['path' => 'components/administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Store Overview'],
             ['icon' => 'bi-shop', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
-            ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
+            ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'bi-percent', 'label' => 'Promotions'],
             ['path' => 'components/administrator/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issues'],
             ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Store Reports', 'items' => $administratorReportItems],
@@ -228,7 +227,7 @@ $roleSections = [
                     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
                     ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
                     ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
-                    ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
+                    ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
                 ]],
             ],
         ],
@@ -248,7 +247,7 @@ $roleSections = [
         [
             'title' => 'Documents',
             'items' => [
-                ['path' => 'components/invoice/sales.php?tab=transactions', 'icon' => 'bi-receipt', 'label' => 'Sales'],
+                ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
             ],
         ],
     ],
