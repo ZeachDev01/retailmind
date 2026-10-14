@@ -23,7 +23,8 @@ $pdo->exec("CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT,
     CREATE TABLE model_training_runs (training_run_id INTEGER PRIMARY KEY, model_version TEXT,
         status TEXT, metrics_json TEXT);
     CREATE TABLE products (product_id INTEGER PRIMARY KEY, sku TEXT, product_name TEXT, status TEXT,
-        supplier_lead_time_days INTEGER, minimum_order_quantity INTEGER);
+        supplier_lead_time_days INTEGER, minimum_order_quantity INTEGER,
+        reorder_level INTEGER, safety_stock INTEGER, units_per_package INTEGER);
     CREATE TABLE inventory (product_id INTEGER, quantity_on_hand INTEGER);
     CREATE TABLE supplier_products (supplier_product_id INTEGER PRIMARY KEY, product_id INTEGER, lead_time_days INTEGER,
         minimum_order_quantity INTEGER, is_preferred INTEGER);
@@ -31,7 +32,7 @@ $pdo->exec("CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT,
     CREATE TABLE replenishment_requests (request_id INTEGER, product_id INTEGER, requested_by INTEGER,
         approved_by INTEGER, request_qty INTEGER, status TEXT, request_date TEXT);
     CREATE TABLE stock_receiving (replenishment_request_id INTEGER, accepted_qty INTEGER);
-    INSERT INTO products VALUES (1, 'NEEDS-STOCK', 'Needs stock', 'active', 7, 1);
+    INSERT INTO products VALUES (1, 'NEEDS-STOCK', 'Needs stock', 'active', 7, 1, 10, 5, 1);
     INSERT INTO inventory VALUES (1, 0);
     INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'newly-promoted-model')");
 

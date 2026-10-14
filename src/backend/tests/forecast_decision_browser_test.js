@@ -24,7 +24,7 @@ const fixture = action => {
     let browser, server;
     try {
         const data = JSON.parse(fixture('create'));
-        fixture('seed');
+        fixture('stock_guidance');
         console.log('Disposable forecast database seeded.');
         const listener = net.createServer();
         await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
@@ -48,6 +48,50 @@ const fixture = action => {
         await page.locator('#landing-login-username').fill('decision_manager');
         await page.locator('#landing-login-password').fill(data.password);
         await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+        const queueRoute = '/components/inventory_management/replenishment_queue.php';
+        await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+        const stockOnly = page.locator('.queue-item').filter({hasText: 'Decision Test Item'});
+        assert.match(await stockOnly.innerText(), /Out of stock/);
+        assert.match(await stockOnly.innerText(), /16 units/);
+        assert.match(await stockOnly.innerText(), /Stock rules/);
+        assert.match(await stockOnly.innerText(), /Forecast unavailable/);
+        fixture('seed');
+        const unchanged = JSON.parse(fixture('state'));
+        await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+        assert.match(await stockOnly.innerText(), /Demand Forecast/);
+        assert.match(await stockOnly.innerText(), /32 units/);
+        const missing = page.locator('.queue-item').filter({hasText: 'Unrelated legacy product'});
+        assert.match(await missing.innerText(), /Forecast unavailable/);
+        assert.match(await missing.innerText(), /Low stock/);
+        assert.equal(await page.getByRole('link', {name: 'Review Request', exact: true}).count(), 0);
+        const response = await context.request.post(queueRoute, {form: {action: 'accept', product_id: 1}});
+        assert.equal(response.status(), 405);
+        assert.deepEqual(JSON.parse(fixture('state')), unchanged, 'Viewing and accepting guidance cannot mutate stock or purchasing');
+        for (const mode of ['low_readiness', 'demo', 'production', 'unavailable']) {
+            fixture(mode);
+            const beforeView = JSON.parse(fixture('state'));
+            await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+            const text = await stockOnly.innerText();
+            if (mode === 'low_readiness') assert.match(text, /Low readiness forecast/);
+            if (mode === 'demo') assert.match(await page.locator('main').innerText(), /Demo Mode/);
+            if (mode === 'production') assert.match(await page.locator('main').innerText(), /Production forecast/);
+            if (mode === 'unavailable') {
+                assert.match(text, /Stock rules/);
+                assert.match(text, /Forecast unavailable/);
+                assert.match(text, /16 units/);
+            }
+            assert.deepEqual(JSON.parse(fixture('state')), beforeView, 'Guidance leaves the database unchanged in ' + mode);
+        }
+        fixture('restore_forecast');
+        fs.mkdirSync('.scratch/ticket179', {recursive: true});
+        await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+        await page.screenshot({path: '.scratch/ticket179/desktop.png', fullPage: true});
+        await page.setViewportSize({width: 390, height: 844});
+        await page.screenshot({path: '.scratch/ticket179/mobile.png', fullPage: true});
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Recommendations fit mobile width');
+        await page.setViewportSize({width: 1280, height: 720});
+        await page.goto('/components/inventory_management/reorder_planner.php', {waitUntil: 'domcontentloaded'});
+        assert.match(page.url(), /replenishment_queue.php/);
         await page.goto(route, {waitUntil: 'domcontentloaded'});
         console.log('Replenishment page loaded.');
         assert.equal(await page.locator('input[name="source"][value="ml_forecast"]').count(), 1, 'Forecast creation form rendered');
@@ -114,13 +158,12 @@ const fixture = action => {
             assert.match(await response.text(), /The forecast source is unavailable/);
             assert.deepEqual(state(), prior, 'Invalid source leaves no request or decision');
         }
-        const queueRoute = '/components/inventory_management/replenishment_queue.php';
         for (const mode of ['observe', 'suspend']) {
             fixture('activate');
             await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
             const review = page.getByRole('link', {name: 'Review Request', exact: true});
-            assert.equal(await review.count(), 1, 'Active recommendation has a review link');
-            await review.click();
+            assert.equal(await review.count(), 0, 'Recommendations never lead directly to purchasing');
+            await page.goto(route, {waitUntil: 'domcontentloaded'});
             assert.equal(await page.locator('#request_qty').inputValue(), '', 'Queue must not copy forecast quantities into manual purchasing');
             assert.equal(await create.locator('input[name="source"]').inputValue(), 'ml_forecast');
             const staleToken = await create.locator('input[name="csrf_token"]').inputValue();
@@ -140,7 +183,9 @@ const fixture = action => {
             }
             await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
             assert.equal(await review.count(), 0, 'Inactive recommendations have no actionable review links');
-            assert.match(await page.locator('.queue-list').innerText(), /Manual requests remain available/);
+            assert.match(await page.locator('.queue-list').innerText(), /Stock rules/);
+            assert.match(await page.locator('.queue-list').innerText(), mode === 'observe' ? /Observation Mode/ : /Suspended/);
+            assert.deepEqual(state(), beforeGate, 'Restricted guidance does not mutate inventory or purchasing');
             await page.goto(route + '?product_id=1&suggested_qty=999', {waitUntil: 'domcontentloaded'});
             assert.equal(await page.locator('#request_qty').inputValue(), '', 'Old queue URLs cannot prefill manual quantity');
             const manual = page.locator('.create-section form');

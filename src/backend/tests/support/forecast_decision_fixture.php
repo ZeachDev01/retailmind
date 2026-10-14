@@ -30,6 +30,24 @@ if ($argv[1] === 'create') {
 }
 $pdo->exec("USE `{$database}`");
 switch ($argv[1]) {
+    case 'stock_guidance':
+        $pdo->exec("UPDATE products SET reorder_level=10, safety_stock=5, minimum_order_quantity=6, units_per_package=4 WHERE product_id=1");
+        break;
+    case 'low_readiness':
+        $pdo->exec("UPDATE demand_forecasts SET readiness_level='Low' WHERE job_id=10");
+        break;
+    case 'demo':
+    case 'production':
+        $pdo->exec('DELETE FROM model_training_runs');
+        $pdo->prepare("INSERT INTO model_training_runs (model_name,model_version,status,metrics_json) VALUES ('Random Forest','decision-test','completed',?)")
+            ->execute([json_encode(['metadata' => ['dataset_kind' => $argv[1] === 'demo' ? 'demo' : 'store']])]);
+        break;
+    case 'unavailable':
+        $pdo->exec("UPDATE ml_jobs SET status='failed' WHERE job_id=10");
+        break;
+    case 'restore_forecast':
+        $pdo->exec("UPDATE ml_jobs SET status='succeeded' WHERE job_id=10; UPDATE demand_forecasts SET readiness_level='High' WHERE job_id=10");
+        break;
     case 'seed':
         $migration = require __DIR__ . '/../../database/migrations/202610100000_ml_tables.php';
         $migration['up']($pdo);
@@ -43,6 +61,8 @@ switch ($argv[1]) {
             INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level)
                 VALUES (10,1,CURDATE(),CURDATE()+INTERVAL 7 DAY,7,14,'decision-test','High');
             INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (2,'UNRELATED','UNRELATED','Unrelated legacy product',25,3,1);
+            UPDATE products SET reorder_level=10,safety_stock=5 WHERE product_id=2;
+            INSERT INTO inventory (product_id,quantity_on_hand) VALUES (2,5);
             INSERT INTO forecast_runs (forecast_run_id,model_name,model_version,forecast_period_days) VALUES (100,'Random Forest','legacy-test',7);
             INSERT INTO stock_predictions (prediction_id,forecast_run_id,product_id,forecast_period_days,forecast_value,actual_demand)
                 VALUES (100,100,2,7,8,6);
@@ -77,6 +97,8 @@ switch ($argv[1]) {
         break;
     case 'state':
         echo json_encode(['requests' => $pdo->query('SELECT * FROM replenishment_requests ORDER BY request_id')->fetchAll(PDO::FETCH_ASSOC),
+            'inventory' => $pdo->query('SELECT * FROM inventory ORDER BY product_id')->fetchAll(PDO::FETCH_ASSOC),
+            'orders' => $pdo->query('SELECT * FROM purchase_orders ORDER BY purchase_order_id')->fetchAll(PDO::FETCH_ASSOC),
             'decisions' => $pdo->query('SELECT * FROM forecast_decisions ORDER BY forecast_decision_id')->fetchAll(PDO::FETCH_ASSOC)]);
         break;
     default: throw new RuntimeException('Unknown fixture action.');

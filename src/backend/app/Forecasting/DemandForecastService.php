@@ -82,6 +82,7 @@ class DemandForecastService
         return [
             'model_version' => $metadata['model_version'],
             'is_demo' => ($metrics['metadata']['dataset_kind'] ?? null) === 'demo',
+            'dataset_kind' => $metrics['metadata']['dataset_kind'] ?? null,
         ];
     }
 

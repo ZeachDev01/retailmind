@@ -15,6 +15,56 @@ class ReplenishmentQueueService
         $this->pdo = $pdo;
     }
 
+    public static function roundQuantity(int $quantity, int $minimumOrder, int $packageSize): int
+    {
+        if ($quantity <= 0) {
+            return 0;
+        }
+        return (int)(ceil(max($quantity, max(1, $minimumOrder)) / max(1, $packageSize)) * max(1, $packageSize));
+    }
+
+    public function getRecommendations(?int $jobId = null): array
+    {
+        $forecasts = $jobId ? array_column($this->getQueue($jobId), null, 'product_id') : [];
+        $settings = new CandidateEvaluationService($this->pdo);
+        $observation = $settings->isObservationMode();
+        $suspended = $settings->isRecommendationsSuspended();
+        $products = $this->pdo->query("SELECT p.product_id, p.sku, p.product_name,
+            p.reorder_level, p.safety_stock, p.minimum_order_quantity, p.units_per_package,
+            COALESCE(i.quantity_on_hand, 0) AS current_stock
+            FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id
+            WHERE p.status = 'active'
+            ORDER BY COALESCE(i.quantity_on_hand, 0), p.product_name")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($products as &$product) {
+            $stock = (int)$product['current_stock'];
+            $reorder = (int)$product['reorder_level'];
+            $forecast = $forecasts[(int)$product['product_id']] ?? [];
+            $available = ($forecast['readiness_level'] ?? null) !== null;
+            $useForecast = $available && !$observation && !$suspended;
+            $quantity = $useForecast ? (int)$forecast['recommended_quantity']
+                : ($stock <= $reorder ? max(0, $reorder + (int)$product['safety_stock'] - $stock) : 0);
+            $product += $forecast;
+            $product['recommended_quantity'] = self::roundQuantity($quantity,
+                (int)($useForecast ? $forecast['moq'] : $product['minimum_order_quantity']),
+                (int)$product['units_per_package']);
+            $product['stock_status'] = $stock <= 0 ? 'Out of stock' : ($stock <= $reorder ? 'Low stock' : 'In stock');
+            $product['basis'] = $useForecast ? 'Demand Forecast' : 'Stock rules';
+            $product['forecast_status'] = !$available ? 'Forecast unavailable'
+                : ($observation ? 'Observation Mode: forecast is observation telemetry only'
+                    : ($suspended ? 'Recommendations Suspended by Administrator' : $forecast['readiness_level'] . ' readiness forecast'));
+            if ($observation && $suspended) {
+                $product['forecast_status'] .= '; Recommendations Suspended by Administrator';
+            }
+            if (!$useForecast) {
+                $product['explanation'] = sprintf('%d on hand; reorder level %d + safety stock %d. Stock-rule suggestion rounded to the minimum quantity and package size.',
+                    $stock, $reorder, (int)$product['safety_stock']);
+            }
+            $product += ['urgency_label' => 'Unknown', 'stock_exposure' => null, 'forecast_origin' => null];
+        }
+        unset($product);
+        return $products;
+    }
+
     public function getQueue(int $jobId, ?string $asOfDate = null): array
     {
         $job = $this->pdo->prepare("SELECT 1 FROM ml_jobs WHERE job_id = ?

@@ -92,6 +92,11 @@ node src/backend/tests/operator_alert_wrapper_behavior_test.js
 node src/backend/tests/backup_status_alert_behavior_test.js
 node src/backend/tests/inventory_counts_scan_browser_test.js
 node src/backend/tests/stock_receiving_scan_browser_test.js
+node src/backend/tests/forecast_decision_browser_test.js
+php src/backend/tests/replenishment_queue_contract.php
+php src/backend/tests/replenishment_metadata_contract.php
+php src/backend/tests/replenishment_supplier_integration.php
+php src/backend/tests/demand_forecast_service_test.php
 php src/backend/tests/operator_alert_fallback_contract.php
 php src/backend/tests/cashier_alert_contract.php
 php src/backend/tests/inventory_alert_contract.php

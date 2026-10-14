@@ -40,7 +40,7 @@ try {
     $products = $read('src/frontend/components/inventory_management/products.php');
     $receiving = $read('src/frontend/components/report/stock_receiving.php');
     $counts = $read('src/frontend/components/inventory_management/inventory_counts.php');
-    $reorder = $read('src/frontend/components/inventory_management/reorder_planner.php');
+    $reorder = $read('src/frontend/components/inventory_management/legacy_reorder_planner.php');
     $replenishment = $read('src/frontend/components/inventory_management/replenishment_requests.php');
     $insights = $read('src/frontend/components/inventory_management/inventory_insights.php');
     $suppliers = $read('src/frontend/components/inventory_management/suppliers.php');

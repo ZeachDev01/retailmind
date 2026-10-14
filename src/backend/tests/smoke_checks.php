@@ -300,7 +300,7 @@ $checks = [
         'forbidden' => ['components/modals/fiscal_periods.php', 'data-fiscal-periods-open'],
     ],
     'Supplier-based reorder planning present' => [
-        'file' => 'src/frontend/components/inventory_management/reorder_planner.php',
+        'file' => 'src/frontend/components/inventory_management/legacy_reorder_planner.php',
         'needles' => ['Supplier-Based Reorder Planning', 'minimum_order_quantity', 'Create selected replenishment requests'],
     ],
     'Shared attention evaluation feeds scheduled notifications' => [
