@@ -18,6 +18,8 @@ $_ENV['SESSION_SECURE_COOKIE'] = 'false';
 App\\Core\\Session::start();
 if (isset($_GET['test_role'])) {
     $_SESSION['user_id'] = 1;
+    $_SESSION['_authenticated_at'] = time();
+    $_SESSION['_last_activity'] = time();
     $_SESSION['role'] = $_GET['test_role'];
 }
 require ${landing};

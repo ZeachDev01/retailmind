@@ -7,7 +7,7 @@ try {
     $bootstrap=var_export(realpath(__DIR__.'/../../bootstrap/app.php'),true);
     $endpoint=var_export(realpath(__DIR__.'/../../../frontend/components/cashier/refunds.php'),true);
     $fixtureDatabase=var_export($database,true);
-    file_put_contents($router,'<?php require '.$bootstrap.'; $_ENV["DB_NAME"]='.$fixtureDatabase.'; App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; require '.$endpoint.';');
+    file_put_contents($router,'<?php require '.$bootstrap.'; $_ENV["DB_NAME"]='.$fixtureDatabase.'; App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_authenticated_at"=>time(),"_last_activity"=>time(),"_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; require '.$endpoint.';');
     $socket=stream_socket_server('tcp://127.0.0.1:0',$errno,$error);
     $assert(is_resource($socket),'Reserve refund HTTP fixture port');
     $address=stream_socket_get_name($socket,false);fclose($socket);

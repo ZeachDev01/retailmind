@@ -7,7 +7,7 @@ try {
     $bootstrap=var_export(realpath(__DIR__.'/../../bootstrap/app.php'),true);
     $endpoint=var_export(realpath(__DIR__.'/../../../frontend/components/invoice/sales.php'),true);
     $fixtureDatabase=var_export($database,true);
-    file_put_contents($router,'<?php require '.$bootstrap.'; $_ENV["DB_NAME"]='.$fixtureDatabase.'; App\Core\Session::start(); $_SESSION["user_id"]=(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1); $_SESSION["role"]=$_SESSION["user_id"]===3?"admin":"cashier"; $_SESSION["session_version"]=1; $_SESSION["csrf_token"]="fixture-csrf"; $_SESSION["_restore_epoch"]=App\Backup\RecoveryStore::epoch(); if(isset($_SERVER["HTTP_X_FIXTURE_COMPLETE"])) $_SESSION["completed_checkout_sale"]=(int)$_SERVER["HTTP_X_FIXTURE_COMPLETE"]; require '.$endpoint.';');
+    file_put_contents($router,'<?php require '.$bootstrap.'; $_ENV["DB_NAME"]='.$fixtureDatabase.'; App\Core\Session::start(); $_SESSION["user_id"]=(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1); $_SESSION["role"]=$_SESSION["user_id"]===3?"admin":"cashier"; $_SESSION["session_version"]=1; $_SESSION["csrf_token"]="fixture-csrf"; $_SESSION["_authenticated_at"]=time(); $_SESSION["_last_activity"]=time(); $_SESSION["_restore_epoch"]=App\Backup\RecoveryStore::epoch(); if(isset($_SERVER["HTTP_X_FIXTURE_COMPLETE"])) $_SESSION["completed_checkout_sale"]=(int)$_SERVER["HTTP_X_FIXTURE_COMPLETE"]; require '.$endpoint.';');
     $socket=stream_socket_server('tcp://127.0.0.1:0',$errno,$error);
     $assert(is_resource($socket),'Reserve receipt HTTP fixture port');
     $address=stream_socket_get_name($socket,false);fclose($socket);

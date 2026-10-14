@@ -120,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             });
         });
     </script>
+<?php require __DIR__ . '/session_activity_client.php'; ?>
 </body>
 
 </html>

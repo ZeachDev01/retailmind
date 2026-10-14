@@ -446,6 +446,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             <label class="pos-field-label" for="cash-received">Cash received</label>
                             <input type="text" name="cash_received" id="cash-received" placeholder="Enter cash received" inputmode="decimal" autocomplete="off">
                             <div class="cash-quick" id="cash-quick" role="group" aria-label="Quick cash amounts">
+                                <button type="button" data-tender="exact">Exact</button>
                                 <button type="button" data-tender="20">₱20</button>
                                 <button type="button" data-tender="50">₱50</button>
                                 <button type="button" data-tender="100">₱100</button>
@@ -1192,6 +1193,7 @@ async function checkoutNow() {
     const paymentLine = paymentMethod.value === 'cash'
         ? `<label>Cash received <input id="review-cash" type="number" min="0" step="0.01" value="${escapeHtml(cashReceived.value)}" oninput="updateReviewedPayment()"></label>
             <div class="cash-quick" role="group" aria-label="Quick cash amounts">
+                <button type="button" data-cash-amount="exact">Exact</button>
                 <button type="button" data-cash-amount="20">₱20</button>
                 <button type="button" data-cash-amount="50">₱50</button>
                 <button type="button" data-cash-amount="100">₱100</button>
@@ -1564,7 +1566,7 @@ cashReceived.addEventListener('input', updatePaymentFields);
 checkoutSummary.addEventListener('click', event => {
     const button = event.target.closest('[data-cash-amount]');
     if (!button) return;
-    document.getElementById('review-cash').value = money(button.dataset.cashAmount);
+    document.getElementById('review-cash').value = money(button.dataset.cashAmount === 'exact' ? checkoutQuote.reviewed.total : button.dataset.cashAmount);
     updateReviewedPayment();
 });
 discountType.addEventListener('change', updatePaymentFields);
@@ -1572,7 +1574,7 @@ discountValue.addEventListener('input', updatePaymentFields);
 cashQuick.addEventListener('click', event => {
     const button = event.target.closest('[data-tender]');
     if (button) {
-        setQuickTender(button.dataset.tender);
+        setQuickTender(button.dataset.tender === 'exact' ? getNetTotal() : button.dataset.tender);
     }
 });
 let quickSearchTimer = null;

@@ -1,6 +1,6 @@
 # Staff login policy
 
-Agreed on 2026-10-14. Policy recorded; login behavior has not been changed.
+Agreed on 2026-10-14. Implemented and tested on the local implementation branch; production deployment has not been checked.
 
 ## Agreed rules
 
@@ -14,9 +14,13 @@ These rules support a full working shift without leaving an unattended login usa
 
 ## Current behavior and implementation scope
 
-The local session lifetime is 7,200 seconds (2 hours). `src/backend/app/Core/Session.php` checks time since the last request and refreshes that timestamp on each session-starting request. It has no absolute login limit. Automatic backup-status checks run every 20 seconds and may therefore keep an unattended session alive; this interaction has not been tested live.
+The server enforces `SESSION_LIFETIME=3600` seconds of inactivity and `SESSION_ABSOLUTE_LIFETIME=43200` seconds since successful authentication. Both clocks reset only on successful login; deliberate requests and validated browser activity extend only the inactivity clock. Existing authenticated sessions without a login timestamp require fresh authentication. PHP session-file retention covers both configured limits.
 
-Implementation must enforce both limits on the server, distinguish staff activity from automatic requests, and preserve Cashier Shift ownership and existing logout behavior. Production configuration has not been checked.
+Backup-status and scanner polling, navigation prefetch, dashboard automatic refresh, and automatic login-status checks do not extend inactivity. The browser sends a CSRF-protected activity request for real typing, clicks/taps, input, and scrolling, at most once per 15 seconds. It checks the server at least every 30 seconds while timers run and when the tab becomes visible. The server remains authoritative across tabs; an idle tab never calls logout to end another tab's active login.
+
+Expiry destroys authenticated access only. It does not close, reconcile, or release a Cashier Shift or its register. Existing close-shift and staff ownership safeguards are preserved for handover.
+
+Validation: public `Session::start()` expiry/activity tests, activity endpoint HTTP checks (including invalid CSRF and expired renewal), browser typing/polling/expiry checks, and existing cashier shift/logout checks. Browser timers may be delayed when a tab is suspended or the device sleeps; the next server request still enforces expiry before permitting access. Production environment settings have not been checked.
 
 ## Reference
 
