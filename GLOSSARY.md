@@ -31,3 +31,11 @@ _Avoid_: Damage report, damage claim, damage adjustment
 **Stock Issue Oversight**:
 The read-only audit view used by the Administrator to review Store-wide stock-issue lifecycle history and correction counts without mutating inventory.
 _Avoid_: Stock issue approval, inventory adjustment (when referring to administrator oversight)
+
+**Stock Receiving**:
+The Inventory Manager's record of goods brought into the Store, including bulk purchases made by the owner at a supermarket. Quantities may be entered as individual units or packs/cases; supplier and receipt details are optional, and no purchase request, purchase order, or Administrator approval is required.
+_Avoid_: Purchase approval, stock count (when referring to newly bought goods)
+
+**Replenishment Recommendation**:
+A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
+_Avoid_: Automatic order, required purchase quantity
