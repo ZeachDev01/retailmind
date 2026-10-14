@@ -252,6 +252,7 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
         $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
         $_SESSION['_authenticated_at'] = time();
+        $_SESSION['_last_activity'] = $_SESSION['_authenticated_at'];
         unset($_SESSION['_login_error']);
         unset($_SESSION['_login_username']);
         log_activity(
@@ -328,7 +329,7 @@ function validate_current_session(PDO $pdo): void
     $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
 
     $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-    if ($_SESSION['must_change_password'] && !in_array($currentScript, ['change_password.php', 'logout.php', 'theme.php'], true)) {
+    if ($_SESSION['must_change_password'] && !in_array($currentScript, ['change_password.php', 'logout.php', 'theme.php', 'session_activity.php'], true)) {
         if (!headers_sent()) {
             header('Location: ' . app_url('components/auth/change_password.php'));
         }

@@ -208,7 +208,7 @@
             }
             nativeFetch(key, {
                 credentials: 'same-origin',
-                headers: {'X-RetailMind-Navigation': '1'},
+                headers: {'X-RetailMind-Navigation': '1', 'X-RetailMind-Background': '1'},
             }).then(async res => {
                 if (!res.ok) {
                     prefetchCache.delete(key);

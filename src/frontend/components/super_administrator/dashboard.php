@@ -309,7 +309,7 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                 window.setTimeout(refreshWhenSafe, 30000);
                 return;
             }
-            RetailMindUI.navigate(window.location.href);
+            RetailMindUI.navigate(window.location.href, {fetch: {headers: {'X-RetailMind-Background': '1'}}});
         };
 
         const staleAt = Date.parse((dashboard.dataset.staleAfter || '').replace(' ', 'T'));

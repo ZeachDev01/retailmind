@@ -69,7 +69,7 @@ try {
     $shiftEndpoint = var_export(realpath(__DIR__ . '/../../frontend/components/cashier/shifts.php'), true);
     $fixtureDatabase = var_export($database, true);
     $routerCode = '<?php require ' . $bootstrap . '; $_ENV["DB_NAME"]=' . $fixtureDatabase . ';'
-        . ' App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; if ($_SERVER["REQUEST_URI"]==="/pos") require ' . $posEndpoint . '; elseif ($_SERVER["REQUEST_URI"]==="/shifts") require ' . $shiftEndpoint . '; else require ' . $endpoint . ';';
+        . ' App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_authenticated_at"=>time(),"_last_activity"=>time(),"_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; if ($_SERVER["REQUEST_URI"]==="/pos") require ' . $posEndpoint . '; elseif ($_SERVER["REQUEST_URI"]==="/shifts") require ' . $shiftEndpoint . '; else require ' . $endpoint . ';';
     file_put_contents($router, $routerCode);
     $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
     $assert(is_resource($socket), 'Reserve local HTTP port');

@@ -447,6 +447,7 @@ cartWorkspace.bindNavigation();
     document.body.setAttribute('data-rm-backup-status', <?= json_encode(app_url('components/backup/backup_status.php'), JSON_UNESCAPED_SLASHES) ?>);
 </script>
 <script src="<?= sidebar_e(app_url('assets/js/backup_status.js')) ?>"></script>
+<?php require __DIR__ . '/auth/session_activity_client.php'; ?>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var menuToggle = document.getElementById('menuToggle');
