@@ -84,13 +84,9 @@ const fixture = action => {
             const destination = origin + '/components/administrator/stock_issues.php?detail=2147483647';
             if (partial) await page.evaluate(url => RetailMindNavigation.navigate(url), destination);
             else await page.goto(destination);
-            await page.getByRole('heading', {name: 'Unable to continue'}).waitFor();
-            assert.ok((await page.locator('.swal2-html-container').textContent()).includes('was not found'), 'Actual stock issue error appears in SweetAlert');
-            const ok = page.getByRole('button', {name: 'OK', exact: true});
-            assert.equal(await ok.isEnabled(), true);
-            if (partial) await page.locator('.swal2-close').click({timeout: 5000});
-            else await ok.click({timeout: 5000});
-            await page.locator('.swal2-container').waitFor({state: 'detached', timeout: 5000});
+            await page.locator('.message.error').waitFor();
+            assert.ok((await page.locator('.message.error').textContent()).includes('was not found'), 'Actual stock issue error appears in inline banner');
+            assert.equal(await page.locator('.swal2-container').count(), 0, 'No blocking modal is raised on read-only oversight page');
             await page.goto(origin + '/components/administrator/dashboard.php');
         }
         await page.evaluate(() => {

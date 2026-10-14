@@ -23,3 +23,11 @@ _Avoid_: Work period, Session
 **Store Reports**:
 Aggregated analytical summaries of business performance (e.g. daily/weekly revenue, category sales, product sales).
 _Avoid_: Sales (when referring to the receipt lookup page)
+
+**Stock Issue**:
+A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Other, reviewed and decided by an Inventory Manager.
+_Avoid_: Damage report, damage claim, damage adjustment
+
+**Stock Issue Oversight**:
+The read-only audit view used by the Administrator to review Store-wide stock-issue lifecycle history and correction counts without mutating inventory.
+_Avoid_: Stock issue approval, inventory adjustment (when referring to administrator oversight)

@@ -437,7 +437,12 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <div class="payment-grid">
                         <div class="payment-field" id="cash-field">
                             <label class="pos-field-label" for="cash-received">Cash received</label>
-                            <input type="text" name="cash_received" id="cash-received" placeholder="Enter after quote review" inputmode="decimal" autocomplete="off" readonly>
+                            <input type="text" name="cash_received" id="cash-received" placeholder="Enter cash received" inputmode="decimal" autocomplete="off">
+                            <div class="cash-quick" id="cash-quick" role="group" aria-label="Quick cash amounts">
+                                <button type="button" data-tender="20">₱20</button>
+                                <button type="button" data-tender="50">₱50</button>
+                                <button type="button" data-tender="100">₱100</button>
+                            </div>
                         </div>
                         <div class="payment-field" id="change-field">
                             <label class="pos-field-label" for="change-due">Change due</label>
@@ -445,9 +450,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         </div>
                     </div>
 
-                    <div class="cash-quick" id="cash-quick" aria-label="Quick cash amounts">
-                        <span class="muted">Review the final quote to enter cash and see change.</span>
-                    </div>
+                    <p class="muted">Review the final quote to confirm payment and change.</p>
 
                     <div class="payment-field hidden" id="reference-field">
                         <label class="pos-field-label" for="payment-reference">Payment reference</label>
@@ -1118,7 +1121,7 @@ function setQuickTender(value) {
         showCartMessage('Add items before entering payment.', 'error');
         return;
     }
-    cashReceived.value = money(value === 'exact' ? total : total + Number(value));
+    cashReceived.value = money(value);
     updatePaymentFields();
 }
 
@@ -1178,16 +1181,27 @@ async function checkoutNow() {
     }
     const methodLabel = paymentMethod.options[paymentMethod.selectedIndex].text;
     const paymentLine = paymentMethod.value === 'cash'
-        ? `<label>Cash received <input id="review-cash" type="number" min="0" step="0.01" value="${escapeHtml(cashReceived.value)}" oninput="updateReviewedPayment()"></label><p>Change: ₱<span id="review-change">0.00</span></p>`
+        ? `<label>Cash received <input id="review-cash" type="number" min="0" step="0.01" value="${escapeHtml(cashReceived.value)}" oninput="updateReviewedPayment()"></label>
+            <div class="cash-quick" role="group" aria-label="Quick cash amounts">
+                <button type="button" data-cash-amount="20">₱20</button>
+                <button type="button" data-cash-amount="50">₱50</button>
+                <button type="button" data-cash-amount="100">₱100</button>
+            </div><div class="review-change"><span>Change due</span><output aria-label="Change due">₱<span id="review-change">0.00</span></output></div>`
         : `<p>Complete and verify the ${escapeHtml(methodLabel)} payment externally for ₱${money(quote.total)}.</p><label>Payment Reference <input id="review-reference" value="${escapeHtml(paymentReference.value)}" oninput="updateReviewedPayment()"></label><label><input type="checkbox" id="review-verified"> I verified this payment externally.</label>`;
 
     checkoutSummary.innerHTML = `
-        ${quote.sale.items.map(item => `<p>${escapeHtml(item.product_name)} · ${item.quantity} × ₱${money(item.unit_price)} = ₱${money(item.subtotal)}</p>`).join('')}
-        <p><strong>Eligible promotions:</strong> ${quote.eligible_promotions.map(p => escapeHtml(p.promotion_name)).join(', ') || 'None'}</p>
-        <p><strong>Selected discount:</strong> ${escapeHtml(quote.discount.promotion_name || quote.discount.discount_reason || 'None')} · ₱${money(quote.discount.discount_amount)}</p>
-        <p><strong>Gross:</strong> ₱${money(quote.sale.total)} · <strong>Total due:</strong> ₱${money(quote.total)}</p>
-        <p><strong>Payment method:</strong> ${escapeHtml(methodLabel)}</p>
+        <table class="review-items" aria-label="Items in this sale">
+            <thead><tr><th scope="col">Item</th><th scope="col">Qty</th><th scope="col">Amount</th></tr></thead>
+            <tbody>${quote.sale.items.map(item => `<tr><td><strong>${escapeHtml(item.product_name)}</strong><small>₱${money(item.unit_price)} each</small></td><td>${item.quantity}</td><td>₱${money(item.subtotal)}</td></tr>`).join('')}</tbody>
+        </table>
+        <div class="review-details">
+            <p><strong>Eligible promotions:</strong> ${quote.eligible_promotions.map(p => escapeHtml(p.promotion_name)).join(', ') || 'None'}</p>
+            <p><strong>Selected discount:</strong> ${escapeHtml(quote.discount.promotion_name || quote.discount.discount_reason || 'None')} · ₱${money(quote.discount.discount_amount)}</p>
+            <p><strong>Gross:</strong> ₱${money(quote.sale.total)} · <strong>Payment method:</strong> ${escapeHtml(methodLabel)}</p>
+        </div>
+        <div class="review-total" role="group" aria-label="Total due"><span>Total due: </span><strong>₱${money(quote.total)}</strong></div>
         ${paymentLine}
+        <p id="checkout-error" class="cart-message" role="alert"></p>
     `;
     RetailMindUI.openOverlay(checkoutModal);
     updateReviewedPayment();
@@ -1243,7 +1257,13 @@ async function submitConfirmedCheckout() {
         checkoutConfirmed = false;
         confirmCheckoutButton.disabled = false;
         confirmCheckoutButton.textContent = 'Confirm payment';
-        showCartMessage('Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.', 'error');
+        const message = !navigator.locks
+            ? 'Checkout recovery requires a browser supporting Web Locks. Open Point of Sale using HTTPS or http://localhost/retailmind before collecting payment.'
+            : 'Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.';
+        const checkoutError = document.getElementById('checkout-error');
+        checkoutError.textContent = message;
+        checkoutError.className = 'cart-message visible error';
+        showCartMessage(message, 'error');
     }
 }
 
@@ -1532,6 +1552,12 @@ holdList.addEventListener('click', event => {
 });
 paymentMethod.addEventListener('change', updatePaymentFields);
 cashReceived.addEventListener('input', updatePaymentFields);
+checkoutSummary.addEventListener('click', event => {
+    const button = event.target.closest('[data-cash-amount]');
+    if (!button) return;
+    document.getElementById('review-cash').value = money(button.dataset.cashAmount);
+    updateReviewedPayment();
+});
 discountType.addEventListener('change', updatePaymentFields);
 discountValue.addEventListener('input', updatePaymentFields);
 cashQuick.addEventListener('click', event => {

@@ -939,6 +939,11 @@
     background: var(--theme-info-surface, #dbeafe);
 }
 
+.checkout-summary-card .cash-quick, #cash-quick {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 0.5rem;
+}
+
 .checkout-primary {
     min-height: 50px;
     font-size: 1rem;
@@ -1099,6 +1104,63 @@
 .checkout-summary-card p + p {
     margin-top: 0.45rem;
 }
+
+.review-items {
+    display: table;
+    width: 100%;
+    margin-bottom: 0.75rem;
+    border-collapse: collapse;
+    table-layout: fixed;
+    background: transparent;
+    white-space: normal;
+}
+
+.review-items th, .review-items td {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--cashier-border);
+    vertical-align: top;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.review-items th:first-child, .review-items td:first-child {
+    padding-right: 0.75rem;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+.review-items th:nth-child(2) { width: 10%; }
+.review-items th:last-child { width: 30%; }
+.review-items th, .review-items small { color: var(--muted); }
+.review-items small { display: block; margin-top: 0.25rem; }
+.review-items td:last-child { font-weight: 700; }
+
+.review-details {
+    margin-bottom: 0.75rem;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.review-total, .review-change {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--cashier-border);
+    font-weight: 700;
+}
+
+.review-total strong, .review-change output {
+    font-size: 1.8rem;
+    line-height: 1.2;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.review-change { padding-bottom: 0; }
 
 .void-reason {
     width: 100%;

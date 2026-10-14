@@ -368,7 +368,7 @@ $checks = [
     ],
     'Administrator navigation offers stock-issue oversight' => [
         'file' => 'src/frontend/components/sidebar.php',
-        'needles' => ["'path' => 'components/administrator/stock_issues.php'", "'label' => 'Stock Issues'"],
+        'needles' => ["'path' => 'components/administrator/stock_issues.php'", "'label' => 'Stock Issue Oversight'"],
     ],
     'Legacy damage report page hands administrators to read-only oversight' => [
         'file' => 'src/frontend/components/report/inventory_adjustments.php',

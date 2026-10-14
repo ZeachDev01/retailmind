@@ -49,7 +49,7 @@ $reports = [];
 try {
     $reports = $stockIssueService->getOversightReports($filters, $viewerId);
 } catch (RuntimeException $exception) {
-    $error = \App\Support\OperatorAlert::message($exception, 'Stock issue reports could not be loaded. Refresh the page and try again. Tell your Administrator if this keeps happening.');
+    $error = \App\Support\OperatorAlert::message($exception, 'Stock issue reports could not be loaded. Refresh the page and try again. Tell your Super Administrator if this keeps happening.');
 }
 
 $detail = null;
@@ -61,7 +61,7 @@ if ($detailId > 0 && $error === '') {
             $error = "Stock issue report #{$detailId} was not found.";
         }
     } catch (RuntimeException $exception) {
-        $error = \App\Support\OperatorAlert::message($exception, 'The report details could not be loaded. Refresh the page and try again. Tell your Administrator if this keeps happening.');
+        $error = \App\Support\OperatorAlert::message($exception, 'The report details could not be loaded. Refresh the page and try again. Tell your Super Administrator if this keeps happening.');
     }
 }
 
@@ -111,7 +111,7 @@ try {
             </div>
 
             <?php if ($error): ?>
-                <div class="message error"><?= htmlspecialchars($error) ?></div>
+                <div class="message error" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
             <div class="history-section">
