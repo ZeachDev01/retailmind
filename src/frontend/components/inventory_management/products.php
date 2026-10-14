@@ -916,7 +916,7 @@ foreach ($products as $product) {
                         <label class="catalog-field catalog-sort-field"><span>Sort by</span><select id="catalog-sort" aria-label="Sort products">
                             <option value="name:1">Default</option><option value="name:1">Name A-Z</option><option value="name:-1">Name Z-A</option><option value="stock:1">Stock: Low to High</option><option value="stock:-1">Stock: High to Low</option><option value="price:1">Price: Low to High</option><option value="price:-1">Price: High to Low</option>
                         </select></label>
-                        <button type="button" class="btn btn-quiet btn-icon catalog-filter-button" id="catalog-filter-toggle" aria-expanded="true" aria-controls="catalog-filter-row"><i class="bi bi-funnel" aria-hidden="true"></i>Filter</button>
+                        <button type="button" class="btn btn-quiet btn-icon catalog-filter-button" id="catalog-filter-toggle" aria-expanded="false" aria-controls="catalog-filter-row"><i class="bi bi-funnel" aria-hidden="true"></i>Filter</button>
                         <div class="product-add-menu" id="product-add-menu">
                             <button type="button" class="btn product-add-trigger" id="product-add-trigger" aria-expanded="false" aria-controls="product-add-options" aria-haspopup="menu"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add</span><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
                             <div class="product-add-menu-list" id="product-add-options" role="menu" hidden>
@@ -926,7 +926,7 @@ foreach ($products as $product) {
                             </div>
                         </div>
                     </div>
-                    <div class="catalog-filter-row" id="catalog-filter-row">
+                    <div class="catalog-filter-row" id="catalog-filter-row" hidden>
                         <label class="catalog-field"><span>Category</span><select id="category-filter" aria-label="Filter by category"><option value="">All Categories</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?></select></label>
                         <label class="catalog-field"><span>Status</span><select id="status-filter" aria-label="Filter by product status"><option value="">All Statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
                         <label class="catalog-field"><span>Price</span><select id="price-filter" aria-label="Filter by selling price"><option value="">Any Price</option><option value="0:50">Under ₱50</option><option value="50:100">₱50 - ₱100</option><option value="100:500">₱100 - ₱500</option><option value="500:">₱500 and above</option></select></label>
