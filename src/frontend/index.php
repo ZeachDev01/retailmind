@@ -261,10 +261,6 @@ unset($_SESSION['_login_username']);
                             <p>Enter your credentials to continue.</p>
                         </div>
                     </div>
-
-                    <?php if ($loginError !== ''): ?>
-                        <div class="error-msg"><?= htmlspecialchars($loginError, ENT_QUOTES, 'UTF-8') ?></div>
-                    <?php endif; ?>
                     <?php if ($loginSuccess !== ''): ?><div id="rm-flash-messages" class="alert tag-success" data-success="<?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
 
                     <form method="POST" action="<?= $loginActionUrl ?>" class="landing-login-form">
@@ -273,12 +269,15 @@ unset($_SESSION['_login_username']);
                             <label for="landing-login-username">Username or email</label>
                             <input type="text" id="landing-login-username" name="username" value="<?= htmlspecialchars($loginUsername, ENT_QUOTES, 'UTF-8') ?>" placeholder="Enter your username or email" required autocomplete="username">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group<?= $loginError !== '' ? ' invalid' : '' ?>">
                             <label for="landing-login-password">Password</label>
                             <div class="password-input">
-                                <input type="password" id="landing-login-password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+                                <input type="password" id="landing-login-password" name="password" placeholder="Enter your password" required autocomplete="current-password"<?= $loginError !== '' ? ' class="is-invalid" aria-invalid="true"' : '' ?>>
                                 <button type="button" class="password-toggle" id="landing-login-password-toggle" aria-controls="landing-login-password" aria-pressed="false" aria-label="Show password">Show</button>
                             </div>
+                            <?php if ($loginError !== ''): ?>
+                                <div class="error-msg field-error" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($loginError, ENT_QUOTES, 'UTF-8') ?></div>
+                            <?php endif; ?>
                         </div>
                         <div class="landing-login-modal__actions">
                             <button type="submit" class="btn btn-block landing-btn landing-btn--primary">Log in</button>
@@ -513,6 +512,25 @@ unset($_SESSION['_login_username']);
                     passwordToggle.setAttribute('aria-label', isVisible ? 'Show password' : 'Hide password');
                 });
             }
+            function clearInputError(inputEl) {
+                if (!inputEl) return;
+                inputEl.classList.remove('is-invalid');
+                inputEl.removeAttribute('aria-invalid');
+                var group = inputEl.closest('.form-group');
+                if (group) {
+                    group.classList.remove('invalid');
+                }
+                var err = modal.querySelector('.field-error, .error-msg');
+                if (err) {
+                    err.remove();
+                }
+            }
+            if (password) {
+                password.addEventListener('input', function() { clearInputError(password); });
+            }
+            if (username) {
+                username.addEventListener('input', function() { clearInputError(username); });
+            }
             document.addEventListener('keydown', function(event) {
                 if (!modal.classList.contains('is-open')) {
                     return;
@@ -550,7 +568,14 @@ unset($_SESSION['_login_username']);
                 document.body.classList.add('landing-modal-open');
                 setPageInert(true);
                 window.setTimeout(function() {
-                    (modal.classList.contains('is-recovery') ? recoveryIdentity : username || panel).focus();
+                    if (modal.classList.contains('is-recovery')) {
+                        if (recoveryIdentity) recoveryIdentity.focus();
+                    } else if (hasLoginError && password && username && username.value.trim() !== '') {
+                        password.focus();
+                        if (typeof password.select === 'function') password.select();
+                    } else {
+                        (username || panel).focus();
+                    }
                 }, 50);
             }
         })();

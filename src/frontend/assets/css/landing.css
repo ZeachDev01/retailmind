@@ -481,9 +481,67 @@
     background: var(--theme-surface, #fff);
     color: var(--landing-ink);
     font: inherit;
+    transition: border-color .15s ease, box-shadow .15s ease;
 }
-.landing-login-form input::placeholder { color: var(--theme-info-text, #7b8798); }
+.landing-login-form input:hover { border-color: #94a3b8; }
 .landing-login-form input:focus { border-color: var(--landing-blue); box-shadow: var(--focus-ring); outline: 0; }
+.landing-login-form .form-group.invalid input,
+.landing-login-form input.is-invalid,
+.landing-login-form input[aria-invalid="true"] {
+    border-color: #dc2626 !important;
+}
+.landing-login-form .form-group.invalid input:hover,
+.landing-login-form input.is-invalid:hover,
+.landing-login-form input[aria-invalid="true"]:hover {
+    border-color: #b91c1c !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18) !important;
+}
+.landing-login-form .form-group.invalid input:focus,
+.landing-login-form input.is-invalid:focus,
+.landing-login-form input[aria-invalid="true"]:focus {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25) !important;
+    outline: 0;
+}
+html[data-theme="dark"] .landing-login-form .form-group.invalid input,
+html[data-theme="dark"] .landing-login-form input.is-invalid,
+html[data-theme="dark"] .landing-login-form input[aria-invalid="true"] {
+    border-color: #f87171 !important;
+}
+html[data-theme="dark"] .landing-login-form .form-group.invalid input:hover,
+html[data-theme="dark"] .landing-login-form input.is-invalid:hover,
+html[data-theme="dark"] .landing-login-form input[aria-invalid="true"]:hover {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
+}
+html[data-theme="dark"] .landing-login-form .form-group.invalid input:focus,
+html[data-theme="dark"] .landing-login-form input.is-invalid:focus,
+html[data-theme="dark"] .landing-login-form input[aria-invalid="true"]:focus {
+    border-color: #f87171 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3) !important;
+}
+.landing-login-modal .landing-login-form .field-error,
+.landing-login-modal .landing-login-form .error-msg,
+.landing-login-form .field-error,
+.landing-login-form .error-msg {
+    margin: .35rem 0 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: var(--theme-danger-text, #dc2626) !important;
+    font-size: .78rem !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+    display: block !important;
+}
+html[data-theme="dark"] .landing-login-modal .landing-login-form .field-error,
+html[data-theme="dark"] .landing-login-modal .landing-login-form .error-msg,
+html[data-theme="dark"] .landing-login-form .field-error,
+html[data-theme="dark"] .landing-login-form .error-msg {
+    color: #fca5a5 !important;
+    background: transparent !important;
+}
 .landing-login-form .password-input { position: relative; }
 .landing-login-form .password-input input { padding-right: 4.5rem; }
 .landing-login-form .password-toggle {
