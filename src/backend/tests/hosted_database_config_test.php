@@ -1,0 +1,35 @@
+<?php
+
+require_once __DIR__ . '/../app/Core/Environment.php';
+
+// Keep local credentials out of this configuration-only check.
+App\Core\Environment::load(__DIR__ . '/nonexistent-test.env');
+$_SERVER['HTTP_HOST'] = 'shalom.example.com';
+$_ENV['APP_ENV'] = 'production';
+// Configuration checks do not need the database recovery admission gate.
+$_SERVER['SCRIPT_FILENAME'] = realpath(__DIR__ . '/../scripts/restore_database.php');
+
+foreach (['HOST', 'PORT', 'NAME', 'USER', 'PASSWORD', 'CHARSET', 'CONNECTION'] as $key) {
+    $_ENV['DB_' . $key] = 'current-' . $key;
+    $_ENV['MYSQL_' . $key] = 'old-mysql-' . $key;
+    $_ENV['INFINITYFREE_DB_' . $key] = 'old-infinityfree-' . $key;
+}
+
+$config = require __DIR__ . '/../config/database.php';
+foreach (['host' => 'HOST', 'port' => 'PORT', 'database' => 'NAME', 'username' => 'USER', 'password' => 'PASSWORD', 'charset' => 'CHARSET', 'driver' => 'CONNECTION'] as $field => $key) {
+    if ($config[$field] !== 'current-' . $key) {
+        throw new RuntimeException('Standard database setting must take priority: ' . $field);
+    }
+}
+
+$_ENV['DB_HOST'] = '';
+try {
+    require __DIR__ . '/../config/database.php';
+    throw new RuntimeException('Legacy settings must not replace a missing DB_HOST.');
+} catch (RuntimeException $exception) {
+    if (strpos($exception->getMessage(), 'Hosted database credentials are missing: host') !== 0) {
+        throw $exception;
+    }
+}
+
+echo "Hosted database configuration checks passed.\n";

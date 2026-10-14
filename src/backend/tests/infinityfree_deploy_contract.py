@@ -13,7 +13,7 @@ assert 'python src/backend/tests/infinityfree_deploy_contract.py' in deploy
 assert 'dangerous-clean-slate: true' not in deploy
 for pattern in ['**/.env', 'backend/', 'backend/**', '**/storage/', '**/storage/**', '**/*.log']:
     assert re.search(r'^\s+' + re.escape(pattern) + r'\s*$', deploy, re.M), f'Preserve hosted {pattern}'
-for secret in ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']:
+for secret in ['APP_URL', 'DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']:
     assert '${{ secrets.' + secret + ' }}' in deploy
     assert f'test -n "${secret}"' in deploy, f'{secret} must be validated before deployment'
 assert 'umask 077' in deploy
@@ -22,7 +22,9 @@ assert "'SESSION_SECURE_COOKIE=true'" in deploy
 for secret in ['FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD']:
     assert deploy.count('${{ secrets.' + secret + ' }}') == 2, f'{secret} must select the same account for sync and environment upload'
 assert 'protocol: ftps' in deploy and 'security: strict' in deploy
-assert 'server-dir: /htdocs/' in deploy
+assert re.search(r'^\s+server-dir: /\s*$', deploy, re.M), 'FTP account is rooted at public_html/shalom'
+assert '"APP_URL=$APP_URL"' in deploy
+assert 'retailmind.infinityfreeapp.com' not in deploy
 assert '--ssl-reqd' in deploy
-assert '--upload-file .env "ftp://$FTP_SERVER/htdocs/.env"' in deploy
-print('InfinityFree deployment contract: passed')
+assert '--upload-file .env "ftp://$FTP_SERVER/.env"' in deploy
+print('Hostinger deployment contract: passed')

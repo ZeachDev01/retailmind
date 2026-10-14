@@ -2,17 +2,6 @@
 
 require_once dirname(__DIR__) . '/bootstrap/app.php';
 
-$envValue = static function (array $keys, $default = null) {
-    foreach ($keys as $key) {
-        $value = env($key);
-        if ($value !== null && $value !== '') {
-            return $value;
-        }
-    }
-
-    return $default;
-};
-
 $endsWith = static function (string $value, string $suffix): bool {
     $length = strlen($suffix);
     return $length === 0 || substr($value, -$length) === $suffix;
@@ -46,19 +35,18 @@ $isLocalHost = $host === ''
     || $endsWith($host, '.localhost')
     || $endsWith($host, '.test');
 
-$appEnv = strtolower((string)env('APP_ENV', $isLocalHost ? 'development' : 'production'));
 $useHostedDatabase = strtolower((string)env('DATABASE_ENV', '')) === 'hosted';
-$isHosted = !$isLocalHost || $useHostedDatabase || $appEnv === 'infinityfree';
+$isHosted = !$isLocalHost || $useHostedDatabase;
 
 if ($isHosted) {
     $config = [
-        'driver' => $envValue(['INFINITYFREE_DB_CONNECTION', 'DB_CONNECTION'], 'mysql'),
-        'host' => $envValue(['INFINITYFREE_DB_HOST', 'MYSQL_HOST', 'DB_HOST']),
-        'port' => $envValue(['INFINITYFREE_DB_PORT', 'MYSQL_PORT', 'DB_PORT'], '3306'),
-        'database' => $envValue(['INFINITYFREE_DB_NAME', 'MYSQL_DATABASE', 'DB_NAME']),
-        'username' => $envValue(['INFINITYFREE_DB_USER', 'MYSQL_USER', 'DB_USER']),
-        'password' => $envValue(['INFINITYFREE_DB_PASSWORD', 'MYSQL_PASSWORD', 'DB_PASSWORD'], ''),
-        'charset' => $envValue(['INFINITYFREE_DB_CHARSET', 'DB_CHARSET'], 'utf8mb4'),
+        'driver' => env('DB_CONNECTION', 'mysql'),
+        'host' => env('DB_HOST'),
+        'port' => env('DB_PORT', '3306'),
+        'database' => env('DB_NAME'),
+        'username' => env('DB_USER'),
+        'password' => env('DB_PASSWORD', ''),
+        'charset' => env('DB_CHARSET', 'utf8mb4'),
     ];
 
     $missing = [];
@@ -71,7 +59,7 @@ if ($isHosted) {
     if ($missing !== []) {
         throw new RuntimeException(
             'Hosted database credentials are missing: ' . implode(', ', $missing) .
-            '. Set DB_HOST, DB_NAME, DB_USER, and DB_PASSWORD in .env using your InfinityFree MySQL details.'
+            '. Set DB_HOST, DB_NAME, DB_USER, and DB_PASSWORD in .env using your hosting provider\'s MySQL details.'
         );
     }
 
@@ -79,11 +67,11 @@ if ($isHosted) {
 }
 
 return [
-    'driver' => $envValue(['DB_CONNECTION'], 'mysql'),
-    'host' => $envValue(['DB_HOST'], 'localhost'),
-    'port' => $envValue(['DB_PORT'], '3306'),
-    'database' => $envValue(['DB_NAME'], 'inventory_system'),
-    'username' => $envValue(['DB_USER'], 'root'),
-    'password' => $envValue(['DB_PASSWORD'], ''),
-    'charset' => $envValue(['DB_CHARSET'], 'utf8mb4'),
+    'driver' => env('DB_CONNECTION', 'mysql'),
+    'host' => env('DB_HOST', 'localhost'),
+    'port' => env('DB_PORT', '3306'),
+    'database' => env('DB_NAME', 'inventory_system'),
+    'username' => env('DB_USER', 'root'),
+    'password' => env('DB_PASSWORD', ''),
+    'charset' => env('DB_CHARSET', 'utf8mb4'),
 ];
