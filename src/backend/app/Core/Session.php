@@ -15,6 +15,7 @@ final class Session
 
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
+        ini_set('session.gc_maxlifetime', (string)max(3600, (int)Environment::get('SESSION_LIFETIME', 3600), (int)Environment::get('SESSION_ABSOLUTE_LIFETIME', 43200)));
 
         $sessionName = (string)Environment::get('SESSION_NAME', 'retailmind_session');
         if ($sessionName !== '') {
@@ -98,21 +99,28 @@ final class Session
         }
         $_SESSION['_restore_epoch'] = $epoch;
 
-        $lifetime = (int)Environment::get('SESSION_LIFETIME', 7200);
-        if ($lifetime <= 0) {
-            return;
-        }
-
+        $lifetime = max(1, (int)Environment::get('SESSION_LIFETIME', 3600));
+        $absoluteLifetime = max(1, (int)Environment::get('SESSION_ABSOLUTE_LIFETIME', 43200));
         $now = time();
-        $lastActivity = (int)($_SESSION['_last_activity'] ?? $now);
+        $lastActivity = (int)($_SESSION['_last_activity'] ?? 0);
+        $authenticatedAt = (int)($_SESSION['_authenticated_at'] ?? 0);
 
-        if (($now - $lastActivity) > $lifetime) {
+        if (isset($_SESSION['user_id']) && ($authenticatedAt <= 0 || $lastActivity <= 0 || ($now - $authenticatedAt) >= $absoluteLifetime || ($now - $lastActivity) >= $lifetime)) {
             self::destroy();
             session_start();
             $_SESSION['_flash_error'] = 'Your session expired. Please sign in again.';
         }
+        $_SESSION['_restore_epoch'] = $epoch;
 
-        $_SESSION['_last_activity'] = $now;
+        $script = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+        $background = ($_SERVER['HTTP_X_RETAILMIND_BACKGROUND'] ?? '') === '1'
+            || str_ends_with($script, '/components/backup/backup_status.php')
+            || str_ends_with($script, '/components/auth/session_activity.php')
+            || (str_ends_with($script, '/components/barcodeScanner/apiScanner/pairing.php')
+                && in_array($_GET['action'] ?? $_POST['action'] ?? '', ['poll', 'status'], true));
+        if (!$background) {
+            $_SESSION['_last_activity'] = $now;
+        }
     }
 
     private static function configureSavePath(): void

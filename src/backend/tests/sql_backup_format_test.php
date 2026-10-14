@@ -48,12 +48,16 @@ try {
     }
     Session::start();
     $_SESSION['user_id'] = 1;
+    $_SESSION['_authenticated_at'] = time();
+    $_SESSION['_last_activity'] = time();
     Session::start();
     $assert(isset($_SESSION['user_id']), 'Normal requests keep their authenticated session');
     RecoveryStore::write('session-epoch', 'new-generation');
     Session::start();
     $assert(!isset($_SESSION['user_id']), 'Epoch change signs out an existing session even if DB session_version matches');
     $_SESSION['user_id'] = 2;
+    $_SESSION['_authenticated_at'] = time();
+    $_SESSION['_last_activity'] = time();
     Session::start();
     $assert(isset($_SESSION['user_id']), 'New login after a restore remains valid');
     Session::destroy();
