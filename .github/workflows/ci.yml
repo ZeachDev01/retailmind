@@ -1,4 +1,4 @@
-name: Deploy to InfinityFree
+name: Deploy to Hostinger
 
 on:
   push:
@@ -29,11 +29,13 @@ jobs:
 
       - name: Create production environment
         env:
+          APP_URL: ${{ secrets.APP_URL }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
+          test -n "$APP_URL" || { echo 'Missing APP_URL secret'; exit 1; }
           test -n "$DB_HOST" || { echo 'Missing DB_HOST secret'; exit 1; }
           test -n "$DB_NAME" || { echo 'Missing DB_NAME secret'; exit 1; }
           test -n "$DB_USER" || { echo 'Missing DB_USER secret'; exit 1; }
@@ -43,7 +45,7 @@ jobs:
             'APP_NAME=RetailMind' \
             'APP_ENV=production' \
             'APP_DEBUG=false' \
-            'APP_URL=https://retailmind.infinityfreeapp.com' \
+            "APP_URL=$APP_URL" \
             'APP_TIMEZONE=Asia/Manila' \
             'SESSION_SECURE_COOKIE=true' \
             'DB_CONNECTION=mysql' \
@@ -54,7 +56,7 @@ jobs:
             "DB_PASSWORD=$DB_PASSWORD" \
             'DB_CHARSET=utf8mb4' > .env
 
-      - name: Deploy to InfinityFree
+      - name: Deploy to Hostinger
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -64,7 +66,7 @@ jobs:
           port: 21
           security: strict
           local-dir: .release/
-          server-dir: /htdocs/
+          server-dir: /
           # Preserve hosted data even if the old repository-wide sync tracked it.
           exclude: |
             **/.git*
@@ -86,4 +88,4 @@ jobs:
         run: |
           curl --fail --silent --show-error --ssl-reqd \
             --user "$FTP_USERNAME:$FTP_PASSWORD" \
-            --upload-file .env "ftp://$FTP_SERVER/htdocs/.env"
+            --upload-file .env "ftp://$FTP_SERVER/.env"
