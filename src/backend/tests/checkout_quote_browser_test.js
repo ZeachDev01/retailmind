@@ -14,13 +14,18 @@ if (!fs.existsSync(chromium.executablePath())) {
     const form = pos.match(/<form method="POST" id="checkout-form"[\s\S]*?<\/form>/)[0]
         .replace(/<\?=[\s\S]*?\?>/g, '<input name="csrf_token" value="fixture">');
     const modal = pos.match(/<div id="checkout-modal"[\s\S]*?(?=<div id="void-modal")/)[0];
-    const functions = pos.slice(pos.indexOf('function validateCheckout('), pos.indexOf('async function apiHeldSale('));
-    const bindings = ['checkoutButton', 'confirmCheckoutButton'].map(name => pos.match(new RegExp(name + "\\.addEventListener\\('click', [^)]+\\);"))[0]).join('\n');
+    const functions = pos.slice(pos.indexOf('function setTextIfPresent('), pos.indexOf('function quickProductMedia('))
+        + pos.slice(pos.indexOf('function updatePaymentFields('), pos.indexOf('async function apiHeldSale('));
+    const bindings = ['checkoutButton', 'confirmCheckoutButton'].map(name => pos.match(new RegExp(name + "\\.addEventListener\\('click', [^)]+\\);"))[0]).join('\n')
+        + '\n' + ['checkoutSummary', 'cashQuick'].map(name => pos.match(new RegExp(name + "\\.addEventListener\\('click',[\\s\\S]*?\\n\\}\\);"))?.[0] || '').join('\n')
+        + '\n' + pos.match(/cashReceived\.addEventListener\('input', [^)]+\);/)[0];
     const editGuard = pos.slice(pos.indexOf('function cartChangesAllowed()'), pos.indexOf('function addToCart('));
     const source = fs.readFileSync('src/frontend/assets/js/ui.js', 'utf8')
         + fs.readFileSync('src/frontend/assets/js/checkout-attempt.js', 'utf8')
         + fs.readFileSync('src/frontend/assets/js/checkout-quote.js', 'utf8');
+    const styles = ['style.css', 'cashier.css'].map(name => fs.readFileSync('src/frontend/assets/css/' + name, 'utf8')).join('\n');
     let quoteTotal = 80;
+    let productName = 'Current Item';
     let committed = null;
     let submissions = 0;
     let stale = true;
@@ -43,7 +48,7 @@ if (!fs.existsSync(chromium.executablePath())) {
                     if (unavailable) { response.end('<p>Sign in again.</p>'); return; }
                     response.setHeader('Content-Type', 'application/json');
                     response.end(JSON.stringify({token: 'server-quote', quote: {total: quoteTotal,
-                        sale: {total: 100, items: [{product_name: 'Current Item', quantity: 4, unit_price: 25, subtotal: 100}]},
+                        sale: {total: 100, items: [{product_name: productName, quantity: 4, unit_price: 25, subtotal: 100}]},
                         eligible_promotions: [{promotion_name: 'Best promotion'}], discount: {promotion_name: 'Best promotion', discount_amount: 100 - quoteTotal}}}));
                 } else {
                     submissions++;
@@ -53,7 +58,8 @@ if (!fs.existsSync(chromium.executablePath())) {
             }); return;
         }
         response.setHeader('Content-Type', 'text/html; charset=utf-8');
-        response.end(`${form}${modal}<p id="message"></p><input id="sku"><script>${source}</script><script>
+        const breakdown = pos.match(/<div class="payment-breakdown"[\s\S]*?(?=<form method="POST" id="checkout-form")/)[0];
+        response.end(`<style>${styles}</style><body class="cashier-page">${breakdown}${form}${modal}<p id="message"></p><input id="sku"><script>${source}</script><script>
             let cart = {1: {qty: 4, name: 'Cached Item', price: 25}};
             let checkoutConfirmed = false, checkoutSubmitting = false;
             const posShiftOpen = true;
@@ -61,6 +67,11 @@ if (!fs.existsSync(chromium.executablePath())) {
             const cartInput = document.getElementById('cart-input');
             const paymentMethod = document.getElementById('payment-method');
             const cashReceived = document.getElementById('cash-received');
+            const cashQuick = document.getElementById('cash-quick');
+            const changeDue = document.getElementById('change-due');
+            const referenceField = document.getElementById('reference-field');
+            const discountSummary = document.getElementById('discount-summary');
+            const supervisorFields = document.getElementById('supervisor-fields');
             const paymentReference = document.getElementById('payment-reference');
             const discountReason = document.getElementById('discount-reason');
             const skuInput = document.getElementById('sku');
@@ -69,6 +80,7 @@ if (!fs.existsSync(chromium.executablePath())) {
             const checkoutModal = document.getElementById('checkout-modal');
             const checkoutSummary = document.getElementById('checkout-summary');
             function getNetTotal() { return 100; }
+            function getCartTotal() { return 100; }
             function getDiscountAmount() { return 0; }
             function money(value) { return Number(value).toFixed(2); }
             function escapeHtml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'); }
@@ -87,7 +99,17 @@ if (!fs.existsSync(chromium.executablePath())) {
         const page = await browser.newPage();
         await page.goto(origin + '/pos'); await page.evaluate(() => loaded);
         assert.equal(await page.evaluate(() => typeof checkoutNow), 'undefined', 'Scoped async handlers need bound listeners after partial navigation');
-        assert(await page.locator('#cash-received').evaluate(input => input.readOnly), 'Cash collection awaits server review');
+        assert.equal(await page.locator('#cash-received').evaluate(input => input.readOnly), false, 'Cashier can type cash received before quote review');
+        const mainPresets = page.locator('#cash-field').getByRole('group', {name: 'Quick cash amounts'});
+        for (const amount of [20, 50, 100]) {
+            const button = mainPresets.getByRole('button', {name: `₱${amount}`, exact: true});
+            assert.equal(await button.count(), 1, `₱${amount} option appears below the main Cash received input`);
+            await button.click();
+            assert.equal(await page.locator('#cash-received').inputValue(), `${amount}.00`, 'Main preset sets an exact amount');
+            assert(await button.evaluate(button => button.getBoundingClientRect().top >= document.getElementById('cash-received').getBoundingClientRect().bottom), 'Preset sits below cash input');
+        }
+        await page.fill('#cash-received', '125.50');
+        assert.equal(await page.locator('#change-due').inputValue(), '25.50', 'Typing cash updates displayed change');
         await page.evaluate(() => {
             window.cartWorkspace = {busy:false, context:{locked:false}};
             window.reviewCurrentCart = async () => {
@@ -99,6 +121,8 @@ if (!fs.existsSync(chromium.executablePath())) {
         });
         await page.click('#checkout-button');
         await page.waitForFunction(() => document.getElementById('checkout-modal').classList.contains('open'));
+        assert.equal(await page.locator('#review-cash').inputValue(), '125.50', 'Typed main cash amount carries into final quote review');
+        assert.equal(await page.locator('#review-change').textContent(), '45.50', 'Change uses final reviewed total rather than cached total');
         assert(await page.locator('body').evaluate(body => body.classList.contains('no-scroll')), 'Checkout locks background scrolling');
         await page.evaluate(() => { checkoutSubmitting = true; closeCheckoutConfirm(); });
         assert(await page.locator('#checkout-modal').evaluate(modal => modal.classList.contains('open')), 'Submitting checkout keeps its page-owned close guard');
@@ -115,9 +139,33 @@ if (!fs.existsSync(chromium.executablePath())) {
         unavailable = false;
         await page.click('#checkout-button');
         await page.waitForSelector('#review-cash');
-        assert.match(await page.locator('#checkout-summary').textContent(), /Current Item.*4 × ₱25.00/);
+        const items = page.getByRole('table', {name: 'Items in this sale'});
+        assert.equal(await items.count(), 1, 'Items are readable as named rows with quantity and amount columns');
+        assert.deepEqual(await items.getByRole('columnheader').allTextContents(), ['Item', 'Qty', 'Amount']);
+        assert.deepEqual(await items.getByRole('row').nth(1).getByRole('cell').allTextContents(), ['Current Item₱25.00 each', '4', '₱100.00']);
         assert.match(await page.locator('#checkout-summary').textContent(), /Best promotion/);
         assert.match(await page.locator('#checkout-summary').textContent(), /Total due: ₱80.00/, 'Server discount replaces cached total');
+        const total = page.getByRole('group', {name: 'Total due', exact: true});
+        assert.equal(await total.count(), 1, 'Total due has its own clearly labeled summary');
+        assert.equal(await total.locator('strong').textContent(), '₱80.00');
+        const changeOutput = page.getByRole('status', {name: 'Change due', exact: true});
+        assert.equal(await changeOutput.count(), 1, 'Change has a labeled live output');
+        assert(await total.locator('strong').evaluate(amount => parseFloat(getComputedStyle(amount).fontSize) > parseFloat(getComputedStyle(document.querySelector('.review-items td')).fontSize)), 'Total amount is larger than item text');
+        assert(await changeOutput.evaluate(amount => parseFloat(getComputedStyle(amount).fontSize) > parseFloat(getComputedStyle(document.querySelector('.review-items td')).fontSize)), 'Change amount is larger than item text');
+        for (const width of [320, 375, 1440]) {
+            await page.setViewportSize({width, height: 900});
+            assert(await items.evaluate(table => table.scrollWidth <= table.clientWidth), `Items, quantities and amounts fit together at ${width}px`);
+        }
+        for (const [amount, change] of [[20, '0.00'], [50, '0.00'], [100, '20.00']]) {
+            const preset = page.locator('#checkout-summary').getByRole('button', {name: `₱${amount}`, exact: true});
+            assert.equal(await preset.count(), 1, `Cashier can choose exactly ₱${amount}`);
+            await preset.click();
+            assert.equal(await page.locator('#review-cash').inputValue(), `${amount}.00`, 'Preset replaces cash received instead of adding to total');
+            assert.equal(await page.locator('#cash-received').inputValue(), `${amount}.00`, 'Selected cash is used for checkout');
+            assert.equal(await page.locator('#review-change').textContent(), change, 'Change uses reviewed total');
+        }
+        await page.fill('#review-cash', '90');
+        assert.equal(await page.locator('#review-change').textContent(), '10.00', 'Manual entry still works after choosing a preset');
         await page.fill('#review-cash', '100');
         assert.equal(await page.locator('#review-change').textContent(), '20.00');
         await page.evaluate(() => cart[1].qty = 5);
@@ -131,10 +179,14 @@ if (!fs.existsSync(chromium.executablePath())) {
         await page.waitForFunction(() => document.body.textContent.includes('Prices changed.'));
         const firstAttempt = await page.evaluate(() => JSON.parse(localStorage.getItem('retailmind.checkout.1')).id);
         quoteTotal = 70;
+        productName = 'Baby Diapers Size 4 20 Pack Extra Long Product Name';
         await page.goto(origin + '/pos'); await page.evaluate(() => loaded);
         assert.match(await page.locator('#message').textContent(), /Do not collect payment again/);
         await page.click('#checkout-button'); await page.waitForSelector('#review-cash');
         assert.match(await page.locator('#checkout-summary').textContent(), /Total due: ₱70.00/);
+        await page.setViewportSize({width: 320, height: 740});
+        assert(await page.getByRole('table', {name: 'Items in this sale'}).evaluate(table => table.scrollWidth <= table.clientWidth), 'Long item names wrap without pushing quantity or amount off screen');
+        await page.setViewportSize({width: 1440, height: 900});
         stale = false;
         // The deliberately broken response commits Chromium's error page.
         // Wait for that navigation instead of racing it with an arbitrary delay.
@@ -160,6 +212,24 @@ if (!fs.existsSync(chromium.executablePath())) {
         await controls.getByText('Resume', {exact:true}).click();
         assert.deepEqual(await controls.evaluate(() => boundCalls), names.map(name => [name,name === 'resumeHeldSale' ? 42 : null]), 'All scoped asynchronous POS buttons bind, including dynamically rendered held-sale actions');
         await controls.close();
+        const insecure = await browser.newPage();
+        await insecure.route('http://retailmind.test/**', async route => {
+            const response = await route.fetch({url: origin + new URL(route.request().url()).pathname});
+            await route.fulfill({response});
+        });
+        await insecure.goto('http://retailmind.test/pos');
+        await insecure.evaluate(() => loaded);
+        assert.equal(await insecure.evaluate(() => Boolean(navigator.locks)), false, 'Plain HTTP custom domains cannot use Web Locks');
+        await insecure.click('#checkout-button');
+        await insecure.waitForSelector('#review-cash');
+        await insecure.fill('#review-cash', '100');
+        await insecure.click('#confirm-checkout-button');
+        await insecure.waitForFunction(() => document.getElementById('message').textContent.includes('recovery'));
+        assert.equal(submissions, 2, 'Unsupported context never submits payment');
+        assert.equal(await insecure.evaluate(() => localStorage.getItem('retailmind.checkout.1')), null);
+        assert.match(await insecure.locator('#checkout-modal').textContent(), /HTTPS.*localhost/, 'Recovery refusal explains the browser requirement inside the visible payment dialog');
+        assert.equal(await insecure.locator('#confirm-checkout-button').isEnabled(), true);
+        await insecure.close();
         console.log('Reviewed quote browser: passed (review before tender, server totals/lines/promotions/change, changed cart refusal, stale quote review, lost outcome receipt recovery)');
     } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exit(1); });
