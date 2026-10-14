@@ -5,13 +5,13 @@ class CartWorkspace {
         this.storage = storage;
         this.key = 'retailmind.cart-workspace';
         this.busy = false;
-        storage.removeItem('pos_cart');
         try {
+            storage.removeItem('pos_cart');
             const saved = JSON.parse(storage.getItem(this.key));
             this.state = saved && saved.cashier === context.cashier && saved.shift === context.shift
                 && context.workspace === 'cashier' && context.shift ? saved : null;
+            if (!this.state) storage.removeItem(this.key);
         } catch { this.state = null; }
-        if (!this.state) storage.removeItem(this.key);
     }
     save(cart, heldSaleId = 0, unresolved = false) {
         if (this.context.workspace !== 'cashier' || !this.context.shift || this.context.locked) return;

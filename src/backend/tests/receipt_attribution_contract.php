@@ -92,6 +92,7 @@ foreach ([
 ] as [$route, $function, $queriedSale]) {
     $source = file_get_contents($root . '/' . $route);
     if ($function === 'render_frontend_receipt') {
+        $source .= file_get_contents($root . '/src/backend/app/Views/sale_receipt_support.php');
         $assert(str_contains($source, '(new ReceiptDetailsService($pdo))->fetchSale($sale_id, $storeId)'),
             'the frontend receipt query uses the scoped service');
         $assert(substr_count($source, 'receipt_fetch_sale($pdo, $sale_id, $storeId)') >= 2,

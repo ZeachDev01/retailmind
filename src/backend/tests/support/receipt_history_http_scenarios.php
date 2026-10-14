@@ -7,7 +7,7 @@ try {
     $bootstrap=var_export(realpath(__DIR__.'/../../bootstrap/app.php'),true);
     $endpoint=var_export(realpath(__DIR__.'/../../../frontend/components/invoice/sales.php'),true);
     $fixtureDatabase=var_export($database,true);
-    file_put_contents($router,'<?php require '.$bootstrap.'; $_ENV["DB_NAME"]='.$fixtureDatabase.'; App\Core\Session::start(); $_SESSION["user_id"]=(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1); $_SESSION["role"]="cashier"; $_SESSION["session_version"]=1; $_SESSION["csrf_token"]="fixture-csrf"; $_SESSION["_restore_epoch"]=App\Backup\RecoveryStore::epoch(); if(isset($_SERVER["HTTP_X_FIXTURE_COMPLETE"])) $_SESSION["completed_checkout_sale"]=(int)$_SERVER["HTTP_X_FIXTURE_COMPLETE"]; require '.$endpoint.';');
+    file_put_contents($router,'<?php require '.$bootstrap.'; $_ENV["DB_NAME"]='.$fixtureDatabase.'; App\Core\Session::start(); $_SESSION["user_id"]=(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1); $_SESSION["role"]=$_SESSION["user_id"]===3?"admin":"cashier"; $_SESSION["session_version"]=1; $_SESSION["csrf_token"]="fixture-csrf"; $_SESSION["_restore_epoch"]=App\Backup\RecoveryStore::epoch(); if(isset($_SERVER["HTTP_X_FIXTURE_COMPLETE"])) $_SESSION["completed_checkout_sale"]=(int)$_SERVER["HTTP_X_FIXTURE_COMPLETE"]; require '.$endpoint.';');
     $socket=stream_socket_server('tcp://127.0.0.1:0',$errno,$error);
     $assert(is_resource($socket),'Reserve receipt HTTP fixture port');
     $address=stream_socket_get_name($socket,false);fclose($socket);
@@ -39,7 +39,16 @@ try {
     $completedHtml=$body;
     [$status,$body]=$request(['sale_id'=>6,'checkout'=>'complete']);
     $assert(str_contains($status,'200') && !str_contains($body,'<strong>Payment completed</strong>'),'Reload does not announce another payment');
-    if($fixturePath=getenv('RECEIPT_HISTORY_BROWSER_FIXTURE')) file_put_contents($fixturePath,json_encode(['completed'=>$completedHtml,'repeat'=>$body,'attempt'=>str_repeat('a',32)],JSON_THROW_ON_ERROR));
+    $repeatHtml=$body;
+    [$status,$body]=$request(['tab'=>'transactions']);
+    $assert(str_contains($status,'200') && str_contains($body,'id="receiptsTable"'),'Receipt History list loads');
+    $listHtml=$body;
+    [$status,$body]=$request(['tab'=>'transactions'],3);
+    $assert(str_contains($status,'200') && str_contains($body,'id="receiptCashier"'),'Administrator receives the authorized Cashier filter');
+    if($fixturePath=getenv('RECEIPT_HISTORY_BROWSER_FIXTURE')) file_put_contents($fixturePath,json_encode(['completed'=>$completedHtml,'repeat'=>$repeatHtml,'list'=>$listHtml,'admin'=>$body,'attempt'=>str_repeat('a',32)],JSON_THROW_ON_ERROR));
+    [$status,$body]=$request(['action'=>'data','date_from'=>'2026-10-02','date_to'=>'2026-10-01']);
+    $response=json_decode($body,true,512,JSON_THROW_ON_ERROR);
+    $assert(str_contains($status,'422') && $response['data']===[] && $response['error']==='From must be on or before To.','Reversed dates are rejected instead of broadening results');
     [$status,$body]=$request(['sale_id'=>2]);
     $assert(str_contains($status,'200') && str_contains($body,'historical') && !str_contains($body,'<strong>Payment completed</strong>'),'Unsnapshotted historical receipt retains notice without payment success');
     [$status,$body]=$request(['sale_id'=>5,'checkout'=>'complete'],1,5);

@@ -8,7 +8,7 @@
         let returnFocus = null;
         let pending = null;
         function open(trigger) {
-            returnFocus = trigger || document.getElementById('receipt-table-title');
+            returnFocus = trigger || document.getElementById('receipt-table-title') || document.getElementById('sku-input');
             if (!dialog.open) dialog.showModal();
             window.RetailMindUI?.syncScrollLock?.();
             const warning = document.querySelector('.theme-save-alert');

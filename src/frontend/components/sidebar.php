@@ -500,7 +500,8 @@ cartWorkspace.bindNavigation();
 
         function setSidebarCollapsed(isCollapsed) {
             document.body.classList.toggle('sidebar-collapsed', isCollapsed);
-            localStorage.setItem(collapseStorageKey, isCollapsed ? '1' : '0');
+            try { localStorage.setItem(collapseStorageKey, isCollapsed ? '1' : '0'); }
+            catch (_) { /* Navigation still works without browser storage. */ }
             updateBrandState();
         }
 

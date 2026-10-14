@@ -111,6 +111,7 @@ php src/backend/tests/receipt_table_contract.php
 php src/backend/tests/receipt_attribution_contract.php
 node src/backend/tests/sale_receipt_browser_test.js
 node src/backend/tests/sale_receipt_dialog_browser_test.js
+node src/backend/tests/receipt_history_browser_test.js
 node src/backend/tests/refund_receipt_browser_test.js
 node src/backend/tests/refund_reprint_browser_test.js
 node src/backend/tests/theme_login_browser_test.js

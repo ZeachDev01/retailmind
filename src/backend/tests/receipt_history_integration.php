@@ -23,8 +23,8 @@ try {
     foreach ($tables[0] as $ddl) $pdo->exec($ddl);
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
     $pdo->exec("INSERT INTO branches(branch_id,branch_name,branch_code) VALUES(1,'Receipt Store','RECEIPT');
-        INSERT INTO roles(role_id,role_name) VALUES(1,'cashier');
-        INSERT INTO users(user_id,full_name,username,password_hash,role_id,branch_id,must_change_password) VALUES(1,'Saved Seller','receipt-one','unused',1,1,0),(2,'Other Seller','receipt-two','unused',1,1,0);
+        INSERT INTO roles(role_id,role_name) VALUES(1,'cashier'),(2,'admin');
+        INSERT INTO users(user_id,full_name,username,password_hash,role_id,branch_id,must_change_password) VALUES(1,'Saved Seller','receipt-one','unused',1,1,0),(2,'Other Seller','receipt-two','unused',1,1,0),(3,'Receipt Administrator','receipt-admin','unused',2,1,0);
         INSERT INTO registers(register_id,name) VALUES(1,'Saved Till'),(2,'Other Till');
         INSERT INTO cashier_shifts(shift_id,cashier_id,register_id,opening_cash,locked_at) VALUES(1,1,1,100,CURRENT_TIMESTAMP),(2,2,2,100,NULL);
         INSERT INTO products(product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES(1,'REC-1','REC-1','Saved Product',10,3,1)");

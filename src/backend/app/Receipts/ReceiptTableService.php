@@ -133,8 +133,7 @@ final class ReceiptTableService
         $dateFrom = $this->validDate((string)($request['date_from'] ?? ''));
         $dateTo = $this->validDate((string)($request['date_to'] ?? ''));
         if ($dateFrom !== null && $dateTo !== null && $dateFrom > $dateTo) {
-            $dateFrom = null;
-            $dateTo = null;
+            throw new \InvalidArgumentException('From must be on or before To.');
         }
 
         $cashierId = filter_var($request['cashier_id'] ?? null, FILTER_VALIDATE_INT);

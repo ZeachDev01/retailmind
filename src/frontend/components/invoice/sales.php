@@ -6,7 +6,6 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Receipts\ReceiptTableService;
-use App\Receipts\ReceiptDetailsService;
 
 require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
@@ -14,68 +13,7 @@ $action = $_GET['action'] ?? 'list';
 if (!in_array($action, ['list', 'view', 'data'], true)) {
     $action = 'list';
 }
-$sale_id = (int)($_GET['sale_id'] ?? $_GET['id'] ?? $_GET['receipt_id'] ?? 0);
-$checkoutCompleted = ($_GET['checkout'] ?? '') === 'complete' && $sale_id > 0;
-$completedAttempt = null;
-if ($checkoutCompleted) {
-    $attemptQuery = $pdo->prepare('SELECT attempt_id FROM checkout_attempts WHERE cashier_id = ? AND sale_id = ?');
-    $attemptQuery->execute([(int)$_SESSION['user_id'], $sale_id]);
-    $completedAttempt = $attemptQuery->fetchColumn() ?: null;
-}
-$checkoutCompleted = $checkoutCompleted && $completedAttempt !== null;
-$announcePayment = $checkoutCompleted && (int)($_SESSION['completed_checkout_sale'] ?? 0) === $sale_id;
-if ($announcePayment) unset($_SESSION['completed_checkout_sale']);
-$storeId = store_scope_id($pdo);
-$can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
-$canStartSale = has_capability(RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
-
-function receipt_store_info(): array {
-    static $cached = null;
-    if ($cached !== null) { return $cached; }
-    return $cached = (new ReceiptDetailsService(App\Core\Database::connection()))->storeInfo();
-}
-
-function receipt_money($value, ?array $store = null): string {
-    $store = $store ?? receipt_store_info();
-    return htmlspecialchars((string)$store['currency_symbol']) . number_format((float)$value, 2);
-}
-
-function receipt_verification_code(array $sale): string {
-    return $sale['verification_code'] ?? ReceiptDetailsService::verificationCode($sale);
-}
-
-function receipt_fetch_sale(PDO $pdo, int $sale_id, int $storeId): ?array {
-    return (new ReceiptDetailsService($pdo))->fetchSale($sale_id, $storeId);
-}
-
-function receipt_fetch_items(PDO $pdo, int $sale_id): array {
-    return (new ReceiptDetailsService($pdo))->fetchItems($sale_id);
-}
-
-function receipt_render_details(array $sale, array $items, bool $canStartSale, bool $announcePayment = false): void {
-    $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
-        ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
-    $store = $sale['receipt_store'] ?? receipt_store_info();
-    $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
-    ?>
-    <div class="receipt-container">
-        <?php if ($announcePayment): ?>
-        <div class="checkout-complete-banner no-print" role="status">
-            <div class="checkout-complete-icon"><i class="bi bi-check2-circle" aria-hidden="true"></i></div>
-            <div class="checkout-complete-copy"><strong>Payment completed</strong><span>Receipt #<?= (int)$sale['sale_id'] ?> was saved successfully.</span></div>
-            <?php if ($sale['change_due'] !== null): ?><div class="checkout-complete-change"><span>Change due</span><strong><?= receipt_money($sale['change_due'], $store) ?></strong></div><?php endif; ?>
-        </div>
-        <?php endif; ?>
-        <div class="receipt-actions no-print">
-            <?php if ($canStartSale): ?>
-                <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg"></i> New Sale</a>
-            <?php endif; ?>
-            <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
-        </div>
-        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
-    </div>
-    <?php
-}
+require __DIR__ . '/../../../backend/app/Views/sale_receipt_support.php';
 
 if ($action === 'data') {
     header('Content-Type: application/json; charset=utf-8');
@@ -87,6 +25,15 @@ if ($action === 'data') {
 
     try {
         echo json_encode((new ReceiptTableService($pdo))->fetch($request, $cashierScope), JSON_THROW_ON_ERROR);
+    } catch (InvalidArgumentException $exception) {
+        http_response_code(422);
+        echo json_encode([
+            'draw' => max(0, (int)($_GET['draw'] ?? 0)),
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => [],
+            'error' => 'From must be on or before To.',
+        ]);
     } catch (Throwable $exception) {
         error_log('Receipt table request failed: ' . $exception->getMessage());
         http_response_code(500);
@@ -137,20 +84,6 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
     exit;
 }
 
-$selected_sale = null;
-$selected_items = [];
-$selected_error = '';
-if ($sale_id > 0) {
-    $selected_sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
-    if (!$selected_sale) {
-        $selected_error = 'Receipt not found.';
-    } elseif (!$can_manage_all && (int)$selected_sale['cashier_id'] !== (int)$_SESSION['user_id']) {
-        $selected_error = 'Access denied.';
-        $selected_sale = null;
-    } else {
-        $selected_items = receipt_fetch_items($pdo, $sale_id);
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -159,22 +92,9 @@ if ($sale_id > 0) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Receipt History</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
-<link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/datatables/datatables.min.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/invoices.css')) ?>">
-<?php if ($checkoutCompleted): ?>
-<script>
-try {
-    const key = <?= json_encode('retailmind.checkout.' . (int)$_SESSION['user_id']) ?>;
-    const pending = JSON.parse(localStorage.getItem(key) || 'null');
-    const matchesAttempt = pending && pending.id === <?= json_encode($completedAttempt) ?>;
-    if (matchesAttempt || (!pending && <?= json_encode($announcePayment) ?>)) {
-        sessionStorage.removeItem('pos_cart');
-        sessionStorage.removeItem('retailmind.cart-workspace');
-        if (matchesAttempt) localStorage.removeItem(key);
-    }
-} catch (error) { /* Returning to POS retries recovery if browser storage is unavailable. */ }
-</script>
-<?php endif; ?>
+<?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_checkout_cleanup.php'; ?>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/sale-receipt.css')) ?>">
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>" defer></script>
@@ -201,14 +121,14 @@ try {
                 </div>
             </div>
 
-            <div class="receipt-filters" aria-label="Receipt filters">
+            <div class="receipt-filters" role="group" aria-label="Receipt filters">
                 <label>
                     <span>From</span>
-                    <input type="date" id="receiptDateFrom">
+                    <input type="date" id="receiptDateFrom" aria-describedby="receiptTableStatusMessage">
                 </label>
                 <label>
                     <span>To</span>
-                    <input type="date" id="receiptDateTo">
+                    <input type="date" id="receiptDateTo" aria-describedby="receiptTableStatusMessage">
                 </label>
                 <label><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
                 <?php if ($can_manage_all): ?>
@@ -238,8 +158,9 @@ try {
                     </div>
                 <?php endif; ?>
             </div>
-            <div class="table-wrap receipt-table-wrap">
-                <table id="receiptsTable" class="receipts-table display" data-no-smart-table>
+            <noscript><p class="receipt-table-status">Enable JavaScript to search receipt history and open saved receipts.</p></noscript>
+            <div class="table-wrap receipt-table-wrap" tabindex="0" role="region" aria-label="Receipt history table and pagination">
+                <table id="receiptsTable" class="receipts-table display" aria-labelledby="receipt-table-title" data-no-smart-table>
                     <thead>
                         <tr>
                             <th>Receipt #</th>
@@ -261,14 +182,10 @@ try {
 
 <?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
 
-<script src="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.js"></script>
+<script src="<?= htmlspecialchars(app_url('assets/vendor/datatables/datatables.min.js')) ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     if (!document.getElementById('receiptsTable')) {
-        return;
-    }
-
-    if (typeof DataTable === 'undefined') {
         return;
     }
 
@@ -282,8 +199,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const retryButton = document.getElementById('retryReceiptTable');
     const emptyState = document.getElementById('receiptEmptyState');
     const tableWrap = document.querySelector('.receipt-table-wrap');
-    const stateKey = 'retailmind.receipts.' + window.location.pathname;
-    const textRenderer = DataTable.render.text();
+    const stateKey = 'retailmind.receipts.' + <?= json_encode((int)$_SESSION['user_id']) ?> + '.' + window.location.pathname;
+    let appliedFilters = {date_from: '', date_to: '', refund_status: '', cashier_id: ''};
+    let loadFailed = false;
 
     function updateStatus(message, isError, canRetry) {
         statusMessage.textContent = message;
@@ -291,13 +209,34 @@ document.addEventListener('DOMContentLoaded', function() {
         retryButton.hidden = !canRetry;
     }
 
+    if (typeof DataTable === 'undefined') {
+        updateStatus('Receipt history could not start. Reload the page to try again.', true, true);
+        tableWrap.hidden = true;
+        retryButton.textContent = 'Reload page';
+        retryButton.addEventListener('click', function() { window.location.reload(); });
+        return;
+    }
+    const textRenderer = DataTable.render.text();
+
+    function validDates() {
+        const reversed = dateFrom.value && dateTo.value && dateFrom.value > dateTo.value;
+        dateTo.setCustomValidity(reversed ? 'From must be on or before To.' : '');
+        const valid = dateFrom.validity.valid && dateTo.validity.valid;
+        dateFrom.setAttribute('aria-invalid', String(!dateFrom.validity.valid));
+        dateTo.setAttribute('aria-invalid', String(!dateTo.validity.valid));
+        if (!valid) updateStatus(reversed ? 'From must be on or before To. Previous results are unchanged.' : 'Enter a valid date. Previous results are unchanged.', true, false);
+        return valid;
+    }
+
     function currentFilters() {
-        return {
+        if (!validDates()) return appliedFilters;
+        appliedFilters = {
             date_from: dateFrom.value,
             date_to: dateTo.value,
             refund_status: refundStatus.value,
             cashier_id: cashier ? cashier.value : ''
         };
+        return appliedFilters;
     }
 
     function restoreFilters(savedState) {
@@ -318,7 +257,9 @@ document.addEventListener('DOMContentLoaded', function() {
         stateDuration: -1,
         stateSaveCallback: function(settings, data) {
             data.receiptFilters = currentFilters();
-            sessionStorage.setItem(stateKey, JSON.stringify(data));
+            try {
+                sessionStorage.setItem(stateKey, JSON.stringify(data));
+            } catch (error) { /* Receipt lookup still works when browser storage is unavailable. */ }
         },
         stateLoadCallback: function() {
             try {
@@ -326,7 +267,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 restoreFilters(savedState);
                 return savedState;
             } catch (error) {
-                sessionStorage.removeItem(stateKey);
                 return null;
             }
         },
@@ -336,6 +276,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 Object.assign(request, currentFilters());
             },
             error: function() {
+                loadFailed = true;
                 updateStatus('Unable to load receipts. Check your connection and retry.', true, true);
                 emptyState.hidden = true;
                 tableWrap.hidden = false;
@@ -355,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: 'total_amount',
                 render: function(value, type) {
                     const amount = Number(value);
-                    return type === 'display' ? '<strong>₱' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</strong>' : amount;
+                    return type === 'display' ? '<strong>₱' + amount.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</strong>' : amount;
                 }
             },
             {
@@ -370,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 render: function(value, type) {
                     const label = String(value || '');
                     return type === 'display'
-                        ? '<span class="' + (label.indexOf('Legacy') === 0 ? 'receipt-tag-neutral' : '') + '">' + label + '</span>'
+                        ? '<span class="' + (label.indexOf('Legacy') === 0 ? 'receipt-tag-neutral' : '') + '">' + textRenderer.display(label) + '</span>'
                         : label;
                 }
             },
@@ -414,14 +355,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     table.on('preXhr', function() {
-        updateStatus('Loading receipts…', false, false);
+        loadFailed = false;
+        if (validDates()) updateStatus('Loading receipts…', false, false);
     });
     table.on('xhr', function(event, settings, json) {
         if (json && json.error) {
+            loadFailed = true;
             updateStatus('Unable to load receipts. Please retry.', true, true);
         }
     });
     table.on('draw', function() {
+        if (loadFailed) {
+            emptyState.hidden = true;
+            tableWrap.hidden = false;
+            return;
+        }
+        if (!validDates()) return;
         const info = table.page.info();
         emptyState.hidden = info.recordsTotal !== 0;
         tableWrap.hidden = info.recordsTotal === 0;
@@ -435,11 +384,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     retryButton.addEventListener('click', function() {
-        table.ajax.reload(null, false);
+        if (validDates()) table.ajax.reload(null, false);
     });
     [dateFrom, dateTo, refundStatus, cashier].filter(Boolean).forEach(function(control) {
         control.addEventListener('change', function() {
-            table.ajax.reload(null, true);
+            if (validDates()) table.ajax.reload(null, true);
         });
     });
     clearFilters.addEventListener('click', function() {
@@ -447,6 +396,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dateTo.value = '';
         refundStatus.value = '';
         if (cashier) cashier.value = '';
+        validDates();
         table.search('');
         table.order([[1, 'desc'], [0, 'desc']]);
         table.page.len(25);

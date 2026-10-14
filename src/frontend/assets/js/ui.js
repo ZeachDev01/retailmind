@@ -609,17 +609,18 @@
     const accountMenu = qs("#sidebarAccountMenu");
     const accountMenuTriggers = qsa("[data-account-menu-open]");
     if (collapse && sidebar) {
-      const stored =
-        localStorage.getItem("retailmind_sidebar_collapsed") === "1";
+      let stored = false;
+      try {
+        stored = localStorage.getItem("retailmind_sidebar_collapsed") === "1";
+      } catch (_) { /* Navigation remains usable when browser storage is blocked. */ }
       if (stored && window.innerWidth > 900)
         document.body.classList.add("sidebar-collapsed");
       collapse.addEventListener("click", () => {
         document.body.classList.toggle("sidebar-collapsed");
         const collapsed = document.body.classList.contains("sidebar-collapsed");
-        localStorage.setItem(
-          "retailmind_sidebar_collapsed",
-          collapsed ? "1" : "0",
-        );
+        try {
+          localStorage.setItem("retailmind_sidebar_collapsed", collapsed ? "1" : "0");
+        } catch (_) { /* Only persistence is optional. */ }
         collapse.setAttribute(
           "aria-label",
           collapsed ? "Expand sidebar" : "Collapse sidebar",

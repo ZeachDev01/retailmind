@@ -17,7 +17,7 @@ The authorized correction workflow for returning goods and refunding payment aga
 _Avoid_: Reversal, Return (when referring to the transaction record)
 
 **Cashier Shift**:
-An operational session linked to a register and drawer where a cashier performs sales and refunds.
+An operational period linked to a register and drawer where a cashier performs sales and refunds. It is separate from the cashier's authenticated access to RetailMind.
 _Avoid_: Work period, Session
 
 **Store Reports**:

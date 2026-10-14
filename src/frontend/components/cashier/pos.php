@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['recover_checkout'])) {
     try {
         $saved = $salesWorkflowService->recoverAttempt((string)$_GET['recover_checkout'], $cashierId, $actorRole);
         if ($saved !== null) $_SESSION['completed_checkout_sale'] = (int)$saved['sale_id'];
-        echo json_encode(['sale' => $saved, 'receipt_url' => $saved === null ? null : app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $saved['sale_id'] . '&checkout=complete')], JSON_THROW_ON_ERROR);
+        echo json_encode(['sale' => $saved, 'receipt_url' => $saved === null ? null : app_url('components/cashier/pos.php?sale_id=' . $saved['sale_id'] . '&checkout=complete')], JSON_THROW_ON_ERROR);
     } catch (Throwable $e) {
         http_response_code(409);
         echo json_encode(['message' => 'Checkout recovery is unavailable. Retry recovery before collecting another payment.']);
@@ -149,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         // not the account's stored role, decides who may sell.
         $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
         $_SESSION['completed_checkout_sale'] = (int)$result['sale_id'];
-        header('Location: ' . app_url('components/invoice/sales.php?tab=transactions&sale_id=' . $result['sale_id'] . '&checkout=complete'));
+        header('Location: ' . app_url('components/cashier/pos.php?sale_id=' . $result['sale_id'] . '&checkout=complete'));
         exit;
     } catch (Throwable $e) {
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
@@ -160,6 +160,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         }
     }
 }
+
+require __DIR__ . '/../../../backend/app/Views/sale_receipt_support.php';
 
 // Ticket #91: the fixed set of reasons a held sale can be discarded for. The
 // dialog offers exactly these, and the service accepts exactly these, so the
@@ -238,7 +240,12 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Point of Sale</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/invoices.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
+    <?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_checkout_cleanup.php'; ?>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/sale-receipt.css')) ?>">
+    <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
+    <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>" defer></script>
 </head>
 <body class="cashier-page cashier-pos-page">
 <div class="app-shell">
@@ -569,6 +576,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
         </div>
     </div>
 </div>
+
+<?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="<?= app_url('assets/js/checkout-attempt.js') ?>"></script>
@@ -1716,7 +1725,7 @@ checkoutAttempt.recover().then(async () => {
         await loadHeldSales();
     } catch (error) { showCartMessage('Unfinished work is preserved. ' + error.message, 'error'); }
 });
-setTimeout(() => skuInput.focus(), 100);
+setTimeout(() => { if (!document.getElementById('receiptModal')?.open) skuInput.focus(); }, 100);
 </script>
         <?php // Ticket #90: the point of sale and its scripts are withheld entirely while the Register is locked, so a locked till has no cart, no scanner, and no checkout to drive. ?>
         <?php endif; ?>
