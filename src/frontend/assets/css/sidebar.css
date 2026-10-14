@@ -183,10 +183,12 @@ body.no-scroll { overflow: hidden; }
     height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: none;
     transition: box-shadow .24s ease, transform .24s ease;
     display: flex;
     flex-direction: column;
 }
+.sidebar::-webkit-scrollbar { display: none; }
 .sidebar-nav { flex: 1; }
 .sidebar-nav :is(a, .dropbtn) { min-height: 44px; }
 .sidebar-brand { position: relative; padding-right: 2.3rem; }
