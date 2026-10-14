@@ -1,9 +1,8 @@
 <?php
-// components/invoice/sales.php - sales transactions and reversal workflows
+// components/invoice/sales.php - receipt history and customer reprint workflows
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
-require_once __DIR__ . '/../../../backend/app/Services/SaleReversalService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Receipts\ReceiptTableService;
@@ -28,8 +27,7 @@ $announcePayment = $checkoutCompleted && (int)($_SESSION['completed_checkout_sal
 if ($announcePayment) unset($_SESSION['completed_checkout_sale']);
 $storeId = store_scope_id($pdo);
 $can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
-$canStartSale = current_role() !== 'inventory_manager';
-$activeTab = ($_GET['tab'] ?? 'transactions') === 'reversals' ? 'reversals' : 'transactions';
+$canStartSale = has_capability(RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
 
 function receipt_store_info(): array {
     static $cached = null;
@@ -97,44 +95,11 @@ if ($action === 'data') {
             'recordsTotal' => 0,
             'recordsFiltered' => 0,
             'data' => [],
-            'error' => 'Unable to load receipts. Please retry.',
+            'error' => \App\Support\OperatorAlert::message($exception, 'Unable to load receipts. Please retry.'),
         ]);
     }
     exit;
 }
-
-$reversalService = new SaleReversalService($pdo);
-$reversalCanApprove = has_capability(RoleCapabilityPolicy::MANAGE_SALE_REVERSALS);
-$reversalMessage = '';
-$reversalError = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $activeTab = 'reversals';
-    csrf_verify();
-    $postAction = $_POST['action'] ?? '';
-
-    try {
-        throw new RuntimeException('New Legacy Reversals are disabled. Use Cash Refunds. Administrator decisions use the Legacy Reversal review page.');
-    } catch (RuntimeException $exception) {
-        $reversalError = \App\Support\OperatorAlert::message($exception, 'The reversal could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
-    } catch (PDOException $exception) {
-        $reversalError = \App\Support\OperatorAlert::message($exception, 'The reversal could not be saved. Please try again. Tell your Administrator if this keeps happening.');
-    }
-}
-
-$reversalSale = $activeTab === 'reversals' && $sale_id > 0
-    ? $reversalService->getSaleWithItems($sale_id)
-    : null;
-if ($reversalSale && !$can_manage_all && (int)$reversalSale['cashier_id'] !== (int)$_SESSION['user_id']) {
-    $reversalError = 'You can only view reversals for your own sales.';
-    $reversalSale = null;
-}
-$reversals = $activeTab === 'reversals'
-    ? ($sale_id > 0 && $reversalSale
-        ? $reversalService->getReversals($sale_id)
-        : ($can_manage_all ? $reversalService->getReversals() : []))
-    : [];
-$pendingReversals = array_values(array_filter($reversals, static fn(array $row): bool => $row['status'] === 'pending'));
 
 $receiptCashiers = [];
 if ($can_manage_all) {
@@ -192,7 +157,7 @@ if ($sale_id > 0) {
 <head><?php retailmind_theme_head(); ?>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sales</title>
+<title>Receipt History</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/invoices.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/invoices.css')) ?>">
@@ -218,222 +183,83 @@ try {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-            <header class="page-heading"><h1>Sales</h1></header>
+        <header class="page-heading"><h1>Receipt History</h1></header>
         <div class="receipts-container">
-            <nav class="sales-tabs" aria-label="Sales views">
-                <a class="sales-tab<?= $activeTab === 'transactions' ? ' is-active' : '' ?>" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">
-                    <i class="bi bi-receipt" aria-hidden="true"></i> Sales Transactions
-                </a>
-                <a class="sales-tab<?= $activeTab === 'reversals' ? ' is-active' : '' ?>" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals')) ?>">
-                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Legacy Reversals
-                </a>
-            </nav>
-
-            <?php if ($activeTab === 'transactions'): ?>
             <?php if ($selected_error): ?>
                 <div class="alert tag-warning" role="alert"><?= htmlspecialchars($selected_error) ?></div>
             <?php endif; ?>
 
-
             <div class="section-header receipt-table-heading">
-                    <div>
-                        <h2 id="receipt-table-title" tabindex="-1">Receipt History</h2>
-                        <p class="section-description">Customer lookup and reprint within your permitted history. Dates use Philippine time (Asia/Manila). Completed receipts are immutable; new corrections use the authorized Cash Refund workflow.</p>
-                    </div>
-                    <div class="receipt-heading-actions">
-                        <?php if ($canStartSale): ?>
-                            <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
-                        <?php endif; ?>
-                    </div>
+                <div>
+                    <h2 id="receipt-table-title" tabindex="-1">Receipt History</h2>
+                    <p class="section-description">Customer lookup and reprint within your permitted history. Dates use Philippine time (Asia/Manila). Completed receipts are immutable; new corrections use the authorized Cash Refund workflow.</p>
                 </div>
+                <div class="receipt-heading-actions">
+                    <?php if ($canStartSale): ?>
+                        <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
+                    <?php endif; ?>
+                </div>
+            </div>
 
-                <div class="receipt-filters" aria-label="Receipt filters">
+            <div class="receipt-filters" aria-label="Receipt filters">
+                <label>
+                    <span>From</span>
+                    <input type="date" id="receiptDateFrom">
+                </label>
+                <label>
+                    <span>To</span>
+                    <input type="date" id="receiptDateTo">
+                </label>
+                <label><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
+                <?php if ($can_manage_all): ?>
                     <label>
-                        <span>From</span>
-                        <input type="date" id="receiptDateFrom">
-                    </label>
-                    <label>
-                        <span>To</span>
-                        <input type="date" id="receiptDateTo">
-                    </label>
-                    <label>
-                        <span>Legacy Reversal status</span>
-                        <select id="receiptReversalStatus">
-                            <option value="">All statuses</option>
-                            <option value="none">No reversal</option>
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
+                        <span>Cashier</span>
+                        <select id="receiptCashier">
+                            <option value="">All cashiers</option>
+                            <?php foreach ($receiptCashiers as $cashier): ?>
+                                <option value="<?= (int)$cashier['user_id'] ?>"><?= htmlspecialchars($cashier['full_name']) ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </label>
-                    <label><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
-                    <?php if ($can_manage_all): ?>
-                        <label>
-                            <span>Cashier</span>
-                            <select id="receiptCashier">
-                                <option value="">All cashiers</option>
-                                <?php foreach ($receiptCashiers as $cashier): ?>
-                                    <option value="<?= (int)$cashier['user_id'] ?>"><?= htmlspecialchars($cashier['full_name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </label>
-                    <?php endif; ?>
-                    <button type="button" class="btn btn-quiet" id="clearReceiptFilters"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear filters</button>
-                </div>
+                <?php endif; ?>
+                <button type="button" class="btn btn-quiet" id="clearReceiptFilters"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear filters</button>
+            </div>
 
-                <div id="receiptTableStatus" class="receipt-table-status" role="status" aria-live="polite">
-                    <span id="receiptTableStatusMessage"></span>
-                    <button type="button" class="btn btn-quiet" id="retryReceiptTable" hidden>Retry</button>
-                </div>
-                <div id="receiptEmptyState" class="empty-state receipt-empty-state" hidden>
-                    <h2>No receipts have been created yet.</h2>
-                    <p>Complete a sale to create the first receipt.</p>
-                    <?php if ($canStartSale): ?>
-                        <div class="empty-actions">
-                            <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>">Start a Sale</a>
-                        </div>
-                    <?php endif; ?>
-                </div>
-                <div class="table-wrap receipt-table-wrap">
-                    <table id="receiptsTable" class="receipts-table display" data-no-smart-table>
-                        <thead>
-                            <tr>
-                                <th>Receipt #</th>
-                                <th>Date</th>
-                                <th>Cashier</th>
-                                <th>Items</th>
-                                <th>Original paid</th>
-                                <th>Payment</th>
-                                <th>Legacy Reversals</th>
-                                <th>Cashier Shift</th>
-                                <th>Cash Refunds</th><th>Refunded</th><th>Remaining net</th><th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            <?php else: ?>
-                <?php if ($reversalMessage): ?><div class="alert tag-success"><?= htmlspecialchars($reversalMessage) ?></div><?php endif; ?>
-                <?php if ($reversalError): ?><div class="alert tag-warning"><?= htmlspecialchars($reversalError) ?></div><?php endif; ?>
-
-                <div class="section-header reversal-heading">
-                    <div>
-                        <h2>Legacy Reversals</h2>
-                        <p class="section-description">Historical records remain readable. New corrections use Cash Refunds.</p>
+            <div id="receiptTableStatus" class="receipt-table-status" role="status" aria-live="polite">
+                <span id="receiptTableStatusMessage"></span>
+                <button type="button" class="btn btn-quiet" id="retryReceiptTable" hidden>Retry</button>
+            </div>
+            <div id="receiptEmptyState" class="empty-state receipt-empty-state" hidden>
+                <h2>No receipts have been created yet.</h2>
+                <p>Complete a sale to create the first receipt.</p>
+                <?php if ($canStartSale): ?>
+                    <div class="empty-actions">
+                        <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>">Start a Sale</a>
                     </div>
-                    <form method="GET" class="actions-row reversal-search">
-                        <input type="hidden" name="tab" value="reversals">
-                        <label for="reversalSaleId">Receipt / Sale ID</label>
-                        <input type="number" min="1" name="sale_id" id="reversalSaleId" value="<?= $sale_id ?: '' ?>" placeholder="Receipt number">
-                        <button class="btn" type="submit"><i class="bi bi-search" aria-hidden="true"></i> Load</button>
-                    </form>
-                </div>
-
-                <div class="grid-two sales-reversal-grid">
-                    <div>
-                        <?php if ($reversalSale): ?>
-                            <div class="panel">
-                                <div class="section-header">
-                                    <div>
-                                        <h3>Sale #<?= (int)$reversalSale['sale_id'] ?></h3>
-                                        <p class="section-description"><?= htmlspecialchars(format_display_datetime($reversalSale['sale_date'])) ?> by <?= htmlspecialchars($reversalSale['cashier_name']) ?>, <?= htmlspecialchars(strtoupper($reversalSale['payment_method'])) ?>, &#8369;<?= number_format((float)$reversalSale['total_amount'], 2) ?></p>
-                                    </div>
-                                    <?php if (!empty($reversalSale['approved_full_reversal'])): ?><span class="status-pill status-approved">Cancelled</span><?php endif; ?>
-                                </div>
-
-                                <p>New corrections use full or partial Cash Refunds in the Cashier workspace. Exchanges require a refund plus a separately paid new sale.</p>
-                                <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a>
-                            </div>
-                        <?php elseif ($sale_id > 0): ?>
-                            <div class="panel">Sale #<?= $sale_id ?> was not found.</div>
-                        <?php else: ?>
-                            <div class="empty-state reversal-empty"><i class="bi bi-receipt"></i><strong>Load a sale to read Legacy Reversals</strong><span>Enter a receipt number above to review eligible items.</span></div>
-                        <?php endif; ?>
-                    </div>
-
-                    <div>
-                        <?php if ($reversalCanApprove): ?>
-                            <p><a href="<?= htmlspecialchars(app_url('components/invoice/legacy_reversals.php')) ?>">Administrator Legacy Reversal review</a></p>
-                        <?php endif; ?>
-                        <div class="panel">
-                            <h3><?= $sale_id > 0 ? 'Legacy Reversal History' : 'Recent Legacy Reversals' ?></h3>
-                            <div class="u-table-scroll u-mt-075"><table><tr><th>ID</th><th>Sale</th><th>Type</th><th>Status</th><th>Requested</th></tr>
-                                <?php foreach ($reversals as $row): ?><tr><td>#<?= (int)$row['reversal_id'] ?></td><td><a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=reversals&sale_id=' . $row['sale_id'])) ?>">#<?= (int)$row['sale_id'] ?></a></td><td><?= htmlspecialchars(ucfirst($row['reversal_type'])) ?></td><td><span class="status-pill status-<?= htmlspecialchars($row['status']) ?>"><?= htmlspecialchars($row['status']) ?></span></td><td><?= htmlspecialchars(format_display_datetime($row['created_at'])) ?></td></tr><?php endforeach; ?>
-                                <?php if (!$reversals): ?><tr><td class="u-empty-cell" colspan="5">No reversal records yet.</td></tr><?php endif; ?>
-                            </table></div>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
+                <?php endif; ?>
+            </div>
+            <div class="table-wrap receipt-table-wrap">
+                <table id="receiptsTable" class="receipts-table display" data-no-smart-table>
+                    <thead>
+                        <tr>
+                            <th>Receipt #</th>
+                            <th>Date</th>
+                            <th>Cashier</th>
+                            <th>Items</th>
+                            <th>Original paid</th>
+                            <th>Payment</th>
+                            <th>Cashier Shift</th>
+                            <th>Cash Refunds</th><th>Refunded</th><th>Remaining net</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
     </main>
 </div>
 
 <?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
-
-<!-- Legacy edit modal is disabled; completed receipts must use reversal records. -->
-<?php if (false && $action === 'update' && $sale_id > 0): ?>
-    <?php
-    $saleStmt = $pdo->prepare(
-        "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date, u.full_name AS cashier_name
-         FROM sales s
-         JOIN users u ON s.cashier_id = u.user_id
-         WHERE s.sale_id = ?"
-    );
-    $saleStmt->execute([$sale_id]);
-    $sale = $saleStmt->fetch();
-
-    if ($sale && ($can_manage_all || (int)$sale['cashier_id'] === (int)$_SESSION['user_id'])): ?>
-    <div id="editModal" class="modal active">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Edit Receipt #<?= $sale_id ?></h2>
-                <button type="button" class="modal-close" title="Close" onclick="RetailMindUI.navigate('<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>')">&times;</button>
-            </div>
-            <div class="receipt-container">
-                <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-
-                    <div class="u-mb-1">
-                        <label class="u-block-label">Receipt #</label>
-                        <input type="text" value="<?= $sale['sale_id'] ?>" disabled style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb;">
-                    </div>
-
-                    <div class="u-mb-1">
-                        <label class="u-block-label">Date</label>
-                        <input type="text" value="<?= htmlspecialchars($sale['sale_date']) ?>" disabled style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb;">
-                    </div>
-
-                    <div class="u-mb-1">
-                        <label class="u-block-label">Cashier</label>
-                        <input type="text" value="<?= htmlspecialchars($sale['cashier_name']) ?>" disabled style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb;">
-                    </div>
-
-                    <div class="u-mb-1">
-                        <label class="u-block-label">Payment Method</label>
-                        <select class="u-field-select" name="payment_method">
-                            <option value="CASH" <?= $sale['payment_method'] === 'CASH' ? 'selected' : '' ?>>Cash</option>
-                            <option value="CARD" <?= $sale['payment_method'] === 'CARD' ? 'selected' : '' ?>>Card</option>
-                            <option value="CHECK" <?= $sale['payment_method'] === 'CHECK' ? 'selected' : '' ?>>Check</option>
-                            <option value="ONLINE" <?= $sale['payment_method'] === 'ONLINE' ? 'selected' : '' ?>>Online</option>
-                        </select>
-                    </div>
-
-                    <div class="u-mb-1">
-                        <label class="u-block-label">Total Amount</label>
-                        <input type="text" value="₱<?= number_format($sale['total_amount'], 2) ?>" disabled style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f9fafb;">
-                    </div>
-
-                    <div class="u-flex-wrap">
-                        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
-                        <a href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>" class="btn">Cancel</a>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
-<?php endif; ?>
 
 <script src="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.js"></script>
 <script>
@@ -448,7 +274,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const dateFrom = document.getElementById('receiptDateFrom');
     const dateTo = document.getElementById('receiptDateTo');
-    const reversalStatus = document.getElementById('receiptReversalStatus');
     const refundStatus = document.getElementById('receiptRefundStatus');
     const cashier = document.getElementById('receiptCashier');
     const clearFilters = document.getElementById('clearReceiptFilters');
@@ -470,7 +295,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return {
             date_from: dateFrom.value,
             date_to: dateTo.value,
-            reversal_status: reversalStatus.value,
             refund_status: refundStatus.value,
             cashier_id: cashier ? cashier.value : ''
         };
@@ -480,7 +304,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const filters = savedState && savedState.receiptFilters ? savedState.receiptFilters : {};
         dateFrom.value = filters.date_from || '';
         dateTo.value = filters.date_to || '';
-        reversalStatus.value = filters.reversal_status || '';
         refundStatus.value = filters.refund_status || '';
         if (cashier) cashier.value = filters.cashier_id || '';
     }
@@ -543,21 +366,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             {
-                data: null,
-                orderable: false,
-                searchable: false,
-                render: function(row, type) {
-                    if (type !== 'display') return Number(row.reversal_count || 0);
-                    const badges = [];
-                    if (Number(row.pending_reversals) > 0) badges.push('<span class="tag-warning">' + Number(row.pending_reversals) + ' pending</span>');
-                    if (Number(row.approved_reversals) > 0) badges.push('<span class="tag-success">' + Number(row.approved_reversals) + ' approved</span>');
-                    if (Number(row.rejected_reversals) > 0) badges.push('<span class="receipt-tag-neutral">' + Number(row.rejected_reversals) + ' rejected</span>');
-                    return badges.length ? badges.join(' ') : '<span class="u-text-muted">None</span>';
-                }
-            },
-            {
-                // Ticket #89: the Cashier Shift a sale ran under, or an explicit
-                // Legacy / Unassigned label for sales predating the cutoff.
                 data: 'attribution_label',
                 render: function(value, type) {
                     const label = String(value || '');
@@ -576,10 +384,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 render: function(value, type) {
                     if (type !== 'display') return value;
                     const saleId = Number(value);
-                    return '<div class="actions-cell">' +
-                        '<button type="button" class="btn-small btn-view" onclick="viewReceipt(' + saleId + ', this)"><i class="bi bi-eye" aria-hidden="true"></i> View</button>' +
-                        <?= current_role() === 'cashier' ? json_encode('<a class="btn-small" href="' . app_url('components/cashier/refunds.php?sale_id=')) : json_encode('<a class="btn-small" href="' . app_url('components/invoice/sales.php?tab=reversals&sale_id=')) ?> + saleId + '"><?= current_role() === 'cashier' ? 'Refund' : 'Legacy history' ?></a>' +
-                        '</div>';
+                    let html = '<div class="actions-cell">' +
+                        '<button type="button" class="btn-small btn-view" onclick="viewReceipt(' + saleId + ', this)"><i class="bi bi-eye" aria-hidden="true"></i> View</button>';
+                    <?php if (current_role() === 'cashier'): ?>
+                    html += '<a class="btn-small" href="' + <?= json_encode(app_url('components/cashier/refunds.php?sale_id=')) ?> + saleId + '">Refund</a>';
+                    <?php endif; ?>
+                    html += '</div>';
+                    return html;
                 }
             }
         ],
@@ -626,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
     retryButton.addEventListener('click', function() {
         table.ajax.reload(null, false);
     });
-    [dateFrom, dateTo, reversalStatus, refundStatus, cashier].filter(Boolean).forEach(function(control) {
+    [dateFrom, dateTo, refundStatus, cashier].filter(Boolean).forEach(function(control) {
         control.addEventListener('change', function() {
             table.ajax.reload(null, true);
         });
@@ -634,7 +445,6 @@ document.addEventListener('DOMContentLoaded', function() {
     clearFilters.addEventListener('click', function() {
         dateFrom.value = '';
         dateTo.value = '';
-        reversalStatus.value = '';
         refundStatus.value = '';
         if (cashier) cashier.value = '';
         table.search('');
@@ -643,20 +453,6 @@ document.addEventListener('DOMContentLoaded', function() {
         table.ajax.reload(null, true);
     });
 });
-
-
-async function legacyDeleteReceiptDisabled(saleId) {
-    const approved = await RetailMindUI.confirm({title:'Delete receipt',message:'This action cannot be undone.',confirmText:'Delete receipt',danger:true});
-    if (!approved) return;
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '<?= htmlspecialchars(app_url('components/invoice/sales.php?action=delete&sale_id=')) ?>' + saleId;
-    form.innerHTML = '<input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">';
-    document.body.appendChild(form);
-    form.submit();
-}
-
 </script>
 </body>
 </html>

@@ -251,14 +251,14 @@ $checks = [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',
         'needles' => ['audit-log-stats', 'bi-card-checklist', 'bi-person-check-fill', 'bi-boxes'],
     ],
-    'Sales Transactions uses a server-side DataTable' => [
+    'Receipt History uses a server-side DataTable' => [
         'file' => 'src/frontend/components/invoice/sales.php',
         'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 25', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
         'forbidden' => ['function performSearch()', 'fetchAll();\n}'],
     ],
-    'Sales workspace exposes transaction filters and reversal actions' => [
+    'Receipt History workspace exposes receipt filters and view actions' => [
         'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['sales-tabs', 'Sales Transactions', 'Legacy Reversals', 'id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptReversalStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'tab=reversals&sale_id=', 'SaleReversalService', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
+        'needles' => ['id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptRefundStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
     ],
     'Sales transaction server contract is isolated and safe' => [
         'file' => 'src/backend/app/Receipts/ReceiptTableService.php',
