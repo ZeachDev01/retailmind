@@ -91,6 +91,7 @@ $products = $receivingService->getActiveProducts();
     <title>Stock Receiving</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/stock-receiving.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/stock-receiving.css')) ?>">
 </head>
 <body class="stock-receiving-page">
 <a class="receiving-skip-link" href="#receiving_main">Skip to Stock Receiving</a>
@@ -98,7 +99,8 @@ $products = $receivingService->getActiveProducts();
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content" id="receiving_main" tabindex="-1">
         <div class="topbar">
-            <h1>Stock Receiving</h1>
+            <div><h1>Stock Receiving</h1><p>A clear path from delivered goods to available stock.</p></div>
+            <a class="btn btn-secondary" href="receiving_history.php"><i class="bi bi-clock-history" aria-hidden="true"></i> Receiving history</a>
         </div>
         <?php if ($message): ?>
             <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
@@ -110,15 +112,22 @@ $products = $receivingService->getActiveProducts();
         <?php endif; ?>
 
         <div class="receiving-form" data-step="1">
-            <h2 id="receiving_step_title" tabindex="-1">1. Select products</h2>
-            <ol class="receiving-steps" aria-label="Receiving progress"><li aria-current="step">1. Select products</li><li>2. Enter quantities</li><li>3. Review</li></ol>
-            <p>Select what was bought, enter actual quantities, then review and save once. Shopping store and receipt details are optional.</p>
+            <div class="receiving-progress">
+                <ol class="receiving-steps" aria-label="Receiving progress">
+                    <li aria-current="step"><span class="step-number">1</span><span>Select products<small>Find what arrived</small></span></li>
+                    <li><span class="step-number">2</span><span>Enter quantities<small>Count received goods</small></span></li>
+                    <li><span class="step-number">3</span><span>Review & save<small>Confirm stock changes</small></span></li>
+                </ol>
+                <span class="receiving-draft">Unsaved delivery</span>
+            </div>
+            <h2 id="receiving_step_title" class="receiving-step-title" tabindex="-1">1. Select products</h2>
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
             <?php if (!$products): ?><p role="status">No active products are available. Ask your Administrator to add or activate a product before receiving stock.</p><?php endif; ?>
             <noscript><p role="alert">Enable JavaScript to select products, review quantities, and save this receiving entry.</p></noscript>
             <fieldset <?= !$canReceive || !$products ? 'disabled' : '' ?>>
             <div class="form-section" id="receiving_selection">
-                <h3>Find products</h3>
+                <div class="receiving-panel-heading"><div><h2>Product catalog</h2><p>Find what arrived</p></div><span class="receiving-count"><?= count($products) ?> products</span></div>
+                <div class="receiving-picker">
                 <div class="form-group"><label for="product_search">Search products by name or SKU</label><input type="search" id="product_search" autocomplete="off" aria-describedby="product_search_status" placeholder="Search active products"><small id="product_search_status" role="status"></small></div>
                 <div class="form-group">
                     <label for="product_code_scan">Barcode or SKU</label>
@@ -126,14 +135,18 @@ $products = $receivingService->getActiveProducts();
                     <small id="scan_target" role="status">Scanning product line 1. Focus another line to scan into it.</small>
                     <small id="scan_status" role="status" aria-live="polite">You can also choose a product manually below.</small>
                 </div>
+                </div>
+                <div id="receiving_catalog" class="receiving-catalog" aria-label="Available products"></div>
             </div>
             <form method="POST" id="receiving_form" novalidate>
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                 <input type="hidden" name="receiving_nonce" value="<?= htmlspecialchars($receivingNonce) ?>">
                 <input type="hidden" name="entry_mode" value="shopping_trip">
+                <div class="delivery-editor">
+                <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2><p>Enter quantities exactly as received.</p></div><span id="delivery_count" class="receiving-count">0 products</span></div>
                 <div id="receiving_lines">
                 <section class="receiving-line" aria-label="Product line 1">
-                    <div class="receiving-line-heading"><h3>Product line <span class="line-number">1</span></h3>
+                    <div class="receiving-line-heading"><div><h3>Product line <span class="line-number">1</span></h3><span class="receiving-product-name"></span></div>
                         <button type="button" class="btn btn-quiet remove-receiving-line">Remove product</button></div>
 
                 <div class="form-section">
@@ -143,7 +156,7 @@ $products = $receivingService->getActiveProducts();
                             <select name="product_id" id="product_id" data-field="product_id" required>
                                 <option value="">-- Select Product --</option>
                                 <?php foreach ($products as $p): ?>
-                                    <option value="<?= $p['product_id'] ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>" data-units-per-package="<?= (int)($p['units_per_package'] ?? 1) ?>" data-base-unit="<?= htmlspecialchars($p['base_unit'] ?? 'piece') ?>" data-receiving-unit="<?= htmlspecialchars($p['receiving_unit'] ?? 'package') ?>">
+                                    <option value="<?= $p['product_id'] ?>" data-name="<?= htmlspecialchars($p['product_name']) ?>" data-sku="<?= htmlspecialchars($p['sku']) ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>" data-units-per-package="<?= (int)($p['units_per_package'] ?? 1) ?>" data-base-unit="<?= htmlspecialchars($p['base_unit'] ?? 'piece') ?>" data-receiving-unit="<?= htmlspecialchars($p['receiving_unit'] ?? 'package') ?>">
                                         <?= htmlspecialchars($p['product_name']) ?> (<?= htmlspecialchars($p['sku']) ?>)
                                     </option>
                                 <?php endforeach; ?>
@@ -174,8 +187,9 @@ $products = $receivingService->getActiveProducts();
                     <small class="receiving-quantity" id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
                 </div>
 
-                <div class="form-section receiving-quantity">
-                    <h4>Optional batch & expiry</h4>
+                <details class="receiving-quantity receiving-extras" open>
+                    <summary>Cost, batch, expiry & notes</summary>
+                <div class="form-section">
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="batch_number">Batch/Lot Number</label>
@@ -198,13 +212,22 @@ $products = $receivingService->getActiveProducts();
                         <textarea name="notes" id="notes" data-field="notes" placeholder="Any additional notes about this receipt..."></textarea>
                     </div>
                 </div>
+                </details>
 
                 </section>
                 </div>
                 <button type="button" class="btn btn-quiet" id="add_receiving_line">Add another product</button>
                 <p id="entry_status" role="alert"></p>
+                <section id="receiving_review" hidden aria-label="Review shopping entry"></section>
+                </div>
+                <section class="receiving-summary" aria-label="Delivery summary">
+                <div class="receiving-panel-heading"><h2>Delivery summary</h2><span id="summary_status" class="receiving-count">Draft</span></div>
+                <div class="receiving-summary-body">
+                    <div class="receiving-accepted"><strong id="summary_accepted">0</strong><span>Accepted units</span><small>To be added to available stock</small></div>
+                    <dl class="receiving-totals"><div><dt>Products</dt><dd id="summary_products">0</dd></div><div><dt>Received units</dt><dd id="summary_received">0</dd></div><div><dt>Damaged units</dt><dd id="summary_damaged">0</dd></div><div><dt>Known accepted cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
+                    <p class="receiving-summary-note">Damaged units are recorded separately. They never increase available stock. Blank purchase costs remain unknown.</p>
                 <div class="form-section receiving-quantity">
-                    <h3>Optional shopping details</h3>
+                    <h3>Receipt details</h3>
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="supplier">Shopping store (optional)</label>
@@ -217,12 +240,14 @@ $products = $receivingService->getActiveProducts();
                     </div>
                 </div>
 
-                <section id="receiving_review" hidden aria-label="Review shopping entry"></section>
                 <div class="u-flex-wrap receiving-actions">
                     <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Back</button>
                     <button type="button" class="btn btn-primary" id="receiving_next">Continue to quantities</button>
                     <button type="submit" class="btn-submit" hidden>Save shopping entry & update inventory</button>
                 </div>
+                <small>Review is required before stock changes.</small>
+                </div>
+                </section>
                 <input type="hidden" name="receiving_complete" value="1">
             </form>
             </fieldset>
@@ -316,6 +341,7 @@ function updatePackageConversion() {
     const packageMode = receivingField('quantity_mode').value === 'packages';
     const total = packageMode ? packages * units : Number(receivingField('received_qty').value || 0);
     receivingField('package_conversion').textContent=`1 ${receiving} = ${units} ${base}(s). ${packageMode ? `${packages} × ${units} = ` : ''}${total} units received; ${damaged} damaged units; ${Math.max(0, total - damaged)} accepted units.`;
+    refreshDelivery();
 }
 function updateQuantityMode() {
     const packages=receivingField('quantity_mode').value==='packages';
@@ -338,6 +364,70 @@ const productOptions = Array.from(receivingField('product_id').options, option =
 const productSearchText = productOptions.map(option => option.textContent.toLowerCase());
 lineTemplate.querySelector('[data-field="product_id"]').replaceChildren(productOptions[0].cloneNode(true));
 for (const label of lineTemplate.querySelectorAll('label[for]')) label.dataset.labelFor = label.htmlFor;
+function refreshDelivery() {
+    let products = 0, received = 0, damaged = 0, accepted = 0, cost = 0;
+    for (const row of lineContainer.children) {
+        const field = name => row.querySelector('[data-field="' + name + '"]');
+        const option = field('product_id').selectedOptions[0];
+        row.querySelector('.receiving-product-name').textContent = option?.value ? option.textContent.trim() : 'Choose a product below';
+        if (!option?.value) continue;
+        products++;
+        const packages = field('quantity_mode').value === 'packages';
+        const quantity = field(packages ? 'received_packages' : 'received_qty').value;
+        const total = /^\d+$/.test(quantity) ? Number(quantity) * (packages ? Number(option.dataset.unitsPerPackage) : 1) : 0;
+        const damage = /^\d+$/.test(field('damaged_qty').value) ? Number(field('damaged_qty').value) : 0;
+        const usable = Math.max(0, total - damage);
+        received += total;
+        damaged += damage;
+        accepted += usable;
+        const price = field('cost_price').value.trim();
+        if (/^\d{1,8}(?:\.\d{1,2})?$/.test(price)) cost += Math.round(Number(price) * 100) * usable;
+    }
+    for (const [name, value] of Object.entries({products, received, damaged, accepted})) document.getElementById('summary_' + name).textContent = value;
+    document.getElementById('summary_cost').textContent = '₱' + (cost / 100).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('delivery_count').textContent = products + (products === 1 ? ' product' : ' products');
+    renderCatalog();
+}
+function renderCatalog() {
+    const query = document.getElementById('product_search').value.trim().toLowerCase();
+    const selected = new Set(Array.from(lineContainer.children, row => row.querySelector('[data-field="product_id"]').value));
+    const matches = productOptions.filter((option, index) => option.value && productSearchText[index].includes(query));
+    const catalog = document.getElementById('receiving_catalog');
+    catalog.replaceChildren();
+    // shortcut: show 20 catalog matches; search narrows larger catalogs without rendering every product.
+    for (const option of matches.slice(0, 20)) {
+        const item = document.createElement('div');
+        item.className = 'receiving-catalog-item';
+        const info = document.createElement('div');
+        const name = document.createElement('strong');
+        name.textContent = option.dataset.name;
+        const sku = document.createElement('small');
+        sku.textContent = option.dataset.sku + ' · ' + option.dataset.unitsPerPackage + ' units / ' + option.dataset.receivingUnit;
+        info.append(name, sku);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn btn-secondary';
+        button.textContent = selected.has(option.value) ? 'Added' : '+ Add';
+        button.setAttribute('aria-label', 'Add ' + option.dataset.name);
+        button.disabled = selected.has(option.value);
+        button.addEventListener('click', () => {
+            const empty = Array.from(lineContainer.children).find(row => !row.querySelector('[data-field="product_id"]').value);
+            if (empty) activateLine(empty);
+            else addReceivingLine();
+            const select = receivingField('product_id');
+            if (!Array.from(select.options).some(item => item.value === option.value)) select.add(option.cloneNode(true));
+            select.value = option.value;
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+            showStep(1, false);
+        });
+        item.append(info, button);
+        catalog.append(item);
+    }
+    const hint = document.createElement('p');
+    hint.className = 'receiving-catalog-hint';
+    hint.textContent = matches.length ? 'Showing ' + Math.min(20, matches.length) + ' of ' + matches.length + ' products. Search to narrow the list.' : 'No matching products. Try another name or SKU.';
+    catalog.append(hint);
+}
 function populateProductOptions(select) {
     const value = select.value;
     const query = document.getElementById('product_search').value.trim().toLowerCase();
@@ -367,6 +457,7 @@ function renumberLines() {
     }
     if (activeLine) activateLine(activeLine);
     else document.getElementById('scan_target').textContent = 'Add a product line or scan to start one.';
+    refreshDelivery();
 }
 function activateLine(row) {
     if (activeLine !== row) {
@@ -398,6 +489,7 @@ function connectLine(row) {
     row.addEventListener('focusin', () => activateLine(row));
     row.addEventListener('input', clearReceivingErrors, {capture: true});
     row.addEventListener('change', clearReceivingErrors, {capture: true});
+    row.querySelector('[data-field="cost_price"]').addEventListener('input', refreshDelivery);
     row.querySelector('.remove-receiving-line').addEventListener('click', () => {
         const populated = Array.from(row.querySelectorAll('input, textarea')).some(field => field.value !== field.defaultValue)
             || Boolean(row.querySelector('[data-field="product_id"]').value);
@@ -456,6 +548,8 @@ function showStep(next, focus = true) {
     lineContainer.hidden = step === 3;
     document.getElementById('add_receiving_line').hidden = step !== 1;
     document.getElementById('receiving_review').hidden = step !== 3;
+    document.getElementById('delivery_title').textContent = step === 3 ? 'Check your delivery' : 'Delivery lines';
+    document.getElementById('summary_status').textContent = step === 3 ? 'Review' : 'Draft';
     document.getElementById('receiving_back').hidden = step === 1;
     document.getElementById('receiving_next').hidden = step === 3;
     document.getElementById('receiving_next').textContent = step === 1 ? 'Continue to quantities' : 'Review shopping entry';
@@ -573,6 +667,7 @@ document.getElementById('receiving_next').addEventListener('click', () => {
 });
 document.getElementById('product_search').addEventListener('input', () => {
     if (activeLine) populateProductOptions(receivingField('product_id'));
+    renderCatalog();
 });
 connectLine(activeLine);
 renumberLines();

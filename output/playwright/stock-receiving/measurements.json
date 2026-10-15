@@ -1,7 +1,7 @@
 {
   "metrics": {
     "options": 61,
-    "searchMs": 3.199999988079071
+    "searchMs": 2.7999999821186066
   },
   "measurements": [
     {
@@ -22,6 +22,106 @@
         },
         {
           "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
           "height": 47.171875,
           "font": "15.2px"
         },
@@ -45,7 +145,7 @@
       "contrast": {
         "failures": [],
         "minimumText": 4.607518093747377,
-        "minimumBorder": 5.379869750937995
+        "minimumBorder": 5.141923123232407
       }
     },
     {
@@ -121,7 +221,7 @@
         },
         {
           "id": "receiving_next",
-          "height": 47.171875,
+          "height": 45.171875,
           "font": "15.2px"
         }
       ],
@@ -145,19 +245,19 @@
         },
         {
           "id": "receiving_back",
-          "height": 48,
+          "height": 47.171875,
           "font": "15.2px"
         },
         {
           "id": "",
-          "height": 48,
+          "height": 72,
           "font": "16px"
         }
       ],
       "unlabeled": [],
       "contrast": {
         "failures": [],
-        "minimumText": 5.168555560022562,
+        "minimumText": 5.141923123232407,
         "minimumBorder": null
       }
     },
@@ -179,6 +279,106 @@
         },
         {
           "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
           "height": 47.171875,
           "font": "15.2px"
         },
@@ -202,7 +402,7 @@
       "contrast": {
         "failures": [],
         "minimumText": 4.607518093747377,
-        "minimumBorder": 5.379869750937995
+        "minimumBorder": 5.141923123232407
       }
     },
     {
@@ -278,7 +478,7 @@
         },
         {
           "id": "receiving_next",
-          "height": 47.171875,
+          "height": 45.171875,
           "font": "15.2px"
         }
       ],
@@ -302,19 +502,19 @@
         },
         {
           "id": "receiving_back",
-          "height": 48,
+          "height": 47.171875,
           "font": "15.2px"
         },
         {
           "id": "",
-          "height": 48,
+          "height": 72,
           "font": "16px"
         }
       ],
       "unlabeled": [],
       "contrast": {
         "failures": [],
-        "minimumText": 5.168555560022562,
+        "minimumText": 5.141923123232407,
         "minimumBorder": null
       }
     },
@@ -336,6 +536,106 @@
         },
         {
           "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
           "height": 47.171875,
           "font": "15.2px"
         },
@@ -359,7 +659,7 @@
       "contrast": {
         "failures": [],
         "minimumText": 4.607518093747377,
-        "minimumBorder": 5.379869750937995
+        "minimumBorder": 5.141923123232407
       }
     },
     {
@@ -471,7 +771,7 @@
       "unlabeled": [],
       "contrast": {
         "failures": [],
-        "minimumText": 5.168555560022562,
+        "minimumText": 5.141923123232407,
         "minimumBorder": null
       }
     },
@@ -490,6 +790,106 @@
           "id": "product_code_scan",
           "height": 50,
           "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
         },
         {
           "id": "",
@@ -516,7 +916,7 @@
       "contrast": {
         "failures": [],
         "minimumText": 4.607518093747377,
-        "minimumBorder": 5.379869750937995
+        "minimumBorder": 5.141923123232407
       }
     },
     {
@@ -628,7 +1028,7 @@
       "unlabeled": [],
       "contrast": {
         "failures": [],
-        "minimumText": 5.168555560022562,
+        "minimumText": 5.141923123232407,
         "minimumBorder": null
       }
     },
@@ -647,6 +1047,106 @@
           "id": "product_code_scan",
           "height": 50,
           "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
         },
         {
           "id": "",
@@ -673,7 +1173,7 @@
       "contrast": {
         "failures": [],
         "minimumText": 5.168555560022562,
-        "minimumBorder": 8.546333894999973
+        "minimumBorder": 7.555101969259299
       }
     },
     {
@@ -773,12 +1273,12 @@
         },
         {
           "id": "receiving_back",
-          "height": 48,
+          "height": 47.171875,
           "font": "15.2px"
         },
         {
           "id": "",
-          "height": 48,
+          "height": 72,
           "font": "16px"
         }
       ],
@@ -807,6 +1307,106 @@
         },
         {
           "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
           "height": 47.171875,
           "font": "15.2px"
         },
@@ -830,7 +1430,7 @@
       "contrast": {
         "failures": [],
         "minimumText": 5.168555560022562,
-        "minimumBorder": 8.546333894999973
+        "minimumBorder": 7.555101969259299
       }
     },
     {
@@ -930,12 +1530,12 @@
         },
         {
           "id": "receiving_back",
-          "height": 48,
+          "height": 47.171875,
           "font": "15.2px"
         },
         {
           "id": "",
-          "height": 48,
+          "height": 72,
           "font": "16px"
         }
       ],
@@ -964,6 +1564,106 @@
         },
         {
           "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
           "height": 47.171875,
           "font": "15.2px"
         },
@@ -987,7 +1687,7 @@
       "contrast": {
         "failures": [],
         "minimumText": 5.168555560022562,
-        "minimumBorder": 8.546333894999973
+        "minimumBorder": 7.555101969259299
       }
     },
     {
@@ -1121,6 +1821,106 @@
         },
         {
           "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
           "height": 47.171875,
           "font": "15.2px"
         },
@@ -1144,7 +1944,7 @@
       "contrast": {
         "failures": [],
         "minimumText": 5.168555560022562,
-        "minimumBorder": 8.546333894999973
+        "minimumBorder": 7.555101969259299
       }
     },
     {

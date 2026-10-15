@@ -60,6 +60,13 @@ try {
     }
 }
 
+$stockPriority = ['Out of stock' => 0, 'Low stock' => 1, 'In stock' => 2];
+usort($queue, static fn (array $a, array $b): int =>
+    ($stockPriority[$a['stock_status']] <=> $stockPriority[$b['stock_status']])
+    ?: ($a['current_stock'] <=> $b['current_stock'])
+    ?: ($a['product_id'] <=> $b['product_id']));
+$stockCounts = array_count_values(array_column($queue, 'stock_status'));
+$replenishCount = count(array_filter($queue, static fn (array $item): bool => $item['recommended_quantity'] > 0));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -69,35 +76,8 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle) ?> - RetailMind</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
-    <style>
-        .replenishment-page .queue-list table { table-layout: fixed; min-width: 760px; }
-        .replenishment-page .queue-list th:first-child { width: 46%; }
-        .replenishment-page .queue-list th:last-child { width: 24%; }
-        .replenishment-page .queue-list th { white-space: normal; overflow-wrap: anywhere; }
-        .replenishment-page .queue-list td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; font-size: 1rem; }
-        .replenishment-page .queue-list small { font-size: .875rem; }
-        .replenishment-page .queue-list a:not(.btn) { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); text-decoration: underline; text-underline-offset: .2em; }
-        .replenishment-page .queue-guidance { max-width: 75ch; }
-        .replenishment-page .queue-guidance summary { min-height: 44px; padding-block: .6rem; cursor: pointer; }
-        .replenishment-page .queue-meta { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
-        .replenishment-page .topbar .queue-meta { flex-direction: row; }
-        .replenishment-page .topbar h1 { overflow-wrap: anywhere; }
-        .replenishment-page .topbar .queue-meta > span { width: auto; max-width: 100%; overflow-wrap: anywhere; }
-        .replenishment-page .alert { flex-wrap: wrap; }
-        .replenishment-page .auto-table-toolbar input,
-        .replenishment-page .table-pagination select { min-height: 44px; font-size: 1rem; }
-        @media print {
-            .replenishment-page .queue-list { overflow: visible; }
-            .replenishment-page .queue-list table { display: table; table-layout: auto; min-width: 0; }
-            .replenishment-page .queue-list .queue-item[hidden] { display: table-row !important; }
-            .replenishment-page .queue-list tr { break-inside: avoid; }
-            .replenishment-page .queue-list th { position: static; }
-            .replenishment-page .queue-list a { text-decoration: none; min-height: 0; }
-            .replenishment-page .queue-guidance summary { min-height: 0; padding: 0; outline: none; list-style: none; }
-            .replenishment-page .queue-list th:last-child,
-            .replenishment-page .queue-list td:last-child { display: none; }
-        }
-    </style>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/replenishment.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/replenishment.css')) ?>">
+    <script src="<?= htmlspecialchars(app_url('assets/js/replenishment.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/replenishment.js')) ?>" defer></script>
 </head>
 <body class="replenishment-page">
 <div class="app-shell">
@@ -106,21 +86,11 @@ try {
         <div class="topbar">
             <div>
                 <h1><?= htmlspecialchars($pageTitle) ?></h1>
-                <p class="page-subtitle">Review current stock and suggested buying quantities.</p>
+                <p class="page-subtitle">Know what needs buying. Receive it when it arrives.</p>
             </div>
-            <div class="queue-meta">
-                <?php if ($activeModelVersion): ?>
-                    <span class="decision-pill">Model: <?= htmlspecialchars($activeModelVersion) ?></span>
-                <?php endif; ?>
-                <?php if ($isDemo): ?>
-                    <span class="decision-pill info">Demo Mode</span>
-                <?php elseif ($isProduction): ?>
-                    <span class="decision-pill">Production forecast</span>
-                <?php endif; ?>
-                <?php if ($queue): ?>
-                    <button class="btn btn-secondary no-print" type="button" onclick="window.print()">Print all recommendations</button>
-                <?php endif; ?>
-            </div>
+            <?php if ($queue): ?>
+                <button class="btn btn-secondary queue-print no-print" type="button" onclick="window.print()" aria-label="Print all recommendations"><i class="bi bi-printer" aria-hidden="true"></i> Print</button>
+            <?php endif; ?>
         </div>
 
             <?php if ($error): ?>
@@ -130,12 +100,29 @@ try {
                 </div>
             <?php endif; ?>
 
-            <section class="dashboard-section" aria-label="Buying guidance">
-                    <details class="queue-guidance">
-                        <summary>Non-binding buying guidance</summary>
-                        <p>No supplier configuration is required. Reviewing these suggestions does not create purchase requests, place orders, or change stock. The owner buys outside RetailMind and may choose different products, stores, or quantities.</p>
-                    </details>
-                    
+            <section class="queue-summary" aria-label="Recommendation summary">
+                <?php foreach (['Out of stock' => 'Needs restocking', 'Low stock' => 'At or below reorder level', 'In stock' => 'Above reorder level'] as $stockStatus => $description): ?>
+                    <a class="queue-stat queue-<?= str_replace(' ', '-', strtolower($stockStatus)) ?>" href="#queue-products" data-queue-stock="<?= $stockStatus ?>" aria-label="Show <?= $stockStatus ?> products">
+                        <strong class="queue-stat-number"><?= $queueUnavailable ? '-' : ($stockCounts[$stockStatus] ?? 0) ?></strong>
+                        <div><strong class="queue-stat-label"><?= $stockStatus ?></strong><span><?= $description ?></span></div>
+                    </a>
+                <?php endforeach; ?>
+                <div class="queue-stat queue-forecast">
+                    <i class="bi bi-clock" aria-hidden="true"></i>
+                    <div><strong><?= $isDemo ? 'Demo Mode' : ($isProduction ? 'Production forecast' : ($jobId ? 'Demand Forecast' : 'Stock-rule guidance')) ?></strong>
+                        <span><?= $activeModelVersion ? 'Model: ' . htmlspecialchars($activeModelVersion) : 'Forecast unavailable' ?></span>
+                    </div>
+                </div>
+            </section>
+            <aside class="queue-guidance" aria-label="Buying guidance">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <details>
+                    <summary><strong>Buying guidance, not a purchase order.</strong> <span>Recommendations are guidance only.</span></summary>
+                    <p>No supplier configuration is required. Reviewing these suggestions does not create purchase requests, place orders, or change stock. The owner buys outside RetailMind and may choose different products, stores, or quantities.</p>
+                </details>
+            </aside>
+            <section class="queue-panel" id="queue-products" tabindex="-1" aria-labelledby="queue-title">
+                <header class="queue-panel-heading"><div><h2 id="queue-title">Purchase queue</h2><span class="queue-count"><?= $replenishCount ?> to replenish</span></div><span class="muted">Priority comes first</span></header>
                     <?php if ($queueUnavailable): ?>
                         <p>Recommendations could not be loaded. Reload to try again.</p>
                     <?php elseif (empty($queue)): ?>
@@ -144,53 +131,42 @@ try {
                             <p>No active products available for recommendations.</p>
                         </div>
                     <?php else: ?>
-                        <p class="muted u-mt-1" id="queue-help">Unknown means forecast urgency is unavailable. <span class="no-print">On smaller screens, scroll sideways for quantities and actions.</span></p>
-                        <div class="queue-list table-wrap u-mt-1" tabindex="0" role="region" aria-label="Replenishment recommendations" aria-describedby="queue-help">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Product / basis</th>
-                                        <th scope="col" class="u-num-col">On hand</th>
-                                        <th scope="col" class="u-num-col">Suggested units</th>
-                                        <th scope="col"><?= $canReceive ? 'Action' : 'Access' ?></th>
-                                    </tr>
-                                </thead>
+                        <div class="queue-filters no-print" role="search" aria-label="Filter recommendations">
+                            <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU" aria-label="Product name or SKU"></div></label>
+                            <label>Stock status<select id="queue-stock"><option value="">All stock</option><option>Out of stock</option><option>Low stock</option><option>In stock</option></select></label>
+                            <label>Sort by<select id="queue-sort"><option value="priority">Stock priority first</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Suggested quantity</option></select></label>
+                        </div>
+                        <p class="queue-help muted" id="queue-help">Priority follows stock level: out of stock, low stock, then in stock. <span class="no-print">Scroll sideways on smaller screens for quantities and actions.</span></p>
+                        <div class="queue-list table-wrap" tabindex="0" role="region" aria-label="Replenishment recommendations" aria-describedby="queue-help">
+                            <table class="table" data-no-smart-table>
+                                <thead><tr>
+                                    <th scope="col">Priority</th><th scope="col">Product</th><th scope="col">On hand</th><th scope="col">Suggested</th><th scope="col">Why now</th><th scope="col"><?= $canReceive ? 'Next action' : 'Access' ?></th>
+                                </tr></thead>
                                 <tbody>
                                     <?php foreach ($queue as $item):
-                                        $rowClass = strtolower($item['urgency_label']);
-                                        $urgencyClass = ['Urgent' => 'tag-danger', 'Watch' => 'tag-warning', 'Unknown' => 'decision-pill info', 'Covered' => 'tag-success'][$item['urgency_label']];
-                                        $stockClass = $item['current_stock'] <= 0 ? 'tag-danger' : ($item['stock_status'] === 'Low stock' ? 'tag-warning' : 'tag-success');
+                                        $rowClass = str_replace(' ', '-', strtolower($item['stock_status']));
+                                        $stockClass = ['Out of stock' => 'tag-danger', 'Low stock' => 'tag-warning', 'In stock' => 'tag-success'][$item['stock_status']];
                                     ?>
-                                        <tr class="queue-item queue-<?= $rowClass ?>">
+                                        <tr class="queue-item queue-<?= $rowClass ?>" data-stock="<?= htmlspecialchars($item['stock_status']) ?>" data-name="<?= htmlspecialchars($item['product_name']) ?>" data-sku="<?= htmlspecialchars($item['sku']) ?>" data-on-hand="<?= (int)$item['current_stock'] ?>" data-quantity="<?= (int)$item['recommended_quantity'] ?>">
+                                            <td><span class="queue-priority <?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span></td>
                                             <td>
-                                                <div class="queue-meta">
-                                                    <strong><a href="../products/product_detail.php?id=<?= (int)$item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a></strong>
-                                                    <span class="<?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span>
-                                                    <span class="<?= $urgencyClass ?>">Forecast urgency: <?= htmlspecialchars($item['urgency_label']) ?></span>
-                                                </div>
-                                                <small class="muted"><?= htmlspecialchars($item['sku']) ?></small>
-                                                <div class="u-mt-05">
+                                                <a class="queue-product" href="../products/product_detail.php?id=<?= (int)$item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a>
+                                                <small class="muted queue-sku"><?= htmlspecialchars($item['sku']) ?></small>
+                                                <details class="queue-details"><summary>Forecast details</summary>
                                                     <strong><?= htmlspecialchars($item['basis']) ?></strong>
-                                                    <div class="muted"><small><?= htmlspecialchars($item['explanation']) ?></small></div>
-                                                    <div><small><?= htmlspecialchars($item['forecast_status']) ?></small></div>
+                                                    <p><?= htmlspecialchars($item['explanation']) ?></p>
+                                                    <p><?= htmlspecialchars($item['forecast_status']) ?></p>
                                                     <?php if ($item['forecast_origin'] && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
-                                                        <div><span class="tag-warning">Stale forecast: <?= htmlspecialchars((string)$item['forecast_origin']) ?></span></div>
+                                                        <span class="tag-warning">Stale forecast: <?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
                                                     <?php endif; ?>
-                                                </div>
+                                                </details>
                                             </td>
-                                            <td class="u-num-col">
-                                                <strong><?= (int)$item['current_stock'] ?> units</strong>
-                                            </td>
-                                            <td class="u-num-col">
-                                                <?php if ($item['recommended_quantity'] > 0): ?>
-                                                    <strong><?= (int)$item['recommended_quantity'] ?> units</strong>
-                                                <?php else: ?>
-                                                    <span class="muted">0 units suggested</span>
-                                                <?php endif; ?>
-                                            </td>
+                                            <td><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong><small class="muted">units</small></td>
+                                            <td><strong class="queue-number queue-suggested"><?= (int)$item['recommended_quantity'] ?></strong><small class="muted">units</small></td>
+                                            <td class="queue-reason"><?= htmlspecialchars($item['stock_status'] === 'In stock' ? ($item['recommended_quantity'] > 0 ? 'Below target stock' : ($item['urgency_label'] === 'Covered' ? 'Stock covers demand' : 'No stock-rule purchase needed')) : $item['stock_status']) ?></td>
                                             <td>
                                                 <?php if ($canReceive): ?>
-                                                    <a class="btn btn-secondary" aria-label="Add bought goods for <?= htmlspecialchars($item['product_name']) ?>" href="../report/stock_receiving.php?product_id=<?= (int)$item['product_id'] ?>">Add bought goods</a>
+                                                    <a class="btn <?= $item['recommended_quantity'] > 0 ? 'btn-primary' : 'btn-secondary' ?> queue-receive" aria-label="Add bought goods for <?= htmlspecialchars($item['product_name']) ?>" href="../report/stock_receiving.php?product_id=<?= (int)$item['product_id'] ?>">Add bought goods <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
                                                 <?php else: ?>
                                                     <span class="muted">View only</span>
                                                 <?php endif; ?>
@@ -200,8 +176,11 @@ try {
                                 </tbody>
                             </table>
                         </div>
+                        <p id="queue-no-results" class="empty-state" hidden>No products match these filters.</p>
+                        <footer class="queue-panel-footer"><span id="queue-results" role="status">Showing <?= count($queue) ?> of <?= count($queue) ?> products</span><span>Review quantities before you buy</span></footer>
                     <?php endif; ?>
             </section>
+            <footer class="queue-page-footer muted"><span>Suggestions use base units. Set cases during receiving.</span><span>Stock updates when bought goods are received.</span></footer>
         </main>
     </div>
 </body>
