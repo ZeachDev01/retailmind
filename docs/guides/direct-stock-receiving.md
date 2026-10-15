@@ -13,6 +13,10 @@ A failed save retains the entry and leaves every line's inventory, batches, cost
 
 Stock Receiving is direct-only: it neither selects nor updates requests or purchase orders. Existing linked history remains readable; physical procurement schema retirement is separate work under #181. Counts still correct existing stock; Cashier Stock Issues retain their reporting/review workflow. Administrators inspect stock, recommendations, receiving history, and Stock Issue Oversight read-only; inventory execution requires the active Inventory Manager workspace. Forecast governance remains separate.
 
+Administrator dashboards and attention notifications show pending Stock Issues as read-only oversight awaiting Inventory Manager review. They no longer show purchasing approval queues. Sales, cash, staff, and Fiscal Period responsibilities remain available. Preferences retain stock and adjustment notifications without a replenishment-request switch; reports retain inventory valuation, stock movements, and count variance.
+
+Run the normal upgrade command, `php src/backend/scripts/migrate.php`, when deploying. Migration `202610150002_retire_procurement_attention` removes obsolete purchasing notifications, their approval attention state, and retired approval thresholds. It preserves retained operational notifications and audit history; procurement tables remain for the separate schema-retirement work.
+
 ## Verification
 
 Use a local test database with the current schema, operational roles, and Store initialized. The existing workflow creates token-scoped disposable products/staff and removes them in `finally`; it temporarily seeds a successful forecast job for its products and removes that job afterward. Do not run it against a Store in use or alongside a forecasting worker. Observation Mode and recommendation suspension must be disabled for the forecast-backed assertions.
@@ -26,6 +30,7 @@ node src/backend/tests/stock_receiving_scan_browser_test.js
 node src/backend/tests/inventory_counts_scan_browser_test.js
 php src/backend/tests/stock_issue_contract.php
 php src/backend/tests/stock_issue_oversight_contract.php
+node src/backend/tests/notification_list_browser_test.js
 php src/backend/tests/database_integration.php
 $env:RUN_CHECKOUT_DB_TESTS = '1'
 php src/backend/tests/checkout_attempt_integration.php

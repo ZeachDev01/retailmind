@@ -66,7 +66,11 @@ try {
     $assert($view['range_days'] === 30, 'Workspace must preserve a supported selected range');
     $assert($view['state'] === 'ready', 'Seeded actionable workspace should be ready');
     $assert(($view['headline']['sales_cash_exceptions']['value'] ?? 0) === 3, 'Headline must combine reversal, cash-variance, and unusual-discount exceptions');
-    $assert(($view['headline']['pending_approvals']['value'] ?? 0) === 1, 'Headline must show pending approvals');
+    $assert(!isset($view['headline']['pending_approvals']), 'Retired purchasing approvals must not become a second Stock Issue count');
+    $assert($view['headline']['inventory_risks']['label'] === 'Pending Stock Issues', 'Inventory headline must describe retained Stock Issue oversight');
+    $actions = array_column($view['actions'], null, 'label');
+    $assert(isset($actions['Stock Issue Oversight']), 'Administrator must retain read-only Stock Issue oversight');
+    $assert(!isset($actions['Store Approvals']), 'Stock Issues must not be presented as Administrator approvals');
     $assert(($view['headline']['inventory_risks']['value'] ?? 0) === 1, 'Headline must show escalated inventory risks');
     $assert(($view['headline']['fiscal_period']['value'] ?? '') === 'September 2026', 'Headline must show the current Fiscal Period');
     $assert(($view['comparison']['sales']['current'] ?? 0) === 150.0, 'Comparison must total the selected period');

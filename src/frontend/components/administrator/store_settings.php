@@ -7,8 +7,7 @@ $fields = [
     'reversal_count' => 'Sales reversals',
     'unusual_discount_percent' => 'Unusual discount (%)',
     'cash_variance_amount' => 'Cash variance amount',
-    'overdue_approval_hours' => 'Approval overdue after (hours)',
-    'inventory_escalation_count' => 'Escalated inventory risks',
+    'inventory_escalation_count' => 'Pending Stock Issues',
     'inventory_overdue_hours' => 'Inventory risk overdue after (hours)',
     'inventory_high_value_amount' => 'High-value inventory risk amount',
     'inventory_unresolved_hours' => 'Inventory risk unresolved after (hours)',
@@ -50,7 +49,7 @@ $effective = $service->thresholdsFor('admin');
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <div><h1>Store Settings</h1><p class="page-subtitle">Govern sales, cash, approval, inventory, and Fiscal Period attention thresholds within Platform safety limits.</p></div>
+            <div><h1>Store Settings</h1><p class="page-subtitle">Govern sales, cash, Stock Issue oversight, and Fiscal Period attention thresholds within Platform safety limits.</p></div>
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <section class="dashboard-section">

@@ -38,6 +38,8 @@ php src/backend/tests/dormancy_runner_contract.php
 php src/backend/tests/dormancy_status_tab_contract.php
 php src/backend/tests/super_administrator_dashboard_workspace_test.php
 php src/backend/tests/super_administrator_dashboard_route_test.php
+php src/backend/tests/administrator_dashboard_workspace_test.php
+php src/backend/tests/administrator_dashboard_route_test.php
 php src/backend/tests/workspace_routing_contract.php
 node src/backend/tests/login_redirect_test.js
 php src/backend/tests/workspace_switching_contract.php

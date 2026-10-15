@@ -20,7 +20,7 @@ final class StoreOperationsDashboardWorkspace
     private const ACTIONS = [
         ['label' => 'Store Staff', 'description' => 'Manage Cashiers and Inventory Managers', 'icon' => 'bi-people', 'destination' => 'components/user_manager/user_manager.php', 'capability' => RoleCapabilityPolicy::MANAGE_USERS],
         ['label' => 'Sales Exceptions', 'description' => 'Review reversals and unusual discounts', 'icon' => 'bi-receipt-cutoff', 'destination' => 'components/invoice/sales.php?tab=reversals', 'capability' => RoleCapabilityPolicy::MANAGE_SALE_REVERSALS],
-        ['label' => 'Store Approvals', 'description' => 'Review reported stock issues', 'icon' => 'bi-check2-square', 'destination' => 'components/administrator/stock_issues.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
+        ['label' => 'Stock Issue Oversight', 'description' => 'Inspect Stock Issue history read-only', 'icon' => 'bi-check2-square', 'destination' => 'components/administrator/stock_issues.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Fiscal Periods', 'description' => 'Govern Store accounting windows', 'icon' => 'bi-calendar-check', 'destination' => 'components/system_administrator/fiscal_periods.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_FORECASTS],
         ['label' => 'Store Settings', 'description' => 'Set operational attention thresholds', 'icon' => 'bi-sliders', 'destination' => 'components/administrator/store_settings.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
@@ -104,14 +104,12 @@ final class StoreOperationsDashboardWorkspace
             [(float)$thresholds['unusual_discount_percent'], $start, $end]
         );
         $inventoryRisks = $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status = 'pending'");
-        $approvals = $inventoryRisks;
         $period = $this->row("SELECT period_name, start_date, end_date, status FROM fiscal_periods WHERE status = 'open' ORDER BY end_date ASC LIMIT 1");
         $periodStatus = $period === [] ? 'not_configured' : ((string)$period['end_date'] < $now->format('Y-m-d') ? 'overdue' : 'open');
 
         return [
             'sales_cash_exceptions' => $this->headlineItem('Sales & cash exceptions', $reversals + $cashVariances + $discounts, $reversals + $cashVariances + $discounts > 0 ? 'warning' : 'healthy', 'Unresolved reversals, cash variances, and unusual discounts.'),
-            'pending_approvals' => $this->headlineItem('Pending approvals', $approvals, $approvals > 0 ? 'warning' : 'healthy', 'Stock issues awaiting an Administrator decision.'),
-            'inventory_risks' => $this->headlineItem('Escalated inventory risks', $inventoryRisks, $inventoryRisks > 0 ? 'warning' : 'healthy', 'Inventory issues escalated for Administrator oversight.'),
+            'inventory_risks' => $this->headlineItem('Pending Stock Issues', $inventoryRisks, $inventoryRisks > 0 ? 'warning' : 'healthy', 'Awaiting Inventory Manager review; Administrator oversight is read-only.'),
             'fiscal_period' => [
                 'label' => 'Current Fiscal Period',
                 'value' => $period['period_name'] ?? 'Not configured',
@@ -195,7 +193,7 @@ final class StoreOperationsDashboardWorkspace
              FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id
              WHERE ia.status = 'pending' ORDER BY ia.reported_at ASC LIMIT 20"
         ) as $row) {
-            $items[] = $this->exception('warning', 'Inventory escalation', (string)$row['product_name'] . ' · ' . (string)$row['adjustment_type'] . ' (' . (int)$row['adjustment_qty'] . ')', (string)$row['reported_at'], 'components/administrator/stock_issues.php');
+            $items[] = $this->exception('warning', 'Pending Stock Issue', (string)$row['product_name'] . ' · ' . (string)$row['adjustment_type'] . ' (' . (int)$row['adjustment_qty'] . ') · Awaiting Inventory Manager review', (string)$row['reported_at'], 'components/administrator/stock_issues.php');
         }
 
         $severity = ['critical' => 0, 'warning' => 1, 'info' => 2];

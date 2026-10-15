@@ -7,7 +7,6 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 $user_id = (int)$_SESSION['user_id'];
 $category_labels = [
     'low_stock' => 'Low stock',
-    'replenishment' => 'Replenishment',
     'adjustment' => 'Inventory adjustments',
     'system' => 'System',
     'fiscal_period' => 'Fiscal periods',

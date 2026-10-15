@@ -12,7 +12,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     $notify_low_stock = isset($_POST['notify_low_stock']) ? 1 : 0;
-    $notify_replenishment = isset($_POST['notify_replenishment']) ? 1 : 0;
     $notify_adjustment = isset($_POST['notify_adjustment']) ? 1 : 0;
     $notify_email = isset($_POST['notify_email']) ? 1 : 0;
     $notify_inapp = isset($_POST['notify_inapp']) ? 1 : 0;
@@ -29,17 +28,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             if ($exists) {
                 $stmt = $pdo->prepare("UPDATE notification_preferences 
-                                      SET notify_low_stock = ?, notify_replenishment = ?, notify_adjustment = ?,
+                                      SET notify_low_stock = ?, notify_adjustment = ?,
                                           notify_email = ?, notify_inapp = ?, low_stock_threshold = ?
                                       WHERE user_id = ?");
-                $stmt->execute([$notify_low_stock, $notify_replenishment, $notify_adjustment, 
+                $stmt->execute([$notify_low_stock, $notify_adjustment,
                                $notify_email, $notify_inapp, $low_stock_threshold, $_SESSION['user_id']]);
             } else {
                 $stmt = $pdo->prepare("INSERT INTO notification_preferences 
-                                      (user_id, notify_low_stock, notify_replenishment, notify_adjustment,
+                                      (user_id, notify_low_stock, notify_adjustment,
                                        notify_email, notify_inapp, low_stock_threshold)
-                                      VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$_SESSION['user_id'], $notify_low_stock, $notify_replenishment, $notify_adjustment,
+                                      VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$_SESSION['user_id'], $notify_low_stock, $notify_adjustment,
                                $notify_email, $notify_inapp, $low_stock_threshold]);
             }
             $message = "Notification preferences updated successfully!";
@@ -202,13 +201,6 @@ $prefs = get_notification_prefs($pdo, $_SESSION['user_id']);
                            <?= $prefs['notify_low_stock'] ? 'checked' : '' ?>>
                     <label for="notify_low_stock">Low Stock Alerts</label>
                     <span class="description">Notified when inventory levels drop below reorder point</span>
-                </div>
-
-                <div class="form-group">
-                    <input type="checkbox" name="notify_replenishment" id="notify_replenishment" 
-                           <?= $prefs['notify_replenishment'] ? 'checked' : '' ?>>
-                    <label for="notify_replenishment">Replenishment Requests</label>
-                    <span class="description">Notified about pending and approved replenishment requests</span>
                 </div>
 
                 <div class="form-group">

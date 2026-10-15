@@ -14,7 +14,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
 
     $notifyLowStock = isset($_POST['notify_low_stock']) ? 1 : 0;
-    $notifyReplenishment = isset($_POST['notify_replenishment']) ? 1 : 0;
     $notifyAdjustment = isset($_POST['notify_adjustment']) ? 1 : 0;
     $notifyEmail = isset($_POST['notify_email']) ? 1 : 0;
     $notifyInApp = isset($_POST['notify_inapp']) ? 1 : 0;
@@ -30,13 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($checkStmt->fetchColumn()) {
                 $stmt = $pdo->prepare(
                     'UPDATE notification_preferences
-                     SET notify_low_stock = ?, notify_replenishment = ?, notify_adjustment = ?,
+                     SET notify_low_stock = ?, notify_adjustment = ?,
                          notify_email = ?, notify_inapp = ?, low_stock_threshold = ?
                      WHERE user_id = ?'
                 );
                 $stmt->execute([
                     $notifyLowStock,
-                    $notifyReplenishment,
                     $notifyAdjustment,
                     $notifyEmail,
                     $notifyInApp,
@@ -46,14 +44,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $stmt = $pdo->prepare(
                     'INSERT INTO notification_preferences
-                        (user_id, notify_low_stock, notify_replenishment, notify_adjustment,
+                        (user_id, notify_low_stock, notify_adjustment,
                          notify_email, notify_inapp, low_stock_threshold)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
                     (int)$_SESSION['user_id'],
                     $notifyLowStock,
-                    $notifyReplenishment,
                     $notifyAdjustment,
                     $notifyEmail,
                     $notifyInApp,
@@ -64,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             log_activity($pdo, (int)$_SESSION['user_id'], 'Updated notification preferences');
             $message = 'Preferences updated successfully.';
         } catch (Throwable $e) {
-            $error = 'Unable to update preferences right now. Please try again.';
+            $error = \App\Support\OperatorAlert::message($e, 'Unable to update preferences right now. Please try again.');
         }
     }
 }
@@ -125,14 +122,6 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                                 <small>Receive an alert when inventory drops below its reorder point.</small>
                             </span>
                             <input type="checkbox" name="notify_low_stock" id="notify_low_stock" <?= !empty($prefs['notify_low_stock']) ? 'checked' : '' ?>>
-                        </label>
-
-                        <label class="preference-option" for="notify_replenishment">
-                            <span>
-                                <strong>Replenishment requests</strong>
-                                <small>Receive updates about pending and approved replenishment requests.</small>
-                            </span>
-                            <input type="checkbox" name="notify_replenishment" id="notify_replenishment" <?= !empty($prefs['notify_replenishment']) ? 'checked' : '' ?>>
                         </label>
 
                         <label class="preference-option" for="notify_adjustment">

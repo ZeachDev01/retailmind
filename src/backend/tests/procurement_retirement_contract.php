@@ -98,20 +98,8 @@ foreach ($surfaces as $surface) {
     }
 }
 
-// Attention rules and dashboard routing
-$attentionRuleFile = $root . '/src/backend/app/Attention/AttentionRuleService.php';
-$attentionRuleContent = file_get_contents($attentionRuleFile);
-$assert(str_contains($attentionRuleContent, 'components/administrator/stock_issues.php'), "AttentionRuleService must route overdue approvals to stock_issues.php");
-
-$dashboardWorkspaceFile = $root . '/src/backend/app/Dashboard/StoreOperationsDashboardWorkspace.php';
-$dashboardWorkspaceContent = file_get_contents($dashboardWorkspaceFile);
-$assert(str_contains($dashboardWorkspaceContent, 'components/administrator/stock_issues.php'), "StoreOperationsDashboardWorkspace must route Store Approvals to stock_issues.php");
-$assert(!str_contains($dashboardWorkspaceContent, 'replenishment_requests'), "StoreOperationsDashboardWorkspace must not query replenishment_requests");
-
-$dashboardServiceFile = $root . '/src/backend/app/Services/DashboardService.php';
-$dashboardServiceContent = file_get_contents($dashboardServiceFile);
-$assert(!str_contains($dashboardServiceContent, 'pending_replenishment'), "DashboardService must not compute pending_replenishment");
-$assert(!str_contains($dashboardServiceContent, 'getPendingReplenishmentRequests'), "DashboardService must not have getPendingReplenishmentRequests");
+// Dashboard and attention behavior is covered by administrator_dashboard_workspace_test.php
+// and attention_rules_contract.php, without procurement tables.
 
 if ($failures !== []) {
     fwrite(STDERR, "Procurement retirement contract failed with " . count($failures) . " errors:\n - " . implode("\n - ", $failures) . "\n");

@@ -196,7 +196,7 @@ $checks = [
     ],
     'Account preferences preserve notification controls' => [
         'file' => 'src/frontend/components/auth/preferences.php',
-        'needles' => ['Preferences', 'preferences.css', 'notify_low_stock', 'notify_replenishment', 'notify_adjustment', 'notify_email', 'notify_inapp', 'low_stock_threshold', 'csrf_field()'],
+        'needles' => ['Preferences', 'preferences.css', 'notify_low_stock', 'notify_adjustment', 'notify_email', 'notify_inapp', 'low_stock_threshold', 'csrf_field()'],
     ],
     'Ordinary account profile pictures are self-service only' => [
         'file' => 'src/frontend/components/auth/user_info.php',

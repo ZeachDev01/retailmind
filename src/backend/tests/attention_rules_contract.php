@@ -135,7 +135,13 @@ try {
     $assert(in_array('store.sales.reversals', $storeKeys, true), 'Reversals should produce Store attention');
     $assert(in_array('store.sales.unusual-discounts', $storeKeys, true), 'Unusual discounts should produce Store attention');
     $assert(in_array('store.cash.variance', $storeKeys, true), 'Cash variance should produce Store attention');
-    $assert(in_array('store.approvals.overdue', $storeKeys, true), 'Overdue approvals should produce Store attention');
+    $assert(!in_array('store.approvals.overdue', $storeKeys, true), 'Retired purchasing approval signals must not produce attention');
+    foreach ($storeItems as $item) {
+        if ($item['category'] === 'inventory') {
+            $assert($item['destination'] === 'components/administrator/stock_issues.php', 'Stock Issue attention must open read-only oversight');
+            $assert(str_contains($item['explanation'], 'Inventory Manager'), 'Stock Issue attention must identify who reviews it');
+        }
+    }
     $assert(in_array('store.inventory.escalated', $storeKeys, true), 'Escalated inventory risk should produce Store attention');
     $assert(in_array('store.fiscal-period.overdue', $storeKeys, true), 'Fiscal Period problems should produce Store attention');
     $assert(count(array_filter($storeKeys, static fn(string $key): bool => str_contains($key, 'routine'))) === 0, 'Routine low-level inventory work must remain excluded');
@@ -168,6 +174,23 @@ try {
         $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE user_id = 99')->fetchColumn() === 0, 'Notification and deduplication state must commit atomically');
     }
     $pdo->exec('DROP TRIGGER fail_attention_state');
+
+    $pdo->exec("INSERT INTO notifications (user_id, type, title, message, reference_type, created_at) VALUES
+        (7, 'replenishment', 'Retired request', 'Pending purchase approval', 'replenishment_request', '2026-09-18'),
+        (7, 'system', 'Retired order', 'Order approved', 'purchase_order', '2026-09-18'),
+        (7, 'low_stock', 'Retained stock alert', 'Coffee is low', 'product', '2026-09-18')");
+    $pdo->exec("INSERT INTO notifications (user_id, type, title, message, attention_key, attention_destination, created_at) VALUES
+        (7, 'attention', 'Old approvals', 'Review requests', 'store.approvals.overdue', 'components/inventory_management/replenishment_requests.php', '2026-09-18')");
+    $pdo->exec("INSERT INTO attention_states VALUES (7, 'store.approvals.overdue', 'obsolete', 1, '2026-09-18', '2026-09-18', NULL)");
+    $settingsBefore = $settings->thresholdsFor('admin');
+    $retainedCount = (int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() - 3;
+    $migration = require __DIR__ . '/../database/migrations/202610150002_retire_procurement_attention.php';
+    $migration['up']($pdo);
+    $migration['up']($pdo);
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() === $retainedCount, 'Upgrade removes only obsolete purchasing notifications and is repeatable');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM attention_states WHERE attention_key = 'store.approvals.overdue'")->fetchColumn() === 0, 'Upgrade removes retired approval deduplication state');
+    $assert($settings->thresholdsFor('admin') === $settingsBefore, 'Upgrade preserves unrelated operational thresholds');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'store.sales.reversals'")->fetchColumn() > 0, 'Upgrade preserves Administrator sales reviews');
 } catch (Throwable $exception) {
     $failures[] = 'Attention rules contract threw: ' . $exception->getMessage();
 }
