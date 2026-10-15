@@ -76,23 +76,6 @@ try {
         .urgency-badge.watch { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); padding: 2px 6px; border-radius: 4px; font-weight: bold;}
         .urgency-badge.unknown { background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); padding: 2px 6px; border-radius: 4px; font-weight: bold;}
         .urgency-badge.covered { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); padding: 2px 6px; border-radius: 4px; font-weight: bold;}
-        
-        .queue-grid {
-            display: grid;
-            grid-template-columns: minmax(200px, 1.5fr) 1fr 1fr 1fr 2fr;
-            gap: 1rem;
-            align-items: center;
-        }
-        .queue-mobile-label { display: none; }
-        @media (max-width: 1100px) {
-            .queue-grid {
-                grid-template-columns: 1fr;
-                gap: 0.5rem;
-            }
-            .queue-grid-header { display: none; }
-            .queue-mobile-label { display: block; }
-            .queue-item { padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
-        }
     </style>
 </head>
 <body>

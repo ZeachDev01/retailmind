@@ -536,7 +536,7 @@ form.addEventListener('submit', event => {
     form.querySelector('.btn-submit').textContent = 'Saving receipt…';
 });
 if (activeLine) updateQuantityMode();
-showStep((retainedValues.lines && retainedValues.lines.length) || (retainedValues.received_qty || retainedValues.received_packages) ? 2 : 1);
+showStep((retainedValues.lines && retainedValues.lines.length) || (retainedValues.received_qty || retainedValues.received_packages) || Boolean(retainedValues.product_id) ? 2 : 1);
 </script>
 </body>
 </html>

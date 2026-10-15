@@ -48,6 +48,12 @@ switch ($argv[1]) {
     case 'restore_forecast':
         $pdo->exec("UPDATE ml_jobs SET status='succeeded' WHERE job_id=10; UPDATE demand_forecasts SET readiness_level='High' WHERE job_id=10");
         break;
+    case 'receive_stock':
+        $pdo->exec("UPDATE inventory SET quantity_on_hand=32 WHERE product_id=1");
+        break;
+    case 'reset_stock':
+        $pdo->exec("UPDATE inventory SET quantity_on_hand=0 WHERE product_id=1");
+        break;
     case 'seed':
         $migration = require __DIR__ . '/../../database/migrations/202610100000_ml_tables.php';
         $migration['up']($pdo);

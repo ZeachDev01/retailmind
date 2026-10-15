@@ -97,6 +97,20 @@ const fixture = action => {
         assert.match(page.url(), /stock_receiving\.php\?product_id=1/);
         assert.equal(await page.locator('#product_id').inputValue(), '1', 'Product 1 pre-selected from recommendations');
         assert.equal(await page.locator('#received_qty').inputValue(), '', 'Bought quantity never prefilled from recommendations');
+
+        // Assert legacy reorder planner redirects to replenishment queue
+        await page.goto('/components/inventory_management/legacy_reorder_planner.php', {waitUntil: 'domcontentloaded'});
+        assert.match(page.url(), /replenishment_queue.php/, 'legacy_reorder_planner redirects to replenishment_queue');
+
+        // Verify committed stock changes update guidance on reload
+        fixture('receive_stock');
+        await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+        const updatedRow = page.locator('.queue-item').filter({hasText: 'Decision Test Item'});
+        assert.match(await updatedRow.innerText(), /32 units/);
+        assert.match(await updatedRow.innerText(), /In stock/);
+        assert.match(await updatedRow.innerText(), /0 units suggested/);
+        fixture('reset_stock');
+        fixture('restore_forecast');
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
 
         await page.goto('/components/inventory_management/reorder_planner.php', {waitUntil: 'domcontentloaded'});

@@ -167,8 +167,8 @@ try {
     // Product 7: Open POs in database must be ignored. Goods bought outside RetailMind count only when received.
     // Stock 0, Lead time 7 days, Lead time demand 15. Exposure = 0 - 15 = -15.
     $assert($byProduct[7]['urgency_label'] === 'Urgent', "P7 must be Urgent");
-    $assert($byProduct[7]['inbound_quantity'] === 0, "P7 inbound must be 0 (open POs ignored), got " . $byProduct[7]['inbound_quantity']);
-    $assert($byProduct[7]['total_inbound_quantity'] === 0, "P7 total inbound must be 0, got " . $byProduct[7]['total_inbound_quantity']);
+    $assert(!array_key_exists('inbound_quantity', $byProduct[7]), "P7 inbound_quantity key must be retired");
+    $assert(!array_key_exists('total_inbound_quantity', $byProduct[7]), "P7 total_inbound_quantity key must be retired");
     $assert($byProduct[7]['stock_exposure'] === -15, "P7 exposure must be -15, got " . $byProduct[7]['stock_exposure']);
 
     // P8 MOQ check

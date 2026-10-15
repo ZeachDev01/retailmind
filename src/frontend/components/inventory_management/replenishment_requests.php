@@ -321,7 +321,7 @@ $selectedProductId = (int)($_GET['product_id'] ?? 0);
 
                                 <div class="rec-details text-muted u-mb-1">
                                     <span><strong>Current Stock:</strong> <?= (int)$rec['current_stock'] ?></span> |
-                                    <span><strong>Reliable Inbound:</strong> <?= (int)$rec['inbound_quantity'] ?></span>
+                                    <span><strong>Reliable Inbound:</strong> <?= (int)($rec['inbound_quantity'] ?? 0) ?></span>
                                     <?php if (!empty($rec['unreliable_inbound_quantity'])): ?>
                                         <small class="text-muted">(<?= (int)$rec['unreliable_inbound_quantity'] ?> late/untimed excluded)</small>
                                     <?php endif; ?> |

@@ -43,7 +43,9 @@ class ReplenishmentQueueService
             $useForecast = $available && !$observation && !$suspended;
             $quantity = $useForecast ? (int)$forecast['recommended_quantity']
                 : ($stock <= $reorder ? max(0, $reorder + (int)$product['safety_stock'] - $stock) : 0);
-            $product += $forecast;
+            if ($useForecast) {
+                $product += $forecast;
+            }
             $product['recommended_quantity'] = self::roundQuantity($quantity,
                 (int)($useForecast ? $forecast['moq'] : $product['minimum_order_quantity']),
                 (int)$product['units_per_package']);
@@ -56,10 +58,12 @@ class ReplenishmentQueueService
                 $product['forecast_status'] .= '; Recommendations Suspended by Administrator';
             }
             if (!$useForecast) {
+                $product['urgency_label'] = 'Unknown';
+                $product['stock_exposure'] = null;
+                $product['forecast_origin'] = null;
                 $product['explanation'] = sprintf('%d on hand; reorder level %d + safety stock %d. Stock-rule suggestion rounded to the minimum quantity and package size.',
                     $stock, $reorder, (int)$product['safety_stock']);
             }
-            $product += ['urgency_label' => 'Unknown', 'stock_exposure' => null, 'forecast_origin' => null];
         }
         unset($product);
         return $products;
@@ -196,9 +200,6 @@ class ReplenishmentQueueService
                 'sku' => $row['sku'],
                 'product_name' => $row['product_name'],
                 'current_stock' => $currentStock,
-                'inbound_quantity' => 0,
-                'total_inbound_quantity' => 0,
-                'unreliable_inbound_quantity' => 0,
                 'lead_time_days' => $leadTimeDays,
                 'moq' => $moq,
                 'forecast_7_day' => $f7,
