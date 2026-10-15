@@ -132,8 +132,7 @@ try {
                     <p>Non-binding buying guidance. No supplier configuration is required. Reviewing these suggestions does not create purchase requests, place orders, or change stock. The owner buys outside RetailMind and may choose different products, stores, or quantities.</p>
                     <details><summary>Purchasing history and legacy workflows</summary>
                         <a href="replenishment_requests.php">Replenishment requests</a> ·
-                        <a href="../invoice/purchase_orders.php">Purchase orders</a> ·
-                        <a href="legacy_reorder_planner.php">Supplier-based reorder planning</a>
+                        <a href="../invoice/purchase_orders.php">Purchase orders</a>
                     </details>
                     
                     <?php if (empty($queue)): ?>
@@ -142,56 +141,56 @@ try {
                             <p>No active products available for recommendations.</p>
                         </div>
                     <?php else: ?>
-                        <div class="queue-list mt-3">
-                            <div class="queue-grid queue-grid-header fw-bold pb-2 border-bottom mb-2">
-                                <div>Product</div>
-                                <div>Current stock</div>
-                                <div>Forecast exposure</div>
-                                <div>Suggested buying quantity</div>
-                                <div>Explanation</div>
-                            </div>
-                            
-                            <?php foreach ($queue as $item): 
-                                $rowClass = strtolower($item['urgency_label']);
-                            ?>
-                                <div class="queue-grid queue-item mb-3 p-2 queue-<?= $rowClass ?> bg-white shadow-sm rounded">
-                                    <div>
-                                        <strong><a href="../products/product_detail.php?id=<?= $item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a></strong><br>
-                                        <small class="text-muted"><?= htmlspecialchars($item['sku']) ?></small>
-                                    </div>
-                                    <div>
-                                        <small class="queue-mobile-label">Current stock</small>
-                                        <strong><?= (int)$item['current_stock'] ?> units</strong><br>
-                                        <span><?= htmlspecialchars($item['stock_status']) ?></span>
-                                    </div>
-                                    <div>
-                                        <small class="queue-mobile-label">Forecast exposure</small>
-                                        <?php if ($item['stock_exposure'] !== null): ?>
-                                            <span class="<?= $item['stock_exposure'] < 0 ? 'text-danger fw-bold' : '' ?>">
-                                                <?= $item['stock_exposure'] ?> units
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="text-muted">Unknown</span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div>
-                                        <small class="queue-mobile-label">Suggested buying quantity</small>
-                                        <?php if ($item['recommended_quantity'] > 0): ?>
-                                            <strong><?= $item['recommended_quantity'] ?> units</strong><br>
-                                        <?php else: ?>
-                                            <span class="text-muted">0 units suggested</span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div>
-                                        <strong><?= htmlspecialchars($item['basis']) ?></strong><br>
-                                        <small><?= htmlspecialchars($item['explanation']) ?></small>
-                                        <div><small><?= htmlspecialchars($item['forecast_status']) ?></small></div>
-                                        <?php if ($item['forecast_origin'] && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
-                                            <div class="text-warning"><small><i class="bi bi-exclamation-triangle"></i> Stale forecast.</small></div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                        <div class="queue-list u-table-scroll mt-3" tabindex="0" role="region" aria-label="Replenishment recommendations">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Product / basis</th>
+                                        <th>On hand</th>
+                                        <th>Suggested units</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($queue as $item):
+                                        $rowClass = strtolower($item['urgency_label']);
+                                        $stockClass = $item['current_stock'] <= 0 ? 'tag-danger' : ($item['stock_status'] === 'Low stock' ? 'tag-warning' : 'tag-success');
+                                    ?>
+                                        <tr class="queue-item queue-<?= $rowClass ?>">
+                                            <td>
+                                                <div>
+                                                    <strong><a href="../products/product_detail.php?id=<?= (int)$item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a></strong>
+                                                    <span class="badge <?= $stockClass ?> ms-1"><?= htmlspecialchars($item['stock_status']) ?></span>
+                                                </div>
+                                                <small class="text-muted"><?= htmlspecialchars($item['sku']) ?></small>
+                                                <div class="mt-1">
+                                                    <strong><?= htmlspecialchars($item['basis']) ?></strong>
+                                                    <div class="text-muted"><small><?= htmlspecialchars($item['explanation']) ?></small></div>
+                                                    <div><small><?= htmlspecialchars($item['forecast_status']) ?></small></div>
+                                                    <?php if ($item['forecast_origin'] && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
+                                                        <div class="text-warning"><small><i class="bi bi-exclamation-triangle"></i> Stale forecast.</small></div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <strong><?= (int)$item['current_stock'] ?> units</strong>
+                                            </td>
+                                            <td>
+                                                <?php if ($item['recommended_quantity'] > 0): ?>
+                                                    <strong><?= (int)$item['recommended_quantity'] ?> units</strong>
+                                                <?php else: ?>
+                                                    <span class="text-muted">0 units suggested</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY)): ?>
+                                                    <a class="btn btn-sm btn-secondary" href="../report/stock_receiving.php?product_id=<?= (int)$item['product_id'] ?>">Add bought goods</a>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     <?php endif; ?>
                 </div>

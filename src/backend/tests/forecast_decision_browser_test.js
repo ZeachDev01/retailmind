@@ -90,6 +90,15 @@ const fixture = action => {
         await page.screenshot({path: '.scratch/ticket179/mobile.png', fullPage: true});
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Recommendations fit mobile width');
         await page.setViewportSize({width: 1280, height: 720});
+        // Non-binding handoff to stock receiving
+        const handoffLink = page.locator('tr.queue-item a', {hasText: 'Add bought goods'}).first();
+        assert.equal(await handoffLink.count(), 1, 'Handoff action present on recommendation row');
+        await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), handoffLink.click()]);
+        assert.match(page.url(), /stock_receiving\.php\?product_id=1/);
+        assert.equal(await page.locator('#product_id').inputValue(), '1', 'Product 1 pre-selected from recommendations');
+        assert.equal(await page.locator('#received_qty').inputValue(), '', 'Bought quantity never prefilled from recommendations');
+        await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+
         await page.goto('/components/inventory_management/reorder_planner.php', {waitUntil: 'domcontentloaded'});
         assert.match(page.url(), /replenishment_queue.php/);
         await page.goto(route, {waitUntil: 'domcontentloaded'});

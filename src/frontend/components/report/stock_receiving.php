@@ -12,6 +12,10 @@ $message = '';
 $error = '';
 $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 $formValues = [];
+$prefillProductId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+if ($prefillProductId > 0 && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $formValues = ['product_id' => (string)$prefillProductId];
+}
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -512,6 +516,7 @@ if (Array.isArray(retainedValues.lines)) {
     for (const values of retainedValues.lines) addReceivingLine(values);
 } else {
     for (const [name, value] of Object.entries(retainedValues)) restoreField(receivingField(name), value);
+    if (activeLine && retainedValues.product_id) activeLine.dataset.productId = String(retainedValues.product_id);
     updateQuantityMode();
 }
 let saving = false;
@@ -531,7 +536,7 @@ form.addEventListener('submit', event => {
     form.querySelector('.btn-submit').textContent = 'Saving receipt…';
 });
 if (activeLine) updateQuantityMode();
-showStep(Object.keys(retainedValues).length ? 2 : 1);
+showStep((retainedValues.lines && retainedValues.lines.length) || (retainedValues.received_qty || retainedValues.received_packages) ? 2 : 1);
 </script>
 </body>
 </html>
