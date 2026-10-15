@@ -70,7 +70,7 @@ const fixture = action => {
         for (const group of await page.locator('.reset-record-group').all()) {
             await group.locator('summary').click();
         }
-        assert.equal(await page.locator('.reset-record:visible').count(), 21, 'All original record totals remain available');
+        assert.equal(await page.locator('.reset-record:visible').count(), 18, 'All retained record totals remain available');
         for (const width of [320, 390, 768, 1024, 1440]) {
             await page.setViewportSize({ width, height: 960 });
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), `Reset page must fit ${width}px`);
@@ -197,7 +197,7 @@ const fixture = action => {
         assert(!manager.page.url().endsWith('/components/report/forecast_import.php'), 'Other sessions must be invalidated');
         assert.equal(await page.locator('.reset-delete').isDisabled(), true, 'Empty catalog disables product removal');
         assert.equal(await page.locator('#delete-product-empty').isVisible(), true, 'Empty catalog explains why removal is unavailable');
-        console.log('Operational reset browser checks passed (keyboard disclosures, 21 totals, 320–1440px layouts, empty catalog, authorization, confirmation, rollback, backup, full reset, preserved definitions/audit, sessions, isolated model cleanup)');
+        console.log('Operational reset browser checks passed (keyboard disclosures, 18 retained totals, 320–1440px layouts, empty catalog, authorization, confirmation, rollback, backup, full reset, preserved definitions/audit, sessions, isolated model cleanup)');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();
