@@ -17,7 +17,7 @@ Changing appearance changes neither forms nor workflow state.
 | Shared account and gates | Staff login, Profile, Preferences, workspace selection, Mandatory/Voluntary Password Change, password reset, Register Lock inside POS |
 | Administrator | Store Operations dashboard, Store Settings, Registers, Shift Report, Stock Issue oversight, Database Backup, operational staff management, Fiscal Periods |
 | Super Administrator | Platform Control Center, Platform Settings, Audit Logs, Database Backup/Restore (including unavailable-hosting screen), Database Updates, Emergency Access, Recovery Account, System Health, ML Settings, privileged account management |
-| Inventory Manager | Inventory Overview/Insights, Products, CSV Import, barcode labels, Reorder Planner, Replenishment Requests, Stock Issues, Suppliers, Inventory Counts, Stock Receiving, Purchase Orders |
+| Inventory Manager | Stock Overview, Replenishment Recommendations, Stock Receiving, Receiving History, Products, Inventory Control (counts and Stock Issue reviews); CSV Import and barcode labels remain product tools |
 | Cashier | Dashboard, POS/product lookup, Cashier Shifts, Cash Refunds, Stock Issues, My History, Held Sales within POS |
 | Reports and receipts | Sales/Receipt History, Sale Receipt previews/dialogs/reprints, Refund Receipt previews/reprints, Data Readiness, Forecast Analytics, Forecast dashboard, Forecast Exceptions, Predictions, Report Generation, notifications |
 
@@ -33,14 +33,14 @@ Database Updates uses theme surfaces even though it has a standalone layout.
 ## Paper paths
 
 The print-media rules enforce light backgrounds and dark text for Report
-Generation, Purchase Orders, barcode labels, Sale Receipts, and Refund Receipts.
+Generation, Replenishment Recommendations, barcode labels, Sale Receipts, and Refund Receipts.
 They hide appearance controls. Receipt print clones keep the existing 58 mm /
 80 mm widths, transaction-time details, and user-initiated print behavior.
 
 | Existing non-receipt paper path | Implementation and retained behavior |
 | --- | --- |
 | Report Generation (all sixteen catalog reports) | Same table/metrics renderer; Print and Export PDF call browser print. GET filters, CSV export and selected smart-table page stay unchanged. |
-| Purchase Orders | Whole current order list through browser print; Store/supplier/product data and totals remain visible. Creation form and per-order actions stay on screen. |
+| Replenishment Recommendations | Print all non-binding recommendations with the saved guidance basis; printing never changes stock. |
 | Printable Barcode Labels | Standalone sheet with its existing label dimensions, quantities and page margins. Manual Print stays manual; Generate Barcode and Print retains its explicit redirect/load print request. |
 | Forecast/report browser print | Data Readiness, Forecast Exceptions, Demand Forecasts (including development dashboard variants) and Forecast Analytics use light paper. Active analytics tab stays selected; features, accuracy trend and actual/forecast canvases redraw labels for print and return to screen colors afterward. |
 
@@ -65,7 +65,7 @@ directory (override with `THEME_BROWSER_OUTPUT`).
 
 `THEME_REPORTS_ONLY=1` narrows that disposable account suite to report acceptance:
 eleven routes (including all three Forecast dashboard variants), populated
-sales/Purchase Order/forecast values, 66 inventory rows,
+sales/receiving/forecast values, 66 inventory rows,
 120 barcode labels and multipage browser PDFs. It tests Dark and dark-resolving
 System paper, screen controls, filter/pagination state, all three canvas kinds,
 mobile focus/access and unchanged inventory/transaction database snapshots.

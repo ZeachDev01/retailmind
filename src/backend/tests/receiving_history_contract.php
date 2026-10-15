@@ -179,6 +179,26 @@ try {
     $historyWithLegacy = $service->getGroupedReceivingHistory($managerId);
     $legacyEntry = array_values(array_filter($historyWithLegacy, fn($g) => $g['group_id'] === $legacyReceivingId && !$g['has_explicit_group']));
     $assert(count($legacyEntry) === 1, 'ungrouped line forms independent entry without explicit group or key collision');
+    $assert($legacyEntry[0]['entry_key'] === 'r_' . $legacyReceivingId
+        && $inspectedGroup['entry_key'] === 'g_' . $groupIdOne, 'legacy and grouped entries expose distinct DOM identities');
+
+    $matches = $service->getGroupedReceivingHistory($managerId, 1, 'BATCH-B-' . $token);
+    $assert(count($matches) === 1 && count($matches[0]['lines']) === 2,
+        'matching one product line returns the complete receipt');
+    $assert($service->getGroupedReceivingHistory($managerTwoId, 1, 'INV-ONE-' . $token) === [],
+        'search cannot expose another manager receipt');
+    $assert($service->getGroupedReceivingHistory($managerId, 1, '%') === [], 'search treats SQL wildcard characters literally');
+    $insertPageLine = $pdo->prepare('INSERT INTO stock_receiving
+        (product_id, received_by, received_qty, accepted_qty, damaged_qty, units_per_package_used, notes)
+        VALUES (?, ?, 1, 1, 0, 1, ?)');
+    for ($i = 0; $i < 22; $i++) {
+        $insertPageLine->execute([$bulkUnitsId, $managerId, 'PAGE-' . $token]);
+    }
+    $firstPage = $service->getGroupedReceivingHistory($managerId, 1, 'PAGE-' . $token);
+    $secondPage = $service->getGroupedReceivingHistory($managerId, 2, 'PAGE-' . $token);
+    $assert(count($firstPage) === 21 && count($secondPage) === 2, 'pagination returns 20 entries plus a next-page probe');
+    $assert(array_intersect(array_column(array_slice($firstPage, 0, 20), 'entry_key'), array_column($secondPage, 'entry_key')) === [],
+        'pagination has stable ordering without overlapping displayed receipts');
 
     echo "Receiving history contract passed.\n";
 } finally {

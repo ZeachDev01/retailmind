@@ -117,7 +117,7 @@ const fixture = action => {
         assert.match(await (await deleteOne(90000)).text(), /Product deleted\. Other products/);
         const singleAfter = JSON.parse(fixture('reset_state'));
         for (const key of Object.keys(singleBefore)) {
-            assert.equal(singleAfter[key], singleBefore[key] - (['products', 'inventory', 'supplier_products'].includes(key) ? 1 : 0), key + ' after single deletion');
+            assert.equal(singleAfter[key], singleBefore[key] - (['products', 'inventory'].includes(key) ? 1 : 0), key + ' after single deletion');
         }
         await page.goto(resetUrl);
         assert.equal(await page.locator('#delete-product option[value="90000"]').count(), 0);
@@ -174,7 +174,7 @@ const fixture = action => {
         assert.match(await page.locator('p[role="status"]').innerText(), /Products, sales, inventory, and forecasting data were deleted/);
         const after = JSON.parse(fixture('reset_state'));
         for (const [key, value] of Object.entries(after)) {
-            if (['general_promotions', 'users', 'categories', 'suppliers', 'roles', 'registers', 'fiscal_periods', 'preserved_audit'].includes(key)) {
+            if (['general_promotions', 'users', 'categories', 'roles', 'registers', 'fiscal_periods', 'preserved_audit'].includes(key)) {
                 assert.equal(value, before[key], key + ' must be preserved');
             } else if (key === 'reset_audits') {
                 assert.equal(value, 1, 'The successful reset must leave a protected audit record');

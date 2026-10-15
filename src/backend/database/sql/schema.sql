@@ -1,5 +1,6 @@
  -- RetailMind canonical database schema and seed data
--- Fresh install reconciled through 2026-10-08; all 37 migrations are included.
+-- Fresh inventory workflow includes procurement storage retirement (2026-10-15).
+-- Apply pending PHP migrations for later forecasting and platform updates.
 -- Complete schema plus Store, accounts, products, stock, and required settings.
 -- Existing database: import update.sql instead; this file replaces records.
 -- WARNING: Importing this file drops and recreates existing RetailMind tables.
@@ -508,18 +509,15 @@ CREATE TABLE `forecast_decisions` (
   `override_reason` text DEFAULT NULL,
   `decided_by` int(11) NOT NULL,
   `decided_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `replenishment_request_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`forecast_decision_id`),
   KEY `idx_forecast_decisions_prediction` (`prediction_id`),
   KEY `fk_forecast_decisions_forecast_job` (`forecast_job_id`),
   KEY `product_id` (`product_id`),
   KEY `decided_by` (`decided_by`),
-  KEY `replenishment_request_id` (`replenishment_request_id`),
   CONSTRAINT `forecast_decisions_ibfk_1` FOREIGN KEY (`prediction_id`) REFERENCES `stock_predictions` (`prediction_id`),
   CONSTRAINT `fk_forecast_decisions_forecast_job` FOREIGN KEY (`forecast_job_id`) REFERENCES `ml_jobs` (`job_id`) ON DELETE RESTRICT,
   CONSTRAINT `forecast_decisions_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
-  CONSTRAINT `forecast_decisions_ibfk_3` FOREIGN KEY (`decided_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `forecast_decisions_ibfk_4` FOREIGN KEY (`replenishment_request_id`) REFERENCES `replenishment_requests` (`request_id`) ON DELETE SET NULL
+  CONSTRAINT `forecast_decisions_ibfk_3` FOREIGN KEY (`decided_by`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -787,7 +785,6 @@ CREATE TABLE `notification_preferences` (
   `pref_id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
   `notify_low_stock` tinyint(1) DEFAULT 1,
-  `notify_replenishment` tinyint(1) DEFAULT 1,
   `notify_adjustment` tinyint(1) DEFAULT 0,
   `notify_email` tinyint(1) DEFAULT 0,
   `notify_inapp` tinyint(1) DEFAULT 1,
@@ -1023,64 +1020,6 @@ CREATE TABLE `purchase_history` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `purchase_order_items`
---
-
-DROP TABLE IF EXISTS `purchase_order_items`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `purchase_order_items` (
-  `purchase_order_item_id` int(11) NOT NULL AUTO_INCREMENT,
-  `purchase_order_id` int(11) NOT NULL,
-  `replenishment_request_id` int(11) DEFAULT NULL,
-  `product_id` int(11) NOT NULL,
-  `ordered_qty` int(11) NOT NULL,
-  `received_qty` int(11) NOT NULL DEFAULT 0,
-  `unit_cost` decimal(12,2) NOT NULL DEFAULT 0.00,
-  `notes` text DEFAULT NULL,
-  PRIMARY KEY (`purchase_order_item_id`),
-  UNIQUE KEY `uq_po_request` (`purchase_order_id`,`replenishment_request_id`),
-  KEY `idx_po_items_product` (`product_id`),
-  KEY `replenishment_request_id` (`replenishment_request_id`),
-  CONSTRAINT `purchase_order_items_ibfk_1` FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_orders` (`purchase_order_id`),
-  CONSTRAINT `purchase_order_items_ibfk_2` FOREIGN KEY (`replenishment_request_id`) REFERENCES `replenishment_requests` (`request_id`) ON DELETE SET NULL,
-  CONSTRAINT `purchase_order_items_ibfk_3` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `purchase_orders`
---
-
-DROP TABLE IF EXISTS `purchase_orders`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `purchase_orders` (
-  `purchase_order_id` int(11) NOT NULL AUTO_INCREMENT,
-  `po_number` varchar(60) NOT NULL,
-  `supplier_id` int(11) DEFAULT NULL,
-  `status` enum('draft','approved','sent','partially_received','fully_received','cancelled') NOT NULL DEFAULT 'draft',
-  `expected_delivery_date` date DEFAULT NULL,
-  `notes` text DEFAULT NULL,
-  `created_by` int(11) NOT NULL,
-  `approved_by` int(11) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `approved_at` timestamp NULL DEFAULT NULL,
-  `sent_at` timestamp NULL DEFAULT NULL,
-  `cancelled_at` timestamp NULL DEFAULT NULL,
-  PRIMARY KEY (`purchase_order_id`),
-  UNIQUE KEY `po_number` (`po_number`),
-  KEY `idx_purchase_orders_status` (`status`),
-  KEY `idx_purchase_orders_supplier` (`supplier_id`),
-  KEY `created_by` (`created_by`),
-  KEY `approved_by` (`approved_by`),
-  CONSTRAINT `purchase_orders_ibfk_1` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`supplier_id`) ON DELETE SET NULL,
-  CONSTRAINT `purchase_orders_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `purchase_orders_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `recovery_accounts`
 --
 
@@ -1122,40 +1061,6 @@ CREATE TABLE `registers` (
   KEY `idx_registers_status` (`status`),
   KEY `fk_registers_created_by` (`created_by`),
   CONSTRAINT `fk_registers_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `replenishment_requests`
---
-
-DROP TABLE IF EXISTS `replenishment_requests`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `replenishment_requests` (
-  `request_id` int(11) NOT NULL AUTO_INCREMENT,
-  `product_id` int(11) NOT NULL,
-  `request_qty` int(11) NOT NULL,
-  `requested_by` int(11) NOT NULL,
-  `request_date` timestamp NOT NULL DEFAULT current_timestamp(),
-  `status` enum('pending','approved','partially_received','rejected','received') DEFAULT 'pending',
-  `approved_by` int(11) DEFAULT NULL,
-  `approved_at` timestamp NULL DEFAULT NULL,
-  `source` enum('manual','ml_forecast') DEFAULT 'manual',
-  `forecast_prediction_id` int(11) DEFAULT NULL,
-  `forecast_job_id` bigint unsigned DEFAULT NULL,
-  `original_suggested_qty` int(11) DEFAULT NULL,
-  `override_reason` text DEFAULT NULL,
-  `notes` text DEFAULT NULL,
-  PRIMARY KEY (`request_id`),
-  KEY `product_id` (`product_id`),
-  KEY `requested_by` (`requested_by`),
-  KEY `approved_by` (`approved_by`),
-  CONSTRAINT `replenishment_requests_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
-  CONSTRAINT `replenishment_requests_ibfk_2` FOREIGN KEY (`requested_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `replenishment_requests_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `fk_replenishment_requests_forecast_job` FOREIGN KEY (`forecast_job_id`) REFERENCES `ml_jobs` (`job_id`) ON DELETE RESTRICT,
-  CONSTRAINT `chk_replenishment_requests_quantity` CHECK (`request_qty` > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1467,9 +1372,6 @@ DROP TABLE IF EXISTS `stock_receiving`;
 CREATE TABLE `stock_receiving` (
   `receiving_id` int(11) NOT NULL AUTO_INCREMENT,
   `group_id` int(11) DEFAULT NULL,
-  `replenishment_request_id` int(11) DEFAULT NULL,
-  `purchase_order_id` int(11) DEFAULT NULL,
-  `purchase_order_item_id` int(11) DEFAULT NULL,
   `product_id` int(11) NOT NULL,
   `received_qty` int(11) NOT NULL,
   `received_packages` int(11) NOT NULL DEFAULT 0,
@@ -1481,7 +1383,6 @@ CREATE TABLE `stock_receiving` (
   `received_by` int(11) NOT NULL,
   `received_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `supplier` varchar(150) DEFAULT NULL,
-  `po_number` varchar(100) DEFAULT NULL,
   `invoice_number` varchar(100) DEFAULT NULL,
   `batch_number` varchar(100) DEFAULT NULL,
   `expiration_date` date DEFAULT NULL,
@@ -1491,11 +1392,9 @@ CREATE TABLE `stock_receiving` (
   `notes` text DEFAULT NULL,
   PRIMARY KEY (`receiving_id`),
   KEY `idx_stock_receiving_group_id` (`group_id`),
-  KEY `replenishment_request_id` (`replenishment_request_id`),
   KEY `product_id` (`product_id`),
   KEY `received_by` (`received_by`),
   CONSTRAINT `fk_stock_receiving_group` FOREIGN KEY (`group_id`) REFERENCES `stock_receiving_groups` (`group_id`) ON DELETE SET NULL,
-  CONSTRAINT `stock_receiving_ibfk_1` FOREIGN KEY (`replenishment_request_id`) REFERENCES `replenishment_requests` (`request_id`),
   CONSTRAINT `stock_receiving_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `stock_receiving_ibfk_3` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=469 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1516,60 +1415,6 @@ CREATE TABLE `store_settings` (
   PRIMARY KEY (`setting_key`),
   KEY `updated_by` (`updated_by`),
   CONSTRAINT `store_settings_ibfk_1` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `supplier_products`
---
-
-DROP TABLE IF EXISTS `supplier_products`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `supplier_products` (
-  `supplier_product_id` int(11) NOT NULL AUTO_INCREMENT,
-  `supplier_id` int(11) NOT NULL,
-  `product_id` int(11) NOT NULL,
-  `supplier_sku` varchar(100) DEFAULT NULL,
-  `last_unit_cost` decimal(12,2) DEFAULT NULL,
-  `minimum_order_quantity` int(11) NOT NULL DEFAULT 1,
-  `lead_time_days` int(11) NOT NULL DEFAULT 7,
-  `is_preferred` tinyint(1) NOT NULL DEFAULT 0,
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`supplier_product_id`),
-  UNIQUE KEY `uq_supplier_product` (`supplier_id`,`product_id`),
-  KEY `idx_supplier_products_product` (`product_id`),
-  CONSTRAINT `supplier_products_ibfk_1` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`supplier_id`),
-  CONSTRAINT `supplier_products_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `suppliers`
---
-
-DROP TABLE IF EXISTS `suppliers`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `suppliers` (
-  `supplier_id` int(11) NOT NULL AUTO_INCREMENT,
-  `supplier_name` varchar(150) NOT NULL,
-  `contact_person` varchar(120) DEFAULT NULL,
-  `email` varchar(150) DEFAULT NULL,
-  `phone` varchar(60) DEFAULT NULL,
-  `address` text DEFAULT NULL,
-  `standard_lead_time_days` int(11) NOT NULL DEFAULT 7,
-  `minimum_order_value` decimal(12,2) NOT NULL DEFAULT 0.00,
-  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
-  `notes` text DEFAULT NULL,
-  `created_by` int(11) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`supplier_id`),
-  UNIQUE KEY `supplier_name` (`supplier_name`),
-  KEY `idx_suppliers_status` (`status`),
-  KEY `created_by` (`created_by`),
-  CONSTRAINT `suppliers_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1803,7 +1648,7 @@ UNLOCK TABLES;
 
 LOCK TABLES `notification_preferences` WRITE;
 /*!40000 ALTER TABLE `notification_preferences` DISABLE KEYS */;
-INSERT INTO `notification_preferences` (`pref_id`, `user_id`, `notify_low_stock`, `notify_replenishment`, `notify_adjustment`, `notify_email`, `notify_inapp`, `low_stock_threshold`, `updated_at`) VALUES (1,1,1,1,1,1,1,10,'2026-09-14 23:15:22');
+INSERT INTO `notification_preferences` (`pref_id`, `user_id`, `notify_low_stock`, `notify_adjustment`, `notify_email`, `notify_inapp`, `low_stock_threshold`, `updated_at`) VALUES (1,1,1,1,1,1,10,'2026-09-14 23:15:22');
 /*!40000 ALTER TABLE `notification_preferences` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1843,7 +1688,7 @@ UNLOCK TABLES;
 
 LOCK TABLES `stock_receiving` WRITE;
 /*!40000 ALTER TABLE `stock_receiving` DISABLE KEYS */;
-INSERT INTO `stock_receiving` (`receiving_id`, `replenishment_request_id`, `purchase_order_id`, `purchase_order_item_id`, `product_id`, `received_qty`, `received_packages`, `units_per_package_used`, `accepted_qty`, `damaged_qty`, `cost_price`, `total_cost`, `received_by`, `received_at`, `supplier`, `po_number`, `invoice_number`, `batch_number`, `expiration_date`, `discrepancy_type`, `discrepancy_qty`, `discrepancy_notes`, `notes`) VALUES (457,NULL,NULL,NULL,1,194,0,1,194,0,0.32,62.08,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-1','RM_SEED_SALES_TREND_V1-20260918-1',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(458,NULL,NULL,NULL,2,214,0,1,214,0,0.62,132.68,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-2','RM_SEED_SALES_TREND_V1-20260918-2',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(459,NULL,NULL,NULL,4,172,0,1,172,0,0.58,99.76,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-4','RM_SEED_SALES_TREND_V1-20260918-4',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(460,NULL,NULL,NULL,6,205,0,1,205,0,1.45,297.25,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-6','RM_SEED_SALES_TREND_V1-20260918-6',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(461,NULL,NULL,NULL,7,186,0,1,186,0,0.82,152.52,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-7','RM_SEED_SALES_TREND_V1-20260918-7',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(462,NULL,NULL,NULL,8,189,0,1,189,0,1.20,226.80,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-8','RM_SEED_SALES_TREND_V1-20260918-8',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(463,NULL,NULL,NULL,9,226,0,1,226,0,1.05,237.30,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-9','RM_SEED_SALES_TREND_V1-20260918-9',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(464,NULL,NULL,NULL,11,205,0,1,205,0,1.70,348.50,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-11','RM_SEED_SALES_TREND_V1-20260918-11',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(465,NULL,NULL,NULL,12,219,0,1,219,0,2.45,536.55,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-12','RM_SEED_SALES_TREND_V1-20260918-12',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(466,NULL,NULL,NULL,17,274,0,1,274,0,1.68,460.32,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-17','RM_SEED_SALES_TREND_V1-20260918-17',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(467,NULL,NULL,NULL,20,233,0,1,233,0,0.82,191.06,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-20','RM_SEED_SALES_TREND_V1-20260918-20',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(468,NULL,NULL,NULL,24,272,0,1,272,0,2.45,666.40,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1','RM_SEED_SALES_TREND_V1-20260918-24','RM_SEED_SALES_TREND_V1-20260918-24',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock');
+INSERT INTO `stock_receiving` (`receiving_id`, `product_id`, `received_qty`, `received_packages`, `units_per_package_used`, `accepted_qty`, `damaged_qty`, `cost_price`, `total_cost`, `received_by`, `received_at`, `supplier`, `invoice_number`, `batch_number`, `expiration_date`, `discrepancy_type`, `discrepancy_qty`, `discrepancy_notes`, `notes`) VALUES (457,1,194,0,1,194,0,0.32,62.08,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-1','RM_SEED_SALES_TREND_V1-20260918-1',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(458,2,214,0,1,214,0,0.62,132.68,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-2','RM_SEED_SALES_TREND_V1-20260918-2',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(459,4,172,0,1,172,0,0.58,99.76,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-4','RM_SEED_SALES_TREND_V1-20260918-4',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(460,6,205,0,1,205,0,1.45,297.25,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-6','RM_SEED_SALES_TREND_V1-20260918-6',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(461,7,186,0,1,186,0,0.82,152.52,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-7','RM_SEED_SALES_TREND_V1-20260918-7',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(462,8,189,0,1,189,0,1.20,226.80,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-8','RM_SEED_SALES_TREND_V1-20260918-8',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(463,9,226,0,1,226,0,1.05,237.30,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-9','RM_SEED_SALES_TREND_V1-20260918-9',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(464,11,205,0,1,205,0,1.70,348.50,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-11','RM_SEED_SALES_TREND_V1-20260918-11',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(465,12,219,0,1,219,0,2.45,536.55,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-12','RM_SEED_SALES_TREND_V1-20260918-12',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(466,17,274,0,1,274,0,1.68,460.32,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-17','RM_SEED_SALES_TREND_V1-20260918-17',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(467,20,233,0,1,233,0,0.82,191.06,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-20','RM_SEED_SALES_TREND_V1-20260918-20',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock'),(468,24,272,0,1,272,0,2.45,666.40,11,'2026-06-18 23:00:00','RetailMind Seed Supplier','RM_SEED_SALES_TREND_V1-20260918-24','RM_SEED_SALES_TREND_V1-20260918-24',NULL,'none',0,NULL,'Deterministic dashboard sales-trend simulation stock');
 /*!40000 ALTER TABLE `stock_receiving` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1883,7 +1728,7 @@ UNLOCK TABLES;
 
 LOCK TABLES `store_settings` WRITE;
 /*!40000 ALTER TABLE `store_settings` DISABLE KEYS */;
-INSERT INTO `store_settings` (`setting_key`, `setting_value`, `updated_by`, `updated_at`) VALUES ('business_identifier','',NULL,'2026-09-14 07:29:33'),('currency_symbol','₱',NULL,'2026-09-14 07:29:33'),('receipt_footer','Thank you for shopping with us.',NULL,'2026-09-14 07:29:33'),('store_address','Tangub City',NULL,'2026-09-14 07:29:33'),('store_email','',NULL,'2026-09-14 07:29:33'),('store_name','Shalom Store',NULL,'2026-09-14 07:29:33'),('store_phone','',NULL,'2026-09-14 07:29:33'),('timezone','Asia/Manila',NULL,'2026-09-14 07:29:33');
+INSERT INTO `store_settings` (`setting_key`, `setting_value`, `updated_by`, `updated_at`) VALUES ('business_identifier','',NULL,'2026-09-14 07:29:33'),('currency_symbol','â‚±',NULL,'2026-09-14 07:29:33'),('receipt_footer','Thank you for shopping with us.',NULL,'2026-09-14 07:29:33'),('store_address','Tangub City',NULL,'2026-09-14 07:29:33'),('store_email','',NULL,'2026-09-14 07:29:33'),('store_name','Shalom Store',NULL,'2026-09-14 07:29:33'),('store_phone','',NULL,'2026-09-14 07:29:33'),('timezone','Asia/Manila',NULL,'2026-09-14 07:29:33');
 /*!40000 ALTER TABLE `store_settings` ENABLE KEYS */;
 UNLOCK TABLES;
 

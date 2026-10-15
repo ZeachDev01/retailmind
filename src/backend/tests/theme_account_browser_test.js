@@ -131,13 +131,7 @@ const fixture = action => {
                 if(await draft.count()) assert.equal(await draft.inputValue(),route.includes('print_barcodes')?'121':'2026-01-02','Mode/device changes preserve report draft');
                 if(route.includes('inventory_valuation')) assert.equal(await page.locator('tbody tr').count(),66,'Representative report retains all inventory rows');
                 if(route.includes('sales_product')) assert((await page.locator('tbody').innerText()).includes('25.00'),'Report retains original sale amount');
-                if(route.includes('purchase_orders')) {
-                    assert((await page.locator('.po-card').innerText()).includes('15.00'),'Purchase Order retains five units at cost 3');
-                    await page.getByRole('button',{name:'Cancel',exact:true}).first().click();
-                    const dialog=page.locator('.rm-modal-overlay.open'); await dialog.waitFor();
-                    await select('light'); await contrast(dialog.locator('h2,h3')); await select('dark');
-                    await dialog.locator('.rm-cancel').click();
-                }
+
                 if(route.includes('forecast_analytics')) {
                     for(const tab of ['features','trend','actual']) {
                         await page.locator('[data-analytics-tab="'+tab+'"]').click();
@@ -548,9 +542,9 @@ const fixture = action => {
                 const inventoryRoutes = [
                     'inventory_management/inventory_overview','inventory_management/inventory_insights',
                     'inventory_management/products','inventory_management/csv_import',
-                    'inventory_management/reorder_planner','inventory_management/replenishment_requests',
-                    'inventory_management/stock_issues','inventory_management/suppliers','inventory_management/inventory_counts',
-                    'report/stock_receiving','invoice/purchase_orders','report/predictions','report/forecast_exceptions',
+
+                    'inventory_management/stock_issues','inventory_management/inventory_counts',
+                    'report/stock_receiving','report/predictions','report/forecast_exceptions',
                     'report/data_readiness','report/forecast_analytics',
                 ];
                 for (const route of inventoryRoutes) {

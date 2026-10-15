@@ -1,0 +1,1265 @@
+{
+  "metrics": {
+    "options": 61,
+    "searchMs": 3.199999988079071
+  },
+  "measurements": [
+    {
+      "theme": "light",
+      "width": 1440,
+      "step": 1,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "product_search",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "product_code_scan",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "add_receiving_line",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 45.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 4.607518093747377,
+        "minimumBorder": 5.379869750937995
+      }
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "step": 2,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "quantity_mode",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "received_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "damaged_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "cost_price",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "batch_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "expiration_date",
+          "height": 52,
+          "font": "16px"
+        },
+        {
+          "id": "discrepancy_notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "supplier",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "invoice_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 4.607518093747377,
+        "minimumBorder": 5.379869750937995
+      }
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "step": 3,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 48,
+          "font": "15.2px"
+        },
+        {
+          "id": "",
+          "height": 48,
+          "font": "16px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": null
+      }
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "step": 1,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "product_search",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "product_code_scan",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "add_receiving_line",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 45.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 4.607518093747377,
+        "minimumBorder": 5.379869750937995
+      }
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "step": 2,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "quantity_mode",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "received_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "damaged_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "cost_price",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "batch_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "expiration_date",
+          "height": 52,
+          "font": "16px"
+        },
+        {
+          "id": "discrepancy_notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "supplier",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "invoice_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 4.607518093747377,
+        "minimumBorder": 5.379869750937995
+      }
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "step": 3,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 48,
+          "font": "15.2px"
+        },
+        {
+          "id": "",
+          "height": 48,
+          "font": "16px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": null
+      }
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "step": 1,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "product_search",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "product_code_scan",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "add_receiving_line",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 45.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 4.607518093747377,
+        "minimumBorder": 5.379869750937995
+      }
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "step": 2,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "quantity_mode",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "received_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "damaged_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "cost_price",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "batch_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "expiration_date",
+          "height": 52,
+          "font": "16px"
+        },
+        {
+          "id": "discrepancy_notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "supplier",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "invoice_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 45.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 4.607518093747377,
+        "minimumBorder": 5.379869750937995
+      }
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "step": 3,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "",
+          "height": 72,
+          "font": "16px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": null
+      }
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "step": 1,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "product_search",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "product_code_scan",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "add_receiving_line",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 45.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 4.607518093747377,
+        "minimumBorder": 5.379869750937995
+      }
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "step": 2,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "quantity_mode",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "received_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "damaged_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "cost_price",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "batch_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "expiration_date",
+          "height": 52,
+          "font": "16px"
+        },
+        {
+          "id": "discrepancy_notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "supplier",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "invoice_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 45.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 4.607518093747377,
+        "minimumBorder": 5.379869750937995
+      }
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "step": 3,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "",
+          "height": 72,
+          "font": "16px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": null
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "step": 1,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "product_search",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "product_code_scan",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "add_receiving_line",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": 8.546333894999973
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "step": 2,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "quantity_mode",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "received_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "damaged_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "cost_price",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "batch_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "expiration_date",
+          "height": 52,
+          "font": "16px"
+        },
+        {
+          "id": "discrepancy_notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "supplier",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "invoice_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": 8.546333894999973
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "step": 3,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 48,
+          "font": "15.2px"
+        },
+        {
+          "id": "",
+          "height": 48,
+          "font": "16px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": null
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "step": 1,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "product_search",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "product_code_scan",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "add_receiving_line",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": 8.546333894999973
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "step": 2,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "quantity_mode",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "received_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "damaged_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "cost_price",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "batch_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "expiration_date",
+          "height": 52,
+          "font": "16px"
+        },
+        {
+          "id": "discrepancy_notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "supplier",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "invoice_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": 8.546333894999973
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "step": 3,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 48,
+          "font": "15.2px"
+        },
+        {
+          "id": "",
+          "height": 48,
+          "font": "16px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": null
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "step": 1,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "product_search",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "product_code_scan",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "add_receiving_line",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": 8.546333894999973
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "step": 2,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "quantity_mode",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "received_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "damaged_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "cost_price",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "batch_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "expiration_date",
+          "height": 52,
+          "font": "16px"
+        },
+        {
+          "id": "discrepancy_notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "supplier",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "invoice_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": 8.546333894999973
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "step": 3,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "",
+          "height": 72,
+          "font": "16px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": null
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "step": 1,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "product_search",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "product_code_scan",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "add_receiving_line",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": 8.546333894999973
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "step": 2,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "product_id",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "quantity_mode",
+          "height": 49,
+          "font": "16px"
+        },
+        {
+          "id": "received_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "damaged_qty",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "cost_price",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "batch_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "expiration_date",
+          "height": 52,
+          "font": "16px"
+        },
+        {
+          "id": "discrepancy_notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "notes",
+          "height": 72.375,
+          "font": "16px"
+        },
+        {
+          "id": "supplier",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "invoice_number",
+          "height": 50,
+          "font": "16px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_next",
+          "height": 47.171875,
+          "font": "15.2px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": 8.546333894999973
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "step": 3,
+      "overflow": false,
+      "controls": [
+        {
+          "id": "",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "receiving_back",
+          "height": 47.171875,
+          "font": "15.2px"
+        },
+        {
+          "id": "",
+          "height": 72,
+          "font": "16px"
+        }
+      ],
+      "unlabeled": [],
+      "contrast": {
+        "failures": [],
+        "minimumText": 5.168555560022562,
+        "minimumBorder": null
+      }
+    }
+  ],
+  "errors": []
+}

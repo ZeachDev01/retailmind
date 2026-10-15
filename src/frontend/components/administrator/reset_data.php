@@ -49,20 +49,20 @@ $productStatement->execute([store_scope_id($pdo)]);
 $products = $productStatement->fetchAll();
 $_SESSION['reset_data_nonce'] = bin2hex(random_bytes(24));
 $labels = [
-    'products' => 'Products', 'supplier_products' => 'Product supplier links', 'promotions' => 'Product promotions',
+    'products' => 'Products', 'promotions' => 'Product promotions',
     'sales' => 'Completed sales', 'sale_items' => 'Sale line items', 'held_sales' => 'Held sales',
     'cash_refunds' => 'Cash refunds', 'sale_reversals' => 'Sale reversals', 'cashier_shifts' => 'Closed cashier shifts',
     'inventory_units' => 'Units currently in stock', 'stock_movements' => 'Stock movements',
     'inventory_adjustments' => 'Stock adjustments', 'inventory_counts' => 'Stock counts',
     'product_batches' => 'Stock batches', 'stock_receiving' => 'Stock receiving records',
-    'purchase_orders' => 'Purchase orders', 'replenishment_requests' => 'Replenishment requests',
+
     'stock_predictions' => 'Forecast predictions', 'forecast_sales_imports' => 'Imported daily sales totals',
     'forecast_evaluations' => 'Forecast evaluations', 'model_training_runs' => 'Model training history',
 ];
 $recordGroups = [
-    'products' => ['Product catalog', 'products', 'supplier_products', 'promotions'],
+    'products' => ['Product catalog', 'products', 'promotions'],
     'sales' => ['Sales & cashier activity', 'sales', 'sale_items', 'held_sales', 'cash_refunds', 'sale_reversals', 'cashier_shifts'],
-    'inventory_units' => ['Inventory & purchasing', 'inventory_units', 'stock_movements', 'inventory_adjustments', 'inventory_counts', 'product_batches', 'stock_receiving', 'purchase_orders', 'replenishment_requests'],
+    'inventory_units' => ['Inventory & receiving', 'inventory_units', 'stock_movements', 'inventory_adjustments', 'inventory_counts', 'product_batches', 'stock_receiving'],
     'stock_predictions' => ['Forecasting', 'stock_predictions', 'forecast_sales_imports', 'forecast_evaluations', 'model_training_runs'],
 ];
 ?>
@@ -112,7 +112,7 @@ $recordGroups = [
                 </details>
                 <?php endforeach; ?>
             </div>
-            <div class="reset-preserved"><h3>What stays unchanged</h3><ul><li>Categories, suppliers, and store-wide or category promotions</li><li>Users, roles, registers, and settings</li><li>Fiscal Periods and Protected Audit Records</li></ul></div>
+            <div class="reset-preserved"><h3>What stays unchanged</h3><ul><li>Categories and store-wide or category promotions</li><li>Users, roles, registers, and settings</li><li>Fiscal Periods and Protected Audit Records</li></ul></div>
         </div>
         <div class="reset-confirm">
             <h3>Before you reset</h3>

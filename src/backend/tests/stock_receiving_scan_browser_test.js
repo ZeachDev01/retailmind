@@ -161,7 +161,7 @@ async function main() {
         await page.goto('/components/inventory_management/inventory_overview.php');
         const primaryNavigation = page.locator('.sidebar-section').first();
         check(JSON.stringify(await primaryNavigation.locator(':scope > a > span, :scope > .dropdown > .dropbtn > span').allTextContents())
-            === JSON.stringify(['Stock Overview', 'Replenishment Recommendations', 'Stock Receiving', 'Receiving History', 'Products', 'Inventory Control']),
+            === JSON.stringify(['Stock Overview', 'Products', 'Replenishment Recommendations', 'Stock Receiving', 'Receiving History', 'Inventory Control']),
             'Inventory Manager has exactly six primary destinations in daily-work order');
         check(await page.getByRole('heading', {name: 'Stock Overview', exact: true}).count() === 1,
             'stock page uses the destination name');
@@ -202,16 +202,22 @@ async function main() {
         }
         await page.setViewportSize({width: 1280, height: 720});
         await page.goto('/components/inventory_management/inventory_overview.php');
-        await page.locator('main').getByRole('link', { name: 'Review recommendations', exact: true }).click();
-        await page.waitForURL('**/inventory_management/replenishment_queue.php', { waitUntil: 'domcontentloaded' });
+        check(await page.locator('main').getByRole('link', { name: 'Review recommendations', exact: true }).count() === 0
+            && await page.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
+            'Stock Overview omits replenishment and bought-stock actions');
+        await page.goto('/components/inventory_management/replenishment_queue.php', { waitUntil: 'domcontentloaded' });
         check(page.url().endsWith('/inventory_management/replenishment_queue.php'),
-            'stock monitoring leads to non-binding replenishment guidance');
-        await page.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).click();
-        await page.waitForURL('**/report/stock_receiving.php');
-        check(page.url().endsWith(receivingPath), 'recommendations lead directly to bought-stock entry');
+            'replenishment guidance remains directly reachable');
+        check(await page.locator('main').getByRole('link', { name: 'Check stock', exact: true }).count() === 0
+            && await page.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
+            'replenishment guidance omits stock and bought-stock actions');
         check(await page.locator('.sidebar').getByRole('link', { name: 'Stock Receiving', exact: true }).count() === 1,
             'Stock Receiving is available from Inventory Manager navigation');
         await page.goto(receivingPath);
+        check(await page.locator('main').getByRole('link', { name: 'Check stock', exact: true }).count() === 0
+            && await page.locator('main').getByRole('link', { name: 'Review recommendations', exact: true }).count() === 0
+            && await page.locator('main').getByRole('link', { name: 'Receiving history', exact: true }).count() === 0,
+            'Stock Receiving omits stock, replenishment and history actions');
 
         console.log('Shopping trip entry');
         check(await page.getByRole('heading', { name: '1. Select products', exact: true }).isVisible(),
@@ -354,8 +360,8 @@ async function main() {
         let directReceipt = state.receipts.find(item => item.sku === fixture.products.direct.sku);
         check(Number(directProduct.quantity_on_hand) === 56, '8 + two cases of 24 = 56 units');
         check(directReceipt.cost_price === null && directReceipt.supplier === null
-            && directReceipt.invoice_number === null && directReceipt.replenishment_request_id === null
-            && directReceipt.purchase_order_item_id === null && Number(directProduct.cost_price) === 5
+            && directReceipt.invoice_number === null
+            && Number(directProduct.cost_price) === 5
             && directProduct.preferred_supplier === 'Original preferred supplier',
             'missing optional details preserve cost and preferred supplier without purchasing links');
         check(state.purchase_history.filter(item => item.sku === fixture.products.direct.sku).length === 0,
@@ -578,8 +584,6 @@ async function main() {
         const finalState = runFixture('--state', '--token', token);
         const finalProduct = finalState.products.find((product) => product.sku === fixture.products.countable.sku);
         const receipt = finalState.receipts.filter((item) => item.sku === fixture.products.countable.sku).at(-1);
-        const poItem = finalState.purchase_order_items.find((item) =>
-            Number(item.purchase_order_item_id) === fixture.receiving_documents.po.purchase_order_item_id);
         check(Number(finalProduct.quantity_on_hand) === Number(fixture.products.countable.quantity_on_hand) + 10,
             'submission increments stock by accepted units only');
         check(receipt && Number(receipt.received_packages) === 2
@@ -591,11 +595,9 @@ async function main() {
             && receipt.batch_number === 'BATCH-' + token
             && receipt.expiration_date === '2027-12-31',
             'the receipt retains reviewed invoice, batch and expiry details');
-        check(poItem && Number(poItem.received_qty) === 2,
-            'direct receiving does not update a legacy purchase-order line');
         check(historicalReceipt && JSON.stringify(finalState.receipts.find(item =>
             Number(item.receiving_id) === Number(historicalReceipt.receiving_id))) === JSON.stringify(historicalReceipt),
-            'historical linked receiving records retain their quantities, cost, staff, time and document references');
+            'earlier receiving records retain their quantities, cost, staff and time');
 
         console.log('Reviewed mixed-product shopping trip');
         runFixture('--seed-guidance', '--token', token);
@@ -609,8 +611,10 @@ async function main() {
             && (await unitGuidance.innerText()).includes('7 units')
             && (await unitGuidance.innerText()).includes('Forecast unavailable'),
             'a product without a forecast uses honest stock-rule guidance');
-        await page.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).click();
-        await page.waitForURL('**/report/stock_receiving.php');
+        check(await page.locator('main').getByRole('link', { name: 'Check stock', exact: true }).count() === 0
+            && await page.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
+            'replenishment guidance keeps stock and bought-stock actions absent');
+        await page.goto(receivingPath);
         const beforeTrip = runFixture('--state', '--token', token);
         await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
         await enterQuantities(page);
@@ -676,9 +680,6 @@ async function main() {
         check(Number(tripState.recommendations.find(item => item.sku === fixture.products.bulk_pack.sku).recommended_quantity) === 0
             && Number(tripState.recommendations.find(item => item.sku === fixture.products.bulk_units.sku).recommended_quantity) === 0,
             'committed stock updates forecast-backed and stock-rule buying guidance');
-        check(tripState.requests.length === beforeTrip.requests.length
-            && JSON.stringify(tripState.purchase_order_items) === JSON.stringify(beforeTrip.purchase_order_items),
-            'receiving actual quantities differing from guidance creates no purchasing documents');
         await dismissBlockingDialog(page);
         await page.locator('a[href*="replenishment_queue.php"]').filter({ hasText: 'Review updated recommendations' }).click();
         await page.waitForURL('**/inventory_management/replenishment_queue.php');
@@ -738,10 +739,13 @@ async function main() {
         }
         await receiptReference.evaluate((el, text) => { el.textContent = text; }, originalReference);
         await page.fill('#history_search', 'SHOP-' + token);
+        await Promise.all([page.waitForURL('**?q=SHOP-' + token), page.locator('#history_search').press('Enter')]);
         check(await tripCard.isVisible(), 'matching card remains visible when filtering history');
         await page.fill('#history_search', 'NONEXISTENT_QUERY_' + token);
-        check(!await tripCard.isVisible(), 'non-matching card is hidden when filtering history');
-        await page.fill('#history_search', '');
+        await Promise.all([page.waitForURL('**?q=NONEXISTENT_QUERY_' + token), page.locator('#history_search').press('Enter')]);
+        check(!await tripCard.isVisible() && await page.getByRole('heading', { name: 'No matching receipts' }).isVisible(),
+            'non-matching search explains the empty result');
+        await page.getByRole('link', { name: 'Clear search' }).click();
 
         const oversightContext = await browser.newContext({ baseURL });
         const oversightPage = await oversightContext.newPage();
@@ -772,6 +776,7 @@ async function main() {
         await page.locator('.receiving-line').nth(1).getByRole('button', { name: 'Remove product' }).click();
         check(await page.locator('.receiving-line').count() === 1 && await page.inputValue('#received_qty') === '7',
             'removing a line preserves the other entered product and quantity');
+        page.once('dialog', dialog => dialog.accept());
         await page.locator('.remove-receiving-line').click();
         await page.locator('#receiving_next').click();
         check((await page.locator('#entry_status').innerText()).includes('Select at least one product'),

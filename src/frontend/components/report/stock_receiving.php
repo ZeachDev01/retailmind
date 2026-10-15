@@ -89,19 +89,14 @@ $products = $receivingService->getActiveProducts();
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
 </head>
-<body>
+<body class="stock-receiving-page">
+<a class="receiving-skip-link" href="#receiving_main">Skip to Stock Receiving</a>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <main class="main-content">
+    <main class="main-content" id="receiving_main" tabindex="-1">
         <div class="topbar">
             <h1>Stock Receiving</h1>
         </div>
-        <nav class="u-flex-wrap mb-3" aria-label="Stock replenishment">
-            <a class="btn btn-secondary" href="../inventory_management/inventory_overview.php">Check stock</a>
-            <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a>
-            <a class="btn btn-secondary" href="receiving_history.php">Receiving history</a>
-        </nav>
-
         <?php if ($message): ?>
             <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
             <p>Stock is updated. <a href="../inventory_management/replenishment_queue.php">Review updated recommendations</a> using current stock and existing forecast outputs, or <a href="receiving_history.php">view receiving history</a>.</p>
@@ -116,13 +111,15 @@ $products = $receivingService->getActiveProducts();
             <ol class="receiving-steps" aria-label="Receiving progress"><li aria-current="step">1. Select products</li><li>2. Enter quantities</li><li>3. Review</li></ol>
             <p>Select what was bought, enter actual quantities, then review and save once. Shopping store and receipt details are optional.</p>
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
-            <fieldset <?= !$canReceive ? 'disabled' : '' ?>>
+            <?php if (!$products): ?><p role="status">No active products are available. Ask your Administrator to add or activate a product before receiving stock.</p><?php endif; ?>
+            <noscript><p role="alert">Enable JavaScript to select products, review quantities, and save this receiving entry.</p></noscript>
+            <fieldset <?= !$canReceive || !$products ? 'disabled' : '' ?>>
             <div class="form-section" id="receiving_selection">
                 <h3>Find products</h3>
-                <div class="form-group"><label for="product_search">Search products by name or SKU</label><input type="search" id="product_search" autocomplete="off" placeholder="Search active products"></div>
+                <div class="form-group"><label for="product_search">Search products by name or SKU</label><input type="search" id="product_search" autocomplete="off" aria-describedby="product_search_status" placeholder="Search active products"><small id="product_search_status" role="status"></small></div>
                 <div class="form-group">
                     <label for="product_code_scan">Barcode or SKU</label>
-                    <input type="text" id="product_code_scan" autocomplete="off" inputmode="text" placeholder="Scan or type a code, then press Enter">
+                    <input type="text" id="product_code_scan" autocomplete="off" inputmode="text" aria-describedby="scan_target scan_status" placeholder="Scan or type a code, then press Enter">
                     <small id="scan_target" role="status">Scanning product line 1. Focus another line to scan into it.</small>
                     <small id="scan_status" role="status" aria-live="polite">You can also choose a product manually below.</small>
                 </div>
@@ -133,7 +130,7 @@ $products = $receivingService->getActiveProducts();
                 <input type="hidden" name="entry_mode" value="shopping_trip">
                 <div id="receiving_lines">
                 <section class="receiving-line" aria-label="Product line 1">
-                    <div class="receiving-line-heading"><h4>Product line <span class="line-number">1</span></h4>
+                    <div class="receiving-line-heading"><h3>Product line <span class="line-number">1</span></h3>
                         <button type="button" class="btn btn-quiet remove-receiving-line">Remove product</button></div>
 
                 <div class="form-section">
@@ -167,8 +164,8 @@ $products = $receivingService->getActiveProducts();
                         </div>
                         <div class="form-group receiving-quantity">
                             <label for="cost_price">Purchase cost per base unit (optional)</label>
-                            <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" placeholder="Leave blank if unknown">
-                            <small>Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
+                            <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Leave blank if unknown">
+                            <small id="cost_hint" data-field="cost_hint">Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
                         </div>
                     </div>
                     <small class="receiving-quantity" id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
@@ -272,6 +269,15 @@ async function identifyReceivingProduct(code) {
         }
         if (!activeLine || receivingField('product_id').value) addReceivingLine();
         const matchedCase = result.matched_code_kind === 'case_barcode';
+        const select = receivingField('product_id');
+        if (!Array.from(select.options).some(option => option.value === String(product.product_id))) {
+            const option = productOptions.find(option => option.value === String(product.product_id));
+            if (!option) {
+                scanStatus.textContent = 'This product is unavailable for receiving. Choose an active product manually.';
+                return;
+            }
+            select.add(option.cloneNode(true));
+        }
         receivingField('product_id').value = String(product.product_id);
         activeLine.dataset.productId = String(product.product_id);
         receivingField('quantity_mode').value = matchedCase ? 'packages' : 'units';
@@ -313,14 +319,34 @@ function updateQuantityMode() {
     receivingField('packages_qty_group').style.display=packages?'flex':'none';
     receivingField('received_qty').required=!packages;
     receivingField('received_packages').required=packages;
+    receivingField('received_qty').disabled=packages;
+    receivingField('received_packages').disabled=!packages;
+    for (const name of ['received_qty', 'received_packages']) {
+        activeLine.querySelector('label[for="' + receivingField(name).id + '"]').classList.toggle('required', receivingField(name).required);
+    }
     updatePackageConversion();
 }
 let step = 1;
 const form = document.getElementById('receiving_form');
 const lineContainer = document.getElementById('receiving_lines');
 const lineTemplate = activeLine.cloneNode(true);
+const productOptions = Array.from(receivingField('product_id').options, option => option.cloneNode(true));
+const productSearchText = productOptions.map(option => option.textContent.toLowerCase());
+lineTemplate.querySelector('[data-field="product_id"]').replaceChildren(productOptions[0].cloneNode(true));
 for (const label of lineTemplate.querySelectorAll('label[for]')) label.dataset.labelFor = label.htmlFor;
+function populateProductOptions(select) {
+    const value = select.value;
+    const query = document.getElementById('product_search').value.trim().toLowerCase();
+    const options = productOptions.filter((option, index) => !option.value || option.value === value || productSearchText[index].includes(query));
+    select.replaceChildren(...options.map(option => option.cloneNode(true)));
+    select.value = value;
+    const matches = productOptions.filter((option, index) => option.value && productSearchText[index].includes(query)).length;
+    document.getElementById('product_search_status').textContent = query
+        ? (matches ? matches + ' matching ' + (matches === 1 ? 'product.' : 'products.') : 'No matching products. Try another name or SKU, or scan a code.')
+        : '';
+}
 function renumberLines() {
+    clearReceivingErrors();
     for (const [index, row] of Array.from(lineContainer.children).entries()) {
         row.querySelector('.line-number').textContent = index + 1;
         row.setAttribute('aria-label', 'Product line ' + (index + 1));
@@ -333,6 +359,7 @@ function renumberLines() {
             label.dataset.labelFor = name;
             label.htmlFor = index === 0 ? name : name + '_' + index;
         }
+        row.querySelector('[data-field="cost_price"]').setAttribute('aria-describedby', row.querySelector('[data-field="cost_hint"]').id);
     }
     if (activeLine) activateLine(activeLine);
     else document.getElementById('scan_target').textContent = 'Add a product line or scan to start one.';
@@ -341,6 +368,13 @@ function activateLine(row) {
     if (activeLine !== row) {
         activeScanLookup++;
         if (scanLookupController) scanLookupController.abort();
+        if (activeLine?.isConnected) {
+            const select = receivingField('product_id');
+            const selected = select.selectedOptions[0];
+            select.replaceChildren(productOptions[0].cloneNode(true), ...(selected?.value ? [selected.cloneNode(true)] : []));
+            select.value = selected?.value || '';
+        }
+        populateProductOptions(row.querySelector('[data-field="product_id"]'));
     }
     activeLine = row;
     document.getElementById('scan_target').textContent = 'Scanning product line ' + row.querySelector('.line-number').textContent
@@ -358,12 +392,18 @@ function restoreField(field, value) {
 }
 function connectLine(row) {
     row.addEventListener('focusin', () => activateLine(row));
+    row.addEventListener('input', clearReceivingErrors, {capture: true});
+    row.addEventListener('change', clearReceivingErrors, {capture: true});
     row.querySelector('.remove-receiving-line').addEventListener('click', () => {
+        const populated = Array.from(row.querySelectorAll('input, textarea')).some(field => field.value !== field.defaultValue)
+            || Boolean(row.querySelector('[data-field="product_id"]').value);
+        if (populated && !window.confirm('Remove this product and its entered receiving details?')) return;
         activeScanLookup++;
         if (scanLookupController) scanLookupController.abort();
         row.remove();
         document.getElementById('entry_status').textContent = '';
-        activeLine = lineContainer.lastElementChild;
+        activeLine = null;
+        if (lineContainer.lastElementChild) activateLine(lineContainer.lastElementChild);
         renumberLines();
         (activeLine?.querySelector('[data-field="product_id"]') || document.getElementById('add_receiving_line')).focus();
     });
@@ -419,12 +459,40 @@ function showStep(next, focus = true) {
     if (focus) document.getElementById('receiving_step_title').focus();
 }
 function validateProducts() {
+    clearReceivingErrors();
     const products = Array.from(lineContainer.children).map(row => row.querySelector('[data-field="product_id"]').value);
     const valid = products.length > 0 && products.every(Boolean) && new Set(products).size === products.length;
     document.getElementById('entry_status').textContent = valid ? '' : 'Select at least one product. Each line must have a different product.';
+    if (!valid) {
+        const invalid = Array.from(lineContainer.querySelectorAll('[data-field="product_id"]')).find(field => !field.value);
+        if (invalid) receivingError(invalid, 'Select a product for this line.');
+        else if (!products.length) document.getElementById('add_receiving_line').focus();
+    }
     return valid;
 }
+function clearReceivingErrors() {
+    for (const field of form.querySelectorAll('[aria-invalid="true"]')) {
+        field.removeAttribute('aria-invalid');
+        const errorId = field.id + '_error';
+        const describedBy = (field.getAttribute('aria-describedby') || '').split(' ').filter(id => id && id !== errorId);
+        if (describedBy.length) field.setAttribute('aria-describedby', describedBy.join(' '));
+        else field.removeAttribute('aria-describedby');
+    }
+    for (const error of form.querySelectorAll('[data-receiving-error]')) error.remove();
+    document.getElementById('entry_status').textContent = '';
+}
+function receivingError(field, message) {
+    const error = document.createElement('small');
+    error.id = field.id + '_error';
+    error.dataset.receivingError = '';
+    error.textContent = message;
+    field.after(error);
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', [field.getAttribute('aria-describedby'), error.id].filter(Boolean).join(' '));
+    field.focus();
+}
 function validateQuantities() {
+    clearReceivingErrors();
     for (const [index, row] of Array.from(lineContainer.children).entries()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const packages = field('quantity_mode').value === 'packages';
@@ -452,7 +520,7 @@ function validateQuantities() {
         if (invalid) {
             showStep(2, false);
             document.getElementById('entry_status').textContent = 'Line ' + (index + 1) + ': ' + message;
-            invalid.focus();
+            receivingError(invalid, message);
             return false;
         }
     }
@@ -499,11 +567,8 @@ document.getElementById('receiving_next').addEventListener('click', () => {
     if (step === 1) { showStep(2); return; }
     if (validateQuantities()) { renderReview(); showStep(3); }
 });
-document.getElementById('product_search').addEventListener('input', event => {
-    const query = event.target.value.trim().toLowerCase();
-    for (const select of lineContainer.querySelectorAll('[data-field="product_id"]')) {
-        for (const option of select.options) option.hidden = Boolean(option.value) && !option.textContent.toLowerCase().includes(query);
-    }
+document.getElementById('product_search').addEventListener('input', () => {
+    if (activeLine) populateProductOptions(receivingField('product_id'));
 });
 connectLine(activeLine);
 renumberLines();

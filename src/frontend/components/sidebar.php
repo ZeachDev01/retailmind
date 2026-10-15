@@ -211,10 +211,10 @@ $roleSections = [
         [
             'items' => [
                 ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Stock Overview'],
+                ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products'],
                 ['path' => 'components/inventory_management/replenishment_queue.php', 'icon' => 'bi-diagram-3', 'label' => 'Replenishment Recommendations'],
                 ['path' => 'components/report/stock_receiving.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'Stock Receiving'],
                 ['path' => 'components/report/receiving_history.php', 'icon' => 'bi-clock-history', 'label' => 'Receiving History'],
-                ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products'],
                 ['icon' => 'bi-sliders', 'label' => 'Inventory Control', 'items' => [
                     ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-clipboard-check', 'label' => 'Inventory Counts'],
                     ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],

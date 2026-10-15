@@ -5,6 +5,7 @@ require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
+require_once __DIR__ . '/../app/Support/OperatorAlert.php';
 
 function require_role(array $roles): void {}
 function current_role(): string { return 'inventory_manager'; }
@@ -26,12 +27,8 @@ $pdo->exec("CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT,
         supplier_lead_time_days INTEGER, minimum_order_quantity INTEGER,
         reorder_level INTEGER, safety_stock INTEGER, units_per_package INTEGER);
     CREATE TABLE inventory (product_id INTEGER, quantity_on_hand INTEGER);
-    CREATE TABLE supplier_products (supplier_product_id INTEGER PRIMARY KEY, product_id INTEGER, lead_time_days INTEGER,
-        minimum_order_quantity INTEGER, is_preferred INTEGER);
     CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT);
-    CREATE TABLE replenishment_requests (request_id INTEGER, product_id INTEGER, requested_by INTEGER,
-        approved_by INTEGER, request_qty INTEGER, status TEXT, request_date TEXT);
-    CREATE TABLE stock_receiving (replenishment_request_id INTEGER, accepted_qty INTEGER);
+
     INSERT INTO products VALUES (1, 'NEEDS-STOCK', 'Needs stock', 'active', 7, 1, 10, 5, 1);
     INSERT INTO inventory VALUES (1, 0);
     INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'newly-promoted-model')");
@@ -41,9 +38,11 @@ function renderReplenishmentPage(PDO $pdo, string $name): string
     $_SERVER['REQUEST_METHOD'] = 'GET';
     $_GET = [];
     $source = file_get_contents(__DIR__ . '/../../frontend/components/inventory_management/' . $name . '.php');
+    $source = str_replace('declare(strict_types=1);', '', $source);
     $source = preg_replace('/^require_once .*;\R/m', '', $source);
     $source = str_replace('Session::start();', '', $source);
     $source = str_replace("<?php include __DIR__ . '/../sidebar.php'; ?>", '', $source);
+    $source = str_replace('__DIR__', var_export(realpath(__DIR__ . '/../../frontend/components/inventory_management'), true), $source);
     ob_start();
     try {
         eval('?>' . $source);
@@ -57,6 +56,9 @@ foreach (['replenishment_queue'] as $page) {
     $empty = renderReplenishmentPage($pdo, $page);
     if (str_contains($empty, 'Demo Mode') || str_contains($empty, 'newly-promoted-model')) {
         throw new RuntimeException("{$page}: empty history must not invent model or Demo metadata");
+    }
+    if (!str_contains($empty, 'View only') || str_contains($empty, 'Add bought goods') || str_contains($empty, 'Record bought stock')) {
+        throw new RuntimeException('Read-only users must see explicit access text without receiving actions');
     }
 }
 
@@ -91,4 +93,16 @@ foreach ([null, 'invalid-json'] as $metrics) {
         throw new RuntimeException('Missing training provenance must retain forecast model without inventing Demo label');
     }
 }
-echo "Replenishment metadata contract passed.\n";
+$pdo->exec("UPDATE products SET status='inactive'");
+$empty = renderReplenishmentPage($pdo, 'replenishment_queue');
+if (!str_contains($empty, 'No active products available') || str_contains($empty, 'Print all recommendations')) {
+    throw new RuntimeException('Empty catalog must show an empty state without a print action');
+}
+$pdo->exec('DROP TABLE inventory');
+$unavailable = renderReplenishmentPage($pdo, 'replenishment_queue');
+if (!str_contains($unavailable, 'Recommendations could not be loaded')
+    || !str_contains($unavailable, '>Reload</a>') || !str_contains($unavailable, 'role="status"')
+    || str_contains($unavailable, 'No active products available') || str_contains($unavailable, 'SQLSTATE')) {
+    throw new RuntimeException('Loading failure must offer recovery without an empty catalog claim or technical details');
+}
+echo "Replenishment metadata and error-state contract passed.\n";

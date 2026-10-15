@@ -31,68 +31,6 @@ function ensure_operational_updates_schema(PDO $pdo): void
         applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-    $pdo->exec("CREATE TABLE IF NOT EXISTS suppliers (
-        supplier_id INT AUTO_INCREMENT PRIMARY KEY,
-        supplier_name VARCHAR(150) NOT NULL UNIQUE,
-        contact_person VARCHAR(120) NULL,
-        email VARCHAR(150) NULL,
-        phone VARCHAR(60) NULL,
-        address TEXT NULL,
-        standard_lead_time_days INT NOT NULL DEFAULT 7,
-        minimum_order_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        status ENUM('active','inactive') NOT NULL DEFAULT 'active',
-        notes TEXT NULL,
-        created_by INT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_suppliers_status (status)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    $pdo->exec("CREATE TABLE IF NOT EXISTS supplier_products (
-        supplier_product_id INT AUTO_INCREMENT PRIMARY KEY,
-        supplier_id INT NOT NULL,
-        product_id INT NOT NULL,
-        supplier_sku VARCHAR(100) NULL,
-        last_unit_cost DECIMAL(12,2) NULL,
-        minimum_order_quantity INT NOT NULL DEFAULT 1,
-        lead_time_days INT NOT NULL DEFAULT 7,
-        is_preferred BOOLEAN NOT NULL DEFAULT FALSE,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_supplier_product (supplier_id, product_id),
-        INDEX idx_supplier_products_product (product_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    $pdo->exec("CREATE TABLE IF NOT EXISTS purchase_orders (
-        purchase_order_id INT AUTO_INCREMENT PRIMARY KEY,
-        po_number VARCHAR(60) NOT NULL UNIQUE,
-        supplier_id INT NULL,
-        status ENUM('draft','approved','sent','partially_received','fully_received','cancelled') NOT NULL DEFAULT 'draft',
-        expected_delivery_date DATE NULL,
-        notes TEXT NULL,
-        created_by INT NOT NULL,
-        approved_by INT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        approved_at TIMESTAMP NULL,
-        sent_at TIMESTAMP NULL,
-        cancelled_at TIMESTAMP NULL,
-        INDEX idx_purchase_orders_status (status),
-        INDEX idx_purchase_orders_supplier (supplier_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    $pdo->exec("CREATE TABLE IF NOT EXISTS purchase_order_items (
-        purchase_order_item_id INT AUTO_INCREMENT PRIMARY KEY,
-        purchase_order_id INT NOT NULL,
-        replenishment_request_id INT NULL,
-        product_id INT NOT NULL,
-        ordered_qty INT NOT NULL,
-        received_qty INT NOT NULL DEFAULT 0,
-        unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        notes TEXT NULL,
-        UNIQUE KEY uq_po_request (purchase_order_id, replenishment_request_id),
-        INDEX idx_po_items_product (product_id),
-        INDEX idx_po_items_request (replenishment_request_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
     // Ticket #88. An open Cashier Shift belongs to exactly one Cashier and
     // exactly one Register. MySQL has no filtered unique index, so each rule is
     // a generated column that is non-NULL only while the shift is open, carried
@@ -190,7 +128,6 @@ function ensure_operational_updates_schema(PDO $pdo): void
         override_reason TEXT NULL,
         decided_by INT NOT NULL,
         decided_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        replenishment_request_id INT NULL,
         INDEX idx_forecast_decisions_prediction (prediction_id),
         INDEX idx_forecast_decisions_product (product_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -239,15 +176,9 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     ensure_table_column($pdo, 'stock_receiving', 'group_id', 'INT NULL AFTER receiving_id');
-    ensure_table_column($pdo, 'stock_receiving', 'purchase_order_id', 'INT NULL AFTER replenishment_request_id');
-    ensure_table_column($pdo, 'stock_receiving', 'purchase_order_item_id', 'INT NULL AFTER purchase_order_id');
     ensure_table_column($pdo, 'stock_receiving', 'received_packages', 'INT NOT NULL DEFAULT 0 AFTER received_qty');
     ensure_table_column($pdo, 'stock_receiving', 'units_per_package_used', 'INT NOT NULL DEFAULT 1 AFTER received_packages');
 
-    ensure_table_column($pdo, 'replenishment_requests', 'forecast_prediction_id', 'INT NULL AFTER source');
-    ensure_table_column($pdo, 'replenishment_requests', 'forecast_job_id', 'BIGINT UNSIGNED NULL AFTER forecast_prediction_id');
-    ensure_table_column($pdo, 'replenishment_requests', 'original_suggested_qty', 'INT NULL AFTER forecast_prediction_id');
-    ensure_table_column($pdo, 'replenishment_requests', 'override_reason', 'TEXT NULL AFTER original_suggested_qty');
 
     $stmt = $pdo->prepare(
         "INSERT INTO schema_migrations (migration_key, description) VALUES (?, ?)

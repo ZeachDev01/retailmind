@@ -122,26 +122,6 @@ try {
             queued_at TEXT DEFAULT CURRENT_TIMESTAMP,
             completed_at TEXT
         );
-        CREATE TABLE supplier_products (
-            supplier_product_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            supplier_id INTEGER,
-            product_id INTEGER,
-            lead_time_days INTEGER,
-            minimum_order_quantity INTEGER,
-            is_preferred INTEGER DEFAULT 1
-        );
-        CREATE TABLE purchase_orders (
-            purchase_order_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            status TEXT,
-            expected_delivery_date TEXT
-        );
-        CREATE TABLE purchase_order_items (
-            purchase_order_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            purchase_order_id INTEGER,
-            product_id INTEGER,
-            ordered_qty INTEGER,
-            received_qty INTEGER
-        );
     ");
     $assert(true, "Isolated test schema initialized successfully");
 
@@ -299,33 +279,20 @@ try {
     $pdo->exec("UPDATE products SET supplier_lead_time_days = 7, minimum_order_quantity = 6 WHERE product_id = 1");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 5)"); // Product 1: Stock 5, Lead demand ~25. Urgent.
 
-    // Product 7: Test reliable vs late/untimed inbound
+    // Product 7: Guidance uses recorded stock only
     $pdo->exec("UPDATE products SET supplier_lead_time_days = 7, minimum_order_quantity = 5 WHERE product_id = 7");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (7, 0)");
-    // Timely PO (in 3 days)
-    $pdo->exec("INSERT INTO purchase_orders (purchase_order_id, status, expected_delivery_date) VALUES (1, 'approved', '2026-10-12')");
-    $pdo->exec("INSERT INTO purchase_order_items (purchase_order_id, product_id, ordered_qty, received_qty) VALUES (1, 7, 10, 0)");
-    // Late PO (in 20 days)
-    $pdo->exec("INSERT INTO purchase_orders (purchase_order_id, status, expected_delivery_date) VALUES (2, 'approved', '2026-10-29')");
-    $pdo->exec("INSERT INTO purchase_order_items (purchase_order_id, product_id, ordered_qty, received_qty) VALUES (2, 7, 25, 0)");
-    // Untimed PO (NULL delivery date)
-    $pdo->exec("INSERT INTO purchase_orders (purchase_order_id, status, expected_delivery_date) VALUES (3, 'approved', NULL)");
-    $pdo->exec("INSERT INTO purchase_order_items (purchase_order_id, product_id, ordered_qty, received_qty) VALUES (3, 7, 15, 0)");
 
     // Add un-forecasted Product 21 (status active, no forecast rows)
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (21, 'P0021-UN', 'Unforecasted Product', 'active', 7, 5)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (21, 12)");
-
-    $initialPoCount = (int)$pdo->query("SELECT COUNT(*) FROM purchase_orders")->fetchColumn();
     $initialStockCount = (int)$pdo->query("SELECT SUM(quantity_on_hand) FROM inventory")->fetchColumn();
 
     $queueService = new ReplenishmentQueueService($pdo);
     $queue = $queueService->getQueue($jobId, $forecastOrigin);
 
     // Decision support invariant: no PO created or stock changed
-    $afterPoCount = (int)$pdo->query("SELECT COUNT(*) FROM purchase_orders")->fetchColumn();
     $afterStockCount = (int)$pdo->query("SELECT SUM(quantity_on_hand) FROM inventory")->fetchColumn();
-    $assert($initialPoCount === $afterPoCount, "Queue generation created no purchase orders (non-binding decision support)");
     $assert($initialStockCount === $afterStockCount, "Queue generation made no inventory adjustments");
 
     // Index by product_id

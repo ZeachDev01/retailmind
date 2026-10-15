@@ -18,7 +18,6 @@ if (in_array($argv[1], ['reset_ready', 'reset_state', 'reset_failure', 'reset_al
         (new App\Database\DailySalesTrendSeeder($pdo))->run();
         $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (90000,'DELETE-TEST','DELETE-TEST','Unused deletion test',1,1,1)");
         $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (90000,0)');
-        $pdo->exec('INSERT INTO supplier_products (supplier_id,product_id) VALUES (1,90000)');
         $pdo->exec("INSERT INTO promotions (promotion_name,discount_type,discount_value,scope,product_id,starts_at,ends_at,created_by) VALUES ('Product reset test','fixed',1,'product',1,NOW(),DATE_ADD(NOW(),INTERVAL 1 DAY),1),('General preserved test','fixed',1,'all',NULL,NOW(),DATE_ADD(NOW(),INTERVAL 1 DAY),1)");
         $pdo->exec("INSERT INTO forecast_sales_imports (product_id,sale_date,quantity,imported_by) VALUES (1,'2026-01-01',5,1)");
         $pdo->exec("INSERT INTO model_training_runs (model_name,model_version,status) VALUES ('Random Forest','rf-v2','completed')");
@@ -51,7 +50,7 @@ if (in_array($argv[1], ['reset_ready', 'reset_state', 'reset_failure', 'reset_al
         $state['promotions'] = (int)$pdo->query('SELECT COUNT(*) FROM promotions WHERE product_id IS NOT NULL')->fetchColumn();
         $state['general_promotions'] = (int)$pdo->query('SELECT COUNT(*) FROM promotions WHERE product_id IS NULL')->fetchColumn();
         $state['inventory_units'] = (int)$pdo->query('SELECT SUM(quantity_on_hand) FROM inventory')->fetchColumn();
-        foreach (['products', 'users', 'categories', 'suppliers', 'roles', 'registers', 'fiscal_periods'] as $table) {
+        foreach (['products', 'users', 'categories', 'roles', 'registers', 'fiscal_periods'] as $table) {
             $state[$table] = (int)$pdo->query("SELECT COUNT(*) FROM `{$table}`")->fetchColumn();
         }
         $state['preserved_audit'] = (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE action = 'Preserve reset audit sentinel'")->fetchColumn();
@@ -67,7 +66,6 @@ if ($argv[1] === 'reports') {
         $product->execute([$id, 'REPORT-' . $id, 'REPORT-' . $id, 'Report pagination item ' . $id, 25, 3]);
         $pdo->exec("INSERT IGNORE INTO inventory (product_id,quantity_on_hand) VALUES ({$id},10)");
     }
-    $pdo->exec('INSERT IGNORE INTO purchase_order_items (purchase_order_item_id,purchase_order_id,product_id,ordered_qty,unit_cost) VALUES (100,1,1,5,3)');
     $pdo->exec("INSERT IGNORE INTO forecast_runs (forecast_run_id,model_name,model_version,forecast_period_days) VALUES (100,'Random Forest','theme-test',7)");
     $pdo->exec('INSERT IGNORE INTO stock_predictions (prediction_id,forecast_run_id,product_id,forecast_period_days,forecast_value,actual_demand) VALUES (100,100,1,7,8,6)');
     $pdo->exec("INSERT IGNORE INTO model_training_runs (training_run_id,model_name,model_version,status,metrics_json) VALUES (100,'Random Forest','theme-test','completed','{\"wape\":12,\"mean_absolute_error\":2}'),(101,'Random Forest','theme-test','completed','{\"wape\":10,\"mean_absolute_error\":1}')");
@@ -83,7 +81,7 @@ if ($argv[1] === 'responsive') {
 if ($argv[1] === 'inventory_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];
-    foreach (['products', 'inventory', 'suppliers', 'supplier_products', 'replenishment_requests', 'purchase_orders', 'purchase_order_items', 'stock_movements', 'inventory_counts', 'inventory_adjustments', 'stock_predictions', 'forecast_runs', 'forecast_decisions', 'stock_receiving', 'promotions'] as $table) {
+    foreach (['products', 'inventory', 'stock_movements', 'inventory_counts', 'inventory_adjustments', 'stock_predictions', 'forecast_runs', 'forecast_decisions', 'stock_receiving', 'promotions'] as $table) {
         $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
     }
     echo json_encode($state); exit;
@@ -179,11 +177,7 @@ $pdo->prepare('INSERT INTO held_sales (cashier_id,shift_id,reference_no,customer
     ->execute(['THEME-HELD', 'Unfinished theme customer', json_encode([1 => ['qty' => 1, 'name' => 'Theme Test Item', 'price' => 25]]), 1, 25]);
 $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (1,'THEME-ITEM','THEME-BARCODE','Theme Test Item',25,3,1)");
 $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,10)');
-$pdo->exec("INSERT INTO suppliers (supplier_id,supplier_name,created_by) VALUES (1,'Theme Test Supplier',3)");
-$pdo->exec('INSERT INTO supplier_products (supplier_id,product_id) VALUES (1,1)');
 $pdo->exec("INSERT INTO inventory_adjustments (product_id,adjustment_qty,adjustment_type,reported_by,shift_id,reason) VALUES (1,1,'damaged',4,1,'Disposable theme Stock Issue')");
-$pdo->exec("INSERT INTO purchase_orders (po_number,supplier_id,status,created_by) VALUES ('THEME-PO',1,'draft',3)");
-$pdo->exec("INSERT INTO replenishment_requests (product_id,request_qty,requested_by,status,approved_by) VALUES (1,5,3,'approved',1)");
 App\Store\StoreWriteGate::begin($pdo); $pdo->commit();
 $pdo->exec("INSERT INTO sales (sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES (1,4,1,25,'cash')");
 $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (1,1,1,1,25,25)');

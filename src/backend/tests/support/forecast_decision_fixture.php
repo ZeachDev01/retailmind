@@ -30,6 +30,25 @@ if ($argv[1] === 'create') {
 }
 $pdo->exec("USE `{$database}`");
 switch ($argv[1]) {
+    case 'queue_many':
+        $product = $pdo->prepare('INSERT INTO products (sku,barcode,product_name,unit_price,cost_price,branch_id,reorder_level) VALUES (?,?,?,25,3,1,10)');
+        $inventory = $pdo->prepare('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (?,5)');
+        for ($i = 0; $i < 1000; $i++) {
+            $sku = 'QUEUE-' . str_pad((string)$i, 4, '0', STR_PAD_LEFT);
+            $product->execute([$sku, $sku, $i === 0 ? str_repeat('Long product name ', 7) . ' Café 茶 <test>' : 'Queue product ' . $i]);
+            $inventory->execute([(int)$pdo->lastInsertId()]);
+        }
+        break;
+    case 'queue_empty':
+        $pdo->exec("UPDATE products SET status='inactive'");
+        break;
+    case 'queue_failure':
+        $pdo->exec('RENAME TABLE inventory TO queue_unavailable_inventory');
+        break;
+    case 'queue_recover':
+        $pdo->exec("RENAME TABLE queue_unavailable_inventory TO inventory;
+            UPDATE products SET status='active' WHERE product_id IN (1,2)");
+        break;
     case 'stock_guidance':
         $pdo->exec("UPDATE products SET reorder_level=10, safety_stock=5, minimum_order_quantity=6, units_per_package=4 WHERE product_id=1");
         break;
@@ -59,8 +78,7 @@ switch ($argv[1]) {
         $migration['up']($pdo);
         // Match the legacy model metadata collation on MySQL 8's newer default.
         $pdo->exec('ALTER TABLE demand_forecasts MODIFY model_version VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL');
-        $pdo->exec('ALTER TABLE forecast_decisions DROP FOREIGN KEY fk_forecast_decisions_forecast_job, DROP COLUMN forecast_job_id, MODIFY prediction_id INT NOT NULL;
-            ALTER TABLE replenishment_requests DROP FOREIGN KEY fk_replenishment_requests_forecast_job, DROP COLUMN forecast_job_id');
+        $pdo->exec('ALTER TABLE forecast_decisions DROP FOREIGN KEY fk_forecast_decisions_forecast_job, DROP COLUMN forecast_job_id, MODIFY prediction_id INT NOT NULL');
         $pdo->exec("UPDATE inventory SET quantity_on_hand=0;
             INSERT INTO ml_jobs (job_id,trigger_type,status,queued_at,completed_at) VALUES
                 (10,'forecast_generation','succeeded',NOW(),NOW());
@@ -73,9 +91,7 @@ switch ($argv[1]) {
             INSERT INTO stock_predictions (prediction_id,forecast_run_id,product_id,forecast_period_days,forecast_value,actual_demand)
                 VALUES (100,100,2,7,8,6);
             INSERT INTO forecast_decisions (prediction_id,product_id,original_suggested_qty,final_quantity,decision,decided_by)
-                VALUES (100,2,8,8,'accepted',3);
-            INSERT INTO replenishment_requests (product_id,request_qty,requested_by,source,forecast_prediction_id,original_suggested_qty)
-                VALUES (2,8,3,'ml_forecast',100,8)");
+                VALUES (100,2,8,8,'accepted',3)");
         break;
     case 'upgrade':
         $migration = require __DIR__ . '/../../database/migrations/202610120001_forecast_decision_source.php';
@@ -102,9 +118,7 @@ switch ($argv[1]) {
         $settings->setRecommendationsSuspended($argv[1] === 'suspend', 3);
         break;
     case 'state':
-        echo json_encode(['requests' => $pdo->query('SELECT * FROM replenishment_requests ORDER BY request_id')->fetchAll(PDO::FETCH_ASSOC),
-            'inventory' => $pdo->query('SELECT * FROM inventory ORDER BY product_id')->fetchAll(PDO::FETCH_ASSOC),
-            'orders' => $pdo->query('SELECT * FROM purchase_orders ORDER BY purchase_order_id')->fetchAll(PDO::FETCH_ASSOC),
+        echo json_encode(['inventory' => $pdo->query('SELECT * FROM inventory ORDER BY product_id')->fetchAll(PDO::FETCH_ASSOC),
             'decisions' => $pdo->query('SELECT * FROM forecast_decisions ORDER BY forecast_decision_id')->fetchAll(PDO::FETCH_ASSOC)]);
         break;
     default: throw new RuntimeException('Unknown fixture action.');

@@ -140,16 +140,24 @@ Select your RetailMind database in phpMyAdmin, then use **Import** with one file
 
 | File                         | Use                                               | Existing records                                                           |
 | ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| `src/backend/database/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, including passwords and transaction history                      |
+| `src/backend/database/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, except retired development procurement records and links                      |
 | `src/backend/database/sql/schema.sql` | Install into an empty database                    | Drops and recreates RetailMind tables; includes seed accounts and products |
 
-Both files include all 37 migrations through `202610040001_user_theme` (October 8,
-2026), including required operational tables, role mappings, settings defaults,
+Both files include procurement retirement through `202610150003_retire_procurement_storage`
+(October 15, 2026), including grouped Receiving History, required operational tables, role mappings, settings defaults,
 indexes, foreign keys, and historical backfills. Barcode pairing, email logs,
 settings, and forecasting SQL dependencies are included too. The update checks actual table,
 column, and constraint state even if the migration ledger incorrectly reports an
 update as applied. It can be imported again. It requires the existing base
 RetailMind tables; it is not a fresh-install script.
+
+The development procurement retirement deletes supplier administration, Supplier Product Terms,
+requests, orders, and document links. Receiving quantities, shopping-store text, receipt
+references, optional cost history, product planning defaults, stock/batches, accounts,
+sales/refunds, customer receipts, and Protected Audit Records survive. This supersedes
+#176’s preservation scope under #181; historical ADRs remain records of past decisions.
+See [the operator workflow](docs/guides/direct-stock-receiving.md) and
+[ADR 0011](docs/adr/0011-retire-development-procurement.md).
 
 Back up the database and stop Store activity before importing the update. Stop
 on the first error. MySQL/MariaDB DDL commits independently, so a failed import
@@ -170,6 +178,7 @@ Validation (creates and removes disposable databases only):
 ```powershell
 $env:RUN_DB_TESTS='1'
 php src/backend/tests/consolidated_sql_integration.php
+php src/backend/tests/procurement_schema_integration.php
 ```
 
 **Hosting compatibility:** InfinityFree only permits application files under

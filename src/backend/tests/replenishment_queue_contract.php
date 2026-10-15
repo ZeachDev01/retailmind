@@ -45,26 +45,6 @@ try {
             readiness_level TEXT,
             model_version TEXT
         );
-        CREATE TABLE supplier_products (
-            supplier_product_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            supplier_id INTEGER,
-            product_id INTEGER,
-            lead_time_days INTEGER,
-            minimum_order_quantity INTEGER,
-            is_preferred INTEGER
-        );
-        CREATE TABLE purchase_orders (
-            purchase_order_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            status TEXT,
-            expected_delivery_date TEXT
-        );
-        CREATE TABLE purchase_order_items (
-            purchase_order_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            purchase_order_id INTEGER,
-            product_id INTEGER,
-            ordered_qty INTEGER,
-            received_qty INTEGER
-        );
     ");
 
     $asOfDate = '2026-10-09';
@@ -104,28 +84,12 @@ try {
     $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 6, 7, 0, '$asOfDate', 'High')");
     $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 6, 28, 0, '$asOfDate', 'High')");
 
-    // Product 7: Reliable vs Late/Unknown Inbound.
+    // Product 7: Guidance uses recorded stock only.
     // Stock 0, Lead time 7 days, Lead time demand 15.
-    // PO 1 (timely): expected in 3 days (2026-10-12), 10 units. Counted!
-    // PO 2 (late): expected in 20 days (2026-10-29), 20 units. Outside 7-day lead time! Excluded.
-    // PO 3 (untimed): expected_delivery_date = NULL, 15 units. Excluded.
-    // PO 4 (overdue): expected in past (2026-10-05), 5 units. Excluded.
-    $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (7, 'SKU7', 'P7 Inbound Timing', 'active', 7, 5)");
+    $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (7, 'SKU7', 'P7 Current Stock', 'active', 7, 5)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (7, 0)");
     $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 7, 7, 15, '$asOfDate', 'High')");
     $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 7, 28, 30, '$asOfDate', 'High')");
-
-    $pdo->exec("INSERT INTO purchase_orders (purchase_order_id, status, expected_delivery_date) VALUES (1, 'approved', '2026-10-12')");
-    $pdo->exec("INSERT INTO purchase_order_items (purchase_order_id, product_id, ordered_qty, received_qty) VALUES (1, 7, 10, 0)");
-
-    $pdo->exec("INSERT INTO purchase_orders (purchase_order_id, status, expected_delivery_date) VALUES (2, 'sent', '2026-10-29')");
-    $pdo->exec("INSERT INTO purchase_order_items (purchase_order_id, product_id, ordered_qty, received_qty) VALUES (2, 7, 20, 0)");
-
-    $pdo->exec("INSERT INTO purchase_orders (purchase_order_id, status, expected_delivery_date) VALUES (3, 'approved', NULL)");
-    $pdo->exec("INSERT INTO purchase_order_items (purchase_order_id, product_id, ordered_qty, received_qty) VALUES (3, 7, 15, 0)");
-
-    $pdo->exec("INSERT INTO purchase_orders (purchase_order_id, status, expected_delivery_date) VALUES (4, 'approved', '2026-10-05')");
-    $pdo->exec("INSERT INTO purchase_order_items (purchase_order_id, product_id, ordered_qty, received_qty) VALUES (4, 7, 5, 0)");
 
     // Product 8: MOQ Constraint rounding.
     // Stock 0, Inbound 0, Lead time demand 10, 28-day demand 15. Target = 25. Deficit = 25.
@@ -134,8 +98,6 @@ try {
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (8, 0)");
     $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 8, 7, 10, '$asOfDate', 'High')");
     $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 8, 28, 15, '$asOfDate', 'High')");
-
-    $initialPoCount = (int)$pdo->query("SELECT COUNT(*) FROM purchase_orders")->fetchColumn();
     $initialInventoryQty = (int)$pdo->query("SELECT SUM(quantity_on_hand) FROM inventory")->fetchColumn();
 
     $service = new ReplenishmentQueueService($pdo);
@@ -144,9 +106,7 @@ try {
     $assert(count($queue) === 8, "Expected 8 items in queue, got " . count($queue));
 
     // Verify non-binding property: queue retrieval never created POs or mutated stock
-    $afterPoCount = (int)$pdo->query("SELECT COUNT(*) FROM purchase_orders")->fetchColumn();
     $afterInventoryQty = (int)$pdo->query("SELECT SUM(quantity_on_hand) FROM inventory")->fetchColumn();
-    $assert($initialPoCount === $afterPoCount, "Queue generation must never create purchase orders");
     $assert($initialInventoryQty === $afterInventoryQty, "Queue generation must never modify inventory stock");
 
     // Index by product_id for granular checks
@@ -192,6 +152,8 @@ try {
 
     // Test getRecommendations() method
     $recs = $service->getRecommendations(10);
+    $assert(array_column($recs, 'product_id') === array_column($queueWithP9, 'product_id'),
+        'Displayed recommendations must preserve forecast risk ordering, including exposure and product ID ties');
     $recsByPid = array_column($recs, null, 'product_id');
     $assert(isset($recsByPid[9]), "P9 must be present in getRecommendations");
     $assert($recsByPid[9]['basis'] === 'Demand Forecast', "P9 basis must be Demand Forecast");
@@ -210,8 +172,6 @@ try {
     $assert($p9After['recommended_quantity'] === 0, "P9 suggested units must be 0 after receiving stock");
 
     // Non-mutation check
-    $finalPoCount = (int)$pdo->query("SELECT COUNT(*) FROM purchase_orders")->fetchColumn();
-    $assert($finalPoCount === $initialPoCount, "Recommendations retrieval must never mutate purchase orders");
 
     // P2 Watch check
     $assert($byProduct[2]['urgency_label'] === 'Watch', "P2 must be Watch");

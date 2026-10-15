@@ -22,7 +22,7 @@ const screens = inventory ? [
     ...fs.readdirSync('src/frontend/components/inventory_management').filter(file => file.endsWith('.php') && file !== 'promotions.php').map(file => 'inventory_management/' + file.slice(0, -4)),
     'inventory_management/product_investigation?product_id=1',
     'inventory_management/print_barcodes?product_id=1',
-    'invoice/purchase_orders', 'report/stock_receiving', 'invoice/sales?tab=transactions',
+    'report/stock_receiving', 'report/receiving_history', 'invoice/sales?tab=transactions',
     'report/forecast_analytics', 'report/forecast_exceptions', 'report/predictions', 'report/data_readiness',
     'auth/user_info', 'auth/preferences', 'auth/change_password', 'auth/workspace', 'notification/notifications',
 ] : admin ? [

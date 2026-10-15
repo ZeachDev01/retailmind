@@ -197,7 +197,7 @@ unset($_SESSION['_login_username']);
                         <div><h3>Forecast planning</h3><p>Review Random Forest forecasts and Store readiness across 7-, 14-, and 28-day horizons.</p></div>
                     </article>
                     <article class="landing-capability">
-                        <div><h3>Purchase flow</h3><p>Manage suppliers, approvals, package conversion, and partial receiving.</p></div>
+                        <div><h3>Stock Receiving</h3><p>Record bought goods in units or packs, then review receiving history.</p></div>
                     </article>
                     <article class="landing-capability">
                         <div><h3>Shift closeout</h3><p>Track pay-ins, pay-outs, expected cash, and end-of-shift variance.</p></div>

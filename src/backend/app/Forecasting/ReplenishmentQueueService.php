@@ -66,7 +66,7 @@ class ReplenishmentQueueService
             }
         }
         unset($product);
-        return $products;
+        return $forecasts && !$observation && !$suspended ? $this->sortByRisk($products) : $products;
     }
 
     public function getQueue(int $jobId, ?string $asOfDate = null): array
@@ -218,6 +218,11 @@ class ReplenishmentQueueService
             ];
         }
 
+        return $this->sortByRisk($queue);
+    }
+
+    private function sortByRisk(array $queue): array
+    {
         // Sort by risk: Urgent -> Watch -> Unknown -> Covered, then by exposure ascending, then product_id ascending
         usort($queue, function($a, $b) {
             $urgencyRank = [

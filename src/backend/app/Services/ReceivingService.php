@@ -317,8 +317,15 @@ class ReceivingService
         return $stmt->fetchAll();
     }
 
-    public function getGroupedReceivingHistory(?int $userId = null): array
+    /** Returns 20 complete receipts plus one next-page probe. */
+    public function getGroupedReceivingHistory(?int $userId = null, int $page = 1, string $search = ''): array
     {
+        $offset = (min(100000, max(1, $page)) - 1) * 20;
+        $from = 'FROM stock_receiving sr
+            LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.group_id
+            JOIN products p ON sr.product_id = p.product_id
+            JOIN users u ON sr.received_by = u.user_id';
+        $key = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
         $stmt = $this->pdo->prepare("SELECT
                 sr.receiving_id, sr.group_id, sr.product_id, sr.received_qty, sr.received_packages,
                 sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,
@@ -330,13 +337,24 @@ class ReceivingService
                 srg.received_at AS group_received_at, srg.supplier AS group_supplier,
                 srg.invoice_number AS group_invoice, srg.notes AS group_notes,
                 u.full_name AS recorded_by
-            FROM stock_receiving sr
-            LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.group_id
-            JOIN products p ON sr.product_id = p.product_id
-            JOIN users u ON sr.received_by = u.user_id
+            {$from}
+            JOIN (
+                SELECT {$key} AS entry_key
+                {$from}
+                WHERE (? IS NULL OR sr.received_by = ?)
+                GROUP BY entry_key
+                HAVING MAX(LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', p.product_name, p.sku,
+                    COALESCE(srg.supplier, sr.supplier), COALESCE(srg.invoice_number, sr.invoice_number),
+                    u.full_name, sr.received_at, sr.batch_number, sr.discrepancy_notes, sr.notes, srg.notes)))) > 0
+                ORDER BY MAX(COALESCE(srg.received_at, sr.received_at)) DESC,
+                    MAX(COALESCE(sr.group_id, sr.receiving_id)) DESC, entry_key DESC
+                LIMIT 21 OFFSET {$offset}
+            ) history_page ON history_page.entry_key = {$key}
             WHERE (? IS NULL OR sr.received_by = ?)
-            ORDER BY COALESCE(srg.received_at, sr.received_at) DESC, COALESCE(sr.group_id, sr.receiving_id) DESC, sr.receiving_id ASC");
-        $stmt->execute([$userId, $userId]);
+            ORDER BY COALESCE(srg.received_at, sr.received_at) DESC, COALESCE(sr.group_id, sr.receiving_id) DESC,
+                history_page.entry_key DESC, sr.receiving_id ASC");
+        // One extra complete receipt lets the page offer Next without a separate count query.
+        $stmt->execute([$userId, $userId, $search, $userId, $userId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $groups = [];
@@ -346,6 +364,7 @@ class ReceivingService
             $displayId = $hasGroup ? (int)$row['group_id'] : (int)$row['receiving_id'];
             if (!isset($groups[$groupKey])) {
                 $groups[$groupKey] = [
+                    'entry_key' => $groupKey,
                     'group_id' => $displayId,
                     'has_explicit_group' => $hasGroup,
                     'recorded_by' => $row['recorded_by'],

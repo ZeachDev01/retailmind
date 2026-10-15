@@ -192,29 +192,6 @@ $pdo->exec("
         diagnostic_reference VARCHAR(100)
     );
 
-    CREATE TABLE purchase_orders (
-        purchase_order_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        status VARCHAR(50),
-        expected_delivery_date DATE
-    );
-
-    CREATE TABLE purchase_order_items (
-        item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        purchase_order_id INT,
-        product_id INT,
-        ordered_qty INT,
-        received_qty INT DEFAULT 0
-    );
-
-    CREATE TABLE supplier_products (
-        supplier_product_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        supplier_id INTEGER,
-        product_id INTEGER,
-        lead_time_days INTEGER,
-        minimum_order_quantity INTEGER,
-        is_preferred INTEGER DEFAULT 1
-    );
-
     CREATE TABLE activity_log (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INT,

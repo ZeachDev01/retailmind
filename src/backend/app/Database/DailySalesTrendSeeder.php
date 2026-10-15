@@ -385,13 +385,13 @@ final class DailySalesTrendSeeder
             $receiving = $this->pdo->prepare(
                 "INSERT INTO stock_receiving
                     (product_id, received_qty, received_packages, units_per_package_used, accepted_qty,
-                     damaged_qty, cost_price, total_cost, received_by, received_at, supplier, po_number,
+                     damaged_qty, cost_price, total_cost, received_by, received_at, supplier,
                      invoice_number, batch_number, discrepancy_type, discrepancy_qty, notes)
-                 VALUES (?, ?, 0, 1, ?, 0, ?, ?, ?, ?, 'RetailMind Seed Supplier', ?, ?, ?, 'none', 0, ?)"
+                 VALUES (?, ?, 0, 1, ?, 0, ?, ?, ?, ?, 'RetailMind Seed Supplier', ?, ?, 'none', 0, ?)"
             );
             $receiving->execute([
                 $productId, $quantity, $quantity, $cost, round($cost * $quantity, 2), $seedUserId,
-                $receivedAt->format('Y-m-d H:i:s'), self::SEED_KEY, $batchNumber, $batchNumber,
+                $receivedAt->format('Y-m-d H:i:s'), $batchNumber, $batchNumber,
                 'Deterministic dashboard sales-trend simulation stock',
             ]);
             $receivingId = (int)$this->pdo->lastInsertId();

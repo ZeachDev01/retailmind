@@ -25,7 +25,7 @@ $assert(Schema::tableExists($pdo, 'login_attempts'), 'login_attempts table is mi
 $assert(Schema::tableExists($pdo, 'attention_settings'), 'attention_settings table is missing');
 $assert(Schema::tableExists($pdo, 'attention_states'), 'attention_states table is missing');
 $assert(Schema::columnExists($pdo, 'notifications', 'attention_key'), 'notifications.attention_key is missing');
-$assert(Schema::tableExists($pdo, 'purchase_orders'), 'purchase_orders table is missing');
+$assert(!Schema::tableExists($pdo, 'purchase_orders'), 'Retired purchase_orders table exists');
 // Register administration (ticket #87). A fresh install and an upgraded install
 // must expose the same Register structure to RegisterService.
 foreach (['register_id', 'name', 'status', 'disabled_at', 'created_by'] as $registerColumn) {
@@ -166,14 +166,6 @@ $salesShiftColumn = $pdo->query(
 $assert(
     $salesShiftColumn === 'YES',
     'sales.shift_id must stay nullable so pre-cutoff sales remain unlinked'
-);
-$assert(
-    Schema::foreignKeyRelationExists($pdo, 'supplier_products', 'supplier_id', 'suppliers', 'supplier_id'),
-    'supplier_products.supplier_id is not protected by a foreign key'
-);
-$assert(
-    Schema::foreignKeyRelationExists($pdo, 'purchase_order_items', 'purchase_order_id', 'purchase_orders', 'purchase_order_id'),
-    'purchase_order_items.purchase_order_id is not protected by a foreign key'
 );
 
 try {

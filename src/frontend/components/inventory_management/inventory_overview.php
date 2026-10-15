@@ -136,12 +136,6 @@ $chartDataJson = json_encode([
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
         <header class="page-heading"><div><h1>Stock Overview</h1><p class="page-subtitle">Review stock levels, expiry risks, and recent movements. Select a summary to inspect products.</p></div></header>
-        <nav class="u-flex-wrap mb-3" aria-label="Stock replenishment">
-            <a class="btn btn-primary" href="replenishment_queue.php">Review recommendations</a>
-            <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY)): ?>
-                <a class="btn btn-secondary" href="../report/stock_receiving.php">Record bought stock</a>
-            <?php endif; ?>
-        </nav>
         <section class="overview-metrics" aria-label="Inventory summary">
             <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
