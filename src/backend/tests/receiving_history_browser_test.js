@@ -52,7 +52,8 @@ async function main() {
                 'lines[0][product_id]':String(data.products.bulk_units.product_id),
                 'lines[0][quantity_mode]':'units', 'lines[0][received_qty]':'2', 'lines[0][damaged_qty]':'1',
                 'lines[1][product_id]':String(data.products.bulk_pack.product_id),
-                'lines[1][quantity_mode]':'units', 'lines[1][received_qty]':'3', 'lines[1][damaged_qty]':'0'
+                'lines[1][quantity_mode]':'units', 'lines[1][received_qty]':'3', 'lines[1][damaged_qty]':'0',
+                receiving_complete:'1'
             };
             const response = await context.request.post('/components/report/stock_receiving.php', {form});
             assert((await response.text()).includes('Shopping entry saved.'), 'receipt persisted');

@@ -23,6 +23,7 @@ php -d disable_functions=putenv src/backend/tests/environment_loading_test.php
 php src/backend/tests/fresh_schema_contract.php
 php src/backend/tests/consolidated_sql_integration.php
 php src/backend/tests/procurement_schema_integration.php
+php -d max_input_vars=1000 src/backend/tests/receiving_submission_contract.php
 php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/backup_unavailable_navigation_test.php

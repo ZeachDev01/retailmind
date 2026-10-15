@@ -1728,7 +1728,7 @@ UNLOCK TABLES;
 
 LOCK TABLES `store_settings` WRITE;
 /*!40000 ALTER TABLE `store_settings` DISABLE KEYS */;
-INSERT INTO `store_settings` (`setting_key`, `setting_value`, `updated_by`, `updated_at`) VALUES ('business_identifier','',NULL,'2026-09-14 07:29:33'),('currency_symbol','â‚±',NULL,'2026-09-14 07:29:33'),('receipt_footer','Thank you for shopping with us.',NULL,'2026-09-14 07:29:33'),('store_address','Tangub City',NULL,'2026-09-14 07:29:33'),('store_email','',NULL,'2026-09-14 07:29:33'),('store_name','Shalom Store',NULL,'2026-09-14 07:29:33'),('store_phone','',NULL,'2026-09-14 07:29:33'),('timezone','Asia/Manila',NULL,'2026-09-14 07:29:33');
+INSERT INTO `store_settings` (`setting_key`, `setting_value`, `updated_by`, `updated_at`) VALUES ('business_identifier','',NULL,'2026-09-14 07:29:33'),('currency_symbol','₱',NULL,'2026-09-14 07:29:33'),('receipt_footer','Thank you for shopping with us.',NULL,'2026-09-14 07:29:33'),('store_address','Tangub City',NULL,'2026-09-14 07:29:33'),('store_email','',NULL,'2026-09-14 07:29:33'),('store_name','Shalom Store',NULL,'2026-09-14 07:29:33'),('store_phone','',NULL,'2026-09-14 07:29:33'),('timezone','Asia/Manila',NULL,'2026-09-14 07:29:33');
 /*!40000 ALTER TABLE `store_settings` ENABLE KEYS */;
 UNLOCK TABLES;
 

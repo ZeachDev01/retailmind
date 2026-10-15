@@ -102,7 +102,23 @@ try {
     $assertRetired($db);
     $assert($afterSql === $structures($db), 'Repeated SQL upgrade changed schema');
     $assert($beforeSql === $records($db), 'Repeated SQL upgrade changed retained data');
-    echo "Procurement schema integration: passed (fresh install, upgrade, retained data, repeated setup)\n";
+    // Older SQL-only installs have no ML jobs table when the new FK is added.
+    $keys = $db->query("SELECT TABLE_NAME, CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+        WHERE CONSTRAINT_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'ml_jobs'")->fetchAll();
+    foreach ($keys as $key) {
+        $table = str_replace('`', '``', $key['TABLE_NAME']);
+        $constraint = str_replace('`', '``', $key['CONSTRAINT_NAME']);
+        $db->exec("ALTER TABLE `{$table}` DROP FOREIGN KEY `{$constraint}`");
+    }
+    $db->exec('DROP TABLE ml_jobs');
+    $import($db, __DIR__ . '/../database/sql/update.sql');
+    $assert(Schema::tableExists($db, 'ml_jobs'), 'SQL upgrade must create the ML jobs prerequisite');
+    $assert((int)$db->query("SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+        WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'forecast_decisions'
+        AND COLUMN_NAME = 'forecast_job_id' AND REFERENCED_TABLE_NAME = 'ml_jobs'")->fetchColumn() === 1,
+        'SQL upgrade must link forecast decisions to ML jobs');
+    $assertRetired($db);
+    echo "Procurement schema integration: passed (fresh install, upgrade, retained data, repeated setup, legacy ML prerequisite)\n";
 } finally {
     $server->exec("DROP DATABASE IF EXISTS `{$name}`");
 }

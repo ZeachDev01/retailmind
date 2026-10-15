@@ -127,6 +127,7 @@ async function shoppingForm(page, lines, entry = {}) {
     lines.forEach((line, index) => {
         for (const [name, value] of Object.entries(line)) form[`lines[${index}][${name}]`] = String(value);
     });
+    form.receiving_complete = '1';
     return form;
 }
 

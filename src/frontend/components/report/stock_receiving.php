@@ -32,6 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'invoice_number' => $_POST['invoice_number'] ?? '',
         ];
         if (isset($_POST['entry_mode']) || array_key_exists('lines', $_POST)) {
+            if (($_POST['receiving_complete'] ?? '') !== '1') {
+                throw new RuntimeException('The shopping entry was not fully received. Nothing was saved. Split it into smaller entries and try again.');
+            }
             $lines = $_POST['lines'] ?? [];
             if (!is_array($lines)) throw new RuntimeException('Product lines must be a list of receiving details.');
         } else {
@@ -220,6 +223,7 @@ $products = $receivingService->getActiveProducts();
                     <button type="button" class="btn btn-primary" id="receiving_next">Continue to quantities</button>
                     <button type="submit" class="btn-submit" hidden>Save shopping entry & update inventory</button>
                 </div>
+                <input type="hidden" name="receiving_complete" value="1">
             </form>
             </fieldset>
         </div>

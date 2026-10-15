@@ -8,6 +8,9 @@ if ($schema === false) {
 
 $normalizedSchema = preg_replace('/\s+/', ' ', str_replace('`', '', $schema));
 $failures = [];
+if (!str_contains($schema, "('currency_symbol','₱',")) {
+    $failures[] = 'Fresh receipts must use the Philippine peso symbol';
+}
 $assertMatches = static function (string $pattern, string $message) use ($normalizedSchema, &$failures): void {
     if ($normalizedSchema === null || preg_match($pattern, $normalizedSchema) !== 1) {
         $failures[] = $message;
