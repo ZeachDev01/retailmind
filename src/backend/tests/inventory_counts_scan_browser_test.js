@@ -516,6 +516,7 @@ async function main() {
 
         console.log('Linked correction counts accept only their Stock Issue product');
         await page.goto(countsPath + '?correct=' + approvedIssue.adjustment_id);
+        await dismissBlockingDialogs(page);
         check(await eventually(page, (id) =>
             document.getElementById('product_id').value === String(id), approvedIssue.product_id),
             'the linked correction starts on the approved Stock Issue product');
