@@ -1444,11 +1444,29 @@ CREATE TABLE `stock_predictions` (
 -- Table structure for table `stock_receiving`
 --
 
+DROP TABLE IF EXISTS `stock_receiving_groups`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `stock_receiving_groups` (
+  `group_id` int(11) NOT NULL AUTO_INCREMENT,
+  `received_by` int(11) NOT NULL,
+  `received_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `supplier` varchar(150) DEFAULT NULL,
+  `invoice_number` varchar(100) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  PRIMARY KEY (`group_id`),
+  KEY `idx_stock_receiving_groups_received_by` (`received_by`),
+  KEY `idx_stock_receiving_groups_received_at` (`received_at`),
+  CONSTRAINT `fk_stock_receiving_groups_user` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 DROP TABLE IF EXISTS `stock_receiving`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `stock_receiving` (
   `receiving_id` int(11) NOT NULL AUTO_INCREMENT,
+  `group_id` int(11) DEFAULT NULL,
   `replenishment_request_id` int(11) DEFAULT NULL,
   `purchase_order_id` int(11) DEFAULT NULL,
   `purchase_order_item_id` int(11) DEFAULT NULL,
@@ -1472,9 +1490,11 @@ CREATE TABLE `stock_receiving` (
   `discrepancy_notes` text DEFAULT NULL,
   `notes` text DEFAULT NULL,
   PRIMARY KEY (`receiving_id`),
+  KEY `idx_stock_receiving_group_id` (`group_id`),
   KEY `replenishment_request_id` (`replenishment_request_id`),
   KEY `product_id` (`product_id`),
   KEY `received_by` (`received_by`),
+  CONSTRAINT `fk_stock_receiving_group` FOREIGN KEY (`group_id`) REFERENCES `stock_receiving_groups` (`group_id`) ON DELETE SET NULL,
   CONSTRAINT `stock_receiving_ibfk_1` FOREIGN KEY (`replenishment_request_id`) REFERENCES `replenishment_requests` (`request_id`),
   CONSTRAINT `stock_receiving_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `stock_receiving_ibfk_3` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`)

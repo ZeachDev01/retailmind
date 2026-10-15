@@ -173,6 +173,7 @@ $managerInventoryItems = [];
 
 $administratorReportItems = [
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shifts'],
+    ['path' => 'components/report/receiving_history.php', 'icon' => 'bi-clock-history', 'label' => 'Receiving History'],
     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Forecast Analytics'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
@@ -212,6 +213,7 @@ $roleSections = [
                 ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
                 ['path' => 'components/inventory_management/replenishment_queue.php', 'icon' => 'bi-diagram-3', 'label' => 'Replenishment Recommendations'],
                 ['path' => 'components/report/stock_receiving.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'Stock Receiving'],
+                ['path' => 'components/report/receiving_history.php', 'icon' => 'bi-clock-history', 'label' => 'Receiving History'],
                 ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Stock Product'],
                 ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Stock Counter'],
                 ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Exceptions'],

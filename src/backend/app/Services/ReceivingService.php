@@ -56,10 +56,19 @@ class ReceivingService
         }
         try {
             StoreWriteGate::begin($this->pdo);
+            $groupStmt = $this->pdo->prepare("INSERT INTO stock_receiving_groups (received_by, supplier, invoice_number, notes) VALUES (?, ?, ?, ?)");
+            $groupStmt->execute([
+                $userId,
+                $shared['supplier'] !== '' ? $shared['supplier'] : null,
+                $shared['invoice_number'] !== '' ? $shared['invoice_number'] : null,
+                !empty($entry['notes']) ? trim((string)$entry['notes']) : null,
+            ]);
+            $groupId = (int)$this->pdo->lastInsertId();
+
             $results = [];
             foreach ($lines as $index => $line) {
                 try {
-                    $results[] = $this->receiveLine(array_replace($line, $shared), $userId);
+                    $results[] = $this->receiveLine(array_replace($line, $shared, ['group_id' => $groupId]), $userId);
                 } catch (RuntimeException $e) {
                     if ($e instanceof PDOException) {
                         error_log((string)$e);
@@ -189,14 +198,16 @@ class ReceivingService
             throw new RuntimeException('Total purchase cost is too large.');
         }
 
+        $groupId = isset($data['group_id']) && (int)$data['group_id'] > 0 ? (int)$data['group_id'] : null;
+
         $stmt = $this->pdo->prepare("INSERT INTO stock_receiving (
-                                   product_id, received_qty, received_packages, units_per_package_used, accepted_qty, damaged_qty, cost_price, total_cost, received_by,
+                                   group_id, product_id, received_qty, received_packages, units_per_package_used, accepted_qty, damaged_qty, cost_price, total_cost, received_by,
                                    supplier, invoice_number,
                                    batch_number, expiration_date, discrepancy_type, discrepancy_qty,
                                    discrepancy_notes, notes
-                               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $productId, $receivedQty, $receivedPackages, $unitsPerPackageUsed, $acceptedQty, $damagedQty,
+            $groupId, $productId, $receivedQty, $receivedPackages, $unitsPerPackageUsed, $acceptedQty, $damagedQty,
             $costPrice, $totalCost, $userId,
             $supplier !== '' ? $supplier : null,
             $invoiceNumber !== '' ? $invoiceNumber : null, $batchNumber !== '' ? $batchNumber : null,
@@ -269,6 +280,7 @@ class ReceivingService
         $recordingStmt->execute([$receivingId]);
         $recording = $recordingStmt->fetch(PDO::FETCH_ASSOC);
         return [
+            'group_id' => $groupId,
             'product_name' => $product['product_name'],
             'recorded_by' => $recording['full_name'],
             'received_at' => $recording['received_at'],
@@ -291,7 +303,7 @@ class ReceivingService
 
     public function getReceivingHistory(?int $userId): array
     {
-        $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.received_qty, sr.accepted_qty, sr.damaged_qty,
+        $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.group_id, sr.received_qty, sr.accepted_qty, sr.damaged_qty,
                                sr.cost_price, sr.received_packages, sr.units_per_package_used, sr.batch_number, sr.expiration_date, sr.discrepancy_type,
                                sr.discrepancy_qty, sr.received_at, sr.supplier, sr.invoice_number,
                                p.sku, p.product_name, u.full_name
@@ -303,6 +315,79 @@ class ReceivingService
                         LIMIT 20");
         $stmt->execute([$userId, $userId]);
         return $stmt->fetchAll();
+    }
+
+    public function getGroupedReceivingHistory(?int $userId = null): array
+    {
+        $stmt = $this->pdo->prepare("SELECT
+                sr.receiving_id, sr.group_id, sr.product_id, sr.received_qty, sr.received_packages,
+                sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,
+                sr.cost_price, sr.total_cost, sr.received_by, sr.received_at,
+                sr.supplier, sr.invoice_number, sr.batch_number, sr.expiration_date,
+                sr.discrepancy_type, sr.discrepancy_qty, sr.discrepancy_notes, sr.notes,
+                p.sku, p.product_name,
+                srg.group_id AS srg_group_id, srg.received_by AS group_received_by,
+                srg.received_at AS group_received_at, srg.supplier AS group_supplier,
+                srg.invoice_number AS group_invoice, srg.notes AS group_notes,
+                u.full_name AS recorded_by
+            FROM stock_receiving sr
+            LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.group_id
+            JOIN products p ON sr.product_id = p.product_id
+            JOIN users u ON sr.received_by = u.user_id
+            WHERE (? IS NULL OR sr.received_by = ?)
+            ORDER BY COALESCE(srg.received_at, sr.received_at) DESC, COALESCE(sr.group_id, sr.receiving_id) DESC, sr.receiving_id ASC");
+        $stmt->execute([$userId, $userId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $groups = [];
+        foreach ($rows as $row) {
+            $gid = $row['group_id'] !== null ? (int)$row['group_id'] : (int)$row['receiving_id'];
+            if (!isset($groups[$gid])) {
+                $groups[$gid] = [
+                    'group_id' => $gid,
+                    'has_explicit_group' => $row['group_id'] !== null,
+                    'recorded_by' => $row['recorded_by'],
+                    'received_by' => (int)$row['received_by'],
+                    'received_at' => $row['group_received_at'] ?? $row['received_at'],
+                    'supplier' => $row['group_supplier'] ?? $row['supplier'],
+                    'invoice_number' => $row['group_invoice'] ?? $row['invoice_number'],
+                    'notes' => $row['group_notes'] ?? $row['notes'],
+                    'total_received_qty' => 0,
+                    'total_accepted_qty' => 0,
+                    'total_damaged_qty' => 0,
+                    'lines' => [],
+                ];
+            }
+            $groups[$gid]['total_received_qty'] += (int)$row['received_qty'];
+            $groups[$gid]['total_accepted_qty'] += (int)$row['accepted_qty'];
+            $groups[$gid]['total_damaged_qty'] += (int)$row['damaged_qty'];
+            $groups[$gid]['lines'][] = [
+                'receiving_id' => (int)$row['receiving_id'],
+                'group_id' => $row['group_id'] !== null ? (int)$row['group_id'] : null,
+                'product_id' => (int)$row['product_id'],
+                'product_name' => $row['product_name'],
+                'sku' => $row['sku'],
+                'received_qty' => (int)$row['received_qty'],
+                'received_packages' => (int)$row['received_packages'],
+                'units_per_package_used' => (int)$row['units_per_package_used'],
+                'quantity_mode' => (int)$row['received_packages'] > 0 ? 'packages' : 'units',
+                'accepted_qty' => (int)$row['accepted_qty'],
+                'damaged_qty' => (int)$row['damaged_qty'],
+                'cost_price' => $row['cost_price'] !== null ? (float)$row['cost_price'] : null,
+                'total_cost' => (float)$row['total_cost'],
+                'batch_number' => $row['batch_number'],
+                'expiration_date' => $row['expiration_date'],
+                'discrepancy_type' => $row['discrepancy_type'],
+                'discrepancy_qty' => (int)$row['discrepancy_qty'],
+                'discrepancy_notes' => $row['discrepancy_notes'],
+                'notes' => $row['notes'],
+                'supplier' => $row['supplier'],
+                'invoice_number' => $row['invoice_number'],
+                'received_at' => $row['received_at'],
+            ];
+        }
+
+        return array_values($groups);
     }
 
     private function wholeNumber($value, string $label): int

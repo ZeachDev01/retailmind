@@ -126,6 +126,7 @@ const fixture = action => {
         await page.goto(resetUrl);
         assert.match(await page.locator('#delete-product option[value="1"]').innerText(), /inactive/);
         const before = JSON.parse(fixture('reset_state'));
+        assert(before.stock_receiving_groups > 0, 'Fixture must contain shopping metadata to reset');
         assert(before.sales > 1 && before.product_batches > 0 && before.inventory_units > 0, 'Fixture must contain linked sales and stock data');
         const submit = async (password, confirmation = 'RESET ALL DATA') => {
             await page.goto(resetUrl);

@@ -316,6 +316,7 @@ $cleanup = static function () use ($pdo, $products, $staff, $token, &$productByN
     if ($userIds !== []) {
         $pdo->exec("DELETE FROM users WHERE user_id IN ({$userList})");
     }
+    $pdo->exec("DELETE FROM stock_receiving_groups WHERE supplier LIKE '%{$token}%' OR invoice_number LIKE '%{$token}%' OR notes LIKE '%{$token}%'");
     $pdo->prepare('DELETE FROM registers WHERE name = ?')->execute(['Scan WF ' . $token]);
 };
 
@@ -348,7 +349,7 @@ if (array_key_exists('state', $options)) {
     $counts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $stmt = $pdo->prepare(
-        "SELECT sr.receiving_id, sr.product_id, p.sku, sr.received_qty, sr.received_packages,
+        "SELECT sr.receiving_id, sr.group_id, sr.product_id, p.sku, sr.received_qty, sr.received_packages,
                 sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,
                 sr.purchase_order_item_id, sr.replenishment_request_id,
                 sr.supplier, sr.po_number, sr.invoice_number, sr.batch_number,
@@ -390,6 +391,7 @@ if (array_key_exists('state', $options)) {
         'products' => $catalog,
         'counts' => $counts,
         'receipts' => $receipts,
+        'receiving_groups' => $pdo->query('SELECT * FROM stock_receiving_groups ORDER BY group_id')->fetchAll(PDO::FETCH_ASSOC),
         'purchase_order_items' => $purchaseOrderItems,
         'requests' => $requests,
         'recommendations' => array_values(array_filter(

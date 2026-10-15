@@ -524,3 +524,9 @@
     }
 
 .btn-submit { min-height:44px; }
+.receiving-entry-card { background:var(--theme-surface, #fff); border:1px solid var(--border, #ddd); border-radius:6px; margin-bottom:1.25rem; overflow:hidden; }
+.receiving-entry-header { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1rem; padding:1rem 1.25rem; background:var(--theme-surface-soft, #f8fafc); cursor:pointer; font-size:0.95rem; user-select:none; list-style:none; }
+.receiving-entry-header::-webkit-details-marker { display:none; }
+.receiving-entry-meta { display:flex; flex-wrap:wrap; min-width:0; overflow-wrap:anywhere; gap:0.6rem 1rem; align-items:center; }
+.receiving-entry-body { padding:1rem 1.25rem; border-top:1px solid var(--border, #ddd); }
+.cost-unknown { color:var(--muted, #6c757d); font-style:italic; }

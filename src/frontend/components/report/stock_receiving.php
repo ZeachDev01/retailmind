@@ -75,7 +75,6 @@ $_SESSION['receiving_nonces'][$receivingNonce] = true;
 $_SESSION['receiving_nonces'] = array_slice($_SESSION['receiving_nonces'], -20, null, true);
 
 $products = $receivingService->getActiveProducts();
-$history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['user_id'] : null);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -96,11 +95,12 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
         <nav class="u-flex-wrap mb-3" aria-label="Stock replenishment">
             <a class="btn btn-secondary" href="../inventory_management/inventory_overview.php">Check stock</a>
             <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a>
+            <a class="btn btn-secondary" href="receiving_history.php">Receiving history</a>
         </nav>
 
         <?php if ($message): ?>
             <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
-            <p>Stock is updated. <a href="../inventory_management/replenishment_queue.php">Review updated recommendations</a> using current stock and existing forecast outputs.</p>
+            <p>Stock is updated. <a href="../inventory_management/replenishment_queue.php">Review updated recommendations</a> using current stock and existing forecast outputs, or <a href="receiving_history.php">view receiving history</a>.</p>
         <?php endif; ?>
 
         <?php if ($error): ?>
@@ -222,53 +222,6 @@ $history = $receivingService->getReceivingHistory($canReceive ? (int)$_SESSION['
             </form>
             </fieldset>
         </div>
-
-        <?php if (!empty($history)): ?>
-            <div class="history-section">
-                <h3>Recent Receiving History (<?= $canReceive ? 'My Receipts' : 'Store Receipts' ?>)</h3>
-                <div class="u-table-scroll" tabindex="0" role="region" aria-label="Recent receiving history">
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>Receipt ID</th>
-                            <th>Product</th>
-                            <th>SKU</th>
-                            <th>Delivered</th>
-                            <th>Accepted</th>
-                            <th>Damaged</th>
-                            <th>Batch / Expiry</th>
-                            <th>Cost</th>
-                            <th>Shopping store</th>
-                            <th>Receipt reference</th>
-                            <th>Recorded by</th>
-                            <th>Date & Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($history as $h): ?>
-                            <tr>
-                                <td>#<?= $h['receiving_id'] ?></td>
-                                <td><?= htmlspecialchars($h['product_name']) ?></td>
-                                <td><code><?= htmlspecialchars($h['sku']) ?></code></td>
-                                <td><?= $h['received_qty'] ?><?php if((int)($h['received_packages']??0)>0): ?><br><small><?= (int)$h['received_packages'] ?> package(s) × <?= (int)$h['units_per_package_used'] ?></small><?php endif; ?></td>
-                                <td><?= $h['accepted_qty'] ?></td>
-                                <td><?= $h['damaged_qty'] ?></td>
-                                <td>
-                                    <?= htmlspecialchars($h['batch_number'] ?? '-') ?><br>
-                                    <small><?= htmlspecialchars($h['expiration_date'] ?? '-') ?></small>
-                                </td>
-                                <td><?= $h['cost_price'] !== null ? number_format((float)$h['cost_price'], 2) : '-' ?></td>
-                                <td><?= htmlspecialchars($h['supplier'] ?? '-') ?></td>
-                                <td><?= htmlspecialchars($h['invoice_number'] ?? '-') ?></td>
-                                <td><?= htmlspecialchars($h['full_name']) ?></td>
-                                <td><?= htmlspecialchars($h['received_at']) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-                </div>
-            </div>
-        <?php endif; ?>
     </main>
 </div>
 

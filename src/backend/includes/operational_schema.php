@@ -227,6 +227,18 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ensure_table_column($pdo, 'products', 'parent_product_id', 'INT NULL AFTER case_barcode');
     ensure_table_column($pdo, 'products', 'variant_label', 'VARCHAR(100) NULL AFTER parent_product_id');
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS stock_receiving_groups (
+        group_id INT AUTO_INCREMENT PRIMARY KEY,
+        received_by INT NOT NULL,
+        received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        supplier VARCHAR(150) NULL,
+        invoice_number VARCHAR(100) NULL,
+        notes TEXT NULL,
+        INDEX idx_stock_receiving_groups_received_by (received_by),
+        INDEX idx_stock_receiving_groups_received_at (received_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    ensure_table_column($pdo, 'stock_receiving', 'group_id', 'INT NULL AFTER receiving_id');
     ensure_table_column($pdo, 'stock_receiving', 'purchase_order_id', 'INT NULL AFTER replenishment_request_id');
     ensure_table_column($pdo, 'stock_receiving', 'purchase_order_item_id', 'INT NULL AFTER purchase_order_id');
     ensure_table_column($pdo, 'stock_receiving', 'received_packages', 'INT NOT NULL DEFAULT 0 AFTER received_qty');

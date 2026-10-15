@@ -8,6 +8,7 @@ const path = require('node:path');
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const fixtureScript = path.join(__dirname, 'support', 'scan_workflow_fixture.php');
 const receivingPath = '/components/report/stock_receiving.php';
+const historyPath = '/components/report/receiving_history.php';
 const phpBinary = process.env.PHP_BINARY || 'php';
 
 function skip(reason) {
@@ -264,11 +265,15 @@ async function main() {
         const cashierContext = await browser.newContext({ baseURL });
         const cashierPage = await cashierContext.newPage();
         await login(cashierPage, fixture.staff.cashier);
-        check(await cashierPage.locator('#appSidebar').getByRole('link', { name: 'Stock Receiving', exact: true }).count() === 0,
-            'Cashier navigation has no Stock Receiving destination');
+        check(await cashierPage.locator('#appSidebar').getByRole('link', { name: 'Stock Receiving', exact: true }).count() === 0
+            && await cashierPage.locator('#appSidebar').getByRole('link', { name: 'Receiving History', exact: true }).count() === 0,
+            'Cashier navigation has no Stock Receiving or Receiving History destination');
         const cashierResponse = await cashierPage.goto(receivingPath);
         check(cashierResponse.status() === 403 || !cashierPage.url().includes(receivingPath),
             'a Cashier cannot open Stock Receiving');
+        const cashierHistoryResponse = await cashierPage.goto(historyPath);
+        check(cashierHistoryResponse.status() === 403 || !cashierPage.url().includes(historyPath),
+            'a Cashier cannot open Receiving History');
         await cashierContext.close();
 
         check(await page.locator('#emergency_reason').count() === 0,
@@ -310,14 +315,17 @@ async function main() {
             'missing optional details preserve cost and preferred supplier without purchasing links');
         check(state.purchase_history.filter(item => item.sku === fixture.products.direct.sku).length === 0,
             'unknown cost creates no invented purchase-cost history');
-        const historyRow = page.locator('.history-table tbody tr').filter({ hasText: fixture.products.direct.sku });
-        check((await historyRow.innerText()).includes('Scan WF Manager')
-            && (await historyRow.innerText()).includes(directReceipt.received_at),
-            'history identifies recording staff and time');
+        check(await page.locator('.history-table').count() === 0,
+            'entry workspace contains no embedded receiving history table');
         const successText = await page.locator('.message.success').innerText();
         check(successText.includes(fixture.products.direct.product_name)
             && successText.includes('Scan WF Manager') && successText.includes(directReceipt.received_at),
             'success identifies product, recording staff and time');
+        await page.goto(historyPath);
+        const historyCard = page.locator('.receiving-entry-card').filter({ hasText: fixture.products.direct.sku });
+        check((await historyCard.innerText()).includes('Scan WF Manager')
+            && (await historyCard.innerText()).includes(directReceipt.received_at),
+            'history identifies recording staff and time');
         await context.request.post(receivingPath, { form: duplicateForm });
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(state),
             'replaying the same form cannot record a second receipt');
@@ -443,6 +451,7 @@ async function main() {
                 form: { ...gatedForm, csrf_token: csrf, emergency_reason: 'Must not bypass workspace policy' }
             });
             check(response.status() === 403, role + ' workspace cannot mutate receiving through HTTP');
+            await response.text();
             if (role === 'super_admin') {
                 await deniedContext.request.post('/components/auth/workspace.php', {
                     form: { csrf_token: csrf, workspace: 'inventory_manager' }
@@ -472,7 +481,7 @@ async function main() {
         await concurrentPage.close();
 
         // Capture both device classes during the same browser verification pass.
-        await page.goto(receivingPath);
+        await page.goto(historyPath);
         check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
             'receiving history stays inside the desktop viewport');
         await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving-177-desktop.png'), fullPage: true });
@@ -595,6 +604,10 @@ async function main() {
             'one success summary identifies every product and actual accepted quantity');
         check(tripState.receipts.length === beforeTrip.receipts.length + 2 && tripReceipts.length === 2,
             'ordinary repeated clicks record one two-line shopping entry');
+        check(tripReceipts[0].group_id && tripReceipts[0].group_id === tripReceipts[1].group_id,
+            'multi-product shopping lines persist a shared atomic group ID');
+        check(tripState.receiving_groups.filter(g => Number(g.group_id) === Number(tripReceipts[0].group_id)).length === 1,
+            'shopping trip persists exactly one stock receiving group');
         check(Number(tripState.products.find(item => item.sku === fixture.products.bulk_pack.sku).quantity_on_hand) === 56
             && Number(tripState.products.find(item => item.sku === fixture.products.bulk_units.sku).quantity_on_hand) === 11,
             'mixed unit/package lines add accepted units; eight plus two cases of 24 is 56');
@@ -621,7 +634,8 @@ async function main() {
         check(tripState.requests.length === beforeTrip.requests.length
             && JSON.stringify(tripState.purchase_order_items) === JSON.stringify(beforeTrip.purchase_order_items),
             'receiving actual quantities differing from guidance creates no purchasing documents');
-        await page.getByRole('link', { name: 'Review updated recommendations', exact: true }).click();
+        await dismissBlockingDialog(page);
+        await page.locator('a[href*="replenishment_queue.php"]').filter({ hasText: 'Review updated recommendations' }).click();
         await page.waitForURL('**/inventory_management/replenishment_queue.php');
         check((await packGuidance.innerText()).includes('56 units')
             && (await packGuidance.innerText()).includes('0 units suggested')
@@ -640,6 +654,50 @@ async function main() {
         await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving180-guidance-mobile.png') });
         await page.setViewportSize({ width: 1280, height: 720 });
 
+        await page.goto(historyPath);
+        const tripCardId = await page.locator('.receiving-entry-card').filter({ hasText: 'SHOP-' + token }).getAttribute('id');
+        const tripCard = page.locator('#' + tripCardId);
+        const tripCardText = await tripCard.innerText();
+        check(tripCardText.includes('Shopping trip store')
+            && tripCardText.includes('SHOP-' + token)
+            && tripCardText.includes('Scan WF Manager')
+            && tripCardText.includes('2 package(s) × 24 = 48 units')
+            && tripCardText.includes('SHOP-UNITS-' + token)
+            && tripCardText.includes('2028-12-31')
+            && tripCardText.includes('Unknown'),
+            'receiving history entry inspects store, receipt ref, staff, pack conversion, batch, expiry, and unknown cost');
+        const inspectBtn = tripCard.locator('.inspect-btn');
+        await inspectBtn.click();
+        check(await tripCard.getAttribute('open') === null, 'inspect button toggles details card closed');
+        await inspectBtn.click();
+        check(await tripCard.getAttribute('open') !== null, 'inspect button toggles details card open');
+        const tripSummary = tripCard.locator('summary');
+        await tripSummary.focus();
+        await page.keyboard.press('Enter');
+        check(await tripCard.getAttribute('open') === null
+            && await tripSummary.getAttribute('aria-expanded') !== 'true',
+            'keyboard collapse preserves native disclosure state');
+        await page.keyboard.press('Space');
+        check(await tripCard.getAttribute('open') !== null, 'keyboard reopens receiving details');
+        const receiptReference = tripCard.locator('.entry-reference');
+        const originalReference = await receiptReference.textContent();
+        await receiptReference.evaluate(el => { el.textContent = 'Receipt: ' + 'X'.repeat(100); });
+        for (const width of [320, 375, 1280]) {
+            await page.setViewportSize({ width, height: 844 });
+            check(await inspectBtn.evaluate(btn => {
+                const bounds = btn.getBoundingClientRect();
+                const card = btn.closest('details').getBoundingClientRect();
+                return bounds.left >= card.left && bounds.right <= card.right
+                    && card.right <= innerWidth;
+            }), 'long receipt reference keeps inspect control inside card at ' + width + 'px');
+        }
+        await receiptReference.evaluate((el, text) => { el.textContent = text; }, originalReference);
+        await page.fill('#history_search', 'SHOP-' + token);
+        check(await tripCard.isVisible(), 'matching card remains visible when filtering history');
+        await page.fill('#history_search', 'NONEXISTENT_QUERY_' + token);
+        check(!await tripCard.isVisible(), 'non-matching card is hidden when filtering history');
+        await page.fill('#history_search', '');
+
         const oversightContext = await browser.newContext({ baseURL });
         const oversightPage = await oversightContext.newPage();
         await login(oversightPage, fixture.staff.admin);
@@ -647,9 +705,12 @@ async function main() {
         check((await oversightPage.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku }).innerText()).includes('56 units')
             && await oversightPage.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
             'Administrator sees refreshed guidance without an inventory execution action');
-        await oversightPage.goto(receivingPath);
-        check(await oversightPage.locator('.btn-submit').isDisabled()
-            && (await oversightPage.locator('main').innerText()).includes('SHOP-' + token),
+        await oversightPage.goto(historyPath);
+        const oversightText = await oversightPage.locator('main').innerText();
+        check(oversightText.includes('SHOP-' + token)
+            && oversightText.includes('Shopping trip store')
+            && await oversightPage.locator('.btn-submit').count() === 0
+            && await oversightPage.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
             'Administrator retains read-only oversight of direct bulk receiving history');
         await oversightContext.close();
 
@@ -788,8 +849,8 @@ async function main() {
         await context.request.post(receivingPath, { form: firstTrip });
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(concurrentState),
             'replaying a multi-line shopping entry records no additional lines');
-        await page.goto(receivingPath);
-        const ownHistory = await page.locator('.history-section').innerText();
+        await page.goto(historyPath);
+        const ownHistory = await page.locator('.receiving-history-container').innerText();
         check(ownHistory.includes('CONCURRENT-A-' + token) && !ownHistory.includes('CONCURRENT-B-' + token),
             'Inventory Manager receiving history remains scoped to their own receipts');
         await concurrentContext.close();

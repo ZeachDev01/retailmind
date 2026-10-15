@@ -12,6 +12,7 @@ if (in_array($argv[1], ['reset_ready', 'reset_state', 'reset_failure', 'reset_al
     $pdo->exec("USE `{$database}`");
     if ($argv[1] === 'reset_ready') {
         $pdo->exec("UPDATE cashier_shifts SET status = 'closed', closed_at = NOW(), closed_by = 1");
+        $pdo->exec("INSERT INTO stock_receiving_groups (received_by,supplier,invoice_number,notes) VALUES (3,'Reset shopping store','RESET-RECEIPT','Remove shopping metadata')");
         $products = App\Database\ProductSeeder::loadProducts(__DIR__ . '/../../database/seeds/product_seed.csv');
         App\Database\ProductSeeder::run($pdo, $products);
         (new App\Database\DailySalesTrendSeeder($pdo))->run();
