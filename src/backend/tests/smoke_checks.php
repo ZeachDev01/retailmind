@@ -293,7 +293,7 @@ $checks = [
     ],
     'Legacy purchasing removed from navigation' => [
         'file' => 'src/frontend/components/sidebar.php',
-        'needles' => ['Inventory Overview', 'Replenishment Recommendations', 'Stock Receiving'],
+        'needles' => ['Stock Overview', 'Replenishment Recommendations', 'Stock Receiving'],
         'forbidden' => ['Legacy Purchasing', 'suppliers.php', 'replenishment_requests.php', 'purchase_orders.php'],
     ],
     'Shared attention evaluation feeds scheduled notifications' => [

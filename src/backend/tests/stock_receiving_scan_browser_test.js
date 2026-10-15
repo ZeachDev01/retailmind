@@ -1,5 +1,5 @@
 'use strict';
-// Browser-to-HTTP guided direct receiving, with persisted stock and checkout assertions (#182).
+// Browser-to-HTTP inventory workflow, with persisted stock and checkout assertions (#187).
 
 const { spawn, spawnSync } = require('node:child_process');
 const net = require('node:net');
@@ -156,6 +156,49 @@ async function main() {
         const context = await browser.newContext({ baseURL });
         const page = await context.newPage();
         await login(page, fixture.staff.manager);
+        await page.goto('/components/inventory_management/inventory_overview.php');
+        const primaryNavigation = page.locator('.sidebar-section').first();
+        check(JSON.stringify(await primaryNavigation.locator(':scope > a > span, :scope > .dropdown > .dropbtn > span').allTextContents())
+            === JSON.stringify(['Stock Overview', 'Replenishment Recommendations', 'Stock Receiving', 'Receiving History', 'Products', 'Inventory Control']),
+            'Inventory Manager has exactly six primary destinations in daily-work order');
+        check(await page.getByRole('heading', {name: 'Stock Overview', exact: true}).count() === 1,
+            'stock page uses the destination name');
+        const control = primaryNavigation.getByRole('button', {name: 'Inventory Control', exact: true});
+        check(await control.count() === 1, 'Inventory Control is a primary navigation group');
+        if (await control.count()) {
+            await control.focus();
+            await page.keyboard.press('Enter');
+            check(await control.getAttribute('aria-expanded') === 'true', 'keyboard opens Inventory Control');
+            check(await primaryNavigation.getByRole('link', {name: 'Inventory Counts', exact: true}).isVisible()
+                && await primaryNavigation.getByRole('link', {name: 'Stock Issue Reviews', exact: true}).isVisible(),
+                'Inventory Control exposes existing counts and Stock Issue review');
+        }
+        if (failures.length) throw new Error(failures.join('\n'));
+        await primaryNavigation.getByRole('link', {name: 'Inventory Counts', exact: true}).click();
+        await page.waitForURL('**/inventory_management/inventory_counts.php');
+        check(await page.locator('.sidebar .dropdown').filter({hasText: 'Inventory Control'}).getByRole('button').getAttribute('aria-expanded') === 'true'
+            && await page.locator('.sidebar a[aria-current="page"]').innerText() === 'Inventory Counts',
+            'count destination keeps Inventory Control open and marks the current page');
+        await page.locator('.sidebar').getByRole('link', {name: 'Stock Issue Reviews', exact: true}).click();
+        await page.waitForURL('**/inventory_management/stock_issues.php');
+        check(await page.locator('.sidebar a[aria-current="page"]').innerText() === 'Stock Issue Reviews',
+            'Stock Issue review is reached through Inventory Control');
+        await page.locator('.sidebar').getByRole('link', {name: 'Stock Overview', exact: true}).click();
+        await page.waitForURL('**/inventory_management/inventory_overview.php');
+        for (const state of ['all', 'low', 'out', 'expiring', 'expired']) {
+            check(await page.locator(`[data-overview-view="${state}"]`).isVisible(), 'Stock Overview exposes ' + state + ' stock review');
+        }
+        for (const [name, width, height] of [['desktop', 1280, 720], ['mobile', 390, 844]]) {
+            await page.setViewportSize({width, height});
+            if (name === 'mobile') await page.locator('#menuToggle').click();
+            const inventoryControl = page.locator('.sidebar').getByRole('button', {name: 'Inventory Control', exact: true});
+            if (await inventoryControl.getAttribute('aria-expanded') !== 'true') await inventoryControl.click();
+            await page.waitForFunction(() => Math.abs(document.querySelector('.sidebar').getBoundingClientRect().left) < 1);
+            check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), name + ' Stock Overview and navigation have no page overflow');
+            check(await page.locator('.sidebar').getByRole('link', {name: 'Stock Issue Reviews', exact: true}).isVisible(), name + ' Inventory Control links remain reachable');
+            await page.screenshot({animations: 'disabled', path: path.join(repoRoot, '.scratch', 'inventory187-' + name + '.png')});
+        }
+        await page.setViewportSize({width: 1280, height: 720});
         await page.goto('/components/inventory_management/inventory_overview.php');
         await page.locator('main').getByRole('link', { name: 'Review recommendations', exact: true }).click();
         await page.waitForURL('**/inventory_management/replenishment_queue.php', { waitUntil: 'domcontentloaded' });
@@ -962,6 +1005,57 @@ async function main() {
         } finally {
             runFixture('--allow-purchase', '--token', token);
         }
+
+        console.log('Sales refresh guidance and Stock Issue control deducts once');
+        const packFields = payment(fixture.products.bulk_pack, 48);
+        const packQuote = await (await quote(packFields)).json();
+        check((await pay(packFields, packQuote.token)).url().includes('checkout=complete'),
+            'Cashier can sell mixed-trip case stock through authorized checkout');
+        const afterSale = runFixture('--state', '--token', token);
+        check(Number(afterSale.products.find(item => item.sku === fixture.products.bulk_pack.sku).quantity_on_hand) === 17
+            && afterSale.product_batches.filter(item => item.sku === fixture.products.bulk_pack.sku)
+                .reduce((sum, item) => sum + Number(item.remaining_quantity), 0) === 9,
+            'case-stock sale reduces shared inventory and received batches by 48');
+        await page.goto('/components/inventory_management/inventory_overview.php');
+        await page.locator('[data-overview-view="all"]').click();
+        check((await page.locator('[data-overview-product-row]').filter({hasText: fixture.products.bulk_pack.sku}).innerText()).includes('17'),
+            'Stock Overview reloads committed stock after Cashier sale');
+        await page.goto('/components/inventory_management/replenishment_queue.php');
+        const soldGuidance = page.locator('.queue-item').filter({hasText: fixture.products.bulk_pack.sku});
+        check((await soldGuidance.innerText()).includes('17 units') && (await soldGuidance.innerText()).includes('24 units'),
+            'normal navigation refreshes case-rounded buying guidance after sale');
+
+        const reportPath = '/components/cashier/stock_issues.php';
+        await checkoutPage.goto(reportPath);
+        const report = await checkoutContext.request.post(reportPath, {form: {
+            csrf_token: await checkoutPage.inputValue('#stock-issue-form input[name="csrf_token"]'),
+            product_id: String(fixture.products.bulk_pack.product_id), category: 'damaged', quantity: '2',
+            explanation: 'Shelf damage discovered after receiving ' + token
+        }});
+        check((await report.text()).includes('submitted for review'), 'Cashier reports a separate shelf Stock Issue');
+        const reported = runFixture('--state', '--token', token);
+        const pendingIssue = reported.inventory_adjustments.find(item => item.sku === fixture.products.bulk_pack.sku && item.status === 'pending');
+        check(JSON.stringify(reported.products) === JSON.stringify(afterSale.products)
+            && JSON.stringify(reported.product_batches) === JSON.stringify(afterSale.product_batches),
+            'Stock Issue reporting alone changes neither stock nor batches');
+        await page.goto('/components/inventory_management/stock_issues.php');
+        const review = {csrf_token: await page.locator('input[name="csrf_token"]').first().inputValue(),
+            adjustment_id: String(pendingIssue?.adjustment_id), action: 'approve', review_notes: 'Confirmed shelf damage'};
+        check((await (await context.request.post('/components/inventory_management/stock_issues.php', {form: review})).text()).includes('approved. Inventory deducted'),
+            'Inventory Manager approves the reported Stock Issue');
+        const approved = runFixture('--state', '--token', token);
+        check(Number(approved.products.find(item => item.sku === fixture.products.bulk_pack.sku).quantity_on_hand) === 15,
+            'approval deducts only the two separately reported shelf units');
+        await context.request.post('/components/inventory_management/stock_issues.php', {form: review});
+        check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(approved),
+            'replayed approval cannot deduct the Stock Issue twice');
+        const boughtDamage = approved.inventory_adjustments.find(item => item.sku === fixture.products.bulk_units.sku && item.status === 'cancelled');
+        await context.request.post('/components/inventory_management/stock_issues.php', {form: {...review, adjustment_id: String(boughtDamage?.adjustment_id)}});
+        const afterIssues = runFixture('--state', '--token', token);
+        check(JSON.stringify(afterIssues) === JSON.stringify(approved), 'excluded bought damage cannot be approved for a second deduction');
+        check(JSON.stringify(afterIssues.forecasts) === JSON.stringify(beforeTrip.forecasts)
+            && JSON.stringify(afterIssues.forecast_jobs) === JSON.stringify(beforeTrip.forecast_jobs),
+            'connected stock workflow never changes saved forecasts or enqueues forecasting jobs');
         await checkoutContext.close();
 
         await context.close();
