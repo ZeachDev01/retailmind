@@ -62,7 +62,9 @@ async function waitForHttp(url) {
 }
 
 async function login(page, member) {
+    await page.route('https://**/*', route => route.fulfill({status: 200, body: '', contentType: route.request().resourceType() === 'stylesheet' ? 'text/css' : 'text/javascript'}));
     await page.goto('/?login=1');
+    await page.waitForFunction(() => document.activeElement === document.getElementById('landing-login-username'));
     await page.fill('#landing-login-username', member.username);
     await page.fill('#landing-login-password', member.password);
     await Promise.all([
