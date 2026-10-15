@@ -73,9 +73,6 @@ class DashboardService
                  WHERE remaining_quantity > 0
                    AND expiration_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)"
             )->fetchColumn(),
-            'pending_replenishment' => (int)$this->pdo->query(
-                "SELECT COUNT(*) FROM replenishment_requests WHERE status = 'pending'"
-            )->fetchColumn(),
             'forecasted_demand' => (int)$this->pdo->query(
                 "SELECT COALESCE(SUM(predicted_units), 0)
                  FROM demand_forecasts df
@@ -151,21 +148,6 @@ class DashboardService
              ) AND df.horizon_day <= 28
              GROUP BY p.product_id, p.sku, p.product_name
              ORDER BY predicted_demand_next_28_days DESC
-             LIMIT ?"
-        );
-        $stmt->bindValue(1, $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        return $stmt->fetchAll();
-    }
-
-    public function getPendingReplenishmentRequests(int $limit = 5): array
-    {
-        $stmt = $this->pdo->prepare(
-            "SELECT rr.request_id, rr.request_qty, rr.request_date, p.sku, p.product_name
-             FROM replenishment_requests rr
-             JOIN products p ON p.product_id = rr.product_id
-             WHERE rr.status = 'pending'
-             ORDER BY rr.request_date ASC
              LIMIT ?"
         );
         $stmt->bindValue(1, $limit, PDO::PARAM_INT);

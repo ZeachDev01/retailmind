@@ -94,6 +94,7 @@ node src/backend/tests/inventory_counts_scan_browser_test.js
 node src/backend/tests/stock_receiving_scan_browser_test.js
 node src/backend/tests/forecast_decision_browser_test.js
 php src/backend/tests/replenishment_queue_contract.php
+php src/backend/tests/procurement_retirement_contract.php
 php src/backend/tests/replenishment_metadata_contract.php
 php src/backend/tests/replenishment_supplier_integration.php
 php src/backend/tests/demand_forecast_service_test.php

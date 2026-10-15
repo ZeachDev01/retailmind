@@ -53,7 +53,7 @@ function renderReplenishmentPage(PDO $pdo, string $name): string
     }
 }
 
-foreach (['replenishment_requests', 'replenishment_queue'] as $page) {
+foreach (['replenishment_queue'] as $page) {
     $empty = renderReplenishmentPage($pdo, $page);
     if (str_contains($empty, 'Demo Mode') || str_contains($empty, 'newly-promoted-model')) {
         throw new RuntimeException("{$page}: empty history must not invent model or Demo metadata");
@@ -71,7 +71,7 @@ foreach ([false, true, false] as $demo) {
     $pdo->prepare('INSERT INTO model_training_runs VALUES (1, ?, ?, ?)')->execute([
         'displayed-run-model', 'completed', json_encode(['metadata' => ['dataset_kind' => $demo ? 'demo' : 'store']]),
     ]);
-    foreach (['replenishment_requests', 'replenishment_queue'] as $page) {
+    foreach (['replenishment_queue'] as $page) {
         $html = renderReplenishmentPage($pdo, $page);
         if (!str_contains($html, 'displayed-run-model') || str_contains($html, 'newly-promoted-model')
             || str_contains($html, 'Demo Mode') !== $demo || !str_contains($html, 'NEEDS-STOCK')) {

@@ -30,7 +30,6 @@ try {
         'CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, cashier_id INTEGER, total_amount REAL, discount_type TEXT, discount_value REAL, discount_amount REAL, sale_date TEXT)',
         'CREATE TABLE sale_reversals (reversal_id INTEGER PRIMARY KEY, sale_id INTEGER, reversal_type TEXT, status TEXT, reason TEXT, created_at TEXT)',
         'CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, cashier_id INTEGER, opened_at TEXT, status TEXT, closed_at TEXT, cash_variance REAL, reviewed_at TEXT)',
-        'CREATE TABLE replenishment_requests (request_id INTEGER PRIMARY KEY, product_id INTEGER, request_qty INTEGER, request_date TEXT, status TEXT)',
         'CREATE TABLE products (product_id INTEGER PRIMARY KEY, product_name TEXT, sku TEXT, cost_price REAL, reorder_level INTEGER, status TEXT)',
         'CREATE TABLE inventory (product_id INTEGER, quantity_on_hand INTEGER)',
         'CREATE TABLE inventory_adjustments (adjustment_id INTEGER PRIMARY KEY, product_id INTEGER, adjustment_qty INTEGER, adjustment_type TEXT, reported_at TEXT, status TEXT)',
@@ -53,7 +52,6 @@ try {
     $pdo->exec("INSERT INTO cashier_shifts VALUES
         (1, 2, '2026-09-18 08:00:00', 'open', NULL, NULL, NULL),
         (2, 2, '2026-09-17 08:00:00', 'closed', '2026-09-17 17:00:00', 150, NULL)");
-    $pdo->exec("INSERT INTO replenishment_requests VALUES (1, 10, 12, '2026-09-16 08:00:00', 'pending')");
     $pdo->exec("INSERT INTO inventory_adjustments VALUES (1, 10, -3, 'missing', '2026-09-16 09:00:00', 'pending')");
     $pdo->exec("INSERT INTO fiscal_periods VALUES (1, 'September 2026', '2026-09-01', '2026-09-20', 'open')");
     $pdo->exec("INSERT INTO ml_jobs VALUES (1, 'forecast_generation', 'succeeded', '2026-09-17 07:00:00')");
@@ -73,7 +71,7 @@ try {
     $assert(($view['headline']['fiscal_period']['value'] ?? '') === 'September 2026', 'Headline must show the current Fiscal Period');
     $assert(($view['comparison']['sales']['current'] ?? 0) === 150.0, 'Comparison must total the selected period');
     $assert(($view['comparison']['sales']['previous'] ?? 0) === 80.0, 'Comparison must use the immediately preceding equivalent period');
-    $assert(count($view['exceptions']) >= 5, 'Action queue must contain operational exceptions instead of ordinary transactions');
+    $assert(count($view['exceptions']) >= 4, 'Action queue must contain operational exceptions instead of ordinary transactions');
     $assert(($view['staff']['active_cashiers'] ?? 0) === 1, 'Staff oversight must show active Cashiers');
     $assert(($view['staff']['disabled_staff'] ?? 0) === 1, 'Staff oversight must show Disabled Accounts');
     $assert(($view['shifts']['open'] ?? 0) === 1, 'Cashier-shift oversight must show open shifts');
@@ -94,7 +92,7 @@ try {
     $fallbackRange = $workspace->load('admin', 365);
     $assert($fallbackRange['range_days'] === 30, 'Unsupported ranges must fall back to 30 days');
 
-    $pdo->exec("DELETE FROM sale_reversals; DELETE FROM cashier_shifts; DELETE FROM replenishment_requests; DELETE FROM inventory_adjustments; DELETE FROM sales; DELETE FROM demand_forecasts; DELETE FROM ml_jobs; DELETE FROM ml_model_evaluations");
+    $pdo->exec("DELETE FROM sale_reversals; DELETE FROM cashier_shifts; DELETE FROM inventory_adjustments; DELETE FROM sales; DELETE FROM demand_forecasts; DELETE FROM ml_jobs; DELETE FROM ml_model_evaluations");
     $empty = $workspace->load('admin', 7);
     $assert($empty['state'] === 'empty', 'No actionable conditions must produce an explicit empty state');
     $assert($empty['exceptions'] === [], 'Empty state must have no exception rows');

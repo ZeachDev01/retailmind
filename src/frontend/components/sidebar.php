@@ -217,11 +217,6 @@ $roleSections = [
                 ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Stock Product'],
                 ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Stock Counter'],
                 ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Exceptions'],
-                ['icon' => 'bi-clipboard-check', 'label' => 'Legacy Purchasing', 'items' => [
-                    ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
-                    ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
-                    ['path' => 'components/invoice/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
-                ]],
             ],
         ],
         [

@@ -77,10 +77,6 @@ final class DatabaseAttentionSignalSource
             "SELECT COALESCE(MAX(ABS(cash_variance)), 0) AS value, COUNT(*) AS item_count
              FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL"
         );
-        $approvals = $this->row(
-            "SELECT MIN(request_date) AS oldest_at, COUNT(*) AS item_count
-             FROM replenishment_requests WHERE status = 'pending'"
-        );
         $inventory = $this->row(
             "SELECT MIN(ia.reported_at) AS oldest_at,
                     COUNT(*) AS item_count,
@@ -88,6 +84,7 @@ final class DatabaseAttentionSignalSource
              FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id
              WHERE ia.status = 'pending'"
         );
+        $approvals = $inventory;
         $fiscal = $this->row(
             "SELECT MIN(end_date) AS next_end FROM fiscal_periods WHERE status = 'open' AND end_date >= ?",
             [$now->format('Y-m-d')]

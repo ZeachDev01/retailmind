@@ -36,11 +36,10 @@ const screens = inventory ? [
     'report/report_generation?report=inventory_valuation', 'auth/user_info', 'auth/preferences',
     'auth/change_password', 'auth/workspace', 'notification/notifications',
     ...['sales_product', 'sales_category', 'sales_cashier', 'refunds', 'fast_moving', 'slow_moving',
-        'low_stock', 'stock_movements', 'adjustments', 'replenishment', 'forecast_actual',
+        'low_stock', 'stock_movements', 'adjustments', 'forecast_actual',
         'gross_profit', 'expiration', 'count_variance'].map(report => 'report/report_generation?report=' + report),
     'administrator/stock_issues?detail=1',
-    'report/predictions', 'inventory_management/replenishment_requests',
-    'inventory_management/replenishment_requests?status=approved',
+    'report/predictions', 'inventory_management/replenishment_queue',
     'inventory_management/inventory_insights', 'inventory_management/products',
     'inventory_management/product_investigation?product_id=1',
 ] : [

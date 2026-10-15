@@ -113,10 +113,6 @@ try {
                         <?php endif; ?>
                     </nav>
                     <p>Non-binding buying guidance. No supplier configuration is required. Reviewing these suggestions does not create purchase requests, place orders, or change stock. The owner buys outside RetailMind and may choose different products, stores, or quantities.</p>
-                    <details><summary>Purchasing history and legacy workflows</summary>
-                        <a href="replenishment_requests.php">Replenishment requests</a> ·
-                        <a href="../invoice/purchase_orders.php">Purchase orders</a>
-                    </details>
                     
                     <?php if (empty($queue)): ?>
                         <div class="empty-state">

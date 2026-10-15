@@ -379,7 +379,6 @@ try {
         'src/frontend/components/report/forecast_analytics.php',
         'src/frontend/components/administrator/store_calendar.php',
         'src/frontend/components/inventory_management/replenishment_queue.php',
-        'src/frontend/components/inventory_management/replenishment_requests.php',
     ];
     foreach ($uiFiles as $file) {
         $path = dirname(__DIR__, 3) . '/' . $file;

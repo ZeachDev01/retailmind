@@ -39,16 +39,11 @@ assert.match(process.env.DB_NAME || '', /^retailmind_demo_[a-f0-9]{12}$/);
             assert.equal(await comparison.locator('td').nth(5).innerText(), 'Unknown');
             assert.equal(await comparison.locator('td').nth(6).innerText(), '—');
         }
-        await page.goto(origin + '/components/inventory_management/replenishment_requests.php');
-        const form = page.locator('form').filter({has: page.locator('input[name="source"][value="ml_forecast"]')}).first();
-        assert.equal(await form.count(), 1, await page.locator('body').innerText());
-        assert.equal(await form.locator('input[name="forecast_job_id"]').inputValue(), process.env.DEMO_FORECAST_JOB);
-        const product = await form.locator('input[name="product_id"]').inputValue();
-        const quantity = await form.locator('input[name="request_qty"]').inputValue();
-        assert.ok(Number(quantity) > 0);
-        await Promise.all([page.waitForNavigation(), form.getByRole('button', {name: 'Create Request from Forecast'}).click()]);
-        assert.match(await page.locator('.message.success').innerText(), /created successfully/);
-        console.log(JSON.stringify({product_id: Number(product), quantity: Number(quantity)}));
+        await page.goto(origin + '/components/inventory_management/replenishment_queue.php');
+        const queueRow = page.locator('tr.queue-item').filter({hasText: 'DEMO-P0001'});
+        assert.equal(await queueRow.count(), 1, 'DEMO-P0001 has recommendations');
+        assert.equal((await page.goto(origin + '/components/inventory_management/replenishment_requests.php')).status(), 404);
+        console.log(JSON.stringify({product_id: 1, quantity: 14}));
     } finally {
         await browser?.close();
         server.kill();

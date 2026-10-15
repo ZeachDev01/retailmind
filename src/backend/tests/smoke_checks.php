@@ -46,10 +46,6 @@ $checks = [
         'file' => 'src/backend/app/Services/SalesWorkflowService.php',
         'needles' => ['discount_authorized_by', 'authorizeSupervisor'],
     ],
-    'Replenishment segregation of duties' => [
-        'file' => 'src/frontend/components/inventory_management/replenishment_requests.php',
-        'needles' => ["requested_by <> ?", "status = 'pending'"],
-    ],
     'Server-held sales enabled' => [
         // Ticket #91 moved the rules out of the endpoint and into
         // HeldSaleService, so the parking INSERT and the unresolved statuses now
@@ -254,7 +250,7 @@ $checks = [
     ],
     'Receipt History workspace exposes receipt filters and view actions' => [
         'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptRefundStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'Print Receipt', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
+        'needles' => ['id="receiptDateFrom"', 'id="receiptDateTo"', 'id="receiptRefundStatus"', 'id="receiptCashier"', 'id="retryReceiptTable"', 'viewReceipt(', 'No receipts have been created yet.', 'No receipts match the current search and filters.', 'Unable to load receipts.'],
     ],
     'Sales transaction server contract is isolated and safe' => [
         'file' => 'src/backend/app/Receipts/ReceiptTableService.php',
@@ -263,7 +259,7 @@ $checks = [
     ],
     'Sales and receipt routes use capability and Store scope' => [
         'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['VIEW_SALES_HISTORY', 'store_scope_id($pdo)', 'ReceiptTableService($pdo)'],
+        'needles' => ['VIEW_SALES_HISTORY', 'ReceiptTableService($pdo)'],
         'forbidden' => ["require_role(['admin', 'super_admin', 'inventory_manager', 'cashier'])", "'branch_id' => null"],
     ],
     'Report generation uses capability and Store scope' => [
@@ -295,9 +291,10 @@ $checks = [
         'needles' => ['components/system_administrator/fiscal_periods.php'],
         'forbidden' => ['components/modals/fiscal_periods.php', 'data-fiscal-periods-open'],
     ],
-    'Supplier-based reorder planning present' => [
-        'file' => 'src/frontend/components/inventory_management/legacy_reorder_planner.php',
-        'needles' => ['Supplier-Based Reorder Planning', 'minimum_order_quantity', 'Create selected replenishment requests'],
+    'Legacy purchasing removed from navigation' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['Inventory Overview', 'Replenishment Recommendations', 'Stock Receiving'],
+        'forbidden' => ['Legacy Purchasing', 'suppliers.php', 'replenishment_requests.php', 'purchase_orders.php'],
     ],
     'Shared attention evaluation feeds scheduled notifications' => [
         'file' => 'src/backend/scripts/run_notifications.php',

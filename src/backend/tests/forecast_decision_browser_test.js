@@ -98,139 +98,29 @@ const fixture = action => {
         assert.equal(await page.locator('#product_id').inputValue(), '1', 'Product 1 pre-selected from recommendations');
         assert.equal(await page.locator('#received_qty').inputValue(), '', 'Bought quantity never prefilled from recommendations');
 
-        // Assert legacy reorder planner redirects to replenishment queue
-        await page.goto('/components/inventory_management/legacy_reorder_planner.php', {waitUntil: 'domcontentloaded'});
-        assert.match(page.url(), /replenishment_queue.php/, 'legacy_reorder_planner redirects to replenishment_queue');
+        // Assert retired procurement routes return 404 and cannot execute
+        for (const retiredRoute of [
+            '/components/inventory_management/legacy_reorder_planner.php',
+            '/components/inventory_management/reorder_planner.php',
+            route,
+            '/components/invoice/purchase_orders.php',
+            '/components/inventory_management/suppliers.php',
+        ]) {
+            const resp = await page.goto(retiredRoute);
+            assert.equal(resp.status(), 404, retiredRoute + ' must return 404');
+        }
 
-        // Verify committed stock changes update guidance on reload
-        fixture('receive_stock');
-        await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
-        const updatedRow = page.locator('.queue-item').filter({hasText: 'Decision Test Item'});
-        assert.match(await updatedRow.innerText(), /32 units/);
-        assert.match(await updatedRow.innerText(), /In stock/);
-        assert.match(await updatedRow.innerText(), /0 units suggested/);
-        fixture('reset_stock');
-        fixture('restore_forecast');
-        await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
-
-        await page.goto('/components/inventory_management/reorder_planner.php', {waitUntil: 'domcontentloaded'});
-        assert.match(page.url(), /replenishment_queue.php/);
-        await page.goto(route, {waitUntil: 'domcontentloaded'});
-        console.log('Replenishment page loaded.');
-        assert.equal(await page.locator('input[name="source"][value="ml_forecast"]').count(), 1, 'Forecast creation form rendered');
-        const create = page.locator('form').filter({has: page.locator('input[name="source"][value="ml_forecast"]')}).first();
-        assert.equal(await create.locator('input[name="forecast_job_id"]').inputValue(), '10', 'Form retains displayed forecast job');
-        assert.equal(await create.locator('input[name="forecast_prediction_id"]').count(), 0, 'Product ID never submitted as legacy prediction');
-        console.log('Forecast form source checked.');
-        fixture('upgrade');
-        console.log('Legacy schema upgraded twice.');
-        const before = JSON.parse(fixture('state'));
-        await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), create.evaluate(form => form.submit())]);
-        const after = JSON.parse(fixture('state'));
-        assert.equal(after.requests.length, before.requests.length + 1);
-        assert.equal(after.decisions.length, before.decisions.length + 1);
-        const decision = after.decisions.at(-1);
-        assert.equal(decision.decision, 'accepted');
-        assert.equal(decision.forecast_job_id, 10);
-        assert.equal(decision.product_id, 1);
-        assert.equal(decision.prediction_id, null);
-        assert.equal(after.requests.at(-1).forecast_prediction_id, null);
-        assert.equal(after.requests.at(-1).forecast_job_id, 10);
-        assert.deepEqual(after.decisions[0], {...before.decisions[0], forecast_job_id: null}, 'Migration retains legacy decision');
-        assert.equal(after.requests[0].forecast_prediction_id, 100, 'Migration retains legacy request');
-
-        const state = () => JSON.parse(fixture('state'));
-        const submit = async form => Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), form.evaluate(el => el.submit())]);
-        const dismiss = page.locator('form').filter({has: page.locator('input[name="action"][value="reject_forecast"]')}).first();
-        for (const collision of [false, true]) {
-            if (collision) fixture('collision');
-            for (const action of (collision ? ['accepted', 'modified', 'rejected'] : ['modified', 'rejected'])) {
-                await page.goto(route, {waitUntil: 'domcontentloaded'});
-                const form = action === 'rejected' ? dismiss : create;
-                assert.equal(await form.locator('input[name="forecast_job_id"]').inputValue(), '10');
-                const original = Number(await form.locator('input[name="original_suggested_qty"]').inputValue());
-                const quantity = action === 'rejected' ? 0 : original + (action === 'modified' ? 1 : 0);
-                if (action === 'modified') {
-                    await form.locator('input[name="request_qty"]').fill(String(quantity));
-                    await form.locator('input[name="override_reason"]').fill('Supplier package adjustment');
-                }
-                const prior = state();
-                // A newly completed run must not relabel an already displayed recommendation.
-                if (collision && action === 'rejected') fixture('next_run');
-                await submit(form);
-                const saved = state();
-                const record = saved.decisions.at(-1);
-                assert.equal(saved.decisions.length, prior.decisions.length + 1);
-                assert.equal(saved.requests.length, prior.requests.length + (action === 'rejected' ? 0 : 1));
-                assert.equal(record.decision, action);
-                assert.equal(record.forecast_job_id, 10);
-                assert.equal(record.product_id, 1);
-                assert.equal(record.prediction_id, null);
-                assert.equal(record.original_suggested_qty, original);
-                assert.equal(record.final_quantity, quantity);
-                assert.equal(record.decided_by, 3);
-                if (action !== 'rejected') assert.equal(record.replenishment_request_id, saved.requests.at(-1).request_id);
-            }
+        // Direct POST to retired procurement URLs must return 404 and cannot mutate stock or create records
+        const beforePost = JSON.parse(fixture('state'));
+        for (const [targetUrl, payload] of [
+            [route, {action: 'create', product_id: 1, request_qty: 10}],
+            ['/components/invoice/purchase_orders.php', {action: 'create', supplier_id: 1, 'request_ids[]': 1}],
+            ['/components/inventory_management/suppliers.php', {action: 'save', supplier_name: 'Test'}]
+        ]) {
+            const postResp = await context.request.post(targetUrl, {form: payload});
+            assert.equal(postResp.status(), 404, targetUrl + ' POST must return 404');
         }
-        await page.goto(route, {waitUntil: 'domcontentloaded'});
-        const token = await create.locator('input[name="csrf_token"]').inputValue();
-        const prior = state();
-        for (const invalid of [{forecast_job_id: 10, product_id: 2}, {forecast_job_id: 999, product_id: 1}, {forecast_prediction_id: 1, product_id: 1}]) {
-            const response = await context.request.post(route, {form: {action: 'create', source: 'ml_forecast', request_qty: 28,
-                original_suggested_qty: 28, csrf_token: token, ...invalid}});
-            assert.match(await response.text(), /The forecast source is unavailable/);
-            assert.deepEqual(state(), prior, 'Invalid source leaves no request or decision');
-        }
-        for (const mode of ['observe', 'suspend']) {
-            fixture('activate');
-            await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
-            const review = page.getByRole('link', {name: 'Review Request', exact: true});
-            assert.equal(await review.count(), 0, 'Recommendations never lead directly to purchasing');
-            await page.goto(route, {waitUntil: 'domcontentloaded'});
-            assert.equal(await page.locator('#request_qty').inputValue(), '', 'Queue must not copy forecast quantities into manual purchasing');
-            assert.equal(await create.locator('input[name="source"]').inputValue(), 'ml_forecast');
-            const staleToken = await create.locator('input[name="csrf_token"]').inputValue();
-            fixture(mode);
-            const beforeGate = state();
-            await submit(create);
-            assert.match(await page.locator('.message.error').innerText(), /Forecast-backed purchasing is unavailable/);
-            assert.deepEqual(state(), beforeGate, 'Stale forecast form cannot save requests or decisions');
-            assert.equal(await page.getByRole('button', {name: 'Create Request from Forecast', exact: true}).count(), 0);
-            assert.equal(await page.getByRole('button', {name: 'Dismiss', exact: true}).count(), 0);
-            for (const action of ['create', 'reject_forecast']) {
-                const response = await context.request.post(route, {form: {action, source: 'ml_forecast',
-                    forecast_job_id: 10, product_id: 1, request_qty: 28, original_suggested_qty: 28,
-                    override_reason: 'Direct submission', csrf_token: staleToken}});
-                assert.match(await response.text(), /Forecast-backed purchasing is unavailable/);
-                assert.deepEqual(state(), beforeGate, 'Direct submission cannot bypass recommendation gate');
-            }
-            await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
-            assert.equal(await review.count(), 0, 'Inactive recommendations have no actionable review links');
-            assert.match(await page.locator('.queue-list').innerText(), /Stock rules/);
-            assert.match(await page.locator('.queue-list').innerText(), mode === 'observe' ? /Observation Mode/ : /Suspended/);
-            assert.deepEqual(state(), beforeGate, 'Restricted guidance does not mutate inventory or purchasing');
-            await page.goto(route + '?product_id=1&suggested_qty=999', {waitUntil: 'domcontentloaded'});
-            assert.equal(await page.locator('#request_qty').inputValue(), '', 'Old queue URLs cannot prefill manual quantity');
-            const manual = page.locator('.create-section form');
-            await manual.locator('#product_id').selectOption('1');
-            await manual.locator('#request_qty').fill('5');
-            await submit(manual);
-            assert.match(await page.locator('.message.success').innerText(), /created successfully/);
-            assert.equal(state().requests.length, beforeGate.requests.length + 1, 'Manual purchasing stays available');
-            assert.equal(state().requests.at(-1).source, 'manual');
-            assert.equal(state().requests.at(-1).forecast_job_id, null);
-            assert.deepEqual(state().decisions, beforeGate.decisions, 'Manual request never records a forecast decision');
-        }
-        fixture('activate');
-        fixture('fail');
-        for (const form of [create, dismiss]) {
-            await page.goto(route, {waitUntil: 'domcontentloaded'});
-            const prior = state();
-            await submit(form);
-            assert.match(await page.locator('.message.error').innerText(), /could not be saved/);
-            assert.equal(await page.locator('.message.success').count(), 0, 'Persistence failure has no success acknowledgment');
-            assert.deepEqual(state(), prior, 'Decision failure rolls back request and audit transaction');
-        }
+        assert.deepEqual(JSON.parse(fixture('state')), beforePost, 'Direct HTTP calls cannot mutate records or stock');
         console.log('Forecast decision browser passed.');
     } finally {
         await browser?.close();
