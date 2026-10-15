@@ -341,11 +341,13 @@ class ReceivingService
 
         $groups = [];
         foreach ($rows as $row) {
-            $gid = $row['group_id'] !== null ? (int)$row['group_id'] : (int)$row['receiving_id'];
-            if (!isset($groups[$gid])) {
-                $groups[$gid] = [
-                    'group_id' => $gid,
-                    'has_explicit_group' => $row['group_id'] !== null,
+            $hasGroup = $row['group_id'] !== null;
+            $groupKey = $hasGroup ? 'g_' . (int)$row['group_id'] : 'r_' . (int)$row['receiving_id'];
+            $displayId = $hasGroup ? (int)$row['group_id'] : (int)$row['receiving_id'];
+            if (!isset($groups[$groupKey])) {
+                $groups[$groupKey] = [
+                    'group_id' => $displayId,
+                    'has_explicit_group' => $hasGroup,
                     'recorded_by' => $row['recorded_by'],
                     'received_by' => (int)$row['received_by'],
                     'received_at' => $row['group_received_at'] ?? $row['received_at'],
@@ -358,10 +360,10 @@ class ReceivingService
                     'lines' => [],
                 ];
             }
-            $groups[$gid]['total_received_qty'] += (int)$row['received_qty'];
-            $groups[$gid]['total_accepted_qty'] += (int)$row['accepted_qty'];
-            $groups[$gid]['total_damaged_qty'] += (int)$row['damaged_qty'];
-            $groups[$gid]['lines'][] = [
+            $groups[$groupKey]['total_received_qty'] += (int)$row['received_qty'];
+            $groups[$groupKey]['total_accepted_qty'] += (int)$row['accepted_qty'];
+            $groups[$groupKey]['total_damaged_qty'] += (int)$row['damaged_qty'];
+            $groups[$groupKey]['lines'][] = [
                 'receiving_id' => (int)$row['receiving_id'],
                 'group_id' => $row['group_id'] !== null ? (int)$row['group_id'] : null,
                 'product_id' => (int)$row['product_id'],

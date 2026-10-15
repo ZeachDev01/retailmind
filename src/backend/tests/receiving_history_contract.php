@@ -172,6 +172,14 @@ try {
     $assert($unitLine !== null && $unitLine['cost_price'] === 7.50, 'supplied cost persists correctly');
     $assert($unitLine['accepted_qty'] === 4 && $unitLine['damaged_qty'] === 1, 'accepted and damaged quantities match');
 
+    // Ungrouped legacy line forms independent entry without key collision
+    $pdo->prepare('INSERT INTO stock_receiving (group_id, product_id, received_by, received_qty, accepted_qty, damaged_qty, units_per_package_used)
+        VALUES (NULL, ?, ?, 1, 1, 0, 1)')->execute([$bulkUnitsId, $managerId]);
+    $legacyReceivingId = (int)$pdo->lastInsertId();
+    $historyWithLegacy = $service->getGroupedReceivingHistory($managerId);
+    $legacyEntry = array_values(array_filter($historyWithLegacy, fn($g) => $g['group_id'] === $legacyReceivingId && !$g['has_explicit_group']));
+    $assert(count($legacyEntry) === 1, 'ungrouped line forms independent entry without explicit group or key collision');
+
     echo "Receiving history contract passed.\n";
 } finally {
     runFixture($phpBinary, $fixtureScript, ['--cleanup', '--token', $token]);

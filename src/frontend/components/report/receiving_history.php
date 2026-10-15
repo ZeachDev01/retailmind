@@ -10,7 +10,13 @@ $receivingService = new ReceivingService($pdo);
 $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 $historyUserId = $canReceive ? (int)$_SESSION['user_id'] : null;
 
-$entries = $receivingService->getGroupedReceivingHistory($historyUserId);
+$error = null;
+$entries = [];
+try {
+    $entries = $receivingService->getGroupedReceivingHistory($historyUserId);
+} catch (Throwable $e) {
+    $error = 'Failed to load receiving history. Please refresh or try again.';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -37,7 +43,11 @@ $entries = $receivingService->getGroupedReceivingHistory($historyUserId);
             <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a>
         </nav>
 
-        <?php if (empty($entries)): ?>
+        <?php if ($error): ?>
+            <div class="message error history-section" role="alert">
+                <p><?= htmlspecialchars($error) ?></p>
+            </div>
+        <?php elseif (empty($entries)): ?>
             <div class="empty-state history-section" role="status">
                 <h3>No receiving records found</h3>
                 <p><?= $canReceive ? 'You have not recorded any stock receipts yet.' : 'No stock receipts found for this store.' ?></p>
@@ -66,7 +76,7 @@ $entries = $receivingService->getGroupedReceivingHistory($historyUserId);
                                     <span class="badge badge-warning"><?= $entry['total_damaged_qty'] ?> damaged units</span>
                                 <?php endif; ?>
                             </div>
-                            <button type="button" class="btn btn-secondary btn-sm inspect-btn" aria-controls="entry_body_<?= $entry['group_id'] ?>">Inspect entry</button>
+                            <button type="button" class="btn btn-secondary btn-sm inspect-btn" aria-expanded="true" aria-controls="entry_body_<?= $entry['group_id'] ?>">Inspect entry</button>
                         </summary>
                         <div class="receiving-entry-body" id="entry_body_<?= $entry['group_id'] ?>">
                             <div class="u-table-scroll" tabindex="0" role="region" aria-label="Products in entry #<?= $entry['group_id'] ?>">
@@ -127,26 +137,23 @@ $entries = $receivingService->getGroupedReceivingHistory($historyUserId);
 </div>
 
 <script>
-document.querySelectorAll('.inspect-btn').forEach(btn => {
-    btn.addEventListener('click', event => {
-        event.preventDefault();
-        event.stopPropagation();
-        const details = btn.closest('details');
-        if (details) {
-            details.open = !details.open;
-            btn.setAttribute('aria-expanded', String(details.open));
-            btn.textContent = details.open ? 'Hide details' : 'Inspect entry';
-        }
-    });
-});
 document.querySelectorAll('details.receiving-entry-card').forEach(details => {
-    details.addEventListener('toggle', () => {
-        const btn = details.querySelector('.inspect-btn');
+    const btn = details.querySelector('.inspect-btn');
+    const sync = () => {
         if (btn) {
             btn.setAttribute('aria-expanded', String(details.open));
             btn.textContent = details.open ? 'Hide details' : 'Inspect entry';
         }
-    });
+    };
+    details.addEventListener('toggle', sync);
+    if (btn) {
+        btn.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            details.open = !details.open;
+            sync();
+        });
+    }
 });
 const searchInput = document.getElementById('history_search');
 if (searchInput) {
