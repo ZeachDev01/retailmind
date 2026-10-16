@@ -51,3 +51,15 @@ _Avoid_: Bulk unit, supplier unit, container
 **Units per Package**:
 The fixed multiplier representing the exact number of Base Units contained within one Receiving Unit.
 _Avoid_: Pack size, multiplier, conversion rate
+
+**Hosted Demo**:
+A client-accessible, non-production RetailMind deployment used to demonstrate workflows and gather feedback. It contains Demo Data and does not represent a commitment to production readiness.
+_Avoid_: Production system, live production
+
+**Demo Data**:
+Synthetic accounts, products, sales, and inventory records isolated for demonstration. It must not contain real customer, employee, or operational data.
+_Avoid_: Production data, client data
+
+**Typical Store Day**:
+The end-to-end demonstration scenario: open a Cashier Shift, complete a sale, view its Sale Receipt, perform Stock Receiving, review stock or replenishment information, then review Administrator oversight and reports. Discounts are outside this scenario.
+_Avoid_: Feature tour, production workflow

@@ -130,6 +130,20 @@ $rangeUrl = $currentUrl;
                 <?php endif; ?>
             </section>
 
+            <?php if ($dashboard['headline'] !== []): ?>
+                <section aria-labelledby="store-status-title">
+                    <div class="section-header control-center-section-header"><div><h2 id="store-status-title">Store status</h2><p class="section-description">Unresolved controls and the active accounting window.</p></div></div>
+                    <div class="card-grid store-operations-headlines">
+                        <?php foreach ($headlineOrder as $key => [$label, $icon]): $item = $dashboard['headline'][$key]; ?>
+                            <article class="stat-card with-icon status-<?= $escape($item['status']) ?>">
+                                <span class="stat-icon"><i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i></span>
+                                <div class="value"><?= $escape($item['value']) ?></div><div class="label"><?= $escape($label) ?></div><div class="hint"><?= $escape($item['detail']) ?></div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+
             <section class="dashboard-section net-sales-section" aria-labelledby="net-sales-title">
                 <div class="net-sales-summaries-grid" role="region" aria-label="Net Sales period summaries">
                     <?php 
@@ -233,18 +247,6 @@ $rangeUrl = $currentUrl;
             </section>
 
             <?php if ($dashboard['headline'] !== []): ?>
-                <section aria-labelledby="store-status-title">
-                    <div class="section-header control-center-section-header"><div><h2 id="store-status-title">Store status</h2><p class="section-description">Unresolved controls and the active accounting window.</p></div></div>
-                    <div class="card-grid store-operations-headlines">
-                        <?php foreach ($headlineOrder as $key => [$label, $icon]): $item = $dashboard['headline'][$key]; ?>
-                            <article class="stat-card with-icon status-<?= $escape($item['status']) ?>">
-                                <span class="stat-icon"><i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i></span>
-                                <div class="value"><?= $escape($item['value']) ?></div><div class="label"><?= $escape($label) ?></div><div class="hint"><?= $escape($item['detail']) ?></div>
-                            </article>
-                        <?php endforeach; ?>
-                    </div>
-                </section>
-
                 <section class="dashboard-section period-comparison" aria-labelledby="comparison-title">
                     <div class="section-header"><div><h2 id="comparison-title"><?= $selectedRange ?>-day performance</h2><p class="section-description">Compared with the Previous equivalent period.</p></div></div>
                     <div class="comparison-grid">
@@ -262,11 +264,11 @@ $rangeUrl = $currentUrl;
                         </div>
                     </div>
                     <div class="indicator-list">
-                        <div class="indicator-item"><span><strong>Active Cashiers</strong><span>Available operational staff</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_cashiers'] ?></b></div>
-                        <div class="indicator-item"><span><strong>Active Inventory Managers</strong><span>Routine inventory operators</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_inventory_managers'] ?></b></div>
-                        <div class="indicator-item"><span><strong>Disabled Accounts</strong><span>Retained staff identities</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['disabled_staff'] ?></b></div>
-                        <div class="indicator-item"><span><strong>Open cashier shifts</strong><span>Currently active shifts</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['open'] ?></b></div>
-                        <div class="indicator-item"><span><strong>Unreviewed variances</strong><span>Closed shifts awaiting review</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-check" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Cashiers</strong><span>Available operational staff</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_cashiers'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Inventory Managers</strong><span>Routine inventory operators</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_inventory_managers'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-x" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Disabled Accounts</strong><span>Retained staff identities</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['disabled_staff'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Open cashier shifts</strong><span>Currently active shifts</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['open'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Unreviewed variances</strong><span>Closed shifts awaiting review</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
                     </div>
                 </section>
             <?php endif; ?>

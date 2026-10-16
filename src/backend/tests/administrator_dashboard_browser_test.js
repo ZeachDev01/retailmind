@@ -202,6 +202,9 @@ const {chromium} = require('playwright');
             assert(await page.locator('#store-status-title').isVisible(), 'Store status must be visible');
             assert(await page.locator('#comparison-title').isVisible(), 'Period comparison must be visible');
             assert(await page.locator('#staff-shifts-title').isVisible(), 'Staff & cashier shifts must be visible');
+            const storeStatusBox = await page.locator('#store-status-title').boundingBox();
+            const salesStatisticsBox = await page.locator('.net-sales-section').boundingBox();
+            assert(storeStatusBox.y < salesStatisticsBox.y, 'Store status must appear above sales statistics');
 
             // Verify staff heading icon and alignment
             assert.equal(await page.locator('#staff-shifts-title i.bi.bi-people').getAttribute('aria-hidden'), 'true', 'Staff heading icon must have aria-hidden="true"');
@@ -209,6 +212,11 @@ const {chromium} = require('playwright');
             const headingAlign = await page.locator('#staff-shifts-title').evaluate(el => window.getComputedStyle(el).alignItems);
             assert.equal(headingDisplay, 'inline-flex', 'Staff heading should use inline-flex for alignment');
             assert.equal(headingAlign, 'center', 'Staff heading should vertically center icon with text');
+            assert.equal(await page.locator('.staff-shifts-section .indicator-icon').count(), 5, 'Staff and cashier-shift indicators each show an icon');
+            const firstIndicatorIcon = await page.locator('.staff-shifts-section .indicator-icon').first().boundingBox();
+            const firstIndicatorCopy = await page.locator('.staff-shifts-section .indicator-copy').first().boundingBox();
+            const indicatorGap = firstIndicatorCopy.x - (firstIndicatorIcon.x + firstIndicatorIcon.width);
+            assert(indicatorGap >= 0 && indicatorGap <= 20, 'Indicator label must sit beside its icon');
 
             // Verify staff section placement after period comparison
             const comparisonBox = await page.locator('.period-comparison').boundingBox();

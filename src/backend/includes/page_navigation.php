@@ -21,12 +21,12 @@ function retailmind_navigation_response(string $html): string
     $before = $scopeScripts($before);
     $after = $scopeScripts($after);
     header('Vary: X-RetailMind-Navigation', false);
+    header('Cache-Control: no-store');
     if (($_SERVER['HTTP_X_RETAILMIND_NAVIGATION'] ?? '') !== '1') {
         return $before . '<!--rm-shell-start-->' . $shell . '<!--rm-shell-end-->' . $after;
     }
     // The shell is excluded, including its scripts, so it cannot be duplicated on navigation.
     header('Content-Type: application/vnd.retailmind.page+json; charset=utf-8');
-    header('Cache-Control: no-store');
     return json_encode(['html' => $before . $after, 'role' => current_role(), 'flash' => $GLOBALS['rm_navigation_flash'] ?? [],
         'shell' => $GLOBALS['rm_navigation_shell'] ?? [], 'cart' => $GLOBALS['rm_navigation_cart'] ?? null],
         JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);

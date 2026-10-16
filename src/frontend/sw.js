@@ -1,8 +1,7 @@
 // Unified root Service Worker for RetailMind
-// Implements Cache-First for versioned static assets and Stale-While-Revalidate for HTML shells.
+// Cache static assets; session pages must always come from the server.
 
-const STATIC_CACHE = 'retailmind-static-v1';
-const SHELL_CACHE = 'retailmind-shell-v1';
+const STATIC_CACHE = 'retailmind-static-v2';
 const STATIC_EXTENSIONS = /\.(?:css|js|woff2?|ttf|eot|svg|png|jpe?g|webp|ico|gif)(?:\?.*)?$/i;
 
 self.addEventListener('install', () => {
@@ -10,7 +9,7 @@ self.addEventListener('install', () => {
 });
 
 self.addEventListener('activate', (event) => {
-  const expectedCaches = [STATIC_CACHE, SHELL_CACHE];
+  const expectedCaches = [STATIC_CACHE];
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
@@ -56,7 +55,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests: HTML shells served Stale-While-Revalidate
+  // Session HTML contains CSRF tokens and workspace state that cannot be replayed.
   const isNavigation = (
     event.request.mode === 'navigate' ||
     event.request.destination === 'document' ||
@@ -64,37 +63,7 @@ self.addEventListener('fetch', (event) => {
   );
 
   if (isNavigation) {
-    event.respondWith(
-      caches.open(SHELL_CACHE).then((cache) => {
-        return cache.match(event.request).then((cachedResponse) => {
-          const fetchPromise = fetch(event.request)
-            .then(async (networkResponse) => {
-              if (networkResponse && networkResponse.status === 200 && !networkResponse.redirected) {
-                await cache.put(event.request, networkResponse.clone());
-              }
-              return networkResponse;
-            })
-            .catch(async (err) => {
-              if (cachedResponse) {
-                return cachedResponse;
-              }
-              const fallback = (await cache.match('/')) ||
-                               (await cache.match(self.registration.scope)) ||
-                               (await cache.match('./'));
-              if (fallback) {
-                return fallback;
-              }
-              throw err;
-            });
-
-          if (cachedResponse) {
-            event.waitUntil(fetchPromise);
-            return cachedResponse;
-          }
-          return fetchPromise;
-        });
-      })
-    );
+    event.respondWith(fetch(event.request, {cache: 'no-store'}));
     return;
   }
 

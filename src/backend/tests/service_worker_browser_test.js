@@ -10,6 +10,7 @@ const registerSource = fs.readFileSync(path.join(__dirname, '../../frontend/asse
 
 (async () => {
     let swVersion = 'v1';
+    let serveLegacyWorker = true;
     let assetHits = 0;
     let cashierNavHits = 0;
 
@@ -23,7 +24,10 @@ const registerSource = fs.readFileSync(path.join(__dirname, '../../frontend/asse
                 'Service-Worker-Allowed': '/',
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
             });
-            res.end(`// SW Version: ${swVersion}\n${swSource}`);
+            const source = serveLegacyWorker
+                ? swSource.replace("retailmind-static-v2", "retailmind-static-v1")
+                : swSource;
+            res.end(`// SW Version: ${swVersion}\n${source}`);
             return;
         }
 
@@ -137,28 +141,31 @@ const registerSource = fs.readFileSync(path.join(__dirname, '../../frontend/asse
         // Hit count must not increase because it was served Cache-First
         assert.equal(assetHits, initialAssetHits, 'Static asset was served from cache without network roundtrip');
 
-        // --- 3. Navigation HTML shell caching and offline navigation ---
+        // --- 3. Session pages stay fresh and cannot be replayed offline ---
         await page.goto(origin + '/components/cashier/');
         await page.waitForLoadState('networkidle');
         assert.equal(await page.textContent('h1'), 'Cashier POS Shell');
 
-        // Verify shell is stored in retailmind-shell-v1 cache
         const isCached = await page.evaluate(async () => {
-            const cache = await caches.open('retailmind-shell-v1');
-            const match = await cache.match('/components/cashier/');
-            return !!match;
+            return !!(await caches.match('/components/cashier/'));
         });
-        assert.ok(isCached, 'Cashier HTML shell is cached in retailmind-shell-v1');
+        assert.equal(isCached, false, 'Session HTML must not be cached');
+        const previousHits = cashierNavHits;
+        await page.reload();
+        assert.equal(cashierNavHits, previousHits + 1, 'Returning to a workspace fetches fresh session HTML');
 
         // Simulate complete offline network
         await context.setOffline(true);
 
-        // Navigate to cashier shell while completely offline
-        await page.goto(origin + '/components/cashier/');
-        assert.equal(await page.textContent('h1'), 'Cashier POS Shell', 'Offline navigation successfully loads cached shell');
+        await assert.rejects(() => page.goto(origin + '/components/cashier/'), /ERR_INTERNET_DISCONNECTED|ERR_FAILED/, 'Offline navigation must not replay an authenticated page');
 
         // Restore network connectivity
         await context.setOffline(false);
+        await page.goto(origin + '/components/cashier/');
+        await page.evaluate(async () => {
+            const legacy = await caches.open('retailmind-shell-v1');
+            await legacy.put('/components/cashier/', new Response('Expired session HTML'));
+        });
 
         // --- 4. Service Worker lifecycle updates & non-blocking notification banner ---
         // Simulate active Cashier shift input
@@ -166,6 +173,7 @@ const registerSource = fs.readFileSync(path.join(__dirname, '../../frontend/asse
 
         // Deploy new service worker version on server
         swVersion = 'v2';
+        serveLegacyWorker = false;
 
         // Trigger background update check
         await page.evaluate(async () => {
@@ -201,6 +209,8 @@ const registerSource = fs.readFileSync(path.join(__dirname, '../../frontend/asse
             return reg && reg.active ? reg.active.state : null;
         });
         assert.equal(newWorkerState, 'activated', 'New service worker activated after user tapped reload');
+        assert.equal(await page.evaluate(() => caches.has('retailmind-shell-v1')), false, 'Activation deletes legacy session page caches');
+        assert.equal(await page.evaluate(() => caches.has('retailmind-static-v1')), false, 'Activation deletes stale static asset caches');
 
         console.log('Service worker browser test: passed');
     } finally {

@@ -653,17 +653,17 @@ $checks = [
         'file' => 'src/frontend/components/cashier/shifts.php',
         'needles' => ['unresolvedHeldSales', 'before closing.'],
     ],
-    'Unified root Service Worker implements Cache-First and Stale-While-Revalidate' => [
+    'Unified root Service Worker caches static assets and fetches fresh session pages' => [
         'file' => 'src/frontend/sw.js',
         'needles' => [
-            'retailmind-static-v1',
-            'retailmind-shell-v1',
-            'caches.open(SHELL_CACHE)',
+            'retailmind-static-v2',
+            "fetch(event.request, {cache: 'no-store'})",
             'caches.open(STATIC_CACHE)',
             'SKIP_WAITING',
             'self.skipWaiting()',
             'self.clients.claim()',
         ],
+        'forbidden' => ['SHELL_CACHE'],
     ],
     'Service Worker registration helper listens for waiting lifecycle updates' => [
         'file' => 'src/frontend/assets/js/sw-register.js',
