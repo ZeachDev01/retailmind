@@ -14,7 +14,7 @@ $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INV
 $formValues = [];
 $prefillProductId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
 if ($prefillProductId > 0 && $_SERVER['REQUEST_METHOD'] === 'GET') {
-    $formValues = ['product_id' => (string)$prefillProductId];
+    $formValues = ['lines' => [['product_id' => (string)$prefillProductId]]];
 }
 
 // Handle form submission
@@ -190,79 +190,96 @@ $categoryIcon = static function (string $categoryName): string {
                 <input type="hidden" name="entry_mode" value="shopping_trip">
                 <div class="delivery-editor">
                 <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2><p>Enter quantities exactly as received.</p></div><span id="delivery_count" class="receiving-count">0 products</span></div>
-                <div id="receiving_lines">
-                <section class="receiving-line" aria-label="Product line 1">
-                    <div class="receiving-line-heading"><div><h3>Product line <span class="line-number">1</span></h3><span class="receiving-product-name"></span></div>
-                        <button type="button" class="btn btn-quiet remove-receiving-line">Remove product</button></div>
-
-                <div class="form-section">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="product_id" class="required">Product</label>
-                            <select name="product_id" id="product_id" data-field="product_id" required>
-                                <option value="">-- Select Product --</option>
-                                <?php foreach ($products as $p): ?>
-                                    <option value="<?= $p['product_id'] ?>" data-name="<?= htmlspecialchars($p['product_name']) ?>" data-sku="<?= htmlspecialchars($p['sku']) ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>" data-units-per-package="<?= (int)($p['units_per_package'] ?? 1) ?>" data-base-unit="<?= htmlspecialchars($p['base_unit'] ?? 'piece') ?>" data-receiving-unit="<?= htmlspecialchars($p['receiving_unit'] ?? 'package') ?>" data-category-id="<?= (int)($p['category_id'] ?? 0) ?>" data-category-name="<?= htmlspecialchars($p['category_name'] ?? '') ?>" data-barcode="<?= htmlspecialchars($p['barcode'] ?? '') ?>" data-case-barcode="<?= htmlspecialchars($p['case_barcode'] ?? '') ?>" data-variant-label="<?= htmlspecialchars($p['variant_label'] ?? '') ?>" data-product-image="<?= htmlspecialchars($p['product_image'] ?? '') ?>" data-quantity-on-hand="<?= (int)($p['quantity_on_hand'] ?? 0) ?>" data-reorder-level="<?= (int)($p['reorder_level'] ?? 0) ?>" data-safety-stock="<?= (int)($p['safety_stock'] ?? 0) ?>">
-                                        <?= htmlspecialchars($p['product_name']) ?> (<?= htmlspecialchars($p['sku']) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                <div id="delivery_empty_state" class="delivery-empty-state">
+                    <i class="bi bi-box-seam" aria-hidden="true"></i>
+                    <p>No products added yet. Scan a barcode or click + Add to Delivery from the catalog below.</p>
+                </div>
+                <div id="receiving_lines"></div>
+                <template id="receiving_line_template">
+                <section class="receiving-line" aria-label="Product line 1" draggable="true">
+                    <div class="receiving-line-heading playlist-row-header">
+                        <div class="playlist-row-main">
+                            <span class="playlist-drag-handle" title="Drag to reorder" aria-hidden="true">
+                                <i class="bi bi-grip-vertical"></i>
+                            </span>
+                            <div class="playlist-row-identity">
+                                <div class="playlist-row-title">
+                                    <span class="line-number">1</span>.
+                                    <strong class="receiving-product-name playlist-product-name"></strong>
+                                    <span class="receiving-product-sku playlist-product-sku"></span>
+                                </div>
+                                <div class="receiving-product-pack playlist-pack-info"></div>
+                            </div>
                         </div>
-                        <div class="form-group receiving-quantity">
-                            <label for="quantity_mode">Receiving quantity type</label>
-                            <select name="quantity_mode" id="quantity_mode" data-field="quantity_mode"><option value="units">Base units</option><option value="packages">Packages / cases</option></select>
-                        </div>
-                        <div class="form-group receiving-quantity" id="units_qty_group" data-field="units_qty_group">
-                            <label for="received_qty">Base units received</label>
-                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_qty" id="received_qty" data-field="received_qty" value="">
-                        </div>
-                        <div class="form-group receiving-quantity" id="packages_qty_group" data-field="packages_qty_group" style="display:none">
-                            <label for="received_packages">Packages received</label>
-                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_packages" id="received_packages" data-field="received_packages" value="">
-                        </div>
-                        <div class="form-group receiving-quantity">
-                            <label for="damaged_qty">Damaged base units on delivery</label>
-                            <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_qty" id="damaged_qty" data-field="damaged_qty" value="0">
-                        </div>
-                        <div class="form-group receiving-quantity">
-                            <label for="cost_price">Purchase cost per base unit (optional)</label>
-                            <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Leave blank if unknown">
-                            <small id="cost_hint" data-field="cost_hint">Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
+                        <div class="playlist-row-actions">
+                            <button type="button" class="btn btn-quiet move-line-up" aria-label="Move line 1 up">
+                                <i class="bi bi-arrow-up" aria-hidden="true"></i> Move up
+                            </button>
+                            <button type="button" class="btn btn-quiet move-line-down" aria-label="Move line 1 down">
+                                <i class="bi bi-arrow-down" aria-hidden="true"></i> Move down
+                            </button>
+                            <button type="button" class="btn btn-quiet remove-receiving-line" aria-label="Remove product">
+                                <i class="bi bi-trash" aria-hidden="true"></i> Remove
+                            </button>
                         </div>
                     </div>
-                    <small class="receiving-quantity" id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
-                </div>
+                    <input type="hidden" name="lines[0][product_id]" id="product_id" data-field="product_id" value="">
 
-                <details class="receiving-quantity receiving-extras" open>
-                    <summary>Cost, batch, expiry & notes</summary>
-                <div class="form-section">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="batch_number">Batch/Lot Number</label>
-                            <input type="text" name="batch_number" id="batch_number" data-field="batch_number" placeholder="Batch #">
+                    <div class="form-section receiving-quantity">
+                        <div class="form-grid">
+                            <div class="form-group receiving-quantity">
+                                <label for="quantity_mode">Receiving quantity type</label>
+                                <select name="quantity_mode" id="quantity_mode" data-field="quantity_mode"><option value="units">Base units</option><option value="packages">Packages / cases</option></select>
+                            </div>
+                            <div class="form-group receiving-quantity" id="units_qty_group" data-field="units_qty_group">
+                                <label for="received_qty">Base units received</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_qty" id="received_qty" data-field="received_qty" value="">
+                            </div>
+                            <div class="form-group receiving-quantity" id="packages_qty_group" data-field="packages_qty_group" style="display:none">
+                                <label for="received_packages">Packages received</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_packages" id="received_packages" data-field="received_packages" value="">
+                            </div>
+                            <div class="form-group receiving-quantity">
+                                <label for="damaged_qty">Damaged base units on delivery</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_qty" id="damaged_qty" data-field="damaged_qty" value="0">
+                            </div>
+                            <div class="form-group receiving-quantity">
+                                <label for="cost_price">Purchase cost per base unit (optional)</label>
+                                <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Leave blank if unknown">
+                                <small id="cost_hint" data-field="cost_hint">Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="expiration_date">Expiration Date</label>
-                            <input type="date" name="expiration_date" id="expiration_date" data-field="expiration_date">
+                        <small class="receiving-quantity" id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
+                    </div>
+
+                    <details class="receiving-quantity receiving-extras" open>
+                        <summary>Cost, batch, expiry & notes</summary>
+                        <div class="form-section">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="batch_number">Batch/Lot Number</label>
+                                    <input type="text" name="batch_number" id="batch_number" data-field="batch_number" placeholder="Batch #">
+                                </div>
+                                <div class="form-group">
+                                    <label for="expiration_date">Expiration Date</label>
+                                    <input type="date" name="expiration_date" id="expiration_date" data-field="expiration_date">
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
 
-                <div class="form-section receiving-quantity">
-                    <div class="form-group"><label for="discrepancy_notes">Damage details (optional)</label><textarea name="discrepancy_notes" id="discrepancy_notes" data-field="discrepancy_notes"></textarea></div>
-                </div>
+                        <div class="form-section receiving-quantity">
+                            <div class="form-group"><label for="discrepancy_notes">Damage details (optional)</label><textarea name="discrepancy_notes" id="discrepancy_notes" data-field="discrepancy_notes"></textarea></div>
+                        </div>
 
-                <div class="form-section receiving-quantity">
-                    <div class="form-group">
-                        <label for="notes">Notes / Comments</label>
-                        <textarea name="notes" id="notes" data-field="notes" placeholder="Any additional notes about this receipt..."></textarea>
-                    </div>
-                </div>
-                </details>
-
+                        <div class="form-section receiving-quantity">
+                            <div class="form-group">
+                                <label for="notes">Notes / Comments</label>
+                                <textarea name="notes" id="notes" data-field="notes" placeholder="Any additional notes about this receipt..."></textarea>
+                            </div>
+                        </div>
+                    </details>
                 </section>
-                </div>
-                <button type="button" class="btn btn-quiet" id="add_receiving_line">Add another product</button>
+                </template>
                 <p id="entry_status" role="alert"></p>
                 <section id="receiving_review" hidden aria-label="Review shopping entry"></section>
                 </div>
@@ -301,7 +318,10 @@ $categoryIcon = static function (string $categoryName): string {
     </main>
 </div>
 
+<script id="receiving_products_data" type="application/json"><?= json_encode($products, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?></script>
 <script>
+const productsCatalog = JSON.parse(document.getElementById('receiving_products_data').textContent);
+const productMap = new Map(productsCatalog.map(p => [String(p.product_id), p]));
 const productSearchScan = document.getElementById('product_search_scan');
 const addScannedItem = document.getElementById('add_scanned_item');
 const scanStatus = document.getElementById('scan_status');
@@ -309,10 +329,15 @@ const productCodeScan = productSearchScan;
 const productSearch = productSearchScan;
 let activeScanLookup = 0;
 let scanLookupController = null;
-let activeLine = document.querySelector('.receiving-line');
-function receivingField(id) {
-    return activeLine?.querySelector('[data-field="' + id + '"]') || null;
+const lineContainer = document.getElementById('receiving_lines');
+const lineTemplate = document.getElementById('receiving_line_template');
+let activeLine = null;
+let draggedRow = null;
+
+for (const label of lineTemplate.content.querySelectorAll('label[for]')) {
+    label.dataset.labelFor = label.htmlFor;
 }
+
 
 async function identifyReceivingProduct(code) {
     code = (code || '').trim();
@@ -350,24 +375,15 @@ async function identifyReceivingProduct(code) {
             scanStatus.textContent = `${product.product_name} is already added to delivery lines. Edit its existing line or choose another product.`;
             return;
         }
-        if (!activeLine || receivingField('product_id').value) addReceivingLine();
-
-        const matchedCase = result.matched_code_kind === 'case_barcode';
-        const select = receivingField('product_id');
-        if (!Array.from(select.options).some(option => option.value === String(product.product_id))) {
-            const option = productOptions.find(option => option.value === String(product.product_id));
-            if (!option) {
-                scanStatus.textContent = 'This product is unavailable for receiving. Choose an active product manually.';
-                return;
-            }
-            select.add(option.cloneNode(true));
+        if (!productMap.has(String(product.product_id))) {
+            productMap.set(String(product.product_id), product);
         }
-        receivingField('product_id').value = String(product.product_id);
-        activeLine.dataset.productId = String(product.product_id);
-        receivingField('quantity_mode').value = matchedCase ? 'packages' : 'units';
-        updateQuantityMode();
+        const matchedCase = result.matched_code_kind === 'case_barcode';
+        addReceivingLine({
+            product_id: product.product_id,
+            quantity_mode: matchedCase ? 'packages' : 'units'
+        });
         productSearchScan.value = '';
-        refreshDelivery();
         const matchedBy = result.matched_code_kind === 'sku'
             ? 'SKU'
             : (matchedCase ? 'case barcode' : 'unit barcode');
@@ -393,56 +409,69 @@ addScannedItem?.addEventListener('click', function () {
     else scanStatus.textContent = 'Scan or type a barcode or SKU first.';
 });
 
-function selectedProductOption() {
-    const select=receivingField('product_id'); return select.options[select.selectedIndex];
-}
-function updatePackageConversion() {
-    const option=selectedProductOption(); const units=Number(option?.dataset.unitsPerPackage||0); const receiving=option?.dataset.receivingUnit||'package'; const base=option?.dataset.baseUnit||'piece';
-    const packages = Number(receivingField('received_packages').value || 0);
-    const damaged = Number(receivingField('damaged_qty').value || 0);
-    const packageMode = receivingField('quantity_mode').value === 'packages';
-    const total = packageMode ? packages * units : Number(receivingField('received_qty').value || 0);
-    receivingField('package_conversion').textContent=`1 ${receiving} = ${units} ${base}(s). ${packageMode ? `${packages} × ${units} = ` : ''}${total} units received; ${damaged} damaged units; ${Math.max(0, total - damaged)} accepted units.`;
+function updatePackageConversion(row = activeLine) {
+    if (!row) return;
+    const field = name => row.querySelector('[data-field="' + name + '"]');
+    const prodId = field('product_id')?.value;
+    const prod = productMap.get(String(prodId));
+    if (!prod) return;
+    const units = Number(prod.units_per_package || 1);
+    const receiving = prod.receiving_unit || 'package';
+    const base = prod.base_unit || 'piece';
+    const packages = Number(field('received_packages')?.value || 0);
+    const damaged = Number(field('damaged_qty')?.value || 0);
+    const packageMode = field('quantity_mode')?.value === 'packages';
+    const total = packageMode ? packages * units : Number(field('received_qty')?.value || 0);
+    const convEl = field('package_conversion');
+    if (convEl) {
+        convEl.textContent = `1 ${receiving} = ${units} ${base}(s). ${packageMode ? `${packages} × ${units} = ` : ''}${total} units received; ${damaged} damaged units; ${Math.max(0, total - damaged)} accepted units.`;
+    }
     refreshDelivery();
 }
-function updateQuantityMode() {
-    const packages=receivingField('quantity_mode').value==='packages';
-    receivingField('units_qty_group').style.display=packages?'none':'flex';
-    receivingField('packages_qty_group').style.display=packages?'flex':'none';
-    receivingField('received_qty').required=!packages;
-    receivingField('received_packages').required=packages;
-    receivingField('received_qty').disabled=packages;
-    receivingField('received_packages').disabled=!packages;
-    for (const name of ['received_qty', 'received_packages']) {
-        activeLine.querySelector('label[for="' + receivingField(name).id + '"]').classList.toggle('required', receivingField(name).required);
+
+function updateQuantityMode(row = activeLine) {
+    if (!row) return;
+    const field = name => row.querySelector('[data-field="' + name + '"]');
+    const packages = field('quantity_mode')?.value === 'packages';
+    const unitsGroup = field('units_qty_group');
+    const packagesGroup = field('packages_qty_group');
+    if (unitsGroup) unitsGroup.style.display = packages ? 'none' : 'flex';
+    if (packagesGroup) packagesGroup.style.display = packages ? 'flex' : 'none';
+    const receivedQty = field('received_qty');
+    const receivedPackages = field('received_packages');
+    if (receivedQty) {
+        receivedQty.required = !packages;
+        receivedQty.disabled = packages;
     }
-    updatePackageConversion();
+    if (receivedPackages) {
+        receivedPackages.required = packages;
+        receivedPackages.disabled = !packages;
+    }
+    for (const name of ['received_qty', 'received_packages']) {
+        const input = field(name);
+        if (input) {
+            const label = row.querySelector('label[for="' + input.id + '"]');
+            if (label) label.classList.toggle('required', input.required);
+        }
+    }
+    updatePackageConversion(row);
 }
+
 let step = 1;
 const form = document.getElementById('receiving_form');
-const lineContainer = document.getElementById('receiving_lines');
-const lineTemplate = activeLine.cloneNode(true);
-const productOptions = Array.from(receivingField('product_id').options, option => option.cloneNode(true));
-const productSearchText = productOptions.map(option => [
-    option.textContent,
-    option.dataset.sku,
-    option.dataset.barcode,
-    option.dataset.caseBarcode,
-    option.dataset.variantLabel
-].filter(Boolean).join(' ').toLowerCase());
-lineTemplate.querySelector('[data-field="product_id"]').replaceChildren(productOptions[0].cloneNode(true));
-for (const label of lineTemplate.querySelectorAll('label[for]')) label.dataset.labelFor = label.htmlFor;
+
 function refreshDelivery() {
     let products = 0, received = 0, damaged = 0, accepted = 0, cost = 0;
     for (const row of lineContainer.children) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
-        const option = field('product_id').selectedOptions[0];
-        row.querySelector('.receiving-product-name').textContent = option?.value ? option.textContent.trim() : 'Choose a product below';
-        if (!option?.value) continue;
+        const prodId = field('product_id')?.value;
+        const prod = productMap.get(String(prodId));
+        if (!prodId || !prod) continue;
         products++;
         const packages = field('quantity_mode').value === 'packages';
         const quantity = field(packages ? 'received_packages' : 'received_qty').value;
-        const total = /^\d+$/.test(quantity) ? Number(quantity) * (packages ? Number(option.dataset.unitsPerPackage) : 1) : 0;
+        const unitsPerPkg = Number(prod.units_per_package || 1);
+        const total = /^\d+$/.test(quantity) ? Number(quantity) * (packages ? unitsPerPkg : 1) : 0;
         const damage = /^\d+$/.test(field('damaged_qty').value) ? Number(field('damaged_qty').value) : 0;
         const usable = Math.max(0, total - damage);
         received += total;
@@ -451,11 +480,18 @@ function refreshDelivery() {
         const price = field('cost_price').value.trim();
         if (/^\d{1,8}(?:\.\d{1,2})?$/.test(price)) cost += Math.round(Number(price) * 100) * usable;
     }
-    for (const [name, value] of Object.entries({products, received, damaged, accepted})) document.getElementById('summary_' + name).textContent = value;
+    for (const [name, value] of Object.entries({products, received, damaged, accepted})) {
+        document.getElementById('summary_' + name).textContent = value;
+    }
     document.getElementById('summary_cost').textContent = '₱' + (cost / 100).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     document.getElementById('delivery_count').textContent = products + (products === 1 ? ' product' : ' products');
+    const emptyState = document.getElementById('delivery_empty_state');
+    if (emptyState) {
+        emptyState.hidden = products > 0 || step === 3;
+    }
     renderCatalog();
 }
+
 let selectedCategory = 'all';
 document.getElementById('receiving_category_filters')?.addEventListener('click', event => {
     const tile = event.target.closest('.receiving-category-tile');
@@ -498,29 +534,34 @@ function getCategoryIcon(categoryName) {
 function renderCatalog() {
     const query = productSearchScan.value.trim().toLowerCase();
     const selected = new Set(Array.from(lineContainer.children, row => row.querySelector('[data-field="product_id"]').value));
-    const matches = productOptions.filter((option, index) => {
-        if (!option.value) return false;
-        const matchesCategory = selectedCategory === 'all' || (option.dataset.categoryId || '') === selectedCategory;
-        const matchesQuery = !query || productSearchText[index].includes(query);
+    const matches = productsCatalog.filter(p => {
+        const matchesCategory = selectedCategory === 'all' || String(p.category_id || '') === selectedCategory;
+        const matchesQuery = !query || [
+            p.product_name,
+            p.sku,
+            p.barcode,
+            p.case_barcode,
+            p.variant_label
+        ].filter(Boolean).join(' ').toLowerCase().includes(query);
         return matchesCategory && matchesQuery;
     });
     const catalog = document.getElementById('receiving_catalog');
     catalog.replaceChildren();
 
-    for (const option of matches.slice(0, 24)) {
-        const isAdded = selected.has(option.value);
-        const stockInfo = getStockState(option.dataset.quantityOnHand, option.dataset.reorderLevel, option.dataset.safetyStock);
-        const iconClass = getCategoryIcon(option.dataset.categoryName);
+    for (const p of matches.slice(0, 24)) {
+        const isAdded = selected.has(String(p.product_id));
+        const stockInfo = getStockState(p.quantity_on_hand, p.reorder_level, p.safety_stock);
+        const iconClass = getCategoryIcon(p.category_name);
 
         const card = document.createElement('article');
         card.className = 'receiving-card' + (stockInfo.state === 'out' ? ' out-of-stock' : '');
-        card.dataset.productId = option.value;
+        card.dataset.productId = String(p.product_id);
 
         const media = document.createElement('div');
         media.className = 'receiving-card-media';
-        if (option.dataset.productImage) {
+        if (p.product_image) {
             const img = document.createElement('img');
-            img.src = option.dataset.productImage;
+            img.src = p.product_image;
             img.alt = '';
             img.loading = 'lazy';
             const fallback = document.createElement('i');
@@ -551,20 +592,20 @@ function renderCatalog() {
 
         const name = document.createElement('strong');
         name.className = 'receiving-card-name';
-        name.title = option.dataset.name;
-        name.textContent = option.dataset.name;
+        name.title = p.product_name;
+        name.textContent = p.product_name;
 
         const meta = document.createElement('span');
         meta.className = 'receiving-card-meta';
-        const catLabel = option.dataset.categoryName || 'General';
-        meta.textContent = catLabel + ' · ' + (option.dataset.sku || 'No SKU');
+        const catLabel = p.category_name || 'General';
+        meta.textContent = catLabel + ' · ' + (p.sku || 'No SKU');
 
         const costStock = document.createElement('div');
         costStock.className = 'receiving-card-cost-stock';
 
         const cost = document.createElement('span');
         cost.className = 'receiving-card-cost';
-        const rawCost = option.dataset.cost;
+        const rawCost = p.cost_price;
         cost.textContent = rawCost !== '' && rawCost !== null && !isNaN(Number(rawCost)) && Number(rawCost) > 0
             ? '₱' + Number(rawCost).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})
             : 'Unknown cost';
@@ -580,27 +621,21 @@ function renderCatalog() {
 
         const pack = document.createElement('div');
         pack.className = 'receiving-card-pack';
-        const unitsPerPkg = Number(option.dataset.unitsPerPackage || 1);
-        const baseUnit = option.dataset.baseUnit || 'piece';
+        const unitsPerPkg = Number(p.units_per_package || 1);
+        const baseUnit = p.base_unit || 'piece';
         const baseLabel = unitsPerPkg === 1 ? baseUnit : (baseUnit.endsWith('s') ? baseUnit : baseUnit + 's');
         const packSmall = document.createElement('small');
-        packSmall.textContent = '1 ' + (option.dataset.receivingUnit || 'package') + ' = ' + unitsPerPkg + ' ' + baseLabel;
+        packSmall.textContent = '1 ' + (p.receiving_unit || 'package') + ' = ' + unitsPerPkg + ' ' + baseLabel;
         pack.appendChild(packSmall);
 
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'btn btn-secondary receiving-card-add';
         button.textContent = isAdded ? 'Added' : '+ Add to Delivery';
-        button.setAttribute('aria-label', 'Add ' + option.dataset.name);
+        button.setAttribute('aria-label', 'Add ' + p.product_name);
         button.disabled = isAdded;
         button.addEventListener('click', () => {
-            const empty = Array.from(lineContainer.children).find(row => !row.querySelector('[data-field="product_id"]').value);
-            if (empty) activateLine(empty);
-            else addReceivingLine();
-            const select = receivingField('product_id');
-            if (!Array.from(select.options).some(item => item.value === option.value)) select.add(option.cloneNode(true));
-            select.value = option.value;
-            select.dispatchEvent(new Event('change', {bubbles: true}));
+            addReceivingLine({product_id: p.product_id});
             showStep(1, false);
         });
 
@@ -613,56 +648,66 @@ function renderCatalog() {
     hint.className = 'receiving-catalog-hint';
     hint.textContent = matches.length ? 'Showing ' + Math.min(24, matches.length) + ' of ' + matches.length + ' products. Search to narrow the list.' : 'No matching products. Try another name or SKU.';
     catalog.append(hint);
-}
-function populateProductOptions(select) {
-    const value = select.value;
-    const query = productSearchScan.value.trim().toLowerCase();
-    const options = productOptions.filter((option, index) => !option.value || option.value === value || productSearchText[index].includes(query));
-    select.replaceChildren(...options.map(option => option.cloneNode(true)));
-    select.value = value;
-    const matches = productOptions.filter((option, index) => option.value && productSearchText[index].includes(query)).length;
+
+    const matchesCount = matches.length;
     const countStatus = query
-        ? (matches ? matches + ' matching ' + (matches === 1 ? 'product.' : 'products.') : 'No matching products. Try another name or SKU, or scan a code.')
+        ? (matchesCount ? matchesCount + ' matching ' + (matchesCount === 1 ? 'product.' : 'products.') : 'No matching products. Try another name or SKU, or scan a code.')
         : '';
     const statusEl = document.getElementById('product_search_status');
     if (statusEl) statusEl.textContent = countStatus;
 }
+
 function renumberLines() {
     clearReceivingErrors();
-    for (const [index, row] of Array.from(lineContainer.children).entries()) {
-        row.querySelector('.line-number').textContent = index + 1;
-        row.setAttribute('aria-label', 'Product line ' + (index + 1));
+    const rows = Array.from(lineContainer.children);
+    const total = rows.length;
+    for (const [index, row] of rows.entries()) {
+        const lineNum = index + 1;
+        const numEl = row.querySelector('.line-number');
+        if (numEl) numEl.textContent = lineNum;
+        row.setAttribute('aria-label', 'Product line ' + lineNum);
+
+        const upBtn = row.querySelector('.move-line-up');
+        if (upBtn) {
+            upBtn.disabled = index === 0;
+            upBtn.setAttribute('aria-label', `Move line ${lineNum} up`);
+        }
+        const downBtn = row.querySelector('.move-line-down');
+        if (downBtn) {
+            downBtn.disabled = index === total - 1;
+            downBtn.setAttribute('aria-label', `Move line ${lineNum} down`);
+        }
+
         for (const field of row.querySelectorAll('[data-field]')) {
             field.id = index === 0 ? field.dataset.field : field.dataset.field + '_' + index;
-            if (field.hasAttribute('name')) field.name = `lines[${index}][${field.dataset.field}]`;
+            if (field.hasAttribute('name')) {
+                field.name = `lines[${index}][${field.dataset.field}]`;
+            }
         }
         for (const label of row.querySelectorAll('label[for]')) {
-            const name = label.dataset.labelFor || label.htmlFor;
+            const name = label.dataset.labelFor || label.htmlFor.replace(/_\d+$/, '');
             label.dataset.labelFor = name;
             label.htmlFor = index === 0 ? name : name + '_' + index;
         }
-        row.querySelector('[data-field="cost_price"]').setAttribute('aria-describedby', row.querySelector('[data-field="cost_hint"]').id);
+        const costHint = row.querySelector('[data-field="cost_hint"]');
+        const costPrice = row.querySelector('[data-field="cost_price"]');
+        if (costPrice && costHint) costPrice.setAttribute('aria-describedby', costHint.id);
     }
-    if (activeLine) activateLine(activeLine);
+    if (activeLine && !activeLine.isConnected) {
+        activeLine = lineContainer.lastElementChild || null;
+    }
     refreshDelivery();
 }
+
 function activateLine(row) {
-    if (activeLine !== row) {
-        activeScanLookup++;
-        if (scanLookupController) scanLookupController.abort();
-        if (activeLine?.isConnected) {
-            const select = receivingField('product_id');
-            const selected = select.selectedOptions[0];
-            select.replaceChildren(productOptions[0].cloneNode(true), ...(selected?.value ? [selected.cloneNode(true)] : []));
-            select.value = selected?.value || '';
-        }
-        populateProductOptions(row.querySelector('[data-field="product_id"]'));
-    }
     activeLine = row;
 }
+
 function restoreField(field, value) {
     if (!field || typeof value !== 'string') return;
-    if (field.tagName === 'SELECT' && !Array.from(field.options).some(option => option.value === value)) field.add(new Option(value, value));
+    if (field.tagName === 'SELECT' && !Array.from(field.options).some(option => option.value === value)) {
+        field.add(new Option(value, value));
+    }
     field.value = value;
     if (field.type === 'date' && value !== '' && field.value !== value) {
         field.type = 'text';
@@ -670,56 +715,167 @@ function restoreField(field, value) {
         field.value = value;
     }
 }
+
+function isLineTouched(row) {
+    const field = name => row.querySelector(`[data-field="${name}"]`);
+    return Boolean(
+        field('received_qty')?.value.trim()
+        || field('received_packages')?.value.trim()
+        || (field('damaged_qty')?.value.trim() && field('damaged_qty')?.value.trim() !== '0')
+        || field('cost_price')?.value.trim()
+        || field('batch_number')?.value.trim()
+        || field('expiration_date')?.value.trim()
+        || field('discrepancy_notes')?.value.trim()
+        || field('notes')?.value.trim()
+    );
+}
+
 function connectLine(row) {
     row.addEventListener('focusin', () => activateLine(row));
     row.addEventListener('input', clearReceivingErrors, {capture: true});
     row.addEventListener('change', clearReceivingErrors, {capture: true});
-    row.querySelector('[data-field="cost_price"]').addEventListener('input', refreshDelivery);
-    row.querySelector('.remove-receiving-line').addEventListener('click', () => {
-        const populated = Array.from(row.querySelectorAll('input, textarea')).some(field => field.value !== field.defaultValue)
-            || Boolean(row.querySelector('[data-field="product_id"]').value);
-        if (populated && !window.confirm('Remove this product and its entered receiving details?')) return;
+    row.querySelector('[data-field="cost_price"]')?.addEventListener('input', refreshDelivery);
+
+    row.querySelector('.move-line-up')?.addEventListener('click', () => {
+        const prev = row.previousElementSibling;
+        if (prev) {
+            lineContainer.insertBefore(row, prev);
+            renumberLines();
+            const upBtn = row.querySelector('.move-line-up');
+            if (upBtn && !upBtn.disabled) upBtn.focus();
+            else row.querySelector('.move-line-down')?.focus();
+        }
+    });
+
+    row.querySelector('.move-line-down')?.addEventListener('click', () => {
+        const next = row.nextElementSibling;
+        if (next) {
+            lineContainer.insertBefore(next, row);
+            renumberLines();
+            const downBtn = row.querySelector('.move-line-down');
+            if (downBtn && !downBtn.disabled) downBtn.focus();
+            else row.querySelector('.move-line-up')?.focus();
+        }
+    });
+
+    row.querySelector('.remove-receiving-line')?.addEventListener('click', () => {
+        if (isLineTouched(row)) {
+            if (!window.confirm('Remove this product and its entered receiving details?')) return;
+        }
         activeScanLookup++;
         if (scanLookupController) scanLookupController.abort();
         row.remove();
         document.getElementById('entry_status').textContent = '';
-        activeLine = null;
-        if (lineContainer.lastElementChild) activateLine(lineContainer.lastElementChild);
+        activeLine = lineContainer.lastElementChild || null;
         renumberLines();
-        (activeLine?.querySelector('[data-field="product_id"]') || document.getElementById('add_receiving_line')).focus();
+        if (lineContainer.children.length === 0) {
+            if (step !== 1) showStep(1);
+            productSearchScan.focus();
+        } else if (activeLine) {
+            const btn = activeLine.querySelector('.remove-receiving-line');
+            if (btn) btn.focus();
+        }
     });
-    row.querySelector('[data-field="product_id"]').addEventListener('change', () => {
+
+    row.querySelector('[data-field="quantity_mode"]')?.addEventListener('change', () => {
         activateLine(row);
-        activeScanLookup++;
-        if (scanLookupController) scanLookupController.abort();
-        const duplicate = Array.from(lineContainer.children).some(other => other !== row
-            && other.querySelector('[data-field="product_id"]').value === receivingField('product_id').value);
-        if (duplicate) receivingField('product_id').value = row.dataset.productId || '';
-        else row.dataset.productId = receivingField('product_id').value;
-        updatePackageConversion();
-        document.getElementById('entry_status').textContent = duplicate ? 'Duplicate product: remove this line or choose another product.' : '';
-        scanStatus.textContent = 'Product selected manually. Enter actual bought quantities.';
+        updateQuantityMode(row);
     });
-    row.querySelector('[data-field="quantity_mode"]').addEventListener('change', () => { activateLine(row); updateQuantityMode(); });
+
     for (const name of ['received_qty', 'received_packages', 'damaged_qty']) {
-        row.querySelector('[data-field="' + name + '"]').addEventListener('input', () => {
+        row.querySelector('[data-field="' + name + '"]')?.addEventListener('input', () => {
             activateLine(row);
-            updatePackageConversion();
+            updatePackageConversion(row);
         });
     }
+
+    row.addEventListener('dragstart', event => {
+        if (step !== 1 || event.target.closest('input, textarea, select')) {
+            event.preventDefault();
+            return;
+        }
+        draggedRow = row;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', row.dataset.productId);
+        row.classList.add('is-dragging');
+    });
+    row.addEventListener('dragend', () => {
+        draggedRow = null;
+        for (const child of lineContainer.children) {
+            child.classList.remove('is-dragging', 'drag-over-above', 'drag-over-below');
+        }
+    });
+    row.addEventListener('dragover', event => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        if (!draggedRow || draggedRow === row) return;
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (event.clientY < midY) {
+            row.classList.add('drag-over-above');
+            row.classList.remove('drag-over-below');
+        } else {
+            row.classList.add('drag-over-below');
+            row.classList.remove('drag-over-above');
+        }
+    });
+    row.addEventListener('dragleave', () => {
+        row.classList.remove('drag-over-above', 'drag-over-below');
+    });
+    row.addEventListener('drop', event => {
+        event.preventDefault();
+        if (!draggedRow || draggedRow === row) return;
+        const isAbove = row.classList.contains('drag-over-above');
+        row.classList.remove('drag-over-above', 'drag-over-below');
+        if (isAbove) {
+            lineContainer.insertBefore(draggedRow, row);
+        } else {
+            lineContainer.insertBefore(draggedRow, row.nextElementSibling);
+        }
+        renumberLines();
+    });
 }
+
 function addReceivingLine(values = {}) {
-    const row = lineTemplate.cloneNode(true);
+    const productId = String(values.product_id || values.productId || '');
+    if (!productId) return null;
+    const product = productMap.get(productId);
+    if (!product) return null;
+
+    if (Array.from(lineContainer.children).some(r => r.querySelector('[data-field="product_id"]').value === productId)) {
+        return null;
+    }
+
+    const row = lineTemplate.content.firstElementChild.cloneNode(true);
+    row.dataset.productId = productId;
+    row.querySelector('[data-field="product_id"]').value = productId;
+
+    const unitsPerPkg = Number(product.units_per_package || 1);
+    const receivingUnit = product.receiving_unit || 'package';
+    const baseUnit = product.base_unit || 'piece';
+    const baseLabel = unitsPerPkg === 1 ? baseUnit : (baseUnit.endsWith('s') ? baseUnit : baseUnit + 's');
+    const packText = `1 ${receivingUnit} = ${unitsPerPkg} ${baseLabel}`;
+
+    row.querySelector('.receiving-product-name').textContent = product.product_name;
+    row.querySelector('.receiving-product-sku').textContent = product.sku ? `(${product.sku})` : '';
+    row.querySelector('.receiving-product-pack').textContent = packText;
+    row.querySelector('.remove-receiving-line').setAttribute('aria-label', `Remove ${product.product_name}`);
+
     lineContainer.appendChild(row);
     connectLine(row);
     activateLine(row);
     renumberLines();
-    for (const [name, value] of Object.entries(values)) restoreField(receivingField(name), value);
-    row.dataset.productId = receivingField('product_id').value;
-    updateQuantityMode();
-    showStep(1, false);
-    receivingField('product_id').focus();
+
+    for (const [name, value] of Object.entries(values)) {
+        if (name !== 'product_id' && value !== undefined && value !== null) {
+            restoreField(row.querySelector('[data-field="' + name + '"]'), String(value));
+        }
+    }
+    updateQuantityMode(row);
+    refreshDelivery();
+    return row;
 }
+
 function showStep(next, focus = true) {
     step = next;
     document.querySelector('.receiving-form').dataset.step = String(step);
@@ -731,7 +887,8 @@ function showStep(next, focus = true) {
     });
     document.getElementById('receiving_selection').hidden = step !== 1;
     lineContainer.hidden = step === 3;
-    document.getElementById('add_receiving_line').hidden = step !== 1;
+    const emptyState = document.getElementById('delivery_empty_state');
+    if (emptyState) emptyState.hidden = lineContainer.children.length > 0 || step === 3;
     document.getElementById('receiving_review').hidden = step !== 3;
     document.getElementById('delivery_title').textContent = step === 3 ? 'Check your delivery' : 'Delivery lines';
     document.getElementById('summary_status').textContent = step === 3 ? 'Review' : 'Draft';
@@ -741,18 +898,24 @@ function showStep(next, focus = true) {
     form.querySelector('.btn-submit').hidden = step !== 3;
     if (focus) document.getElementById('receiving_step_title').focus();
 }
+
 function validateProducts() {
     clearReceivingErrors();
-    const products = Array.from(lineContainer.children).map(row => row.querySelector('[data-field="product_id"]').value);
-    const valid = products.length > 0 && products.every(Boolean) && new Set(products).size === products.length;
-    document.getElementById('entry_status').textContent = valid ? '' : 'Select at least one product. Each line must have a different product.';
+    const rows = Array.from(lineContainer.children);
+    if (rows.length === 0) {
+        document.getElementById('entry_status').textContent = 'Add at least one product before continuing.';
+        productSearchScan.focus();
+        return false;
+    }
+    const products = rows.map(row => row.querySelector('[data-field="product_id"]')?.value).filter(Boolean);
+    const valid = products.length === rows.length && new Set(products).size === products.length;
+    document.getElementById('entry_status').textContent = valid ? '' : 'Add at least one product before continuing.';
     if (!valid) {
-        const invalid = Array.from(lineContainer.querySelectorAll('[data-field="product_id"]')).find(field => !field.value);
-        if (invalid) receivingError(invalid, 'Select a product for this line.');
-        else if (!products.length) document.getElementById('add_receiving_line').focus();
+        productSearchScan.focus();
     }
     return valid;
 }
+
 function clearReceivingErrors() {
     for (const field of form.querySelectorAll('[aria-invalid="true"]')) {
         field.removeAttribute('aria-invalid');
@@ -764,6 +927,7 @@ function clearReceivingErrors() {
     for (const error of form.querySelectorAll('[data-receiving-error]')) error.remove();
     document.getElementById('entry_status').textContent = '';
 }
+
 function receivingError(field, message) {
     const error = document.createElement('small');
     error.id = field.id + '_error';
@@ -774,13 +938,16 @@ function receivingError(field, message) {
     field.setAttribute('aria-describedby', [field.getAttribute('aria-describedby'), error.id].filter(Boolean).join(' '));
     field.focus();
 }
+
 function validateQuantities() {
     clearReceivingErrors();
     for (const [index, row] of Array.from(lineContainer.children).entries()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
+        const prodId = field('product_id')?.value;
+        const prod = productMap.get(String(prodId));
         const packages = field('quantity_mode').value === 'packages';
         const quantity = field(packages ? 'received_packages' : 'received_qty');
-        const pack = packages ? Number(field('product_id').selectedOptions[0]?.dataset.unitsPerPackage) : 1;
+        const pack = packages ? Number(prod?.units_per_package || 1) : 1;
         const total = Number(quantity.value) * pack;
         const damage = field('damaged_qty');
         let invalid = null;
@@ -814,6 +981,7 @@ function validateQuantities() {
     document.getElementById('entry_status').textContent = '';
     return true;
 }
+
 function renderReview() {
     const review = document.getElementById('receiving_review');
     review.replaceChildren();
@@ -823,12 +991,16 @@ function renderReview() {
     review.append(shared);
     for (const [index, row] of Array.from(lineContainer.children).entries()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
+        const prodId = field('product_id')?.value;
+        const prod = productMap.get(String(prodId));
         const section = document.createElement('section');
         section.className = 'receiving-line';
         const title = document.createElement('h3');
-        title.textContent = field('product_id').selectedOptions[0].textContent.trim();
+        title.textContent = prod ? `${prod.product_name} (${prod.sku})` : 'Product ' + (index + 1);
         const mode = document.createElement('p');
-        mode.textContent = field('quantity_mode').selectedOptions[0].textContent + ' · ' + field('package_conversion').textContent;
+        const qtyModeSelect = field('quantity_mode');
+        const modeText = qtyModeSelect.options[qtyModeSelect.selectedIndex]?.textContent || 'Units';
+        mode.textContent = modeText + ' · ' + field('package_conversion').textContent;
         const details = document.createElement('p');
         details.textContent = 'Purchase cost per base unit: ' + (field('cost_price').value || 'Unknown; current cost preserved')
             + ' · Batch: ' + (field('batch_number').value || 'Not supplied')
@@ -844,30 +1016,29 @@ function renderReview() {
         review.append(section);
     }
 }
+
 document.getElementById('receiving_back').addEventListener('click', () => showStep(step - 1));
 document.getElementById('receiving_next').addEventListener('click', () => {
     if (!validateProducts()) return;
     if (step === 1) { showStep(2); return; }
     if (validateQuantities()) { renderReview(); showStep(3); }
 });
+
 productSearchScan.addEventListener('input', () => {
-    if (activeLine) populateProductOptions(receivingField('product_id'));
     renderCatalog();
 });
-connectLine(activeLine);
+
+renderCatalog();
 renumberLines();
-document.getElementById('add_receiving_line').addEventListener('click', () => addReceivingLine());
+
 const retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 for (const name of ['supplier', 'invoice_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);
-if (Array.isArray(retainedValues.lines)) {
-    lineContainer.replaceChildren();
-    activeLine = null;
+if (Array.isArray(retainedValues.lines) && retainedValues.lines.length > 0) {
     for (const values of retainedValues.lines) addReceivingLine(values);
-} else {
-    for (const [name, value] of Object.entries(retainedValues)) restoreField(receivingField(name), value);
-    if (activeLine && retainedValues.product_id) activeLine.dataset.productId = String(retainedValues.product_id);
-    updateQuantityMode();
+} else if (retainedValues.product_id) {
+    addReceivingLine(retainedValues);
 }
+
 let saving = false;
 form.addEventListener('submit', event => {
     if (saving) { event.preventDefault(); return; }
@@ -884,8 +1055,8 @@ form.addEventListener('submit', event => {
     form.querySelector('.btn-submit').disabled = true;
     form.querySelector('.btn-submit').textContent = 'Saving receipt…';
 });
-if (activeLine) updateQuantityMode();
-showStep((retainedValues.lines && retainedValues.lines.length) || (retainedValues.received_qty || retainedValues.received_packages) || Boolean(retainedValues.product_id) ? 2 : 1);
+
+showStep(retainedValues.lines && retainedValues.lines.length > 0 && (retainedValues.lines[0].received_qty || retainedValues.lines[0].received_packages) ? 2 : 1);
 </script>
 </body>
 </html>

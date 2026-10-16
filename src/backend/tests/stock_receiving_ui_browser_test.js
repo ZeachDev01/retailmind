@@ -61,13 +61,84 @@ function fixture(action) {
         assert.equal(await page.locator('#summary_products').innerText(), '0');
         assert.match(await page.locator('.receiving-accepted').innerText(), /Products added/);
         assert.match(await page.locator('.receiving-accepted').innerText(), /In current delivery list/);
+        // Verification 1: Empty start state and removal of dropdown / "Add another product" button
+        assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 0, 'starts with 0 delivery lines');
+        assert.equal(await page.locator('#delivery_empty_state').isVisible(), true, 'empty state visible');
+        assert.match(await page.locator('#delivery_empty_state').innerText(), /No products added yet\. Scan a barcode or click \+ Add to Delivery/);
+        assert.equal(await page.locator('select[name="product_id"]').count(), 0, 'select dropdown removed');
+        assert.equal(await page.locator('#add_receiving_line').count(), 0, 'Add another product button removed');
+        await page.locator('#receiving_next').click();
+        assert.equal(await page.locator('#entry_status').innerText(), 'Add at least one product before continuing.');
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'product_search_scan', 'focus returned to search');
+
+        // Verification 2: Pre-population from ?product_id=... as line 1
+        await page.goto(url + '?product_id=1');
+        assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 1, 'pre-populated with line 1');
+        assert.equal(await page.locator('#delivery_empty_state').isVisible(), false, 'empty state hidden when pre-populated');
+        const prepop = page.locator('#receiving_lines .receiving-line').first();
+        assert.equal(await prepop.locator('input[data-field="product_id"]').inputValue(), '1');
+        assert.equal(await prepop.locator('.line-number').innerText(), '1');
+        assert.match(await prepop.locator('.receiving-product-name').innerText(), /.+/);
+        assert.match(await prepop.locator('.receiving-product-sku').innerText(), /.+/);
+        assert.match(await prepop.locator('.receiving-product-pack').innerText(), /1 case = 24 pieces|1 package = 1 piece/);
+        assert.equal(await prepop.locator('.move-line-up').isDisabled(), true, 'boundary disabled move up on single line');
+        assert.equal(await prepop.locator('.move-line-down').isDisabled(), true, 'boundary disabled move down on single line');
+
+        // Verification 3: Add second product, verify playlist row rendering, boundary states, and sequential indexing
         await page.getByLabel('Scan barcode or search by name or SKU').fill('Receiving test product 999');
         await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).click();
-        assert.match(await page.locator('#receiving_lines').innerText(), /UI-999/);
-        await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).waitFor({state: 'visible'});
-        assert.equal(await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).isDisabled(), true);
-        assert.equal(await page.locator('.receiving-card-add:disabled').innerText(), 'Added');
-        assert.equal(await page.locator('#summary_products').innerText(), '1', 'hero counter updates dynamically on add');
+        assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 2);
+        const second = page.locator('#receiving_lines .receiving-line').nth(1);
+        assert.equal(await second.locator('.line-number').innerText(), '2');
+        assert.match(await second.locator('.receiving-product-name').innerText(), /Receiving test product 999/);
+        assert.match(await second.locator('.receiving-product-sku').innerText(), /UI-999/);
+        assert.equal(await prepop.locator('.move-line-up').isDisabled(), true, 'first line move up disabled');
+        assert.equal(await prepop.locator('.move-line-down').isDisabled(), false, 'first line move down enabled');
+        assert.equal(await second.locator('.move-line-up').isDisabled(), false, 'second line move up enabled');
+        assert.equal(await second.locator('.move-line-down').isDisabled(), true, 'second line move down disabled');
+        assert.equal(await prepop.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
+        assert.equal(await second.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[1][product_id]');
+
+        // Verification 4: Move up / Move down reordering with boundary disabling and sequential updates
+        await prepop.locator('.move-line-down').click();
+        const row1 = page.locator('#receiving_lines .receiving-line').nth(0);
+        const row2 = page.locator('#receiving_lines .receiving-line').nth(1);
+        assert.match(await row1.locator('.receiving-product-name').innerText(), /Receiving test product 999/);
+        assert.equal(await row1.locator('.line-number').innerText(), '1');
+        assert.equal(await row2.locator('.line-number').innerText(), '2');
+        assert.equal(await row1.locator('.move-line-up').isDisabled(), true);
+        assert.equal(await row1.locator('.move-line-down').isDisabled(), false);
+        assert.equal(await row2.locator('.move-line-up').isDisabled(), false);
+        assert.equal(await row2.locator('.move-line-down').isDisabled(), true);
+        assert.equal(await row1.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
+        assert.equal(await row2.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[1][product_id]');
+
+        await row2.locator('.move-line-up').click();
+        const back1 = page.locator('#receiving_lines .receiving-line').nth(0);
+        const back2 = page.locator('#receiving_lines .receiving-line').nth(1);
+        assert.equal(await back1.locator('input[data-field="product_id"]').inputValue(), '1');
+        assert.equal(await back1.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
+        assert.equal(await back2.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[1][product_id]');
+
+        // Verification 5: HTML5 Drag-and-Drop reordering
+        await page.evaluate(() => {
+            const lines = document.querySelectorAll('#receiving_lines .receiving-line');
+            const dt = new DataTransfer();
+            lines[1].dispatchEvent(new DragEvent('dragstart', {dataTransfer: dt, bubbles: true}));
+            lines[0].dispatchEvent(new DragEvent('dragover', {dataTransfer: dt, bubbles: true, clientY: lines[0].getBoundingClientRect().top}));
+            lines[0].dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true}));
+            lines[1].dispatchEvent(new DragEvent('dragend', {dataTransfer: dt, bubbles: true}));
+        });
+        assert.match(await page.locator('#receiving_lines .receiving-line').first().locator('.receiving-product-name').innerText(), /Receiving test product 999/);
+        assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('.line-number').innerText(), '1');
+        assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
+
+        // Verification 6: Immediate deletion of untouched line and confirmed deletion of touched line
+        await page.locator('#receiving_lines .receiving-line').nth(1).locator('.remove-receiving-line').click();
+        assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 1, 'untouched line deleted immediately');
+        assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('.line-number').innerText(), '1');
+        assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
+
         await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('12');
         await page.locator('#damaged_qty').fill('2');
@@ -75,9 +146,27 @@ function fixture(action) {
         assert.equal(await page.locator('#summary_accepted').innerText(), '10');
         assert.equal(await page.locator('#summary_damaged').innerText(), '2');
         assert.equal(await page.locator('#summary_cost').innerText(), '₱35.00');
+
+        page.once('dialog', dialog => dialog.dismiss());
+        await page.locator('.remove-receiving-line').first().click();
+        assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 1, 'cancel removal preserves entered details');
+        assert.equal(await page.locator('#received_qty').inputValue(), '12');
+
+        page.once('dialog', dialog => dialog.accept());
+        await page.locator('.remove-receiving-line').first().click();
+        assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 0, 'confirmed removal deletes line');
+        assert.equal(await page.locator('#delivery_empty_state').isVisible(), true, 'empty state message shown');
+
+        // Review step check
+        await page.goto(url);
+        await page.locator('#product_search_scan').fill('Receiving test product 999');
+        await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).click();
+        await page.locator('#receiving_next').click();
+        await page.locator('#received_qty').fill('10');
         await page.locator('#receiving_next').click();
         assert.match(await page.locator('#receiving_review').innerText(), /10 accepted units/);
         assert.equal(await page.locator('.sidebar').innerHTML(), navbar, 'receiving steps preserve navigation');
+
         await page.goto(url);
         await page.locator('#product_search_scan').fill('THEME-CASE');
         await page.locator('#product_search_scan').press('Enter');
@@ -93,13 +182,8 @@ function fixture(action) {
         await page.locator('#add_scanned_item').click();
         await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('No product matches'));
         assert.equal(await page.locator('.receiving-line').count(), 1, 'unknown code preserves line');
-        await page.goto(url);
-        const catalogOptions = await page.locator('#product_id option').count();
-        await page.locator('#receiving_next').click();
-        assert.equal(await page.locator('#product_id').getAttribute('aria-invalid'), 'true');
-        assert.equal(await page.locator('#product_id_error').innerText(), 'Select a product for this line.');
-        await page.locator('#product_id').selectOption('1');
-        assert.equal(await page.locator('#product_id').getAttribute('aria-invalid'), null);
+
+        await page.goto(url + '?product_id=1');
         await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('abc');
         await page.locator('#quantity_mode').selectOption('packages');
@@ -115,39 +199,26 @@ function fixture(action) {
         assert.equal(await page.locator('#received_qty').getAttribute('aria-describedby'), 'received_qty_error');
         await page.locator('#received_qty').fill('2');
         assert.equal(await page.locator('#received_qty').getAttribute('aria-invalid'), null);
-        page.once('dialog', dialog => dialog.dismiss());
-        await page.locator('.remove-receiving-line').click();
-        assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 1, 'cancel removal preserves entered details');
-        assert.equal(await page.locator('#received_qty').inputValue(), '2');
-        page.once('dialog', dialog => dialog.accept());
-        await page.locator('.remove-receiving-line').click();
-        assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 0);
-        await page.locator('#receiving_back').click();
-        await page.locator('#add_receiving_line').click();
-        for (let index = 0; index < 19; index++) await page.locator('#add_receiving_line').click();
-        const expandedOptions = await page.locator('#receiving_lines [data-field="product_id"] option').count();
-        assert.ok(expandedOptions <= catalogOptions + 38, `only the active line expands the full catalog (${expandedOptions}, catalog ${catalogOptions})`);
+
+        await page.goto(url);
+
         const metrics = await page.evaluate(() => {
             const start = performance.now();
             const search = document.querySelector('#product_search_scan');
             search.value = 'Receiving test product 999';
             search.dispatchEvent(new Event('input', {bubbles: true}));
-            return {options: document.querySelectorAll('#receiving_lines option').length, searchMs: performance.now() - start};
+            return {cards: document.querySelectorAll('.receiving-card').length, searchMs: performance.now() - start};
         });
         console.log('Receiving UI metrics:', JSON.stringify(metrics));
         assert.ok(metrics.searchMs < 200, '1,001-product search stays below the interaction latency budget');
-        await page.locator('#add_receiving_line').click();
-        assert.equal(await page.locator('#product_id_20 option').count(), 2, 'new lines respect the existing search');
         assert.match(await page.locator('#product_search_status').innerText(), /1 matching product/);
-        await page.locator('#product_id_20').selectOption({label: 'Receiving test product 999 (UI-999)'});
         await page.locator('#product_search_scan').fill('no-such-product');
         assert.match(await page.locator('#product_search_status').innerText(), /No matching products/);
-        assert.match(await page.locator('#product_id_20 option:checked').innerText(), /UI-999/, 'search preserves selected product');
         assert.equal(await page.locator('#add_scanned_item').isVisible(), true, '+ Add item button is visible in search/scan bar');
         await page.locator('#product_search_scan').fill('THEME-BARCODE');
         await page.locator('#product_search_scan').press('Enter');
         await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('selected. Matched'));
-        assert.equal(await page.locator('#product_id_21').inputValue(), '1', 'barcode lookup can select outside the search filter');
+        assert.equal(await page.locator('#receiving_lines .receiving-line').last().locator('input[data-field="product_id"]').inputValue(), '1', 'barcode lookup can select outside the search filter');
         assert.deepEqual(errors, []);
         fs.mkdirSync(output, {recursive: true});
         await page.goto(url);
@@ -161,7 +232,9 @@ function fixture(action) {
                         while (await page.locator('#receiving_back').isVisible()) await page.locator('#receiving_back').click();
                     }
                     if (step === 2) {
-                        await page.locator('#product_id').selectOption('1');
+                        if (await page.locator('#receiving_lines .receiving-line').count() === 0) {
+                            await page.locator('.receiving-card-add').first().click();
+                        }
                         await page.locator('#receiving_next').click();
                     }
                     if (step === 3) {
@@ -228,13 +301,12 @@ function fixture(action) {
         await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '200% text zoom remains readable without page overflow');
         await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
-        await page.goto(url);
+        await page.goto(url + '?product_id=1');
         await page.locator('#product_search_scan').fill('THEME-BARCODE');
         await page.route('**/product_code_lookup.php?**', route => route.fulfill({status:500, contentType:'application/json', body:'{"success":false}'}));
         await page.locator('#add_scanned_item').click();
         await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('could not be checked'));
         await page.unroute('**/product_code_lookup.php?**');
-        await page.locator('#product_id').selectOption('1');
         await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('invalid inactive units');
         await page.locator('#quantity_mode').selectOption('packages');
@@ -264,20 +336,15 @@ function fixture(action) {
         await page.locator('.receiving-skip-link').focus();
         await page.keyboard.press('Enter');
         assert.equal(await page.evaluate(() => document.activeElement.id), 'receiving_main', 'keyboard bypasses repeated navigation');
-        await page.locator('#product_id').focus();
-        await page.keyboard.press('t');
+        await page.locator('#product_search_scan').focus();
         await page.keyboard.press('Tab');
-        assert.equal(await page.evaluate(() => document.activeElement.id), 'add_receiving_line', 'keyboard reaches the next selection action');
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'add_scanned_item', 'keyboard reaches the scan item action');
         const touchContext = await browser.newContext({storageState: await page.context().storageState(), viewport:{width:390, height:844}, isMobile:true, hasTouch:true});
         const touchPage = await touchContext.newPage();
         await touchPage.goto(url);
-        await touchPage.locator('#add_receiving_line').tap();
-        assert.equal(await touchPage.locator('#receiving_lines .receiving-line').count(), 2, 'synthesized touch adds a product line');
-        await touchPage.locator('#product_id_1').selectOption('1');
-        await touchPage.locator('#product_id').focus();
-        await touchPage.locator('#product_id').selectOption('1');
-        assert.match(await touchPage.locator('#entry_status').innerText(), /Duplicate product/, 'duplicate feedback survives change events');
-        await touchPage.locator('#product_id').selectOption({label:'Receiving test product 999 (UI-999)'});
+        await touchPage.locator('.receiving-card-add').first().tap();
+        await touchPage.locator('.receiving-card-add').nth(1).tap();
+        assert.equal(await touchPage.locator('#receiving_lines .receiving-line').count(), 2, 'synthesized touch adds two products');
         await touchPage.locator('#receiving_next').tap();
         assert.equal(await touchPage.locator('.receiving-form').getAttribute('data-step'), '2');
         await touchPage.locator('#received_qty').tap();
@@ -293,7 +360,7 @@ function fixture(action) {
         await readonlyPage.locator('#landing-login-password').fill(data.password);
         await Promise.all([readonlyPage.waitForURL(url => !url.search.includes('login=1')), readonlyPage.getByRole('button', {name:'Log in', exact:true}).click()]);
         await readonlyPage.goto(url);
-        assert.equal(await readonlyPage.locator('#product_id').isDisabled(), true, 'technical workspace cannot record routine stock');
+        assert.equal(await readonlyPage.locator('#product_search_scan').isDisabled(), true, 'technical workspace cannot record routine stock');
         assert.match(await readonlyPage.locator('.receiving-form').innerText(), /authorized Inventory Manager/);
         await readonlyPage.close();
         assert.deepEqual(errors, []);
