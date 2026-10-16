@@ -63,3 +63,7 @@ _Avoid_: Production data, client data
 **Typical Store Day**:
 The end-to-end demonstration scenario: open a Cashier Shift, complete a sale, view its Sale Receipt, perform Stock Receiving, review stock or replenishment information, then review Administrator oversight and reports. Discounts are outside this scenario.
 _Avoid_: Feature tour, production workflow
+
+**Workspace**:
+The active role context through which a user accesses RetailMind. A multi-role user switches Workspace to perform each role's permitted tasks; assigned privileges are not combined.
+_Avoid_: Combined permissions, role bundle
