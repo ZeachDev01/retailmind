@@ -12,9 +12,9 @@ async function main() {
     let lockQueue = Promise.resolve();
     const context = vm.createContext({crypto: webcrypto, Uint8Array,
         navigator: {locks: {request: (key, callback) => { const next = lockQueue.then(callback); lockQueue = next.catch(() => {}); return next; }}},
-        localStorage: {getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value)},
+        localStorage: {getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)},
         window: {location: {replace: url => { navigation = url; }}},
-        FormData: class { constructor(form) { this.form = form; } *[Symbol.iterator]() { for (const [key, field] of Object.entries(this.form.elements)) yield [key, field.value]; } },
+        FormData: class { constructor(form) { this.form = form; } set() {} *[Symbol.iterator]() { for (const [key, field] of Object.entries(this.form.elements)) yield [key, field.value]; } },
         fetch: async () => { fetches++; if (blocked) throw Error('Lost connection'); return {ok: true, json: async () => response}; }
     });
     vm.runInContext(fs.readFileSync('src/frontend/assets/js/checkout-attempt.js', 'utf8') + '\nglobalThis.Attempt = CheckoutAttempt;', context);
@@ -22,7 +22,8 @@ async function main() {
     const cart = {1: {product_id: 1, qty: 2, name: 'Fixture Item'}};
     let restored = null;
     let message = '';
-    const options = {recoverUrl: '/pos.php', restore: value => {restored = value;}, message: value => {message = value;}};
+    let messageType = '';
+    const options = {recoverUrl: '/pos.php', restore: value => {restored = value;}, message: (value, type) => {message = value; messageType = type;}};
     const first = new context.Attempt(form, '1', options);
     const staleTab = new context.Attempt(form, '1', options);
     await first.recover();
@@ -46,6 +47,7 @@ async function main() {
     assert.equal(reload.ready, true);
     assert.equal(JSON.stringify(restored), JSON.stringify(cart), 'Reload restores cart for same-attempt retry');
     assert.match(message, /Do not collect payment again/);
+    assert.equal(messageType, 'warning', 'Retry recovery is actionable, not a blocked-work error');
     await reload.save(cart);
     assert.equal(form.elements.checkout_attempt.value, id);
     response = {sale: {sale_id: 42}, receipt_url: '/receipt.php?sale_id=42'};
@@ -64,7 +66,37 @@ async function main() {
     await Promise.all([tabA.recover(), tabB.recover()]);
     const racing = await Promise.allSettled([tabA.save(cart), tabB.save(cart)]);
     assert.equal(racing.filter(result => result.status === 'fulfilled').length, 1, 'Simultaneous tabs persist one identity only');
+    storage.clear();
+    response = {sale: null};
+    const cancelling = new context.Attempt(form, '4', options);
+    await cancelling.recover();
+    await cancelling.save(cart);
+    const cancelledId = cancelling.pending.id;
+    blocked = true;
+    await assert.rejects(cancelling.cancel(), /Lost connection/);
+    assert(storage.has(cancelling.key), 'Cancellation failure preserves payment recovery');
+    blocked = false;
+    response = {cancelled: true, sale: null};
+    assert.equal(await cancelling.cancel(), true);
+    assert.equal(cancelling.pending, null, 'Server-confirmed cancellation unlocks cart edits');
+    assert.equal(cancelling.ready, true);
+    assert(!storage.has(cancelling.key), 'Server-confirmed cancellation unblocks logout');
+    assert.equal(form.elements.checkout_attempt.value, '');
+    await cancelling.save(cart);
+    assert.notEqual(cancelling.pending.id, cancelledId, 'Next checkout gets a fresh identity');
+    const cancelledReload = new context.Attempt(form, '4', options);
+    await cancelledReload.recover();
+    assert.equal(cancelledReload.pending, null, 'Reload recovers a lost cancellation response');
+    assert(!storage.has(cancelling.key));
+    response = {sale: null};
+    await cancelledReload.save(cart);
+    response = {sale: {sale_id: 42}, receipt_url: '/receipt.php?sale_id=42'};
+    navigation = null;
+    assert.equal(await cancelledReload.cancel(), false, 'Cancellation discovers a committed sale');
+    assert.equal(navigation, response.receipt_url);
+    assert(storage.has(cancelling.key), 'Committed receipt navigation preserves recovery identity');
+    assert.equal(cancelledReload.ready, false);
     assert(fetches >= 3);
-    console.log('Checkout browser state behavior: passed (double click, reload, unavailable recovery, lost response, simultaneous/stale tabs, Cashier scope, credential exclusion)');
+    console.log('Checkout browser state behavior: passed (double click, reload, unavailable recovery, lost response, simultaneous/stale tabs, Cashier scope, credential exclusion, cancellation failure, cancellation recovery, new identity, committed receipt protection)');
 }
 main().catch(error => {console.error(error); process.exit(1);});

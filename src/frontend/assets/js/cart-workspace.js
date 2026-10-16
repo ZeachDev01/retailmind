@@ -63,7 +63,7 @@ class CartWorkspace {
         if (!state || (!Object.keys(state.cart || {}).length && !state.heldSaleId)) return true;
         // Payment recovery must finish before any decision can discard that cart.
         if (localStorage.getItem('retailmind.checkout.' + this.context.cashier)) {
-            await RetailMindUI.alert({title: 'Recover checkout first', message: 'Return to Point of Sale and recover the checkout before leaving.'});
+            await RetailMindUI.alert({title: 'Recover checkout first', message: 'Return to Point of Sale. Retry the same checkout, or cancel the unsuccessful checkout after settling any payment, before leaving.'});
             return false;
         }
         const choice = await Swal.fire({title: 'Preserve unfinished work?',

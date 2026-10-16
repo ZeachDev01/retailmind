@@ -30,6 +30,26 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('.rm-toast-copy span').textContent(), 'Login successful! Welcome, <img src=x onerror=alert(1)>!');
     assert.equal(await page.locator('.rm-toast img').count(), 0, 'Username is rendered as text');
     assert.equal(await page.locator('.bi-check-circle-fill').count(), 1);
+    const alerts = await page.evaluate(() => {
+      const alerts = [];
+      window.Swal = { fire() {} };
+      RM.queueAlert = (message, kind) => { alerts.push({ message, kind }); return Promise.resolve(); };
+      const flash = document.querySelector('#rm-flash-messages');
+      for (const kind of ['success', 'error', 'warning', 'info']) {
+        flash.dataset[kind] = kind === 'success' ? 'Password changed successfully.' : `${kind} notice`;
+      }
+      // The sidebar survives page switches; content initialization runs again.
+      initServerNotifications();
+      initServerNotifications();
+      initServerNotifications();
+      return alerts;
+    });
+    assert.deepEqual(alerts, [
+      { message: 'Password changed successfully.', kind: 'success' },
+      { message: 'error notice', kind: 'error' },
+      { message: 'warning notice', kind: 'warning' },
+      { message: 'info notice', kind: 'info' },
+    ], 'Persistent sidebar flash messages appear once across page initializations');
     await page.locator('.rm-toast').evaluate(async node => {
       await new Promise(requestAnimationFrame);
       await Promise.all(node.getAnimations().map(animation => animation.finished));

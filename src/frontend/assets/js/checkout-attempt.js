@@ -28,15 +28,59 @@ class CheckoutAttempt {
                 else window.location.replace(outcome.receipt_url);
                 return;
             }
+            if (outcome.cancelled) {
+                this.clearCancelled();
+                return;
+            }
             for (const [name, value] of Object.entries(this.pending.fields)) {
                 if (this.form.elements[name]) this.form.elements[name].value = value;
             }
             this.options.restore(this.pending.cart);
-            this.options.message('Previous checkout recovered for retry. No saved receipt yet. Do not collect payment again; retry the same checkout.');
+            this.options.message('Previous checkout recovered for retry. No saved receipt yet. Do not collect payment again; retry the same checkout.', 'warning');
             this.ready = true;
         } catch (error) {
-            this.options.message('Unable to recover the previous checkout. Reload to retry recovery before collecting another payment.');
+            this.options.message('Unable to recover the previous checkout. Reload to retry recovery before collecting another payment.', 'error');
         }
+    }
+
+    async cancel() {
+        if (!this.pending) return false;
+        if (!navigator.locks) throw new Error('Checkout cancellation requires a secure browser context with Web Locks.');
+        return navigator.locks.request(this.key, async () => {
+            const shared = JSON.parse(localStorage.getItem(this.key) || 'null');
+            if (!shared || shared.id !== this.pending?.id) {
+                this.ready = false;
+                throw new Error('Another tab changed the checkout. Reload to recover it.');
+            }
+            this.ready = false;
+            const data = new FormData(this.form);
+            data.set('action', 'cancel_checkout');
+            data.set('checkout_attempt', this.pending.id);
+            data.set('no_outstanding_payment', '1');
+            const response = await fetch(this.options.recoverUrl, {method: 'POST', body: data, cache: 'no-store'});
+            const outcome = await response.json();
+            if (!response.ok) throw new Error(outcome.message || 'Checkout cancellation failed. Reload to recover before collecting payment.');
+            if (outcome.sale) {
+                if (window.RetailMindNavigation) await window.RetailMindNavigation.navigate(outcome.receipt_url, {history: 'none'});
+                else window.location.replace(outcome.receipt_url);
+                return false;
+            }
+            if (!outcome.cancelled) throw new Error('Cancellation was not confirmed. Reload to recover the checkout.');
+            this.clearCancelled();
+            return true;
+        });
+    }
+
+    clearCancelled() {
+        const shared = JSON.parse(localStorage.getItem(this.key) || 'null');
+        if (shared && shared.id !== this.pending.id) throw new Error('Another tab changed the checkout. Reload to recover it.');
+        if (shared) localStorage.removeItem(this.key);
+        this.pending = null;
+        for (const name of ['checkout_attempt', 'checkout_attempt_id', 'cash_received', 'payment_reference', 'payment_verified', 'quote_token']) {
+            if (this.form.elements[name]) this.form.elements[name].value = '';
+        }
+        this.ready = true;
+        this.options.cancelled?.();
     }
 
     async save(cart) {

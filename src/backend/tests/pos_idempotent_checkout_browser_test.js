@@ -81,6 +81,20 @@ const queryDb = code => {
         await page.locator('#cart-body td strong.cart-item-name').waitFor();
         assert.equal(await page.locator('#cart-item-count').innerText(), '1', 'Item added to cart');
 
+        await page.reload();
+        assert.equal(await page.locator('#cart-item-count').innerText(), '1', 'Refresh restores the cart');
+        await page.locator('#cart-body .qty-btn').last().click();
+        assert.equal(await page.locator('#cart-item-count').innerText(), '2', 'Restored cart quantity can increase');
+        await page.locator('#cart-body .qty-btn').first().click();
+        assert.equal(await page.locator('#cart-item-count').innerText(), '1', 'Restored cart quantity can decrease');
+        await page.locator('#cart-body .remove-item-btn').click();
+        assert.equal(await page.locator('#cart-item-count').innerText(), '0', 'Restored cart item can be removed');
+        await page.reload();
+        assert.equal(await page.locator('#cart-item-count').innerText(), '0', 'Removed item stays removed after refresh');
+        await page.locator('#sku-input').fill('CASHIER-101');
+        await page.locator('#add-code-btn').click();
+        await page.locator('#cart-body td strong.cart-item-name').waitFor();
+
         // --- SECTION 1: Offline check blocks checkout attempt ---
         await context.setOffline(true);
         await page.locator('#checkout-button').click();
@@ -183,7 +197,78 @@ const queryDb = code => {
         assert.equal(salesCountFinal, initialSales + 2, 'Second sale committed after conflict adjustment');
         assert.equal(stock102Final, 0, 'Inventory depleted to 0 (2 - 2 = 0)');
 
-        console.log('POS idempotent checkout browser test: passed (offline check, retry idempotency, 409 conflict modal, cart retention & adjustment)');
+        await page.getByRole('button', {name: 'Close Sale Receipt'}).click();
+        await page.goto(origin + '/components/cashier/pos.php');
+        await page.locator('#sku-input').fill('CASHIER-103');
+        await page.locator('#add-code-btn').click();
+        await page.locator('#cart-body td strong.cart-item-name').waitFor();
+        // A failed/lost submission leaves a durable attempt without a committed sale.
+        const cancelledId = await page.evaluate(() => {
+            const state = JSON.parse(sessionStorage.getItem('retailmind.cart-workspace'));
+            const id = 'e'.repeat(32);
+            const fields = Object.fromEntries(new FormData(document.getElementById('checkout-form')));
+            delete fields.csrf_token;
+            delete fields.discount_approver_password;
+            localStorage.setItem('retailmind.checkout.4', JSON.stringify({id, cart: state.cart, fields}));
+            return id;
+        });
+        // Existing browsers can retain the pre-cancellation script in the service worker cache.
+        const legacyCheckout = fs.readFileSync('src/frontend/assets/js/checkout-attempt.js', 'utf8')
+            .replace(/    async cancel\(\)[\s\S]*?(?=    async save\()/, '');
+        await page.evaluate(async source => {
+            await navigator.serviceWorker.ready;
+            const cache = await caches.open('retailmind-static-v2');
+            await cache.put(new URL('/assets/js/checkout-attempt.js', location.origin),
+                new Response(source, {headers: {'Content-Type': 'application/javascript'}}));
+        }, legacyCheckout);
+        await page.reload();
+        await page.locator('#cancel-checkout-btn').waitFor({state: 'visible'});
+        assert.equal(await page.evaluate(() => typeof CheckoutAttempt.prototype.cancel), 'function', 'POS must load the updated recovery script even with a legacy service worker cache');
+        await page.locator('.remove-item-btn').click();
+        assert.equal(await page.locator('#cart-item-count').innerText(), '1', 'Pending payment blocks cart deletion');
+        await page.locator('[data-account-menu-open]:visible').first().click();
+        await page.locator('a[href*="auth/logout.php"]').first().click();
+        await page.locator('.rm-toast').filter({hasText: 'Recover checkout first'}).waitFor();
+        await page.keyboard.press('Escape');
+
+        const denied = await page.request.post(origin + '/components/cashier/pos.php', {
+            form: {action: 'cancel_checkout', checkout_attempt: cancelledId,
+                csrf_token: await page.locator('input[name="csrf_token"]').first().inputValue()}
+        });
+        assert.equal(denied.status(), 409, 'Cancellation requires an explicit no-outstanding-payment confirmation');
+        await page.locator('#cancel-checkout-btn').click();
+        await page.locator('.rm-cancel').click();
+        assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('retailmind.checkout.4')).id), cancelledId, 'Declining cancellation preserves recovery');
+
+        await page.evaluate(() => document.querySelectorAll('.rm-toast').forEach(toast => toast.remove()));
+        await page.setViewportSize({width: 390, height: 844});
+        await page.locator('#checkout-recovery').scrollIntoViewIfNeeded();
+        await page.screenshot({path: path.join(output, 'checkout-recovery-mobile.png'), fullPage: true});
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Recovery controls fit mobile');
+        await page.setViewportSize({width: 1365, height: 900});
+        await page.locator('#checkout-recovery').scrollIntoViewIfNeeded();
+        await page.screenshot({path: path.join(output, 'checkout-recovery-desktop.png'), fullPage: true});
+        await page.locator('#cancel-checkout-btn').click();
+        await page.locator('.rm-accept').click();
+        await page.waitForFunction(() => localStorage.getItem('retailmind.checkout.4') === null);
+        assert.equal(await page.evaluate(() => localStorage.getItem('retailmind.checkout.4')), null, 'Confirmed cancellation releases logout guard');
+        assert.equal(await page.locator('#cart-item-count').innerText(), '1', 'Cancellation keeps cart available for editing');
+        await page.reload();
+        await page.locator('.remove-item-btn').click();
+        await page.waitForFunction(() => document.getElementById('cart-item-count').innerText === '0');
+        const late = new URLSearchParams(postData);
+        late.set('checkout_attempt', cancelledId);
+        late.set('checkout_attempt_id', cancelledId);
+        const lateResponse = await page.request.post(origin + '/components/cashier/pos.php', {
+            headers: {Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded'}, data: late.toString()
+        });
+        assert.equal(lateResponse.status(), 409, 'Delayed payment submission is refused after cancellation');
+        assert.equal(Number(queryDb("echo (int)$p->query('SELECT COUNT(*) FROM sales')->fetchColumn();")), salesCountFinal, 'Cancellation and late retry create no sale');
+        await page.locator('[data-account-menu-open]:visible').first().click();
+        await page.locator('a[href*="auth/logout.php"]').first().click();
+        await page.waitForURL(url => !url.pathname.includes('/components/cashier/pos.php'));
+        console.log('POS idempotent checkout browser test: passed (offline, idempotency, stock conflicts, recovered checkout cancellation, payment confirmation, cart removal, reload, logout, late retry)');
+        console.log('Recovery screenshots: ' + output);
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

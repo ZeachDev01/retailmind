@@ -1127,7 +1127,7 @@ CREATE TABLE `checkout_attempts` (
   `cashier_id` int(11) NOT NULL,
   `attempt_id` char(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `request_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `sale_id` int(11) NOT NULL,
+  `sale_id` int(11) DEFAULT NULL,
   `result_json` longtext NOT NULL,
   PRIMARY KEY (`cashier_id`,`attempt_id`),
   UNIQUE KEY `uq_checkout_attempt_sale` (`sale_id`),
@@ -1872,6 +1872,7 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300003_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300004_legacy_register_columns','Upgrade existing Register columns to the current Cashier schema') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609300005_register_paper_width','Configure thermal receipt paper width per Register') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010001_checkout_attempts','Persist Cashier checkout identities with committed sale outcomes') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610170001_cancel_checkout_attempts','Retain cancelled checkout identities without creating a sale') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010003_safe_refund_exceptions','Preserve external settlement and specific Cash Refund exception attribution (#113)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610040001_user_theme','Personal display theme for every Staff account') ON DUPLICATE KEY UPDATE description=VALUES(description);
 

@@ -373,7 +373,10 @@
       flash.hidden = true;
       ["success", "error", "warning", "info"].forEach((kind) => {
         const message = flash.dataset[kind];
-        if (message) notices.push({ message, kind });
+        if (message) {
+          notices.push({ message, kind });
+          delete flash.dataset[kind];
+        }
       });
     }
     qsa(".alert, .error-msg, .message, .pos-alert").forEach((node) => {

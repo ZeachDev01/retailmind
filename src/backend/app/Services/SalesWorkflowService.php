@@ -188,10 +188,40 @@ class SalesWorkflowService
         if (!$saved) {
             return null;
         }
+        $result = json_decode($saved['result_json'], true, 512, JSON_THROW_ON_ERROR);
+        if ($fingerprint !== null && !empty($result['cancelled'])) {
+            throw new DomainException('This checkout was cancelled. Return to Point of Sale before starting another sale.');
+        }
         if ($fingerprint !== null && !hash_equals($saved['request_hash'], $fingerprint)) {
             throw new DomainException('This checkout attempt belongs to a different cart or payment. Recover its saved receipt before starting another sale.');
         }
-        return json_decode($saved['result_json'], true, 512, JSON_THROW_ON_ERROR);
+        return $result;
+    }
+
+    public function cancelAttempt(string $attempt, int $userId, string $actorRole): array
+    {
+        $this->requireCashierWorkspace($actorRole);
+        $attempt = strtolower(str_replace('-', '', $attempt));
+        $this->attemptIdentity(['checkout_attempt' => $attempt]);
+        StoreWriteGate::begin($this->pdo);
+        try {
+            $saved = $this->recoverAttempt($attempt, $userId, $actorRole);
+            if ($saved !== null) {
+                $this->pdo->commit();
+                return $saved;
+            }
+            $this->resolveSaleAttribution($userId);
+            // Keep a tombstone under the checkout write gate so a delayed POST cannot create a sale.
+            $this->pdo->prepare('INSERT INTO checkout_attempts (cashier_id, attempt_id, request_hash, sale_id, result_json) VALUES (?, ?, ?, NULL, ?)')
+                ->execute([$userId, $attempt, str_repeat('0', 64), '{"cancelled":true}']);
+            $this->pdo->prepare("INSERT INTO activity_log (user_id, action, category, module, metadata) VALUES (?, 'Cancelled unsuccessful checkout; confirmed no outstanding payment', 'store_operation', 'sales', ?)")
+                ->execute([$userId, json_encode(['checkout_attempt' => $attempt], JSON_THROW_ON_ERROR)]);
+            $this->pdo->commit();
+            return ['cancelled' => true];
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
+        }
     }
 
     /** The quote is read under the same locks as checkout and makes no sale. */

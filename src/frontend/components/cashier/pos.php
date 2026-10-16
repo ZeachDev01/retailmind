@@ -21,16 +21,27 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SAL
 $actorRole = (string)current_role();
 header('Cache-Control: no-store');
 
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['recover_checkout'])) {
+if (($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['recover_checkout']))
+    || ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel_checkout')) {
     header('Content-Type: application/json');
     header('Cache-Control: no-store');
     try {
-        $saved = $salesWorkflowService->recoverAttempt((string)$_GET['recover_checkout'], $cashierId, $actorRole);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            csrf_verify();
+            if (($_POST['no_outstanding_payment'] ?? '') !== '1') {
+                throw new DomainException('Confirm that no payment is outstanding before cancelling checkout.');
+            }
+            $saved = $salesWorkflowService->cancelAttempt((string)($_POST['checkout_attempt'] ?? ''), $cashierId, $actorRole);
+        } else {
+            $saved = $salesWorkflowService->recoverAttempt((string)$_GET['recover_checkout'], $cashierId, $actorRole);
+        }
+        $cancelled = !empty($saved['cancelled']);
+        if ($cancelled) $saved = null;
         if ($saved !== null) $_SESSION['completed_checkout_sale'] = (int)$saved['sale_id'];
-        echo json_encode(['sale' => $saved, 'receipt_url' => $saved === null ? null : app_url('components/cashier/pos.php?sale_id=' . $saved['sale_id'] . '&checkout=complete')], JSON_THROW_ON_ERROR);
+        echo json_encode(['cancelled' => $cancelled, 'sale' => $saved, 'receipt_url' => $saved === null ? null : app_url('components/cashier/pos.php?sale_id=' . $saved['sale_id'] . '&checkout=complete')], JSON_THROW_ON_ERROR);
     } catch (Throwable $e) {
         http_response_code(409);
-        echo json_encode(['message' => 'Checkout recovery is unavailable. Retry recovery before collecting another payment.']);
+        echo json_encode(['message' => \App\Support\OperatorAlert::message($e, 'Checkout recovery is unavailable. Retry recovery before collecting another payment.')]);
         error_log('Checkout recovery failed: ' . (string)$e);
     }
     exit;
@@ -590,6 +601,13 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     </button>
                 </div>
 
+                <div id="checkout-recovery" class="pos-alert" data-rm-alert-processed="1" hidden role="status">
+                    <div>
+                        <p>No saved receipt yet. Retry the same checkout without collecting payment again, or cancel it after settling any payment with the customer.</p>
+                        <button type="button" class="btn btn-small btn-secondary" id="cancel-checkout-btn">Cancel unsuccessful checkout</button>
+                    </div>
+                </div>
+
                 <div class="cart-table-wrap">
                     <table class="cart-table" aria-label="Cart items">
                         <thead>
@@ -793,8 +811,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
 <?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="<?= app_url('assets/js/checkout-attempt.js') ?>"></script>
-<script src="<?= app_url('assets/js/checkout-quote.js') ?>"></script>
+<script src="<?= app_url('assets/js/checkout-attempt.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/checkout-attempt.js') ?>"></script>
+<script src="<?= app_url('assets/js/checkout-quote.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/checkout-quote.js') ?>"></script>
 <script>
 setTimeout(() => document.querySelector('.pos-register-bar')?.remove(), 8000);
 
@@ -1446,7 +1464,7 @@ async function addScannedCode(code) {
 
 function cartChangesAllowed() {
     if (!posShiftOpen || cartWorkspace.context.locked || cartWorkspace.busy || checkoutSubmitting || (typeof checkoutAttempt !== 'undefined' && checkoutAttempt.pending)) {
-        showCartMessage('Finish checkout recovery or unlock your Register before changing the cart.', 'error'); return false;
+        showCartMessage('Retry or cancel the unsuccessful checkout before changing the cart. Unlock your Register if it is locked.', 'error'); return false;
     }
     return true;
 }
@@ -2412,9 +2430,35 @@ if (cashierClock) {
 const checkoutAttempt = new CheckoutAttempt(checkoutForm, <?= json_encode((string)$cashierId) ?>, {
     recoverUrl: <?= json_encode(app_url('components/cashier/pos.php')) ?>,
     restore(savedCart) { cart = savedCart; resumedHeldSaleId = Number(resumedHeldSaleInput.value) || null; renderCart(); },
-    message(text) { showCartMessage(text, 'error'); }
+    message(text, type) {
+        document.getElementById('checkout-recovery').hidden = !checkoutAttempt.pending;
+        showCartMessage(text, type);
+    },
+    cancelled() {
+        document.getElementById('checkout-recovery').hidden = true;
+        checkoutQuote.reviewed = null;
+        updatePaymentFields();
+        showCartMessage('Unsuccessful checkout cancelled. You can edit or clear the cart.', 'info');
+    }
 });
 const checkoutQuote = new CheckoutQuote(checkoutForm);
+document.getElementById('cancel-checkout-btn').addEventListener('click', async event => {
+    if (cartWorkspace.busy || checkoutSubmitting) return;
+    const button = event.currentTarget;
+    button.disabled = true;
+    cartWorkspace.busy = true;
+    try {
+        if (!await RetailMindUI.confirm({title: 'Cancel unsuccessful checkout?',
+            message: 'Only cancel if no payment was collected, or you have returned the cash or reversed the external payment. Cancelling does not return money. A saved sale will open its receipt instead.',
+            confirmText: 'No payment outstanding'})) return;
+        if (await checkoutAttempt.cancel()) document.getElementById('clear-cart-btn').focus();
+    } catch (error) {
+        showCartMessage(error.message || 'Cancellation could not be confirmed. Reload to recover the checkout.', 'error');
+    } finally {
+        button.disabled = false;
+        cartWorkspace.busy = false;
+    }
+});
 checkoutAttempt.recover().then(async () => {
     const url = new URL(window.location.href);
     if (!url.searchParams.has('new_sale')) return;

@@ -50,6 +50,9 @@ try {
     $migration = require __DIR__ . '/../database/migrations/202610010001_checkout_attempts.php';
     $migration['up']($pdo);
     $migration['up']($pdo);
+    $cancellationMigration = require __DIR__ . '/../database/migrations/202610170001_cancel_checkout_attempts.php';
+    $cancellationMigration['up']($pdo);
+    $cancellationMigration['up']($pdo);
     $pdo->exec("INSERT INTO branches (branch_id, branch_name, branch_code) VALUES (1, 'Fixture Store', 'TEST')");
     $pdo->exec("INSERT INTO roles (role_id, role_name) VALUES (1, 'cashier')");
     $pdo->exec("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id) VALUES (1, 'Fixture Cashier', 'checkout-test', 'unused', 1, 1), (2, 'Other Cashier', 'other-test', 'unused', 1, 1)");
@@ -123,7 +126,24 @@ try {
     $assert($service->recoverAttempt($atomic['checkout_attempt'], 1, 'cashier') === $saved, 'Post-commit failure still returns and recovers success');
     $receipt = (new App\Receipts\ReceiptDetailsService($pdo))->fetchSale($saved['sale_id']);
     $assert(isset($receipt['receipt_items']), 'Saved customer receipt remains available');
-    echo "Checkout attempts integration: passed (concurrency, replay, lost response, scope, incompatible reuse, atomic rollback, notification failure)\n";
+    $assert($service->cancelAttempt($atomic['checkout_attempt'], 1, 'cashier') === $saved, 'Cancellation recovers an already committed sale instead');
+    $cancelled = str_repeat('c', 32);
+    $assert($service->cancelAttempt($cancelled, 1, 'cashier') === ['cancelled' => true], 'Unsuccessful checkout can be cancelled');
+    $assert($service->cancelAttempt($cancelled, 1, 'cashier') === ['cancelled' => true], 'Cancellation is idempotent');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE action LIKE 'Cancelled unsuccessful checkout%'")->fetchColumn() === 1, 'Cancellation audit is recorded once');
+    $assert($service->recoverAttempt($cancelled, 1, 'cashier') === ['cancelled' => true], 'Lost cancellation response is recoverable');
+    $late = array_replace($atomic, ['checkout_attempt' => $cancelled]);
+    try { $service->checkout($cart, 1, 'cashier', 'cash', $late); throw new LogicException('Late checkout succeeded'); }
+    catch (DomainException $e) { $assert(str_contains($e->getMessage(), 'cancelled'), 'Late checkout cannot commit after cancellation'); }
+    $assert($service->recoverAttempt($cancelled, 2, 'cashier') === null, 'Cancellation is Cashier scoped');
+    try { $service->cancelAttempt(str_repeat('d', 32), 1, 'administrator'); throw new LogicException('Wrong workspace cancelled'); }
+    catch (DomainException $e) { /* Active Cashier workspace required. */ }
+    $pdo->exec('UPDATE cashier_shifts SET locked_at=CURRENT_TIMESTAMP WHERE shift_id=1');
+    try { $service->cancelAttempt(str_repeat('d', 32), 1, 'cashier'); throw new LogicException('Locked register cancelled'); }
+    catch (DomainException $e) { /* Own unlocked shift required. */ }
+    $assert($service->recoverAttempt(str_repeat('d', 32), 1, 'cashier') === null, 'Refused cancellation writes nothing');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === 2, 'Cancellation creates no sale');
+    echo "Checkout attempts integration: passed (concurrency, replay, lost response, scope, incompatible reuse, atomic rollback, notification failure, cancellation, late retry, audit, locked register)\n";
 } catch (Throwable $e) { fwrite(STDERR, 'Checkout attempts integration failed: ' . $e->getMessage() . "\n"); $failed = true; }
 finally {
     foreach ($workers as [$process, $pipes]) { foreach ($pipes as $pipe) if (is_resource($pipe)) fclose($pipe); proc_terminate($process); proc_close($process); }

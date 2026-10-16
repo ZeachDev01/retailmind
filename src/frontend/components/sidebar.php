@@ -434,7 +434,7 @@ $cartWorkspaceContext = [
 ];
 $GLOBALS['rm_navigation_cart'] = $cartWorkspaceContext;
 ?>
-<script src="<?= sidebar_e(app_url('assets/js/cart-workspace.js')) ?>"></script>
+<script src="<?= sidebar_e(app_url('assets/js/cart-workspace.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/cart-workspace.js')) ?>"></script>
 <script>
 window.cartWorkspace = new CartWorkspace(<?= json_encode($cartWorkspaceContext, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
 cartWorkspace.bindNavigation();
