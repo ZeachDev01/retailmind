@@ -15,7 +15,7 @@ const html = `<!doctype html><meta name="viewport" content="width=device-width, 
 <div class="rm-drawer-overlay" id="drawer"><aside class="rm-drawer">${header('rm-drawer', 'Product details')}<div class="rm-drawer-body">${fields}</div><footer class="rm-drawer-footer"><button class="btn">Update product</button></footer></aside></div>
 <div class="user-modal-overlay" id="user"><section class="user-modal">${header('user-modal', 'Add store staff')}<form class="user-form">${fields}${actions('modal')}</form></section></div>
 <div class="user-drawer-overlay" id="staff"><aside class="user-drawer">${header('user-drawer', 'Manage staff')}<div class="user-drawer-body"><nav class="user-drawer-tabs"><button class="user-drawer-tab">Info</button><button class="user-drawer-tab">Access</button><button class="user-drawer-tab">History</button><button class="user-drawer-tab">Security</button></nav>${fields}</div></aside></div>
-<div class="checkout-modal" id="checkout"><section class="checkout-dialog">${header('checkout-dialog', 'Review final quote before payment')}<div class="checkout-dialog-body"><div class="checkout-summary-card">${Array.from({ length: 40 }, (_, i) => `<p>Purchase item ${i + 1}: ₱100.00</p>`).join('')}</div></div>${actions('checkout-dialog')}</section></div>`;
+<div class="checkout-modal" id="checkout"><section class="checkout-dialog">${header('checkout-dialog', 'Review sale before payment')}<div class="checkout-dialog-body"><div class="checkout-summary-card">${Array.from({ length: 40 }, (_, i) => `<p>Purchase item ${i + 1}: ₱100.00</p>`).join('')}</div></div>${actions('checkout-dialog')}</section></div>`;
 
 (async () => {
     const browser = await chromium.launch({ headless: true });

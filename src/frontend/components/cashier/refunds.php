@@ -20,6 +20,9 @@ require_once __DIR__ . '/../../../backend/app/Services/CashRefundService.php';
 require_once __DIR__ . '/../../../backend/app/Receipts/RefundReceiptPresentation.php';
 require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptPaperService.php';
 
+require_once __DIR__ . '/../../../backend/app/Services/CashierOperationalHistoryService.php';
+require_once __DIR__ . '/../../../backend/app/Services/CashierOperationalHistoryRequest.php';
+
 use App\Services\CashRefundService;
 use App\Services\CashierShiftService;
 
@@ -103,7 +106,15 @@ try {
     $error = \App\Support\OperatorAlert::message($e, 'Ask your Administrator to authorize this sale again.');
     $exceptionToken = '';
 }
-$refunds = $refundService->recentForCashier($actorId);
+$refundHistory = \App\Services\CashierOperationalHistoryRequest::resolve($pdo, $actorId, [
+    'type' => 'refunds', 'page' => $_GET['page'] ?? 1, 'length' => $_GET['length'] ?? 10,
+]);
+$refunds = $refundHistory['rows'];
+['page' => $page, 'pageSize' => $pageSize, 'totalRows' => $totalRows,
+    'totalPages' => $totalPages, 'hasNext' => $hasNext] = $refundHistory;
+$paginationFilters = array_intersect_key($_GET, array_flip(['sale_id', 'refund_id']));
+$paginationFilters = array_filter($paginationFilters, static fn($value): bool => is_scalar($value) && (int)$value > 0);
+$url = static fn(array $params): string => app_url('components/cashier/refunds.php?' . http_build_query($params + $paginationFilters + ['length' => $pageSize])) . '#refund-history';
 $receiptId = (int)($_GET['refund_id'] ?? 0);
 $receipt = $receiptId > 0 ? (new \App\Receipts\RefundReceiptService($pdo))->forCashier($receiptId, $actorId, $storeId) : null;
 $paperWidthMm = (new \App\Receipts\ReceiptPaperService($pdo))->currentWidth($actorId, $actorRole);
@@ -131,8 +142,7 @@ if ($receiptId > 0 && $receipt === null) {
             <div class="topbar">
                 <div>
                     <h1>Refunds</h1>
-                    <p class="page-subtitle">Refunds are added to the record; the original sale is never changed. Dates use Philippine time (Asia/Manila).</p>
-                </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back</a>
+                </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
             </div>
             <?php if ($error): ?><div class="message error" role="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
             <?php if (!$openShift): ?><div class="message warning" role="note" data-rm-alert-processed="1">Open a Cashier Shift before issuing a refund. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Go to Cashier Shift</a></div><?php endif; ?>
@@ -275,9 +285,9 @@ if ($receiptId > 0 && $receipt === null) {
             <?php endif; ?>
 
             <section class="dashboard-section refund-history" id="refund-history">
-                <div class="refund-history-heading"><h2 id="refund-history-heading">My refunds</h2><span><?= count($refunds) ?> refund<?= count($refunds) === 1 ? '' : 's' ?></span></div>
+                <div class="refund-history-heading"><h2 id="refund-history-heading">My refunds</h2><span><?= $totalRows ?> refund<?= $totalRows === 1 ? '' : 's' ?></span></div>
                 <?php if (!$refunds): ?>
-                    <p class="refund-help refund-empty">You have not issued any refunds yet.</p>
+                    <p class="refund-help refund-empty">No refunds to show on this page.</p>
                 <?php else: ?>
                     <div class="table-wrap" role="region" aria-labelledby="refund-history-heading" tabindex="0">
                         <table class="refund-history-table">
@@ -309,6 +319,7 @@ if ($receiptId > 0 && $receipt === null) {
                         </table>
                     </div>
                 <?php endif; ?>
+                <?php $rows = $refunds; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
             </section>
         </main>
     </div>

@@ -6,5 +6,5 @@
         <h2 id="saleReceiptTitle" tabindex="-1">Sale Receipt<?= $selected_sale ? ' #' . (int)$selected_sale['sale_id'] : '' ?></h2>
         <button type="button" class="btn btn-secondary" data-close-receipt aria-label="Close Sale Receipt">Close</button>
     </div>
-    <div id="receiptContent"><?php if ($selected_sale) receipt_render_details($selected_sale, $selected_items, $canStartSale, $announcePayment); ?></div>
+    <div id="receiptContent"><?php if ($selected_sale) receipt_render_details($selected_sale, $selected_items, $canStartSale, $announcePayment, $receiptHistoryDrawer ?? false); ?></div>
 </dialog>

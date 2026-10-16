@@ -2,14 +2,64 @@
 
 /* Sales transactions */
 .receipts-container {
-        max-width: 1200px;
+        max-width: 1600px;
         margin: 0 auto;
         padding: 2rem 1rem;
     }
 
     .receipts-page .receipt-table-heading {
         align-items: center;
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
     }
+
+    .receipts-page .receipt-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        margin-bottom: .6rem;
+        color: var(--primary);
+        font-size: .78rem;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .receipts-page .receipt-table-heading h1 { margin: 0 0 .5rem; }
+    .receipts-page .receipt-table-heading .section-description { margin: 0; }
+
+    .receipts-page .receipt-history-panel {
+        min-width: 0;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 6px 24px rgba(15, 23, 42, .04);
+    }
+
+    .receipts-page .receipt-filter-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: .5rem 1rem;
+        padding: 1.25rem 1.25rem .85rem;
+    }
+
+    .receipts-page .receipt-filter-heading h2 { margin: 0; font-size: 1rem; }
+    .receipts-page .receipt-filter-heading h2 i { margin-right: .35rem; color: var(--primary); }
+    .receipts-page .receipt-filter-heading > span { color: var(--muted); font-size: .8rem; }
+    .receipts-page .receipt-history-note {
+        display: flex;
+        align-items: baseline;
+        gap: .5rem;
+        margin: 0;
+        padding: 1rem 1.25rem;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: .8rem;
+        line-height: 1.6;
+    }
+    .receipts-page .receipt-empty-icon { display: block; margin-bottom: 1rem; font-size: 2rem; color: var(--muted); }
 
     .sales-tabs { display:flex;gap:0;margin-bottom:1.5rem;border-bottom:1px solid var(--border); }
     .sales-tab { display:inline-flex;min-height:44px;align-items:center;gap:.45rem;padding:.7rem 1rem;border-bottom:3px solid transparent;color:var(--muted);font-weight:700;text-decoration:none; }
@@ -45,8 +95,8 @@
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
         gap: 0.75rem;
         align-items: end;
-        padding: 1rem;
-        border-block: 1px solid var(--border);
+        padding: 0 1.25rem 1.25rem;
+        border-bottom: 1px solid var(--border);
         background: var(--theme-surface-soft, #f8fafc);
     }
 
@@ -63,7 +113,7 @@
         width: 100%;
         min-height: 44px;
         padding: 0.58rem 0.7rem;
-        border: 1px solid var(--muted);
+        border: 1px solid var(--border);
         border-radius: 10px;
         background: var(--theme-surface, #fff);
         color: var(--text);
@@ -112,19 +162,20 @@
     }
 
     .receipts-page .receipt-table-wrap {
-        overflow-x: auto;
-        overflow-y: visible;
+        overflow-x: hidden;
+        padding: 0 1.25rem 1.25rem;
     }
 
     .receipts-table {
         width: 100% !important;
-        min-width: 1250px;
+        min-width: 0 !important;
+        table-layout: fixed;
         border-collapse: collapse;
         background: var(--card-bg);
         border: 1px solid var(--border);
         border-radius: 12px;
         overflow: hidden;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+        box-shadow: none;
         font-variant-numeric: tabular-nums;
     }
 
@@ -134,16 +185,19 @@
     }
 
     .receipts-table th {
-        padding: 1rem;
+        padding: .85rem .45rem;
+        overflow-wrap: anywhere;
         text-align: left;
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.72rem;
         color: var(--muted);
         text-transform: uppercase;
+        letter-spacing: .04em;
     }
 
     .receipts-table td {
-        padding: 1rem;
+        padding: .9rem .45rem;
+        overflow-wrap: anywhere;
         border-bottom: 1px solid var(--border);
     }
 
@@ -151,7 +205,7 @@
     .receipts-table :is(th, td):nth-child(5),
     .receipts-table :is(th, td):nth-child(9),
     .receipts-table :is(th, td):nth-child(10) {
-        white-space: nowrap;
+        white-space: normal;
     }
 
     .receipts-table :is(th, td):nth-child(5),
@@ -160,7 +214,7 @@
         text-align: right;
     }
 
-    .receipts-table td:nth-child(3) { min-width: 12rem; overflow-wrap: anywhere; }
+    .receipts-table td:nth-child(3) { overflow-wrap: anywhere; }
 
     .receipts-table tr:last-child td {
         border-bottom: none;
@@ -190,14 +244,25 @@
         padding: 0.65rem 1rem 0.15rem;
     }
 
+    .receipts-page .dt-container > .dt-layout-row:first-child .dt-layout-end {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: .75rem;
+    }
+
+    .receipts-page #receiptNewSale { white-space: nowrap; }
+
     .receipts-page .dt-container .dt-layout-row:last-child {
         margin: 1rem 0 0;
     }
 
     .receipts-page .dt-container .dt-layout-row:last-child .dt-layout-cell {
-        display: grid;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
         width: 100%;
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
         align-items: center;
         gap: 1rem;
     }
@@ -217,7 +282,7 @@
 
     .receipts-page .dt-container .dt-search input,
     .receipts-page .dt-container .dt-length select {
-        border: 1px solid var(--muted);
+        border: 1px solid var(--border);
         border-radius: 8px;
         background: var(--theme-surface, #fff);
         color: var(--text);
@@ -226,7 +291,8 @@
     }
 
     .receipts-page .dt-container .dt-search input {
-        min-width: 280px;
+        width: min(350px, 100%);
+        min-width: 0;
         padding: 0.55rem 0.7rem;
     }
 
@@ -243,6 +309,28 @@
         border-radius: 8px;
         min-width: 44px;
         min-height: 44px;
+    }
+
+    .receipts-page .dt-container .dt-search {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .receipts-page .receipts-table .actions-cell { flex-wrap: wrap; }
+
+    .receipts-page .receipts-table .actions-cell .btn-small {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .35rem;
+        white-space: nowrap;
+    }
+
+    .receipts-page .receipts-table .actions-cell a.btn-small {
+        color: var(--primary);
+        border: 1px solid var(--border);
+        background: var(--card-bg);
     }
 
     .receipt-id {
@@ -641,4 +729,111 @@
     background: var(--theme-info-surface, #dbeafe) !important;
     color: var(--theme-info-text, #1d4ed8) !important;
     border-color: var(--border) !important;
+}
+
+/* Stack receipt details when eleven columns would crowd the available space. */
+@media (max-width: 900px) {
+    .receipts-page .receipts-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+    .receipts-page .receipts-table,
+    .receipts-page .receipts-table tbody { display: block; }
+    .receipts-page .receipts-table { border: 0; overflow: visible; }
+    .receipts-page .receipts-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: .75rem;
+        margin-bottom: .75rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--card-bg);
+    }
+    .receipts-page .receipts-table tbody td {
+        display: block;
+        padding: .5rem;
+        border: 0;
+        text-align: left;
+        white-space: normal;
+        min-width: 0;
+    }
+    .receipts-page .receipts-table tbody td::before {
+        display: block;
+        margin-bottom: .25rem;
+        color: var(--muted);
+        font-size: .72rem;
+        font-weight: 600;
+    }
+    .receipts-page .receipts-table tbody td:nth-child(1)::before { content: 'Receipt #'; }
+    .receipts-page .receipts-table tbody td:nth-child(2)::before { content: 'Date'; }
+    .receipts-page .receipts-table tbody td:nth-child(3)::before { content: 'Cashier'; }
+    .receipts-page .receipts-table tbody td:nth-child(4)::before { content: 'Items'; }
+    .receipts-page .receipts-table tbody td:nth-child(5)::before { content: 'Original paid'; }
+    .receipts-page .receipts-table tbody td:nth-child(6)::before { content: 'Payment'; }
+    .receipts-page .receipts-table tbody td:nth-child(7)::before { content: 'Cashier shift'; }
+    .receipts-page .receipts-table tbody td:nth-child(8)::before { content: 'Cash Refunds'; }
+    .receipts-page .receipts-table tbody td:nth-child(9)::before { content: 'Refunded'; }
+    .receipts-page .receipts-table tbody td:nth-child(10)::before { content: 'Remaining net'; }
+    .receipts-page .receipts-table tbody td:nth-child(11)::before { content: 'Actions'; }
+    .receipts-page .receipts-table tbody td:last-child,
+    .receipts-page .receipts-table tbody td.dt-empty { grid-column: 1 / -1; }
+    .receipts-page .receipts-table tbody td.dt-empty::before { content: none; }
+}
+
+/* Receipt History uses the shared accessible dialog as a right-hand drawer. */
+@media screen {
+    .receipts-page .sale-receipt-dialog {
+        inset: 0 0 0 auto;
+        margin: 0;
+        width: min(580px, 100%);
+        max-width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 16px 0 0 16px;
+    }
+}
+.receipts-page .receipt-drawer-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--theme-surface-soft, #f8fafc);
+}
+.receipts-page .receipt-drawer-summary[hidden] { display: none; }
+.receipts-page .sale-receipt-dialog [role="tabpanel"][hidden] { display: none; }
+.receipts-page .receipt-drawer-tabs {
+    display: flex;
+    gap: 1.25rem;
+    padding: 0 1rem;
+    border-bottom: 1px solid var(--border);
+}
+.receipts-page .receipt-drawer-tabs button {
+    min-height: 48px;
+    padding: .75rem .25rem;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.receipts-page .receipt-drawer-tabs button[aria-selected="true"] {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+.receipts-page .receipt-drawer-tabs button:disabled { opacity: .5; cursor: default; }
+.receipts-page .receipt-drawer-summary dt { color: var(--muted); font-size: .8rem; }
+.receipts-page .receipt-drawer-summary dd { margin: .3rem 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.receipts-page .receipts-table :is(th, td):last-child { width: 170px; }
+@media (max-width: 900px) {
+    .receipts-page .receipts-table tbody td:last-child { width: auto; }
+    .receipts-page .receipts-table tbody td:last-child::before { content: 'Actions'; }
 }

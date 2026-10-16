@@ -41,7 +41,7 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
     return (new ReceiptDetailsService($pdo))->fetchItems($sale_id);
 }
 
-function receipt_render_details(array $sale, array $items, bool $canStartSale, bool $announcePayment = false): void {
+function receipt_render_details(array $sale, array $items, bool $canStartSale, bool $announcePayment = false, bool $historyDrawer = false): void {
     $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
         ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
@@ -56,7 +56,9 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale, b
         </div>
         <?php endif; ?>
         <div class="receipt-actions no-print">
-            <?php if ($canStartSale): ?>
+            <?php if ($historyDrawer && current_role() === 'cashier'): ?>
+                <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php?sale_id=' . (int)$sale['sale_id'])) ?>" class="btn">Refund</a>
+            <?php elseif (!$historyDrawer && $canStartSale): ?>
                 <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg"></i> New Sale</a>
             <?php endif; ?>
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
