@@ -1,6 +1,6 @@
 # RetailMind
 
-RetailMind supports one Store's inventory, purchasing, sales, and demand-forecasting operations.
+RetailMind supports one Store's inventory, receiving, sales, and demand-forecasting operations.
 
 ## Language
 
@@ -165,16 +165,16 @@ A future price or promotion already recorded for its effective date and therefor
 _Avoid_: Guessed promotion, planned-but-unrecorded price
 
 **Replenishment Recommendation**:
-A non-binding quantity or attention marker derived from a Demand Forecast, current stock, and supplier lead time. A Store operator reviews it before any purchasing action.
+A non-binding buying suggestion reviewed by the Inventory Manager, using current stock and existing stock rules or an available Demand Forecast. Missing forecasts remain explicitly unavailable. No supplier configuration is required, and actual purchases may differ in products, stores, or quantities. Reviewing guidance neither places orders nor changes stock.
 _Avoid_: Automatic purchase order, guaranteed reorder
+
+**Stock Receiving**:
+The Inventory Manager's record of bought goods brought into the Store, including several products entered together as individual units or saved packs/cases. Supplier, receipt reference, and purchase cost are optional; no request, order, or Administrator approval is required for direct receiving. Only accepted units add to usable stock. Receiving History groups saved shopping entries with staff attribution; Administrators retain read-only oversight.
+_Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 
 **Protected Audit Record**:
 A record of a security-sensitive or operational action that application users cannot individually edit or delete; Database Restore returns these records to the backup's state. In-app visibility remains role-restricted, but a complete Database Backup exposes all captured records to either administrator role.
 _Avoid_: Editable log, activity note
-
-**Supplier Product Terms**:
-The purchasing relationship between a supplier and a product, including unit cost, minimum order quantity, lead time, and whether the supplier is preferred for that product.
-_Avoid_: Supplier mapping, supplier directory
 
 **Temporary Password**:
 An Administrator-issued credential for a Cashier or Inventory Manager that must be replaced by the holder before Store access. Creating Store staff and resetting a staff password both issue one; completing a Mandatory Password Change or an email-link reset clears it.

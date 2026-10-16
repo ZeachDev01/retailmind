@@ -91,7 +91,7 @@ const fixture = action => {
                 '/components/report/report_generation.php?report=inventory_valuation',
                 '/components/report/report_generation.php?report=sales_product&from=2020-01-01&to=2030-01-01',
             ] : [
-                '/components/invoice/purchase_orders.php',
+                '/components/report/receiving_history.php',
                 '/components/inventory_management/print_barcodes.php?product_id=1&quantity=120',
                 '/components/report/data_readiness.php', '/components/report/forecast_exceptions.php',
                 '/components/report/predictions.php', '/components/report/predictions.php?variant=A',
@@ -131,13 +131,7 @@ const fixture = action => {
                 if(await draft.count()) assert.equal(await draft.inputValue(),route.includes('print_barcodes')?'121':'2026-01-02','Mode/device changes preserve report draft');
                 if(route.includes('inventory_valuation')) assert.equal(await page.locator('tbody tr').count(),66,'Representative report retains all inventory rows');
                 if(route.includes('sales_product')) assert((await page.locator('tbody').innerText()).includes('25.00'),'Report retains original sale amount');
-                if(route.includes('purchase_orders')) {
-                    assert((await page.locator('.po-card').innerText()).includes('15.00'),'Purchase Order retains five units at cost 3');
-                    await page.getByRole('button',{name:'Cancel',exact:true}).first().click();
-                    const dialog=page.locator('.rm-modal-overlay.open'); await dialog.waitFor();
-                    await select('light'); await contrast(dialog.locator('h2,h3')); await select('dark');
-                    await dialog.locator('.rm-cancel').click();
-                }
+
                 if(route.includes('forecast_analytics')) {
                     for(const tab of ['features','trend','actual']) {
                         await page.locator('[data-analytics-tab="'+tab+'"]').click();
@@ -548,9 +542,9 @@ const fixture = action => {
                 const inventoryRoutes = [
                     'inventory_management/inventory_overview','inventory_management/inventory_insights',
                     'inventory_management/products','inventory_management/csv_import',
-                    'inventory_management/reorder_planner','inventory_management/replenishment_requests',
-                    'inventory_management/stock_issues','inventory_management/suppliers','inventory_management/inventory_counts',
-                    'report/stock_receiving','invoice/purchase_orders','report/predictions','report/forecast_exceptions',
+
+                    'inventory_management/stock_issues','inventory_management/inventory_counts',
+                    'report/stock_receiving','report/predictions','report/forecast_exceptions',
                     'report/data_readiness','report/forecast_analytics',
                 ];
                 for (const route of inventoryRoutes) {
@@ -606,20 +600,9 @@ const fixture = action => {
                 }
                 await page.locator('#add-product-modal [data-close-modal]').first().click();
                 await page.setViewportSize({width:1280,height:900}); await select('dark');
-                await page.goto('/components/invoice/purchase_orders.php');
-                await page.locator('form[data-confirm] button').click();
-                await page.getByRole('heading',{name:'Cancel purchase order'}).waitFor();
-                await select('light'); await select('dark');
-                await contrast(page.getByRole('heading',{name:'Cancel purchase order'}));
-                await page.locator('.rm-cancel').click();
-                await page.locator('textarea[name="notes"]').fill('Unsubmitted purchasing work');
-                await page.locator('select[name="supplier_id"]').selectOption('1');
-                await page.locator('input[name="request_ids[]"]').check();
-                await select('light'); await select('system'); await page.emulateMedia({colorScheme:'light'});
-                assert.equal(await page.locator('textarea[name="notes"]').inputValue(),'Unsubmitted purchasing work');
-                assert.equal(await page.locator('select[name="supplier_id"]').inputValue(),'1');
-                assert(await page.locator('input[name="request_ids[]"]').isChecked());
-                await page.emulateMedia({colorScheme:'dark'}); await select('dark');
+                assert.equal((await page.goto('/components/invoice/purchase_orders.php')).status(), 404);
+                assert.equal((await page.goto('/components/inventory_management/suppliers.php')).status(), 404);
+                assert.equal((await page.goto('/components/inventory_management/replenishment_requests.php')).status(), 404);
                 await page.goto('/components/inventory_management/stock_issues.php');
                 await page.locator('textarea[name="review_notes"]').fill('Unsubmitted Stock Issue decision');
                 await select('light'); await select('dark');
@@ -635,6 +618,7 @@ const fixture = action => {
                         const productField = route.includes('inventory_counts') ? '#product_search' : '#product_code_scan';
                         await page.goto(route); await page.locator(productField).fill('THEME-BARCODE'); await page.locator(productField).press('Enter');
                         await page.waitForFunction(()=>document.getElementById('product_id').value==='1');
+                        if (route.includes('stock_receiving')) await page.locator('#receiving_next').click();
                         const field=route.includes('inventory_counts') ? '#physical_quantity' : '#received_qty';
                         const notes=page.locator(route.includes('inventory_counts') ? '#discrepancy_reason' : '#notes');
                         await page.locator(field).fill('7'); await notes.fill('Unsubmitted inventory work');
@@ -650,8 +634,8 @@ const fixture = action => {
                         await select('dark');
                     }
                 }
-                await page.goto('/components/inventory_management/suppliers.php'); await contrast(page.locator('.count-badge')); await contrast(page.locator('.status-badge--active'));
-                for(const route of ['/components/invoice/purchase_orders.php','/components/inventory_management/print_barcodes.php?product_id=1']) {
+                await page.goto('/components/report/receiving_history.php');
+                for(const route of ['/components/report/receiving_history.php','/components/inventory_management/print_barcodes.php?product_id=1']) {
                     await page.goto(route); assert.equal(await control().evaluate(el => el.dataset.themeMode || el.dataset.themeCurrent),'dark');
                     if(route.includes('print_barcodes')) assert.equal(await page.locator('.barcode-svg').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)','Barcode ink retains readable inset');
                     await page.emulateMedia({media:'print'});

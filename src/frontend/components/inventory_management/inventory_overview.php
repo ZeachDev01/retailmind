@@ -126,7 +126,7 @@ $chartDataJson = json_encode([
 <head><?php retailmind_theme_head(); ?>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventory Overview</title>
+<title>Stock Overview</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -135,7 +135,7 @@ $chartDataJson = json_encode([
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
-        <header class="page-heading"><div><h1>Inventory Overview</h1><p class="page-subtitle">Review stock levels, expiry risks, and recent movements. Select a summary to inspect products.</p></div></header>
+        <header class="page-heading"><div><h1>Stock Overview</h1><p class="page-subtitle">Review stock levels, expiry risks, and recent movements. Select a summary to inspect products.</p></div></header>
         <section class="overview-metrics" aria-label="Inventory summary">
             <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>

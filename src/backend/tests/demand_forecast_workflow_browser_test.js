@@ -157,7 +157,7 @@ const { chromium } = resolvePlaywright();
         await page.goto(`http://127.0.0.1:${port}/components/inventory_management/replenishment_queue.php`);
         
         // Wait for page load
-        await page.waitForSelector('h1:has-text("Replenishment Action Queue")');
+        await page.waitForSelector('h1:has-text("Replenishment Recommendations")');
         
         // Verify replenishment recommendation is present and uses 28-day logic (324 units)
         const queueItems = page.locator('.queue-item');

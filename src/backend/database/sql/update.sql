@@ -1,7 +1,7 @@
--- RetailMind single-run UPDATE, reconciled through 2026-10-08.
+-- RetailMind single-run UPDATE, procurement cleanup through 2026-10-15.
 -- Select the existing RetailMind database in phpMyAdmin, then import this file.
 -- Back up first; stop Store activity during import. DDL commits independently.
--- Existing business records and passwords are retained. No DROP TABLE or TRUNCATE.
+-- Retained business records and passwords are preserved; retired development procurement tables/links are dropped.
 -- Re-running repairs schema even when schema_migrations incorrectly says applied.
 -- Requires the existing base RetailMind tables; use schema.sql for a fresh install.
 -- Includes SQL dependencies only; PHP/Composer, Python, .env and private storage stay separate.
@@ -68,64 +68,6 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
         migration_key VARCHAR(100) PRIMARY KEY,
         description VARCHAR(255) NOT NULL,
         applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS suppliers (
-        supplier_id INT AUTO_INCREMENT PRIMARY KEY,
-        supplier_name VARCHAR(150) NOT NULL UNIQUE,
-        contact_person VARCHAR(120) NULL,
-        email VARCHAR(150) NULL,
-        phone VARCHAR(60) NULL,
-        address TEXT NULL,
-        standard_lead_time_days INT NOT NULL DEFAULT 7,
-        minimum_order_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        status ENUM('active','inactive') NOT NULL DEFAULT 'active',
-        notes TEXT NULL,
-        created_by INT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_suppliers_status (status)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS supplier_products (
-        supplier_product_id INT AUTO_INCREMENT PRIMARY KEY,
-        supplier_id INT NOT NULL,
-        product_id INT NOT NULL,
-        supplier_sku VARCHAR(100) NULL,
-        last_unit_cost DECIMAL(12,2) NULL,
-        minimum_order_quantity INT NOT NULL DEFAULT 1,
-        lead_time_days INT NOT NULL DEFAULT 7,
-        is_preferred BOOLEAN NOT NULL DEFAULT FALSE,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_supplier_product (supplier_id, product_id),
-        INDEX idx_supplier_products_product (product_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS purchase_orders (
-        purchase_order_id INT AUTO_INCREMENT PRIMARY KEY,
-        po_number VARCHAR(60) NOT NULL UNIQUE,
-        supplier_id INT NULL,
-        status ENUM('draft','approved','sent','partially_received','fully_received','cancelled') NOT NULL DEFAULT 'draft',
-        expected_delivery_date DATE NULL,
-        notes TEXT NULL,
-        created_by INT NOT NULL,
-        approved_by INT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        approved_at TIMESTAMP NULL,
-        sent_at TIMESTAMP NULL,
-        cancelled_at TIMESTAMP NULL,
-        INDEX idx_purchase_orders_status (status),
-        INDEX idx_purchase_orders_supplier (supplier_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS purchase_order_items (
-        purchase_order_item_id INT AUTO_INCREMENT PRIMARY KEY,
-        purchase_order_id INT NOT NULL,
-        replenishment_request_id INT NULL,
-        product_id INT NOT NULL,
-        ordered_qty INT NOT NULL,
-        received_qty INT NOT NULL DEFAULT 0,
-        unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        notes TEXT NULL,
-        UNIQUE KEY uq_po_request (purchase_order_id, replenishment_request_id),
-        INDEX idx_po_items_product (product_id),
-        INDEX idx_po_items_request (replenishment_request_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS cashier_shifts (
         shift_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -213,7 +155,6 @@ CREATE TABLE IF NOT EXISTS forecast_decisions (
         override_reason TEXT NULL,
         decided_by INT NOT NULL,
         decided_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        replenishment_request_id INT NULL,
         INDEX idx_forecast_decisions_prediction (prediction_id),
         INDEX idx_forecast_decisions_product (product_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -288,72 +229,11 @@ SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE tabl
 PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='purchase_order_id'), 'ALTER TABLE `stock_receiving` ADD COLUMN `purchase_order_id` INT NULL AFTER replenishment_request_id', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='purchase_order_item_id'), 'ALTER TABLE `stock_receiving` ADD COLUMN `purchase_order_item_id` INT NULL AFTER purchase_order_id', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='received_packages'), 'ALTER TABLE `stock_receiving` ADD COLUMN `received_packages` INT NOT NULL DEFAULT 0 AFTER received_qty', 'DO 0');
 PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='units_per_package_used'), 'ALTER TABLE `stock_receiving` ADD COLUMN `units_per_package_used` INT NOT NULL DEFAULT 1 AFTER received_packages', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='replenishment_requests' AND column_name='forecast_prediction_id'), 'ALTER TABLE `replenishment_requests` ADD COLUMN `forecast_prediction_id` INT NULL AFTER source', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='replenishment_requests' AND column_name='original_suggested_qty'), 'ALTER TABLE `replenishment_requests` ADD COLUMN `original_suggested_qty` INT NULL AFTER forecast_prediction_id', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='replenishment_requests' AND column_name='override_reason'), 'ALTER TABLE `replenishment_requests` ADD COLUMN `override_reason` TEXT NULL AFTER original_suggested_qty', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-INSERT INTO schema_migrations (migration_key, description) VALUES ('2026_07_operational_updates', 'Suppliers, purchase orders, shifts, held sales, forecast decisions, units, and inventory insights')
-         ON DUPLICATE KEY UPDATE description = VALUES(description);
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040002_operational_updates','Operational workflow tables and columns') ON DUPLICATE KEY UPDATE description=VALUES(description);
-
--- 202608040003_integrity_constraints: Foreign-key protections for upgraded operational databases
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='suppliers' AND column_name='created_by' AND referenced_table_name='users' AND referenced_column_name='user_id'), 'ALTER TABLE `suppliers` ADD CONSTRAINT `fk_suppliers_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='supplier_products' AND column_name='supplier_id' AND referenced_table_name='suppliers' AND referenced_column_name='supplier_id'), 'ALTER TABLE `supplier_products` ADD CONSTRAINT `fk_supplier_products_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`supplier_id`) ON DELETE CASCADE', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='supplier_products' AND column_name='product_id' AND referenced_table_name='products' AND referenced_column_name='product_id'), 'ALTER TABLE `supplier_products` ADD CONSTRAINT `fk_supplier_products_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='purchase_orders' AND column_name='supplier_id' AND referenced_table_name='suppliers' AND referenced_column_name='supplier_id'), 'ALTER TABLE `purchase_orders` ADD CONSTRAINT `fk_purchase_orders_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`supplier_id`) ON DELETE SET NULL', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='purchase_orders' AND column_name='created_by' AND referenced_table_name='users' AND referenced_column_name='user_id'), 'ALTER TABLE `purchase_orders` ADD CONSTRAINT `fk_purchase_orders_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='purchase_orders' AND column_name='approved_by' AND referenced_table_name='users' AND referenced_column_name='user_id'), 'ALTER TABLE `purchase_orders` ADD CONSTRAINT `fk_purchase_orders_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='purchase_order_items' AND column_name='purchase_order_id' AND referenced_table_name='purchase_orders' AND referenced_column_name='purchase_order_id'), 'ALTER TABLE `purchase_order_items` ADD CONSTRAINT `fk_po_items_order` FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_orders` (`purchase_order_id`) ON DELETE CASCADE', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='purchase_order_items' AND column_name='replenishment_request_id' AND referenced_table_name='replenishment_requests' AND referenced_column_name='request_id'), 'ALTER TABLE `purchase_order_items` ADD CONSTRAINT `fk_po_items_request` FOREIGN KEY (`replenishment_request_id`) REFERENCES `replenishment_requests` (`request_id`) ON DELETE SET NULL', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='purchase_order_items' AND column_name='product_id' AND referenced_table_name='products' AND referenced_column_name='product_id'), 'ALTER TABLE `purchase_order_items` ADD CONSTRAINT `fk_po_items_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE RESTRICT', 'DO 0');
 PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
@@ -402,10 +282,6 @@ PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='forecast_decisions' AND column_name='decided_by' AND referenced_table_name='users' AND referenced_column_name='user_id'), 'ALTER TABLE `forecast_decisions` ADD CONSTRAINT `fk_forecast_decisions_user` FOREIGN KEY (`decided_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='forecast_decisions' AND column_name='replenishment_request_id' AND referenced_table_name='replenishment_requests' AND referenced_column_name='request_id'), 'ALTER TABLE `forecast_decisions` ADD CONSTRAINT `fk_forecast_decisions_request` FOREIGN KEY (`replenishment_request_id`) REFERENCES `replenishment_requests` (`request_id`) ON DELETE SET NULL', 'DO 0');
 PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
@@ -1399,6 +1275,134 @@ INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_i
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_upper','90');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('holiday_dates','');
 
+
+-- Direct receiving and procurement retirement (#188). Stop Store activity before importing.
+CREATE TABLE IF NOT EXISTS ml_jobs (
+    job_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    trigger_type VARCHAR(50) NOT NULL COMMENT 'e.g. forecast_generation, model_retraining',
+    status VARCHAR(20) NOT NULL DEFAULT 'queued' COMMENT 'queued, running, succeeded, failed',
+    requester_id INT NULL COMMENT 'User ID who requested it, NULL if scheduled',
+    queued_at DATETIME NOT NULL,
+    started_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    lease_expires_at DATETIME NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    operator_message VARCHAR(255) NULL COMMENT 'Safe user-facing message',
+    diagnostic_reference TEXT NULL COMMENT 'Technical failure details',
+    INDEX (status, queued_at),
+    FOREIGN KEY (requester_id) REFERENCES users(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE forecast_decisions MODIFY prediction_id INT NULL;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='forecast_decisions' AND column_name='forecast_job_id'), 'ALTER TABLE forecast_decisions ADD COLUMN forecast_job_id BIGINT UNSIGNED NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='forecast_decisions' AND column_name='forecast_job_id' AND referenced_table_name='ml_jobs'), 'ALTER TABLE forecast_decisions ADD CONSTRAINT fk_forecast_decisions_forecast_job FOREIGN KEY (forecast_job_id) REFERENCES ml_jobs(job_id) ON DELETE RESTRICT', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610120001_forecast_decision_source','Retain demand forecast job/product sources alongside legacy prediction history') ON DUPLICATE KEY UPDATE description=VALUES(description);
+CREATE TABLE IF NOT EXISTS stock_receiving_groups (
+            group_id INT AUTO_INCREMENT PRIMARY KEY,
+            received_by INT NOT NULL,
+            received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            supplier VARCHAR(150) NULL,
+            invoice_number VARCHAR(100) NULL,
+            notes TEXT NULL,
+            INDEX idx_stock_receiving_groups_received_by (received_by),
+            INDEX idx_stock_receiving_groups_received_at (received_at),
+            CONSTRAINT fk_stock_receiving_groups_user FOREIGN KEY (received_by) REFERENCES users (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='group_id'), 'ALTER TABLE stock_receiving ADD COLUMN group_id INT NULL AFTER receiving_id', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND index_name='idx_stock_receiving_group_id'), 'ALTER TABLE stock_receiving ADD INDEX idx_stock_receiving_group_id (group_id)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='stock_receiving' AND column_name='group_id' AND referenced_table_name='stock_receiving_groups'), 'ALTER TABLE stock_receiving ADD CONSTRAINT fk_stock_receiving_group FOREIGN KEY (group_id) REFERENCES stock_receiving_groups(group_id) ON DELETE SET NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='stock_receiving_groups' AND column_name='received_by' AND referenced_table_name='users'), 'ALTER TABLE stock_receiving_groups ADD CONSTRAINT fk_stock_receiving_groups_user FOREIGN KEY (received_by) REFERENCES users(user_id) ON DELETE RESTRICT', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO stock_receiving_groups (group_id, received_by, received_at, supplier, invoice_number, notes)
+            SELECT sr.receiving_id, sr.received_by, sr.received_at, sr.supplier, sr.invoice_number, sr.notes
+            FROM stock_receiving sr
+            LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.receiving_id
+            WHERE sr.group_id IS NULL AND srg.group_id IS NULL;
+UPDATE stock_receiving SET group_id = receiving_id WHERE group_id IS NULL;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610150001_receiving_groups','Dedicated grouped receiving history and stable shopping trip grouping') ON DUPLICATE KEY UPDATE description=VALUES(description);
+DELETE FROM notifications
+            WHERE type = 'replenishment'
+               OR reference_type IN ('replenishment_request', 'purchase_order')
+               OR attention_key = 'store.approvals.overdue'
+               OR attention_destination LIKE '%/replenishment_requests.php%'
+               OR attention_destination LIKE '%/purchase_orders.php%';
+DELETE FROM attention_states WHERE attention_key = 'store.approvals.overdue';
+DELETE FROM attention_settings
+            WHERE (setting_scope = 'store' AND setting_key = 'overdue_approval_hours')
+               OR (setting_scope = 'platform' AND setting_key = 'store_overdue_approval_hours_max');
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610150002_retire_procurement_attention','Remove retired purchasing notifications and approval thresholds (#186)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+SELECT GROUP_CONCAT(DISTINCT CONCAT('DROP FOREIGN KEY `', REPLACE(CONSTRAINT_NAME, '`', '``'), '`') SEPARATOR ', ') INTO @rm_drop_keys FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='stock_receiving' AND COLUMN_NAME='replenishment_request_id' AND REFERENCED_TABLE_NAME IS NOT NULL;
+SET @rm_sql = IF(@rm_drop_keys IS NULL, 'DO 0', CONCAT('ALTER TABLE `stock_receiving` ', @rm_drop_keys));
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='replenishment_request_id'), 'ALTER TABLE `stock_receiving` DROP COLUMN `replenishment_request_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SELECT GROUP_CONCAT(DISTINCT CONCAT('DROP FOREIGN KEY `', REPLACE(CONSTRAINT_NAME, '`', '``'), '`') SEPARATOR ', ') INTO @rm_drop_keys FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='stock_receiving' AND COLUMN_NAME='purchase_order_id' AND REFERENCED_TABLE_NAME IS NOT NULL;
+SET @rm_sql = IF(@rm_drop_keys IS NULL, 'DO 0', CONCAT('ALTER TABLE `stock_receiving` ', @rm_drop_keys));
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='purchase_order_id'), 'ALTER TABLE `stock_receiving` DROP COLUMN `purchase_order_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SELECT GROUP_CONCAT(DISTINCT CONCAT('DROP FOREIGN KEY `', REPLACE(CONSTRAINT_NAME, '`', '``'), '`') SEPARATOR ', ') INTO @rm_drop_keys FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='stock_receiving' AND COLUMN_NAME='purchase_order_item_id' AND REFERENCED_TABLE_NAME IS NOT NULL;
+SET @rm_sql = IF(@rm_drop_keys IS NULL, 'DO 0', CONCAT('ALTER TABLE `stock_receiving` ', @rm_drop_keys));
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='purchase_order_item_id'), 'ALTER TABLE `stock_receiving` DROP COLUMN `purchase_order_item_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SELECT GROUP_CONCAT(DISTINCT CONCAT('DROP FOREIGN KEY `', REPLACE(CONSTRAINT_NAME, '`', '``'), '`') SEPARATOR ', ') INTO @rm_drop_keys FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='stock_receiving' AND COLUMN_NAME='po_number' AND REFERENCED_TABLE_NAME IS NOT NULL;
+SET @rm_sql = IF(@rm_drop_keys IS NULL, 'DO 0', CONCAT('ALTER TABLE `stock_receiving` ', @rm_drop_keys));
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='po_number'), 'ALTER TABLE `stock_receiving` DROP COLUMN `po_number`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SELECT GROUP_CONCAT(DISTINCT CONCAT('DROP FOREIGN KEY `', REPLACE(CONSTRAINT_NAME, '`', '``'), '`') SEPARATOR ', ') INTO @rm_drop_keys FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='forecast_decisions' AND COLUMN_NAME='replenishment_request_id' AND REFERENCED_TABLE_NAME IS NOT NULL;
+SET @rm_sql = IF(@rm_drop_keys IS NULL, 'DO 0', CONCAT('ALTER TABLE `forecast_decisions` ', @rm_drop_keys));
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='forecast_decisions' AND column_name='replenishment_request_id'), 'ALTER TABLE `forecast_decisions` DROP COLUMN `replenishment_request_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='notification_preferences' AND column_name='notify_replenishment'), 'ALTER TABLE notification_preferences DROP COLUMN notify_replenishment', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+DROP TABLE IF EXISTS `purchase_order_items`;
+DROP TABLE IF EXISTS `purchase_orders`;
+DROP TABLE IF EXISTS `replenishment_requests`;
+DROP TABLE IF EXISTS `supplier_products`;
+DROP TABLE IF EXISTS `suppliers`;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610150003_retire_procurement_storage','Retire development procurement storage; preserve receiving and operational records') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
-SELECT 'RetailMind SQL update completed through 202610040001_user_theme' AS result;
+SELECT 'RetailMind SQL update completed through 202610150003_retire_procurement_storage' AS result;

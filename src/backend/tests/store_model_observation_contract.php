@@ -130,26 +130,6 @@ try {
             data_window_end TEXT,
             evaluated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE TABLE supplier_products (
-            supplier_product_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            supplier_id INTEGER,
-            product_id INTEGER,
-            lead_time_days INTEGER,
-            minimum_order_quantity INTEGER,
-            is_preferred INTEGER DEFAULT 1
-        );
-        CREATE TABLE purchase_orders (
-            purchase_order_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            status TEXT,
-            expected_delivery_date TEXT
-        );
-        CREATE TABLE purchase_order_items (
-            purchase_order_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            purchase_order_id INTEGER,
-            product_id INTEGER,
-            ordered_qty INTEGER,
-            received_qty INTEGER
-        );
     ");
 
     $evalService = new CandidateEvaluationService($pdo);

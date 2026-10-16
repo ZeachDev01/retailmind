@@ -173,6 +173,7 @@ $managerInventoryItems = [];
 
 $administratorReportItems = [
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shifts'],
+    ['path' => 'components/report/receiving_history.php', 'icon' => 'bi-clock-history', 'label' => 'Receiving History'],
     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Forecast Analytics'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
@@ -209,13 +210,15 @@ $roleSections = [
     'inventory_manager' => [
         [
             'items' => [
-                ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Inventory Overview'],
-                ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Stock Product'],
-                ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-sliders', 'label' => 'Stock Counter'],
-                ['path' => 'components/inventory_management/reorder_planner.php', 'icon' => 'bi-diagram-3', 'label' => 'Reorder Planning'],
-                ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Exceptions'],
-                ['path' => 'components/inventory_management/suppliers.php', 'icon' => 'bi-building', 'label' => 'Suppliers'],
-                ['path' => 'components/invoice/purchase_orders.php', 'icon' => 'bi-clipboard-check', 'label' => 'Purchase Orders'],
+                ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Stock Overview'],
+                ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products'],
+                ['path' => 'components/inventory_management/replenishment_queue.php', 'icon' => 'bi-diagram-3', 'label' => 'Replenishment Recommendations'],
+                ['path' => 'components/report/stock_receiving.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'Stock Receiving'],
+                ['path' => 'components/report/receiving_history.php', 'icon' => 'bi-clock-history', 'label' => 'Receiving History'],
+                ['icon' => 'bi-sliders', 'label' => 'Inventory Control', 'items' => [
+                    ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-clipboard-check', 'label' => 'Inventory Counts'],
+                    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
+                ]],
             ],
         ],
         [
@@ -223,10 +226,9 @@ $roleSections = [
                 ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Reports', 'items' => [
                     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
                     ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecast'],
+                    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
                     ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
                     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
-                    ['path' => 'components/inventory_management/replenishment_requests.php', 'icon' => 'bi-truck', 'label' => 'Requests'],
-                    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
                     ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
                 ]],
             ],

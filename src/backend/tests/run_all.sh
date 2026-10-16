@@ -22,6 +22,8 @@ php src/backend/tests/environment_loading_test.php
 php -d disable_functions=putenv src/backend/tests/environment_loading_test.php
 php src/backend/tests/fresh_schema_contract.php
 php src/backend/tests/consolidated_sql_integration.php
+php src/backend/tests/procurement_schema_integration.php
+php -d max_input_vars=1000 src/backend/tests/receiving_submission_contract.php
 php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/backup_unavailable_navigation_test.php
@@ -38,6 +40,8 @@ php src/backend/tests/dormancy_runner_contract.php
 php src/backend/tests/dormancy_status_tab_contract.php
 php src/backend/tests/super_administrator_dashboard_workspace_test.php
 php src/backend/tests/super_administrator_dashboard_route_test.php
+php src/backend/tests/administrator_dashboard_workspace_test.php
+php src/backend/tests/administrator_dashboard_route_test.php
 php src/backend/tests/workspace_routing_contract.php
 node src/backend/tests/login_redirect_test.js
 php src/backend/tests/workspace_switching_contract.php
@@ -92,6 +96,12 @@ node src/backend/tests/operator_alert_wrapper_behavior_test.js
 node src/backend/tests/backup_status_alert_behavior_test.js
 node src/backend/tests/inventory_counts_scan_browser_test.js
 node src/backend/tests/stock_receiving_scan_browser_test.js
+node src/backend/tests/forecast_decision_browser_test.js
+php src/backend/tests/replenishment_queue_contract.php
+php src/backend/tests/procurement_retirement_contract.php
+php src/backend/tests/replenishment_metadata_contract.php
+php src/backend/tests/replenishment_supplier_integration.php
+php src/backend/tests/demand_forecast_service_test.php
 php src/backend/tests/operator_alert_fallback_contract.php
 php src/backend/tests/cashier_alert_contract.php
 php src/backend/tests/inventory_alert_contract.php

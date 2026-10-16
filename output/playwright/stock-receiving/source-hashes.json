@@ -1,0 +1,18 @@
+[
+  {
+    "Path": "C:\\laragon\\www\\retailmind\\src\\frontend\\components\\report\\stock_receiving.php",
+    "Hash": "DB2ABD39ADCD3B73650064493AD1EC6FEF2BBDC21D3180B6555503E43C7DBCD2"
+  },
+  {
+    "Path": "C:\\laragon\\www\\retailmind\\src\\frontend\\assets\\css\\reports.css",
+    "Hash": "93DB66FDF611AF81504F862DF8C14B2EEDD12B48B47B445E78C6C1FB742E63F7"
+  },
+  {
+    "Path": "C:\\laragon\\www\\retailmind\\src\\backend\\tests\\stock_receiving_ui_browser_test.js",
+    "Hash": "CEE081565514501E80DF97273A31A602FC9A8E4BD56E69C7EB0F7A7DBDC2BA98"
+  },
+  {
+    "Path": "C:\\laragon\\www\\retailmind\\src\\backend\\tests\\support\\receiving_ui_fixture.php",
+    "Hash": "4B23279E4D745FAD09C9932CFAA28468DD7E9456F9A99AFF24FB72FB3837BA12"
+  }
+]

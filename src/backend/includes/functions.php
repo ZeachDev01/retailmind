@@ -291,7 +291,6 @@ function get_forecasting_readiness(PDO $pdo): array
                 p.product_name,
                 COALESCE(c.category_name, 'Uncategorized') AS category,
                 COALESCE(i.quantity_on_hand, 0) AS current_stock,
-                COALESCE(incoming.incoming_stock, 0) AS incoming_stock,
                 COALESCE(p.reorder_level, 10) AS reorder_level,
                 COALESCE(p.supplier_lead_time_days, 7) AS supplier_lead_time_days,
                 COALESCE(p.safety_stock, 0) AS safety_stock,
@@ -322,18 +321,6 @@ function get_forecasting_readiness(PDO $pdo): array
             FROM products p
             LEFT JOIN categories c ON c.category_id = p.category_id
             LEFT JOIN inventory i ON i.product_id = p.product_id
-            LEFT JOIN (
-                SELECT rr.product_id,
-                       SUM(GREATEST(rr.request_qty - COALESCE(received.received_to_date, 0), 0)) AS incoming_stock
-                FROM replenishment_requests rr
-                LEFT JOIN (
-                    SELECT replenishment_request_id, SUM(accepted_qty) AS received_to_date
-                    FROM stock_receiving WHERE replenishment_request_id IS NOT NULL
-                    GROUP BY replenishment_request_id
-                ) received ON received.replenishment_request_id = rr.request_id
-                WHERE rr.status IN ('approved', 'partially_received')
-                GROUP BY rr.product_id
-            ) incoming ON incoming.product_id = p.product_id
             LEFT JOIN (
                 SELECT si.product_id,
                        COUNT(DISTINCT CASE WHEN si.qty_sold > 0 THEN si.sale_day END) AS nonzero_sales_days,
@@ -499,7 +486,6 @@ function get_notification_prefs(PDO $pdo, int $user_id): array
     if (!$prefs) {
         return [
             'notify_low_stock' => true,
-            'notify_replenishment' => true,
             'notify_adjustment' => false,
             'notify_email' => false,
             'notify_inapp' => true,

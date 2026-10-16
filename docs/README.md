@@ -13,6 +13,7 @@ repository root unless stated otherwise.
 
 ## Interface guides
 
+- [Stock monitoring, recommendations, and direct receiving](guides/direct-stock-receiving.md)
 - [Mobile and tablet home-screen installation](guides/HOME_SCREEN_APP.md)
 - [Persistent dashboard navigation](guides/page-navigation.md)
 - [Personal display themes and screen coverage](guides/theme-coverage.md)

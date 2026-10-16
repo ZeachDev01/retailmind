@@ -20,11 +20,11 @@ final class OperationalDataResetService
         'cash_refund_items', 'cash_refunds', 'sale_reversal_items', 'sale_reversals',
         'sale_receipt_details', 'sale_item_batches', 'held_sales', 'checkout_attempts',
         'sale_items', 'sales', 'inventory_adjustment_revisions', 'inventory_counts',
-        'stock_movements', 'inventory_adjustments', 'product_batches', 'stock_receiving',
-        'purchase_history', 'purchase_order_items', 'purchase_orders', 'replenishment_requests',
+        'stock_movements', 'inventory_adjustments', 'product_batches', 'stock_receiving', 'stock_receiving_groups',
+        'purchase_history',
         'cash_drawer_movements', 'cashier_shifts', 'cycle_count_schedules', 'barcode_scans',
         'stock_predictions', 'forecast_evaluations', 'forecast_runs', 'model_training_runs',
-        'forecast_sales_imports', 'attention_states', 'promotions', 'supplier_products', 'inventory', 'products',
+        'forecast_sales_imports', 'attention_states', 'promotions', 'inventory', 'products',
     ];
 
     public function __construct(private PDO $pdo, private RoleCapabilityPolicy $policy, private ?string $modelDirectory = null)
@@ -83,7 +83,7 @@ final class OperationalDataResetService
             $preserve = (int)$stock->fetchColumn() !== 0;
             $references = $this->pdo->query("SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'products'")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($references as $reference) {
-                if (in_array($reference['TABLE_NAME'], ['inventory', 'supplier_products', 'promotions'], true)) continue;
+                if (in_array($reference['TABLE_NAME'], ['inventory', 'promotions'], true)) continue;
                 $table = str_replace('`', '``', $reference['TABLE_NAME']);
                 $column = str_replace('`', '``', $reference['COLUMN_NAME']);
                 $exists = $this->pdo->prepare("SELECT 1 FROM `{$table}` WHERE `{$column}` = ? LIMIT 1");
@@ -93,7 +93,7 @@ final class OperationalDataResetService
             if ($preserve) {
                 $this->pdo->prepare("UPDATE products SET status = 'inactive' WHERE product_id = ?")->execute([$productId]);
             } else {
-                foreach (['promotions', 'supplier_products', 'inventory', 'products'] as $table) {
+                foreach (['promotions', 'inventory', 'products'] as $table) {
                     $this->pdo->prepare("DELETE FROM `{$table}` WHERE product_id = ?")->execute([$productId]);
                 }
             }

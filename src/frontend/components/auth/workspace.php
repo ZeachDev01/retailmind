@@ -11,7 +11,7 @@ if (!is_logged_in()) {
 $workspaceDetails = [
     'super_admin' => ['label' => 'Super Administrator', 'description' => 'Platform governance, security, and system health.', 'icon' => 'bi-shield-lock'],
     'admin' => ['label' => 'Administrator', 'description' => 'Store operations, staff, approvals, and reports.', 'icon' => 'bi-shop'],
-    'inventory_manager' => ['label' => 'Inventory', 'description' => 'Stock, suppliers, purchasing, and replenishment.', 'icon' => 'bi-boxes'],
+    'inventory_manager' => ['label' => 'Inventory', 'description' => 'Stock, receiving, replenishment, and inventory control.', 'icon' => 'bi-boxes'],
     'cashier' => ['label' => 'Cashier', 'description' => 'Point of sale, shifts, and sales documents.', 'icon' => 'bi-cart-check'],
 ];
 $error = '';

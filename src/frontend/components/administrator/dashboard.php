@@ -36,8 +36,7 @@ $formatChange = static function (?float $change): string {
 };
 $headlineOrder = [
     'sales_cash_exceptions' => ['Sales & cash exceptions', 'bi-exclamation-diamond'],
-    'pending_approvals' => ['Pending approvals', 'bi-check2-square'],
-    'inventory_risks' => ['Escalated inventory risks', 'bi-box-seam'],
+    'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam'],
     'fiscal_period' => ['Current Fiscal Period', 'bi-calendar-check'],
 ];
 $comparisonOrder = [
@@ -83,7 +82,7 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
 
             <section class="dashboard-section governance-queue store-attention-queue" aria-labelledby="store-attention-title">
                 <div class="section-header">
-                    <div><h2 id="store-attention-title">Store attention queue</h2><p class="section-description">Actionable reversals, cash variances, unusual discounts, approvals, and inventory escalations.</p></div>
+                    <div><h2 id="store-attention-title">Store attention queue</h2><p class="section-description">Reversals, cash variances, unusual discounts, and read-only Stock Issue oversight.</p></div>
                 </div>
                 <?php if ($dashboard['state'] === 'error'): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><div><strong>Store status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div><a class="btn btn-quiet" href="<?= $escape($rangeUrl) ?>">Try again</a></div>
@@ -144,12 +143,12 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
                             <article><span>14-Day MAE</span><strong><?= isset($dashboard['forecast']['evaluations'][14]['mae']) ? $escape(number_format($dashboard['forecast']['evaluations'][14]['mae'], 2)) : 'N/A' ?></strong></article>
                             <article><span>28-Day MAE</span><strong><?= isset($dashboard['forecast']['evaluations'][28]['mae']) ? $escape(number_format($dashboard['forecast']['evaluations'][28]['mae'], 2)) : 'N/A' ?></strong></article>
                         </div>
-                        <div class="indicator-item"><span><strong>Operational forecast exceptions</strong><span>Low-confidence or replenishment-signaled products</span></span><b class="indicator-value"><?= (int)$dashboard['forecast']['operational_exceptions'] ?></b></div>
+                        <div class="indicator-item"><span><strong>Operational forecast exceptions</strong><span>Products with Low or Insufficient Forecast Readiness</span></span><b class="indicator-value"><?= (int)$dashboard['forecast']['operational_exceptions'] ?></b></div>
                     </section>
 
                     <section class="dashboard-section inventory-escalation-summary" aria-labelledby="inventory-title">
-                        <div class="section-header"><div><h2 id="inventory-title">Inventory escalations</h2><p class="section-description">Summary and escalation only; routine inventory execution remains with the Inventory Manager.</p></div></div>
-                        <div class="metric-pair"><article><span>Escalated</span><strong><?= (int)$dashboard['inventory']['escalated'] ?></strong></article><article><span>Out of stock</span><strong><?= (int)$dashboard['inventory']['out_of_stock'] ?></strong></article><article><span>Low stock</span><strong><?= (int)$dashboard['inventory']['low_stock'] ?></strong></article></div>
+                        <div class="section-header"><div><h2 id="inventory-title">Inventory oversight</h2><p class="section-description">Read-only stock and Stock Issue summary; routine inventory execution remains with the Inventory Manager.</p></div></div>
+                        <div class="metric-pair"><article><span>Pending Stock Issues</span><strong><?= (int)$dashboard['inventory']['escalated'] ?></strong></article><article><span>Out of stock</span><strong><?= (int)$dashboard['inventory']['out_of_stock'] ?></strong></article><article><span>Low stock</span><strong><?= (int)$dashboard['inventory']['low_stock'] ?></strong></article></div>
                     </section>
                 </div>
             <?php endif; ?>

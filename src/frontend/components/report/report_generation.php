@@ -20,7 +20,6 @@ $reportCatalog = [
     'inventory_valuation' => 'Inventory Valuation',
     'stock_movements' => 'Stock Movement History',
     'adjustments' => 'Damaged, Missing and Expired Items',
-    'replenishment' => 'Replenishment Request Status',
     'forecast_actual' => 'Forecast Versus Actual Demand',
     'gross_profit' => 'Gross Profit Estimate',
     'expiration' => 'Expiration Report',
@@ -375,45 +374,6 @@ function run_report(PDO $pdo, string $report, array $filters): array
                 ], $stmt->fetchAll()),
             ];
 
-        case 'replenishment':
-            $stmt = $pdo->prepare(
-                "SELECT rr.request_date, COALESCE(p.barcode, p.sku) AS sku, p.product_name,
-                        COALESCE(c.category_name, 'Uncategorized') AS category_name,
-                        rr.request_qty, COALESCE(received.accepted_qty, 0) AS accepted_qty,
-                        rr.status, rr.source, COALESCE(requester.full_name, 'Unknown') AS requested_by,
-                        COALESCE(approver.full_name, '-') AS approved_by
-                 FROM replenishment_requests rr
-                 JOIN products p ON p.product_id = rr.product_id
-                 LEFT JOIN categories c ON c.category_id = p.category_id
-                 LEFT JOIN users requester ON requester.user_id = rr.requested_by
-                 LEFT JOIN users approver ON approver.user_id = rr.approved_by
-                 LEFT JOIN (
-                    SELECT replenishment_request_id, SUM(accepted_qty) AS accepted_qty
-                    FROM stock_receiving
-                    WHERE replenishment_request_id IS NOT NULL
-                    GROUP BY replenishment_request_id
-                 ) received ON received.replenishment_request_id = rr.request_id
-                 WHERE rr.request_date BETWEEN ? AND ? {$productSql}
-                 ORDER BY rr.request_date DESC"
-            );
-            $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
-            return [
-                'headers' => ['Date', 'SKU', 'Product', 'Category', 'Requested Qty', 'Accepted Qty', 'Open Qty', 'Status', 'Source', 'Requested By', 'Approved By'],
-                'rows' => array_map(static fn($row) => [
-                    'Date' => $row['request_date'],
-                    'SKU' => $row['sku'],
-                    'Product' => $row['product_name'],
-                    'Category' => $row['category_name'],
-                    'Requested Qty' => (int)$row['request_qty'],
-                    'Accepted Qty' => (int)$row['accepted_qty'],
-                    'Open Qty' => max(0, (int)$row['request_qty'] - (int)$row['accepted_qty']),
-                    'Status' => ucfirst(str_replace('_', ' ', (string)$row['status'])),
-                    'Source' => ucfirst(str_replace('_', ' ', (string)$row['source'])),
-                    'Requested By' => $row['requested_by'],
-                    'Approved By' => $row['approved_by'],
-                ], $stmt->fetchAll()),
-            ];
-
         case 'forecast_actual':
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name,
@@ -683,7 +643,7 @@ $totalRows = count($reportData['rows']);
         <div class="topbar">
             <div>
                 <h1>Report Generation</h1>
-                <p class="page-subtitle">Sales, inventory, stock movement, replenishment, forecast, and variance reporting.</p>
+                <p class="page-subtitle">Sales, inventory, stock movement, forecast, and variance reporting.</p>
             </div>
         </div>
 

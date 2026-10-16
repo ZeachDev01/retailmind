@@ -12,7 +12,6 @@ const slice = (source, start, end) => clean(source.slice(source.indexOf(start), 
         const widths = [320,375,425,768,800,820,834,900,901,912,960,1024,1180,1194,1280,1366,1440];
         const shared = ['style', 'theme'].map(name => read('assets/css/' + name + '.css')).join('\n');
         const promotions = read('components/inventory_management/promotions.php');
-        const requests = read('components/inventory_management/replenishment_requests.php');
         const settings = read('components/system_administrator/system_settings.php');
         const products = read('components/inventory_management/products.php');
         const counts = read('components/inventory_management/inventory_counts.php');
@@ -20,7 +19,6 @@ const slice = (source, start, end) => clean(source.slice(source.indexOf(start), 
         const sales = read('components/invoice/sales.php');
         const fixtures = [
             {name:'promotions', css:'inventory', html:slice(promotions, '<div class="two-col">', '</main>'), selectors:['.two-col', '.two-col > section', 'input', 'select', 'button']},
-            {name:'replenishment', css:'inventory', html:slice(requests, '<div class="create-section">', '            <?php if (empty($requests))') + slice(requests, '<div class="request-card">', '                <?php endforeach; ?>\n            <?php endif; ?>'), selectors:['.tabs', '.forecast-items', '.request-card', 'input:not([type="hidden"])', 'select', 'textarea', 'button']},
             {name:'settings', html:slice(settings, '<div class="dashboard-section"><h3>Email delivery test', '</main>'), selectors:['form', 'input', 'button']},
             {name:'products', css:'inventory', inline:products.match(/<style>([\s\S]*?)<\/style>/)[1], html:slice(products, '<div class="catalog-toolbar"', '        </main>'), selectors:['.catalog-toolbar', 'input:not([type="hidden"])', 'select', 'button']},
             {name:'counts', css:'inventory', html:slice(counts, '<div class="count-layout">', '    <script>'), selectors:['.count-layout', '.count-panel', 'input:not([type="hidden"])', 'select', 'textarea', 'button']},

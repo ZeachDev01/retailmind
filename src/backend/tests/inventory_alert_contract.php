@@ -39,29 +39,23 @@ try {
 
     $products = $read('src/frontend/components/inventory_management/products.php');
     $receiving = $read('src/frontend/components/report/stock_receiving.php');
+    $history = $read('src/frontend/components/report/receiving_history.php');
     $counts = $read('src/frontend/components/inventory_management/inventory_counts.php');
-    $reorder = $read('src/frontend/components/inventory_management/reorder_planner.php');
-    $replenishment = $read('src/frontend/components/inventory_management/replenishment_requests.php');
     $insights = $read('src/frontend/components/inventory_management/inventory_insights.php');
-    $suppliers = $read('src/frontend/components/inventory_management/suppliers.php');
     $promotions = $read('src/frontend/components/inventory_management/promotions.php');
     $print = $read('src/frontend/components/inventory_management/print_barcodes.php');
     $csv = $read('src/frontend/components/inventory_management/csv_import.php');
-    $purchaseOrders = $read('src/frontend/components/invoice/purchase_orders.php');
     $managerStock = $read('src/frontend/components/inventory_management/stock_issues.php');
 
     foreach ([
         'products' => $products,
         'stock receiving' => $receiving,
+        'receiving history' => $history,
         'inventory counts' => $counts,
-        'reorder planner' => $reorder,
-        'replenishment requests' => $replenishment,
         'inventory insights' => $insights,
-        'suppliers' => $suppliers,
         'promotions' => $promotions,
         'print barcodes' => $print,
         'csv import' => $csv,
-        'purchase orders' => $purchaseOrders,
         'manager stock issues' => $managerStock,
     ] as $name => $source) {
         $assert($source !== '', ucfirst($name) . ' must be readable');
@@ -121,14 +115,10 @@ try {
     $easyLines = [
         'receiving' => ['The receiving record could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.', $receiving],
         'count save' => ['The inventory count could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.', $counts],
-        'reorder planning' => ['The replenishment requests could not be saved. Check your selection and try again. Tell your Administrator if this keeps happening.', $reorder],
-        'replenishment request' => ['The replenishment request could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.', $replenishment],
         'cycle schedule' => ['The cycle-count schedule could not be generated. Refresh the page and try again. Tell your Administrator if this keeps happening.', $insights],
-        'supplier save' => ['The supplier details could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.', $suppliers],
         'promotion save' => ['The promotion could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.', $promotions],
         'barcode generate' => ['The barcode could not be generated. Try again. Tell your Administrator if this keeps happening.', $print],
         'csv row import' => ['This row could not be imported. Check the row values and try again. Tell your Administrator if this keeps happening.', $csv],
-        'purchase order' => ['The purchase order could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.', $purchaseOrders],
     ];
     foreach ($easyLines as $name => [$line, $source]) {
         $assert(str_contains($source, $line), ucfirst($name) . ' failure must show its aligned easy sentence');
@@ -140,12 +130,8 @@ try {
     $redContainers = [
         'receiving' => $receiving,
         'inventory counts' => $counts,
-        'reorder planner' => $reorder,
-        'replenishment requests' => $replenishment,
         'inventory insights' => $insights,
-        'suppliers' => $suppliers,
         'promotions' => $promotions,
-        'purchase orders' => $purchaseOrders,
         'csv import' => $csv,
         'print barcodes' => $print,
     ];
@@ -159,14 +145,10 @@ try {
 
     // No raw getMessage output reaches the Inventory Manager.
     foreach ([
-        'reorder planner' => $reorder,
-        'replenishment requests' => $replenishment,
         'inventory insights' => $insights,
-        'suppliers' => $suppliers,
         'promotions' => $promotions,
         'print barcodes' => $print,
         'csv import' => $csv,
-        'purchase orders' => $purchaseOrders,
     ] as $name => $source) {
         $assert(!str_contains($source, 'getMessage('), ucfirst($name) . ' must not surface getMessage output to the Inventory Manager');
         $assert(str_contains($source, 'OperatorAlert::message'), ucfirst($name) . ' must build the friendly message at the boundary so the full exception is logged');

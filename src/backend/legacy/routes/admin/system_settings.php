@@ -24,7 +24,6 @@ $attentionFields = [
     'store_reversal_count_max' => 'Store reversal threshold safety maximum',
     'store_unusual_discount_percent_max' => 'Store discount threshold safety maximum (%)',
     'store_cash_variance_amount_max' => 'Store cash variance threshold safety maximum',
-    'store_overdue_approval_hours_max' => 'Store overdue approval safety maximum (hours)',
     'store_inventory_overdue_hours_max' => 'Store inventory overdue safety maximum (hours)',
     'store_inventory_high_value_amount_max' => 'Store high-value risk safety maximum',
     'store_inventory_unresolved_hours_max' => 'Store unresolved risk safety maximum (hours)',

@@ -48,6 +48,32 @@ const fixture = action => {
         await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         const url = origin + '/components/notification/notifications.php';
         const submit = async button => Promise.all([page.waitForNavigation(), button.click()]);
+        await page.goto(origin + '/components/administrator/dashboard.php');
+        assert.equal(await page.locator('[data-dashboard-action]').filter({hasText: 'Stock Issue Oversight'}).count(), 1);
+        assert.equal(await page.getByText('Pending approvals', {exact: true}).count(), 0);
+        assert.equal(await page.getByText('Stock issues awaiting an Administrator decision.').count(), 0);
+        assert.equal(await page.locator('.dashboard-state-error').count(), 0);
+        await page.locator('[data-dashboard-action]').filter({hasText: 'Stock Issue Oversight'}).click();
+        await page.getByRole('link', {name: 'View', exact: true}).click();
+        await page.getByText('Disposable theme Stock Issue', {exact: false}).waitFor();
+        assert.match(await page.locator('main').innerText(), /Disposable theme Stock Issue/);
+        await page.goto(origin + '/components/report/data_readiness.php');
+        assert.equal(await page.getByText('Theme Test Item', {exact: true}).count(), 1, 'Readiness remains populated without procurement tables');
+        await page.goto(origin + '/components/report/report_generation.php?report=inventory_valuation');
+        assert.equal(await page.locator('#report option[value="replenishment"]').count(), 0);
+        assert.equal(await page.getByRole('cell', {name: 'Theme Test Item', exact: true}).count(), 1, 'Retained inventory report renders real stock');
+        const reportCsrf = await page.locator('input[name="csrf_token"]').inputValue();
+        const csv = await page.request.post(origin + '/components/report/report_generation.php', {
+            form: {report: 'inventory_valuation', action: 'export_csv', csrf_token: reportCsrf}
+        });
+        assert.equal(csv.status(), 200);
+        assert.match(csv.headers()['content-type'], /text\/csv/);
+        assert.match(await csv.text(), /Theme Test Item/);
+        await page.goto(origin + '/components/auth/preferences.php');
+        assert.equal(await page.locator('[name="notify_replenishment"]').count(), 0);
+        await page.locator('#low_stock_threshold').fill('7');
+        await submit(page.getByRole('button', {name: /Save/}));
+        assert.equal(await page.locator('#low_stock_threshold').inputValue(), '7', 'Retained notification preferences persist');
         await page.goto(url);
         assert.equal(await page.locator('.notification-item').count(), 10);
         assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), Array.from({length: 10}, (_, i) => 'Notice ' + (27 - i)));

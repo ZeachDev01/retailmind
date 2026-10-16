@@ -70,7 +70,7 @@ const fixture = action => {
         for (const group of await page.locator('.reset-record-group').all()) {
             await group.locator('summary').click();
         }
-        assert.equal(await page.locator('.reset-record:visible').count(), 21, 'All original record totals remain available');
+        assert.equal(await page.locator('.reset-record:visible').count(), 18, 'All retained record totals remain available');
         for (const width of [320, 390, 768, 1024, 1440]) {
             await page.setViewportSize({ width, height: 960 });
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), `Reset page must fit ${width}px`);
@@ -117,7 +117,7 @@ const fixture = action => {
         assert.match(await (await deleteOne(90000)).text(), /Product deleted\. Other products/);
         const singleAfter = JSON.parse(fixture('reset_state'));
         for (const key of Object.keys(singleBefore)) {
-            assert.equal(singleAfter[key], singleBefore[key] - (['products', 'inventory', 'supplier_products'].includes(key) ? 1 : 0), key + ' after single deletion');
+            assert.equal(singleAfter[key], singleBefore[key] - (['products', 'inventory'].includes(key) ? 1 : 0), key + ' after single deletion');
         }
         await page.goto(resetUrl);
         assert.equal(await page.locator('#delete-product option[value="90000"]').count(), 0);
@@ -126,6 +126,7 @@ const fixture = action => {
         await page.goto(resetUrl);
         assert.match(await page.locator('#delete-product option[value="1"]').innerText(), /inactive/);
         const before = JSON.parse(fixture('reset_state'));
+        assert(before.stock_receiving_groups > 0, 'Fixture must contain shopping metadata to reset');
         assert(before.sales > 1 && before.product_batches > 0 && before.inventory_units > 0, 'Fixture must contain linked sales and stock data');
         const submit = async (password, confirmation = 'RESET ALL DATA') => {
             await page.goto(resetUrl);
@@ -173,7 +174,7 @@ const fixture = action => {
         assert.match(await page.locator('p[role="status"]').innerText(), /Products, sales, inventory, and forecasting data were deleted/);
         const after = JSON.parse(fixture('reset_state'));
         for (const [key, value] of Object.entries(after)) {
-            if (['general_promotions', 'users', 'categories', 'suppliers', 'roles', 'registers', 'fiscal_periods', 'preserved_audit'].includes(key)) {
+            if (['general_promotions', 'users', 'categories', 'roles', 'registers', 'fiscal_periods', 'preserved_audit'].includes(key)) {
                 assert.equal(value, before[key], key + ' must be preserved');
             } else if (key === 'reset_audits') {
                 assert.equal(value, 1, 'The successful reset must leave a protected audit record');
@@ -196,7 +197,7 @@ const fixture = action => {
         assert(!manager.page.url().endsWith('/components/report/forecast_import.php'), 'Other sessions must be invalidated');
         assert.equal(await page.locator('.reset-delete').isDisabled(), true, 'Empty catalog disables product removal');
         assert.equal(await page.locator('#delete-product-empty').isVisible(), true, 'Empty catalog explains why removal is unavailable');
-        console.log('Operational reset browser checks passed (keyboard disclosures, 21 totals, 320–1440px layouts, empty catalog, authorization, confirmation, rollback, backup, full reset, preserved definitions/audit, sessions, isolated model cleanup)');
+        console.log('Operational reset browser checks passed (keyboard disclosures, 18 retained totals, 320–1440px layouts, empty catalog, authorization, confirmation, rollback, backup, full reset, preserved definitions/audit, sessions, isolated model cleanup)');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

@@ -77,10 +77,6 @@ final class DatabaseAttentionSignalSource
             "SELECT COALESCE(MAX(ABS(cash_variance)), 0) AS value, COUNT(*) AS item_count
              FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL"
         );
-        $approvals = $this->row(
-            "SELECT MIN(request_date) AS oldest_at, COUNT(*) AS item_count
-             FROM replenishment_requests WHERE status = 'pending'"
-        );
         $inventory = $this->row(
             "SELECT MIN(ia.reported_at) AS oldest_at,
                     COUNT(*) AS item_count,
@@ -96,7 +92,6 @@ final class DatabaseAttentionSignalSource
             "SELECT COUNT(*) FROM fiscal_periods WHERE status = 'open' AND end_date < ?",
             [$now->format('Y-m-d')]
         );
-        $approvalHours = $this->ageHours($approvals['oldest_at'] ?? null);
         $inventoryHours = $this->ageHours($inventory['oldest_at'] ?? null);
         $fiscalDays = isset($fiscal['next_end'])
             ? max(0, (int)$now->setTime(0, 0)->diff(new \DateTimeImmutable((string)$fiscal['next_end']))->format('%a'))
@@ -106,9 +101,7 @@ final class DatabaseAttentionSignalSource
             'reversal_count' => $this->signal($reversals, (int)$reversals),
             'max_discount_percent' => $this->signal((float)($discount['value'] ?? 0)),
             'cash_variance_amount' => $this->signal((float)($cash['value'] ?? 0)),
-            'oldest_approval_hours' => $this->signal($approvalHours),
-            // A pending inventory adjustment is an explicit escalation from routine
-            // inventory execution into the Administrator approval workflow.
+            // Stock Issues remain Inventory Manager decisions; administrators inspect them read-only.
             'inventory_escalated_count' => $this->signal((int)($inventory['item_count'] ?? 0), (int)($inventory['item_count'] ?? 0)),
             'oldest_inventory_risk_hours' => $this->signal($inventoryHours),
             'inventory_risk_value' => $this->signal((float)($inventory['risk_value'] ?? 0)),

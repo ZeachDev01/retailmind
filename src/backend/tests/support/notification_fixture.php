@@ -7,3 +7,8 @@ for ($id = 1; $id <= 27; $id++) {
     $insert->execute([$id, 1, $id <= 13 ? 'low_stock' : 'system', 'Notice ' . $id, 'Review this Store update.']);
 }
 $insert->execute([9000, 2, 'adjustment', 'Private notice', 'Another user only.']);
+
+// Exercise retained surfaces with no purchasing schema, after upgrading old notices.
+$insert->execute([9001, 1, 'replenishment', 'Retired purchasing approval', 'Obsolete request.']);
+$migration = require __DIR__ . '/../../database/migrations/202610150002_retire_procurement_attention.php';
+$migration['up']($pdo);

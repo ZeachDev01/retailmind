@@ -14,7 +14,7 @@ Cashiers use RetailMind for barcode sales, shifts, and Stock Issue reporting. A 
 
 ## Product Purpose
 
-RetailMind gives one Store a connected operating system for inventory, purchasing, barcode sales, cashier shifts, reporting, and demand forecasting. It exists so shelf activity, checkout records, stock movements, forecasts, and replenishment decisions remain part of one operational record. Success means Store staff can act on accurate information without rebuilding it across separate tools.
+RetailMind gives one Store a connected operating system for inventory, receiving, barcode sales, cashier shifts, reporting, and demand forecasting. It exists so shelf activity, checkout records, stock movements, forecasts, and replenishment decisions remain part of one operational record. Success means Store staff can act on accurate information without rebuilding it across separate tools.
 
 ## Positioning
 
@@ -23,10 +23,10 @@ RetailMind is purpose-built around one Store rather than multi-branch administra
 ## Operating Context
 
 - Cashiers scan products, process and hold sales, print receipts, manage shifts, and report Stock Issues.
-- Inventory Managers monitor stock and expiry risk, perform counts, receive stock, manage suppliers and Supplier Product Terms, review forecasts, and plan replenishment.
+- Inventory Managers check stock, review non-binding Replenishment Recommendations, and record bought goods through direct bulk Stock Receiving. They also monitor expiry risk, perform counts, and review Stock Issues through Inventory Control. The owner shops outside RetailMind; supplier administration, requests, orders, and document-linked receiving are retired.
 - The Administrator oversees Store performance, operational staff, approvals, Fiscal Periods, Store Settings, compliance, and operational exceptions.
 - The Super Administrator manages platform security, recovery, system health, technical settings, privileged identities, and demand-forecasting model operation.
-- Sales activity updates stock movement and forecast history; reviewed demand recommendations inform purchase orders and receiving.
+- Sales activity updates stock movement and forecast history. Receiving adds accepted goods to stock; recommendations reload using committed stock and existing forecast outputs without generating forecasts or retraining models.
 - The application handles Philippine-peso retail operations at Shalom Store.
 
 ## Capabilities and Constraints
@@ -48,7 +48,7 @@ The product name is **RetailMind** and the Store is **Shalom Store**. Product la
 ## Evidence on Hand
 
 - The implemented application contains role-specific workspaces for the Administrator, Super Administrator, Inventory Manager, and Cashier.
-- Existing workflows cover barcode sales, shifts, Stock Issues, products, inventory counts, receiving, suppliers, purchase orders, promotions, reports, notifications, backups, restore, audit visibility, system health, and demand forecasting.
+- Existing workflows cover barcode sales, shifts, Stock Issues, products, inventory counts, receiving, Replenishment Recommendations, promotions, reports, notifications, backups, restore, audit visibility, system health, and demand forecasting.
 - `CONTEXT.md` is the authority for domain language and role responsibilities.
 - `docs/adr/` records the confirmed single-Store model, administrator boundaries, staff-safe Operator Alerts, and current Database Backup and Database Restore decisions.
 - `src/backend/database/seeds/product_seed.csv` provides product seed data for the Store.
@@ -59,5 +59,5 @@ The product name is **RetailMind** and the Store is **Shalom Store**. Product la
 1. **Keep one operational record.** Sales, stock, forecasting, and replenishment should strengthen the same Store record rather than create parallel sources of truth.
 2. **Respect role boundaries.** Routine Store work, operational governance, and technical governance remain distinct even when workflows touch the same data.
 3. **Make the shop floor calm.** Staff receive clear, actionable language while technical detail remains available through the proper diagnostic and audit channels.
-4. **Treat forecasts as decision support.** Model outputs inform human review and controlled purchasing rather than presenting uncertain demand as fact.
+4. **Treat forecasts as decision support.** Model outputs inform human review and non-binding buying guidance rather than presenting uncertain demand as fact.
 5. **Preserve accountability.** Account lifecycle, approvals, recovery actions, and sensitive operational changes retain historical attribution and auditable records.
