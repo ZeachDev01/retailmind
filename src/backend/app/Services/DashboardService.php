@@ -262,19 +262,28 @@ class DashboardService
     public function getCashierMetrics(int $cashierId): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT COALESCE(SUM(total_amount), 0) AS today_sales,
-                    COUNT(*) AS transactions,
-                    COALESCE(AVG(total_amount), 0) AS average_transaction
+            "SELECT HOUR(sale_date) AS sale_hour,
+                    COALESCE(SUM(total_amount), 0) AS today_sales,
+                    COUNT(*) AS transactions
              FROM sales
-             WHERE cashier_id = ? AND sale_date >= CURDATE() AND sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)"
+             WHERE cashier_id = ? AND sale_date >= CURDATE() AND sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+             GROUP BY HOUR(sale_date)
+             ORDER BY sale_hour"
         );
         $stmt->execute([$cashierId]);
-        $row = $stmt->fetch() ?: [];
+        $hourlySales = array_fill(0, 24, 0.0);
+        $transactions = 0;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $hourlySales[(int)$row['sale_hour']] = (float)$row['today_sales'];
+            $transactions += (int)$row['transactions'];
+        }
+        $todaySales = array_sum($hourlySales);
 
         return [
-            'today_sales' => (float)($row['today_sales'] ?? 0),
-            'transactions' => (int)($row['transactions'] ?? 0),
-            'average_transaction' => (float)($row['average_transaction'] ?? 0),
+            'today_sales' => $todaySales,
+            'transactions' => $transactions,
+            'average_transaction' => $transactions ? $todaySales / $transactions : 0.0,
+            'hourly_sales' => $hourlySales,
         ];
     }
 
@@ -286,7 +295,7 @@ class DashboardService
              LEFT JOIN sale_items si ON si.sale_id = s.sale_id
              WHERE s.cashier_id = ?
              GROUP BY s.sale_id
-             ORDER BY s.sale_date DESC
+             ORDER BY s.sale_date DESC, s.sale_id DESC
              LIMIT ?"
         );
         $stmt->bindValue(1, $cashierId, PDO::PARAM_INT);

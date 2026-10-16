@@ -69,6 +69,57 @@ $openShift = $shiftService->getOpenShift($cashierId);
 $posShiftOpen = $openShift !== null;
 $posRegisterLocked = $shiftService->isRegisterLocked($cashierId);
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_lookup') {
+    csrf_verify();
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+    try {
+        if (!$posShiftOpen || $posRegisterLocked) {
+            throw new InvalidArgumentException('Open and unlock your Cashier Shift before scanning.');
+        }
+        $code = trim(is_string($_POST['code'] ?? null) ? $_POST['code'] : '');
+        if ($code === '' || strlen($code) > 255 || preg_match('/[\x00-\x1F\x7F]/', $code)) {
+            throw new InvalidArgumentException('Enter or scan a valid barcode.');
+        }
+        require_once __DIR__ . '/../../../backend/app/Services/ProductCodeLookupService.php';
+        $match = (new ProductCodeLookupService($pdo))->lookup($code);
+        if ($match['outcome'] !== ProductCodeLookupService::OUTCOME_MATCH) {
+            throw new InvalidArgumentException($match['outcome'] === ProductCodeLookupService::OUTCOME_AMBIGUOUS
+                ? 'This barcode matches multiple products. Use product search.' : 'Product not found. Try product search.');
+        }
+        $statement = $pdo->prepare(
+            "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.unit_price,
+                    p.reorder_level, p.safety_stock,
+                    LEAST(COALESCE(i.quantity_on_hand, 0), COALESCE((
+                        SELECT SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= CURDATE()
+                                        THEN remaining_quantity ELSE 0 END)
+                        FROM product_batches WHERE product_id = p.product_id AND remaining_quantity > 0
+                    ), i.quantity_on_hand, 0)) AS quantity_on_hand
+             FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id
+             WHERE p.product_id = ? AND p.status = 'active'"
+        );
+        $statement->execute([$match['product']['product_id']]);
+        $product = $statement->fetch(PDO::FETCH_ASSOC);
+        $quantities = json_decode((string)($_POST['quantities'] ?? '{}'), true);
+        $quantity = is_array($quantities) ? ($quantities[$match['product']['product_id']] ?? 0) : null;
+        if (!is_int($quantity) || $quantity < 0) {
+            throw new InvalidArgumentException('Invalid cart quantity. Review the cart before scanning.');
+        }
+        if (!$product || $quantity >= (int)$product['quantity_on_hand']) {
+            throw new InvalidArgumentException('Insufficient stock. Only ' . (int)($product['quantity_on_hand'] ?? 0) . ' available.');
+        }
+        echo json_encode(['success' => true, 'product' => $product], JSON_THROW_ON_ERROR);
+    } catch (InvalidArgumentException $e) {
+        http_response_code(409);
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        error_log((string)$e);
+        echo json_encode(['success' => false, 'message' => 'Product lookup failed. Please try again.']);
+    }
+    exit;
+}
+
 // Ticket #90: the lock screen replaces the point of sale, so nothing below may
 // act on a request that arrives while the Register is locked. Checkout already
 // refuses at the service seam; voiding a cart also writes a Protected Audit
@@ -252,6 +303,11 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <h1 class="sr-only">Point of Sale</h1>
+        <?php foreach ([[$checkout_error, 'error'], [$lock_error, 'error'], [$checkout_notice, 'success']] as [$notice, $noticeType]): ?>
+            <?php if ($notice !== ''): ?>
+                <script>RetailMindUI.toast(<?= json_encode($notice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, <?= json_encode($noticeType) ?>, undefined, 3000);</script>
+            <?php endif; ?>
+        <?php endforeach; ?>
         <?php if ($posRegisterLocked): ?>
             <?php // Ticket #90: a locked Register shows a lock screen instead of the point of sale. The sidebar stays, so the Cashier can still log out — logging out leaves the shift open. ?>
             <section class="pos-lock" aria-labelledby="pos-lock-title">
@@ -263,12 +319,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         &middot; Shift #<?= (int)$openShift['shift_id'] ?>
                         &middot; locked <?= htmlspecialchars(format_display_datetime((string)$openShift['locked_at'])) ?>
                     </p>
-                    <?php if ($lock_error !== ''): ?>
-                        <div class="pos-lock-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($lock_error) ?></div>
-                    <?php endif; ?>
-                    <?php if ($checkout_error !== ''): ?>
-                        <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_error) ?></div>
-                    <?php endif; ?>
                     <form method="post" class="pos-lock-form" autocomplete="off">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="unlock_register">
@@ -281,29 +331,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
                 </div>
             </section>
         <?php else: ?>
-        <?php if ($checkout_error): ?>
-            <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_error) ?></div>
-        <?php endif; ?>
-        <?php // A refused lock renders here, on the unlocked page it left us on: the Cashier clicked "Lock register" and must be told why, not shown a POS that silently ignored them. ?>
-        <?php if ($lock_error !== ''): ?>
-            <div class="pos-alert error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><?= htmlspecialchars($lock_error) ?></div>
-        <?php endif; ?>
-        <?php if ($checkout_notice): ?>
-            <div class="pos-alert success" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><?= htmlspecialchars($checkout_notice) ?></div>
-        <?php endif; ?>
         <?php if ($posShiftOpen): ?>
-            <div class="pos-register-bar">
-                <p class="pos-register-identity">
-                    <i class="bi bi-upc-scan" aria-hidden="true"></i>
-                    <span>Register <strong><?= htmlspecialchars((string)($openShift['register_name'] ?? 'Unassigned')) ?></strong></span>
-                    <span class="pos-register-shift">Shift #<?= (int)$openShift['shift_id'] ?></span>
-                </p>
-                <form method="post" data-confirm="Lock this register for a break? Your Cashier Shift stays open and your Register stays yours. Nobody else can use it until you unlock it with your password." data-confirm-title="Lock register" data-confirm-button="Lock register">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="lock_register">
-                    <button class="btn btn-secondary" type="submit"><i class="bi bi-lock" aria-hidden="true"></i>Lock register</button>
-                </form>
-            </div>
+            <script>RetailMindUI.toast(<?= json_encode('Register: ' . ($openShift['register_name'] ?? 'Unassigned') . ' · Shift #' . (int)$openShift['shift_id'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'info', 'Register ready', 3000);</script>
         <?php endif; ?>
         <?php if (!$posShiftOpen): ?>
             <div class="pos-alert error" role="note" data-rm-alert-processed="1"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a Cashier Shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
@@ -316,8 +345,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         <div class="pos-panel-title">
                             <div class="pos-panel-icon"><i class="bi bi-upc-scan" aria-hidden="true"></i></div>
                             <div>
-                                <h2>Scan an item</h2>
-                                <p>USB scanners can scan directly into the field below.</p>
+                                <h2>Find an item</h2>
                             </div>
                         </div>
                         <div class="pos-toolbar">
@@ -327,17 +355,26 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             <button type="button" class="btn btn-small btn-danger" id="stop-scanner" disabled>
                                 <i class="bi bi-stop-circle" aria-hidden="true"></i>Stop
                             </button>
+                            <?php if ($posShiftOpen): ?>
+                                <form method="post" data-confirm="Lock this register for a break? Your Cashier Shift stays open and your Register stays yours. Nobody else can use it until you unlock it with your password." data-confirm-title="Lock register" data-confirm-button="Lock register">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="lock_register">
+                                    <button class="btn btn-small btn-secondary" type="submit"><i class="bi bi-lock" aria-hidden="true"></i>Lock register</button>
+                                </form>
+                            <?php endif; ?>
+                            <button type="button" class="quick-grid-toggle" id="quick-grid-toggle" title="Toggle compact product grid" aria-label="Toggle compact product grid" aria-pressed="false">
+                                <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
+                            </button>
                         </div>
                     </div>
 
-                    <label class="scan-label" for="sku-input">Barcode or SKU</label>
+                    <label class="scan-label" for="sku-input">Scan or search products</label>
                     <div class="scan-row">
-                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or enter SKU" autocomplete="off" autofocus inputmode="search">
+                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU" autocomplete="off" autofocus inputmode="search">
                         <button type="button" class="btn" id="add-code-btn" title="Add item (Enter)">
                             <i class="bi bi-plus-lg" aria-hidden="true"></i>Add item
                         </button>
                     </div>
-                    <div id="cart-message" class="cart-message" role="status" aria-live="polite"></div>
 
                     <div class="scanner-area" id="scanner-area">
                         <div id="scanner-reader" class="scanner-reader"></div>
@@ -348,23 +385,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     </div>
                 </div>
 
-                <section class="quick-add-section" aria-labelledby="quick-add-title">
-                    <div class="quick-add-header">
-                        <div class="quick-add-title-row">
-                            <h2 id="quick-add-title">Quick Add Products</h2>
-                            <span id="quick-product-count" class="quick-product-count"></span>
-                        </div>
-                        <div class="quick-add-toolbar">
-                            <div class="quick-product-search">
-                                <i class="bi bi-search" aria-hidden="true"></i>
-                                <label class="sr-only" for="quick-product-search">Search product by name or SKU</label>
-                                <input id="quick-product-search" type="search" placeholder="Search product by name or SKU" autocomplete="off">
-                            </div>
-                            <button type="button" class="quick-grid-toggle" id="quick-grid-toggle" title="Toggle compact product grid" aria-label="Toggle compact product grid" aria-pressed="false">
-                                <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                    </div>
+                <section class="quick-add-section" aria-label="Products">
 
                     <div class="quick-category-filters" id="quick-category-filters" aria-label="Product categories">
                         <button type="button" class="quick-category-filter active" aria-pressed="true" data-quick-category="all">
@@ -431,6 +452,10 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <input type="hidden" name="payment_verified" value="0">
                     <input type="hidden" name="cart" id="cart-input">
                     <input type="hidden" name="held_sale_id" id="held-sale-id-input" value="">
+                    <div class="payment-breakdown" aria-label="Drawer preview">
+                        <div><span>Cash added</span><strong>&#8369;<span id="drawer-cash-added">0.00</span></strong></div>
+                    </div>
+                    <p class="pos-lock-note">Preview only. Cash received minus change is added when payment is confirmed.</p>
 
                     <div class="payment-field">
                         <label class="pos-field-label" for="payment-method">Payment method</label>
@@ -480,7 +505,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     </details>
 
                     <button class="btn btn-block checkout-primary" id="checkout-button" type="button" title="Checkout (Ctrl+Enter)" disabled>
-                        <i class="bi bi-check2-circle" aria-hidden="true"></i>Review final quote
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>Review checkout
                     </button>
                 </form>
 
@@ -515,7 +540,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <div class="checkout-dialog">
         <div class="checkout-dialog-header">
             <div>
-                <h3 id="checkout-title">Review final quote before payment</h3>
+                <h3 id="checkout-title">Review sale before payment</h3>
                 <p>Verify the payment details before completing the sale.</p>
             </div>
             <button type="button" class="modal-close" onclick="closeCheckoutConfirm()" aria-label="Close checkout confirmation"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
@@ -542,7 +567,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
         <div class="checkout-dialog-body">
             <label class="pos-field-label" for="void-reason">Reason for voiding</label>
             <textarea class="void-reason" id="void-reason" placeholder="Example: Customer cancelled the purchase"></textarea>
-            <div id="void-error" class="cart-message error" role="alert"></div>
         </div>
         <div class="checkout-dialog-actions">
             <button type="button" class="btn btn-secondary" onclick="closeVoidModal()">Keep sale</button>
@@ -569,7 +593,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
             </select>
             <label class="pos-field-label" for="discard-note">Note (required when the reason is Other)</label>
             <textarea class="void-reason" id="discard-note" placeholder="Example: Customer collected their items another way"></textarea>
-            <div id="discard-error" class="cart-message error" role="alert"></div>
         </div>
         <div class="checkout-dialog-actions">
             <button type="button" class="btn btn-secondary" onclick="closeDiscardModal()">Keep working</button>
@@ -584,6 +607,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
 <script src="<?= app_url('assets/js/checkout-attempt.js') ?>"></script>
 <script src="<?= app_url('assets/js/checkout-quote.js') ?>"></script>
 <script>
+setTimeout(() => document.querySelector('.pos-register-bar')?.remove(), 8000);
+
 let cart = {};
 let heldSales = [];
 // Ticket #91: the held sale this cart came from, if any. Checkout sends it so
@@ -595,20 +620,13 @@ let scanCooldown = false;
 let scannerActive = false;
 let checkoutConfirmed = false;
 let checkoutSubmitting = false;
-let messageTimer = null;
 let lastScannedCode = '';
 let lastScannedAt = 0;
 let posAudioContext = null;
 
 const quickProducts = <?= json_encode($quickProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const quickProductById = new Map(quickProducts.map(product => [Number(product.product_id), product]));
-const productLookup = {};
-quickProducts.forEach(product => {
-    if (product.sku) productLookup[product.sku] = product;
-    if (product.barcode) productLookup[product.barcode] = product;
-});
 const skuInput = document.getElementById('sku-input');
-const cartMessage = document.getElementById('cart-message');
 const scannerResult = document.getElementById('scanner-result');
 const scannerArea = document.getElementById('scanner-area');
 const recentScan = document.getElementById('recent-scan');
@@ -628,11 +646,9 @@ const checkoutModal = document.getElementById('checkout-modal');
 const checkoutSummary = document.getElementById('checkout-summary');
 const voidModal = document.getElementById('void-modal');
 const voidReason = document.getElementById('void-reason');
-const voidError = document.getElementById('void-error');
 const discardModal = document.getElementById('discard-modal');
 const discardReason = document.getElementById('discard-reason');
 const discardNote = document.getElementById('discard-note');
-const discardError = document.getElementById('discard-error');
 let discardingHeldSaleId = 0;
 const checkoutButton = document.getElementById('checkout-button');
 const confirmCheckoutButton = document.getElementById('confirm-checkout-button');
@@ -647,13 +663,11 @@ const discountSummary = document.getElementById('discount-summary');
 const supervisorFields = document.getElementById('supervisor-fields');
 const fullscreenToggle = document.getElementById('pos-fullscreen-toggle');
 const cashierClock = document.getElementById('cashier-clock');
-const quickProductSearch = document.getElementById('quick-product-search');
 const quickCategoryFilters = document.getElementById('quick-category-filters');
 const quickProductGrid = document.getElementById('quick-product-grid');
-const quickProductCount = document.getElementById('quick-product-count');
 const quickGridToggle = document.getElementById('quick-grid-toggle');
 const findProductUrl = <?= json_encode(app_url('components/cashier/findProduct.php')) ?>;
-const barcodeApiUrl = <?= json_encode(app_url('components/barcodeScanner/apiScanner/barcode.php')) ?>;
+const barcodeApiUrl = <?= json_encode(app_url('components/cashier/pos.php')) ?>;
 const heldSalesApiUrl = <?= json_encode(app_url('components/barcodeScanner/apiScanner/held_sales.php')) ?>;
 const csrfToken = <?= json_encode(generate_csrf_token()) ?>;
 const posShiftOpen = <?= $posShiftOpen ? 'true' : 'false' ?>;
@@ -766,7 +780,7 @@ function updateQuickProductAvailability() {
 }
 
 function renderQuickProducts() {
-    const term = quickProductSearch.value.trim().toLowerCase();
+    const term = skuInput.value.trim().toLowerCase();
     const activeCategory = quickCategoryFilters.querySelector('.active')?.dataset.quickCategory || 'all';
     const products = quickProducts.filter(product => {
         const categoryMatches = activeCategory === 'all' || Number(product.category_id) === Number(activeCategory);
@@ -774,7 +788,6 @@ function renderQuickProducts() {
         return categoryMatches && (term === '' || searchText.includes(term));
     });
 
-    quickProductCount.textContent = `${products.length} product${products.length === 1 ? '' : 's'}`;
     if (!products.length) {
         quickProductGrid.innerHTML = '<div class="quick-products-empty"><i class="bi bi-search" aria-hidden="true"></i><span>No matching products found.</span></div>';
         return;
@@ -830,17 +843,8 @@ function getLowStockThreshold(item) {
 }
 
 function showCartMessage(message, type = 'info') {
-    window.clearTimeout(messageTimer);
     const kind = ['error', 'warning', 'success', 'info'].includes(type) ? type : 'info';
-    const clean = (window.RetailMindUI && typeof window.RetailMindUI.sanitizeAlert === 'function')
-        ? window.RetailMindUI.sanitizeAlert(String(message == null ? '' : message), kind)
-        : { message: String(message == null ? '' : message), tech: '' };
-    cartMessage.textContent = clean.tech ? clean.message + '\n' + clean.tech : clean.message;
-    cartMessage.className = `cart-message visible ${type}`;
-    messageTimer = window.setTimeout(() => {
-        cartMessage.className = 'cart-message';
-        cartMessage.textContent = '';
-    }, 5000);
+    return RetailMindUI.toast(message, kind, undefined, 3000);
 }
 
 function playScanTone(success = true) {
@@ -879,7 +883,7 @@ function showRecentScan(product, code, status = 'success') {
            <div class="recent-scan-copy"><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(code)} &middot; Stock ${Number(product.quantity_on_hand)}</span></div>
            <div class="recent-scan-price">&#8369;${money(product.price)}</div>`
         : `<div class="recent-scan-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
-           <div class="recent-scan-copy"><strong>Product not found</strong><span>${escapeHtml(code)}</span></div>
+           <div class="recent-scan-copy"><strong>Scan not added</strong><span>${escapeHtml(code)}</span></div>
            <div class="recent-scan-price">—</div>`;
 }
 
@@ -890,15 +894,11 @@ async function fetchProductByCode(code) {
         return null;
     }
 
-    if (productLookup[normalized]) {
-        return productLookup[normalized];
-    }
-
     try {
-        const response = await fetch(`${barcodeApiUrl}?action=search`, {
+        const response = await fetch(barcodeApiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ barcode: normalized })
+            body: new URLSearchParams({ action: 'scan_lookup', csrf_token: csrfToken, code: normalized,
+                quantities: JSON.stringify(Object.fromEntries(Object.entries(cart).map(([id, item]) => [id, item.qty]))) })
         });
         const data = await response.json();
 
@@ -914,15 +914,12 @@ async function fetchProductByCode(code) {
                 safety_stock: Number(data.product.safety_stock || 0)
             };
 
-            productLookup[entry.sku] = entry;
-            if (entry.barcode) {
-                productLookup[entry.barcode] = entry;
-            }
             return entry;
         }
 
         showRecentScan(null, normalized, 'warning');
-        showCartMessage(`No product found for ${normalized}. Try product search.`, 'error');
+        const message = data.message || 'Product not found.';
+        showCartMessage(message, message.startsWith('Insufficient stock') ? 'warning' : 'error');
         return null;
     } catch (error) {
         showCartMessage('Product lookup failed. Check the network or login session.', 'error');
@@ -930,18 +927,29 @@ async function fetchProductByCode(code) {
     }
 }
 
-async function addCodeFromInput() {
+let scanQueue = Promise.resolve();
+function addCodeFromInput() {
     const code = skuInput.value.trim();
-    const product = await fetchProductByCode(code);
-    if (!product) {
-        skuInput.select();
-        return;
-    }
-
-    addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode);
-    showRecentScan(product, code);
     skuInput.value = '';
+    skuInput.dispatchEvent(new Event('input'));
     skuInput.focus();
+    queueBarcode(code);
+}
+
+function queueBarcode(code) {
+    scanQueue = scanQueue.then(() => addScannedCode(code)).catch(() => {
+        showCartMessage('Product lookup failed. Please try again.', 'error');
+    });
+    return scanQueue;
+}
+
+async function addScannedCode(code) {
+    if (!cartChangesAllowed()) return;
+    const product = await fetchProductByCode(code);
+    if (!product) return;
+
+    if (!addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode)) return;
+    showRecentScan(product, code);
     scannerResult.innerHTML = `<strong>Item added</strong><span>${escapeHtml(product.name)}</span>`;
 }
 
@@ -953,13 +961,13 @@ function cartChangesAllowed() {
 }
 
 function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '') {
-    if (!cartChangesAllowed()) return;
+    if (!cartChangesAllowed()) return false;
     const productId = Number(id);
     const currentQty = cart[productId]?.qty || 0;
     const availableStock = Number(stock);
     if (currentQty + 1 > availableStock) {
-        showCartMessage(`Cannot add more. Only ${availableStock} in stock.`, 'error');
-        return;
+        showCartMessage('Insufficient stock.', 'warning');
+        return false;
     }
 
     cart[productId] = {
@@ -976,10 +984,11 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
 
     const remaining = availableStock - cart[productId].qty;
     if (Number.isFinite(availableStock) && remaining <= getLowStockThreshold(cart[productId])) {
-        showCartMessage(`${name} added. Low-stock warning: ${remaining} will remain.`, 'info');
+        showCartMessage(`Product added to cart. Low stock: ${remaining} left.`, 'warning');
     } else {
-        showCartMessage(`${name} added to the cart.`, 'success');
+        showCartMessage('Product added to cart.', 'success');
     }
+    return true;
 }
 
 function updateCartQty(id, newQty) {
@@ -991,17 +1000,19 @@ function updateCartQty(id, newQty) {
 
     const qty = Number(newQty);
     if (!Number.isInteger(qty) || qty <= 0) {
-        removeFromCart(id);
+        renderCart();
+        showCartMessage('Quantity must be at least 1. Use delete to remove the item.', 'warning');
         return;
     }
 
     if (item.stock !== undefined && qty > item.stock) {
-        showCartMessage('Requested quantity exceeds available stock. Choose a quantity explicitly.', 'error'); return;
-        showCartMessage(`Only ${item.stock} units of ${item.name} are available.`, 'error');
+        renderCart();
+        showCartMessage('Insufficient stock.', 'warning'); return;
     } else {
         cart[id].qty = qty;
     }
     renderCart();
+    showCartMessage('Cart updated successfully.', 'info');
 }
 
 function changeCartQty(id, delta) {
@@ -1113,6 +1124,8 @@ function updatePaymentFields() {
     const receivedValue = Number(cashReceived.value);
     const received = Number.isFinite(receivedValue) && receivedValue >= 0 ? receivedValue : 0;
     changeDue.value = money(Math.max(0, received - total));
+    const cashAdded = isCash && getCartItemCount() > 0 ? Math.min(received, total) : 0;
+    document.getElementById('drawer-cash-added').textContent = money(cashAdded);
     document.getElementById('summary-subtotal').textContent = money(gross);
     document.getElementById('summary-discount').textContent = money(discount);
     document.getElementById('summary-change').textContent = money(Math.max(0, received - total));
@@ -1212,7 +1225,6 @@ async function checkoutNow() {
         </div>
         <div class="review-total" role="group" aria-label="Total due"><span>Total due: </span><strong>₱${money(quote.total)}</strong></div>
         ${paymentLine}
-        <p id="checkout-error" class="cart-message" role="alert"></p>
     `;
     RetailMindUI.openOverlay(checkoutModal);
     updateReviewedPayment();
@@ -1227,6 +1239,7 @@ function updateReviewedPayment() {
         document.getElementById('review-change').textContent = money(Math.max(0, Number(cash.value) - checkoutQuote.reviewed.total));
     }
     if (reference) paymentReference.value = reference.value;
+    updatePaymentFields();
 }
 
 function closeCheckoutConfirm() {
@@ -1271,9 +1284,6 @@ async function submitConfirmedCheckout() {
         const message = !navigator.locks
             ? 'Checkout recovery requires a browser supporting Web Locks. Open Point of Sale using HTTPS or http://localhost/retailmind before collecting payment.'
             : 'Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.';
-        const checkoutError = document.getElementById('checkout-error');
-        checkoutError.textContent = message;
-        checkoutError.className = 'cart-message visible error';
         showCartMessage(message, 'error');
     }
 }
@@ -1342,8 +1352,6 @@ function openDiscardModal(id) {
     discardingHeldSaleId = Number(id) || 0;
     discardReason.value = 'customer_cancelled';
     discardNote.value = '';
-    discardError.textContent = '';
-    discardError.className = 'cart-message error';
     RetailMindUI.openOverlay(discardModal);
     setTimeout(() => discardReason.focus(), 50);
 }
@@ -1359,8 +1367,7 @@ async function confirmDiscardHeldSale() {
     const reason = discardReason.value;
     const note = discardNote.value.trim();
     if (reason === 'other' && note === '') {
-        discardError.textContent = 'Add a note explaining why this held sale is being discarded.';
-        discardError.className = 'cart-message visible error';
+        showCartMessage('Add a note explaining why this sale is being cleared.', 'error');
         discardNote.focus();
         return;
     }
@@ -1378,10 +1385,9 @@ async function confirmDiscardHeldSale() {
         }
         closeDiscardModal();
         renderCart(); renderHeldSales();
-        showCartMessage('Held sale discarded. The reason is in the audit log.', 'success');
+        showCartMessage('Sale cleared.', 'success');
     } catch (error) {
-        discardError.textContent = error.message;
-        discardError.className = 'cart-message visible error';
+        showCartMessage(error.message, 'error');
     } finally { cartWorkspace.busy = false; }
 }
 
@@ -1410,8 +1416,7 @@ function closeVoidModal() {
 function confirmVoidSale() {
     const reason = voidReason.value.trim();
     if (reason === '') {
-        voidError.textContent = 'Enter a reason before voiding the sale.';
-        voidError.className = 'cart-message visible error';
+        showCartMessage('Enter a reason before voiding the sale.', 'error');
         voidReason.focus();
         return;
     }
@@ -1437,7 +1442,9 @@ function restoreState() {
     resumedHeldSaleInput.value = resumedHeldSaleId ? String(resumedHeldSaleId) : '';
     renderCart();
     loadHeldSales();
-    if (Object.keys(cart).length) showCartMessage('Unfinished cart recovered for this Cashier Shift. Review stock and prices before checkout.', 'info');
+    if (Object.keys(cart).length && performance.getEntriesByType('navigation')[0]?.type === 'reload') {
+        showCartMessage('Sale restored. Check stock and prices before checkout.', 'info');
+    }
 }
 
 async function reviewCurrentCart() {
@@ -1468,12 +1475,11 @@ function onScanSuccess(decodedText) {
     }
     lastScannedCode = code;
     lastScannedAt = now;
-    skuInput.value = code;
     scannerResult.innerHTML = `<strong>Barcode detected</strong><span>${escapeHtml(code)}</span>`;
     if (navigator.vibrate) {
         navigator.vibrate(100);
     }
-    addCodeFromInput();
+    queueBarcode(code);
 }
 
 function showCameraStartFailure(hint, detail) {
@@ -1486,7 +1492,7 @@ function showCameraStartFailure(hint, detail) {
     if (window.RetailMindUI && typeof window.RetailMindUI.toast === 'function') {
         const easy = 'The camera could not start. Check your camera permission, or enter the code manually to continue. Tell your Administrator if this keeps happening.';
         const tech = window.RetailMindUI.isDebug() && detail !== undefined ? '\n' + String(detail) : '';
-        window.RetailMindUI.toast(easy + tech, 'error');
+        showCartMessage(easy + tech, 'error');
     }
 }
 
@@ -1578,7 +1584,7 @@ cashQuick.addEventListener('click', event => {
     }
 });
 let quickSearchTimer = null;
-quickProductSearch.addEventListener('input', () => {
+skuInput.addEventListener('input', () => {
     clearTimeout(quickSearchTimer);
     quickSearchTimer = setTimeout(renderQuickProducts, 80);
 });
@@ -1642,11 +1648,48 @@ if (fullscreenToggle) {
 }
 
 skuInput.addEventListener('keydown', event => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
         event.preventDefault();
-        addCodeFromInput();
+        if (!event.repeat) addCodeFromInput();
     }
 });
+
+// Keyboard-wedge scanners end a rapid burst with Enter; editable fields keep their normal input.
+let keyboardBarcode = '';
+let keyboardBarcodeAt = 0;
+function resetKeyboardBarcode() {
+    keyboardBarcode = '';
+    keyboardBarcodeAt = 0;
+}
+document.addEventListener('keydown', event => {
+    const editing = event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]');
+    const dialogOpen = document.querySelector('dialog[open], .checkout-modal.open, [aria-modal="true"].open, .swal2-container');
+    if (event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey
+        || document.hidden || editing || dialogOpen) {
+        resetKeyboardBarcode();
+        return;
+    }
+    const now = performance.now();
+    // shortcut: scanners must send characters within 80ms; tune against hardware if slower scanners are introduced.
+    if (now - keyboardBarcodeAt > 80) resetKeyboardBarcode();
+    if (event.key === 'Enter') {
+        const code = keyboardBarcode;
+        resetKeyboardBarcode();
+        if (code.length >= 3) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            queueBarcode(code);
+        }
+    } else if (event.key.length === 1 && /^[\x21-\x7E]$/.test(event.key)) {
+        keyboardBarcode += event.key;
+        keyboardBarcodeAt = now;
+        if (keyboardBarcode.length > 255) resetKeyboardBarcode();
+    } else if (event.key !== 'Shift') {
+        resetKeyboardBarcode();
+    }
+}, true);
+window.addEventListener('blur', resetKeyboardBarcode);
+document.addEventListener('visibilitychange', resetKeyboardBarcode);
 
 checkoutForm.addEventListener('submit', event => {
     if (!checkoutConfirmed) {

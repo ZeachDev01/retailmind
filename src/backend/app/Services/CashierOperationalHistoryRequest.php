@@ -16,6 +16,8 @@ final class CashierOperationalHistoryRequest
         }
         $page = filter_var($query['page'] ?? 1, FILTER_VALIDATE_INT);
         $page = is_int($page) ? max(1, min(100000, $page)) : 1;
+        $pageSize = filter_var($query['length'] ?? CashierOperationalHistoryService::PAGE_SIZE, FILTER_VALIDATE_INT);
+        $pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : CashierOperationalHistoryService::PAGE_SIZE;
         $recordId = filter_var($query['id'] ?? null, FILTER_VALIDATE_INT);
         $recordId = is_int($recordId) && $recordId > 0 ? $recordId : null;
         $fromDay = null;
@@ -39,9 +41,10 @@ final class CashierOperationalHistoryRequest
 
         $history = new CashierOperationalHistoryService($pdo);
         $record = $recordId === null ? null : $history->find($type, $authenticatedCashierId, $recordId);
-        $rows = $recordId === null && $dateError === '' ? $history->page($type, $authenticatedCashierId, $page, CashierOperationalHistoryService::PAGE_SIZE, $fromDay, $throughDay) : [];
-        $hasNext = $recordId === null && count($rows) === CashierOperationalHistoryService::PAGE_SIZE
-            && $history->page($type, $authenticatedCashierId, $page + 1, CashierOperationalHistoryService::PAGE_SIZE, $fromDay, $throughDay) !== [];
-        return compact('types', 'type', 'page', 'recordId', 'record', 'rows', 'hasNext', 'fromDay', 'throughDay', 'dateError');
+        $rows = $recordId === null && $dateError === '' ? $history->page($type, $authenticatedCashierId, $page, $pageSize, $fromDay, $throughDay) : [];
+        $totalRows = $recordId === null && $dateError === '' ? $history->count($type, $authenticatedCashierId, $fromDay, $throughDay) : 0;
+        $totalPages = max(1, (int)ceil($totalRows / $pageSize));
+        $hasNext = $page < $totalPages;
+        return compact('types', 'type', 'page', 'pageSize', 'totalRows', 'totalPages', 'recordId', 'record', 'rows', 'hasNext', 'fromDay', 'throughDay', 'dateError');
     }
 }

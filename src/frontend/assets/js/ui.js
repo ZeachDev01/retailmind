@@ -136,7 +136,7 @@
     qs(".rm-toast-close", toast).addEventListener("click", remove);
     stack.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add("show"));
-    setTimeout(remove, Number(duration || 4800));
+    setTimeout(remove, Number(duration || (kind === "warning" ? 20000 : 4800)));
     return toast;
   };
 
@@ -217,6 +217,7 @@
         icon: kind,
         title: title || labels[kind] || labels.info,
         html: html,
+        ...(kind === "warning" ? { timer: 20000, timerProgressBar: true } : {}),
         confirmButtonText: "OK",
         showCloseButton: true,
         // Release the backdrop immediately instead of waiting for a closing animation.
@@ -229,7 +230,7 @@
         },
       }));
     }
-    return Promise.resolve(RM.toast(message, kind, title));
+    return Promise.resolve(RM.toast(message, kind, title, kind === "warning" ? 20000 : undefined));
   };
 
   let alertQueue = Promise.resolve();

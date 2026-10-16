@@ -75,6 +75,7 @@ const html = execFileSync('php', ['-r', `
         await watchRow.locator('.queue-details summary').click();
 
         // Sticky table header inside scrollable container
+        await page.locator('#queue-page-size').selectOption('50');
         const stickyCheck = await page.evaluate(() => {
             const container = document.querySelector('.queue-list');
             const th = container.querySelector('thead th');
@@ -111,7 +112,7 @@ const html = execFileSync('php', ['-r', `
             assert.equal(await card.getAttribute('aria-current'), null);
             assert.equal(await page.locator('#queue-stock').inputValue(), '');
             assert.equal(await page.locator('.queue-item:visible').count(), 30);
-            assert.equal(await page.locator('#queue-results').innerText(), 'Showing 30 of 30 products');
+            assert.equal(await page.locator('#queue-results').innerText(), 'Showing 1–30 of 30 products');
         }
         await page.locator('#queue-sort').selectOption('name');
         await page.locator('#queue-sort').selectOption('priority');

@@ -75,6 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $sku = $barcode;
                     }
 
+                    // Keep generated IDs and all writes for this row in the same transaction.
+                    App\Store\StoreWriteGate::begin($pdo);
+
                     // Get or create category
                     $category_id = null;
                     if (!empty($category_name)) {
@@ -96,6 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $prod = $prod_stmt->fetch();
 
                     if ($prod) {
+                        $product_id = (int)$prod['product_id'];
                         $beforeStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
                         $beforeStmt->execute([(int)$prod['product_id'], $import_store_id]);
                         $beforeProduct = $beforeStmt->fetch();
@@ -171,10 +175,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         ]);
                         $product_id = $pdo->lastInsertId();
 
-                        // Create inventory record
-                        $inv_ins = $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, 0)");
-                        App\Store\StoreWriteGate::execute($pdo, $inv_ins, [$product_id]);
-                        
                         $driverService = new \App\Store\ScheduledDemandDriverService();
                         $driverService->recordDriver(
                             $pdo,
@@ -199,8 +199,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         );
                     }
 
+                    // Retrying a previously interrupted import also restores missing inventory.
+                    $inv_ins = $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand)
+                        SELECT ?, 0 WHERE NOT EXISTS (SELECT 1 FROM inventory WHERE product_id = ?)");
+                    App\Store\StoreWriteGate::execute($pdo, $inv_ins, [$product_id, $product_id]);
+                    $pdo->commit();
                     $successful++;
                 } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                     $failed++;
                     $errors[] = 'Row ' . ($successful + $failed) . ': ' . \App\Support\OperatorAlert::message($e, 'This row could not be imported. Check the row values and try again. Tell your Administrator if this keeps happening.');
                 }

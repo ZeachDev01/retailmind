@@ -7,6 +7,10 @@ const php = process.env.PHP_BINARY || (process.platform === 'win32' ? 'C:/xampp/
 const ui = fs.readFileSync('src/frontend/assets/js/ui.js', 'utf8');
 const navigation = fs.readFileSync('src/frontend/assets/js/page-navigation.js', 'utf8');
 const css = fs.readFileSync('src/frontend/assets/css/page-navigation.css', 'utf8');
+const products = fs.readFileSync('src/frontend/components/inventory_management/products.php', 'utf8');
+assert(products.includes("app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')"));
+assert(!products.includes('https://unpkg.com/html5-qrcode'));
+const scanner = fs.readFileSync('src/frontend/assets/vendor/html5-qrcode/html5-qrcode.min.js', 'utf8');
 const render = (html, partial) => {
     const result = spawnSync(php, ['src/backend/tests/support/navigation_response_fixture.php', partial ? '1' : ''], {input: html, encoding: 'utf8'});
     assert.equal(result.status, 0, result.stderr);
@@ -17,6 +21,7 @@ const render = (html, partial) => {
     let submitted;
     const server = http.createServer(async (req, res) => {
         if (req.url === '/navigation.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(navigation); return; }
+        if (req.url === '/scanner.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(scanner); return; }
         if (req.url === '/deferred.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(`document.addEventListener('DOMContentLoaded', () => { document.querySelector('#deferred').textContent = 'Ready'; });`); return; }
         if (req.url.startsWith('/shared.css')) { res.setHeader('Content-Type', 'text/css'); res.end('#control { color: rgb(12, 34, 56); }'); return; }
         if (req.url === '/error.php') { res.writeHead(500); res.end('SQLSTATE: private error'); return; }
@@ -37,7 +42,7 @@ const render = (html, partial) => {
             <form id="get-form" method="get"><input name="search" value="needle"><button>Search</button></form>
             <form id="ajax-form" method="post"><button>Existing AJAX</button></form></${contentTag}>
             <div id="page-modal" class="rm-modal-overlay" aria-hidden="true">Modal ${req.url}</div></div>
-            <script>
+            <script src="/scanner.js"></script><script>
             const localValue = 'Working';
             function changeControl() { document.querySelector('#control').textContent = localValue; }
             document.addEventListener('test-page-handler', () => window.handlerCalls = (window.handlerCalls || 0) + 1);
@@ -64,6 +69,7 @@ const render = (html, partial) => {
                     const page = await browser.newPage({viewport: {width: 1280, height: 800}});
                     page.setDefaultTimeout(10000);
                     const errors = [];
+                    await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
                     page.on('pageerror', error => errors.push(error.message));
                     await page.goto(origin + '/first.php');
                     await page.addStyleTag({content: fs.readFileSync('src/frontend/assets/css/theme.css', 'utf8')});
@@ -101,6 +107,7 @@ const render = (html, partial) => {
                         assert.equal(await page.locator('#appSidebar .active').getAttribute('id'), id);
                         assert(await page.locator('#appSidebar').evaluate(node => node.classList.contains('open')));
                         assert.equal(await page.locator('#deferred').textContent(), 'Ready');
+                        assert.equal(await page.evaluate(() => typeof window.Html5Qrcode), 'function', 'Scanner loads locally with external requests blocked');
                         await page.locator('#control').click();
                         assert.equal(await page.locator('#control').textContent(), 'Working');
                         assert.equal(await page.locator('#control').evaluate(node => getComputedStyle(node).color), 'rgb(12, 34, 56)');
@@ -122,6 +129,7 @@ const render = (html, partial) => {
                     assert.equal((await download).suggestedFilename(), 'report.csv');
                     await page.locator('#error').click();
                     await page.locator('[data-navigation-status][role=alert]').waitFor();
+                    assert(!(await page.locator('[data-navigation-status]').textContent()).includes('connection'), 'Loading errors do not assume an internet connection failure');
                     assert(!(await page.locator('#page-content').textContent()).includes('SQLSTATE'));
                     assert.equal(new URL(page.url()).search, '?search=needle');
                     await page.locator('#slow').click();

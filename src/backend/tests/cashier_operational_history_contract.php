@@ -96,4 +96,24 @@ $assert(str_contains($route, 'CashierOperationalHistoryRequest::resolve($pdo, $c
 $assert(!str_contains($route, "\$_POST[") && !str_contains($route, 'csrf_verify'), 'history route has no write action');
 $assert(str_contains(file_get_contents($root . '/src/frontend/components/sidebar.php'), 'components/cashier/history.php'),
     'Cashier can navigate to history');
+$insert = $pdo->prepare("INSERT INTO sales (sale_id, cashier_id, sale_date, total_amount, payment_method) VALUES (?, 1, '2026-10-01 12:00', 10, 'cash')");
+for ($saleId = 100; $saleId < 111; $saleId++) $insert->execute([$saleId]);
+$first = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales']);
+$second = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'page' => 2]);
+$assert(count($first['rows']) === 10 && $first['hasNext'], 'default page contains ten rows and has a next page');
+$assert(count($second['rows']) === 3 && !$second['hasNext'], 'last page contains the remaining rows');
+$assert(array_intersect(array_column($first['rows'], 'sale_id'), array_column($second['rows'], 'sale_id')) === [], 'pages do not repeat records');
+$assert($first['totalRows'] === 13 && $first['totalPages'] === 2, 'pagination counts only the authenticated Cashier records');
+$larger = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'length' => 25]);
+$assert(count($larger['rows']) === 13 && $larger['totalPages'] === 1 && !$larger['hasNext'], 'page length selector changes pagination');
+$invalidSize = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'length' => '-1']);
+$assert($invalidSize['pageSize'] === 10, 'unsupported page size uses ten rows');
+$filtered = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'date_from' => '2026-10-01', 'date_to' => '2026-10-01']);
+$assert($filtered['totalRows'] === 11 && count($filtered['rows']) === 10 && $filtered['hasNext'], 'count and rows use identical date filters');
+$insertRefund = $pdo->prepare("INSERT INTO cash_refunds (refund_id, cashier_id, sale_id, shift_id, created_at, refund_amount, payment_method, reason, note) VALUES (?, 1, 20, 10, '2026-10-01 12:00', 1, 'cash', 'other', 'pagination fixture')");
+for ($refundId = 100; $refundId < 155; $refundId++) $insertRefund->execute([$refundId]);
+$refundFirst = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'refunds']);
+$refundLast = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'refunds', 'page' => 6]);
+$assert(count($refundFirst['rows']) === 10 && $refundFirst['totalRows'] === 56, 'refund pagination counts only owned refunds');
+$assert(count($refundLast['rows']) === 6 && !$refundLast['hasNext'], 'refund pagination reaches records beyond the former fifty-row limit');
 echo "Cashier operational history contract: passed\n";

@@ -10,7 +10,7 @@ require_once __DIR__ . '/PhilippineTime.php';
 /** Read-only, identity-scoped operational records for the active Cashier. */
 final class CashierOperationalHistoryService
 {
-    public const PAGE_SIZE = 25;
+    public const PAGE_SIZE = 10;
 
     /** @return array<string, array{label: string, id: string, columns: array<string, string>}> */
     public static function types(): array
@@ -83,6 +83,24 @@ final class CashierOperationalHistoryService
         }
         $statement->execute();
         return $statement->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function count(string $type, int $cashierId, ?string $fromDay = null, ?string $throughDay = null): int
+    {
+        $query = $this->query($type);
+        $where = $query['alias'] . '.cashier_id = :cashier_id';
+        $parameters = [':cashier_id' => $cashierId];
+        if ($fromDay !== null) {
+            $where .= " AND {$query['date']} >= :date_start";
+            $parameters[':date_start'] = PhilippineTime::dayStart($fromDay);
+        }
+        if ($throughDay !== null) {
+            $where .= " AND {$query['date']} < :date_after";
+            $parameters[':date_after'] = PhilippineTime::dayAfter($throughDay);
+        }
+        $statement = $this->pdo->prepare("SELECT COUNT(*) FROM {$query['table']} {$query['alias']} WHERE {$where}");
+        $statement->execute($parameters);
+        return (int)$statement->fetchColumn();
     }
 
     /** A guessed identifier never reveals another Cashier's record. */

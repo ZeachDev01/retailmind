@@ -688,13 +688,13 @@ class CashierShiftService
     }
 
     /** The owning Cashier closes their own unlocked shift. */
-    public function closeShift(int $cashierId, float $actualCash, string $notes): array
+    public function closeShift(int $cashierId, float $actualCash, string $notes, ?array $denominations = null, ?int $countedShiftId = null): array
     {
-        return $this->reconcileShift($cashierId, $cashierId, $actualCash, $notes, null);
+        return $this->reconcileShift($cashierId, $cashierId, $actualCash, $notes, null, $denominations, $countedShiftId);
     }
 
     /** An Administrator intervenes without taking ownership of the shift. */
-    public function closeAbandonedShift(int $actorId, string $actorRole, int $cashierId, float $actualCash, string $notes, string $interventionReason): array
+    public function closeAbandonedShift(int $actorId, string $actorRole, int $cashierId, float $actualCash, string $notes, string $interventionReason, ?array $denominations = null, ?int $countedShiftId = null): array
     {
         if ($actorRole !== 'admin' || $actorId === $cashierId) {
             throw new DomainException('Only an Administrator can close another Cashier\'s Shift.');
@@ -703,13 +703,17 @@ class CashierShiftService
         if ($interventionReason === '') {
             throw new DomainException('Enter an intervention reason before closing another Cashier\'s Shift.');
         }
-        return $this->reconcileShift($cashierId, $actorId, $actualCash, $notes, $interventionReason);
+        return $this->reconcileShift($cashierId, $actorId, $actualCash, $notes, $interventionReason, $denominations, $countedShiftId);
     }
 
-    private function reconcileShift(int $cashierId, int $closingActorId, float $actualCash, string $notes, ?string $interventionReason): array
+    private function reconcileShift(int $cashierId, int $closingActorId, float $actualCash, string $notes, ?string $interventionReason, ?array $denominations, ?int $countedShiftId): array
     {
         $this->validateCountedCash($actualCash);
-        return $this->transaction(function () use ($cashierId, $closingActorId, $actualCash, $notes, $interventionReason): array {
+        $breakdown = $denominations === null ? null : CashDenominationCounter::count($denominations);
+        if ($breakdown !== null && (int)round($actualCash * 100) !== $breakdown['total_cents']) {
+            throw new InvalidArgumentException('Cash counted must match the bill and coin total.');
+        }
+        return $this->transaction(function () use ($cashierId, $closingActorId, $actualCash, $notes, $interventionReason, $breakdown, $countedShiftId): array {
             $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $lock = $this->pdo->prepare("SELECT shift_id FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
             $lock->execute([$cashierId]);
@@ -722,6 +726,9 @@ class CashierShiftService
             $shift = $this->getOpenShift($cashierId);
             if (!$shift) {
                 throw new RuntimeException('No open shift was found.');
+            }
+            if ($countedShiftId !== null && (int)$shift['shift_id'] !== $countedShiftId) {
+                throw new DomainException('This count belongs to a different shift. Count the current drawer first.');
             }
             $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
             $summary = $this->calculateShift((int)$shift['shift_id']);
@@ -772,6 +779,7 @@ class CashierShiftService
                     'variance_review_required' => $reviewRequired,
                     'reason' => $reason === '' ? null : $reason,
                     'payment_totals' => $paymentTotals,
+                    'denomination_breakdown' => $breakdown,
                 ]
             );
             return $this->calculateShift((int)$shift['shift_id']);
@@ -795,7 +803,7 @@ class CashierShiftService
     private function reconciliationResult(array $summary, float $countedCash): array
     {
         $expected = (float)$summary['calculated_expected_cash'];
-        $variance = round($countedCash - $expected, 2);
+        $variance = ((int)round($countedCash * 100) - (int)round($expected * 100)) / 100;
         $threshold = $this->materialVarianceThreshold();
         return [
             'counted_cash' => $countedCash,

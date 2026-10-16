@@ -90,10 +90,6 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <div class="topbar">
-                <h1>Report Stock Issue</h1><p class="page-subtitle">Your Stock Issue report history remains separate. Dates use Philippine time (Asia/Manila).</p>
-            </div>
-
             <?php if ($message): ?>
                 <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
@@ -132,15 +128,15 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                             </div>
                         </div>
                         <div id="product-results" class="search-results" aria-live="polite"></div>
-                        <div id="selected-product" class="adjustment-card" hidden>
+                        <div id="selected-product" class="adjustment-card" role="status" hidden>
                             <div class="adjustment-header">
                                 <div>
                                     <div class="adjustment-product" id="selected-product-name"></div>
                                     <div class="adjustment-sku" id="selected-product-code"></div>
                                 </div>
-                                <div class="u-text-right">
+                                <div class="selected-product-actions">
                                     <div class="adjustment-qty" id="selected-product-stock"></div>
-                                    <button type="button" class="btn-link" id="clear-product">Change</button>
+                                    <button type="button" class="btn btn-secondary" id="clear-product">Change product</button>
                                 </div>
                             </div>
                         </div>
@@ -326,30 +322,69 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         }
 
         let lookupAbortController = null;
-        async function lookup(url, emptyMessage) {
+        async function lookup(url, emptyMessage, selectMatch = false) {
             if (lookupAbortController) lookupAbortController.abort();
             lookupAbortController = new AbortController();
             try {
                 const response = await fetch(url, { signal: lookupAbortController.signal });
                 const data = await response.json();
-                renderResults(data.success ? (data.products || []) : [], emptyMessage);
+                const products = response.ok && data.success ? (data.products || []) : [];
+                if (selectMatch && products.length === 1) selectProduct(products[0]);
+                else renderResults(products, products.length > 1 ? 'More than one product matches. Select the correct product.' : emptyMessage);
             } catch (error) {
                 if (error && error.name === 'AbortError') return;
                 renderResults([], 'Unable to load products.');
             }
         }
 
+        function scanStockIssueCode(code) {
+            if (barcodeInput.disabled || !code) return;
+            clearTimeout(searchTimer);
+            productIdField.value = '';
+            selectedCard.hidden = true;
+            return lookup(productsApiUrl + '?code=' + encodeURIComponent(code) + '&limit=5', 'No active product with available stock matches that barcode.', true);
+        }
         barcodeInput.addEventListener('keydown', event => {
-            if (event.key !== 'Enter') {
-                return;
-            }
+            if (event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
             event.preventDefault();
+            if (event.repeat) return;
             const code = barcodeInput.value.trim();
-            if (code === '') {
+            barcodeInput.value = '';
+            scanStockIssueCode(code);
+        });
+
+        let stockIssueBarcode = '';
+        let stockIssueBarcodeAt = 0;
+        function resetStockIssueBarcode() {
+            stockIssueBarcode = '';
+            stockIssueBarcodeAt = 0;
+        }
+        document.addEventListener('keydown', event => {
+            if (barcodeInput.disabled || event.defaultPrevented || event.isComposing || event.repeat
+                || event.ctrlKey || event.metaKey || event.altKey || document.hidden
+                || event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')
+                || document.querySelector('dialog[open], [aria-modal="true"].open, .rm-modal-overlay.open, .command-overlay.open, .swal2-container')) {
+                resetStockIssueBarcode();
                 return;
             }
-            lookup(productsApiUrl + '?code=' + encodeURIComponent(code) + '&limit=5', 'No active product matches that barcode.');
-        });
+            const now = performance.now();
+            // shortcut: scanners must send characters within 80ms; tune for slower hardware if needed.
+            if (now - stockIssueBarcodeAt > 80) resetStockIssueBarcode();
+            if (event.key === 'Enter') {
+                const code = stockIssueBarcode;
+                resetStockIssueBarcode();
+                if (code.length < 3) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                scanStockIssueCode(code);
+            } else if (event.key.length === 1 && /^[\x21-\x7E]$/.test(event.key)) {
+                stockIssueBarcode += event.key;
+                stockIssueBarcodeAt = now;
+                if (stockIssueBarcode.length > 255) resetStockIssueBarcode();
+            } else if (event.key !== 'Shift') resetStockIssueBarcode();
+        }, true);
+        window.addEventListener('blur', resetStockIssueBarcode);
+        document.addEventListener('visibilitychange', resetStockIssueBarcode);
 
         searchInput.addEventListener('input', () => {
             clearTimeout(searchTimer);

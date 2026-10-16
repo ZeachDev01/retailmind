@@ -110,7 +110,7 @@
             spinner.setAttribute('aria-hidden', 'true');
             notice.append(spinner);
         }
-        notice.append(document.createTextNode(error ? 'This page could not be loaded completely. Check your connection and try the navigation again.' : 'Loading…'));
+        notice.append(document.createTextNode(error ? 'This page could not be loaded completely. Reload the page and try again.' : 'Loading…'));
         content.prepend(notice);
         content.setAttribute('aria-busy', error ? 'false' : 'true');
     }

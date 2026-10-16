@@ -24,31 +24,10 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
 </head>
 
-<body class="cashier-page">
+<body class="cashier-page cashier-dashboard-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <header class="topbar cashier-topbar">
-                <div class="cashier-heading">
-                    <h1>My Sales</h1>
-                    <p><?= htmlspecialchars((new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('l, M j, Y')) ?> performance and recent activity. Philippine time (Asia/Manila).</p>
-                </div>
-                <div class="cashier-meta">
-                    <a class="cashier-chip" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">View Cashier Shift</a>
-                    <span class="cashier-chip"><i class="bi bi-person" aria-hidden="true"></i><?= htmlspecialchars($_SESSION['full_name']) ?></span>
-                </div>
-            </header>
-
-            <section class="cashier-hero" aria-labelledby="cashier-hero-title">
-                <div>
-                    <h2 id="cashier-hero-title">Ready for the next customer?</h2>
-                    <p>Open the checkout screen to scan products, adjust quantities, accept payment, and print the receipt.</p>
-                </div>
-                <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">
-                    <i class="bi bi-cart-check" aria-hidden="true"></i>Open checkout
-                </a>
-            </section>
-
             <nav class="cashier-quick-actions" aria-label="Cashier quick actions">
                 <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">
                     <span class="action-icon"><i class="bi bi-upc-scan" aria-hidden="true"></i></span>
@@ -68,8 +47,8 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 <article class="stat-card with-icon">
                     <div class="stat-icon"><i class="bi bi-cash-stack" aria-hidden="true"></i></div>
                     <div class="value">&#8369;<?= number_format((float)$cashierMetrics['today_sales'], 2) ?></div>
-                    <div class="label">Today's sales</div>
-                    <div class="hint">Completed sales under your account</div>
+                    <div class="label">Today's gross sales</div>
+                    <div class="hint">Before refunds, Philippine time</div>
                 </article>
                 <article class="stat-card with-icon">
                     <div class="stat-icon"><i class="bi bi-receipt-cutoff" aria-hidden="true"></i></div>
@@ -96,11 +75,27 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="dashboard-panel-header">
                         <div>
                             <h2 id="recent-transactions-title">Recent transactions</h2>
-                            <p class="section-description">Your latest completed checkouts.</p>
+                            <p class="section-description">Your latest ten checkouts across all dates.</p>
                         </div>
                         <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">View all</a>
                     </div>
-                    <div class="table-wrap u-table-flat">
+                    <div class="dashboard-panel-header">
+                        <div>
+                            <h3>Today's sales by hour</h3>
+                            <p class="section-description">All your sales today, before refunds. Philippine time (UTC+08:00).</p>
+                        </div>
+                    </div>
+                        <div class="cashier-sales-chart">
+                            <canvas id="cashier-sales-chart" role="img" aria-label="Today's gross sales in pesos by hour, Philippine time.">
+                                <?php foreach ($cashierMetrics['hourly_sales'] as $hour => $total): ?>
+                                    <?= sprintf('%02d:00', $hour) ?>: PHP <?= number_format($total, 2) ?>;
+                                <?php endforeach; ?>
+                            </canvas>
+                        </div>
+                    <?php if (!$cashierMetrics['transactions']): ?>
+                        <p class="section-description">No sales recorded today.</p>
+                    <?php endif; ?>
+                    <div class="table-wrap u-table-flat" role="region" aria-labelledby="recent-transactions-title" tabindex="0">
                         <table class="cashier-recent-table">
                             <thead>
                                 <tr>
@@ -115,12 +110,12 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                             <tbody>
                                 <?php foreach ($recentTransactions as $sale): ?>
                                     <tr>
-                                        <td><strong>#<?= (int)$sale['sale_id'] ?></strong></td>
-                                        <td>&#8369;<?= number_format((float)$sale['total_amount'], 2) ?></td>
-                                        <td><?= (int)$sale['item_count'] ?></td>
-                                        <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', $sale['payment_method']))) ?></td>
-                                        <td><?= htmlspecialchars(format_display_datetime($sale['sale_date'])) ?></td>
-                                        <td>
+                                        <td data-label="Receipt"><strong>#<?= (int)$sale['sale_id'] ?></strong></td>
+                                        <td data-label="Total">&#8369;<?= number_format((float)$sale['total_amount'], 2) ?></td>
+                                        <td data-label="Items"><?= (int)$sale['item_count'] ?></td>
+                                        <td data-label="Payment"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $sale['payment_method']))) ?></td>
+                                        <td data-label="Time"><?= htmlspecialchars(format_display_datetime($sale['sale_date'])) ?></td>
+                                        <td data-label="Action">
                                             <a class="receipt-link" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id'])) ?>">
                                                 View receipt <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                             </a>
@@ -129,7 +124,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                                 <?php endforeach; ?>
                                 <?php if (!$recentTransactions): ?>
                                     <tr>
-                                        <td class="u-empty-cell-padded" colspan="6">No transactions recorded today.</td>
+                                        <td class="u-empty-cell-padded" colspan="6">No transactions recorded.</td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -170,6 +165,40 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
             </div>
         </main>
     </div>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+        <script>
+            if (typeof Chart !== 'undefined') {
+                const hourlySales = <?= json_encode($cashierMetrics['hourly_sales']) ?>;
+                const currency = new Intl.NumberFormat('en-PH', {style: 'currency', currency: 'PHP'});
+                const textColor = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#334155';
+                new Chart(document.getElementById('cashier-sales-chart'), {
+                    type: 'bar',
+                    data: {
+                        labels: hourlySales.map((total, hour) => String(hour).padStart(2, '0') + ':00'),
+                        datasets: [{
+                            label: 'Gross sales (PHP)',
+                            data: hourlySales,
+                            backgroundColor: getComputedStyle(document.body).getPropertyValue('--primary').trim() || '#2563eb',
+                            borderRadius: 6,
+                            maxBarThickness: 48
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+                        plugins: {
+                            legend: {display: false},
+                            tooltip: {callbacks: {label: context => currency.format(context.parsed.y)}}
+                        },
+                        scales: {
+                            x: {ticks: {color: textColor, maxTicksLimit: 8}, grid: {display: false}, title: {display: true, text: 'Hour (Philippine time)', color: textColor}},
+                            y: {beginAtZero: true, ticks: {color: textColor, callback: value => currency.format(value)}}
+                        }
+                    }
+                });
+            }
+        </script>
 </body>
 
 </html>

@@ -80,7 +80,7 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         exit;
     }
 
-    receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale);
+    receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale, false, true);
     exit;
 }
 
@@ -103,31 +103,26 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <header class="page-heading"><h1>Receipt History</h1></header>
-        <div class="receipts-container">
             <?php if ($selected_error): ?>
                 <div class="alert tag-warning" role="alert"><?= htmlspecialchars($selected_error) ?></div>
             <?php endif; ?>
 
-            <div class="section-header receipt-table-heading">
-                <div>
-                    <h2 id="receipt-table-title" tabindex="-1">Receipt History</h2>
-                    <p class="section-description">Customer lookup and reprint within your permitted history. Dates use Philippine time (Asia/Manila). Completed receipts are immutable; new corrections use the authorized Cash Refund workflow.</p>
-                </div>
-                <div class="receipt-heading-actions">
-                    <?php if ($canStartSale): ?>
-                        <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
-                    <?php endif; ?>
-                </div>
-            </div>
+            <?php if ($canStartSale): ?>
+                <a id="receiptNewSale" href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
+            <?php endif; ?>
 
+            <section class="receipt-history-panel" aria-label="Search receipt history">
+            <div class="receipt-filter-heading">
+                <h2><i class="bi bi-funnel" aria-hidden="true"></i> Filter receipts</h2>
+                <span>Dates in Philippine time &middot; Asia/Manila</span>
+            </div>
             <div class="receipt-filters" role="group" aria-label="Receipt filters">
                 <label>
-                    <span>From</span>
+                    <span>From date</span>
                     <input type="date" id="receiptDateFrom" aria-describedby="receiptTableStatusMessage">
                 </label>
                 <label>
-                    <span>To</span>
+                    <span>To date</span>
                     <input type="date" id="receiptDateTo" aria-describedby="receiptTableStatusMessage">
                 </label>
                 <label><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
@@ -150,6 +145,7 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
                 <button type="button" class="btn btn-quiet" id="retryReceiptTable" hidden>Retry</button>
             </div>
             <div id="receiptEmptyState" class="empty-state receipt-empty-state" hidden>
+                <i class="bi bi-receipt receipt-empty-icon" aria-hidden="true"></i>
                 <h2>No receipts have been created yet.</h2>
                 <p>Complete a sale to create the first receipt.</p>
                 <?php if ($canStartSale): ?>
@@ -159,8 +155,8 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
                 <?php endif; ?>
             </div>
             <noscript><p class="receipt-table-status">Enable JavaScript to search receipt history and open saved receipts.</p></noscript>
-            <div class="table-wrap receipt-table-wrap" tabindex="0" role="region" aria-label="Receipt history table and pagination">
-                <table id="receiptsTable" class="receipts-table display" aria-labelledby="receipt-table-title" data-no-smart-table>
+            <div id="receipt-table-title" class="table-wrap receipt-table-wrap" tabindex="0" role="region" aria-label="Receipt history table and pagination">
+                <table id="receiptsTable" class="receipts-table display" aria-label="Receipt History" data-no-smart-table>
                     <thead>
                         <tr>
                             <th>Receipt #</th>
@@ -176,11 +172,12 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
                     <tbody></tbody>
                 </table>
             </div>
-        </div>
+            <p class="receipt-history-note"><i class="bi bi-shield-check" aria-hidden="true"></i> Completed receipts are saved permanently. Use the authorized Cash Refund workflow to make corrections.</p>
+            </section>
     </main>
 </div>
 
-<?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
+<?php $receiptHistoryDrawer = true; require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
 
 <script src="<?= htmlspecialchars(app_url('assets/vendor/datatables/datatables.min.js')) ?>"></script>
 <script>
@@ -249,12 +246,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const table = new DataTable('#receiptsTable', {
         serverSide: true,
+        autoWidth: false,
+        columnDefs: [{targets: [6, 7, 8, 9], visible: false}],
         processing: true,
-        pageLength: 25,
+        pageLength: 10,
         lengthMenu: [10, 25, 50, 100],
         order: [[1, 'desc'], [0, 'desc']],
         stateSave: true,
         stateDuration: -1,
+        stateLoadParams: function(settings, data) {
+            data.length = 10;
+            data.start = 0;
+            if (data.columns) data.columns.forEach(function(column, index) {
+                column.visible = ![6, 7, 8, 9].includes(index);
+            });
+        },
         stateSaveCallback: function(settings, data) {
             data.receiptFilters = currentFilters();
             try {
@@ -325,23 +331,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 render: function(value, type) {
                     if (type !== 'display') return value;
                     const saleId = Number(value);
-                    let html = '<div class="actions-cell">' +
-                        '<button type="button" class="btn-small btn-view" onclick="viewReceipt(' + saleId + ', this)"><i class="bi bi-eye" aria-hidden="true"></i> View</button>';
-                    <?php if (current_role() === 'cashier'): ?>
-                    html += '<a class="btn-small" href="' + <?= json_encode(app_url('components/cashier/refunds.php?sale_id=')) ?> + saleId + '">Refund</a>';
-                    <?php endif; ?>
-                    html += '</div>';
-                    return html;
+                    return '<div class="actions-cell">' +
+                        '<button type="button" class="btn-small btn-view" data-receipt-details="' + saleId + '"><i class="bi bi-eye" aria-hidden="true"></i> Full details</button></div>';
                 }
             }
         ],
         layout: {
             topStart: null,
-            topEnd: {
+            topEnd: [{
                 search: {
                     placeholder: 'Receipt number or payment method...'
                 }
-            },
+            }, document.getElementById('receiptNewSale')].filter(Boolean),
             bottom: ['info', {pageLength: {menu: [10, 25, 50, 100]}}, {paging: {numbers: 5}}],
             bottomStart: null,
             bottomEnd: null
@@ -352,6 +353,73 @@ document.addEventListener('DOMContentLoaded', function() {
             zeroRecords: 'No receipts match the current search and filters.',
             search: 'Search:'
         }
+    });
+
+    const drawer = document.getElementById('receiptModal');
+    const receiptPanel = drawer.querySelector('#receiptContent');
+    const otherPanel = document.createElement('section');
+    otherPanel.id = 'receiptOtherDetails';
+    const drawerTabs = document.createElement('div');
+    drawerTabs.className = 'receipt-drawer-tabs';
+    drawerTabs.setAttribute('role', 'tablist');
+    drawerTabs.setAttribute('aria-label', 'Receipt details');
+    drawerTabs.innerHTML = '<button type="button" id="receiptPaperTab" role="tab" aria-controls="receiptContent">Receipt</button>' +
+        '<button type="button" id="receiptOtherTab" role="tab" aria-controls="receiptOtherDetails" disabled>Other Details</button>';
+    const drawerSummary = document.createElement('dl');
+    drawerSummary.className = 'receipt-drawer-summary';
+    otherPanel.append(drawerSummary);
+    receiptPanel.before(drawerTabs);
+    receiptPanel.after(otherPanel);
+    const tabs = Array.from(drawerTabs.querySelectorAll('[role="tab"]'));
+    const panels = [receiptPanel, otherPanel];
+    function selectDrawerTab(index) {
+        tabs.forEach(function(tab, position) {
+            tab.setAttribute('aria-selected', String(position === index));
+            tab.tabIndex = position === index ? 0 : -1;
+            panels[position].hidden = position !== index;
+        });
+    }
+    tabs.forEach(function(tab, index) {
+        panels[index].setAttribute('role', 'tabpanel');
+        panels[index].setAttribute('aria-labelledby', tab.id);
+        panels[index].tabIndex = 0;
+        tab.addEventListener('click', function() { selectDrawerTab(index); });
+        tab.addEventListener('keydown', function(event) {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : 1 - index;
+            if (tabs[next].disabled) return;
+            selectDrawerTab(next);
+            tabs[next].focus();
+        });
+    });
+    selectDrawerTab(0);
+    document.getElementById('receiptsTable').addEventListener('click', function(event) {
+        const button = event.target.closest('[data-receipt-details]');
+        if (!button) return;
+        const receipt = table.row(button.closest('tr')).data();
+        if (!receipt) return;
+        drawerSummary.replaceChildren();
+        const money = function(value) {
+            return '₱' + Number(value).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        };
+        Object.entries({
+            'Cashier shift': receipt.attribution_label,
+            'Cash Refunds': receipt.refund_status,
+            'Refunded': money(receipt.refunded_amount),
+            'Remaining net': money(receipt.remaining_net_amount)
+        }).forEach(function(entry) {
+            const field = document.createElement('div');
+            const label = document.createElement('dt');
+            const value = document.createElement('dd');
+            label.textContent = entry[0];
+            value.textContent = entry[1];
+            field.append(label, value);
+            drawerSummary.append(field);
+        });
+        tabs[1].disabled = false;
+        selectDrawerTab(0);
+        window.viewReceipt(receipt.sale_id, button);
     });
 
     table.on('preXhr', function() {
@@ -399,7 +467,7 @@ document.addEventListener('DOMContentLoaded', function() {
         validDates();
         table.search('');
         table.order([[1, 'desc'], [0, 'desc']]);
-        table.page.len(25);
+        table.page.len(10);
         table.ajax.reload(null, true);
     });
 });

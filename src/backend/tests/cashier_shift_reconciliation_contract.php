@@ -46,7 +46,9 @@ $check((float)$service->calculateShift(20)['calculated_expected_cash'] === $expe
 $refused(fn() => $service->closeShift(1, 310, ''), 'material variance without a reason is refused');
 $check((int)$pdo->query("SELECT COUNT(*) FROM cashier_shifts WHERE status='open'")->fetchColumn() === 1,
     'refused count leaves shift open');
-$summary = $service->closeShift(1, 320, 'Drawer was short after count');
+$denominations = ['bill_100' => 3, 'bill_20' => 1];
+$refused(fn() => $service->closeShift(1, 319, 'Count', $denominations, 20), 'tampered total is refused');
+$summary = $service->closeShift(1, 320, 'Drawer was short after count', $denominations, 20);
 $check((float)$summary['expected_cash'] === $expected && (float)$summary['cash_variance'] === -100.00,
     'Cashier receives expected cash and variance after submission');
 $check((int)$summary['variance_review_required'] === 0, 'exactly PHP 100 needs no review');
@@ -58,11 +60,20 @@ $check($audit !== false && (int)$audit['record_id'] === 20 && $audit['category']
     'closure creates a Protected Audit Record');
 $check(($details['expected_cash'] ?? null) == $expected && ($details['cash_variance'] ?? null) == -100,
     'audit records reconciliation result');
+$check(($details['denomination_breakdown']['quantities']['bill_100'] ?? null) === 3
+    && ($details['denomination_breakdown']['total_cents'] ?? null) === 32000,
+    'protected database audit stores final denominations and exact centavo total');
+$auditCount = (int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE action='Cashier Shift closed'")->fetchColumn();
+try { $service->closeShift(1, 320, 'Repeated close', $denominations, 20); $failures[] = 'duplicate close accepted'; }
+catch (RuntimeException $expectedDuplicate) {}
+$check((int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE action='Cashier Shift closed'")->fetchColumn() === $auditCount,
+    'duplicate closure cannot write another audit or reconciliation');
 $check((int)$summary['closed_by'] === 1 && $summary['intervention_reason'] === null,
     'owner closure records the owning Cashier as closing actor');
 
 $pdo->exec("INSERT INTO cashier_shifts (shift_id,cashier_id,register_id,status,opening_cash) VALUES (21,1,10,'open',100);
     INSERT INTO attention_settings VALUES ('store','cash_variance_amount','50')");
+$refused(fn() => $service->closeShift(1, 320, 'Old count', $denominations, 20), 'old count cannot close a newly opened shift');
 $refused(fn() => $service->closeShift(1, 0, ''), 'configured threshold applies to closure');
 $preview = $service->previewReconciliation(1, 0);
 $check($preview['expected_cash'] === 100.0 && $preview['variance_review_required'],
