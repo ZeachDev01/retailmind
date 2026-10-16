@@ -254,44 +254,22 @@ $rangeUrl = $currentUrl;
                     </div>
                 </section>
 
-                <div class="operations-overview-grid">
-                    <section class="dashboard-section" aria-labelledby="staff-shifts-title">
-                        <div class="section-header"><div><h2 id="staff-shifts-title">Staff &amp; cashier shifts</h2><p class="section-description">Delegated staff and cash-control oversight.</p></div></div>
-                        <div class="indicator-list">
-                            <div class="indicator-item"><span><strong>Active Cashiers</strong><span>Available operational staff</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_cashiers'] ?></b></div>
-                            <div class="indicator-item"><span><strong>Active Inventory Managers</strong><span>Routine inventory operators</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_inventory_managers'] ?></b></div>
-                            <div class="indicator-item"><span><strong>Disabled Accounts</strong><span>Retained staff identities</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['disabled_staff'] ?></b></div>
-                            <div class="indicator-item"><span><strong>Open cashier shifts</strong><span>Currently active shifts</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['open'] ?></b></div>
-                            <div class="indicator-item"><span><strong>Unreviewed variances</strong><span>Closed shifts awaiting review</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
+                <section class="dashboard-section staff-shifts-section" aria-labelledby="staff-shifts-title">
+                    <div class="section-header">
+                        <div>
+                            <h2 id="staff-shifts-title"><i class="bi bi-people" aria-hidden="true"></i> Staff &amp; cashier shifts</h2>
+                            <p class="section-description">Delegated staff and cash-control oversight.</p>
                         </div>
-                    </section>
-
-                    <section class="dashboard-section" aria-labelledby="forecast-title">
-                        <div class="section-header"><div><h2 id="forecast-title">Demand Forecast performance</h2><p class="section-description">Operational quality and exceptions; model controls are not available here.</p></div></div>
-                        <div class="metric-pair">
-                            <article><span>Evaluated products</span><strong><?= (int)$dashboard['forecast']['evaluated_products'] ?></strong></article>
-                            <article><span>7-Day MAE</span><strong><?= isset($dashboard['forecast']['evaluations'][7]['mae']) ? $escape(number_format($dashboard['forecast']['evaluations'][7]['mae'], 2)) : 'N/A' ?></strong></article>
-                            <article><span>14-Day MAE</span><strong><?= isset($dashboard['forecast']['evaluations'][14]['mae']) ? $escape(number_format($dashboard['forecast']['evaluations'][14]['mae'], 2)) : 'N/A' ?></strong></article>
-                            <article><span>28-Day MAE</span><strong><?= isset($dashboard['forecast']['evaluations'][28]['mae']) ? $escape(number_format($dashboard['forecast']['evaluations'][28]['mae'], 2)) : 'N/A' ?></strong></article>
-                        </div>
-                        <div class="indicator-item"><span><strong>Operational forecast exceptions</strong><span>Products with Low or Insufficient Forecast Readiness</span></span><b class="indicator-value"><?= (int)$dashboard['forecast']['operational_exceptions'] ?></b></div>
-                    </section>
-
-                    <section class="dashboard-section inventory-escalation-summary" aria-labelledby="inventory-title">
-                        <div class="section-header"><div><h2 id="inventory-title">Inventory oversight</h2><p class="section-description">Read-only stock and Stock Issue summary; routine inventory execution remains with the Inventory Manager.</p></div></div>
-                        <div class="metric-pair"><article><span>Pending Stock Issues</span><strong><?= (int)$dashboard['inventory']['escalated'] ?></strong></article><article><span>Out of stock</span><strong><?= (int)$dashboard['inventory']['out_of_stock'] ?></strong></article><article><span>Low stock</span><strong><?= (int)$dashboard['inventory']['low_stock'] ?></strong></article></div>
-                    </section>
-                </div>
+                    </div>
+                    <div class="indicator-list">
+                        <div class="indicator-item"><span><strong>Active Cashiers</strong><span>Available operational staff</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_cashiers'] ?></b></div>
+                        <div class="indicator-item"><span><strong>Active Inventory Managers</strong><span>Routine inventory operators</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_inventory_managers'] ?></b></div>
+                        <div class="indicator-item"><span><strong>Disabled Accounts</strong><span>Retained staff identities</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['disabled_staff'] ?></b></div>
+                        <div class="indicator-item"><span><strong>Open cashier shifts</strong><span>Currently active shifts</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['open'] ?></b></div>
+                        <div class="indicator-item"><span><strong>Unreviewed variances</strong><span>Closed shifts awaiting review</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
+                    </div>
+                </section>
             <?php endif; ?>
-
-            <section class="dashboard-section control-center-actions" aria-labelledby="store-tools-title">
-                <div class="section-header"><div><h2 id="store-tools-title">Store governance</h2><p class="section-description">Administrator actions for Store oversight and delegated decisions.</p></div></div>
-                <div class="quick-actions">
-                    <?php foreach ($dashboard['actions'] as $action): ?>
-                        <a class="quick-action" href="<?= $escape(app_url($action['destination'])) ?>" data-dashboard-action><i class="bi <?= $escape($action['icon']) ?>" aria-hidden="true"></i><strong><?= $escape($action['label']) ?></strong><span><?= $escape($action['description']) ?></span></a>
-                    <?php endforeach; ?>
-                </div>
-            </section>
         </main>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>

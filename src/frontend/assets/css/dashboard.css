@@ -198,12 +198,7 @@
 .comparison-card > span,
 .comparison-card small { display: block; color: var(--muted); font-size: .76rem; }
 .comparison-card strong { display: block; margin: .25rem 0; font-size: 1.2rem; overflow-wrap: anywhere; }
-.operations-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
-.operations-overview-grid .inventory-escalation-summary { grid-column: 1 / -1; }
-.metric-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: .65rem; margin-bottom: .75rem; }
-.metric-pair article { padding: .75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--theme-surface-soft, #f8fafc); }
-.metric-pair span { display: block; color: var(--muted); font-size: .76rem; }
-.metric-pair strong { display: block; margin-top: .2rem; font-size: 1.15rem; }
+.staff-shifts-section .section-header h2 { display: inline-flex; align-items: center; gap: .5rem; }
 
 .net-sales-section { margin-top: 1.25rem; }
 .net-sales-summaries-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
@@ -263,9 +258,7 @@
     .control-center-headlines,
     .store-operations-headlines,
     .comparison-grid,
-    .operations-overview-grid,
     .continuity-grid { grid-template-columns: 1fr; }
-    .operations-overview-grid .inventory-escalation-summary { grid-column: auto; }
     .dashboard-state { align-items: flex-start; flex-wrap: wrap; }
     .control-center-heading { align-items: flex-start; }
     .control-center-utilities { width: 100%; justify-content: space-between; }

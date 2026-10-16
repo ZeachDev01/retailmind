@@ -192,6 +192,29 @@ const {chromium} = require('playwright');
 
             await page.goto('http://dashboard.test/');
 
+            // Verify removed sections are absent
+            assert.equal(await page.locator('#store-tools-title').count(), 0, 'Store governance section must be absent');
+            assert.equal(await page.locator('#inventory-title').count(), 0, 'Inventory oversight section must be absent');
+            assert.equal(await page.locator('#forecast-title').count(), 0, 'Demand Forecast performance section must be absent');
+
+            // Verify retained sections remain visible
+            assert(await page.locator('#store-attention-title').isVisible(), 'Store attention queue must be visible');
+            assert(await page.locator('#store-status-title').isVisible(), 'Store status must be visible');
+            assert(await page.locator('#comparison-title').isVisible(), 'Period comparison must be visible');
+            assert(await page.locator('#staff-shifts-title').isVisible(), 'Staff & cashier shifts must be visible');
+
+            // Verify staff heading icon and alignment
+            assert.equal(await page.locator('#staff-shifts-title i.bi.bi-people').getAttribute('aria-hidden'), 'true', 'Staff heading icon must have aria-hidden="true"');
+            const headingDisplay = await page.locator('#staff-shifts-title').evaluate(el => window.getComputedStyle(el).display);
+            const headingAlign = await page.locator('#staff-shifts-title').evaluate(el => window.getComputedStyle(el).alignItems);
+            assert.equal(headingDisplay, 'inline-flex', 'Staff heading should use inline-flex for alignment');
+            assert.equal(headingAlign, 'center', 'Staff heading should vertically center icon with text');
+
+            // Verify staff section placement after period comparison
+            const comparisonBox = await page.locator('.period-comparison').boundingBox();
+            const staffBox = await page.locator('.staff-shifts-section').boundingBox();
+            assert(staffBox.y > comparisonBox.y, 'Staff section must be placed after performance comparison');
+
             // 1. Verify Net Sales heading and ongoing badge
             assert(await page.locator('#net-sales-title').isVisible(), 'Net sales title must be visible');
             assert.match(await page.locator('.net-sales-title-wrap .period-badge.ongoing').innerText(), /ongoing/i);
@@ -293,6 +316,9 @@ const {chromium} = require('playwright');
                 assert(await page.locator('.net-sales-section').evaluate(el => el.scrollWidth <= el.clientWidth), `Net sales section fits at ${width}px`);
                 assert(await page.locator('.net-sales-summaries-grid').evaluate(el => el.scrollWidth <= el.clientWidth), `Summaries grid fits at ${width}px`);
                 assert(await page.locator('.net-sales-table-wrap').evaluate(el => el.scrollWidth <= el.clientWidth), `Accessible table fits at ${width}px`);
+                assert(await page.locator('.staff-shifts-section').evaluate(el => el.scrollWidth <= el.clientWidth), `Staff section fits at ${width}px`);
+                assert.equal(await page.locator('#staff-shifts-title i.bi.bi-people').count(), 1, `Staff icon present at ${width}px`);
+                assert.equal(await page.locator('#staff-shifts-title').evaluate(el => window.getComputedStyle(el).display), 'inline-flex', `Staff heading aligned at ${width}px`);
             }
 
             await page.close();
