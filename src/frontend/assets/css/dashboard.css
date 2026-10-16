@@ -205,6 +205,26 @@
 .metric-pair span { display: block; color: var(--muted); font-size: .76rem; }
 .metric-pair strong { display: block; margin-top: .2rem; font-size: 1.15rem; }
 
+.net-sales-section { margin-top: 1.25rem; }
+.net-sales-title-wrap { display: flex; align-items: center; gap: .6rem; }
+.net-sales-title-wrap h2 { margin: 0; }
+.period-badge { display: inline-flex; align-items: center; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.period-badge.ongoing { background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); }
+.net-sales-summary-stat { text-align: right; }
+.net-sales-summary-label { display: block; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+.net-sales-summary-value { display: block; font-size: clamp(1.4rem, 2vw, 1.8rem); font-weight: 800; color: var(--text); }
+.net-sales-summary-value.is-negative,
+.text-negative { color: #dc2626; }
+.net-sales-summary-value.is-unavailable { color: var(--muted); font-size: 1.2rem; }
+.net-sales-empty-note { display: flex; align-items: center; gap: .45rem; margin-bottom: .85rem; font-style: italic; }
+.net-sales-chart-wrapper { position: relative; width: 100%; height: 260px; min-height: 220px; margin-bottom: 1.25rem; }
+.net-sales-table-wrap { margin-top: 1rem; overflow-x: auto; }
+.net-sales-table-wrap .net-sales-table { min-width: 0; width: 100%; border-collapse: collapse; }
+.net-sales-table th,
+.net-sales-table td { padding: .65rem .85rem; text-align: left; }
+.net-sales-table th:last-child,
+.net-sales-table td:last-child { text-align: right; }
+
 @media (max-width: 1180px) {
     .super-administrator-workspace .main-content { grid-template-columns: 1fr; }
     .super-administrator-workspace .control-center-heading,
@@ -240,11 +260,17 @@
     .governance-queue .attention-item .btn { grid-column: 1 / -1; width: 100%; min-width: 0; }
     .access-readiness-item { grid-template-columns: 1fr; }
     .access-readiness-action { width: 100%; min-width: 0; }
+    .net-sales-section .section-header { flex-direction: column; align-items: flex-start; gap: .75rem; }
+    .net-sales-summary-stat { text-align: left; }
+    .net-sales-chart-wrapper { height: 220px; }
 }
 
 @media (max-width: 480px) {
     .control-center-utilities { align-items: stretch; flex-direction: column; }
     .control-center-utilities .btn { justify-content: center; width: 100%; }
+    .net-sales-table th,
+    .net-sales-table td { padding: .4rem .35rem; font-size: .78rem; }
+    .net-sales-table .net-sales-breakdown-col { display: none; }
 }
 
 .skeleton { position: relative; overflow: hidden; background: var(--theme-surface-soft, #e2e8f0); border-radius: 8px; color: transparent !important; }

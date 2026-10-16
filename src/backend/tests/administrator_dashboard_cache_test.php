@@ -251,6 +251,54 @@ try {
     $afterTtl = $workspace->load('admin', 30);
     $assert($pdo->queryCount > 0, 'Advancing clock past 300s must trigger cache refresh (queries executed: ' . $pdo->queryCount . ')');
 
+    // 8. Stale prior-day calendar data cannot masquerade as Today (Issue #209 / Acceptance Criteria 6)
+    // Prime cache near midnight: 23:59:00
+    $clock->set(new DateTimeImmutable('2026-10-16 23:59:00'));
+    $pdo->queryCount = 0;
+    $nearMidnight = $workspace->load('admin', 30);
+    $assert($nearMidnight['net_sales']['as_of'] === '2026-10-16 23:59:00', 'As-of time shares freshness time');
+    $assert($nearMidnight['net_sales']['as_of'] === $nearMidnight['freshness']['generated_at'], 'Cached totals and chart points share as-of time');
+
+    // Advance 120 seconds into next day: 00:01:00 (120s < 300s TTL)
+    $clock->advance(120);
+    $pdo->queryCount = 0;
+    $afterMidnight = $workspace->load('admin', 30);
+    $assert($pdo->queryCount > 0, 'Crossing calendar midnight must invalidate cache even if under 300s TTL (queries executed: ' . $pdo->queryCount . ')');
+    $assert($afterMidnight['net_sales']['as_of'] === '2026-10-17 00:01:00', 'New calendar day must generate new Today payload');
+
+    // 9. Older cached payload without net_sales cannot break new view
+    $clock->set(new DateTimeImmutable('2026-10-17 10:00:00'));
+    // Prime cache with legacy payload missing net_sales
+    $legacyEntry = [
+        'timestamp' => $clock->now()->getTimestamp(),
+        'data' => [
+            'role' => 'admin',
+            'range_days' => 30,
+            'state' => 'ready',
+            'headline' => [],
+            'exceptions' => [],
+            'comparison' => [],
+            'staff' => [],
+            'shifts' => [],
+            'forecast' => [],
+            'inventory' => [],
+            'actions' => [],
+            'freshness' => ['generated_at' => '2026-10-17 10:00:00', 'stale_after' => '2026-10-17 10:05:00', 'refresh_seconds' => 300, 'is_stale' => false],
+            'message' => null,
+            // net_sales missing
+        ],
+    ];
+    // Put legacy entry directly into file cache
+    $prefix = substr(md5(dirname(__DIR__, 2) . '/app/Dashboard'), 0, 8);
+    $cacheFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'retailmind_' . $prefix . '_dashboard_admin_30.json';
+    file_put_contents($cacheFile, json_encode($legacyEntry));
+    StoreOperationsDashboardWorkspace::invalidateCache('cashier', 30); // invalidate only cashier to leave file intact
+
+    $pdo->queryCount = 0;
+    $recoveredView = $workspace->load('admin', 30);
+    $assert(isset($recoveredView['net_sales']), 'Older cached payload without net_sales must trigger refresh with net_sales');
+    $assert($recoveredView['net_sales']['status'] === 'ongoing', 'Recovered view has ongoing status');
+
 } catch (Throwable $e) {
     $failures[] = 'Administrator dashboard cache integration test threw: ' . $e->getMessage() . "\n" . $e->getTraceAsString();
 }

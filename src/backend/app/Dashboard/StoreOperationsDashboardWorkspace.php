@@ -74,26 +74,33 @@ final class StoreOperationsDashboardWorkspace
         return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'retailmind_' . $prefix . '_dashboard_' . $role . '_' . $days . '.json';
     }
 
+    private static function isCacheValid(array $entry, int $nowTs, string $todayDatePh, \DateTimeZone $tz): bool
+    {
+        if (($nowTs - (int)($entry['timestamp'] ?? 0)) >= self::REFRESH_SECONDS) {
+            return false;
+        }
+        $entryDatePh = (new DateTimeImmutable('@' . (int)$entry['timestamp']))->setTimezone($tz)->format('Y-m-d');
+        return $entryDatePh === $todayDatePh && isset($entry['data']['net_sales']) && is_array($entry['data']['net_sales']);
+    }
+
     private static function getCached(string $role, int $days, DateTimeImmutable $now): ?array
     {
         $key = "{$role}_{$days}";
         $nowTs = $now->getTimestamp();
-        if (isset(self::$memoryCache[$key])) {
-            $entry = self::$memoryCache[$key];
-            if (($nowTs - (int)$entry['timestamp']) < self::REFRESH_SECONDS) {
-                return $entry['data'];
-            }
+        $tz = new \DateTimeZone('Asia/Manila');
+        $todayDatePh = $now->setTimezone($tz)->format('Y-m-d');
+
+        if (isset(self::$memoryCache[$key]) && self::isCacheValid(self::$memoryCache[$key], $nowTs, $todayDatePh, $tz)) {
+            return self::$memoryCache[$key]['data'];
         }
         $file = self::cacheFilePath($role, $days);
         if (is_file($file)) {
             $content = @file_get_contents($file);
             if ($content !== false) {
                 $entry = json_decode($content, true);
-                if (is_array($entry) && isset($entry['timestamp'], $entry['data'])) {
-                    if (($nowTs - (int)$entry['timestamp']) < self::REFRESH_SECONDS) {
-                        self::$memoryCache[$key] = $entry;
-                        return $entry['data'];
-                    }
+                if (is_array($entry) && self::isCacheValid($entry, $nowTs, $todayDatePh, $tz)) {
+                    self::$memoryCache[$key] = $entry;
+                    return $entry['data'];
                 }
             }
         }
@@ -135,6 +142,7 @@ final class StoreOperationsDashboardWorkspace
             ));
             $exceptions = $this->exceptions($now, $days, $thresholds);
             $headline = $this->headline($now, $days, $thresholds);
+            $netSales = $this->netSales($now);
 
             $data = [
                 'role' => $actorRole,
@@ -148,6 +156,7 @@ final class StoreOperationsDashboardWorkspace
                 'shifts' => $this->shifts(),
                 'forecast' => $this->forecast(),
                 'inventory' => $this->inventory(),
+                'net_sales' => $netSales,
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
                 'message' => $exceptions === [] ? 'No Store-operational exceptions currently require action.' : null,
@@ -169,6 +178,7 @@ final class StoreOperationsDashboardWorkspace
                 'shifts' => [],
                 'forecast' => [],
                 'inventory' => [],
+                'net_sales' => null,
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
                 'message' => 'Current Store operations could not be loaded. Refresh to try again.',
@@ -242,6 +252,79 @@ final class StoreOperationsDashboardWorkspace
                 'SELECT COUNT(*) FROM sale_reversals WHERE created_at >= ? AND created_at < ?',
                 [$startValue, $endValue]
             ),
+        ];
+    }
+
+    private function netSales(DateTimeImmutable $now): array
+    {
+        $tz = new \DateTimeZone('Asia/Manila');
+        $nowPh = $now->setTimezone($tz);
+        $todayStart = $nowPh->setTime(0, 0, 0);
+        $startStr = $todayStart->format('Y-m-d H:i:s');
+        $endStr = $nowPh->format('Y-m-d H:i:s');
+        $currentHour = (int)$nowPh->format('G');
+
+        $hourlyCents = [];
+        for ($hour = 0; $hour <= $currentHour; $hour++) {
+            $hourlyCents[$hour] = ['sales' => 0, 'refunds' => 0];
+        }
+
+        $salesRows = $this->rows(
+            'SELECT total_amount, sale_date FROM sales WHERE sale_date >= ? AND sale_date <= ?',
+            [$startStr, $endStr]
+        );
+        foreach ($salesRows as $row) {
+            $hour = (int)(new DateTimeImmutable((string)$row['sale_date'], $tz))->setTimezone($tz)->format('G');
+            if ($hour >= 0 && $hour <= $currentHour) {
+                $hourlyCents[$hour]['sales'] += (int)round((float)$row['total_amount'] * 100);
+            }
+        }
+
+        $refundRows = $this->rows(
+            'SELECT refund_amount, created_at FROM cash_refunds WHERE created_at >= ? AND created_at <= ?',
+            [$startStr, $endStr]
+        );
+        foreach ($refundRows as $row) {
+            $hour = (int)(new DateTimeImmutable((string)$row['created_at'], $tz))->setTimezone($tz)->format('G');
+            if ($hour >= 0 && $hour <= $currentHour) {
+                $hourlyCents[$hour]['refunds'] += (int)round((float)$row['refund_amount'] * 100);
+            }
+        }
+
+        $points = [];
+        $totalSalesCents = 0;
+        $totalRefundsCents = 0;
+        $totalNetCents = 0;
+
+        for ($hour = 0; $hour <= $currentHour; $hour++) {
+            $salesCents = $hourlyCents[$hour]['sales'];
+            $refundsCents = $hourlyCents[$hour]['refunds'];
+            $netCents = $salesCents - $refundsCents;
+            $totalSalesCents += $salesCents;
+            $totalRefundsCents += $refundsCents;
+            $totalNetCents += $netCents;
+
+            $points[] = [
+                'hour' => $hour,
+                'label' => sprintf('%02d:00', $hour),
+                'sales' => (float)($salesCents / 100),
+                'refunds' => (float)($refundsCents / 100),
+                'net_sales' => (float)($netCents / 100),
+            ];
+        }
+
+        $hasActivity = ($totalSalesCents > 0 || $totalRefundsCents > 0);
+
+        return [
+            'period' => 'today',
+            'status' => 'ongoing',
+            'as_of' => $endStr,
+            'timezone' => 'Asia/Manila',
+            'total' => (float)($totalNetCents / 100),
+            'sales_total' => (float)($totalSalesCents / 100),
+            'refunds_total' => (float)($totalRefundsCents / 100),
+            'has_activity' => $hasActivity,
+            'points' => $points,
         ];
     }
 

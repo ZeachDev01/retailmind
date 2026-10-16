@@ -27,13 +27,22 @@ $formatDate = static function (?string $value): string {
         return 'Unavailable';
     }
 };
-$formatMetric = static fn(float|int $value, bool $currency = false): string => ($currency ? '₱' : '') . number_format((float)$value, $currency ? 2 : 0);
+$formatMetric = static fn(float|int $value, bool $currency = false): string => $currency
+    ? ($value < 0 ? '-₱' : '₱') . number_format(abs((float)$value), 2)
+    : number_format((float)$value, 0);
+$formatCurrency = static fn(float|int $value): string => $formatMetric($value, true);
 $formatChange = static function (?float $change): string {
     if ($change === null) {
         return 'No prior baseline';
     }
     return ($change > 0 ? '+' : '') . number_format($change, 1) . '%';
 };
+$netSales = $dashboard['net_sales'] ?? null;
+$hasNetSales = $netSales !== null && is_array($netSales);
+$netSalesPoints = $hasNetSales ? ($netSales['points'] ?? []) : [];
+$netSalesTotal = $hasNetSales ? ($netSales['total'] ?? 0.0) : null;
+$netSalesHasActivity = $hasNetSales && ($netSales['has_activity'] ?? false);
+$netSalesAsOf = $hasNetSales ? ($netSales['as_of'] ?? null) : null;
 $headlineOrder = [
     'sales_cash_exceptions' => ['Sales & cash exceptions', 'bi-exclamation-diamond'],
     'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam'],
@@ -54,6 +63,7 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Store Operations</title>
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/dashboard.css')) ?>">
 </head>
 <body class="admin-dashboard-page administrator-workspace">
     <div class="app-shell">
@@ -97,6 +107,69 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
                                 <a class="btn btn-small" href="<?= $escape(app_url($item['destination'])) ?>" data-dashboard-action>Review</a>
                             </article>
                         <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </section>
+
+            <section class="dashboard-section net-sales-section" aria-labelledby="net-sales-title">
+                <div class="section-header control-center-section-header">
+                    <div>
+                        <div class="net-sales-title-wrap">
+                            <h2 id="net-sales-title">Today's Net Sales</h2>
+                            <span class="period-badge ongoing">Ongoing</span>
+                        </div>
+                        <p class="section-description">Philippine time (UTC+08:00) · Completed sales after discounts minus issued refunds<?php if ($netSalesAsOf): ?> · As of <?= $escape($formatDate($netSalesAsOf)) ?><?php endif; ?></p>
+                    </div>
+                    <div class="net-sales-summary-stat">
+                        <span class="net-sales-summary-label">Today's Net Sales</span>
+                        <?php if ($hasNetSales): ?>
+                            <strong class="net-sales-summary-value <?= $netSalesTotal < 0 ? 'is-negative' : '' ?>"><?= $escape($formatCurrency($netSalesTotal)) ?></strong>
+                        <?php else: ?>
+                            <strong class="net-sales-summary-value is-unavailable">Unavailable</strong>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <?php if (!$hasNetSales): ?>
+                    <div class="dashboard-state dashboard-state-error" role="alert">
+                        <i class="bi bi-cloud-slash" aria-hidden="true"></i>
+                        <div>
+                            <strong>Today's Net Sales unavailable</strong>
+                            <p>Net sales metrics could not be loaded. Refresh to try again.</p>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <?php if (!$netSalesHasActivity): ?>
+                        <p class="section-description net-sales-empty-note"><i class="bi bi-info-circle" aria-hidden="true"></i> No sales or refunds recorded today.</p>
+                    <?php endif; ?>
+
+                    <div class="net-sales-chart-wrapper">
+                        <canvas id="net-sales-hourly-chart" role="img" aria-label="Today's hourly Net Sales in Philippine pesos"></canvas>
+                    </div>
+
+                    <div class="table-wrap u-table-flat net-sales-table-wrap" role="region" aria-label="Today's hourly Net Sales breakdown" tabindex="0">
+                        <table class="net-sales-table" aria-label="Exact hourly Net Sales breakdown for Today">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Hour</th>
+                                    <th scope="col" class="net-sales-breakdown-col">Sales</th>
+                                    <th scope="col" class="net-sales-breakdown-col">Refunds</th>
+                                    <th scope="col">Net Sales</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($netSalesPoints as $point): ?>
+                                    <tr>
+                                        <td data-label="Hour"><strong><?= $escape($point['label']) ?></strong></td>
+                                        <td data-label="Sales" class="net-sales-breakdown-col"><?= $escape($formatCurrency($point['sales'])) ?></td>
+                                        <td data-label="Refunds" class="net-sales-breakdown-col"><?= $escape($formatCurrency($point['refunds'])) ?></td>
+                                        <td data-label="Net Sales" class="<?= $point['net_sales'] < 0 ? 'text-negative' : '' ?>">
+                                            <?= $escape($formatCurrency($point['net_sales'])) ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 <?php endif; ?>
             </section>
@@ -163,8 +236,69 @@ $rangeUrl = app_url('components/administrator/dashboard.php') . '?range=' . $sel
             </section>
         </main>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script>
     (() => {
+        <?php if ($hasNetSales && !empty($netSalesPoints)): ?>
+        if (typeof Chart !== 'undefined') {
+            const canvas = document.getElementById('net-sales-hourly-chart');
+            if (canvas) {
+                const points = <?= json_encode($netSalesPoints, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+                const labels = points.map(p => p.label);
+                const data = points.map(p => p.net_sales);
+                const textColor = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#334155';
+                const primaryColor = getComputedStyle(document.body).getPropertyValue('--primary').trim() || '#2563eb';
+                const negativeColor = '#ef4444';
+                const formatPeso = val => (val < 0 ? '-₱' : '₱') + Math.abs(val).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+                const chart = new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Net Sales',
+                            data: data,
+                            backgroundColor: data.map(v => v < 0 ? negativeColor : primaryColor),
+                            borderRadius: 4,
+                            maxBarThickness: 36
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => formatPeso(ctx.parsed.y)
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: textColor, maxTicksLimit: 12 },
+                                grid: { display: false },
+                                title: { display: true, text: 'Hour (Philippine time)', color: textColor }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: textColor,
+                                    callback: value => formatPeso(value)
+                                },
+                                grid: {
+                                    color: ctx => ctx.tick.value === 0 ? '#94a3b8' : 'rgba(148, 163, 184, 0.15)'
+                                }
+                            }
+                        }
+                    }
+                });
+                window.netSalesChart = chart;
+            }
+        }
+        <?php endif; ?>
+
         const dashboard = document.querySelector('[data-dashboard-refresh]');
         const staleNotice = document.querySelector('.dashboard-stale');
         if (!dashboard || !staleNotice) return;
