@@ -61,7 +61,7 @@ function fixture(action) {
         assert.equal(await page.locator('#summary_products').innerText(), '0');
         assert.match(await page.locator('.receiving-accepted').innerText(), /Products added/);
         assert.match(await page.locator('.receiving-accepted').innerText(), /In current delivery list/);
-        await page.getByLabel('Search products by name or SKU').fill('Receiving test product 999');
+        await page.getByLabel('Scan barcode or search by name or SKU').fill('Receiving test product 999');
         await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).click();
         assert.match(await page.locator('#receiving_lines').innerText(), /UI-999/);
         await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).waitFor({state: 'visible'});
@@ -78,6 +78,21 @@ function fixture(action) {
         await page.locator('#receiving_next').click();
         assert.match(await page.locator('#receiving_review').innerText(), /10 accepted units/);
         assert.equal(await page.locator('.sidebar').innerHTML(), navbar, 'receiving steps preserve navigation');
+        await page.goto(url);
+        await page.locator('#product_search_scan').fill('THEME-CASE');
+        await page.locator('#product_search_scan').press('Enter');
+        await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('case barcode'));
+        assert.equal(await page.locator('#quantity_mode').inputValue(), 'packages', 'case barcode selects packages mode');
+        assert.equal(await page.locator('#product_search_scan').inputValue(), '', 'input cleared after scan');
+        assert.equal(await page.locator('#summary_products').innerText(), '1', 'live delivery summary updated');
+        await page.locator('#product_search_scan').fill('THEME-CASE');
+        await page.locator('#add_scanned_item').click();
+        await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('already added'));
+        assert.equal(await page.locator('.receiving-line').count(), 1, 'duplicate scan creates no duplicate line');
+        await page.locator('#product_search_scan').fill('UNKNOWN-9999');
+        await page.locator('#add_scanned_item').click();
+        await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('No product matches'));
+        assert.equal(await page.locator('.receiving-line').count(), 1, 'unknown code preserves line');
         await page.goto(url);
         const catalogOptions = await page.locator('#product_id option').count();
         await page.locator('#receiving_next').click();
@@ -114,7 +129,7 @@ function fixture(action) {
         assert.ok(expandedOptions <= catalogOptions + 38, `only the active line expands the full catalog (${expandedOptions}, catalog ${catalogOptions})`);
         const metrics = await page.evaluate(() => {
             const start = performance.now();
-            const search = document.querySelector('#product_search');
+            const search = document.querySelector('#product_search_scan');
             search.value = 'Receiving test product 999';
             search.dispatchEvent(new Event('input', {bubbles: true}));
             return {options: document.querySelectorAll('#receiving_lines option').length, searchMs: performance.now() - start};
@@ -125,11 +140,12 @@ function fixture(action) {
         assert.equal(await page.locator('#product_id_20 option').count(), 2, 'new lines respect the existing search');
         assert.match(await page.locator('#product_search_status').innerText(), /1 matching product/);
         await page.locator('#product_id_20').selectOption({label: 'Receiving test product 999 (UI-999)'});
-        await page.locator('#product_search').fill('no-such-product');
+        await page.locator('#product_search_scan').fill('no-such-product');
         assert.match(await page.locator('#product_search_status').innerText(), /No matching products/);
         assert.match(await page.locator('#product_id_20 option:checked').innerText(), /UI-999/, 'search preserves selected product');
-        await page.locator('#product_code_scan').fill('THEME-BARCODE');
-        await page.locator('#product_code_scan').press('Enter');
+        assert.equal(await page.locator('#add_scanned_item').isVisible(), true, '+ Add item button is visible in search/scan bar');
+        await page.locator('#product_search_scan').fill('THEME-BARCODE');
+        await page.locator('#product_search_scan').press('Enter');
         await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('selected. Matched'));
         assert.equal(await page.locator('#product_id_21').inputValue(), '1', 'barcode lookup can select outside the search filter');
         assert.deepEqual(errors, []);
@@ -213,9 +229,9 @@ function fixture(action) {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '200% text zoom remains readable without page overflow');
         await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
         await page.goto(url);
-        await page.locator('#product_code_scan').fill('THEME-BARCODE');
+        await page.locator('#product_search_scan').fill('THEME-BARCODE');
         await page.route('**/product_code_lookup.php?**', route => route.fulfill({status:500, contentType:'application/json', body:'{"success":false}'}));
-        await page.locator('#product_code_scan').press('Enter');
+        await page.locator('#add_scanned_item').click();
         await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('could not be checked'));
         await page.unroute('**/product_code_lookup.php?**');
         await page.locator('#product_id').selectOption('1');

@@ -296,7 +296,7 @@ class ReceivingService
     public function getActiveProducts(): array
     {
         [$scopeSql, $scopeParams] = $this->productScope();
-        $stmt = $this->pdo->prepare("SELECT p.product_id, p.sku, p.product_name, p.cost_price, p.units_per_package, p.base_unit, p.receiving_unit, p.category_id, c.category_name, p.barcode, p.variant_label, p.product_image, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, p.reorder_level, p.safety_stock FROM products p LEFT JOIN categories c ON p.category_id = c.category_id LEFT JOIN inventory i ON p.product_id = i.product_id WHERE p.status = 'active'{$scopeSql} ORDER BY p.product_name");
+        $stmt = $this->pdo->prepare("SELECT p.product_id, p.sku, p.product_name, p.cost_price, p.units_per_package, p.base_unit, p.receiving_unit, p.category_id, c.category_name, p.barcode, p.case_barcode, p.variant_label, p.product_image, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, p.reorder_level, p.safety_stock FROM products p LEFT JOIN categories c ON p.category_id = c.category_id LEFT JOIN inventory i ON p.product_id = i.product_id WHERE p.status = 'active'{$scopeSql} ORDER BY p.product_name");
         $stmt->execute($scopeParams);
         return $stmt->fetchAll();
     }

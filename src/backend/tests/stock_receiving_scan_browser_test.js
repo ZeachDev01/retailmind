@@ -106,7 +106,7 @@ async function saveEntry(page, double = false) {
 
 async function scan(page, code) {
     await selectProducts(page);
-    const input = page.locator('#product_code_scan');
+    const input = page.locator('#product_search_scan');
     await input.fill(code);
     await input.press('Enter');
 }
@@ -234,8 +234,8 @@ async function main() {
         const beforeZero = before.products.find((product) => product.sku === fixture.products.zero.sku);
 
         console.log('Scan-only identification');
-        check(await page.locator('#product_code_scan').count() === 1,
-            'Stock Receiving renders the scan field');
+        check(await page.locator('#product_search_scan').count() === 1,
+            'Stock Receiving renders the unified search and scan field');
         await scan(page, fixture.products.zero.barcode);
         check(await eventually(page, (productId) =>
             document.getElementById('product_id').value === String(productId), fixture.products.zero.product_id),
@@ -288,7 +288,7 @@ async function main() {
         check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id)
             && await page.inputValue('#received_qty') === '5', 'unknown and ambiguous scans preserve the draft');
         await page.goto(receivingPath);
-        await page.fill('#product_search', fixture.products.short.sku);
+        await page.fill('#product_search_scan', fixture.products.short.sku);
         check(await page.locator('#product_id option:not([hidden])').count() === 2, 'search filters active products by SKU');
         await scan(page, fixture.products.short.sku);
         await page.waitForFunction(id => document.getElementById('product_id').value === String(id), fixture.products.short.product_id);

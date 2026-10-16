@@ -615,7 +615,7 @@ const fixture = action => {
                 for (const width of [390,1280]) {
                     await page.setViewportSize({width,height:900});
                     for(const route of ['/components/inventory_management/inventory_counts.php','/components/report/stock_receiving.php']) {
-                        const productField = route.includes('inventory_counts') ? '#product_search' : '#product_code_scan';
+                        const productField = route.includes('inventory_counts') ? '#product_search' : '#product_search_scan';
                         await page.goto(route); await page.locator(productField).fill('THEME-BARCODE'); await page.locator(productField).press('Enter');
                         await page.waitForFunction(()=>document.getElementById('product_id').value==='1');
                         if (route.includes('stock_receiving')) await page.locator('#receiving_next').click();

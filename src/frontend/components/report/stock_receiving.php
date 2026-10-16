@@ -159,14 +159,14 @@ $categoryIcon = static function (string $categoryName): string {
             <fieldset <?= !$canReceive || !$products ? 'disabled' : '' ?>>
             <div class="form-section" id="receiving_selection">
                 <div class="receiving-panel-heading"><div><h2>Product catalog</h2><p>Find what arrived</p></div><span class="receiving-count"><?= count($products) ?> products</span></div>
-                <div class="receiving-picker">
-                <div class="form-group"><label for="product_search">Search products by name or SKU</label><input type="search" id="product_search" autocomplete="off" aria-describedby="product_search_status" placeholder="Search active products"><small id="product_search_status" role="status"></small></div>
-                <div class="form-group">
-                    <label for="product_code_scan">Barcode or SKU</label>
-                    <input type="text" id="product_code_scan" autocomplete="off" inputmode="text" aria-describedby="scan_target scan_status" placeholder="Scan or type a code, then press Enter">
-                    <small id="scan_target" role="status">Scanning product line 1. Focus another line to scan into it.</small>
-                    <small id="scan_status" role="status" aria-live="polite">You can also choose a product manually below.</small>
-                </div>
+                <div class="receiving-search-bar form-group">
+                    <label for="product_search_scan">Scan barcode or search by name or SKU</label>
+                    <div class="receiving-search-group">
+                        <input type="search" id="product_search_scan" autocomplete="off" aria-describedby="scan_status product_search_status" placeholder="Scan barcode or search by name, SKU or barcode">
+                        <button type="button" class="btn btn-secondary" id="add_scanned_item">+ Add item</button>
+                    </div>
+                    <small id="scan_status" role="status" aria-live="polite">Scan barcode or search by name or SKU, or choose a product manually below.</small>
+                    <small id="product_search_status" role="status"></small>
                 </div>
                 <div class="receiving-category-filters" id="receiving_category_filters" role="group" aria-label="Product categories">
                     <button type="button" class="receiving-category-tile active" aria-pressed="true" data-category="all">
@@ -202,7 +202,7 @@ $categoryIcon = static function (string $categoryName): string {
                             <select name="product_id" id="product_id" data-field="product_id" required>
                                 <option value="">-- Select Product --</option>
                                 <?php foreach ($products as $p): ?>
-                                    <option value="<?= $p['product_id'] ?>" data-name="<?= htmlspecialchars($p['product_name']) ?>" data-sku="<?= htmlspecialchars($p['sku']) ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>" data-units-per-package="<?= (int)($p['units_per_package'] ?? 1) ?>" data-base-unit="<?= htmlspecialchars($p['base_unit'] ?? 'piece') ?>" data-receiving-unit="<?= htmlspecialchars($p['receiving_unit'] ?? 'package') ?>" data-category-id="<?= (int)($p['category_id'] ?? 0) ?>" data-category-name="<?= htmlspecialchars($p['category_name'] ?? '') ?>" data-barcode="<?= htmlspecialchars($p['barcode'] ?? '') ?>" data-variant-label="<?= htmlspecialchars($p['variant_label'] ?? '') ?>" data-product-image="<?= htmlspecialchars($p['product_image'] ?? '') ?>" data-quantity-on-hand="<?= (int)($p['quantity_on_hand'] ?? 0) ?>" data-reorder-level="<?= (int)($p['reorder_level'] ?? 0) ?>" data-safety-stock="<?= (int)($p['safety_stock'] ?? 0) ?>">
+                                    <option value="<?= $p['product_id'] ?>" data-name="<?= htmlspecialchars($p['product_name']) ?>" data-sku="<?= htmlspecialchars($p['sku']) ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>" data-units-per-package="<?= (int)($p['units_per_package'] ?? 1) ?>" data-base-unit="<?= htmlspecialchars($p['base_unit'] ?? 'piece') ?>" data-receiving-unit="<?= htmlspecialchars($p['receiving_unit'] ?? 'package') ?>" data-category-id="<?= (int)($p['category_id'] ?? 0) ?>" data-category-name="<?= htmlspecialchars($p['category_name'] ?? '') ?>" data-barcode="<?= htmlspecialchars($p['barcode'] ?? '') ?>" data-case-barcode="<?= htmlspecialchars($p['case_barcode'] ?? '') ?>" data-variant-label="<?= htmlspecialchars($p['variant_label'] ?? '') ?>" data-product-image="<?= htmlspecialchars($p['product_image'] ?? '') ?>" data-quantity-on-hand="<?= (int)($p['quantity_on_hand'] ?? 0) ?>" data-reorder-level="<?= (int)($p['reorder_level'] ?? 0) ?>" data-safety-stock="<?= (int)($p['safety_stock'] ?? 0) ?>">
                                         <?= htmlspecialchars($p['product_name']) ?> (<?= htmlspecialchars($p['sku']) ?>)
                                     </option>
                                 <?php endforeach; ?>
@@ -302,8 +302,11 @@ $categoryIcon = static function (string $categoryName): string {
 </div>
 
 <script>
-const productCodeScan = document.getElementById('product_code_scan');
+const productSearchScan = document.getElementById('product_search_scan');
+const addScannedItem = document.getElementById('add_scanned_item');
 const scanStatus = document.getElementById('scan_status');
+const productCodeScan = productSearchScan;
+const productSearch = productSearchScan;
 let activeScanLookup = 0;
 let scanLookupController = null;
 let activeLine = document.querySelector('.receiving-line');
@@ -312,6 +315,11 @@ function receivingField(id) {
 }
 
 async function identifyReceivingProduct(code) {
+    code = (code || '').trim();
+    if (!code) {
+        scanStatus.textContent = 'Scan or type a barcode or SKU first.';
+        return;
+    }
     const lookupId = ++activeScanLookup;
     if (scanLookupController) scanLookupController.abort();
     const controller = new AbortController();
@@ -339,10 +347,11 @@ async function identifyReceivingProduct(code) {
         }
         const product = result.product;
         if (Array.from(lineContainer.children).some(row => row.querySelector('[data-field="product_id"]').value === String(product.product_id))) {
-            scanStatus.textContent = 'This product is already in the shopping entry. Edit its existing line or choose another product.';
+            scanStatus.textContent = `${product.product_name} is already added to delivery lines. Edit its existing line or choose another product.`;
             return;
         }
         if (!activeLine || receivingField('product_id').value) addReceivingLine();
+
         const matchedCase = result.matched_code_kind === 'case_barcode';
         const select = receivingField('product_id');
         if (!Array.from(select.options).some(option => option.value === String(product.product_id))) {
@@ -357,11 +366,12 @@ async function identifyReceivingProduct(code) {
         activeLine.dataset.productId = String(product.product_id);
         receivingField('quantity_mode').value = matchedCase ? 'packages' : 'units';
         updateQuantityMode();
+        productSearchScan.value = '';
+        refreshDelivery();
         const matchedBy = result.matched_code_kind === 'sku'
             ? 'SKU'
             : (matchedCase ? 'case barcode' : 'unit barcode');
         scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Enter actual delivered ${matchedCase ? 'packages / cases' : 'Base units'}.`;
-        productCodeScan.value = '';
     } catch (error) {
         if (error.name === 'AbortError' || lookupId !== activeScanLookup) return;
         scanStatus.textContent = 'The product code could not be checked right now. Try again or choose the product manually.';
@@ -370,11 +380,17 @@ async function identifyReceivingProduct(code) {
     }
 }
 
-productCodeScan.addEventListener('keydown', function (event) {
+productSearchScan.addEventListener('keydown', function (event) {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     const code = this.value.trim();
     if (code !== '') identifyReceivingProduct(code);
+});
+
+addScannedItem?.addEventListener('click', function () {
+    const code = productSearchScan.value.trim();
+    if (code !== '') identifyReceivingProduct(code);
+    else scanStatus.textContent = 'Scan or type a barcode or SKU first.';
 });
 
 function selectedProductOption() {
@@ -411,6 +427,7 @@ const productSearchText = productOptions.map(option => [
     option.textContent,
     option.dataset.sku,
     option.dataset.barcode,
+    option.dataset.caseBarcode,
     option.dataset.variantLabel
 ].filter(Boolean).join(' ').toLowerCase());
 lineTemplate.querySelector('[data-field="product_id"]').replaceChildren(productOptions[0].cloneNode(true));
@@ -479,7 +496,7 @@ function getCategoryIcon(categoryName) {
 }
 
 function renderCatalog() {
-    const query = document.getElementById('product_search').value.trim().toLowerCase();
+    const query = productSearchScan.value.trim().toLowerCase();
     const selected = new Set(Array.from(lineContainer.children, row => row.querySelector('[data-field="product_id"]').value));
     const matches = productOptions.filter((option, index) => {
         if (!option.value) return false;
@@ -599,14 +616,16 @@ function renderCatalog() {
 }
 function populateProductOptions(select) {
     const value = select.value;
-    const query = document.getElementById('product_search').value.trim().toLowerCase();
+    const query = productSearchScan.value.trim().toLowerCase();
     const options = productOptions.filter((option, index) => !option.value || option.value === value || productSearchText[index].includes(query));
     select.replaceChildren(...options.map(option => option.cloneNode(true)));
     select.value = value;
     const matches = productOptions.filter((option, index) => option.value && productSearchText[index].includes(query)).length;
-    document.getElementById('product_search_status').textContent = query
+    const countStatus = query
         ? (matches ? matches + ' matching ' + (matches === 1 ? 'product.' : 'products.') : 'No matching products. Try another name or SKU, or scan a code.')
         : '';
+    const statusEl = document.getElementById('product_search_status');
+    if (statusEl) statusEl.textContent = countStatus;
 }
 function renumberLines() {
     clearReceivingErrors();
@@ -625,7 +644,6 @@ function renumberLines() {
         row.querySelector('[data-field="cost_price"]').setAttribute('aria-describedby', row.querySelector('[data-field="cost_hint"]').id);
     }
     if (activeLine) activateLine(activeLine);
-    else document.getElementById('scan_target').textContent = 'Add a product line or scan to start one.';
     refreshDelivery();
 }
 function activateLine(row) {
@@ -641,8 +659,6 @@ function activateLine(row) {
         populateProductOptions(row.querySelector('[data-field="product_id"]'));
     }
     activeLine = row;
-    document.getElementById('scan_target').textContent = 'Scanning product line ' + row.querySelector('.line-number').textContent
-        + '. Focus another line to scan into it.';
 }
 function restoreField(field, value) {
     if (!field || typeof value !== 'string') return;
@@ -834,7 +850,7 @@ document.getElementById('receiving_next').addEventListener('click', () => {
     if (step === 1) { showStep(2); return; }
     if (validateQuantities()) { renderReview(); showStep(3); }
 });
-document.getElementById('product_search').addEventListener('input', () => {
+productSearchScan.addEventListener('input', () => {
     if (activeLine) populateProductOptions(receivingField('product_id'));
     renderCatalog();
 });

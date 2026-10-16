@@ -1,7 +1,7 @@
 {
   "metrics": {
     "options": 61,
-    "searchMs": 3.5999999940395355
+    "searchMs": 2.600000023841858
   },
   "measurements": [
     {
@@ -11,14 +11,14 @@
       "overflow": false,
       "controls": [
         {
-          "id": "product_search",
-          "height": 50,
-          "font": "16px"
+          "id": "product_search_scan",
+          "height": 44,
+          "font": "14px"
         },
         {
-          "id": "product_code_scan",
-          "height": 50,
-          "font": "16px"
+          "id": "add_scanned_item",
+          "height": 44,
+          "font": "14px"
         },
         {
           "id": "",
@@ -293,14 +293,14 @@
       "overflow": false,
       "controls": [
         {
-          "id": "product_search",
-          "height": 50,
-          "font": "16px"
+          "id": "product_search_scan",
+          "height": 44,
+          "font": "14px"
         },
         {
-          "id": "product_code_scan",
-          "height": 50,
-          "font": "16px"
+          "id": "add_scanned_item",
+          "height": 44,
+          "font": "14px"
         },
         {
           "id": "",
@@ -575,14 +575,14 @@
       "overflow": false,
       "controls": [
         {
-          "id": "product_search",
-          "height": 50,
-          "font": "16px"
+          "id": "product_search_scan",
+          "height": 44,
+          "font": "14px"
         },
         {
-          "id": "product_code_scan",
-          "height": 50,
-          "font": "16px"
+          "id": "add_scanned_item",
+          "height": 44,
+          "font": "14px"
         },
         {
           "id": "",
@@ -857,14 +857,14 @@
       "overflow": false,
       "controls": [
         {
-          "id": "product_search",
-          "height": 50,
-          "font": "16px"
+          "id": "product_search_scan",
+          "height": 44,
+          "font": "14px"
         },
         {
-          "id": "product_code_scan",
-          "height": 50,
-          "font": "16px"
+          "id": "add_scanned_item",
+          "height": 44,
+          "font": "14px"
         },
         {
           "id": "",
@@ -1139,14 +1139,14 @@
       "overflow": false,
       "controls": [
         {
-          "id": "product_search",
-          "height": 50,
-          "font": "16px"
+          "id": "product_search_scan",
+          "height": 44,
+          "font": "14px"
         },
         {
-          "id": "product_code_scan",
-          "height": 50,
-          "font": "16px"
+          "id": "add_scanned_item",
+          "height": 44,
+          "font": "14px"
         },
         {
           "id": "",
@@ -1421,14 +1421,14 @@
       "overflow": false,
       "controls": [
         {
-          "id": "product_search",
-          "height": 50,
-          "font": "16px"
+          "id": "product_search_scan",
+          "height": 44,
+          "font": "14px"
         },
         {
-          "id": "product_code_scan",
-          "height": 50,
-          "font": "16px"
+          "id": "add_scanned_item",
+          "height": 44,
+          "font": "14px"
         },
         {
           "id": "",
@@ -1703,14 +1703,14 @@
       "overflow": false,
       "controls": [
         {
-          "id": "product_search",
-          "height": 50,
-          "font": "16px"
+          "id": "product_search_scan",
+          "height": 44,
+          "font": "14px"
         },
         {
-          "id": "product_code_scan",
-          "height": 50,
-          "font": "16px"
+          "id": "add_scanned_item",
+          "height": 44,
+          "font": "14px"
         },
         {
           "id": "",
@@ -1985,14 +1985,14 @@
       "overflow": false,
       "controls": [
         {
-          "id": "product_search",
-          "height": 50,
-          "font": "16px"
+          "id": "product_search_scan",
+          "height": 44,
+          "font": "14px"
         },
         {
-          "id": "product_code_scan",
-          "height": 50,
-          "font": "16px"
+          "id": "add_scanned_item",
+          "height": 44,
+          "font": "14px"
         },
         {
           "id": "",
