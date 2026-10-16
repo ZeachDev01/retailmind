@@ -5,6 +5,7 @@ namespace App\Services;
 
 use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
+use App\Dashboard\StoreOperationsDashboardWorkspace;
 use App\Receipts\RefundReceiptService;
 use App\Store\StoreWriteGate;
 use DomainException;
@@ -18,6 +19,7 @@ use Throwable;
 // referred to by its plain name rather than through a `use` for it.
 require_once __DIR__ . '/../Audit/AuditRecordCategory.php';
 require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
+require_once __DIR__ . '/../Dashboard/StoreOperationsDashboardWorkspace.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 require_once __DIR__ . '/CashierShiftService.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
@@ -252,6 +254,7 @@ class CashRefundService
             );
 
             $this->pdo->commit();
+            StoreOperationsDashboardWorkspace::invalidateCache();
 
             return $refundId;
         } catch (Throwable $exception) {
@@ -261,6 +264,7 @@ class CashRefundService
             throw $exception;
         }
     }
+
 
     /**
      * What is still refundable from a sale, in the money the customer paid.

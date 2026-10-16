@@ -21,6 +21,7 @@ final class StoreDashboardContractClock implements Clock
 }
 
 try {
+    StoreOperationsDashboardWorkspace::invalidateCache();
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     foreach ([
@@ -101,6 +102,7 @@ try {
     $assert($empty['state'] === 'empty', 'No actionable conditions must produce an explicit empty state');
     $assert($empty['exceptions'] === [], 'Empty state must have no exception rows');
 
+    StoreOperationsDashboardWorkspace::invalidateCache();
     $pdo->exec('DROP TABLE sales');
     $error = $workspace->load('admin', 30);
     $assert($error['state'] === 'error', 'Query failures must produce an explicit error state');

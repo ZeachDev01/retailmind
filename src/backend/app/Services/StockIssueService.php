@@ -14,7 +14,9 @@
 
 require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/CashierShiftService.php';
+require_once __DIR__ . '/../Dashboard/StoreOperationsDashboardWorkspace.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
+use App\Dashboard\StoreOperationsDashboardWorkspace;
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -597,6 +599,7 @@ class StockIssueService
             );
 
             $this->pdo->commit();
+            StoreOperationsDashboardWorkspace::invalidateCache();
             $this->notificationService->checkAndNotifyLowStock();
             $this->notificationService->checkAndNotifyExpiringStock();
         } catch (Throwable $e) {
@@ -682,6 +685,7 @@ class StockIssueService
             );
 
             $this->pdo->commit();
+            StoreOperationsDashboardWorkspace::invalidateCache();
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -696,6 +700,17 @@ class StockIssueService
                 "Stock issue report #{$adjustmentId} rejected",
                 'An Inventory Manager rejected your report: ' . $reason
             );
+        }
+    }
+
+    public function decide(int $adjustmentId, int $approverId, string $outcome, string $notesOrReason = ''): void
+    {
+        if ($outcome === 'approved') {
+            $this->approveReport($adjustmentId, $approverId, $notesOrReason);
+        } elseif ($outcome === 'rejected') {
+            $this->rejectReport($adjustmentId, $approverId, $notesOrReason);
+        } else {
+            throw new \InvalidArgumentException("Invalid decision outcome: {$outcome}");
         }
     }
 

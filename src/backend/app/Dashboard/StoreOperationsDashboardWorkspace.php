@@ -14,8 +14,10 @@ use Throwable;
 
 final class StoreOperationsDashboardWorkspace
 {
-    private const REFRESH_SECONDS = 300;
-    private const RANGES = [7, 30, 90];
+    public const REFRESH_SECONDS = 300;
+    public const RANGES = [7, 30, 90];
+
+    private static array $memoryCache = [];
 
     private const ACTIONS = [
         ['label' => 'Store Staff', 'description' => 'Manage Cashiers and Inventory Managers', 'icon' => 'bi-people', 'destination' => 'components/user_manager/user_manager.php', 'capability' => RoleCapabilityPolicy::MANAGE_USERS],
@@ -34,6 +36,81 @@ final class StoreOperationsDashboardWorkspace
     ) {
     }
 
+    public static function invalidateCache(?string $role = null, ?int $days = null): void
+    {
+        if ($role !== null && $days !== null) {
+            unset(self::$memoryCache["{$role}_{$days}"]);
+            $file = self::cacheFilePath($role, $days);
+            if (is_file($file)) {
+                @unlink($file);
+            }
+            return;
+        }
+
+        if ($role !== null) {
+            foreach (self::RANGES as $r) {
+                unset(self::$memoryCache["{$role}_{$r}"]);
+                $file = self::cacheFilePath($role, $r);
+                if (is_file($file)) {
+                    @unlink($file);
+                }
+            }
+            return;
+        }
+
+        self::$memoryCache = [];
+        $prefix = substr(md5(__DIR__), 0, 8);
+        $files = glob(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'retailmind_' . $prefix . '_dashboard_*.json');
+        if ($files) {
+            foreach ($files as $file) {
+                @unlink($file);
+            }
+        }
+    }
+
+    private static function cacheFilePath(string $role, int $days): string
+    {
+        $prefix = substr(md5(__DIR__), 0, 8);
+        return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'retailmind_' . $prefix . '_dashboard_' . $role . '_' . $days . '.json';
+    }
+
+    private static function getCached(string $role, int $days, DateTimeImmutable $now): ?array
+    {
+        $key = "{$role}_{$days}";
+        $nowTs = $now->getTimestamp();
+        if (isset(self::$memoryCache[$key])) {
+            $entry = self::$memoryCache[$key];
+            if (($nowTs - (int)$entry['timestamp']) < self::REFRESH_SECONDS) {
+                return $entry['data'];
+            }
+        }
+        $file = self::cacheFilePath($role, $days);
+        if (is_file($file)) {
+            $content = @file_get_contents($file);
+            if ($content !== false) {
+                $entry = json_decode($content, true);
+                if (is_array($entry) && isset($entry['timestamp'], $entry['data'])) {
+                    if (($nowTs - (int)$entry['timestamp']) < self::REFRESH_SECONDS) {
+                        self::$memoryCache[$key] = $entry;
+                        return $entry['data'];
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static function setCached(string $role, int $days, DateTimeImmutable $now, array $data): void
+    {
+        $key = "{$role}_{$days}";
+        $entry = [
+            'timestamp' => $now->getTimestamp(),
+            'data' => $data,
+        ];
+        self::$memoryCache[$key] = $entry;
+        @file_put_contents(self::cacheFilePath($role, $days), json_encode($entry), LOCK_EX);
+    }
+
     public function load(string $actorRole, int $days = 30): array
     {
         if ($actorRole !== 'admin' || !$this->policy->allows($actorRole, RoleCapabilityPolicy::STORE_OPERATIONS)) {
@@ -42,6 +119,12 @@ final class StoreOperationsDashboardWorkspace
 
         $days = in_array($days, self::RANGES, true) ? $days : 30;
         $now = $this->clock->now();
+
+        $cached = self::getCached($actorRole, $days, $now);
+        if ($cached !== null) {
+            return $cached;
+        }
+
         try {
             $settings = new AttentionSettingsService($this->pdo, $this->clock);
             $thresholds = $settings->thresholdsFor($actorRole);
@@ -53,7 +136,7 @@ final class StoreOperationsDashboardWorkspace
             $exceptions = $this->exceptions($now, $days, $thresholds);
             $headline = $this->headline($now, $days, $thresholds);
 
-            return [
+            $data = [
                 'role' => $actorRole,
                 'range_days' => $days,
                 'state' => $exceptions === [] ? 'empty' : 'ready',
@@ -69,6 +152,9 @@ final class StoreOperationsDashboardWorkspace
                 'freshness' => $this->freshness($now),
                 'message' => $exceptions === [] ? 'No Store-operational exceptions currently require action.' : null,
             ];
+
+            self::setCached($actorRole, $days, $now, $data);
+            return $data;
         } catch (Throwable $exception) {
             error_log('Store-operations dashboard load failed: ' . $exception->getMessage());
             return [
