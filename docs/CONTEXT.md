@@ -92,6 +92,10 @@ _Avoid_: Floating cart, silent cancel, self-expiring cart, cancel button on a he
 The break-time state of an open Cashier Shift that leaves the drawer owned and the Register claimed while the point of sale refuses to transact. Only the owning Cashier resumes it, with their own account password; a separate PIN or unlock code is never introduced. Locking and logging out both leave the shift open and unreconciled, and the lock is held by the shift rather than the session so a Register never reopens itself.
 _Avoid_: Closed shift, break mode, shared PIN, session logout
 
+**Net Sales**:
+The Store's completed sales after discounts, minus refunds. Net Sales does not deduct product costs or operating expenses and is not profit.
+_Avoid_: Earnings, gross profit, net profit
+
 **Cash Refund**:
 An append-only record a Cashier issues against a completed sale, normally their own, in the active Cashier workspace and under their own open Cashier Shift; an Administrator-authorized exception permits another Cashier to handle an absent or disabled original Cashier's sale while retaining original seller, issuing Cashier, approver, and paying-shift attribution. It never edits, deletes, or voids the sale it reverses, so what is left refundable is a sum over the refunds already issued rather than a column on the sale. It is settled on the sale's original payment method, and only a cash refund reduces expected drawer cash. Full and partial refunds are allowed, capped by each line's remaining quantity and by the amount the customer actually paid, even under concurrent attempts. Routine own-sale refunds require no supervisor approval: individual identity, a predefined reason, a note when the reason is Other, append-only records, Cashier-scoped visibility, and a Protected Audit Record are what make them accountable. Every returned item is classified Restockable or Damaged, and only a Restockable quantity returns to available inventory; a Damaged customer return is not also deducted through a Stock Issue.
 _Avoid_: Sale edit, sale void, stock-only return, supervisor-approved reversal, store credit
