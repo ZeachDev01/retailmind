@@ -19,6 +19,7 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SAL
 // Ticket #89: checkout is attributed to the workspace that is active now, so
 // the service judges the same context this page did.
 $actorRole = (string)current_role();
+header('Cache-Control: no-store');
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['recover_checkout'])) {
     header('Content-Type: application/json');

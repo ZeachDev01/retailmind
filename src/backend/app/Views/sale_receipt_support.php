@@ -41,6 +41,46 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
     return (new ReceiptDetailsService($pdo))->fetchItems($sale_id);
 }
 
+if (!function_exists('receipt_send_cache_headers')) {
+    function receipt_send_cache_headers(array $sale): bool {
+        if (headers_sent()) {
+            return false;
+        }
+
+        $etag = '"sale-' . (int)$sale['sale_id'] . '-' . substr(md5(($sale['sale_date'] ?? '') . '-' . ($sale['verification_code'] ?? ($sale['total_amount'] ?? ''))), 0, 16) . '"';
+        header('Cache-Control: private, max-age=86400, immutable');
+        header('ETag: ' . $etag);
+        if (!empty($sale['sale_date'])) {
+            $timestamp = strtotime($sale['sale_date']);
+            if ($timestamp > 0) {
+                header('Last-Modified: ' . gmdate('D, d M Y H:i:s \G\M\T', $timestamp));
+            }
+        }
+
+        $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+        if ($ifNoneMatch !== '') {
+            $candidates = array_map('trim', explode(',', $ifNoneMatch));
+            foreach ($candidates as $candidate) {
+                $candidateClean = trim($candidate, 'W/');
+                if ($candidate === '*' || $candidate === $etag || $candidateClean === $etag) {
+                    http_response_code(304);
+                    return true;
+                }
+            }
+        }
+
+        if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']) && !empty($sale['sale_date'])) {
+            $since = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
+            if ($since !== false && $since >= strtotime($sale['sale_date'])) {
+                http_response_code(304);
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 function receipt_render_details(array $sale, array $items, bool $canStartSale, bool $announcePayment = false, bool $historyDrawer = false): void {
     $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
         ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());

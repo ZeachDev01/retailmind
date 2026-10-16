@@ -679,6 +679,31 @@ $checks = [
         'file' => 'src/frontend/components/sidebar.php',
         'needles' => ['assets/js/sw-register.js', 'sw.js'],
     ],
+    'Completed Sale Receipt view endpoints emit immutable browser caching headers' => [
+        'file' => 'src/frontend/components/invoice/sales.php',
+        'needles' => [
+            'receipt_send_cache_headers',
+            'receipt_fetch_sale($pdo, $sale_id, $storeId)',
+        ],
+    ],
+    'Thermal reprint layouts emit immutable browser caching headers' => [
+        'file' => 'src/backend/app/Views/sale_receipt_support.php',
+        'needles' => [
+            'function receipt_send_cache_headers',
+            'private, max-age=86400, immutable',
+            'HTTP_IF_NONE_MATCH',
+            '304',
+        ],
+    ],
+    'Active or draft checkout states are strictly excluded from immutable caching headers' => [
+        'file' => 'src/frontend/components/cashier/pos.php',
+        'needles' => [
+            "header('Cache-Control: no-store')",
+        ],
+        'forbidden' => [
+            'max-age=86400, immutable',
+        ],
+    ],
 ];
 $failures = [];
 foreach ($checks as $label => $check) {

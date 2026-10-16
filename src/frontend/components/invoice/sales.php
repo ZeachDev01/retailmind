@@ -9,8 +9,8 @@ use App\Receipts\ReceiptTableService;
 
 require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
-$action = $_GET['action'] ?? 'list';
-if (!in_array($action, ['list', 'view', 'data'], true)) {
+$action = $_GET['action'] ?? (isset($_GET['reprint']) ? 'reprint' : (isset($_GET['thermal']) ? 'thermal' : 'list'));
+if (!in_array($action, ['list', 'view', 'data', 'reprint', 'thermal'], true)) {
     $action = 'list';
 }
 require __DIR__ . '/../../../backend/app/Views/sale_receipt_support.php';
@@ -64,8 +64,8 @@ if ($can_manage_all) {
     $receiptCashiers = $cashierStatement->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Handle AJAX view request
-if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
+// Handle receipt view / reprint request
+if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
     $sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
 
     if (!$sale) {
@@ -80,7 +80,33 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         exit;
     }
 
-    receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale, false, true);
+    if (receipt_send_cache_headers($sale)) {
+        exit;
+    }
+
+    if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
+        receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale, false, true);
+        exit;
+    }
+
+    $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
+        ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sale Receipt #<?= (int)$sale['sale_id'] ?></title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
+    <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
+</head>
+<body class="receipt-standalone-reprint">
+    <?php receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale, false, false); ?>
+</body>
+</html>
+    <?php
     exit;
 }
 
