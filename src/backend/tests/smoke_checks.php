@@ -653,6 +653,32 @@ $checks = [
         'file' => 'src/frontend/components/cashier/shifts.php',
         'needles' => ['unresolvedHeldSales', 'before closing.'],
     ],
+    'Unified root Service Worker implements Cache-First and Stale-While-Revalidate' => [
+        'file' => 'src/frontend/sw.js',
+        'needles' => [
+            'retailmind-static-v1',
+            'retailmind-shell-v1',
+            'caches.open(SHELL_CACHE)',
+            'caches.open(STATIC_CACHE)',
+            'SKIP_WAITING',
+            'self.skipWaiting()',
+            'self.clients.claim()',
+        ],
+    ],
+    'Service Worker registration helper listens for waiting lifecycle updates' => [
+        'file' => 'src/frontend/assets/js/sw-register.js',
+        'needles' => [
+            'navigator.serviceWorker.register',
+            'showUpdateBanner',
+            'Update available — Tap to reload',
+            'SKIP_WAITING',
+            'controllerchange',
+        ],
+    ],
+    'Shared shell and landing register unified service worker' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['assets/js/sw-register.js', 'sw.js'],
+    ],
 ];
 $failures = [];
 foreach ($checks as $label => $check) {
