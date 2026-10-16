@@ -69,6 +69,57 @@ $openShift = $shiftService->getOpenShift($cashierId);
 $posShiftOpen = $openShift !== null;
 $posRegisterLocked = $shiftService->isRegisterLocked($cashierId);
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_lookup') {
+    csrf_verify();
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+    try {
+        if (!$posShiftOpen || $posRegisterLocked) {
+            throw new InvalidArgumentException('Open and unlock your Cashier Shift before scanning.');
+        }
+        $code = trim(is_string($_POST['code'] ?? null) ? $_POST['code'] : '');
+        if ($code === '' || strlen($code) > 255 || preg_match('/[\x00-\x1F\x7F]/', $code)) {
+            throw new InvalidArgumentException('Enter or scan a valid barcode.');
+        }
+        require_once __DIR__ . '/../../../backend/app/Services/ProductCodeLookupService.php';
+        $match = (new ProductCodeLookupService($pdo))->lookup($code);
+        if ($match['outcome'] !== ProductCodeLookupService::OUTCOME_MATCH) {
+            throw new InvalidArgumentException($match['outcome'] === ProductCodeLookupService::OUTCOME_AMBIGUOUS
+                ? 'This barcode matches multiple products. Use product search.' : 'Product not found. Try product search.');
+        }
+        $statement = $pdo->prepare(
+            "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.unit_price,
+                    p.reorder_level, p.safety_stock,
+                    LEAST(COALESCE(i.quantity_on_hand, 0), COALESCE((
+                        SELECT SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= CURDATE()
+                                        THEN remaining_quantity ELSE 0 END)
+                        FROM product_batches WHERE product_id = p.product_id AND remaining_quantity > 0
+                    ), i.quantity_on_hand, 0)) AS quantity_on_hand
+             FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id
+             WHERE p.product_id = ? AND p.status = 'active'"
+        );
+        $statement->execute([$match['product']['product_id']]);
+        $product = $statement->fetch(PDO::FETCH_ASSOC);
+        $quantities = json_decode((string)($_POST['quantities'] ?? '{}'), true);
+        $quantity = is_array($quantities) ? ($quantities[$match['product']['product_id']] ?? 0) : null;
+        if (!is_int($quantity) || $quantity < 0) {
+            throw new InvalidArgumentException('Invalid cart quantity. Review the cart before scanning.');
+        }
+        if (!$product || $quantity >= (int)$product['quantity_on_hand']) {
+            throw new InvalidArgumentException('Insufficient stock. Only ' . (int)($product['quantity_on_hand'] ?? 0) . ' available.');
+        }
+        echo json_encode(['success' => true, 'product' => $product], JSON_THROW_ON_ERROR);
+    } catch (InvalidArgumentException $e) {
+        http_response_code(409);
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        error_log((string)$e);
+        echo json_encode(['success' => false, 'message' => 'Product lookup failed. Please try again.']);
+    }
+    exit;
+}
+
 // Ticket #90: the lock screen replaces the point of sale, so nothing below may
 // act on a request that arrives while the Register is locked. Checkout already
 // refuses at the service seam; voiding a cart also writes a Protected Audit
@@ -317,7 +368,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             <div class="pos-panel-icon"><i class="bi bi-upc-scan" aria-hidden="true"></i></div>
                             <div>
                                 <h2>Scan an item</h2>
-                                <p>USB scanners can scan directly into the field below.</p>
                             </div>
                         </div>
                         <div class="pos-toolbar">
@@ -584,6 +634,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
 <script src="<?= app_url('assets/js/checkout-attempt.js') ?>"></script>
 <script src="<?= app_url('assets/js/checkout-quote.js') ?>"></script>
 <script>
+setTimeout(() => document.querySelector('.pos-register-bar')?.remove(), 8000);
+
 let cart = {};
 let heldSales = [];
 // Ticket #91: the held sale this cart came from, if any. Checkout sends it so
@@ -602,11 +654,6 @@ let posAudioContext = null;
 
 const quickProducts = <?= json_encode($quickProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const quickProductById = new Map(quickProducts.map(product => [Number(product.product_id), product]));
-const productLookup = {};
-quickProducts.forEach(product => {
-    if (product.sku) productLookup[product.sku] = product;
-    if (product.barcode) productLookup[product.barcode] = product;
-});
 const skuInput = document.getElementById('sku-input');
 const cartMessage = document.getElementById('cart-message');
 const scannerResult = document.getElementById('scanner-result');
@@ -653,7 +700,7 @@ const quickProductGrid = document.getElementById('quick-product-grid');
 const quickProductCount = document.getElementById('quick-product-count');
 const quickGridToggle = document.getElementById('quick-grid-toggle');
 const findProductUrl = <?= json_encode(app_url('components/cashier/findProduct.php')) ?>;
-const barcodeApiUrl = <?= json_encode(app_url('components/barcodeScanner/apiScanner/barcode.php')) ?>;
+const barcodeApiUrl = <?= json_encode(app_url('components/cashier/pos.php')) ?>;
 const heldSalesApiUrl = <?= json_encode(app_url('components/barcodeScanner/apiScanner/held_sales.php')) ?>;
 const csrfToken = <?= json_encode(generate_csrf_token()) ?>;
 const posShiftOpen = <?= $posShiftOpen ? 'true' : 'false' ?>;
@@ -879,7 +926,7 @@ function showRecentScan(product, code, status = 'success') {
            <div class="recent-scan-copy"><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(code)} &middot; Stock ${Number(product.quantity_on_hand)}</span></div>
            <div class="recent-scan-price">&#8369;${money(product.price)}</div>`
         : `<div class="recent-scan-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
-           <div class="recent-scan-copy"><strong>Product not found</strong><span>${escapeHtml(code)}</span></div>
+           <div class="recent-scan-copy"><strong>Scan not added</strong><span>${escapeHtml(code)}</span></div>
            <div class="recent-scan-price">—</div>`;
 }
 
@@ -890,15 +937,11 @@ async function fetchProductByCode(code) {
         return null;
     }
 
-    if (productLookup[normalized]) {
-        return productLookup[normalized];
-    }
-
     try {
-        const response = await fetch(`${barcodeApiUrl}?action=search`, {
+        const response = await fetch(barcodeApiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ barcode: normalized })
+            body: new URLSearchParams({ action: 'scan_lookup', csrf_token: csrfToken, code: normalized,
+                quantities: JSON.stringify(Object.fromEntries(Object.entries(cart).map(([id, item]) => [id, item.qty]))) })
         });
         const data = await response.json();
 
@@ -914,15 +957,11 @@ async function fetchProductByCode(code) {
                 safety_stock: Number(data.product.safety_stock || 0)
             };
 
-            productLookup[entry.sku] = entry;
-            if (entry.barcode) {
-                productLookup[entry.barcode] = entry;
-            }
             return entry;
         }
 
         showRecentScan(null, normalized, 'warning');
-        showCartMessage(`No product found for ${normalized}. Try product search.`, 'error');
+        showCartMessage(data.message || `No product found for ${normalized}. Try product search.`, 'error');
         return null;
     } catch (error) {
         showCartMessage('Product lookup failed. Check the network or login session.', 'error');
@@ -930,18 +969,27 @@ async function fetchProductByCode(code) {
     }
 }
 
-async function addCodeFromInput() {
+let scanQueue = Promise.resolve();
+function addCodeFromInput() {
     const code = skuInput.value.trim();
-    const product = await fetchProductByCode(code);
-    if (!product) {
-        skuInput.select();
-        return;
-    }
-
-    addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode);
-    showRecentScan(product, code);
     skuInput.value = '';
-    skuInput.focus();
+    queueBarcode(code);
+}
+
+function queueBarcode(code) {
+    scanQueue = scanQueue.then(() => addScannedCode(code)).catch(() => {
+        showCartMessage('Product lookup failed. Please try again.', 'error');
+    });
+    return scanQueue;
+}
+
+async function addScannedCode(code) {
+    if (!cartChangesAllowed()) return;
+    const product = await fetchProductByCode(code);
+    if (!product) return;
+
+    if (!addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode)) return;
+    showRecentScan(product, code);
     scannerResult.innerHTML = `<strong>Item added</strong><span>${escapeHtml(product.name)}</span>`;
 }
 
@@ -953,13 +1001,13 @@ function cartChangesAllowed() {
 }
 
 function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '') {
-    if (!cartChangesAllowed()) return;
+    if (!cartChangesAllowed()) return false;
     const productId = Number(id);
     const currentQty = cart[productId]?.qty || 0;
     const availableStock = Number(stock);
     if (currentQty + 1 > availableStock) {
         showCartMessage(`Cannot add more. Only ${availableStock} in stock.`, 'error');
-        return;
+        return false;
     }
 
     cart[productId] = {
@@ -980,6 +1028,7 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
     } else {
         showCartMessage(`${name} added to the cart.`, 'success');
     }
+    return true;
 }
 
 function updateCartQty(id, newQty) {
@@ -1468,12 +1517,11 @@ function onScanSuccess(decodedText) {
     }
     lastScannedCode = code;
     lastScannedAt = now;
-    skuInput.value = code;
     scannerResult.innerHTML = `<strong>Barcode detected</strong><span>${escapeHtml(code)}</span>`;
     if (navigator.vibrate) {
         navigator.vibrate(100);
     }
-    addCodeFromInput();
+    queueBarcode(code);
 }
 
 function showCameraStartFailure(hint, detail) {
@@ -1642,11 +1690,48 @@ if (fullscreenToggle) {
 }
 
 skuInput.addEventListener('keydown', event => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
         event.preventDefault();
-        addCodeFromInput();
+        if (!event.repeat) addCodeFromInput();
     }
 });
+
+// Keyboard-wedge scanners end a rapid burst with Enter; editable fields keep their normal input.
+let keyboardBarcode = '';
+let keyboardBarcodeAt = 0;
+function resetKeyboardBarcode() {
+    keyboardBarcode = '';
+    keyboardBarcodeAt = 0;
+}
+document.addEventListener('keydown', event => {
+    const editing = event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]');
+    const dialogOpen = document.querySelector('dialog[open], .checkout-modal.open, [aria-modal="true"].open, .swal2-container');
+    if (event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey
+        || document.hidden || editing || dialogOpen) {
+        resetKeyboardBarcode();
+        return;
+    }
+    const now = performance.now();
+    // shortcut: scanners must send characters within 80ms; tune against hardware if slower scanners are introduced.
+    if (now - keyboardBarcodeAt > 80) resetKeyboardBarcode();
+    if (event.key === 'Enter') {
+        const code = keyboardBarcode;
+        resetKeyboardBarcode();
+        if (code.length >= 3) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            queueBarcode(code);
+        }
+    } else if (event.key.length === 1 && /^[\x21-\x7E]$/.test(event.key)) {
+        keyboardBarcode += event.key;
+        keyboardBarcodeAt = now;
+        if (keyboardBarcode.length > 255) resetKeyboardBarcode();
+    } else if (event.key !== 'Shift') {
+        resetKeyboardBarcode();
+    }
+}, true);
+window.addEventListener('blur', resetKeyboardBarcode);
+document.addEventListener('visibilitychange', resetKeyboardBarcode);
 
 checkoutForm.addEventListener('submit', event => {
     if (!checkoutConfirmed) {

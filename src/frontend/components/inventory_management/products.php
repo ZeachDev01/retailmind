@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Handle image upload
             $initialQuantity = filter_var($_POST['initial_stock_quantity'] ?? '0', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 2147483647]]);
             if ($initialQuantity === false) {
-                throw new RuntimeException('Initial quantity must be a whole number of zero or more.');
+                throw new RuntimeException('Starting stock must be a whole number of zero or more.');
             }
             $productImage = '';
             if (!empty($_FILES['product_image']['name'])) {
@@ -1114,7 +1114,7 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel" data-panel="4">
                         <div class="form-grid">
-                            <div class="form-group full"><label for="initial-stock-quantity">Initial Quantity (Base Units)</label><input id="initial-stock-quantity" type="number" name="initial_stock_quantity" min="0" max="2147483647" step="1" value="0" required><small class="field-help">Total individual units: one box of 24 packs = 24. Leave at 0 if no stock is on hand.</small><small class="field-error">Enter a whole number of zero or more.</small></div>
+                            <div class="form-group full"><label for="initial-stock-quantity">Starting stock</label><input id="initial-stock-quantity" type="number" name="initial_stock_quantity" min="0" max="2147483647" step="1" value="0" required><small class="field-help">How many items do you have now? Count each item: one box of 24 packs = 24. Enter 0 if you have none.</small><small class="field-error">Enter a whole number of zero or more.</small></div>
                             <div class="form-group"><label>Reorder Level</label><input type="number" min="0" name="reorder_level" value="10"></div>
                             <div class="form-group"><label>Safety Stock</label><input type="number" min="0" name="safety_stock" value="0"></div>
                             <div class="form-group"><label>Minimum Order Quantity</label><input type="number" min="1" name="minimum_order_quantity" value="1"></div>
@@ -1127,7 +1127,7 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel" data-panel="5">
                         <div class="detail-grid" id="product-review"></div>
-                        <div class="u-info-note"><i class="bi bi-info-circle"></i> Initial quantity is recorded as starting stock. Use Stock Receiving for subsequent deliveries.</div>
+                        <div class="u-info-note"><i class="bi bi-info-circle"></i> Starting stock is the number of items you have now. Use Stock Receiving to add future deliveries.</div>
                         <div class="form-grid u-mt-1">
                             <label class="form-group full u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" checked>Open printable barcode labels after saving</label>
                             <div class="form-group"><label>Number of labels</label><input type="number" name="label_quantity" value="1" min="1" max="200"></div>
@@ -1217,7 +1217,7 @@ foreach ($products as $product) {
         </section>
     </div>
 
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="<?= htmlspecialchars(app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')) ?>"></script>
     <script>
         const PRODUCT_PHOTO_LIMIT_MESSAGE = <?= json_encode(PRODUCT_PHOTO_LIMIT_MESSAGE) ?>;
         const productData = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
@@ -1770,7 +1770,8 @@ foreach ($products as $product) {
             const formData = new FormData(addProductForm);
             const state = {};
             formData.forEach((value, key) => {
-                if (key !== 'action') {
+                const field = addProductForm.elements[key];
+                if (field && field.type !== 'hidden' && field.type !== 'file') {
                     state[key] = value;
                 }
             });
@@ -1787,7 +1788,7 @@ foreach ($products as $product) {
                     const state = JSON.parse(savedState);
                     Object.entries(state).forEach(([name, value]) => {
                         const field = addProductForm.elements[name];
-                        if (field) {
+                        if (field && field.type !== 'hidden') {
                             if (field.type === 'checkbox') {
                                 field.checked = value === '1' || value === true;
                             } else if (field.type === 'file') {
@@ -1883,6 +1884,70 @@ foreach ($products as $product) {
 
         // Camera scan and internal barcode generation
         const barcodeInput = document.getElementById('create-barcode-input');
+        let productKeyboardCode = '';
+        let productKeyboardAt = 0;
+        let productScanQueue = Promise.resolve();
+        function resetProductKeyboardScan() {
+            productKeyboardCode = '';
+            productKeyboardAt = 0;
+        }
+        async function findScannedProduct(code) {
+            try {
+                const response = await fetch(<?= json_encode(app_url('components/barcodeScanner/apiScanner/product_code_lookup.php')) ?> + '?code=' + encodeURIComponent(code), {
+                    headers: { Accept: 'application/json' }, cache: 'no-store'
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.error || 'Product lookup failed. Please try again.');
+                if (data.outcome !== 'match') {
+                    RetailMindUI.toast(data.outcome === 'ambiguous' ? 'This barcode matches more than one product. Use search.' : 'Product not found. Check the barcode or add the product.', 'error');
+                    return;
+                }
+                if (document.querySelector('.rm-modal-overlay.open, dialog[open]')) return;
+                if (!productData.some(product => Number(product.product_id) === Number(data.product.product_id))) {
+                    RetailMindUI.toast('This product is not in the current list. Refresh the page and scan again.', 'info');
+                    return;
+                }
+                openProductDrawer(data.product.product_id);
+            } catch (error) {
+                RetailMindUI.toast(error.message || 'Product lookup failed. Please try again.', 'error');
+            }
+        }
+        document.addEventListener('keydown', event => {
+            const addingBarcode = productModalOverlay.classList.contains('open') && wizardStep === 2;
+            const editing = event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]');
+            if (event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey || document.hidden
+                || editing || document.querySelector('dialog[open], .swal2-container, .command-overlay.open')
+                || (document.querySelector('.rm-modal-overlay.open') && !addingBarcode)) {
+                resetProductKeyboardScan();
+                return;
+            }
+            const now = performance.now();
+            // shortcut: scanners must send characters within 80ms; tune for slower hardware if needed.
+            if (now - productKeyboardAt > 80) resetProductKeyboardScan();
+            if (event.key === 'Enter') {
+                const code = productKeyboardCode;
+                resetProductKeyboardScan();
+                if (code.length < 3) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if (addingBarcode) {
+                    if (code.length > barcodeInput.maxLength) {
+                        RetailMindUI.toast('Barcode is too long. Use up to ' + barcodeInput.maxLength + ' characters.', 'error');
+                        return;
+                    }
+                    barcodeInput.value = code;
+                    barcodeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                } else {
+                    productScanQueue = productScanQueue.then(() => findScannedProduct(code));
+                }
+            } else if (event.key.length === 1 && /^[\x21-\x7E]$/.test(event.key)) {
+                productKeyboardCode += event.key;
+                productKeyboardAt = now;
+                if (productKeyboardCode.length > 255) resetProductKeyboardScan();
+            } else if (event.key !== 'Shift') resetProductKeyboardScan();
+        }, true);
+        window.addEventListener('blur', resetProductKeyboardScan);
+        document.addEventListener('visibilitychange', resetProductKeyboardScan);
         let productScanner = null;
         document.getElementById('generate-barcode-btn').addEventListener('click', () => {
             const values = new Uint32Array(1);

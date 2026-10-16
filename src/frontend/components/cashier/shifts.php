@@ -153,7 +153,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                     <?php if (!$isCashier): ?><p class="shift-help">A Cashier Shift is opened and owned by the Cashier who sells. <?= $actorRole === 'admin' ? 'An Administrator may reconcile an abandoned shift here.' : 'You may review shifts here.' ?></p><?php endif; ?>
                     <?php if (!$openShift && $isCashier && !$availableRegisters): ?><p>No Register is free right now. Every Register is either disabled or already on an open shift. Tell your Administrator.</p><?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
                             <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($availableRegisters as $register): ?><option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option><?php endforeach; ?></select></div>
-                            <div><label for="opening-float">Opening float</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required></div>
+                            <div><label for="opening-float">Starting cash</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required></div>
                         </div><button class="btn" type="submit">Open shift</button></form><?php elseif ($openShift): ?>
                         <div class="shift-overview-content">
                             <dl class="shift-details">
@@ -164,7 +164,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         <div class="card-grid shift-metrics">
                             <?php if ($countPreview): ?><div class="stat-card">
                                 <div class="value">₱<?= number_format((float)$summary['opening_cash'], 2) ?></div>
-                                <div class="label">Opening float</div>
+                                <div class="label">Starting cash</div>
                             </div>
                             <div class="stat-card">
                                 <div class="value">₱<?= number_format((float)$summary['cash_sales'], 2) ?></div>
