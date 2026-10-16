@@ -1125,7 +1125,10 @@ renumberLines();
 const receivingDraftKey = 'receiving-draft:' + <?= json_encode((string)$_SESSION['user_id']) ?>;
 let retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 try {
-    if (<?= json_encode($message !== '') ?>) sessionStorage.removeItem(receivingDraftKey);
+    if (<?= json_encode($message !== '') ?>) {
+        sessionStorage.removeItem(receivingDraftKey);
+        sessionStorage.removeItem('retailmind_replenishment_snapshot');
+    }
     else if (canReceive && <?= json_encode($_SERVER['REQUEST_METHOD'] === 'GET') ?>) {
         const draft = JSON.parse(sessionStorage.getItem(receivingDraftKey));
         const lineFields = new Set(Array.from(lineTemplate.content.querySelectorAll('input[data-field], select[data-field], textarea[data-field]'), field => field.dataset.field));
@@ -1165,6 +1168,9 @@ form.addEventListener('submit', event => {
     }
     if (!validateQuantities()) { event.preventDefault(); return; }
     saving = true;
+    try {
+        sessionStorage.removeItem('retailmind_replenishment_snapshot');
+    } catch (_) {}
     form.querySelector('.btn-submit').disabled = true;
     form.querySelector('.btn-submit').textContent = 'Saving receipt…';
 });
