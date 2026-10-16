@@ -82,6 +82,38 @@ $_SESSION['receiving_nonces'][$receivingNonce] = true;
 $_SESSION['receiving_nonces'] = array_slice($_SESSION['receiving_nonces'], -20, null, true);
 
 $products = $receivingService->getActiveProducts();
+
+$categories = [];
+foreach ($products as $p) {
+    $catId = (int)($p['category_id'] ?? 0);
+    $catName = trim((string)($p['category_name'] ?? ''));
+    if ($catId <= 0 || $catName === '') {
+        continue;
+    }
+    if (!isset($categories[$catId])) {
+        $categories[$catId] = [
+            'id' => $catId,
+            'name' => $catName,
+            'count' => 0,
+        ];
+    }
+    $categories[$catId]['count']++;
+}
+uasort($categories, static fn(array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
+
+$categoryIcon = static function (string $categoryName): string {
+    $name = strtolower($categoryName);
+    return match (true) {
+        str_contains($name, 'beverage'), str_contains($name, 'drink') => 'bi-cup-straw',
+        str_contains($name, 'snack'), str_contains($name, 'biscuit') => 'bi-cookie',
+        str_contains($name, 'personal'), str_contains($name, 'health') => 'bi-heart-pulse',
+        str_contains($name, 'school'), str_contains($name, 'office') => 'bi-pencil',
+        str_contains($name, 'electronic') => 'bi-battery-charging',
+        str_contains($name, 'baking'), str_contains($name, 'grocery') => 'bi-basket2',
+        str_contains($name, 'canned'), str_contains($name, 'condiment') => 'bi-box2-heart',
+        default => 'bi-bag',
+    };
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -136,6 +168,20 @@ $products = $receivingService->getActiveProducts();
                     <small id="scan_status" role="status" aria-live="polite">You can also choose a product manually below.</small>
                 </div>
                 </div>
+                <div class="receiving-category-filters" id="receiving_category_filters" role="group" aria-label="Product categories">
+                    <button type="button" class="receiving-category-tile active" aria-pressed="true" data-category="all">
+                        <span class="receiving-category-icon"><i class="bi bi-grid" aria-hidden="true"></i></span>
+                        <strong>All</strong>
+                        <small><?= count($products) ?> products</small>
+                    </button>
+                    <?php foreach ($categories as $catId => $cat): ?>
+                        <button type="button" class="receiving-category-tile" aria-pressed="false" data-category="<?= (int)$catId ?>">
+                            <span class="receiving-category-icon"><i class="bi <?= htmlspecialchars($categoryIcon($cat['name'])) ?>" aria-hidden="true"></i></span>
+                            <strong><?= htmlspecialchars($cat['name']) ?></strong>
+                            <small><?= (int)$cat['count'] ?> product<?= (int)$cat['count'] === 1 ? '' : 's' ?></small>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
                 <div id="receiving_catalog" class="receiving-catalog" aria-label="Available products"></div>
             </div>
             <form method="POST" id="receiving_form" novalidate>
@@ -156,7 +202,7 @@ $products = $receivingService->getActiveProducts();
                             <select name="product_id" id="product_id" data-field="product_id" required>
                                 <option value="">-- Select Product --</option>
                                 <?php foreach ($products as $p): ?>
-                                    <option value="<?= $p['product_id'] ?>" data-name="<?= htmlspecialchars($p['product_name']) ?>" data-sku="<?= htmlspecialchars($p['sku']) ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>" data-units-per-package="<?= (int)($p['units_per_package'] ?? 1) ?>" data-base-unit="<?= htmlspecialchars($p['base_unit'] ?? 'piece') ?>" data-receiving-unit="<?= htmlspecialchars($p['receiving_unit'] ?? 'package') ?>">
+                                    <option value="<?= $p['product_id'] ?>" data-name="<?= htmlspecialchars($p['product_name']) ?>" data-sku="<?= htmlspecialchars($p['sku']) ?>" data-cost="<?= htmlspecialchars($p['cost_price'] ?? '0') ?>" data-units-per-package="<?= (int)($p['units_per_package'] ?? 1) ?>" data-base-unit="<?= htmlspecialchars($p['base_unit'] ?? 'piece') ?>" data-receiving-unit="<?= htmlspecialchars($p['receiving_unit'] ?? 'package') ?>" data-category-id="<?= (int)($p['category_id'] ?? 0) ?>" data-category-name="<?= htmlspecialchars($p['category_name'] ?? '') ?>" data-barcode="<?= htmlspecialchars($p['barcode'] ?? '') ?>" data-variant-label="<?= htmlspecialchars($p['variant_label'] ?? '') ?>" data-product-image="<?= htmlspecialchars($p['product_image'] ?? '') ?>" data-quantity-on-hand="<?= (int)($p['quantity_on_hand'] ?? 0) ?>" data-reorder-level="<?= (int)($p['reorder_level'] ?? 0) ?>" data-safety-stock="<?= (int)($p['safety_stock'] ?? 0) ?>">
                                         <?= htmlspecialchars($p['product_name']) ?> (<?= htmlspecialchars($p['sku']) ?>)
                                     </option>
                                 <?php endforeach; ?>
@@ -223,8 +269,8 @@ $products = $receivingService->getActiveProducts();
                 <section class="receiving-summary" aria-label="Delivery summary">
                 <div class="receiving-panel-heading"><h2>Delivery summary</h2><span id="summary_status" class="receiving-count">Draft</span></div>
                 <div class="receiving-summary-body">
-                    <div class="receiving-accepted"><strong id="summary_accepted">0</strong><span>Accepted units</span><small>To be added to available stock</small></div>
-                    <dl class="receiving-totals"><div><dt>Products</dt><dd id="summary_products">0</dd></div><div><dt>Received units</dt><dd id="summary_received">0</dd></div><div><dt>Damaged units</dt><dd id="summary_damaged">0</dd></div><div><dt>Known accepted cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
+                    <div class="receiving-accepted"><strong id="summary_products">0</strong><span>Products added</span><small>In current delivery list</small></div>
+                    <dl class="receiving-totals"><div><dt>Accepted units</dt><dd id="summary_accepted">0</dd></div><div><dt>Received units</dt><dd id="summary_received">0</dd></div><div><dt>Damaged units</dt><dd id="summary_damaged">0</dd></div><div><dt>Known accepted cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
                     <p class="receiving-summary-note">Damaged units are recorded separately. They never increase available stock. Blank purchase costs remain unknown.</p>
                 <div class="form-section receiving-quantity">
                     <h3>Receipt details</h3>
@@ -361,7 +407,12 @@ const form = document.getElementById('receiving_form');
 const lineContainer = document.getElementById('receiving_lines');
 const lineTemplate = activeLine.cloneNode(true);
 const productOptions = Array.from(receivingField('product_id').options, option => option.cloneNode(true));
-const productSearchText = productOptions.map(option => option.textContent.toLowerCase());
+const productSearchText = productOptions.map(option => [
+    option.textContent,
+    option.dataset.sku,
+    option.dataset.barcode,
+    option.dataset.variantLabel
+].filter(Boolean).join(' ').toLowerCase());
 lineTemplate.querySelector('[data-field="product_id"]').replaceChildren(productOptions[0].cloneNode(true));
 for (const label of lineTemplate.querySelectorAll('label[for]')) label.dataset.labelFor = label.htmlFor;
 function refreshDelivery() {
@@ -388,28 +439,143 @@ function refreshDelivery() {
     document.getElementById('delivery_count').textContent = products + (products === 1 ? ' product' : ' products');
     renderCatalog();
 }
+let selectedCategory = 'all';
+document.getElementById('receiving_category_filters')?.addEventListener('click', event => {
+    const tile = event.target.closest('.receiving-category-tile');
+    if (!tile) return;
+    document.querySelectorAll('.receiving-category-tile').forEach(el => {
+        el.classList.remove('active');
+        el.setAttribute('aria-pressed', 'false');
+    });
+    tile.classList.add('active');
+    tile.setAttribute('aria-pressed', 'true');
+    selectedCategory = tile.dataset.category || 'all';
+    renderCatalog();
+});
+
+function getStockState(quantityOnHand, reorderLevel, safetyStock) {
+    const stock = Number(quantityOnHand || 0);
+    const reorder = Number(reorderLevel || 0);
+    const safety = Number(safetyStock || 0);
+    const threshold = Math.max(reorder, safety);
+    const isBelowThreshold = threshold > 0 && stock <= threshold;
+    if (stock <= 0) return { state: 'out', label: 'Out of stock', isLow: isBelowThreshold || true };
+    if (isBelowThreshold) {
+        return { state: 'low', label: 'Low stock', isLow: true };
+    }
+    return { state: 'available', label: `${stock} in stock`, isLow: false };
+}
+
+function getCategoryIcon(categoryName) {
+    const name = String(categoryName || '').toLowerCase();
+    if (name.includes('beverage') || name.includes('drink')) return 'bi-cup-straw';
+    if (name.includes('snack') || name.includes('biscuit')) return 'bi-cookie';
+    if (name.includes('personal') || name.includes('health')) return 'bi-heart-pulse';
+    if (name.includes('school') || name.includes('office')) return 'bi-pencil';
+    if (name.includes('electronic')) return 'bi-battery-charging';
+    if (name.includes('baking') || name.includes('grocery')) return 'bi-basket2';
+    if (name.includes('canned') || name.includes('condiment')) return 'bi-box2-heart';
+    return 'bi-bag';
+}
+
 function renderCatalog() {
     const query = document.getElementById('product_search').value.trim().toLowerCase();
     const selected = new Set(Array.from(lineContainer.children, row => row.querySelector('[data-field="product_id"]').value));
-    const matches = productOptions.filter((option, index) => option.value && productSearchText[index].includes(query));
+    const matches = productOptions.filter((option, index) => {
+        if (!option.value) return false;
+        const matchesCategory = selectedCategory === 'all' || (option.dataset.categoryId || '') === selectedCategory;
+        const matchesQuery = !query || productSearchText[index].includes(query);
+        return matchesCategory && matchesQuery;
+    });
     const catalog = document.getElementById('receiving_catalog');
     catalog.replaceChildren();
-    // shortcut: show 20 catalog matches; search narrows larger catalogs without rendering every product.
-    for (const option of matches.slice(0, 20)) {
-        const item = document.createElement('div');
-        item.className = 'receiving-catalog-item';
-        const info = document.createElement('div');
+
+    for (const option of matches.slice(0, 24)) {
+        const isAdded = selected.has(option.value);
+        const stockInfo = getStockState(option.dataset.quantityOnHand, option.dataset.reorderLevel, option.dataset.safetyStock);
+        const iconClass = getCategoryIcon(option.dataset.categoryName);
+
+        const card = document.createElement('article');
+        card.className = 'receiving-card' + (stockInfo.state === 'out' ? ' out-of-stock' : '');
+        card.dataset.productId = option.value;
+
+        const media = document.createElement('div');
+        media.className = 'receiving-card-media';
+        if (option.dataset.productImage) {
+            const img = document.createElement('img');
+            img.src = option.dataset.productImage;
+            img.alt = '';
+            img.loading = 'lazy';
+            const fallback = document.createElement('i');
+            fallback.className = 'bi ' + iconClass;
+            fallback.setAttribute('aria-hidden', 'true');
+            fallback.hidden = true;
+            img.onerror = () => { img.hidden = true; fallback.hidden = false; };
+            media.append(img, fallback);
+        } else {
+            const icon = document.createElement('i');
+            icon.className = 'bi ' + iconClass;
+            icon.setAttribute('aria-hidden', 'true');
+            media.appendChild(icon);
+        }
+
+        if (stockInfo.isLow) {
+            const badge = document.createElement('span');
+            badge.className = 'receiving-card-badge low-stock';
+            const badgeIcon = document.createElement('i');
+            badgeIcon.className = 'bi bi-exclamation-triangle-fill';
+            badgeIcon.setAttribute('aria-hidden', 'true');
+            badge.append(badgeIcon, document.createTextNode(' Low stock'));
+            media.appendChild(badge);
+        }
+
+        const body = document.createElement('div');
+        body.className = 'receiving-card-body';
+
         const name = document.createElement('strong');
+        name.className = 'receiving-card-name';
+        name.title = option.dataset.name;
         name.textContent = option.dataset.name;
-        const sku = document.createElement('small');
-        sku.textContent = option.dataset.sku + ' · ' + option.dataset.unitsPerPackage + ' units / ' + option.dataset.receivingUnit;
-        info.append(name, sku);
+
+        const meta = document.createElement('span');
+        meta.className = 'receiving-card-meta';
+        const catLabel = option.dataset.categoryName || 'General';
+        meta.textContent = catLabel + ' · ' + (option.dataset.sku || 'No SKU');
+
+        const costStock = document.createElement('div');
+        costStock.className = 'receiving-card-cost-stock';
+
+        const cost = document.createElement('span');
+        cost.className = 'receiving-card-cost';
+        const rawCost = option.dataset.cost;
+        cost.textContent = rawCost !== '' && rawCost !== null && !isNaN(Number(rawCost)) && Number(rawCost) > 0
+            ? '₱' + Number(rawCost).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+            : 'Unknown cost';
+
+        const stock = document.createElement('span');
+        stock.className = 'receiving-card-stock ' + stockInfo.state;
+        const stockIcon = document.createElement('i');
+        stockIcon.className = 'bi bi-circle-fill';
+        stockIcon.setAttribute('aria-hidden', 'true');
+        stock.append(stockIcon, document.createTextNode(' ' + stockInfo.label));
+
+        costStock.append(cost, stock);
+
+        const pack = document.createElement('div');
+        pack.className = 'receiving-card-pack';
+        const unitsPerPkg = Number(option.dataset.unitsPerPackage || 1);
+        const baseUnit = option.dataset.baseUnit || 'piece';
+        const baseLabel = unitsPerPkg === 1 ? baseUnit : (baseUnit.endsWith('s') ? baseUnit : baseUnit + 's');
+        const packSmall = document.createElement('small');
+        packSmall.textContent = '1 ' + (option.dataset.receivingUnit || 'package') + ' = ' + unitsPerPkg + ' ' + baseLabel;
+        pack.appendChild(packSmall);
+
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'btn btn-secondary';
-        button.textContent = selected.has(option.value) ? 'Added' : '+ Add';
+        button.className = 'btn btn-secondary receiving-card-add';
+        button.textContent = isAdded ? 'Added' : '+ Add to Delivery';
         button.setAttribute('aria-label', 'Add ' + option.dataset.name);
-        button.disabled = selected.has(option.value);
+        button.disabled = isAdded;
         button.addEventListener('click', () => {
             const empty = Array.from(lineContainer.children).find(row => !row.querySelector('[data-field="product_id"]').value);
             if (empty) activateLine(empty);
@@ -420,12 +586,15 @@ function renderCatalog() {
             select.dispatchEvent(new Event('change', {bubbles: true}));
             showStep(1, false);
         });
-        item.append(info, button);
-        catalog.append(item);
+
+        body.append(name, meta, costStock, pack, button);
+        card.append(media, body);
+        catalog.append(card);
     }
+
     const hint = document.createElement('p');
     hint.className = 'receiving-catalog-hint';
-    hint.textContent = matches.length ? 'Showing ' + Math.min(20, matches.length) + ' of ' + matches.length + ' products. Search to narrow the list.' : 'No matching products. Try another name or SKU.';
+    hint.textContent = matches.length ? 'Showing ' + Math.min(24, matches.length) + ' of ' + matches.length + ' products. Search to narrow the list.' : 'No matching products. Try another name or SKU.';
     catalog.append(hint);
 }
 function populateProductOptions(select) {

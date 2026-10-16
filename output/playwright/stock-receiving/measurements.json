@@ -1,7 +1,7 @@
 {
   "metrics": {
     "options": 61,
-    "searchMs": 2.7999999821186066
+    "searchMs": 3.5999999940395355
   },
   "measurements": [
     {
@@ -22,6 +22,31 @@
         },
         {
           "id": "",
+          "height": 95.09375,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
           "height": 44,
           "font": "13px"
         },
@@ -276,6 +301,31 @@
           "id": "product_code_scan",
           "height": 50,
           "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 95.09375,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
         },
         {
           "id": "",
@@ -533,6 +583,31 @@
           "id": "product_code_scan",
           "height": 50,
           "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 95.09375,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
         },
         {
           "id": "",
@@ -790,6 +865,31 @@
           "id": "product_code_scan",
           "height": 50,
           "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 95.09375,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
         },
         {
           "id": "",
@@ -1047,6 +1147,31 @@
           "id": "product_code_scan",
           "height": 50,
           "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 95.09375,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
         },
         {
           "id": "",
@@ -1307,6 +1432,31 @@
         },
         {
           "id": "",
+          "height": 95.09375,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
           "height": 44,
           "font": "13px"
         },
@@ -1561,6 +1711,31 @@
           "id": "product_code_scan",
           "height": 50,
           "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 95.09375,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
         },
         {
           "id": "",
@@ -1818,6 +1993,31 @@
           "id": "product_code_scan",
           "height": 50,
           "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 95.09375,
+          "font": "16px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "id": "",
+          "height": 44,
+          "font": "13px"
         },
         {
           "id": "",

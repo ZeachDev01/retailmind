@@ -50,11 +50,24 @@ function fixture(action) {
         const url = origin + '/components/report/stock_receiving.php';
         await page.goto(url);
         const navbar = await page.locator('.sidebar').innerHTML();
+        assert.equal(await page.locator('.receiving-category-tile[data-category="all"]').getAttribute('aria-pressed'), 'true');
+        assert.match(await page.locator('.receiving-category-tile[data-category="all"]').innerText(), /All/);
+        assert.equal(await page.locator('.receiving-catalog').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 3, '3-column responsive card grid');
+        const firstCard = page.locator('.receiving-card').first();
+        assert.match(await firstCard.locator('.receiving-card-stock').innerText(), /in stock|Out of stock|Low stock/);
+        assert.match(await firstCard.locator('.receiving-card-pack').innerText(), /1 case = 24 pieces|1 package = 1 piece/);
+        assert.match(await firstCard.locator('.receiving-card-add').innerText(), /\+ Add to Delivery/);
+        assert.equal(await firstCard.locator('.receiving-card-add').isDisabled(), false, 'depleted and in-stock items remain enabled for receiving replenishment');
+        assert.equal(await page.locator('#summary_products').innerText(), '0');
+        assert.match(await page.locator('.receiving-accepted').innerText(), /Products added/);
+        assert.match(await page.locator('.receiving-accepted').innerText(), /In current delivery list/);
         await page.getByLabel('Search products by name or SKU').fill('Receiving test product 999');
         await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).click();
         assert.match(await page.locator('#receiving_lines').innerText(), /UI-999/);
         await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).waitFor({state: 'visible'});
         assert.equal(await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).isDisabled(), true);
+        assert.equal(await page.locator('.receiving-card-add:disabled').innerText(), 'Added');
+        assert.equal(await page.locator('#summary_products').innerText(), '1', 'hero counter updates dynamically on add');
         await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('12');
         await page.locator('#damaged_qty').fill('2');
@@ -216,6 +229,9 @@ function fixture(action) {
         await Promise.all([page.waitForNavigation(), page.locator('.btn-submit').click()]);
         assert.match(await page.locator('.message.error').innerText(), /already been saved or expired/);
         assert.equal(await page.locator('#received_packages').inputValue(), '2', 'server rejection retains entered package quantity');
+        if (await page.locator('.swal2-confirm').isVisible({timeout: 1000}).catch(() => false)) {
+            await page.locator('.swal2-confirm').click();
+        }
         await page.locator('#receiving_next').click();
         const [savedRequest] = await Promise.all([
             page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/report/stock_receiving.php')),
