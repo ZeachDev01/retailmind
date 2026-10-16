@@ -295,8 +295,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     $cart = json_decode($_POST['cart'], true) ?: [];
     $payment_method = in_array($_POST['payment_method'] ?? '', ['cash', 'card', 'ewallet'], true)
         ? $_POST['payment_method'] : 'cash';
+    $attemptToken = (string)($_POST['checkout_attempt_id'] ?? $_POST['checkout_attempt'] ?? '');
     $paymentDetails = [
-        'checkout_attempt' => (string)($_POST['checkout_attempt'] ?? ''),
+        'checkout_attempt' => $attemptToken,
+        'checkout_attempt_id' => $attemptToken,
         'cash_received' => $_POST['cash_received'] ?? 0,
         'payment_reference' => $_POST['payment_reference'] ?? '',
         'payment_method' => $payment_method,
@@ -329,13 +331,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         // not the account's stored role, decides who may sell.
         $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
         $_SESSION['completed_checkout_sale'] = (int)$result['sale_id'];
-        header('Location: ' . app_url('components/cashier/pos.php?sale_id=' . $result['sale_id'] . '&checkout=complete'));
+        $receiptUrl = app_url('components/cashier/pos.php?sale_id=' . $result['sale_id'] . '&checkout=complete');
+
+        $isJson = (stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
+            || (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest');
+        if ($isJson) {
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            echo json_encode(['success' => true, 'sale_id' => $result['sale_id'], 'receipt_url' => $receiptUrl], JSON_THROW_ON_ERROR);
+            exit;
+        }
+
+        header('Location: ' . $receiptUrl);
         exit;
+    } catch (StockConflictException $e) {
+        http_response_code(409);
+        $conflicts = $e->getConflicts();
+        $isJson = (($_POST['action'] ?? '') === 'review_quote')
+            || (stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
+            || (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest');
+        if ($isJson) {
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            echo json_encode([
+                'success' => false,
+                'error' => 'stock_conflict',
+                'message' => $e->getMessage(),
+                'conflicts' => $conflicts,
+            ], JSON_THROW_ON_ERROR);
+            exit;
+        }
+        $checkout_error = $e->getMessage();
     } catch (Throwable $e) {
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
-        if (($_POST['action'] ?? '') === 'review_quote') {
+        $isJson = (($_POST['action'] ?? '') === 'review_quote')
+            || (stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
+            || (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest');
+        if ($isJson) {
             http_response_code(409);
-            echo json_encode(['message' => $checkout_error], JSON_THROW_ON_ERROR);
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            echo json_encode(['success' => false, 'message' => $checkout_error], JSON_THROW_ON_ERROR);
             exit;
         }
     }
@@ -580,6 +616,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="checkout">
                     <input type="hidden" name="checkout_attempt" id="checkout-attempt-input">
+                    <input type="hidden" name="checkout_attempt_id" id="checkout-attempt-id-input">
                     <input type="hidden" name="quote_token" id="quote-token-input">
                     <input type="hidden" name="payment_verified" value="0">
                     <input type="hidden" name="cart" id="cart-input">
@@ -687,6 +724,25 @@ $quickCategoryIcon = static function (string $categoryName): string {
     </div>
 </div>
 
+<div id="stock-conflict-modal" class="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="stock-conflict-title">
+    <div class="checkout-dialog">
+        <div class="checkout-dialog-header">
+            <div>
+                <h3 id="stock-conflict-title">Stock conflict detected</h3>
+                <p>Live inventory changed. Adjust affected quantities or remove depleted items to continue.</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeStockConflictModal()" aria-label="Close stock conflict dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+        <div class="checkout-dialog-body">
+            <div id="stock-conflict-content"></div>
+        </div>
+        <div class="checkout-dialog-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeStockConflictModal()">Keep reviewing</button>
+            <button type="button" class="btn" id="confirm-conflict-adjustments-btn" onclick="applyStockConflictAdjustments()"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>Proceed with updated cart</button>
+        </div>
+    </div>
+</div>
+
 <div id="void-modal" class="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="void-title">
     <div class="checkout-dialog">
         <div class="checkout-dialog-header">
@@ -784,6 +840,7 @@ const voidReason = document.getElementById('void-reason');
 const discardModal = document.getElementById('discard-modal');
 const discardReason = document.getElementById('discard-reason');
 const discardNote = document.getElementById('discard-note');
+const stockConflictModal = document.getElementById('stock-conflict-modal');
 let discardingHeldSaleId = 0;
 const checkoutButton = document.getElementById('checkout-button');
 const confirmCheckoutButton = document.getElementById('confirm-checkout-button');
@@ -1620,6 +1677,10 @@ function validateCheckout(requirePayment = true) {
 
 async function checkoutNow() {
     if (checkoutSubmitting || !checkoutAttempt.ready || window.cartWorkspace?.busy) return;
+    if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
+        showCartMessage('Checkout requires an active internet connection. Please check your network and try again.', 'error');
+        return;
+    }
     if (!validateCheckout(false)) {
         return;
     }
@@ -1628,10 +1689,14 @@ async function checkoutNow() {
     checkoutButton.disabled = true;
     if (window.cartWorkspace) cartWorkspace.busy = true;
     try {
-        if (window.cartWorkspace && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
+        if (window.cartWorkspace && resumedHeldSaleId && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
         if (!validateCheckout(false)) return;
         quote = await checkoutQuote.review();
     } catch (error) {
+        if (error.conflicts && error.conflicts.length) {
+            showStockConflictModal(error.conflicts);
+            return;
+        }
         showCartMessage(error.message, 'error');
         return;
     } finally {
@@ -1687,6 +1752,10 @@ function closeCheckoutConfirm() {
 
 async function submitConfirmedCheckout() {
     if (checkoutSubmitting) return;
+    if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
+        showCartMessage('Checkout requires an active internet connection. Please check your network and try again.', 'error');
+        return;
+    }
     if (!checkoutAttempt.ready) {
         showCartMessage('Recover the previous checkout before collecting another payment.', 'error');
         return;
@@ -1710,6 +1779,7 @@ async function submitConfirmedCheckout() {
     confirmCheckoutButton.disabled = true;
     confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
     try {
+        await checkoutQuote.review();
         await checkoutAttempt.save(cart);
         checkoutForm.submit();
     } catch (error) {
@@ -1717,12 +1787,146 @@ async function submitConfirmedCheckout() {
         checkoutConfirmed = false;
         confirmCheckoutButton.disabled = false;
         confirmCheckoutButton.textContent = 'Confirm payment';
+        closeCheckoutConfirm();
+        if (error.conflicts && error.conflicts.length) {
+            showStockConflictModal(error.conflicts);
+            return;
+        }
         const message = !navigator.locks
             ? 'Checkout recovery requires a browser supporting Web Locks. Open Point of Sale using HTTPS or http://localhost/retailmind before collecting payment.'
-            : 'Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.';
+            : (error.message || 'Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.');
         showCartMessage(message, 'error');
     }
 }
+
+let activeStockConflicts = [];
+
+function showStockConflictModal(conflicts) {
+    activeStockConflicts = conflicts || [];
+    renderStockConflictItems();
+    RetailMindUI.openOverlay(stockConflictModal);
+    const firstAction = stockConflictModal.querySelector('button, input');
+    if (firstAction) firstAction.focus();
+}
+
+function closeStockConflictModal() {
+    RetailMindUI.closeOverlay(stockConflictModal);
+    activeStockConflicts = [];
+    checkoutButton.focus();
+}
+
+function renderStockConflictItems() {
+    const container = document.getElementById('stock-conflict-content');
+    if (!container) return;
+    if (!activeStockConflicts.length) {
+        container.innerHTML = '<p>No stock conflicts detected.</p>';
+        return;
+    }
+    let html = `<p class="conflict-modal-desc">Available inventory is less than requested. Adjust quantities or remove items to proceed.</p>
+    <table class="conflict-items-table" style="width:100%; border-collapse:collapse; margin:1rem 0;">
+        <thead>
+            <tr style="text-align:left; border-bottom:1px solid var(--border-color, #ccc);">
+                <th style="padding:0.5rem;">Item</th>
+                <th style="padding:0.5rem; text-align:center;">Requested</th>
+                <th style="padding:0.5rem; text-align:center;">Available</th>
+                <th style="padding:0.5rem; text-align:right;">Action</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    for (const item of activeStockConflicts) {
+        const id = Number(item.product_id);
+        const name = escapeHtml(item.product_name);
+        const requested = Number(item.requested_qty);
+        const available = Number(item.available_stock);
+        const currentInCart = cart[id] ? Number(cart[id].qty) : 0;
+
+        html += `<tr data-conflict-id="${id}" style="border-bottom:1px solid var(--border-color, #eee);">
+            <td style="padding:0.5rem;"><strong class="conflict-product-name">${name}</strong></td>
+            <td style="padding:0.5rem; text-align:center;" class="conflict-requested-qty">${requested}</td>
+            <td style="padding:0.5rem; text-align:center;"><strong class="conflict-available-stock ${available > 0 ? 'text-warning' : 'text-danger'}">${available}</strong></td>
+            <td style="padding:0.5rem; text-align:right;">`;
+
+        if (available > 0) {
+            html += `<div style="display:inline-flex; align-items:center; gap:0.25rem;">
+                <input type="number" min="1" max="${available}" value="${Math.min(currentInCart || available, available)}"
+                       class="conflict-qty-input" data-product-id="${id}" style="width:60px; padding:0.25rem;"
+                       onchange="updateConflictItemQty(${id}, Number(this.value), ${available})">
+                <button type="button" class="btn btn-sm btn-secondary adjust-conflict-qty-btn" onclick="adjustConflictItemQty(${id}, ${available})">Set to ${available}</button>
+                <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem(${id})">Remove</button>
+            </div>`;
+        } else {
+            html += `<span class="badge" style="background:#dc3545; color:#fff; padding:0.25rem 0.5rem; border-radius:4px; margin-right:0.5rem;">Depleted</span>
+                     <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem(${id})">Remove</button>`;
+        }
+
+        html += `</td></tr>`;
+    }
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+}
+
+function updateConflictItemQty(productId, qty, maxAvailable) {
+    productId = Number(productId);
+    const validQty = Math.max(1, Math.min(Number(qty) || 1, maxAvailable));
+    if (cart[productId]) {
+        cart[productId].qty = validQty;
+        cart[productId].stock = maxAvailable;
+        renderCart();
+        persistCart();
+    }
+}
+
+function adjustConflictItemQty(productId, targetQty) {
+    productId = Number(productId);
+    if (cart[productId]) {
+        cart[productId].qty = targetQty;
+        cart[productId].stock = targetQty;
+        renderCart();
+        persistCart();
+        renderStockConflictItems();
+    }
+}
+
+function removeConflictItem(productId) {
+    productId = Number(productId);
+    if (cart[productId]) {
+        delete cart[productId];
+        renderCart();
+        persistCart();
+    }
+    activeStockConflicts = activeStockConflicts.filter(c => Number(c.product_id) !== productId);
+    renderStockConflictItems();
+}
+
+function applyStockConflictAdjustments() {
+    for (const conflict of activeStockConflicts) {
+        const id = Number(conflict.product_id);
+        const avail = Number(conflict.available_stock);
+        if (avail <= 0) {
+            delete cart[id];
+        } else if (cart[id] && cart[id].qty > avail) {
+            cart[id].qty = avail;
+            cart[id].stock = avail;
+        }
+    }
+    renderCart();
+    persistCart();
+    closeStockConflictModal();
+    if (Object.keys(cart).length === 0) {
+        showCartMessage('All conflicted items were removed. Cart is empty.', 'info');
+        return;
+    }
+    checkoutNow();
+}
+
+window.showStockConflictModal = showStockConflictModal;
+window.closeStockConflictModal = closeStockConflictModal;
+window.adjustConflictItemQty = adjustConflictItemQty;
+window.removeConflictItem = removeConflictItem;
+window.applyStockConflictAdjustments = applyStockConflictAdjustments;
+window.checkoutNow = checkoutNow;
 
 async function apiHeldSale(action, payload = {}) {
     return cartWorkspace.request(action, payload);
@@ -2148,12 +2352,13 @@ checkoutForm.addEventListener('submit', event => {
     }
 });
 
-[checkoutModal, voidModal, discardModal].forEach(modal => {
+[checkoutModal, voidModal, discardModal, stockConflictModal].filter(Boolean).forEach(modal => {
     modal.addEventListener('mousedown', event => {
         if (event.target === modal) {
             if (modal === checkoutModal) { closeCheckoutConfirm(); }
             else if (modal === voidModal) { closeVoidModal(); }
-            else { closeDiscardModal(); }
+            else if (modal === discardModal) { closeDiscardModal(); }
+            else if (modal === stockConflictModal) { closeStockConflictModal(); }
         }
     });
 });
@@ -2183,6 +2388,8 @@ document.addEventListener('keydown', event => {
             closeVoidModal();
         } else if (discardModal.classList.contains('open')) {
             closeDiscardModal();
+        } else if (stockConflictModal && stockConflictModal.classList.contains('open')) {
+            closeStockConflictModal();
         }
         return;
     }

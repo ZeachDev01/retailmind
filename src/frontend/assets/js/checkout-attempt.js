@@ -16,7 +16,8 @@ class CheckoutAttempt {
                 this.ready = true;
                 return;
             }
-            this.form.elements.checkout_attempt.value = this.pending.id;
+            if (this.form.elements.checkout_attempt) this.form.elements.checkout_attempt.value = this.pending.id;
+            if (this.form.elements.checkout_attempt_id) this.form.elements.checkout_attempt_id.value = this.pending.id;
             const response = await fetch(this.options.recoverUrl + '?recover_checkout=' + encodeURIComponent(this.pending.id), {cache: 'no-store'});
             if (!response.ok) throw new Error('Recovery unavailable');
             const outcome = await response.json();
@@ -39,6 +40,9 @@ class CheckoutAttempt {
     }
 
     async save(cart) {
+        if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
+            throw new Error('Checkout requires an active internet connection. Please check your network and try again.');
+        }
         if (!this.ready) throw new Error('Recovery required');
         if (!navigator.locks) throw new Error('Checkout requires a secure browser context with Web Locks');
         return navigator.locks.request(this.key, () => this.persist(cart));
@@ -55,7 +59,8 @@ class CheckoutAttempt {
         }
         const bytes = new Uint8Array(16);
         const id = this.pending ? this.pending.id : Array.from(crypto.getRandomValues(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
-        this.form.elements.checkout_attempt.value = id;
+        if (this.form.elements.checkout_attempt) this.form.elements.checkout_attempt.value = id;
+        if (this.form.elements.checkout_attempt_id) this.form.elements.checkout_attempt_id.value = id;
         const fields = {};
         for (const [name, value] of new FormData(this.form)) {
             if (name !== 'csrf_token' && !name.includes('password')) fields[name] = value;
