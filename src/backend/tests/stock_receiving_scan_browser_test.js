@@ -247,6 +247,12 @@ async function main() {
         check(await page.inputValue('#received_qty') === '',
             'a scan does not infer a delivered quantity');
 
+        await page.goto(receivingPath);
+        await page.locator('#product_search_scan').focus();
+        await page.keyboard.type(fixture.products.direct.barcode, { delay: 10 });
+        check(await eventually(page, id => document.getElementById('product_id').value === String(id),
+            fixture.products.direct.product_id), 'scanner-speed barcode input selects a product without Enter');
+
         const after = runFixture('--state', '--token', token);
         const afterZero = after.products.find((product) => product.sku === fixture.products.zero.sku);
         check(Number(afterZero.quantity_on_hand) === Number(beforeZero.quantity_on_hand),

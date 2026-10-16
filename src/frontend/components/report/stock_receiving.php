@@ -133,10 +133,6 @@ $categoryIcon = static function (string $categoryName): string {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content" id="receiving_main" tabindex="-1">
-        <div class="topbar">
-            <div><h1>Stock Receiving</h1><p>A clear path from delivered goods to available stock.</p></div>
-            <a class="btn btn-secondary" href="receiving_history.php"><i class="bi bi-clock-history" aria-hidden="true"></i> Receiving history</a>
-        </div>
         <?php if ($message): ?>
             <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
             <p>Stock is updated. <a href="../inventory_management/replenishment_queue.php">Review updated recommendations</a> using current stock and existing forecast outputs, or <a href="receiving_history.php">view receiving history</a>.</p>
@@ -147,21 +143,13 @@ $categoryIcon = static function (string $categoryName): string {
         <?php endif; ?>
 
         <div class="receiving-form" data-step="1" <?= !$canReceive ? 'data-readonly="true"' : '' ?>>
-            <div class="receiving-progress">
-                <ol class="receiving-steps" aria-label="Receiving progress">
-                    <li aria-current="step"><span class="step-number">1</span><span>Select products<small>Find what arrived</small></span></li>
-                    <li><span class="step-number">2</span><span>Enter quantities<small>Count received goods</small></span></li>
-                    <li><span class="step-number">3</span><span>Review & save<small>Confirm stock changes</small></span></li>
-                </ol>
-                <span class="receiving-draft">Unsaved delivery</span>
-            </div>
             <h2 id="receiving_step_title" class="receiving-step-title" tabindex="-1">1. Select products</h2>
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
             <?php if (!$products): ?><p role="status">No active products are available. Ask your Administrator to add or activate a product before receiving stock.</p><?php endif; ?>
             <noscript><p role="alert">Enable JavaScript to select products, review quantities, and save this receiving entry.</p></noscript>
             <fieldset class="receiving-fieldset-reset" <?= !$canReceive || !$products ? 'disabled' : '' ?>>
             <div class="form-section" id="receiving_selection">
-                <div class="receiving-panel-heading"><div><h2>Product catalog</h2><p>Find what arrived</p></div><span class="receiving-count"><?= count($products) ?> products</span></div>
+                <div class="receiving-panel-heading"><div><h2>Product catalog</h2><p>Find what arrived</p></div><div class="receiving-catalog-actions"><button type="button" class="btn btn-secondary" id="receiving_help_open" aria-haspopup="dialog">How to use</button><span class="receiving-count"><?= count($products) ?> products</span></div></div>
                 <div class="receiving-search-bar form-group">
                     <label for="product_search_scan">Scan barcode or search by name or SKU</label>
                     <div class="receiving-search-group">
@@ -193,7 +181,7 @@ $categoryIcon = static function (string $categoryName): string {
                 <input type="hidden" name="receiving_nonce" value="<?= htmlspecialchars($receivingNonce) ?>">
                 <input type="hidden" name="entry_mode" value="shopping_trip">
                 <div class="delivery-editor">
-                <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2><p>Enter quantities exactly as received.</p></div><span id="delivery_count" class="receiving-count">0 products</span></div>
+                <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2><p>Enter quantities exactly as received.</p></div><div class="receiving-delivery-actions"><span id="delivery_count" class="receiving-count">0 products</span><button type="button" class="btn btn-primary" id="receiving_next">Add quantity</button></div></div>
                 <div id="delivery_empty_state" class="delivery-empty-state">
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
                     <p>No products added yet. Scan a barcode or click + Add to Delivery from the catalog below.</p>
@@ -312,8 +300,8 @@ $categoryIcon = static function (string $categoryName): string {
                 </fieldset>
 
                 <div class="u-flex-wrap receiving-actions">
+                    <button type="button" class="btn btn-secondary" id="receiving_return_products" hidden>Return to products</button>
                     <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Back</button>
-                    <button type="button" class="btn btn-primary" id="receiving_next">Continue to quantities</button>
                     <button type="submit" class="btn-submit" <?= !$canReceive ? 'disabled' : '' ?> hidden>Save shopping entry & update inventory</button>
                 </div>
                 <small>Review is required before stock changes.</small>
@@ -324,12 +312,24 @@ $categoryIcon = static function (string $categoryName): string {
         </div>
     </main>
 </div>
+<dialog class="receiving-help-dialog" id="receiving_help_dialog" aria-labelledby="receiving_help_title">
+    <div class="receiving-panel-heading"><h2 id="receiving_help_title">How to receive stock</h2><button type="button" class="btn btn-secondary" id="receiving_help_close">Close</button></div>
+    <ol>
+        <li><strong>Select products:</strong> scan a barcode, search by name or SKU, or choose a category and add products from the catalog.</li>
+        <li><strong>Enter quantities:</strong> continue to quantities, choose units or packages, then enter received and damaged units. Add cost, batch, expiry, or notes when needed.</li>
+        <li><strong>Review and save:</strong> check the delivery summary and receipt details, review the stock changes, then save the entry.</li>
+    </ol>
+</dialog>
 
 <script id="receiving_products_data" type="application/json"><?= json_encode($products, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?></script>
 <script>
 const productsCatalog = JSON.parse(document.getElementById('receiving_products_data').textContent);
 const canReceive = <?= json_encode((bool)$canReceive) ?>;
 const productMap = new Map(productsCatalog.map(p => [String(p.product_id), p]));
+const receivingHelpDialog = document.getElementById('receiving_help_dialog');
+document.getElementById('receiving_help_open').addEventListener('click', () => receivingHelpDialog.showModal());
+document.getElementById('receiving_help_close').addEventListener('click', () => receivingHelpDialog.close());
+receivingHelpDialog.addEventListener('click', event => { if (event.target === receivingHelpDialog) receivingHelpDialog.close(); });
 
 function updateExtrasDisclosure(row) {
     const details = row?.querySelector('.receiving-extras');
@@ -346,6 +346,8 @@ const productCodeScan = productSearchScan;
 const productSearch = productSearchScan;
 let activeScanLookup = 0;
 let scanLookupController = null;
+let scanInputTimer = null;
+let lastScanInputAt = 0;
 const lineContainer = document.getElementById('receiving_lines');
 const lineTemplate = document.getElementById('receiving_line_template');
 let activeLine = null;
@@ -396,10 +398,12 @@ async function identifyReceivingProduct(code) {
             productMap.set(String(product.product_id), product);
         }
         const matchedCase = result.matched_code_kind === 'case_barcode';
-        addReceivingLine({
+        const line = addReceivingLine({
             product_id: product.product_id,
             quantity_mode: matchedCase ? 'packages' : 'units'
         });
+        if (!line) return;
+        RetailMindUI.toast(`${product.product_name} added to delivery lines.`, 'success');
         productSearchScan.value = '';
         const matchedBy = result.matched_code_kind === 'sku'
             ? 'SKU'
@@ -414,9 +418,11 @@ async function identifyReceivingProduct(code) {
 }
 
 productSearchScan.addEventListener('keydown', function (event) {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
     event.preventDefault();
+    if (event.repeat) return;
     const code = this.value.trim();
+    this.value = '';
     if (code !== '') identifyReceivingProduct(code);
 });
 
@@ -425,6 +431,41 @@ addScannedItem?.addEventListener('click', function () {
     if (code !== '') identifyReceivingProduct(code);
     else scanStatus.textContent = 'Scan or type a barcode or SKU first.';
 });
+
+// Keyboard-wedge scanners send a rapid burst plus Enter without moving focus.
+let keyboardReceivingCode = '';
+let keyboardReceivingCodeAt = 0;
+let keyboardReceivingQueue = Promise.resolve();
+function resetKeyboardReceivingCode() {
+    keyboardReceivingCode = '';
+    keyboardReceivingCodeAt = 0;
+}
+document.addEventListener('keydown', event => {
+    const editing = event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]');
+    const dialogOpen = document.querySelector('dialog[open], .rm-modal-overlay.open, .command-overlay.open, .swal2-container');
+    if (!canReceive || event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey
+        || document.hidden || editing || dialogOpen) {
+        resetKeyboardReceivingCode();
+        return;
+    }
+    const now = performance.now();
+    // shortcut: scanners must send characters within 80ms; tune for slower hardware if needed.
+    if (now - keyboardReceivingCodeAt > 80) resetKeyboardReceivingCode();
+    if (event.key === 'Enter') {
+        const code = keyboardReceivingCode;
+        resetKeyboardReceivingCode();
+        if (code.length < 3) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        keyboardReceivingQueue = keyboardReceivingQueue.then(() => identifyReceivingProduct(code));
+    } else if (event.key.length === 1 && /^[\x21-\x7E]$/.test(event.key)) {
+        keyboardReceivingCode += event.key;
+        keyboardReceivingCodeAt = now;
+        if (keyboardReceivingCode.length > 255) resetKeyboardReceivingCode();
+    } else if (event.key !== 'Shift') resetKeyboardReceivingCode();
+}, true);
+window.addEventListener('blur', resetKeyboardReceivingCode);
+document.addEventListener('visibilitychange', resetKeyboardReceivingCode);
 
 function updatePackageConversion(row = activeLine) {
     if (!row) return;
@@ -915,20 +956,18 @@ function showStep(next, focus = true) {
     document.querySelector('.receiving-form').dataset.step = String(step);
     const titles = ['1. Select products', '2. Enter quantities', '3. Review'];
     document.getElementById('receiving_step_title').textContent = titles[step - 1];
-    document.querySelectorAll('.receiving-steps li').forEach((item, index) => {
-        if (index === step - 1) item.setAttribute('aria-current', 'step');
-        else item.removeAttribute('aria-current');
-    });
     document.getElementById('receiving_selection').hidden = step !== 1;
     lineContainer.hidden = step === 3;
     const emptyState = document.getElementById('delivery_empty_state');
     if (emptyState) emptyState.hidden = lineContainer.children.length > 0 || step === 3;
     document.getElementById('receiving_review').hidden = step !== 3;
+    document.querySelector('.receiving-summary').hidden = step === 1;
     document.getElementById('delivery_title').textContent = step === 3 ? 'Check your delivery' : 'Delivery lines';
     document.getElementById('summary_status').textContent = step === 3 ? 'Review' : 'Draft';
     document.getElementById('receiving_back').hidden = step === 1;
+    document.getElementById('receiving_return_products').hidden = step !== 2;
     document.getElementById('receiving_next').hidden = step === 3;
-    document.getElementById('receiving_next').textContent = step === 1 ? 'Continue to quantities' : 'Review shopping entry';
+    document.getElementById('receiving_next').textContent = step === 1 ? 'Add quantity' : 'Review shopping entry';
     form.querySelector('.btn-submit').hidden = step !== 3;
     if (focus) document.getElementById('receiving_step_title').focus();
 }
@@ -1062,6 +1101,7 @@ function renderReview() {
 }
 
 document.getElementById('receiving_back').addEventListener('click', () => showStep(step - 1));
+document.getElementById('receiving_return_products').addEventListener('click', () => showStep(1));
 document.getElementById('receiving_next').addEventListener('click', () => {
     if (!validateProducts()) return;
     if (step === 1) { showStep(2); return; }
@@ -1070,12 +1110,35 @@ document.getElementById('receiving_next').addEventListener('click', () => {
 
 productSearchScan.addEventListener('input', () => {
     renderCatalog();
+    const now = performance.now();
+    const isScannerBurst = now - lastScanInputAt < 80 && productSearchScan.value.trim().length >= 6;
+    lastScanInputAt = now;
+    clearTimeout(scanInputTimer);
+    if (isScannerBurst) {
+        scanInputTimer = setTimeout(() => identifyReceivingProduct(productSearchScan.value), 120);
+    }
 });
 
 renderCatalog();
 renumberLines();
 
-const retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+const receivingDraftKey = 'receiving-draft:' + <?= json_encode((string)$_SESSION['user_id']) ?>;
+let retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+try {
+    if (<?= json_encode($message !== '') ?>) sessionStorage.removeItem(receivingDraftKey);
+    else if (canReceive && <?= json_encode($_SERVER['REQUEST_METHOD'] === 'GET') ?>) {
+        const draft = JSON.parse(sessionStorage.getItem(receivingDraftKey));
+        if (draft && Array.isArray(draft.lines)) {
+            const requestedLines = retainedValues.lines || [];
+            retainedValues = draft;
+            for (const line of requestedLines) {
+                if (!draft.lines.some(saved => String(saved.product_id) === String(line.product_id))) draft.lines.push(line);
+            }
+        }
+    }
+} catch (error) {
+    // Browser storage may be unavailable or contain an invalid draft.
+}
 for (const name of ['supplier', 'invoice_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);
 const linesToRestore = Array.isArray(retainedValues.lines)
     ? retainedValues.lines
@@ -1109,6 +1172,31 @@ const hasQuantities = linesToRestore.some(line =>
     (line.received_packages !== undefined && line.received_packages !== '')
 );
 showStep(hasQuantities ? 2 : 1);
+
+function saveReceivingDraft() {
+    if (!canReceive) return;
+    const draft = {
+        supplier: form.elements.supplier.value,
+        invoice_number: form.elements.invoice_number.value,
+        lines: Array.from(lineContainer.children, row => Object.fromEntries(
+            Array.from(row.querySelectorAll('input[data-field], select[data-field], textarea[data-field]'),
+                field => [field.dataset.field, field.value])
+        ))
+    };
+    try {
+        if (draft.lines.length || draft.supplier || draft.invoice_number) {
+            sessionStorage.setItem(receivingDraftKey, JSON.stringify(draft));
+        } else sessionStorage.removeItem(receivingDraftKey);
+    } catch (error) {
+        document.getElementById('entry_status').textContent = 'Draft could not be kept in this browser. Keep this page open until the delivery is saved.';
+    }
+}
+form.addEventListener('input', saveReceivingDraft);
+form.addEventListener('change', saveReceivingDraft);
+new MutationObserver(saveReceivingDraft).observe(lineContainer, {childList: true});
+saveReceivingDraft();
 </script>
+<?php if ($message): ?><script>RetailMindUI.toast(<?= json_encode($message, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'success');</script><?php endif; ?>
+<?php if ($error): ?><script>RetailMindUI.toast(<?= json_encode($error, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'error');</script><?php endif; ?>
 </body>
 </html>
