@@ -99,12 +99,14 @@ Before the first deployment, configure these in the GitHub repository under
 
 | Type     | Name                          | Value                                                                                                                      |
 | -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Secret   | `FTP_SERVER`                 | FTP hostname matching the TLS certificate, normally `ftpupload.net` |
 | Secret   | `FTP_USERNAME`               | FTP username from the InfinityFree account dashboard |
 | Secret   | `FTP_PASSWORD`               | FTP password from that dashboard |
 | Secret   | `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Production MySQL connection details |
 
-Deployment targets `/htdocs/` on port 21. Missing database secrets stop the job
+The FTP server is fixed to `ftpupload.net`; the old `FTP_SERVER` secret is unused.
+`FTP_USERNAME` must match `DB_USER` for the same InfinityFree hosting account.
+You can also deploy from Actions using **Run workflow**.
+Deployment targets `/htdocs/` on port 21. Missing database or FTP secrets stop the job
 before upload. The sync excludes hosted `.env`, storage, logs, and the legacy
 root `backend/` tree from deletion. After the code sync, a separate verified FTPS
 upload replaces `.env` using the database secrets and production settings for
