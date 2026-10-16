@@ -299,6 +299,67 @@ try {
     $assert(isset($recoveredView['net_sales']), 'Older cached payload without net_sales must trigger refresh with net_sales');
     $assert($recoveredView['net_sales']['status'] === 'ongoing', 'Recovered view has ongoing status');
 
+    // 10. Incompatible older #209 cache payload (has net_sales but lacks week/month periods)
+    $clock->set(new DateTimeImmutable('2026-10-17 11:00:00'));
+    $payload209 = [
+        'timestamp' => $clock->now()->getTimestamp(),
+        'data' => [
+            'role' => 'admin',
+            'range_days' => 30,
+            'state' => 'ready',
+            'headline' => [],
+            'exceptions' => [],
+            'comparison' => [],
+            'staff' => [],
+            'shifts' => [],
+            'forecast' => [],
+            'inventory' => [],
+            'actions' => [],
+            'freshness' => ['generated_at' => '2026-10-17 11:00:00', 'stale_after' => '2026-10-17 11:05:00', 'refresh_seconds' => 300, 'is_stale' => false],
+            'message' => null,
+            'net_sales' => [
+                'period' => 'today',
+                'status' => 'ongoing',
+                'as_of' => '2026-10-17 11:00:00',
+                'timezone' => 'Asia/Manila',
+                'total' => 100.0,
+                // periods missing!
+            ],
+        ],
+    ];
+    file_put_contents($cacheFile, json_encode($payload209));
+    StoreOperationsDashboardWorkspace::invalidateCache('cashier', 30);
+
+    $pdo->queryCount = 0;
+    $reloadedView = $workspace->load('admin', 30);
+    $assert($pdo->queryCount > 0, 'Incompatible older payload missing week/month periods must force reload');
+    $assert(isset($reloadedView['net_sales']['periods']['week']), 'Reloaded view must include week period');
+    $assert(isset($reloadedView['net_sales']['periods']['month']), 'Reloaded view must include month period');
+
+    // 11. Week rollover invalidation: Sunday night -> Monday
+    $clock->set(new DateTimeImmutable('2026-10-18 23:59:00')); // Sunday
+    $pdo->queryCount = 0;
+    $sundayView = $workspace->load('admin', 30);
+    $assert($sundayView['net_sales']['as_of'] === '2026-10-18 23:59:00', 'Sunday cache primed');
+
+    $clock->advance(120); // Advance 120s into Monday 00:01:00
+    $pdo->queryCount = 0;
+    $mondayRolloverView = $workspace->load('admin', 30);
+    $assert($pdo->queryCount > 0, 'Crossing into new week (Monday) must invalidate cache');
+    $assert(count($mondayRolloverView['net_sales']['periods']['week']['points']) === 1, 'Monday rollover has 1 daily bucket');
+
+    // 12. Month rollover invalidation: Month end -> 1st of month
+    $clock->set(new DateTimeImmutable('2026-10-31 23:59:00')); // Saturday Oct 31
+    $pdo->queryCount = 0;
+    $octEndView = $workspace->load('admin', 30);
+    $assert($octEndView['net_sales']['as_of'] === '2026-10-31 23:59:00', 'Month end cache primed');
+
+    $clock->advance(120); // Advance 120s into Nov 1 00:01:00
+    $pdo->queryCount = 0;
+    $novRolloverView = $workspace->load('admin', 30);
+    $assert($pdo->queryCount > 0, 'Crossing into new month must invalidate cache');
+    $assert(count($novRolloverView['net_sales']['periods']['month']['points']) === 1, 'New month rollover has 1 daily bucket');
+
 } catch (Throwable $e) {
     $failures[] = 'Administrator dashboard cache integration test threw: ' . $e->getMessage() . "\n" . $e->getTraceAsString();
 }

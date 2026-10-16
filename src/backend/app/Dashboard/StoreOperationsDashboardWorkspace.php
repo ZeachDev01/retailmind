@@ -80,7 +80,11 @@ final class StoreOperationsDashboardWorkspace
             return false;
         }
         $entryDatePh = (new DateTimeImmutable('@' . (int)$entry['timestamp']))->setTimezone($tz)->format('Y-m-d');
-        return $entryDatePh === $todayDatePh && isset($entry['data']['net_sales']) && is_array($entry['data']['net_sales']);
+        if ($entryDatePh !== $todayDatePh) {
+            return false;
+        }
+        $ns = $entry['data']['net_sales'] ?? null;
+        return is_array($ns) && isset($ns['periods']['week'], $ns['periods']['month'], $ns['periods']['today']);
     }
 
     private static function getCached(string $role, int $days, DateTimeImmutable $now): ?array
@@ -259,72 +263,237 @@ final class StoreOperationsDashboardWorkspace
     {
         $tz = new \DateTimeZone('Asia/Manila');
         $nowPh = $now->setTimezone($tz);
+        $asOfStr = $nowPh->format('Y-m-d H:i:s');
+
+        // Today boundary: local midnight
         $todayStart = $nowPh->setTime(0, 0, 0);
-        $startStr = $todayStart->format('Y-m-d H:i:s');
-        $endStr = $nowPh->format('Y-m-d H:i:s');
+        $todayStartStr = $todayStart->format('Y-m-d H:i:s');
         $currentHour = (int)$nowPh->format('G');
 
-        $hourlyCents = [];
-        for ($hour = 0; $hour <= $currentHour; $hour++) {
-            $hourlyCents[$hour] = ['sales' => 0, 'refunds' => 0];
-        }
+        // Week boundary: starts Monday 00:00:00
+        $dayOfWeek = (int)$nowPh->format('N'); // 1 = Monday, 7 = Sunday
+        $daysFromMonday = $dayOfWeek - 1;
+        $weekStart = $nowPh->modify("-{$daysFromMonday} days")->setTime(0, 0, 0);
+        $weekStartStr = $weekStart->format('Y-m-d H:i:s');
+
+        // Month boundary: starts 1st of month 00:00:00
+        $monthStart = $nowPh->setDate((int)$nowPh->format('Y'), (int)$nowPh->format('n'), 1)->setTime(0, 0, 0);
+        $monthStartStr = $monthStart->format('Y-m-d H:i:s');
+        $currentDayOfMonth = (int)$nowPh->format('j');
+
+        $earliestStartStr = min($todayStartStr, $weekStartStr, $monthStartStr);
 
         $salesRows = $this->rows(
             'SELECT total_amount, sale_date FROM sales WHERE sale_date >= ? AND sale_date <= ?',
-            [$startStr, $endStr]
+            [$earliestStartStr, $asOfStr]
         );
-        foreach ($salesRows as $row) {
-            $hour = (int)(new DateTimeImmutable((string)$row['sale_date'], $tz))->setTimezone($tz)->format('G');
-            if ($hour >= 0 && $hour <= $currentHour) {
-                $hourlyCents[$hour]['sales'] += (int)round((float)$row['total_amount'] * 100);
-            }
-        }
-
         $refundRows = $this->rows(
             'SELECT refund_amount, created_at FROM cash_refunds WHERE created_at >= ? AND created_at <= ?',
-            [$startStr, $endStr]
+            [$earliestStartStr, $asOfStr]
         );
-        foreach ($refundRows as $row) {
-            $hour = (int)(new DateTimeImmutable((string)$row['created_at'], $tz))->setTimezone($tz)->format('G');
-            if ($hour >= 0 && $hour <= $currentHour) {
-                $hourlyCents[$hour]['refunds'] += (int)round((float)$row['refund_amount'] * 100);
+
+        // Buckets initialization
+        $todayCents = [];
+        for ($h = 0; $h <= $currentHour; $h++) {
+            $todayCents[$h] = ['sales' => 0, 'refunds' => 0];
+        }
+
+        $weekCents = [];
+        $weekDays = [];
+        for ($d = 0; $d < $dayOfWeek; $d++) {
+            $dDate = $weekStart->modify("+{$d} days");
+            $weekDays[$d] = [
+                'date' => $dDate->format('Y-m-d'),
+                'day' => $dDate->format('D'),
+                'label' => $dDate->format('D'),
+            ];
+            $weekCents[$d] = ['sales' => 0, 'refunds' => 0];
+        }
+
+        $monthCents = [];
+        $monthDays = [];
+        for ($d = 1; $d <= $currentDayOfMonth; $d++) {
+            $dDate = $monthStart->modify('+' . ($d - 1) . ' days');
+            $monthDays[$d] = [
+                'date' => $dDate->format('Y-m-d'),
+                'day' => $d,
+                'label' => $dDate->format('M j'),
+            ];
+            $monthCents[$d] = ['sales' => 0, 'refunds' => 0];
+        }
+
+        // Aggregate sales
+        foreach ($salesRows as $row) {
+            $saleDt = (new DateTimeImmutable((string)$row['sale_date'], $tz))->setTimezone($tz);
+            $saleStr = $saleDt->format('Y-m-d H:i:s');
+            $amountCents = (int)round((float)$row['total_amount'] * 100);
+
+            if ($saleStr >= $todayStartStr && $saleStr <= $asOfStr) {
+                $h = (int)$saleDt->format('G');
+                if ($h >= 0 && $h <= $currentHour) {
+                    $todayCents[$h]['sales'] += $amountCents;
+                }
+            }
+            if ($saleStr >= $weekStartStr && $saleStr <= $asOfStr) {
+                $dIdx = (int)$saleDt->format('N') - 1;
+                if ($dIdx >= 0 && $dIdx < $dayOfWeek) {
+                    $weekCents[$dIdx]['sales'] += $amountCents;
+                }
+            }
+            if ($saleStr >= $monthStartStr && $saleStr <= $asOfStr) {
+                $dNum = (int)$saleDt->format('j');
+                if ($dNum >= 1 && $dNum <= $currentDayOfMonth) {
+                    $monthCents[$dNum]['sales'] += $amountCents;
+                }
             }
         }
 
-        $points = [];
-        $totalSalesCents = 0;
-        $totalRefundsCents = 0;
-        $totalNetCents = 0;
+        // Aggregate refunds
+        foreach ($refundRows as $row) {
+            $refDt = (new DateTimeImmutable((string)$row['created_at'], $tz))->setTimezone($tz);
+            $refStr = $refDt->format('Y-m-d H:i:s');
+            $amountCents = (int)round((float)$row['refund_amount'] * 100);
 
-        for ($hour = 0; $hour <= $currentHour; $hour++) {
-            $salesCents = $hourlyCents[$hour]['sales'];
-            $refundsCents = $hourlyCents[$hour]['refunds'];
-            $netCents = $salesCents - $refundsCents;
-            $totalSalesCents += $salesCents;
-            $totalRefundsCents += $refundsCents;
-            $totalNetCents += $netCents;
+            if ($refStr >= $todayStartStr && $refStr <= $asOfStr) {
+                $h = (int)$refDt->format('G');
+                if ($h >= 0 && $h <= $currentHour) {
+                    $todayCents[$h]['refunds'] += $amountCents;
+                }
+            }
+            if ($refStr >= $weekStartStr && $refStr <= $asOfStr) {
+                $dIdx = (int)$refDt->format('N') - 1;
+                if ($dIdx >= 0 && $dIdx < $dayOfWeek) {
+                    $weekCents[$dIdx]['refunds'] += $amountCents;
+                }
+            }
+            if ($refStr >= $monthStartStr && $refStr <= $asOfStr) {
+                $dNum = (int)$refDt->format('j');
+                if ($dNum >= 1 && $dNum <= $currentDayOfMonth) {
+                    $monthCents[$dNum]['refunds'] += $amountCents;
+                }
+            }
+        }
 
-            $points[] = [
-                'hour' => $hour,
-                'label' => sprintf('%02d:00', $hour),
+        // Assemble Today
+        $todayPoints = [];
+        $todaySales = 0;
+        $todayRefunds = 0;
+        for ($h = 0; $h <= $currentHour; $h++) {
+            $salesCents = $todayCents[$h]['sales'];
+            $refundsCents = $todayCents[$h]['refunds'];
+            $todaySales += $salesCents;
+            $todayRefunds += $refundsCents;
+            $todayPoints[] = [
+                'hour' => $h,
+                'label' => sprintf('%02d:00', $h),
+                'date' => $todayStart->format('Y-m-d'),
                 'sales' => (float)($salesCents / 100),
                 'refunds' => (float)($refundsCents / 100),
-                'net_sales' => (float)($netCents / 100),
+                'net_sales' => (float)(($salesCents - $refundsCents) / 100),
             ];
         }
 
-        $hasActivity = ($totalSalesCents > 0 || $totalRefundsCents > 0);
+        // Assemble Week
+        $weekPoints = [];
+        $weekSales = 0;
+        $weekRefunds = 0;
+        for ($d = 0; $d < $dayOfWeek; $d++) {
+            $salesCents = $weekCents[$d]['sales'];
+            $refundsCents = $weekCents[$d]['refunds'];
+            $weekSales += $salesCents;
+            $weekRefunds += $refundsCents;
+            $weekPoints[] = [
+                'day' => $weekDays[$d]['day'],
+                'label' => $weekDays[$d]['label'],
+                'date' => $weekDays[$d]['date'],
+                'sales' => (float)($salesCents / 100),
+                'refunds' => (float)($refundsCents / 100),
+                'net_sales' => (float)(($salesCents - $refundsCents) / 100),
+            ];
+        }
+
+        // Assemble Month
+        $monthPoints = [];
+        $monthSales = 0;
+        $monthRefunds = 0;
+        for ($d = 1; $d <= $currentDayOfMonth; $d++) {
+            $salesCents = $monthCents[$d]['sales'];
+            $refundsCents = $monthCents[$d]['refunds'];
+            $monthSales += $salesCents;
+            $monthRefunds += $refundsCents;
+            $monthPoints[] = [
+                'day' => $monthDays[$d]['day'],
+                'label' => $monthDays[$d]['label'],
+                'date' => $monthDays[$d]['date'],
+                'sales' => (float)($salesCents / 100),
+                'refunds' => (float)($refundsCents / 100),
+                'net_sales' => (float)(($salesCents - $refundsCents) / 100),
+            ];
+        }
+
+        $todayData = [
+            'period' => 'today',
+            'label' => "Today's Net Sales",
+            'short_label' => 'Today',
+            'interval_type' => 'hourly',
+            'interval_label' => 'Hour',
+            'status' => 'ongoing',
+            'as_of' => $asOfStr,
+            'timezone' => 'Asia/Manila',
+            'total' => (float)(($todaySales - $todayRefunds) / 100),
+            'sales_total' => (float)($todaySales / 100),
+            'refunds_total' => (float)($todayRefunds / 100),
+            'has_activity' => ($todaySales > 0 || $todayRefunds > 0),
+            'points' => $todayPoints,
+        ];
+
+        $weekData = [
+            'period' => 'week',
+            'label' => "This Week's Net Sales",
+            'short_label' => 'This Week',
+            'interval_type' => 'daily',
+            'interval_label' => 'Day',
+            'status' => 'ongoing',
+            'as_of' => $asOfStr,
+            'timezone' => 'Asia/Manila',
+            'total' => (float)(($weekSales - $weekRefunds) / 100),
+            'sales_total' => (float)($weekSales / 100),
+            'refunds_total' => (float)($weekRefunds / 100),
+            'has_activity' => ($weekSales > 0 || $weekRefunds > 0),
+            'points' => $weekPoints,
+        ];
+
+        $monthData = [
+            'period' => 'month',
+            'label' => "This Month's Net Sales",
+            'short_label' => 'This Month',
+            'interval_type' => 'daily',
+            'interval_label' => 'Day',
+            'status' => 'ongoing',
+            'as_of' => $asOfStr,
+            'timezone' => 'Asia/Manila',
+            'total' => (float)(($monthSales - $monthRefunds) / 100),
+            'sales_total' => (float)($monthSales / 100),
+            'refunds_total' => (float)($monthRefunds / 100),
+            'has_activity' => ($monthSales > 0 || $monthRefunds > 0),
+            'points' => $monthPoints,
+        ];
 
         return [
             'period' => 'today',
             'status' => 'ongoing',
-            'as_of' => $endStr,
+            'as_of' => $asOfStr,
             'timezone' => 'Asia/Manila',
-            'total' => (float)($totalNetCents / 100),
-            'sales_total' => (float)($totalSalesCents / 100),
-            'refunds_total' => (float)($totalRefundsCents / 100),
-            'has_activity' => $hasActivity,
-            'points' => $points,
+            'total' => $todayData['total'],
+            'sales_total' => $todayData['sales_total'],
+            'refunds_total' => $todayData['refunds_total'],
+            'has_activity' => $todayData['has_activity'],
+            'points' => $todayData['points'],
+            'periods' => [
+                'today' => $todayData,
+                'week' => $weekData,
+                'month' => $monthData,
+            ],
         ];
     }
 

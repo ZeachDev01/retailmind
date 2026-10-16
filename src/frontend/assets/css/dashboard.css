@@ -206,10 +206,24 @@
 .metric-pair strong { display: block; margin-top: .2rem; font-size: 1.15rem; }
 
 .net-sales-section { margin-top: 1.25rem; }
+.net-sales-summaries-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+.net-sales-summary-card { padding: .9rem; border: 1px solid var(--border); border-radius: 11px; background: var(--theme-surface-soft, #f8fafc); }
+.net-sales-summary-card.is-selected { border-color: var(--primary, #2563eb); box-shadow: 0 0 0 1px var(--primary, #2563eb); }
+.net-sales-summary-card .label-wrap { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .35rem; }
+.net-sales-summary-card .label { display: block; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+.net-sales-summary-card .value { font-size: clamp(1.2rem, 1.8vw, 1.5rem); font-weight: 800; color: var(--text); }
+.net-sales-summary-card .value.is-negative { color: #dc2626; }
+.net-sales-summary-card .value.is-unavailable { color: var(--muted); font-size: 1.1rem; }
 .net-sales-title-wrap { display: flex; align-items: center; gap: .6rem; }
 .net-sales-title-wrap h2 { margin: 0; }
 .period-badge { display: inline-flex; align-items: center; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .period-badge.ongoing { background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); }
+.net-sales-header-controls { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.period-controls { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--theme-surface-soft, #f8fafc); }
+.period-btn { padding: .35rem .75rem; font-size: .8rem; font-weight: 600; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; border-radius: 0; }
+.period-btn.active,
+.period-btn.is-selected { background: var(--primary, #2563eb); color: #fff; }
+.period-btn:focus-visible { outline: 2px solid var(--primary, #2563eb); outline-offset: -2px; }
 .net-sales-summary-stat { text-align: right; }
 .net-sales-summary-label { display: block; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
 .net-sales-summary-value { display: block; font-size: clamp(1.4rem, 2vw, 1.8rem); font-weight: 800; color: var(--text); }
@@ -261,6 +275,10 @@
     .access-readiness-item { grid-template-columns: 1fr; }
     .access-readiness-action { width: 100%; min-width: 0; }
     .net-sales-section .section-header { flex-direction: column; align-items: flex-start; gap: .75rem; }
+    .net-sales-summaries-grid { grid-template-columns: 1fr; }
+    .net-sales-header-controls { flex-direction: column; align-items: flex-start; width: 100%; gap: .75rem; }
+    .period-controls { width: 100%; display: flex; }
+    .period-btn { flex: 1; text-align: center; }
     .net-sales-summary-stat { text-align: left; }
     .net-sales-chart-wrapper { height: 220px; }
 }

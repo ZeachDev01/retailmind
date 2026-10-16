@@ -26,9 +26,17 @@ foreach ([
     'aria-live="polite"',
     'aria-labelledby=',
     "Today's Net Sales",
+    "This Week's Net Sales",
+    "This Month's Net Sales",
     'id="net-sales-title"',
     'id="net-sales-hourly-chart"',
     'class="net-sales-table"',
+    'net-sales-summaries-grid',
+    'period-controls',
+    'data-period="today"',
+    'data-period="week"',
+    'data-period="month"',
+    'name="period"',
     'period-badge ongoing',
     'chart.umd.min.js',
 ] as $needle) {
@@ -41,7 +49,8 @@ $assert(str_contains($route, '300000'), 'Dashboard must schedule a five-minute r
 $assert(str_contains($route, 'actionInProgress'), 'Automatic refresh must defer during an action');
 $assert(str_contains($route, 'dashboard-stale'), 'Dashboard must visibly mark deferred stale data');
 $assert(str_contains($route, 'range='), 'Manual and automatic refresh must preserve the selected range');
-foreach (['.store-operations-headlines', '.comparison-grid', '.operations-overview-grid', '.net-sales-section', '.net-sales-chart-wrapper', '.net-sales-table', '@media (max-width: 640px)'] as $needle) {
+$assert(str_contains($route, 'period='), 'Manual and automatic refresh must preserve the selected period');
+foreach (['.store-operations-headlines', '.comparison-grid', '.operations-overview-grid', '.net-sales-section', '.net-sales-summaries-grid', '.net-sales-summary-card', '.period-controls', '.period-btn', '.net-sales-chart-wrapper', '.net-sales-table', '@media (max-width: 640px)'] as $needle) {
     $assert(str_contains($styles, $needle), "Dashboard styles are missing responsive contract {$needle}");
 }
 
