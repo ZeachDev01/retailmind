@@ -1121,11 +1121,37 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel" data-panel="4">
                         <div class="form-grid">
-                            <div class="form-group full"><label for="initial-stock-quantity">Starting stock</label><input id="initial-stock-quantity" type="number" name="initial_stock_quantity" min="0" max="2147483647" step="1" value="0" required><small class="field-help">How many items do you have now? Count each item: one box of 24 packs = 24. Enter 0 if you have none.</small><small class="field-error">Enter a whole number of zero or more.</small></div>
+                            <div class="form-group full">
+                                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.35rem;">
+                                    <label for="initial-stock-quantity" style="margin-bottom:0;">Starting Stock</label>
+                                    <div style="display:inline-flex;gap:0.75rem;font-size:0.875rem;">
+                                        <label style="font-weight:normal;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;"><input type="radio" name="starting_stock_mode" value="pieces" checked> Pieces</label>
+                                        <label style="font-weight:normal;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;"><input type="radio" name="starting_stock_mode" value="packages"> Packages / boxes</label>
+                                    </div>
+                                </div>
+                                <div id="stock-pieces-wrapper">
+                                    <input id="initial-stock-quantity" type="number" name="initial_stock_quantity" min="0" max="2147483647" step="1" value="0" required>
+                                    <small class="field-help" id="stock-help-pieces">How many items do you have now? Enter 0 if you have none.</small>
+                                </div>
+                                <div id="stock-packages-wrapper" hidden>
+                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                                        <div>
+                                            <label for="starting-packages-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Full packages / boxes</label>
+                                            <input id="starting-packages-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                        </div>
+                                        <div>
+                                            <label for="starting-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
+                                            <input id="starting-loose-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                        </div>
+                                    </div>
+                                    <small class="field-help" id="stock-package-calc-preview" style="display:block;margin-top:0.4rem;font-weight:600;color:var(--primary, #0d6efd);">0 packages × 1 + 0 pieces = 0 pieces total</small>
+                                </div>
+                                <small class="field-error">Enter a whole number of zero or more.</small>
+                            </div>
+                            <div class="form-group"><label for="units-per-package">Units per Package/Case</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1"></div>
+                            <div class="form-group"><label>Minimum Order Quantity</label><input type="number" min="1" name="minimum_order_quantity" value="1"></div>
                             <div class="form-group"><label>Reorder Level</label><input type="number" min="0" name="reorder_level" value="10"></div>
                             <div class="form-group"><label>Safety Stock</label><input type="number" min="0" name="safety_stock" value="0"></div>
-                            <div class="form-group"><label>Minimum Order Quantity</label><input type="number" min="1" name="minimum_order_quantity" value="1"></div>
-                            <div class="form-group"><label>Units per Package/Case</label><input type="number" min="1" name="units_per_package" value="1"></div>
                             <div class="form-group"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
                             <div class="form-group"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>
                             <div class="form-group full"><label>Expiration Date</label><input type="date" name="expiration_date"></div>
@@ -1753,6 +1779,55 @@ foreach ($products as $product) {
             saveButton.innerHTML = '<i class="bi bi-arrow-repeat"></i> Saving...';
         });
 
+        // Package and piece starting stock calculation
+        const stockPiecesWrapper = document.getElementById('stock-pieces-wrapper');
+        const stockPackagesWrapper = document.getElementById('stock-packages-wrapper');
+        const initialStockInput = document.getElementById('initial-stock-quantity');
+        const startingPackagesCount = document.getElementById('starting-packages-count');
+        const startingLooseCount = document.getElementById('starting-loose-count');
+        const unitsPerPkgInput = document.getElementById('units-per-package');
+        const stockCalcPreview = document.getElementById('stock-package-calc-preview');
+
+        function updatePackageStockCalc() {
+            const pkgs = Math.max(0, parseInt(startingPackagesCount?.value, 10) || 0);
+            const loose = Math.max(0, parseInt(startingLooseCount?.value, 10) || 0);
+            const units = Math.max(1, parseInt(unitsPerPkgInput?.value, 10) || 1);
+            const total = (pkgs * units) + loose;
+            if (initialStockInput) {
+                initialStockInput.value = total;
+            }
+            if (stockCalcPreview) {
+                const base = addProductForm?.elements['base_unit']?.value?.trim() || 'piece';
+                const rec = addProductForm?.elements['receiving_unit']?.value?.trim() || 'package';
+                stockCalcPreview.textContent = `${pkgs} ${rec}(s) × ${units} + ${loose} ${base}(s) = ${total} ${base}(s) total`;
+            }
+        }
+
+        function setStartingStockMode(mode) {
+            const isPackages = mode === 'packages';
+            if (stockPiecesWrapper) stockPiecesWrapper.hidden = isPackages;
+            if (stockPackagesWrapper) stockPackagesWrapper.hidden = !isPackages;
+            if (isPackages) {
+                const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
+                const units = Math.max(1, parseInt(unitsPerPkgInput?.value, 10) || 1);
+                if (startingPackagesCount && startingLooseCount) {
+                    startingPackagesCount.value = Math.floor(currentTotal / units);
+                    startingLooseCount.value = currentTotal % units;
+                }
+                updatePackageStockCalc();
+            }
+        }
+
+        addProductForm?.querySelectorAll('input[name="starting_stock_mode"]').forEach(radio => {
+            radio.addEventListener('change', () => setStartingStockMode(radio.value));
+        });
+        startingPackagesCount?.addEventListener('input', updatePackageStockCalc);
+        startingLooseCount?.addEventListener('input', updatePackageStockCalc);
+        unitsPerPkgInput?.addEventListener('input', () => {
+            const checkedMode = addProductForm?.querySelector('input[name="starting_stock_mode"]:checked')?.value;
+            if (checkedMode === 'packages') updatePackageStockCalc();
+        });
+
         function renderReview() {
             const data = new FormData(addProductForm);
             const categoryText = document.getElementById('product-category').selectedOptions[0]?.text || '—';
@@ -1822,6 +1897,9 @@ foreach ($products as $product) {
                 }
             }
 
+            const restoredMode = addProductForm.querySelector('input[name="starting_stock_mode"]:checked')?.value || 'pieces';
+            setStartingStockMode(restoredMode);
+
             if (savedStep) {
                 const step = Math.max(1, Math.min(5, Number(savedStep)));
                 setWizardStep(step);
@@ -1834,6 +1912,11 @@ foreach ($products as $product) {
             addProductForm.reset();
             localStorage.removeItem(FORM_STATE_KEY);
             localStorage.removeItem(FORM_STEP_KEY);
+            const defaultRadio = addProductForm.querySelector('input[name="starting_stock_mode"][value="pieces"]');
+            if (defaultRadio) defaultRadio.checked = true;
+            setStartingStockMode('pieces');
+            if (startingPackagesCount) startingPackagesCount.value = '0';
+            if (startingLooseCount) startingLooseCount.value = '0';
             wizardStep = 1;
             setWizardStep(1);
             saveButton.disabled = false;

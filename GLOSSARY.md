@@ -39,3 +39,15 @@ _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 **Replenishment Recommendation**:
 A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
 _Avoid_: Automatic order, required purchase quantity
+
+**Base Unit**:
+The atomic, single physical item sold to retail customers and tracked in inventory counts (e.g. piece, sachet, can, bottle, stick).
+_Avoid_: Selling unit, retail unit, loose unit
+
+**Receiving Unit**:
+The bulk commercial container or package used when purchasing goods from suppliers or supermarkets (e.g. case, box, ream, carton, pack).
+_Avoid_: Bulk unit, supplier unit, container
+
+**Units per Package**:
+The fixed multiplier representing the exact number of Base Units contained within one Receiving Unit.
+_Avoid_: Pack size, multiplier, conversion rate
