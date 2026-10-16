@@ -245,7 +245,7 @@ $checks = [
     ],
     'Receipt History uses a server-side DataTable' => [
         'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 25', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
+        'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 10', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
         'forbidden' => ['function performSearch()', 'fetchAll();\n}'],
     ],
     'Receipt History workspace exposes receipt filters and view actions' => [
