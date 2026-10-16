@@ -11,9 +11,17 @@ const rows = [
     row('Milk', 'MILK-02', 'Out of stock', '0', '8'),
     row('Salt', 'SALT-03', 'In stock', '24', '0'),
 ];
+const card = stock => ({
+    dataset: { queueStock: stock },
+    attrs: {},
+    setAttribute(k, v) { this.attrs[k] = v; },
+    removeAttribute(k) { delete this.attrs[k]; },
+    addEventListener(type, callback) { this[type] = callback; },
+});
+const cards = ['Out of stock', 'Low stock', 'In stock'].map(card);
 let ordered = [];
 const table = { querySelectorAll: () => rows, tBodies: [{ append(item) { ordered = ordered.filter(existing => existing !== item); ordered.push(item); } }] };
-const document = { querySelector: () => table, querySelectorAll: () => [], getElementById: id => controls[id] };
+const document = { querySelector: () => table, querySelectorAll: () => cards, getElementById: id => controls[id] };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../frontend/assets/js/replenishment.js'), 'utf8'), { document });
 assert.deepEqual(ordered.map(item => item.dataset.stock), ['Out of stock', 'Low stock', 'In stock']);
 controls['queue-search'].value = '  rice-01 ';
@@ -27,7 +35,12 @@ controls['queue-search'].value = '';
 controls['queue-stock'].value = 'Out of stock';
 controls['queue-stock'].change();
 assert.deepEqual(rows.filter(item => !item.hidden).map(item => item.dataset.name), ['Milk']);
-controls['queue-stock'].value = '';
+assert.equal(cards[0].attrs['aria-current'], 'true');
+cards[0].click();
+assert.equal(controls['queue-stock'].value, '');
+assert.equal(cards[0].attrs['aria-current'], undefined);
+assert.equal(controls['queue-results'].textContent, 'Showing 3 of 3 products');
+assert.equal(rows.every(item => !item.hidden), true);
 for (const [sort, expected] of [
     ['quantity', ['Rice', 'Milk', 'Salt']],
     ['stock', ['Milk', 'Rice', 'Salt']],

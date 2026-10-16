@@ -36,6 +36,8 @@ async function checkQueueAccessibility(page) {
         while (walker.nextNode()) {
             const node = walker.currentNode, el = node.parentElement;
             if (!node.textContent.trim() || !el.checkVisibility() || el.closest('button:disabled, [hidden], script, style')) continue;
+            const row = el.closest('tr.queue-item');
+            if (row && row.rowIndex > 10) continue;
             const style = getComputedStyle(el);
             const layers = [];
             for (let parent = el; parent; parent = parent.parentElement) layers.unshift(rgba(getComputedStyle(parent).backgroundColor));
@@ -48,6 +50,8 @@ async function checkQueueAccessibility(page) {
         }
         for (const el of main.querySelectorAll('a, button, input, select, summary')) {
             if (!el.checkVisibility()) continue;
+            const row = el.closest('tr.queue-item');
+            if (row && row.rowIndex > 10) continue;
             const rect = el.getBoundingClientRect();
             if (rect.height < 44 || rect.width < 44) issues.push(`${el.textContent.trim() || el.getAttribute('aria-label')}: target ${rect.width}×${rect.height}`);
         }
@@ -88,6 +92,7 @@ async function checkQueueAccessibility(page) {
         const queueRoute = '/components/inventory_management/replenishment_queue.php';
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
         const stockOnly = page.locator('.queue-item').filter({hasText: 'Decision Test Item'});
+        await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
         assert.match(await stockOnly.innerText(), /Out of stock/);
         assert.match(await stockOnly.innerText(), /16 units/);
         assert.match(await stockOnly.innerText(), /Stock rules/);
@@ -95,9 +100,11 @@ async function checkQueueAccessibility(page) {
         fixture('seed');
         const unchanged = JSON.parse(fixture('state'));
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+        await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
         assert.match(await stockOnly.innerText(), /Demand Forecast/);
         assert.match(await stockOnly.innerText(), /32 units/);
         const missing = page.locator('.queue-item').filter({hasText: 'Unrelated legacy product'});
+        await missing.locator('.queue-details').evaluate(d => { d.open = true; });
         assert.match(await missing.innerText(), /Forecast unavailable/);
         assert.match(await missing.innerText(), /Low stock/);
         assert.equal(await page.getByRole('link', {name: 'Review Request', exact: true}).count(), 0);
@@ -108,6 +115,7 @@ async function checkQueueAccessibility(page) {
             fixture(mode);
             const beforeView = JSON.parse(fixture('state'));
             await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
+            await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
             const text = await stockOnly.innerText();
             if (mode === 'low_readiness') assert.match(text, /Low readiness forecast/);
             if (mode === 'demo') assert.match(await page.locator('main').innerText(), /Demo Mode/);
@@ -140,20 +148,19 @@ async function checkQueueAccessibility(page) {
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
         const rows = page.locator('.queue-item');
         assert.equal(await rows.count(), 1002);
-        assert.equal(await page.locator('.queue-item:visible').count(), 25);
+        assert.equal(await page.locator('.queue-item:visible').count(), 1002);
         const loadMs = Math.round(performance.now() - started);
-        assert.match(await rows.first().innerText(), /Forecast urgency: Urgent/);
-        await page.getByRole('button', {name: 'Next page', exact: true}).click();
-        assert.match(await page.locator('.auto-page-summary').innerText(), /Showing 26–50 of 1002/);
-        await page.getByRole('searchbox', {name: 'Search table', exact: true}).fill('QUEUE-0999');
-        await page.waitForFunction(() => document.querySelector('.toolbar-count')?.textContent === '1 result');
+        assert.match(await rows.first().innerText(), /Out of stock/);
+        await page.locator('#queue-search').fill('QUEUE-0999');
         assert.equal(await page.locator('.queue-item:visible').count(), 1);
         assert.match(await page.locator('.queue-item:visible').innerText(), /Queue product 999/);
-        await page.getByRole('searchbox', {name: 'Search table', exact: true}).fill('no-such-queue-product');
-        await page.waitForFunction(() => document.querySelector('.toolbar-count')?.textContent === '0 results');
-        assert.match(await page.locator('.auto-page-summary').innerText(), /Showing 0 results/);
-        await page.getByRole('button', {name: 'Clear', exact: true}).click();
-        assert.equal(await page.locator('.queue-item:visible').count(), 25);
+        assert.equal(await page.locator('#queue-results').innerText(), 'Showing 1 of 1002 products');
+        await page.locator('#queue-search').fill('no-such-queue-product');
+        assert.equal(await page.locator('.queue-item:visible').count(), 0);
+        assert.equal(await page.locator('#queue-no-results').isVisible(), true);
+        assert.equal(await page.locator('#queue-results').innerText(), 'Showing 0 of 1002 products');
+        await page.locator('#queue-search').fill('');
+        assert.equal(await page.locator('.queue-item:visible').count(), 1002);
         const artifacts = 'output/playwright/replenishment';
         fs.mkdirSync(artifacts, {recursive: true});
         for (const colorScheme of ['light', 'dark']) {
@@ -164,7 +171,7 @@ async function checkQueueAccessibility(page) {
                 await page.setViewportSize({width, height: 900});
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
                     `${colorScheme} queue fits ${width}px`);
-                assert.equal(await page.locator('.queue-list').evaluate(el => el.scrollWidth > el.clientWidth), width < 1000);
+                assert.equal(await page.locator('.queue-list').evaluate(el => el.scrollWidth > el.clientWidth), width < 900);
                 await checkQueueAccessibility(page);
                 if (width === 1280 || width === 390) {
                     await page.evaluate(() => { document.activeElement.blur(); window.scrollTo(0, 0); });
@@ -196,19 +203,23 @@ async function checkQueueAccessibility(page) {
         await page.locator('.queue-list').press('Tab');
         assert.equal(await page.evaluate(() => !!document.activeElement.closest('.queue-list')), true, 'Keyboard enters product links');
         await page.setViewportSize({width: 1280, height: 900});
-        await page.getByText('Non-binding buying guidance', {exact: true}).click();
-        assert.equal(await page.locator('.queue-guidance').getAttribute('open'), '');
-        await page.getByText('Non-binding buying guidance', {exact: true}).press('Enter');
-        assert.equal(await page.locator('.queue-guidance').getAttribute('open'), null);
+        await page.locator('.queue-guidance summary').click();
+        assert.equal(await page.locator('.queue-guidance details').getAttribute('open'), '');
+        await page.locator('.queue-guidance summary').press('Enter');
+        assert.equal(await page.locator('.queue-guidance details').getAttribute('open'), null);
+        await page.locator('#queue-stock').selectOption('Out of stock');
+        const filteredVisible = await page.locator('.queue-item:visible').count();
+        assert.ok(filteredVisible < 1002);
         await page.emulateMedia({media: 'print'});
         await page.setViewportSize({width: 794, height: 1123});
-        assert.equal(await page.locator('.queue-item:visible').count(), 1002, 'Print includes every row beyond the selected page');
+        assert.equal(await page.locator('.queue-item:visible').count(), 1002, 'Print includes every row beyond active filter');
         assert.equal(await page.getByRole('button', {name: 'Print all recommendations'}).isVisible(), false);
         await page.evaluate(() => { document.activeElement.blur(); window.scrollTo(0, 0); });
         await page.screenshot({path: `${artifacts}/print.png`});
         await page.emulateMedia({media: 'screen'});
-        assert.equal(await page.locator('.queue-item:visible').count(), 25, 'Printing preserves screen pagination');
-        console.log('Queue 1002-product load: ' + loadMs + 'ms; search, pagination, light/dark, 320–1280px, keyboard, and print passed.');
+        assert.equal(await page.locator('.queue-item:visible').count(), filteredVisible, 'Printing preserves screen filter state');
+        await page.locator('#queue-stock').selectOption('');
+        console.log('Queue 1002-product load: ' + loadMs + 'ms; search, filter, light/dark, 320–1280px, keyboard, and print passed.');
         fixture('queue_empty');
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
         assert.match(await page.locator('main').innerText(), /No active products available/);

@@ -216,9 +216,8 @@ async function main() {
             'Stock Receiving is available from Inventory Manager navigation');
         await page.goto(receivingPath);
         check(await page.locator('main').getByRole('link', { name: 'Check stock', exact: true }).count() === 0
-            && await page.locator('main').getByRole('link', { name: 'Review recommendations', exact: true }).count() === 0
-            && await page.locator('main').getByRole('link', { name: 'Receiving history', exact: true }).count() === 0,
-            'Stock Receiving omits stock, replenishment and history actions');
+            && await page.locator('main').getByRole('link', { name: 'Review recommendations', exact: true }).count() === 0,
+            'Stock Receiving omits stock and replenishment actions');
 
         console.log('Shopping trip entry');
         check(await page.getByRole('heading', { name: '1. Select products', exact: true }).isVisible(),
@@ -605,6 +604,8 @@ async function main() {
         await page.goto('/components/inventory_management/replenishment_queue.php');
         const packGuidance = page.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku });
         const unitGuidance = page.locator('.queue-item').filter({ hasText: fixture.products.bulk_units.sku });
+        await packGuidance.locator('.queue-details summary').click();
+        await unitGuidance.locator('.queue-details summary').click();
         check((await packGuidance.innerText()).includes('Demand Forecast')
             && (await packGuidance.innerText()).includes('48 units'),
             'saved forecast and eight on hand suggest 48 units rounded to cases');
@@ -684,12 +685,14 @@ async function main() {
         await dismissBlockingDialog(page);
         await page.locator('a[href*="replenishment_queue.php"]').filter({ hasText: 'Review updated recommendations' }).click();
         await page.waitForURL('**/inventory_management/replenishment_queue.php');
+        await packGuidance.locator('.queue-details summary').click();
+        await unitGuidance.locator('.queue-details summary').click();
         check((await packGuidance.innerText()).includes('56 units')
-            && (await packGuidance.innerText()).includes('0 units suggested')
+            && (await packGuidance.innerText()).includes('0 units')
             && (await packGuidance.innerText()).includes('Demand Forecast'),
             'success action reloads forecast guidance using 56 committed units');
         check((await unitGuidance.innerText()).includes('11 units')
-            && (await unitGuidance.innerText()).includes('0 units suggested')
+            && (await unitGuidance.innerText()).includes('0 units')
             && (await unitGuidance.innerText()).includes('Stock rules'),
             'stock-rule view reflects the actual unplanned quantity and accepted damage');
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),

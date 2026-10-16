@@ -9,7 +9,7 @@ require_once __DIR__ . '/../app/Support/OperatorAlert.php';
 
 function require_role(array $roles): void {}
 function current_role(): string { return 'inventory_manager'; }
-function has_capability(string $capability): bool { return false; }
+function has_capability(string $capability): bool { return (bool)($GLOBALS['test_can_receive'] ?? false); }
 function retailmind_theme_head(): void {}
 function app_url(string $path): string { return '/' . $path; }
 function generate_csrf_token(): string { return 'test'; }
