@@ -61,6 +61,10 @@
 .queue-receive { display: inline-flex; justify-content: center; align-items: center; gap: .75rem; min-height: 44px; white-space: nowrap; font-size: .875rem; }
 .queue-receive.btn-secondary { background: var(--card-bg); border: 1px solid var(--border); }
 .queue-panel-footer, .queue-page-footer { color: var(--muted); font-size: .75rem; }
+.queue-pagination { display: flex; gap: .25rem; }
+.queue-pagination button, #queue-page-size { min-height: 36px; padding: .35rem .6rem; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); color: var(--text); }
+.queue-pagination button[aria-current="page"] { border-color: var(--primary); color: var(--primary); font-weight: 700; }
+.queue-pagination button:disabled { opacity: .5; cursor: not-allowed; }
 .queue-page-footer { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; }
 .queue-panel > .empty-state, .queue-panel > p { padding: 1.5rem; }
 .queue-panel > .queue-help { padding: 0 1.5rem .75rem; }
@@ -77,6 +81,7 @@
     .queue-stat-number { font-size: 1.5rem; }
     .queue-filters { grid-template-columns: 1fr; padding: 1rem; }
     .queue-panel-heading, .queue-panel-footer { padding: 1rem; flex-wrap: wrap; }
+    .queue-panel-footer > span:last-child { display: none; }
     .queue-panel-heading > span { display: none; }
     .queue-page-footer { flex-direction: column; }
     .queue-guidance summary span { display: block; margin-top: .25rem; }

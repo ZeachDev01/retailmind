@@ -177,7 +177,13 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                             </table>
                         </div>
                         <p id="queue-no-results" class="empty-state" hidden>No products match these filters.</p>
-                        <footer class="queue-panel-footer"><span id="queue-results" role="status">Showing <?= count($queue) ?> of <?= count($queue) ?> products</span><span>Review quantities before you buy</span></footer>
+                        <footer class="queue-panel-footer">
+                            <span id="queue-results" role="status">Showing <?= count($queue) ?> of <?= count($queue) ?> products</span>
+                            <label>Rows <select id="queue-page-size" aria-label="Rows per page"><option>10</option><option>25</option><option>50</option><option>100</option></select></label>
+                            <span id="queue-page-status" aria-live="polite"></span>
+                            <nav class="queue-pagination" id="queue-pagination" aria-label="Recommendation pages"></nav>
+                            <span>Review quantities before you buy</span>
+                        </footer>
                     <?php endif; ?>
             </section>
             <footer class="queue-page-footer muted"><span>Suggestions use base units. Set cases during receiving.</span><span>Stock updates when bought goods are received.</span></footer>
