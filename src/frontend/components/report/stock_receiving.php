@@ -73,6 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $e) {
         $formValues = $_POST;
+        if (isset($formValues['lines']) && is_array($formValues['lines'])) {
+            $formValues['lines'] = array_values($formValues['lines']);
+        }
         $error = \App\Support\OperatorAlert::message($e, 'The receiving record could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.');
     }
 }
@@ -143,7 +146,7 @@ $categoryIcon = static function (string $categoryName): string {
             <div class="message error"><span role="alert"><?= htmlspecialchars($error) ?></span></div>
         <?php endif; ?>
 
-        <div class="receiving-form" data-step="1">
+        <div class="receiving-form" data-step="1" <?= !$canReceive ? 'data-readonly="true"' : '' ?>>
             <div class="receiving-progress">
                 <ol class="receiving-steps" aria-label="Receiving progress">
                     <li aria-current="step"><span class="step-number">1</span><span>Select products<small>Find what arrived</small></span></li>
@@ -156,7 +159,7 @@ $categoryIcon = static function (string $categoryName): string {
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
             <?php if (!$products): ?><p role="status">No active products are available. Ask your Administrator to add or activate a product before receiving stock.</p><?php endif; ?>
             <noscript><p role="alert">Enable JavaScript to select products, review quantities, and save this receiving entry.</p></noscript>
-            <fieldset <?= !$canReceive || !$products ? 'disabled' : '' ?>>
+            <fieldset class="receiving-fieldset-reset" <?= !$canReceive || !$products ? 'disabled' : '' ?>>
             <div class="form-section" id="receiving_selection">
                 <div class="receiving-panel-heading"><div><h2>Product catalog</h2><p>Find what arrived</p></div><span class="receiving-count"><?= count($products) ?> products</span></div>
                 <div class="receiving-search-bar form-group">
@@ -184,6 +187,7 @@ $categoryIcon = static function (string $categoryName): string {
                 </div>
                 <div id="receiving_catalog" class="receiving-catalog" aria-label="Available products"></div>
             </div>
+            </fieldset>
             <form method="POST" id="receiving_form" novalidate>
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                 <input type="hidden" name="receiving_nonce" value="<?= htmlspecialchars($receivingNonce) ?>">
@@ -194,7 +198,9 @@ $categoryIcon = static function (string $categoryName): string {
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
                     <p>No products added yet. Scan a barcode or click + Add to Delivery from the catalog below.</p>
                 </div>
+                <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
                 <div id="receiving_lines"></div>
+                </fieldset>
                 <template id="receiving_line_template">
                 <section class="receiving-line" aria-label="Product line 1" draggable="true">
                     <div class="receiving-line-heading playlist-row-header">
@@ -243,22 +249,22 @@ $categoryIcon = static function (string $categoryName): string {
                                 <label for="damaged_qty">Damaged base units on delivery</label>
                                 <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_qty" id="damaged_qty" data-field="damaged_qty" value="0">
                             </div>
-                            <div class="form-group receiving-quantity">
-                                <label for="cost_price">Purchase cost per base unit (optional)</label>
-                                <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Leave blank if unknown">
-                                <small id="cost_hint" data-field="cost_hint">Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
-                            </div>
                         </div>
                         <small class="receiving-quantity" id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
                     </div>
 
-                    <details class="receiving-quantity receiving-extras" open>
+                    <details class="receiving-quantity receiving-extras">
                         <summary>Cost, batch, expiry & notes</summary>
                         <div class="form-section">
                             <div class="form-grid">
                                 <div class="form-group">
+                                    <label for="cost_price">Purchase cost per base unit (optional)</label>
+                                    <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Leave blank if unknown">
+                                    <small id="cost_hint" data-field="cost_hint">Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
+                                </div>
+                                <div class="form-group">
                                     <label for="batch_number">Batch/Lot Number</label>
-                                    <input type="text" name="batch_number" id="batch_number" data-field="batch_number" placeholder="Batch #">
+                                    <input type="text" name="batch_number" id="batch_number" data-field="batch_number" maxlength="100" placeholder="Batch #">
                                 </div>
                                 <div class="form-group">
                                     <label for="expiration_date">Expiration Date</label>
@@ -289,6 +295,7 @@ $categoryIcon = static function (string $categoryName): string {
                     <div class="receiving-accepted"><strong id="summary_products">0</strong><span>Products added</span><small>In current delivery list</small></div>
                     <dl class="receiving-totals"><div><dt>Accepted units</dt><dd id="summary_accepted">0</dd></div><div><dt>Received units</dt><dd id="summary_received">0</dd></div><div><dt>Damaged units</dt><dd id="summary_damaged">0</dd></div><div><dt>Known accepted cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
                     <p class="receiving-summary-note">Damaged units are recorded separately. They never increase available stock. Blank purchase costs remain unknown.</p>
+                <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
                 <div class="form-section receiving-quantity">
                     <h3>Receipt details</h3>
                     <div class="form-grid">
@@ -302,18 +309,18 @@ $categoryIcon = static function (string $categoryName): string {
                         </div>
                     </div>
                 </div>
+                </fieldset>
 
                 <div class="u-flex-wrap receiving-actions">
                     <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Back</button>
                     <button type="button" class="btn btn-primary" id="receiving_next">Continue to quantities</button>
-                    <button type="submit" class="btn-submit" hidden>Save shopping entry & update inventory</button>
+                    <button type="submit" class="btn-submit" <?= !$canReceive ? 'disabled' : '' ?> hidden>Save shopping entry & update inventory</button>
                 </div>
                 <small>Review is required before stock changes.</small>
                 </div>
                 </section>
                 <input type="hidden" name="receiving_complete" value="1">
             </form>
-            </fieldset>
         </div>
     </main>
 </div>
@@ -321,7 +328,17 @@ $categoryIcon = static function (string $categoryName): string {
 <script id="receiving_products_data" type="application/json"><?= json_encode($products, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?></script>
 <script>
 const productsCatalog = JSON.parse(document.getElementById('receiving_products_data').textContent);
+const canReceive = <?= json_encode((bool)$canReceive) ?>;
 const productMap = new Map(productsCatalog.map(p => [String(p.product_id), p]));
+
+function updateExtrasDisclosure(row) {
+    const details = row?.querySelector('.receiving-extras');
+    if (!details) return;
+    const hasValue = Array.from(details.querySelectorAll('input, textarea')).some(el => el.value.trim() !== '');
+    if (hasValue || details.querySelector('[aria-invalid="true"]')) {
+        details.open = true;
+    }
+}
 const productSearchScan = document.getElementById('product_search_scan');
 const addScannedItem = document.getElementById('add_scanned_item');
 const scanStatus = document.getElementById('scan_status');
@@ -669,13 +686,17 @@ function renumberLines() {
 
         const upBtn = row.querySelector('.move-line-up');
         if (upBtn) {
-            upBtn.disabled = index === 0;
+            upBtn.disabled = index === 0 || !canReceive;
             upBtn.setAttribute('aria-label', `Move line ${lineNum} up`);
         }
         const downBtn = row.querySelector('.move-line-down');
         if (downBtn) {
-            downBtn.disabled = index === total - 1;
+            downBtn.disabled = index === total - 1 || !canReceive;
             downBtn.setAttribute('aria-label', `Move line ${lineNum} down`);
+        }
+        const removeBtn = row.querySelector('.remove-receiving-line');
+        if (removeBtn && !canReceive) {
+            removeBtn.disabled = true;
         }
 
         for (const field of row.querySelectorAll('[data-field]')) {
@@ -789,8 +810,16 @@ function connectLine(row) {
         });
     }
 
+    for (const name of ['cost_price', 'batch_number', 'expiration_date', 'discrepancy_notes', 'notes']) {
+        const input = row.querySelector(`[data-field="${name}"]`);
+        if (input) {
+            input.addEventListener('input', () => updateExtrasDisclosure(row));
+            input.addEventListener('change', () => updateExtrasDisclosure(row));
+        }
+    }
+
     row.addEventListener('dragstart', event => {
-        if (step !== 1 || event.target.closest('input, textarea, select')) {
+        if (step !== 1 || !canReceive || event.target.closest('input, textarea, select')) {
             event.preventDefault();
             return;
         }
@@ -872,6 +901,11 @@ function addReceivingLine(values = {}) {
         }
     }
     updateQuantityMode(row);
+    updateExtrasDisclosure(row);
+    if (!canReceive) {
+        row.setAttribute('draggable', 'false');
+        row.querySelectorAll('input, select, textarea, button').forEach(el => el.disabled = true);
+    }
     refreshDelivery();
     return row;
 }
@@ -929,6 +963,10 @@ function clearReceivingErrors() {
 }
 
 function receivingError(field, message) {
+    const details = field.closest('details');
+    if (details) {
+        details.open = true;
+    }
     const error = document.createElement('small');
     error.id = field.id + '_error';
     error.dataset.receivingError = '';
@@ -941,6 +979,7 @@ function receivingError(field, message) {
 
 function validateQuantities() {
     clearReceivingErrors();
+    if (!canReceive) return true;
     for (const [index, row] of Array.from(lineContainer.children).entries()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const prodId = field('product_id')?.value;
@@ -1011,7 +1050,12 @@ function renderReview() {
         edit.type = 'button';
         edit.className = 'btn btn-secondary';
         edit.textContent = 'Edit line ' + (index + 1);
-        edit.addEventListener('click', () => { showStep(2, false); field('quantity_mode').focus(); });
+        edit.addEventListener('click', () => {
+            showStep(2, false);
+            row.scrollIntoView({behavior: 'smooth', block: 'center'});
+            const target = field('quantity_mode') || row.querySelector('input:not([type="hidden"]), select');
+            target?.focus();
+        });
         section.append(title, mode, details, notes, edit);
         review.append(section);
     }
@@ -1033,8 +1077,11 @@ renumberLines();
 
 const retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 for (const name of ['supplier', 'invoice_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);
-if (Array.isArray(retainedValues.lines) && retainedValues.lines.length > 0) {
-    for (const values of retainedValues.lines) addReceivingLine(values);
+const linesToRestore = Array.isArray(retainedValues.lines)
+    ? retainedValues.lines
+    : (retainedValues.lines && typeof retainedValues.lines === 'object' ? Object.values(retainedValues.lines) : []);
+if (linesToRestore.length > 0) {
+    for (const values of linesToRestore) addReceivingLine(values);
 } else if (retainedValues.product_id) {
     addReceivingLine(retainedValues);
 }
@@ -1042,6 +1089,7 @@ if (Array.isArray(retainedValues.lines) && retainedValues.lines.length > 0) {
 let saving = false;
 form.addEventListener('submit', event => {
     if (saving) { event.preventDefault(); return; }
+    if (!canReceive) { event.preventDefault(); return; }
     if (step !== 3) { event.preventDefault(); document.getElementById('receiving_next').click(); return; }
     const products = Array.from(lineContainer.children).map(row => row.querySelector('[data-field="product_id"]').value);
     if (products.length === 0 || new Set(products).size !== products.length) {
@@ -1056,7 +1104,11 @@ form.addEventListener('submit', event => {
     form.querySelector('.btn-submit').textContent = 'Saving receipt…';
 });
 
-showStep(retainedValues.lines && retainedValues.lines.length > 0 && (retainedValues.lines[0].received_qty || retainedValues.lines[0].received_packages) ? 2 : 1);
+const hasQuantities = linesToRestore.some(line =>
+    (line.received_qty !== undefined && line.received_qty !== '') ||
+    (line.received_packages !== undefined && line.received_packages !== '')
+);
+showStep(hasQuantities ? 2 : 1);
 </script>
 </body>
 </html>

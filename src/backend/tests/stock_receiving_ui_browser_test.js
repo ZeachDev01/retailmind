@@ -140,6 +140,9 @@ function fixture(action) {
         assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
 
         await page.locator('#receiving_next').click();
+        assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), false, 'extras disclosure collapsed by default');
+        await page.locator('.receiving-extras summary').first().click();
+        assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), true, 'extras disclosure opened on summary click');
         await page.locator('#received_qty').fill('12');
         await page.locator('#damaged_qty').fill('2');
         await page.locator('#cost_price').fill('3.50');
@@ -185,6 +188,14 @@ function fixture(action) {
 
         await page.goto(url + '?product_id=1');
         await page.locator('#receiving_next').click();
+        assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), false, 'extras disclosure collapsed by default');
+        await page.locator('#received_qty').fill('10');
+        await page.locator('#cost_price').evaluate(el => { el.value = 'invalid-cost'; });
+        await page.locator('#receiving_next').click();
+        assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), true, 'validation error auto-expands extras disclosure');
+        assert.equal(await page.locator('#cost_price').getAttribute('aria-invalid'), 'true', 'invalid cost highlighted');
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'cost_price', 'invalid cost focused');
+        await page.locator('#cost_price').fill('');
         await page.locator('#received_qty').fill('abc');
         await page.locator('#quantity_mode').selectOption('packages');
         await page.locator('#received_packages').fill('2');
@@ -239,6 +250,9 @@ function fixture(action) {
                     }
                     if (step === 3) {
                         await page.locator('#received_qty').fill('5');
+                        if (!await page.locator('.receiving-extras').first().evaluate(el => el.open)) {
+                            await page.locator('.receiving-extras summary').first().click();
+                        }
                         await page.locator('#cost_price').fill('3.50');
                         await page.locator('#notes').fill('Long note: ' + 'Receiving details 漢字 العربية '.repeat(15));
                         await page.locator('#receiving_next').click();
@@ -312,11 +326,28 @@ function fixture(action) {
         await page.locator('#quantity_mode').selectOption('packages');
         await page.locator('#received_packages').fill('2');
         await page.locator('#damaged_qty').fill('1');
+        await page.locator('.receiving-extras summary').first().click();
+        await page.locator('#cost_price').fill('4.50');
+        await page.locator('#batch_number').fill('B-99');
+        await page.locator('#expiration_date').fill('2028-06-30');
+        await page.locator('#notes').fill('Rejection test note');
+        await page.locator('#receiving_next').click();
+        assert.match(await page.locator('#receiving_review').innerText(), /B-99/);
+        assert.match(await page.locator('#receiving_review').innerText(), /Rejection test note/);
+        await page.getByRole('button', {name: 'Edit line 1'}).click();
+        assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '2', 'edit line jumps back to step 2');
         await page.locator('#receiving_next').click();
         await page.locator('[name="receiving_nonce"]').evaluate(input => { input.value = 'expired-ui-test'; });
         await Promise.all([page.waitForNavigation(), page.locator('.btn-submit').click()]);
         assert.match(await page.locator('.message.error').innerText(), /already been saved or expired/);
+        assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '2', 'server rejection restores to Step 2');
         assert.equal(await page.locator('#received_packages').inputValue(), '2', 'server rejection retains entered package quantity');
+        assert.equal(await page.locator('#damaged_qty').inputValue(), '1', 'server rejection retains damaged quantity');
+        assert.equal(await page.locator('#cost_price').inputValue(), '4.50', 'server rejection retains cost price');
+        assert.equal(await page.locator('#batch_number').inputValue(), 'B-99', 'server rejection retains batch number');
+        assert.equal(await page.locator('#expiration_date').inputValue(), '2028-06-30', 'server rejection retains expiry date');
+        assert.equal(await page.locator('#notes').inputValue(), 'Rejection test note', 'server rejection retains notes');
+        assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), true, 'extras auto-expanded on server rejection restoration');
         if (await page.locator('.swal2-confirm').isVisible({timeout: 1000}).catch(() => false)) {
             await page.locator('.swal2-confirm').click();
         }
@@ -362,6 +393,25 @@ function fixture(action) {
         await readonlyPage.goto(url);
         assert.equal(await readonlyPage.locator('#product_search_scan').isDisabled(), true, 'technical workspace cannot record routine stock');
         assert.match(await readonlyPage.locator('.receiving-form').innerText(), /authorized Inventory Manager/);
+
+        // Verification of read-only playlist and disabled mutations in oversight mode:
+        await readonlyPage.goto(url + '?product_id=1');
+        assert.equal(await readonlyPage.locator('#receiving_lines .receiving-line').count(), 1, 'oversight shows playlist line');
+        assert.equal(await readonlyPage.locator('.move-line-up').isDisabled(), true, 'oversight move up disabled');
+        assert.equal(await readonlyPage.locator('.move-line-down').isDisabled(), true, 'oversight move down disabled');
+        assert.equal(await readonlyPage.locator('.remove-receiving-line').isDisabled(), true, 'oversight remove line disabled');
+        await readonlyPage.locator('#receiving_next').click();
+        assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '2', 'oversight advances to Step 2');
+        assert.equal(await readonlyPage.locator('#received_qty').isDisabled(), true, 'oversight quantity disabled');
+        assert.equal(await readonlyPage.locator('#quantity_mode').isDisabled(), true, 'oversight mode selector disabled');
+        assert.equal(await readonlyPage.locator('#damaged_qty').isDisabled(), true, 'oversight damage disabled');
+        assert.equal(await readonlyPage.locator('#cost_price').isDisabled(), true, 'oversight cost disabled');
+        await readonlyPage.locator('#receiving_next').click();
+        assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '3', 'oversight advances to Step 3 review');
+        assert.equal(await readonlyPage.locator('#receiving_review').isVisible(), true, 'oversight review visible');
+        assert.equal(await readonlyPage.locator('.btn-submit').isDisabled(), true, 'oversight submit action disabled');
+        await readonlyPage.getByRole('button', {name: 'Edit line 1'}).click();
+        assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '2', 'edit line jumps back to step 2 in oversight');
         await readonlyPage.close();
         assert.deepEqual(errors, []);
         fs.writeFileSync(path.join(output, 'measurements.json'), JSON.stringify({metrics, measurements, errors}, null, 2));
