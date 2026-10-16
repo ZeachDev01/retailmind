@@ -71,7 +71,35 @@ $posRegisterLocked = $shiftService->isRegisterLocked($cashierId);
 
 [$catalogScope, $catalogParams] = store_product_scope('p');
 $catalogProducts = [];
+$catalogEtag = null;
 if ($posShiftOpen && !$posRegisterLocked) {
+    try {
+        $etagStmt = $pdo->prepare(
+            "SELECT COUNT(p.product_id) AS total_count,
+                    COALESCE(MAX(p.created_at), '') AS max_product_created,
+                    COALESCE(MAX(i.last_updated), '') AS max_inventory_updated,
+                    COALESCE(SUM(i.quantity_on_hand), 0) AS total_stock,
+                    COALESCE(SUM(p.unit_price), 0) AS total_price
+             FROM products p
+             LEFT JOIN inventory i ON i.product_id = p.product_id
+             WHERE p.status = 'active'{$catalogScope}"
+        );
+        $etagStmt->execute($catalogParams);
+        $meta = $etagStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $rawHash = implode(':', [
+            $meta['total_count'] ?? 0,
+            $meta['max_product_created'] ?? '',
+            $meta['max_inventory_updated'] ?? '',
+            $meta['total_stock'] ?? 0,
+            $meta['total_price'] ?? 0,
+        ]);
+        $catalogEtag = '"' . md5($rawHash) . '"';
+    } catch (Throwable) {
+        $catalogEtag = null;
+    }
+}
+
+$loadCatalogProducts = static function () use ($pdo, $catalogScope, $catalogParams): array {
     $catalogStmt = $pdo->prepare(
         "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.product_name, p.unit_price,
                 COALESCE(p.reorder_level, 0) AS reorder_level,
@@ -83,7 +111,7 @@ if ($posShiftOpen && !$posRegisterLocked) {
          ORDER BY p.product_id ASC"
     );
     $catalogStmt->execute($catalogParams);
-    $catalogProducts = array_map(static function (array $row): array {
+    return array_map(static function (array $row): array {
         return [
             'product_id' => (int)$row['product_id'],
             'sku' => (string)($row['sku'] ?? ''),
@@ -96,17 +124,77 @@ if ($posShiftOpen && !$posRegisterLocked) {
             'quantity_on_hand' => (int)$row['quantity_on_hand'],
         ];
     }, $catalogStmt->fetchAll(PDO::FETCH_ASSOC));
-}
+};
 
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'catalog_preload') {
-    header('Content-Type: application/json');
-    header('Cache-Control: no-cache');
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && in_array(($_GET['action'] ?? ''), ['catalog_preload', 'catalog_sync'], true)) {
     if (!$posShiftOpen || $posRegisterLocked) {
         http_response_code(403);
+        header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => 'Shift closed or locked']);
         exit;
     }
-    echo json_encode(['success' => true, 'catalog' => $catalogProducts], JSON_THROW_ON_ERROR);
+
+    $clientEtag = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? $_GET['if_none_match'] ?? $_GET['etag'] ?? '');
+    $clientEtag = trim($clientEtag, '"');
+    $serverEtag = trim((string)$catalogEtag, '"');
+
+    if ($clientEtag !== '' && $serverEtag !== '' && $clientEtag === $serverEtag) {
+        http_response_code(304);
+        header('ETag: ' . $catalogEtag);
+        header('Cache-Control: no-cache');
+        exit;
+    }
+
+    $since = trim((string)($_GET['since'] ?? ''));
+    $deltaProducts = null;
+    if ($since !== '') {
+        try {
+            $deltaStmt = $pdo->prepare(
+                "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.product_name, p.unit_price,
+                        COALESCE(p.reorder_level, 0) AS reorder_level,
+                        COALESCE(p.safety_stock, 0) AS safety_stock,
+                        COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+                 FROM products p
+                 LEFT JOIN inventory i ON i.product_id = p.product_id
+                 WHERE p.status = 'active'{$catalogScope}
+                   AND (i.last_updated > ? OR p.created_at > ?)
+                 ORDER BY p.product_id ASC"
+            );
+            $deltaParams = array_merge($catalogParams, [$since, $since]);
+            $deltaStmt->execute($deltaParams);
+            $deltaProducts = array_map(static function (array $row): array {
+                return [
+                    'product_id' => (int)$row['product_id'],
+                    'sku' => (string)($row['sku'] ?? ''),
+                    'barcode' => (string)($row['barcode'] ?? ''),
+                    'case_barcode' => (string)($row['case_barcode'] ?? ''),
+                    'product_name' => (string)$row['product_name'],
+                    'unit_price' => (float)$row['unit_price'],
+                    'reorder_level' => (int)$row['reorder_level'],
+                    'safety_stock' => (int)$row['safety_stock'],
+                    'quantity_on_hand' => (int)$row['quantity_on_hand'],
+                ];
+            }, $deltaStmt->fetchAll(PDO::FETCH_ASSOC));
+        } catch (Throwable) {
+            $deltaProducts = null;
+        }
+    }
+
+    $isDelta = $deltaProducts !== null;
+    $responseProducts = $isDelta ? $deltaProducts : $loadCatalogProducts();
+
+    header('Content-Type: application/json');
+    header('Cache-Control: no-cache');
+    if ($catalogEtag !== null) {
+        header('ETag: ' . $catalogEtag);
+    }
+    echo json_encode([
+        'success' => true,
+        'etag' => $catalogEtag,
+        'server_time' => date('Y-m-d H:i:s'),
+        'delta' => $isDelta,
+        'catalog' => $responseProducts
+    ], JSON_THROW_ON_ERROR);
     exit;
 }
 
@@ -670,7 +758,9 @@ let posAudioContext = null;
 
 const quickProducts = <?= json_encode($quickProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const quickProductById = new Map(quickProducts.map(product => [Number(product.product_id), product]));
-const posCatalogPreload = <?= json_encode($catalogProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const posCatalogPreload = <?= json_encode(($posShiftOpen && !$posRegisterLocked) ? $loadCatalogProducts() : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const posCatalogEtag = <?= json_encode($catalogEtag) ?>;
+const posCatalogServerTime = <?= json_encode(date('Y-m-d H:i:s')) ?>;
 const skuInput = document.getElementById('sku-input');
 const scannerResult = document.getElementById('scanner-result');
 const scannerArea = document.getElementById('scanner-area');
@@ -1066,10 +1156,133 @@ function getLocalStock(productId) {
     return cart[id]?.stock !== undefined ? (cart[id].stock - (cart[id].qty || 0)) : null;
 }
 
+const CATALOG_SYNC_INTERVAL_MS = 300000;
+let catalogSyncTimer = null;
+let currentCatalogEtag = typeof posCatalogEtag !== 'undefined' ? (posCatalogEtag || '') : '';
+let lastCatalogSyncTime = typeof posCatalogServerTime !== 'undefined' ? (posCatalogServerTime || '') : '';
+
+function applyCatalogDelta(items = []) {
+    return new Promise((resolve) => {
+        const db = (typeof posDb !== 'undefined' ? posDb : (window.posDb || null));
+        if (!db || !Array.isArray(items) || items.length === 0) {
+            return resolve(false);
+        }
+        try {
+            const tx = db.transaction(POS_CATALOG_STORE, 'readwrite');
+            const store = tx.objectStore(POS_CATALOG_STORE);
+            for (const item of items) {
+                store.put(item);
+                const id = Number(item.product_id);
+                const map = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap);
+                if (map) {
+                    const existing = map.get(id);
+                    map.set(id, {
+                        ...(existing || {}),
+                        ...item,
+                        initial_stock: Number(item.quantity_on_hand)
+                    });
+                    if (typeof syncCatalogStock === 'function') syncCatalogStock(id);
+                }
+                if (typeof quickProductById !== 'undefined' && quickProductById && quickProductById.has(id)) {
+                    const qp = quickProductById.get(id);
+                    if (item.unit_price !== undefined) qp.price = Number(item.unit_price);
+                    if (item.quantity_on_hand !== undefined) qp.quantity_on_hand = Number(item.quantity_on_hand);
+                }
+            }
+            tx.oncomplete = () => {
+                if (typeof renderQuickProducts === 'function') renderQuickProducts();
+                resolve(true);
+            };
+            tx.onerror = () => resolve(false);
+        } catch (e) {
+            resolve(false);
+        }
+    });
+}
+
+async function syncCatalog(isManual = false) {
+    if (!posShiftOpen || (typeof cartWorkspace !== 'undefined' && cartWorkspace.context?.locked)) {
+        return { success: false, reason: 'Shift closed or locked' };
+    }
+    const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : 'http://127.0.0.1';
+    const url = new URL(barcodeApiUrl, origin);
+    url.searchParams.set('action', 'catalog_sync');
+    if (lastCatalogSyncTime) {
+        url.searchParams.set('since', lastCatalogSyncTime);
+    }
+    if (currentCatalogEtag) {
+        url.searchParams.set('if_none_match', currentCatalogEtag);
+    }
+
+    const headers = {};
+    if (currentCatalogEtag) {
+        headers['If-None-Match'] = currentCatalogEtag;
+    }
+
+    try {
+        const res = await fetch(url.toString(), { headers });
+        if (res.status === 304) {
+            if (isManual) {
+                showCartMessage('Catalog is already up to date.', 'info');
+            }
+            return { success: true, notModified: true, updated: 0 };
+        }
+
+        if (res.status === 200) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.catalog)) {
+                const etag = res.headers?.get ? res.headers.get('ETag') : data.etag;
+                if (etag) currentCatalogEtag = etag;
+                if (data.server_time) lastCatalogSyncTime = data.server_time;
+
+                if (data.catalog.length > 0) {
+                    await applyCatalogDelta(data.catalog);
+                }
+                if (isManual) {
+                    const count = data.catalog.length;
+                    showCartMessage(count > 0 ? `Catalog refreshed with ${count} products.` : 'Catalog is already up to date.', 'success');
+                }
+                return { success: true, notModified: false, updated: data.catalog.length };
+            }
+        }
+
+        if (isManual) {
+            showCartMessage('Failed to refresh catalog.', 'warning');
+        }
+        return { success: false };
+    } catch (err) {
+        if (isManual) {
+            showCartMessage('Could not reach server to refresh catalog.', 'warning');
+        }
+        return { success: false, error: err };
+    }
+}
+
+function startCatalogSyncLoop() {
+    if (catalogSyncTimer) clearInterval(catalogSyncTimer);
+    if (!posShiftOpen || (typeof cartWorkspace !== 'undefined' && cartWorkspace.context?.locked)) {
+        return;
+    }
+    catalogSyncTimer = setInterval(async () => {
+        if (!posShiftOpen || (typeof cartWorkspace !== 'undefined' && cartWorkspace.context?.locked)) {
+            return;
+        }
+        try {
+            await syncCatalog(false);
+        } catch (err) {
+            console.warn('Background catalog sync failed:', err);
+        }
+    }, CATALOG_SYNC_INTERVAL_MS);
+}
+
 window.initPosCatalogDb = initPosCatalogDb;
 window.lookupProductInIndexedDB = lookupProductInIndexedDB;
 window.catalogProductMap = catalogProductMap;
 window.getLocalStock = getLocalStock;
+window.applyCatalogDelta = applyCatalogDelta;
+window.syncCatalog = syncCatalog;
+window.startCatalogSyncLoop = startCatalogSyncLoop;
+window.CATALOG_SYNC_INTERVAL_MS = CATALOG_SYNC_INTERVAL_MS;
 
 async function fetchProductByCode(code) {
     const normalized = String(code || '').trim();
@@ -1812,14 +2025,7 @@ if (refreshCatalogBtn) {
     refreshCatalogBtn.addEventListener('click', async () => {
         try {
             refreshCatalogBtn.disabled = true;
-            const res = await fetch(barcodeApiUrl + '?action=catalog_preload');
-            const data = await res.json();
-            if (data.success && Array.isArray(data.catalog)) {
-                await initPosCatalogDb(data.catalog);
-                showCartMessage('Catalog refreshed with ' + data.catalog.length + ' products.', 'success');
-            } else {
-                showCartMessage('Failed to refresh catalog.', 'warning');
-            }
+            await syncCatalog(true);
         } catch (e) {
             showCartMessage('Could not reach server to refresh catalog.', 'warning');
         } finally {
@@ -1988,7 +2194,9 @@ document.addEventListener('keydown', event => {
 
 renderQuickProducts();
 restoreState();
-initPosCatalogDb(typeof posCatalogPreload !== 'undefined' ? posCatalogPreload : []);
+initPosCatalogDb(typeof posCatalogPreload !== 'undefined' ? posCatalogPreload : []).then(() => {
+    startCatalogSyncLoop();
+});
 if (cashierClock) {
     updateClock();
     setInterval(updateClock, 30000);
