@@ -1128,7 +1128,9 @@ try {
     if (<?= json_encode($message !== '') ?>) sessionStorage.removeItem(receivingDraftKey);
     else if (canReceive && <?= json_encode($_SERVER['REQUEST_METHOD'] === 'GET') ?>) {
         const draft = JSON.parse(sessionStorage.getItem(receivingDraftKey));
-        if (draft && Array.isArray(draft.lines)) {
+        const lineFields = new Set(Array.from(lineTemplate.content.querySelectorAll('input[data-field], select[data-field], textarea[data-field]'), field => field.dataset.field));
+        if (draft && Array.isArray(draft.lines) && draft.lines.every(line => line && typeof line === 'object'
+            && Object.entries(line).every(([name, value]) => lineFields.has(name) && typeof value === 'string'))) {
             const requestedLines = retainedValues.lines || [];
             retainedValues = draft;
             for (const line of requestedLines) {
