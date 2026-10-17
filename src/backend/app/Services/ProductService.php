@@ -633,6 +633,124 @@ class ProductService
         return $stmt->fetchAll();
     }
 
+    public function updateProductCatalogDetails(int $productId, array $data, int $userId): array
+    {
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+        }
+
+        $role = function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? null);
+        if ($role !== 'inventory_manager') {
+            throw new RuntimeException('Only the active Inventory Manager workspace can edit product catalog details.');
+        }
+
+        if ($productId <= 0) {
+            throw new RuntimeException('Invalid product selected.');
+        }
+
+        [$scopeSql, $scopeParams] = $this->storeProductScope();
+        $stmt = $this->pdo->prepare("SELECT p.* FROM products p WHERE p.product_id = ?{$scopeSql}");
+        $stmt->execute(array_merge([$productId], $scopeParams));
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$existing) {
+            throw new RuntimeException('Product not found.');
+        }
+
+        $productName = trim((string)($data['product_name'] ?? ''));
+        if ($productName === '') {
+            throw new RuntimeException('Product name is required.');
+        }
+
+        $hasParent = !empty($existing['parent_product_id']) && (int)$existing['parent_product_id'] > 0;
+        if ($hasParent) {
+            $variantLabel = trim((string)($data['variant_label'] ?? ''));
+            if ($variantLabel === '') {
+                throw new RuntimeException('Variant label is required for variant products.');
+            }
+            if (mb_strlen($variantLabel) > 100) {
+                throw new RuntimeException('Variant label must not exceed 100 characters.');
+            }
+        } else {
+            $variantLabel = $existing['variant_label'];
+        }
+
+        $brand = trim((string)($data['brand'] ?? ''));
+        $brand = $brand !== '' ? $brand : null;
+
+        $categoryId = (($data['category_id'] ?? '') !== '') ? (int)$data['category_id'] : null;
+        if ($categoryId !== null && $categoryId > 0) {
+            $catStmt = $this->pdo->prepare("SELECT category_id FROM categories WHERE category_id = ?");
+            $catStmt->execute([$categoryId]);
+            if (!$catStmt->fetch()) {
+                throw new RuntimeException('Selected category was not found.');
+            }
+        } else {
+            $categoryId = null;
+        }
+
+        $productImage = array_key_exists('product_image', $data) && $data['product_image'] !== null && $data['product_image'] !== ''
+            ? trim((string)$data['product_image'])
+            : $existing['product_image'];
+
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) {
+            StoreWriteGate::begin($this->pdo);
+        }
+        try {
+            $updateStmt = $this->pdo->prepare(
+                "UPDATE products
+                 SET product_name = ?,
+                     variant_label = ?,
+                     brand = ?,
+                     category_id = ?,
+                     product_image = ?
+                 WHERE product_id = ?"
+            );
+            $updateStmt->execute([
+                $productName,
+                $variantLabel,
+                $brand,
+                $categoryId,
+                $productImage,
+                $productId,
+            ]);
+
+            $fetchStmt = $this->pdo->prepare(
+                "SELECT p.*, c.category_name, i.quantity_on_hand
+                 FROM products p
+                 LEFT JOIN categories c ON c.category_id = p.category_id
+                 LEFT JOIN inventory i ON i.product_id = p.product_id
+                 WHERE p.product_id = ?"
+            );
+            $fetchStmt->execute([$productId]);
+            $updated = $fetchStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+            if (function_exists('log_activity')) {
+                log_activity(
+                    $this->pdo,
+                    $userId,
+                    'Product catalog details updated',
+                    'Products',
+                    $productId,
+                    $existing,
+                    $updated
+                );
+            }
+
+            if ($ownsTransaction) {
+                $this->pdo->commit();
+            }
+
+            return $updated;
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+
     private function storeProductScope(): array
     {
         if (function_exists('store_product_scope')) {

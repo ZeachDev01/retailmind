@@ -28,10 +28,115 @@ const PRODUCT_PHOTO_LIMIT_MESSAGE = 'Choose a product photo that is a JPEG, PNG,
 const PRODUCT_PHOTO_UPLOAD_MESSAGE = 'The product photo could not be uploaded. Choose another file and try again.';
 const PRODUCT_PHOTO_SAVE_MESSAGE = 'The product photo could not be saved. Try again. Tell your Administrator if this keeps happening.';
 
+function handle_product_photo_upload(?array $file): ?string
+{
+    if (empty($file) || empty($file['name'])) {
+        return null;
+    }
+    $allowedMimes = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp',
+    ];
+    $maxSize = 5 * 1024 * 1024; // 5MB
+
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException(PRODUCT_PHOTO_UPLOAD_MESSAGE);
+    }
+    if (($file['size'] ?? 0) > $maxSize) {
+        throw new RuntimeException(PRODUCT_PHOTO_LIMIT_MESSAGE);
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($file['tmp_name']);
+    if (!isset($allowedMimes[$mime])) {
+        throw new RuntimeException(PRODUCT_PHOTO_LIMIT_MESSAGE);
+    }
+
+    $ext = $allowedMimes[$mime];
+    $filename = bin2hex(random_bytes(16)) . '.' . $ext;
+    $uploadDir = __DIR__ . '/../../../backend/storage/images';
+    $uploadPath = $uploadDir . '/' . $filename;
+
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+
+    if (!move_uploaded_file($file['tmp_name'], $uploadPath)) {
+        throw new RuntimeException(PRODUCT_PHOTO_SAVE_MESSAGE);
+    }
+
+    return 'storage/images/' . $filename;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
 
     require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+
+    if ($action === 'update_catalog_details') {
+        $isAjax = (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+            || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json');
+
+        if (current_role() !== 'inventory_manager') {
+            http_response_code(403);
+            $msg = 'Only the active Inventory Manager workspace can edit product catalog details.';
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['success' => false, 'error' => $msg]);
+                exit;
+            }
+            redirect_products('error', $msg);
+        }
+
+        csrf_verify();
+
+        try {
+            $productId = (int)($_POST['product_id'] ?? 0);
+            if ($productId <= 0) {
+                throw new RuntimeException('Invalid product selected.');
+            }
+
+            $updateData = [
+                'product_name' => $_POST['product_name'] ?? '',
+                'brand' => $_POST['brand'] ?? '',
+                'category_id' => $_POST['category_id'] ?? '',
+            ];
+            if (isset($_POST['variant_label'])) {
+                $updateData['variant_label'] = $_POST['variant_label'];
+            }
+            $uploadedPhoto = handle_product_photo_upload($_FILES['product_image'] ?? null);
+            if ($uploadedPhoto !== null) {
+                $updateData['product_image'] = $uploadedPhoto;
+            }
+
+            $updated = $productService->updateProductCatalogDetails($productId, $updateData, (int)$_SESSION['user_id']);
+
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['success' => true, 'product' => $updated]);
+                exit;
+            }
+
+            redirect_products('success', 'Product catalog details updated successfully.');
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $alert = \App\Support\OperatorAlert::message($e, 'The product details could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
+            if ($isAjax) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['success' => false, 'error' => $alert]);
+                exit;
+            }
+            if (in_array($e->getMessage(), [PRODUCT_PHOTO_LIMIT_MESSAGE, PRODUCT_PHOTO_UPLOAD_MESSAGE, PRODUCT_PHOTO_SAVE_MESSAGE], true)) {
+                redirect_products('warning', $alert);
+            }
+            redirect_products('error', $alert);
+        }
+    }
 
     if ($action === 'create_category') {
         csrf_verify();
@@ -48,46 +153,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
         csrf_verify();
         try {
-            // Handle image upload
             $initialQuantity = filter_var($_POST['initial_stock_quantity'] ?? '0', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 2147483647]]);
             if ($initialQuantity === false) {
                 throw new RuntimeException('Starting stock must be a whole number of zero or more.');
             }
-            $productImage = '';
-            if (!empty($_FILES['product_image']['name'])) {
-                $file = $_FILES['product_image'];
-                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                $maxSize = 5 * 1024 * 1024; // 5MB
+            $productImage = handle_product_photo_upload($_FILES['product_image'] ?? null) ?? '';
 
-                // Validate file
-                if (!in_array($file['type'], $allowedTypes, true)) {
-                    throw new RuntimeException(PRODUCT_PHOTO_LIMIT_MESSAGE);
-                }
-                if ($file['size'] > $maxSize) {
-                    throw new RuntimeException(PRODUCT_PHOTO_LIMIT_MESSAGE);
-                }
-                if ($file['error'] !== UPLOAD_ERR_OK) {
-                    throw new RuntimeException(PRODUCT_PHOTO_UPLOAD_MESSAGE);
-                }
-
-                // Generate unique filename
-                $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-                $filename = bin2hex(random_bytes(16)) . '.' . $ext;
-                $uploadDir = __DIR__ . '/../../../backend/storage/images';
-                $uploadPath = $uploadDir . '/' . $filename;
-
-                // Create directory if it doesn't exist
-                if (!is_dir($uploadDir)) {
-                    mkdir($uploadDir, 0755, true);
-                }
-
-                // Move uploaded file
-                if (!move_uploaded_file($file['tmp_name'], $uploadPath)) {
-                    throw new RuntimeException(PRODUCT_PHOTO_SAVE_MESSAGE);
-                }
-
-                $productImage = 'storage/images/' . $filename;
-            }
 
             $productId = $productService->createProduct([
                 'barcode' => $_POST['barcode'] ?? '',
@@ -1096,7 +1167,13 @@ foreach ($products as $product) {
                 <div>
                     <h2 id="product-drawer-title">Product details</h2>
                     <p id="product-drawer-subtitle"></p>
-                </div><button type="button" class="rm-close" data-close-drawer aria-label="Close product details"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <?php if (current_role() === 'inventory_manager'): ?>
+                        <button type="button" class="btn btn-small btn-secondary" id="product-edit-btn" aria-label="Edit product catalog details"><i class="bi bi-pencil" aria-hidden="true"></i> Edit product</button>
+                    <?php endif; ?>
+                    <button type="button" class="rm-close" data-close-drawer aria-label="Close product details"><i class="bi bi-x-lg"></i></button>
+                </div>
             </header>
             <nav class="product-drawer-tabs" role="tablist" aria-label="Product details sections">
                 <button type="button" class="product-drawer-tab is-active" id="product-tab-info" role="tab" aria-selected="true" aria-controls="product-panel-info" data-product-tab="info">Info</button>
@@ -1312,6 +1389,9 @@ foreach ($products as $product) {
         const PRODUCT_PHOTO_LIMIT_MESSAGE = <?= json_encode(PRODUCT_PHOTO_LIMIT_MESSAGE) ?>;
         const productData = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const canDirectAdjust = <?= $canDirectAdjust ? 'true' : 'false' ?>;
+        const canEditProduct = <?= current_role() === 'inventory_manager' ? 'true' : 'false' ?>;
+        const csrfToken = <?= json_encode(csrf_token()) ?>;
+        const categoriesData = <?= json_encode(array_values($categories), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const productsById = Object.fromEntries(productData.map(product => [Number(product.product_id), product]));
         const existingBarcodes = new Set(productData.map(product => String(product.barcode || '').trim().toLowerCase()).filter(Boolean));
         const existingProductNames = new Set(productData.map(product => String(product.product_name || '').trim().toLowerCase()).filter(Boolean));
@@ -1586,7 +1666,9 @@ foreach ($products as $product) {
 
         function safeLink(value) {
             const url = String(value || '').trim();
-            return /^(https?:\/\/|\/)/i.test(url) ? url : '';
+            if (!url) return '';
+            if (/^(https?:\/\/|\/)/i.test(url)) return url;
+            return '/' + url.replace(/^\/+/, '');
         }
 
         function formatMoney(value) {
@@ -1624,21 +1706,232 @@ foreach ($products as $product) {
             });
         });
 
-        function openProductDrawer(id) {
-            const product = productsById[Number(id)];
-            if (!product) return;
+        let currentDrawerProductId = null;
+        let isEditingProduct = false;
+        let isDrawerDirty = false;
+
+        function renderProductDrawerReadOnly(product) {
+            isEditingProduct = false;
+            isDrawerDirty = false;
             document.getElementById('product-drawer-title').textContent = product.product_name + (product.variant_label ? ` — ${product.variant_label}` : '');
             document.getElementById('product-drawer-subtitle').textContent = `${safe(product.sku)} · ${safe(product.category_name, 'Uncategorized')}`;
-            const quantity = Number(product.quantity_on_hand || 0);
-            const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
-            const stockLabel = quantity <= 0 ? 'Out of stock' : quantity <= threshold ? 'Low stock' : 'Available';
-            const quantityActions = canDirectAdjust ? `<div class="product-quantity-actions"><button type="button" class="btn btn-icon" id="drawer-adjust-stock"><i class="bi bi-sliders" aria-hidden="true"></i>Adjust Stock</button></div>` : '';
+            const editBtn = document.getElementById('product-edit-btn');
+            if (editBtn) editBtn.hidden = !canEditProduct;
             document.getElementById('product-panel-info').innerHTML = `<div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
+        <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
         <div class="detail-item"><span>Expiration</span><strong>${escapeHtml(safe(product.expiration_date))}</strong></div><div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
     </div>`;
+        }
+
+        function enterProductEditMode() {
+            if (!canEditProduct) return;
+            const product = productsById[currentDrawerProductId];
+            if (!product) return;
+
+            isEditingProduct = true;
+            isDrawerDirty = false;
+            const editBtn = document.getElementById('product-edit-btn');
+            if (editBtn) editBtn.hidden = true;
+
+            setProductDrawerTab('info');
+            document.getElementById('product-drawer-title').textContent = `Edit ${product.product_name}`;
+
+            const categoryOptions = categoriesData.map(c =>
+                `<option value="${c.category_id}" ${Number(product.category_id) === Number(c.category_id) ? 'selected' : ''}>${escapeHtml(c.category_name)}</option>`
+            ).join('');
+
+            const hasParent = Number(product.parent_product_id || 0) > 0;
+
+            document.getElementById('product-panel-info').innerHTML = `
+                <form id="product-edit-form" novalidate enctype="multipart/form-data">
+                    <div id="product-edit-error" class="alert alert-danger" role="alert" hidden style="margin-bottom:1rem;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:0.75rem 1rem;border-radius:6px;font-size:0.875rem;"></div>
+                    <input type="hidden" name="action" value="update_catalog_details">
+                    <input type="hidden" name="product_id" value="${product.product_id}">
+                    <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}">
+
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <label class="form-field">
+                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Product Name <span style="color:#dc2626;">*</span></span>
+                            <input type="text" name="product_name" id="edit-product-name" required value="${escapeHtml(product.product_name || '')}" class="form-input" style="width:100%;">
+                        </label>
+
+                        ${hasParent ? `
+                        <label class="form-field">
+                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Variant Label <small style="font-weight:normal;color:#6b7280;">(max 100 characters)</small></span>
+                            <input type="text" name="variant_label" id="edit-variant-label" maxlength="100" value="${escapeHtml(product.variant_label || '')}" class="form-input" style="width:100%;">
+                        </label>
+                        ` : `
+                        <div class="form-field">
+                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Variant Label</span>
+                            <span style="color:#6b7280;font-size:0.875rem;">Not a variant product (parent identity preserved)</span>
+                        </div>
+                        `}
+
+                        <label class="form-field">
+                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Brand</span>
+                            <input type="text" name="brand" id="edit-brand" list="brand-suggestions-list" value="${escapeHtml(product.brand || '')}" class="form-input" style="width:100%;">
+                        </label>
+
+                        <label class="form-field">
+                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Category</span>
+                            <select name="category_id" id="edit-category-id" class="form-input" style="width:100%;">
+                                <option value="">Uncategorized</option>
+                                ${categoryOptions}
+                            </select>
+                        </label>
+
+                        <div class="form-field">
+                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Product Image <small style="font-weight:normal;color:#6b7280;">(JPEG, PNG, GIF, WebP, max 5MB)</small></span>
+                            ${safeLink(product.product_image) ? `<div style="margin-bottom:0.35rem;font-size:0.875rem;">Current: <a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open image</a></div>` : ''}
+                            <input type="file" name="product_image" id="edit-product-image" accept="image/jpeg,image/png,image/gif,image/webp" class="form-input" style="width:100%;">
+                        </div>
+
+                        <div style="display:flex;gap:0.75rem;margin-top:0.75rem;">
+                            <button type="submit" class="btn btn-primary" id="product-save-btn"><i class="bi bi-check-lg" aria-hidden="true"></i> Save changes</button>
+                            <button type="button" class="btn btn-secondary" id="product-cancel-btn">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            `;
+
+            const form = document.getElementById('product-edit-form');
+            form.addEventListener('input', () => { isDrawerDirty = true; });
+            form.addEventListener('change', () => { isDrawerDirty = true; });
+
+            document.getElementById('product-cancel-btn').addEventListener('click', cancelProductEdit);
+            form.addEventListener('submit', saveProductCatalogDetails);
+        }
+
+        async function cancelProductEdit() {
+            if (isDrawerDirty) {
+                const discard = await RetailMindUI.confirm({
+                    title: 'Discard unsaved changes?',
+                    message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
+                    confirmText: 'Discard changes',
+                    danger: true
+                });
+                if (!discard) return;
+            }
+            const product = productsById[currentDrawerProductId];
+            if (product) renderProductDrawerReadOnly(product);
+        }
+
+        async function saveProductCatalogDetails(event) {
+            event.preventDefault();
+            const product = productsById[currentDrawerProductId];
+            if (!product) return;
+
+            const errorBox = document.getElementById('product-edit-error');
+            errorBox.hidden = true;
+
+            const nameInput = document.getElementById('edit-product-name');
+            const productName = nameInput ? nameInput.value.trim() : '';
+            if (!productName) {
+                errorBox.textContent = 'Product name is required.';
+                errorBox.hidden = false;
+                nameInput?.focus();
+                return;
+            }
+
+            const variantInput = document.getElementById('edit-variant-label');
+            if (variantInput) {
+                const variantLabel = variantInput.value.trim();
+                if (Number(product.parent_product_id || 0) > 0 && !variantLabel) {
+                    errorBox.textContent = 'Variant label is required for variant products.';
+                    errorBox.hidden = false;
+                    variantInput.focus();
+                    return;
+                }
+                if (variantLabel.length > 100) {
+                    errorBox.textContent = 'Variant label must not exceed 100 characters.';
+                    errorBox.hidden = false;
+                    variantInput.focus();
+                    return;
+                }
+            }
+
+            const imageInput = document.getElementById('edit-product-image');
+            if (imageInput && imageInput.files && imageInput.files[0]) {
+                const file = imageInput.files[0];
+                const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                if (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024) {
+                    errorBox.textContent = PRODUCT_PHOTO_LIMIT_MESSAGE;
+                    errorBox.hidden = false;
+                    return;
+                }
+            }
+
+            const saveBtn = document.getElementById('product-save-btn');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving...';
+            }
+
+            try {
+                const formData = new FormData(document.getElementById('product-edit-form'));
+                const response = await fetch('products.php', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+                const result = await response.json();
+                if (result.success && result.product) {
+                    Object.assign(product, result.product);
+                    const row = document.querySelector(`tr[data-product-id="${product.product_id}"]`);
+                    if (row) {
+                        row.dataset.name = (product.product_name || '').toLowerCase();
+                        row.dataset.category = String(product.category_id || 0);
+                        row.dataset.categoryName = (product.category_name || '').toLowerCase();
+                        row.dataset.search = [product.product_name, product.variant_label || '', product.sku || '', product.barcode || '', product.brand || ''].join(' ').toLowerCase();
+                        const copy = row.querySelector('.product-copy');
+                        if (copy) {
+                            const brandText = product.brand || 'No brand';
+                            const variantText = product.variant_label ? ` · ${product.variant_label}` : '';
+                            copy.innerHTML = `<strong>${escapeHtml(product.product_name)}</strong><span>${escapeHtml(brandText)}${escapeHtml(variantText)}</span>`;
+                        }
+                        const thumb = row.querySelector('.product-thumb');
+                        if (thumb) {
+                            if (product.product_image) {
+                                thumb.innerHTML = `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot;></i>'">`;
+                            } else {
+                                thumb.innerHTML = '<i class="bi bi-box-seam"></i>';
+                            }
+                        }
+                    }
+                    isDrawerDirty = false;
+                    renderProductDrawerReadOnly(product);
+                    RetailMindUI.toast('Product details updated successfully.', 'success');
+                } else {
+                    errorBox.textContent = result.error || 'The product details could not be saved.';
+                    errorBox.hidden = false;
+                }
+            } catch (e) {
+                errorBox.textContent = 'A network error occurred while saving. Please try again.';
+                errorBox.hidden = false;
+            } finally {
+                if (saveBtn && isEditingProduct) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Save changes';
+                }
+            }
+        }
+
+        function openProductDrawer(id) {
+            const product = productsById[Number(id)];
+            if (!product) return;
+            currentDrawerProductId = Number(id);
+            renderProductDrawerReadOnly(product);
+
+            const quantity = Number(product.quantity_on_hand || 0);
+            const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
+            const stockLabel = quantity <= 0 ? 'Out of stock' : quantity <= threshold ? 'Low stock' : 'Available';
+            const quantityActions = canDirectAdjust ? `<div class="product-quantity-actions"><button type="button" class="btn btn-icon" id="drawer-adjust-stock"><i class="bi bi-sliders" aria-hidden="true"></i>Adjust Stock</button></div>` : '';
             document.getElementById('product-panel-quantity').innerHTML = `<div class="detail-grid">
         <div class="detail-item"><span>Current Stock</span><strong>${quantity.toLocaleString()} — ${stockLabel}</strong></div><div class="detail-item"><span>Reorder / Safety</span><strong>${Number(product.reorder_level || 0)} / ${Number(product.safety_stock || 0)}</strong></div>
         <div class="detail-item"><span>MOQ / Units per Case</span><strong>${Number(product.minimum_order_quantity || 1)} / ${Number(product.units_per_package || 1)}</strong></div><div class="detail-item"><span>Units</span><strong>${escapeHtml(safe(product.base_unit))} / ${escapeHtml(safe(product.receiving_unit))}</strong></div>
@@ -1661,7 +1954,85 @@ foreach ($products as $product) {
             setProductDrawerTab('info');
             RetailMindUI.openOverlay(document.getElementById('product-drawer'));
         }
-        document.querySelectorAll('.manage-product').forEach(button => button.addEventListener('click', () => openProductDrawer(button.dataset.productId)));
+        document.querySelectorAll('.manage-product').forEach(button => button.addEventListener('click', async () => {
+            if (isEditingProduct && isDrawerDirty) {
+                const discard = await RetailMindUI.confirm({
+                    title: 'Discard unsaved changes?',
+                    message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
+                    confirmText: 'Discard and switch',
+                    danger: true
+                });
+                if (!discard) return;
+                isDrawerDirty = false;
+            }
+            openProductDrawer(button.dataset.productId);
+        }));
+
+        const drawerEditBtn = document.getElementById('product-edit-btn');
+        if (drawerEditBtn) {
+            drawerEditBtn.addEventListener('click', enterProductEditMode);
+        }
+
+        const drawerOverlay = document.getElementById('product-drawer');
+        if (drawerOverlay) {
+            drawerOverlay.querySelector('[data-close-drawer]')?.addEventListener('click', async event => {
+                if (isEditingProduct && isDrawerDirty) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    const discard = await RetailMindUI.confirm({
+                        title: 'Discard unsaved changes?',
+                        message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
+                        confirmText: 'Discard and close',
+                        danger: true
+                    });
+                    if (!discard) return;
+                    isDrawerDirty = false;
+                    RetailMindUI.closeOverlay(drawerOverlay);
+                }
+            }, true);
+
+            drawerOverlay.addEventListener('click', async event => {
+                if (event.target === drawerOverlay && isEditingProduct && isDrawerDirty) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    const discard = await RetailMindUI.confirm({
+                        title: 'Discard unsaved changes?',
+                        message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
+                        confirmText: 'Discard and close',
+                        danger: true
+                    });
+                    if (!discard) return;
+                    isDrawerDirty = false;
+                    RetailMindUI.closeOverlay(drawerOverlay);
+                }
+            }, true);
+        }
+
+        window.addEventListener('keydown', async event => {
+            if (event.key === 'Escape' && isEditingProduct && isDrawerDirty) {
+                const overlay = document.getElementById('product-drawer');
+                if (overlay && !overlay.hidden && overlay.classList.contains('open')) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    const discard = await RetailMindUI.confirm({
+                        title: 'Discard unsaved changes?',
+                        message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
+                        confirmText: 'Discard and close',
+                        danger: true
+                    });
+                    if (!discard) return;
+                    isDrawerDirty = false;
+                    RetailMindUI.closeOverlay(overlay);
+                }
+            }
+        }, true);
+
+        window.addEventListener('beforeunload', event => {
+            if (isEditingProduct && isDrawerDirty) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        });
 
         function generateBarcode(id) {
             document.getElementById('generate-product-id').value = id;
