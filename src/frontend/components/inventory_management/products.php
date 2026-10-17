@@ -1272,8 +1272,34 @@ foreach ($products as $product) {
                         <div class="form-grid">
                             <div class="form-group"><label>Cost Price *</label><input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required><small class="field-error">Enter a valid cost price.</small></div>
                             <div class="form-group"><label>Selling Price *</label><input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required><small class="field-error">Selling price must not be lower than cost.</small></div>
-                            <div class="form-group"><label>Base Unit</label><input name="base_unit" value="piece" placeholder="piece, bottle, pack"></div>
-                            <div class="form-group"><label>Receiving Unit</label><input name="receiving_unit" value="package" placeholder="case, box, carton"></div>
+                            <div class="form-group">
+                                <label for="product-base-unit">Base Unit</label>
+                                <select id="product-base-unit" data-unit-field="base_unit">
+                                    <option value="piece">Piece</option><option value="bottle">Bottle</option><option value="can">Can</option><option value="sachet">Sachet</option>
+                                    <option value="stick">Stick</option><option value="pack">Pack</option><option value="bag">Bag</option><option value="box">Box</option>
+                                    <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option>
+                                    <option value="">Other…</option>
+                                </select>
+                                <div data-unit-custom hidden>
+                                    <label for="product-base-unit-custom">Custom base unit</label>
+                                    <input name="base_unit" id="product-base-unit-custom" value="piece" placeholder="Enter your unit">
+                                    <small class="field-error">Enter a custom base unit.</small>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="product-receiving-unit">Receiving Unit</label>
+                                <select id="product-receiving-unit" data-unit-field="receiving_unit">
+                                    <option value="package">Package</option><option value="case">Case</option><option value="box">Box</option><option value="carton">Carton</option>
+                                    <option value="pack">Pack</option><option value="bundle">Bundle</option><option value="bag">Bag</option><option value="sack">Sack</option>
+                                    <option value="tray">Tray</option><option value="crate">Crate</option><option value="ream">Ream</option><option value="pallet">Pallet</option>
+                                    <option value="">Other…</option>
+                                </select>
+                                <div data-unit-custom hidden>
+                                    <label for="product-receiving-unit-custom">Custom receiving unit</label>
+                                    <input name="receiving_unit" id="product-receiving-unit-custom" value="package" placeholder="Enter your unit">
+                                    <small class="field-error">Enter a custom receiving unit.</small>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
@@ -2316,6 +2342,31 @@ foreach ($products as $product) {
         const nextButton = document.getElementById('wizard-next');
         const backButton = document.getElementById('wizard-back');
         const saveButton = document.getElementById('wizard-save');
+        const unitSelects = addProductForm.querySelectorAll('[data-unit-field]');
+
+        function syncUnitSelects() {
+            unitSelects.forEach(select => {
+                const input = addProductForm.elements[select.dataset.unitField];
+                const preset = Array.from(select.options).some(option => option.value && option.value === input.value);
+                select.value = preset ? input.value : '';
+                input.parentElement.hidden = preset;
+                input.required = !preset;
+            });
+        }
+        unitSelects.forEach(select => select.addEventListener('change', () => {
+            const input = addProductForm.elements[select.dataset.unitField];
+            input.value = select.value;
+            input.parentElement.hidden = select.value !== '';
+            input.required = select.value === '';
+            input.closest('.form-group').classList.remove('invalid');
+            if (input.required) input.focus();
+        }));
+        unitSelects.forEach(select => {
+            const input = addProductForm.elements[select.dataset.unitField];
+            input.addEventListener('input', () => {
+                if (input.value.trim()) input.closest('.form-group').classList.remove('invalid');
+            });
+        });
 
         function setWizardStep(step) {
             wizardStep = Math.max(1, Math.min(5, step));
@@ -2365,6 +2416,13 @@ foreach ($products as $product) {
                 }
             }
             if (step === 3) {
+                unitSelects.forEach(select => {
+                    const input = addProductForm.elements[select.dataset.unitField];
+                    if (!select.value && !input.value.trim()) {
+                        input.closest('.form-group').classList.add('invalid');
+                        valid = false;
+                    }
+                });
                 const cost = document.getElementById('cost-price');
                 const selling = document.getElementById('selling-price');
                 if (cost.value === '' || Number(cost.value) < 0) {
@@ -2522,6 +2580,7 @@ foreach ($products as $product) {
                 }
             }
 
+            syncUnitSelects();
             const restoredMode = addProductForm.querySelector('input[name="starting_stock_mode"]:checked')?.value || 'pieces';
             setStartingStockMode(restoredMode);
 
@@ -2535,6 +2594,7 @@ foreach ($products as $product) {
 
         function clearFormState() {
             addProductForm.reset();
+            syncUnitSelects();
             localStorage.removeItem(FORM_STATE_KEY);
             localStorage.removeItem(FORM_STEP_KEY);
             const defaultRadio = addProductForm.querySelector('input[name="starting_stock_mode"][value="pieces"]');

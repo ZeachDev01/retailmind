@@ -4,6 +4,28 @@ RetailMind supports one Store's inventory, receiving, sales, and demand-forecast
 
 ## Language
 
+**Stock Batch**:
+A separately tracked quantity of one Product with its own receiving provenance, remaining quantity, and expiration date when recorded. Different batches may share the same expiration date.
+_Avoid_: Product expiration, unique expiration date
+
+**Opening Batch**:
+A Stock Batch representing stock already on hand when a Product is first entered into RetailMind.
+_Avoid_: Default stock, default expiration
+
+**Expiry Warning Lead Time**:
+The number of calendar days before a Stock Batch's expiration when it should receive an expiring-soon warning. It describes when attention is needed, not how long the goods last.
+_Avoid_: Shelf life, expiration date
+
+**Supplier Pullout**:
+The supplier's collection of a recorded quantity from an existing Stock Batch. It is distinct from receipt of Replacement Stock and from a customer Cash Refund.
+_Avoid_: Cash Refund, stock count, refreshed batch
+
+**Replacement Stock**:
+New goods supplied in relation to a Supplier Pullout, with their own quantity and expiration. The replacement quantity and arrival time may differ from the pullout.
+_Avoid_: Expiration extension, overwritten stock
+
+Design status, workflow, and unresolved policy choices: [batch expiration context](batch-expiration-context.md), [ADR-0013](adr/0013-batch-expiration-and-supplier-replacements.md).
+
 **Notification**:
 A user-addressed update about Store activity or a condition requiring attention. Reading it does not resolve the underlying condition.
 _Avoid_: Resolved issue, global announcement
