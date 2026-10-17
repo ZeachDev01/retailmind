@@ -106,19 +106,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($_POST['variant_label'])) {
                 $updateData['variant_label'] = $_POST['variant_label'];
             }
+            if (isset($_POST['selling_price'])) {
+                $updateData['selling_price'] = $_POST['selling_price'];
+            }
             $uploadedPhoto = handle_product_photo_upload($_FILES['product_image'] ?? null);
             if ($uploadedPhoto !== null) {
                 $updateData['product_image'] = $uploadedPhoto;
             }
 
             $updated = $productService->updateProductCatalogDetails($productId, $updateData, (int)$_SESSION['user_id']);
+            $warning = $updated['warning'] ?? null;
 
             if ($isAjax) {
                 header('Content-Type: application/json; charset=UTF-8');
-                echo json_encode(['success' => true, 'product' => $updated]);
+                echo json_encode([
+                    'success' => true,
+                    'product' => $updated,
+                    'warning' => $warning,
+                ]);
                 exit;
             }
 
+            if ($warning) {
+                redirect_products('warning', $warning);
+            }
             redirect_products('success', 'Product catalog details updated successfully.');
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -1770,6 +1781,18 @@ foreach ($products as $product) {
                         </div>
                         `}
 
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;">
+                            <label class="form-field">
+                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Cost Price <small style="font-weight:normal;color:#6b7280;">(Read-only)</small></span>
+                                <input type="text" readonly id="edit-cost-price" value="${formatMoney(product.cost_price)}" class="form-input" style="width:100%;background:#f3f4f6;cursor:default;">
+                            </label>
+                            <label class="form-field">
+                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Selling Price (₱) <span style="color:#dc2626;">*</span></span>
+                                <input type="number" step="0.01" min="0.01" max="999999999.99" name="selling_price" id="edit-selling-price" required value="${(Number(product.unit_price) || 0).toFixed(2)}" class="form-input" style="width:100%;">
+                            </label>
+                        </div>
+                        <div id="selling-price-warning" role="alert" style="display:none;color:#b45309;background:#fef3c7;border:1px solid #fde68a;padding:0.625rem 0.875rem;border-radius:6px;font-size:0.875rem;margin-top:-0.25rem;"></div>
+
                         <label class="form-field">
                             <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Brand</span>
                             <input type="text" name="brand" id="edit-brand" list="brand-suggestions-list" value="${escapeHtml(product.brand || '')}" class="form-input" style="width:100%;">
@@ -1796,6 +1819,25 @@ foreach ($products as $product) {
                     </div>
                 </form>
             `;
+
+            const priceInput = document.getElementById('edit-selling-price');
+            const priceWarning = document.getElementById('selling-price-warning');
+            const costPrice = Number(product.cost_price || 0);
+
+            function updatePriceWarning() {
+                const val = parseFloat(priceInput.value);
+                if (!isNaN(val) && costPrice > 0 && val < costPrice) {
+                    priceWarning.textContent = `Warning: Selling price (${formatMoney(val)}) is below cost price (${formatMoney(costPrice)})`;
+                    priceWarning.style.display = 'block';
+                } else {
+                    priceWarning.textContent = '';
+                    priceWarning.style.display = 'none';
+                }
+            }
+            if (priceInput && priceWarning) {
+                priceInput.addEventListener('input', updatePriceWarning);
+                updatePriceWarning();
+            }
 
             const form = document.getElementById('product-edit-form');
             form.addEventListener('input', () => { isDrawerDirty = true; });
@@ -1853,6 +1895,21 @@ foreach ($products as $product) {
                 }
             }
 
+            const priceInput = document.getElementById('edit-selling-price');
+            const sellingPriceVal = priceInput ? parseFloat(priceInput.value) : NaN;
+            if (!priceInput || isNaN(sellingPriceVal) || sellingPriceVal <= 0 || !isFinite(sellingPriceVal)) {
+                errorBox.textContent = 'Selling price must be greater than PHP 0.';
+                errorBox.hidden = false;
+                priceInput?.focus();
+                return;
+            }
+            if (sellingPriceVal > 999999999.99) {
+                errorBox.textContent = 'Selling price is out of range.';
+                errorBox.hidden = false;
+                priceInput?.focus();
+                return;
+            }
+
             const imageInput = document.getElementById('edit-product-image');
             if (imageInput && imageInput.files && imageInput.files[0]) {
                 const file = imageInput.files[0];
@@ -1888,6 +1945,7 @@ foreach ($products as $product) {
                         row.dataset.name = (product.product_name || '').toLowerCase();
                         row.dataset.category = String(product.category_id || 0);
                         row.dataset.categoryName = (product.category_name || '').toLowerCase();
+                        row.dataset.price = String(product.unit_price || 0);
                         row.dataset.search = [product.product_name, product.variant_label || '', product.sku || '', product.barcode || '', product.brand || ''].join(' ').toLowerCase();
                         const copy = row.querySelector('.product-copy');
                         if (copy) {
@@ -1903,10 +1961,18 @@ foreach ($products as $product) {
                                 thumb.innerHTML = '<i class="bi bi-box-seam"></i>';
                             }
                         }
+                        const priceCell = row.querySelector('.column-price');
+                        if (priceCell) {
+                            priceCell.textContent = formatMoney(product.unit_price);
+                        }
                     }
                     isDrawerDirty = false;
                     renderProductDrawerReadOnly(product);
-                    RetailMindUI.toast('Product details updated successfully.', 'success');
+                    if (result.warning) {
+                        RetailMindUI.toast(result.warning, 'warning');
+                    } else {
+                        RetailMindUI.toast('Product details updated successfully.', 'success');
+                    }
                 } else {
                     errorBox.textContent = result.error || 'The product details could not be saved.';
                     errorBox.hidden = false;

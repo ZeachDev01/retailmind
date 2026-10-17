@@ -692,6 +692,31 @@ class ProductService
             ? trim((string)$data['product_image'])
             : $existing['product_image'];
 
+        $hasSellingPrice = array_key_exists('selling_price', $data);
+        $costPrice = (float)($existing['cost_price'] ?? 0);
+        $warning = null;
+
+        if ($hasSellingPrice) {
+            $rawPrice = $data['selling_price'];
+            $trimmedPrice = is_string($rawPrice) ? trim($rawPrice) : $rawPrice;
+            if ($trimmedPrice === null || $trimmedPrice === '' || !is_numeric($trimmedPrice)) {
+                throw new RuntimeException('Selling price must be a valid number greater than 0.');
+            }
+            $sellingPrice = round((float)$trimmedPrice, 2);
+            if (!is_finite($sellingPrice) || $sellingPrice <= 0) {
+                throw new RuntimeException('Selling price must be greater than PHP 0.');
+            }
+            if ($sellingPrice > 999999999.99) {
+                throw new RuntimeException('Selling price is out of range.');
+            }
+
+            if ($costPrice > 0 && $sellingPrice < $costPrice) {
+                $warning = sprintf('Warning: Selling price (₱%s) is below cost price (₱%s).', number_format($sellingPrice, 2), number_format($costPrice, 2));
+            }
+        } else {
+            $sellingPrice = (float)$existing['unit_price'];
+        }
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             StoreWriteGate::begin($this->pdo);
@@ -703,7 +728,8 @@ class ProductService
                      variant_label = ?,
                      brand = ?,
                      category_id = ?,
-                     product_image = ?
+                     product_image = ?,
+                     unit_price = ?
                  WHERE product_id = ?"
             );
             $updateStmt->execute([
@@ -712,6 +738,7 @@ class ProductService
                 $brand,
                 $categoryId,
                 $productImage,
+                $sellingPrice,
                 $productId,
             ]);
 
@@ -724,6 +751,13 @@ class ProductService
             );
             $fetchStmt->execute([$productId]);
             $updated = $fetchStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            if ($updated) {
+                $updated['unit_price'] = (float)$updated['unit_price'];
+                $updated['selling_price'] = (float)$updated['unit_price'];
+                if ($warning !== null) {
+                    $updated['warning'] = $warning;
+                }
+            }
 
             if (function_exists('log_activity')) {
                 log_activity(
