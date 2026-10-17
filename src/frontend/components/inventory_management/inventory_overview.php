@@ -315,7 +315,7 @@ $chartDataJson = json_encode([
             <div class="overview-product-view-header"><button type="button" class="btn btn-quiet" id="overview-back">Back to stock movements</button></div>
             <div class="overview-product-table-shell">
                 <table class="overview-product-table">
-                    <thead><tr><th class="overview-select-cell"><input type="checkbox" id="overview-select-all" aria-label="Select all visible products"></th><th>Product <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>SKU / Barcode <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Current Stock <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Status</th></tr></thead>
+                    <thead><tr><th class="overview-select-cell"><input type="checkbox" id="overview-select-all" aria-label="Select all visible products"></th><th>Product <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>SKU / Barcode <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Cost Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Current Stock <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Status</th></tr></thead>
                     <tbody id="overview-product-table-body">
                     <?php foreach ($products as $product): ?>
                     <?php
@@ -335,6 +335,7 @@ $chartDataJson = json_encode([
                         <td><strong><?= htmlspecialchars($product['sku'] ?? '-') ?></strong><small><?= htmlspecialchars($product['barcode'] ?: 'Not assigned') ?></small></td>
                         <td><?= htmlspecialchars($product['category_name'] ?? 'Uncategorized') ?></td>
                         <td>₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
+                        <td>₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
                         <td><strong><?= number_format($quantity) ?></strong><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                         <td><span class="overview-stock-status overview-stock-status--<?= $statusClass ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
                     </tr>

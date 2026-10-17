@@ -751,11 +751,6 @@ foreach ($products as $product) {
                 min-width: 780px;
             }
 
-            .product-table-shell .column-category,
-            .product-table-shell .column-price {
-                display: none;
-            }
-
             .product-table-shell .product-copy strong,
             .product-table-shell .product-copy span {
                 max-width: min(30vw, 280px);
@@ -806,10 +801,6 @@ foreach ($products as $product) {
 
             .product-table-shell .data-table {
                 min-width: 680px;
-            }
-
-            .product-table-shell .column-barcode {
-                display: none;
             }
 
             .bulk-bar {
@@ -954,6 +945,16 @@ foreach ($products as $product) {
                 font-size: .76rem;
             }
         }
+        @media (max-width: 900px) {
+            .product-table-shell { overflow: hidden; }
+            .product-table-shell .data-table-scroll { overflow: auto; }
+            .product-table-shell .data-table { display: table; min-width: 980px; }
+            .product-table-shell thead { display: table-header-group; }
+            .product-table-shell tbody { display: table-row-group; }
+            .product-table-shell tr { display: table-row; }
+            .product-table-shell td,
+            .product-table-shell td.mobile-hide { display: table-cell; padding: .8rem 1rem; }
+        }
     </style>
 </head>
 
@@ -1020,9 +1021,8 @@ foreach ($products as $product) {
                                 <tr>
                                     <th class="u-col-select"><input type="checkbox" id="select-all" aria-label="Select all visible products"></th>
                                     <th class="sortable" data-sort="name">Product <i class="bi bi-arrow-down-up"></i></th>
-                                    <th class="column-barcode sortable" data-sort="barcode">SKU / Barcode <i class="bi bi-arrow-down-up"></i></th>
-                                    <th class="column-category sortable" data-sort="category">Category <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="column-price sortable" data-sort="price">Selling Price <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="column-cost sortable" data-sort="cost">Cost Price <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="sortable" data-sort="stock">Current Stock <i class="bi bi-arrow-down-up"></i></th>
                                     <th>Status</th>
                                     <th class="u-text-right">Actions</th>
@@ -1050,6 +1050,7 @@ foreach ($products as $product) {
                                         data-status="<?= htmlspecialchars($status, ENT_QUOTES) ?>"
                                         data-barcode="<?= htmlspecialchars(strtolower($barcode), ENT_QUOTES) ?>"
                                         data-price="<?= (float)($product['unit_price'] ?? 0) ?>"
+                                        data-cost="<?= (float)($product['cost_price'] ?? 0) ?>"
                                         data-expiring="<?= $expiring ? '1' : '0' ?>">
                                         <td><input type="checkbox" class="row-select" value="<?= (int)$product['product_id'] ?>" aria-label="Select <?= htmlspecialchars($product['product_name']) ?>"></td>
                                         <td class="product-cell">
@@ -1060,9 +1061,8 @@ foreach ($products as $product) {
                                                 <span class="product-copy"><strong><?= htmlspecialchars($product['product_name']) ?></strong><span><?= htmlspecialchars($product['brand'] ?: 'No brand') ?><?= !empty($product['variant_label']) ? ' · ' . htmlspecialchars($product['variant_label']) : '' ?></span></span>
                                             </div>
                                         </td>
-                                        <td class="column-barcode mobile-hide"><strong><?= htmlspecialchars($product['sku'] ?? '-') ?></strong><br><small><?= $barcode !== '' ? htmlspecialchars($barcode) : '<span class="tag-warning">Not assigned</span>' ?></small></td>
-                                        <td class="column-category mobile-hide"><?= htmlspecialchars($product['category_name'] ?? 'Uncategorized') ?></td>
                                         <td class="column-price mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
+                                        <td class="column-cost mobile-hide">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
                                         <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">
@@ -1300,7 +1300,7 @@ foreach ($products as $product) {
                     <p>Choose which optional columns appear in the table.</p>
                 </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
             </header>
-            <div class="rm-modal-body"><label class="u-checkbox-row"><input type="checkbox" data-column="barcode" checked> SKU / Barcode</label><label class="u-checkbox-row"><input type="checkbox" data-column="category" checked> Category</label><label class="u-checkbox-row"><input type="checkbox" data-column="price" checked> Selling Price</label></div>
+            <div class="rm-modal-body"><label class="u-checkbox-row"><input type="checkbox" data-column="price" checked> Selling Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="cost" checked> Cost Price</label></div>
             <footer class="rm-modal-actions"><button type="button" class="btn" data-close-modal>Done</button></footer>
         </section>
     </div>
@@ -1418,6 +1418,7 @@ foreach ($products as $product) {
                     barcode: [a.dataset.barcode, b.dataset.barcode],
                     category: [a.dataset.categoryName, b.dataset.categoryName],
                     price: [Number(a.dataset.price), Number(b.dataset.price)],
+                    cost: [Number(a.dataset.cost), Number(b.dataset.cost)],
                     stock: [Number(a.dataset.stock), Number(b.dataset.stock)]
                 } [sortKey] || [a.dataset.name, b.dataset.name];
                 return (typeof values[0] === 'number' ? values[0] - values[1] : String(values[0]).localeCompare(String(values[1]))) * sortDirection;
@@ -1667,14 +1668,15 @@ foreach ($products as $product) {
             document.getElementById('generate-barcode-form').submit();
         }
         // Column preferences
-        const columnPreferences = JSON.parse(localStorage.getItem('retailmind_product_columns') || '{}');
+        // Reset legacy hidden columns once for the revised comparison table.
+        const columnPreferences = JSON.parse(localStorage.getItem('retailmind_product_columns_v2') || '{}');
         document.querySelectorAll('[data-column]').forEach(box => {
             if (columnPreferences[box.dataset.column] === false) box.checked = false;
 
             function apply() {
                 document.querySelectorAll(`.column-${box.dataset.column}`).forEach(cell => cell.hidden = !box.checked);
                 columnPreferences[box.dataset.column] = box.checked;
-                localStorage.setItem('retailmind_product_columns', JSON.stringify(columnPreferences));
+                localStorage.setItem('retailmind_product_columns_v2', JSON.stringify(columnPreferences));
             }
             box.addEventListener('change', apply);
             apply();
@@ -1724,11 +1726,11 @@ foreach ($products as $product) {
             return `"${String(value ?? '').replace(/"/g, '""')}"`;
         }
         document.getElementById('export-products').addEventListener('click', () => {
-            const header = ['Product', 'SKU', 'Barcode', 'Brand', 'Category', 'Selling Price', 'Current Stock', 'Status'];
+            const header = ['Product', 'SKU', 'Barcode', 'Brand', 'Category', 'Selling Price', 'Cost Price', 'Current Stock', 'Status'];
             const lines = [header.map(csvCell).join(',')];
             filteredRows.forEach(row => {
                 const product = productsById[Number(row.dataset.productId)];
-                lines.push([product.product_name, product.sku, product.barcode, product.brand, product.category_name, product.unit_price, product.quantity_on_hand, product.status].map(csvCell).join(','));
+                lines.push([product.product_name, product.sku, product.barcode, product.brand, product.category_name, product.unit_price, product.cost_price, product.quantity_on_hand, product.status].map(csvCell).join(','));
             });
             const blob = new Blob([lines.join('\n')], {
                 type: 'text/csv;charset=utf-8'
