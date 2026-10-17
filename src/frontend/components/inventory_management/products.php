@@ -306,6 +306,61 @@ foreach ($products as $product) {
             box-sizing: border-box;
         }
 
+        #add-product-modal .stock-mode-selector {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        #add-product-modal .stock-mode-selector label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px;
+            margin: 0;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: .875rem;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        #add-product-modal .stock-mode-selector label:has(input:checked) {
+            border-color: var(--primary);
+            background: var(--theme-surface-soft, #f8fafc);
+            color: var(--primary);
+        }
+
+        #add-product-modal .stock-mode-selector input[type="radio"] {
+            flex: 0 0 16px;
+            width: 16px;
+            height: 16px;
+            min-height: 0;
+            margin: 0;
+            padding: 0;
+            accent-color: var(--primary);
+        }
+
+        #add-product-modal .u-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 44px;
+            cursor: pointer;
+        }
+
+        #add-product-modal .u-checkbox-label input[type="checkbox"] {
+            flex: 0 0 18px;
+            width: 18px;
+            height: 18px;
+            min-height: 0;
+            margin: 0;
+            padding: 0;
+            accent-color: var(--primary);
+        }
+
         #add-product-modal .btn[hidden] {
             display: none;
         }
@@ -1124,9 +1179,9 @@ foreach ($products as $product) {
                             <div class="form-group full">
                                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.35rem;">
                                     <label for="initial-stock-quantity" style="margin-bottom:0;">Starting Stock</label>
-                                    <div style="display:inline-flex;gap:0.75rem;font-size:0.875rem;">
-                                        <label style="font-weight:normal;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;"><input type="radio" name="starting_stock_mode" value="pieces" checked> Pieces</label>
-                                        <label style="font-weight:normal;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;"><input type="radio" name="starting_stock_mode" value="packages"> Packages / boxes</label>
+                                    <div class="stock-mode-selector" role="radiogroup" aria-label="Starting stock unit">
+                                        <label><input type="radio" name="starting_stock_mode" value="pieces" checked> Pieces</label>
+                                        <label><input type="radio" name="starting_stock_mode" value="packages"> Packages / boxes</label>
                                     </div>
                                 </div>
                                 <div id="stock-pieces-wrapper">

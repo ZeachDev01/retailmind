@@ -77,6 +77,8 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
     <title><?= htmlspecialchars($pageTitle) ?> - RetailMind</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/replenishment.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/replenishment.css')) ?>">
+    <script src="<?= htmlspecialchars(app_url('assets/js/jspdf.umd.min.js')) ?>" defer></script>
+    <script src="<?= htmlspecialchars(app_url('assets/js/replenishment-pdf.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/replenishment-pdf.js')) ?>" defer></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/replenishment.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/replenishment.js')) ?>" defer></script>
 </head>
 <body class="replenishment-page">
@@ -89,7 +91,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 <p class="page-subtitle">Know what needs buying. Receive it when it arrives.</p>
             </div>
             <?php if ($queue): ?>
-                <button class="btn btn-secondary queue-print no-print" type="button" onclick="window.print()" aria-label="Print all recommendations"><i class="bi bi-printer" aria-hidden="true"></i> Print</button>
+                <button class="btn btn-secondary queue-print no-print" id="queue-download-pdf" type="button" aria-label="Download all recommendations as PDF"><i class="bi bi-download" aria-hidden="true"></i> Download PDF</button>
             <?php endif; ?>
         </div>
 
