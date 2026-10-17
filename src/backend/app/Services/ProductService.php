@@ -76,11 +76,13 @@ class ProductService
         $caseBarcode = trim((string)($data['case_barcode'] ?? ''));
         $parentProductId = (int)($data['parent_product_id'] ?? 0);
         $variantLabel = trim((string)($data['variant_label'] ?? ''));
-        $expirationDate = (($data['expiration_date'] ?? '') !== '') ? $data['expiration_date'] : null;
+        $rawExpiration = $data['expiration_date'] ?? null;
+        $expirationDate = validate_calendar_date($rawExpiration);
         $batchNumber = trim((string)($data['batch_number'] ?? ''));
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
         $initialStock = max(0, (int)($data['initial_stock_quantity'] ?? 0));
+        $productExpirationDate = ($initialStock > 0) ? $expirationDate : null;
         $branchId = function_exists('store_scope_id')
             ? store_scope_id($this->pdo)
             : (new App\Store\StoreScope($this->pdo))->id();
@@ -157,7 +159,7 @@ class ProductService
                 $unitsPerPackage,
                 $baseUnit,
                 $receivingUnit,
-                $expirationDate,
+                $productExpirationDate,
                 $productImage !== '' ? $productImage : null,
                 $status,
                 $userId,
@@ -228,7 +230,8 @@ class ProductService
         $baseUnit = trim((string)($data['base_unit'] ?? 'piece')) ?: 'piece';
         $receivingUnit = trim((string)($data['receiving_unit'] ?? 'package')) ?: 'package';
         $caseBarcode = trim((string)($data['case_barcode'] ?? ''));
-        $expirationDate = (($data['expiration_date'] ?? '') !== '') ? $data['expiration_date'] : null;
+        $rawExpiration = $data['expiration_date'] ?? null;
+        $expirationDate = $this->validateCalendarDate($rawExpiration);
         $batchNumber = trim((string)($data['batch_number'] ?? ''));
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';

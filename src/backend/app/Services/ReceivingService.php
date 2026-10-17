@@ -5,6 +5,7 @@ require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/../../includes/functions.php';
 
 class ReceivingService
 {
@@ -118,13 +119,7 @@ class ReceivingService
         $supplier = $this->text($data['supplier'] ?? '', 'Shopping store', 150);
         $invoiceNumber = $this->text($data['invoice_number'] ?? '', 'Receipt reference', 100);
         $batchNumber = $this->text($data['batch_number'] ?? '', 'Batch number', 100);
-        $expirationDate = $this->text($data['expiration_date'] ?? '', 'Expiration date', 10);
-        if ($expirationDate !== '') {
-            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $expirationDate);
-            if (!$date || $date->format('Y-m-d') !== $expirationDate || $expirationDate < '1000-01-01') {
-                throw new RuntimeException('Enter a valid expiration date.');
-            }
-        }
+        $expirationDate = validate_calendar_date($data['expiration_date'] ?? null);
         $discrepancyType = $data['discrepancy_type'] ?? 'none';
         $discrepancyQty = $this->wholeNumber($data['discrepancy_qty'] ?? 0, 'Discrepancy quantity');
         $discrepancyNotes = $this->text($data['discrepancy_notes'] ?? '', 'Discrepancy details', 65535);
@@ -211,7 +206,7 @@ class ReceivingService
             $costPrice, $totalCost, $userId,
             $supplier !== '' ? $supplier : null,
             $invoiceNumber !== '' ? $invoiceNumber : null, $batchNumber !== '' ? $batchNumber : null,
-            $expirationDate !== '' ? $expirationDate : null, $discrepancyType, $discrepancyQty,
+            $expirationDate, $discrepancyType, $discrepancyQty,
             $discrepancyNotes !== '' ? $discrepancyNotes : null, $notes,
         ]);
 
@@ -227,7 +222,7 @@ class ReceivingService
                 $batchNumber !== '' ? $batchNumber : null,
                 $acceptedQty,
                 $acceptedQty,
-                $expirationDate !== '' ? $expirationDate : null,
+                $expirationDate,
                 $supplier !== '' ? $supplier : null,
             ]);
 
@@ -242,10 +237,6 @@ class ReceivingService
             if ($costPrice !== null) {
                 $productUpdateParts[] = 'cost_price = ?';
                 $productUpdateParams[] = $costPrice;
-            }
-            if ($expirationDate !== '') {
-                $productUpdateParts[] = 'expiration_date = ?';
-                $productUpdateParams[] = $expirationDate;
             }
             $productUpdateParams[] = $productId;
             $this->pdo->prepare('UPDATE products SET ' . implode(', ', $productUpdateParts) . ' WHERE product_id = ?')
@@ -438,5 +429,4 @@ class ReceivingService
 
         return (new App\Store\StoreScope($this->pdo))->productScope('p');
     }
-
 }

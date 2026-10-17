@@ -1338,7 +1338,7 @@ foreach ($products as $product) {
                             <div class="form-group"><label>Safety Stock</label><input type="number" min="0" name="safety_stock" value="0"></div>
                             <div class="form-group"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
                             <div class="form-group"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>
-                            <div class="form-group full"><label>Expiration Date</label><input type="date" name="expiration_date"></div>
+                            <div class="form-group full" id="starting-stock-expiration-group" hidden><label for="starting-stock-expiration">Starting Stock Expiration</label><input type="date" id="starting-stock-expiration" name="expiration_date"></div>
                         </div>
                     </section>
 
@@ -2466,10 +2466,23 @@ foreach ($products as $product) {
         const stockPiecesWrapper = document.getElementById('stock-pieces-wrapper');
         const stockPackagesWrapper = document.getElementById('stock-packages-wrapper');
         const initialStockInput = document.getElementById('initial-stock-quantity');
+        const startingStockExpGroup = document.getElementById('starting-stock-expiration-group');
+        const startingStockExpInput = document.getElementById('starting-stock-expiration');
         const startingPackagesCount = document.getElementById('starting-packages-count');
         const startingLooseCount = document.getElementById('starting-loose-count');
         const unitsPerPkgInput = document.getElementById('units-per-package');
         const stockCalcPreview = document.getElementById('stock-package-calc-preview');
+
+        function updateStartingStockExpirationVisibility() {
+            const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
+            if (startingStockExpGroup) {
+                startingStockExpGroup.hidden = currentTotal <= 0;
+            }
+            if (currentTotal <= 0 && startingStockExpInput) {
+                startingStockExpInput.value = '';
+            }
+        }
+        updateStartingStockExpirationVisibility();
 
         function updatePackageStockCalc() {
             const pkgs = Math.max(0, parseInt(startingPackagesCount?.value, 10) || 0);
@@ -2479,6 +2492,7 @@ foreach ($products as $product) {
             if (initialStockInput) {
                 initialStockInput.value = total;
             }
+            updateStartingStockExpirationVisibility();
             if (stockCalcPreview) {
                 const base = addProductForm?.elements['base_unit']?.value?.trim() || 'piece';
                 const rec = addProductForm?.elements['receiving_unit']?.value?.trim() || 'package';
@@ -2498,12 +2512,16 @@ foreach ($products as $product) {
                     startingLooseCount.value = currentTotal % units;
                 }
                 updatePackageStockCalc();
+            } else {
+                updateStartingStockExpirationVisibility();
             }
         }
 
         addProductForm?.querySelectorAll('input[name="starting_stock_mode"]').forEach(radio => {
             radio.addEventListener('change', () => setStartingStockMode(radio.value));
         });
+        initialStockInput?.addEventListener('input', updateStartingStockExpirationVisibility);
+        initialStockInput?.addEventListener('change', updateStartingStockExpirationVisibility);
         startingPackagesCount?.addEventListener('input', updatePackageStockCalc);
         startingLooseCount?.addEventListener('input', updatePackageStockCalc);
         unitsPerPkgInput?.addEventListener('input', () => {
@@ -2525,6 +2543,10 @@ foreach ($products as $product) {
                 ['Reorder / Safety', `${data.get('reorder_level')} / ${data.get('safety_stock')}`],
                 ['Supplier', data.get('preferred_supplier') || '—']
             ];
+            const initialQty = parseInt(data.get('initial_stock_quantity'), 10) || 0;
+            if (initialQty > 0 && data.get('expiration_date')) {
+                items.push(['Starting Stock Expiration', data.get('expiration_date')]);
+            }
             document.getElementById('product-review').innerHTML = items.map(([label, value]) => `<div class="detail-item"><span>${label}</span><strong>${String(value).replace(/[<>]/g,'')}</strong></div>`).join('');
         }
 
