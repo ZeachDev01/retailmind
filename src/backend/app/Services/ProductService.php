@@ -728,6 +728,26 @@ class ProductService
             $status = $existing['status'] ?? 'active';
         }
 
+        $hasUnitsPerPackage = array_key_exists('units_per_package', $data);
+        $unitsPerPackage = $hasUnitsPerPackage
+            ? $this->validateStockSetting($data['units_per_package'], 'Units per package', 1)
+            : (int)$existing['units_per_package'];
+
+        $hasMinOrderQty = array_key_exists('minimum_order_quantity', $data);
+        $minimumOrderQuantity = $hasMinOrderQty
+            ? $this->validateStockSetting($data['minimum_order_quantity'], 'Minimum order quantity', 1)
+            : (int)$existing['minimum_order_quantity'];
+
+        $hasReorderLevel = array_key_exists('reorder_level', $data);
+        $reorderLevel = $hasReorderLevel
+            ? $this->validateStockSetting($data['reorder_level'], 'Reorder level', 0)
+            : (int)$existing['reorder_level'];
+
+        $hasSafetyStock = array_key_exists('safety_stock', $data);
+        $safetyStock = $hasSafetyStock
+            ? $this->validateStockSetting($data['safety_stock'], 'Safety stock', 0)
+            : (int)$existing['safety_stock'];
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             StoreWriteGate::begin($this->pdo);
@@ -741,7 +761,11 @@ class ProductService
                      category_id = ?,
                      product_image = ?,
                      unit_price = ?,
-                     status = ?
+                     status = ?,
+                     units_per_package = ?,
+                     minimum_order_quantity = ?,
+                     reorder_level = ?,
+                     safety_stock = ?
                  WHERE product_id = ?"
             );
             $updateStmt->execute([
@@ -752,6 +776,10 @@ class ProductService
                 $productImage,
                 $sellingPrice,
                 $status,
+                $unitsPerPackage,
+                $minimumOrderQuantity,
+                $reorderLevel,
+                $safetyStock,
                 $productId,
             ]);
 
@@ -767,6 +795,10 @@ class ProductService
             if ($updated) {
                 $updated['unit_price'] = (float)$updated['unit_price'];
                 $updated['selling_price'] = (float)$updated['unit_price'];
+                $updated['units_per_package'] = (int)$updated['units_per_package'];
+                $updated['minimum_order_quantity'] = (int)$updated['minimum_order_quantity'];
+                $updated['reorder_level'] = (int)$updated['reorder_level'];
+                $updated['safety_stock'] = (int)$updated['safety_stock'];
                 if ($warning !== null) {
                     $updated['warning'] = $warning;
                 }
@@ -797,6 +829,36 @@ class ProductService
         }
     }
 
+    private function validateStockSetting(mixed $value, string $label, int $min): int
+    {
+        if (is_int($value)) {
+            $int = $value;
+        } elseif (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '' || !preg_match('/^-?\d+$/D', $trimmed)) {
+                throw new RuntimeException("{$label} must be a valid whole number.");
+            }
+            if (strlen(ltrim($trimmed, '-')) > 10 || (float)$trimmed > 2147483647 || (float)$trimmed < -2147483648) {
+                throw new RuntimeException("{$label} is out of range.");
+            }
+            $int = (int)$trimmed;
+        } else {
+            throw new RuntimeException("{$label} must be a valid whole number.");
+        }
+
+        if ($int > 2147483647 || $int < -2147483648) {
+            throw new RuntimeException("{$label} is out of range.");
+        }
+
+        if ($int < $min) {
+            if ($min === 1) {
+                throw new RuntimeException("{$label} must be a whole number of at least 1.");
+            }
+            throw new RuntimeException("{$label} must be a whole number of 0 or more.");
+        }
+
+        return $int;
+    }
 
     private function storeProductScope(): array
     {

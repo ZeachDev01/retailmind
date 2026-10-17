@@ -112,6 +112,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($_POST['status'])) {
                 $updateData['status'] = $_POST['status'];
             }
+            if (isset($_POST['units_per_package'])) {
+                $updateData['units_per_package'] = $_POST['units_per_package'];
+            }
+            if (isset($_POST['minimum_order_quantity'])) {
+                $updateData['minimum_order_quantity'] = $_POST['minimum_order_quantity'];
+            }
+            if (isset($_POST['reorder_level'])) {
+                $updateData['reorder_level'] = $_POST['reorder_level'];
+            }
+            if (isset($_POST['safety_stock'])) {
+                $updateData['safety_stock'] = $_POST['safety_stock'];
+            }
             $uploadedPhoto = handle_product_photo_upload($_FILES['product_image'] ?? null);
             if ($uploadedPhoto !== null) {
                 $updateData['product_image'] = $uploadedPhoto;
@@ -1724,6 +1736,33 @@ foreach ($products as $product) {
         let isEditingProduct = false;
         let isDrawerDirty = false;
 
+        function renderProductDrawerQuantity(product) {
+            const quantity = Number(product.quantity_on_hand || 0);
+            const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
+            const stockLabel = quantity <= 0 ? 'Out of stock' : quantity <= threshold ? 'Low stock' : 'Available';
+            const quantityActions = canDirectAdjust ? `<div class="product-quantity-actions"><button type="button" class="btn btn-icon" id="drawer-adjust-stock"><i class="bi bi-sliders" aria-hidden="true"></i>Adjust Stock</button></div>` : '';
+            const quantityPanel = document.getElementById('product-panel-quantity');
+            if (quantityPanel) {
+                quantityPanel.innerHTML = `<div class="detail-grid">
+        <div class="detail-item"><span>Current Stock</span><strong>${quantity.toLocaleString()} — ${stockLabel}</strong></div><div class="detail-item"><span>Reorder / Safety</span><strong>${Number(product.reorder_level || 0)} / ${Number(product.safety_stock || 0)}</strong></div>
+        <div class="detail-item"><span>MOQ / Units per Case</span><strong>${Number(product.minimum_order_quantity || 1)} / ${Number(product.units_per_package || 1)}</strong></div><div class="detail-item"><span>Units</span><strong>${escapeHtml(safe(product.base_unit))} / ${escapeHtml(safe(product.receiving_unit))}</strong></div>
+        <div class="detail-item"><span>Lead Time</span><strong>${Number(product.supplier_lead_time_days || 0)} day(s)</strong></div><div class="detail-item"><span>Preferred Supplier</span><strong>${escapeHtml(safe(product.preferred_supplier || product.supplier))}</strong></div>
+    </div>${quantityActions}`;
+                const drawerAdjustButton = document.getElementById('drawer-adjust-stock');
+                if (drawerAdjustButton) drawerAdjustButton.addEventListener('click', () => {
+                    const productSelect = document.getElementById('adjust-product-select');
+                    if (productSelect) productSelect.value = String(product.product_id);
+                    RetailMindUI.closeOverlay(document.getElementById('product-drawer'));
+                    openModal('stock-adjust-modal');
+                    document.querySelector('#stock-adjust-modal [name="qty_change"]')?.focus();
+                });
+            }
+            const actionsPanel = document.getElementById('product-panel-actions');
+            if (actionsPanel) {
+                actionsPanel.innerHTML = `<div class="attention-list">${quantity <= threshold ? '<div class="attention-item"><span class="attention-icon"><i class="bi bi-box-arrow-in-down"></i></span><span class="attention-copy"><strong>Replenishment needed</strong><span>Stock is at or below the planning threshold.</span></span><a class="btn btn-small" href="../report/stock_receiving.php">Receive</a></div>' : '<div class="attention-item"><span class="attention-icon u-stock-ok-icon"><i class="bi bi-check2"></i></span><span class="attention-copy"><strong>Stock level is healthy</strong><span>No immediate replenishment action is required.</span></span></div>'}</div>`;
+            }
+        }
+
         function renderProductDrawerReadOnly(product) {
             isEditingProduct = false;
             isDrawerDirty = false;
@@ -1738,6 +1777,7 @@ foreach ($products as $product) {
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
         <div class="detail-item"><span>Expiration</span><strong>${escapeHtml(safe(product.expiration_date))}</strong></div><div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
     </div>`;
+            renderProductDrawerQuantity(product);
         }
 
         function enterProductEditMode() {
@@ -1803,6 +1843,28 @@ foreach ($products as $product) {
                                 <option value="inactive" ${product.status === 'inactive' ? 'selected' : ''}>Inactive</option>
                             </select>
                         </label>
+
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;">
+                            <label class="form-field" for="edit-units-per-package">
+                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Units per Package/Case <span style="color:#dc2626;">*</span> <small style="font-weight:normal;color:#6b7280;">(${escapeHtml(safe(product.base_unit, 'unit'))}s per ${escapeHtml(safe(product.receiving_unit, 'package'))})</small></span>
+                                <input type="number" step="1" min="1" max="2147483647" name="units_per_package" id="edit-units-per-package" required value="${Number(product.units_per_package || 1)}" class="form-input" style="width:100%;">
+                            </label>
+                            <label class="form-field" for="edit-moq">
+                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Minimum Order Quantity (MOQ) <span style="color:#dc2626;">*</span> <small style="font-weight:normal;color:#6b7280;">(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
+                                <input type="number" step="1" min="1" max="2147483647" name="minimum_order_quantity" id="edit-moq" required value="${Number(product.minimum_order_quantity || 1)}" class="form-input" style="width:100%;">
+                            </label>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;">
+                            <label class="form-field" for="edit-reorder-level">
+                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Reorder Level <span style="color:#dc2626;">*</span> <small style="font-weight:normal;color:#6b7280;">(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
+                                <input type="number" step="1" min="0" max="2147483647" name="reorder_level" id="edit-reorder-level" required value="${Number(product.reorder_level || 0)}" class="form-input" style="width:100%;">
+                            </label>
+                            <label class="form-field" for="edit-safety-stock">
+                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Safety Stock <span style="color:#dc2626;">*</span> <small style="font-weight:normal;color:#6b7280;">(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
+                                <input type="number" step="1" min="0" max="2147483647" name="safety_stock" id="edit-safety-stock" required value="${Number(product.safety_stock || 0)}" class="form-input" style="width:100%;">
+                            </label>
+                        </div>
 
                         <label class="form-field">
                             <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Brand</span>
@@ -1930,6 +1992,42 @@ foreach ($products as $product) {
                 return;
             }
 
+            const packInput = document.getElementById('edit-units-per-package');
+            const packVal = packInput ? packInput.value.trim() : '';
+            if (!packInput || !/^\d+$/.test(packVal) || Number(packVal) < 1 || Number(packVal) > 2147483647) {
+                errorBox.textContent = 'Units per package must be a whole number of at least 1.';
+                errorBox.hidden = false;
+                packInput?.focus();
+                return;
+            }
+
+            const moqInput = document.getElementById('edit-moq');
+            const moqVal = moqInput ? moqInput.value.trim() : '';
+            if (!moqInput || !/^\d+$/.test(moqVal) || Number(moqVal) < 1 || Number(moqVal) > 2147483647) {
+                errorBox.textContent = 'Minimum order quantity must be a whole number of at least 1.';
+                errorBox.hidden = false;
+                moqInput?.focus();
+                return;
+            }
+
+            const reorderInput = document.getElementById('edit-reorder-level');
+            const reorderVal = reorderInput ? reorderInput.value.trim() : '';
+            if (!reorderInput || !/^\d+$/.test(reorderVal) || Number(reorderVal) < 0 || Number(reorderVal) > 2147483647) {
+                errorBox.textContent = 'Reorder level must be a whole number of 0 or more.';
+                errorBox.hidden = false;
+                reorderInput?.focus();
+                return;
+            }
+
+            const safetyInput = document.getElementById('edit-safety-stock');
+            const safetyVal = safetyInput ? safetyInput.value.trim() : '';
+            if (!safetyInput || !/^\d+$/.test(safetyVal) || Number(safetyVal) < 0 || Number(safetyVal) > 2147483647) {
+                errorBox.textContent = 'Safety stock must be a whole number of 0 or more.';
+                errorBox.hidden = false;
+                safetyInput?.focus();
+                return;
+            }
+
             const imageInput = document.getElementById('edit-product-image');
             if (imageInput && imageInput.files && imageInput.files[0]) {
                 const file = imageInput.files[0];
@@ -1986,12 +2084,19 @@ foreach ($products as $product) {
                         if (priceCell) {
                             priceCell.textContent = formatMoney(product.unit_price);
                         }
+                        const stockCell = row.querySelector('.stock-cell');
+                        if (stockCell) {
+                            stockCell.innerHTML = `<span class="stock-value">${Number(product.quantity_on_hand || 0).toLocaleString()}</span><br><small>Reorder at ${Number(product.reorder_level || 0).toLocaleString()}</small>`;
+                        }
                         const statusCell = row.querySelector('.status-cell');
                         if (statusCell) {
                             let badgeClass = 'inactive';
                             let badgeText = 'Inactive';
                             if (product.status === 'active') {
-                                const stockState = row.dataset.stockState || 'available';
+                                const quantity = Number(product.quantity_on_hand || 0);
+                                const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
+                                const stockState = quantity <= 0 ? 'out' : (quantity <= threshold ? 'low' : 'available');
+                                row.dataset.stockState = stockState;
                                 const isExpiring = row.dataset.expiring === '1';
                                 if (stockState === 'out') {
                                     badgeClass = 'out';
@@ -2038,29 +2143,11 @@ foreach ($products as $product) {
             currentDrawerProductId = Number(id);
             renderProductDrawerReadOnly(product);
 
-            const quantity = Number(product.quantity_on_hand || 0);
-            const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
-            const stockLabel = quantity <= 0 ? 'Out of stock' : quantity <= threshold ? 'Low stock' : 'Available';
-            const quantityActions = canDirectAdjust ? `<div class="product-quantity-actions"><button type="button" class="btn btn-icon" id="drawer-adjust-stock"><i class="bi bi-sliders" aria-hidden="true"></i>Adjust Stock</button></div>` : '';
-            document.getElementById('product-panel-quantity').innerHTML = `<div class="detail-grid">
-        <div class="detail-item"><span>Current Stock</span><strong>${quantity.toLocaleString()} — ${stockLabel}</strong></div><div class="detail-item"><span>Reorder / Safety</span><strong>${Number(product.reorder_level || 0)} / ${Number(product.safety_stock || 0)}</strong></div>
-        <div class="detail-item"><span>MOQ / Units per Case</span><strong>${Number(product.minimum_order_quantity || 1)} / ${Number(product.units_per_package || 1)}</strong></div><div class="detail-item"><span>Units</span><strong>${escapeHtml(safe(product.base_unit))} / ${escapeHtml(safe(product.receiving_unit))}</strong></div>
-        <div class="detail-item"><span>Lead Time</span><strong>${Number(product.supplier_lead_time_days || 0)} day(s)</strong></div><div class="detail-item"><span>Preferred Supplier</span><strong>${escapeHtml(safe(product.preferred_supplier || product.supplier))}</strong></div>
-    </div>${quantityActions}`;
-            document.getElementById('product-panel-actions').innerHTML = `<div class="attention-list">${quantity <= threshold ? '<div class="attention-item"><span class="attention-icon"><i class="bi bi-box-arrow-in-down"></i></span><span class="attention-copy"><strong>Replenishment needed</strong><span>Stock is at or below the planning threshold.</span></span><a class="btn btn-small" href="../report/stock_receiving.php">Receive</a></div>' : '<div class="attention-item"><span class="attention-icon u-stock-ok-icon"><i class="bi bi-check2"></i></span><span class="attention-copy"><strong>Stock level is healthy</strong><span>No immediate replenishment action is required.</span></span></div>'}</div>`;
             const footer = document.getElementById('product-drawer-footer');
             footer.innerHTML = product.barcode ? `<a class="btn btn-warning" target="_blank" href="print_barcodes.php?product_id=${Number(product.product_id)}&quantity=1"><i class="bi bi-printer"></i> Print Barcode</a>` : `<button type="button" class="btn btn-success drawer-generate" data-product-id="${Number(product.product_id)}"><i class="bi bi-upc"></i> Generate Barcode</button>`;
             footer.innerHTML += `<a class="btn btn-quiet" href="../report/stock_receiving.php"><i class="bi bi-box-arrow-in-down"></i> Stock Receiving</a>`;
             const generate = footer.querySelector('.drawer-generate');
             if (generate) generate.addEventListener('click', () => generateBarcode(generate.dataset.productId));
-            const drawerAdjustButton = document.getElementById('drawer-adjust-stock');
-            if (drawerAdjustButton) drawerAdjustButton.addEventListener('click', () => {
-                const productSelect = document.getElementById('adjust-product-select');
-                if (productSelect) productSelect.value = String(product.product_id);
-                RetailMindUI.closeOverlay(document.getElementById('product-drawer'));
-                openModal('stock-adjust-modal');
-                document.querySelector('#stock-adjust-modal [name="qty_change"]')?.focus();
-            });
             setProductDrawerTab('info');
             RetailMindUI.openOverlay(document.getElementById('product-drawer'));
         }
