@@ -4,10 +4,15 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      FTP_SERVER: ftpupload.net
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
     steps:
       - name: Checkout repository
@@ -40,6 +45,9 @@ jobs:
           test -n "$DB_NAME" || { echo 'Missing DB_NAME secret'; exit 1; }
           test -n "$DB_USER" || { echo 'Missing DB_USER secret'; exit 1; }
           test -n "$DB_PASSWORD" || { echo 'Missing DB_PASSWORD secret'; exit 1; }
+          test -n "$FTP_USERNAME" || { echo 'Missing FTP_USERNAME secret'; exit 1; }
+          test -n "$FTP_PASSWORD" || { echo 'Missing FTP_PASSWORD secret'; exit 1; }
+          test "$FTP_USERNAME" = "$DB_USER" || { echo 'FTP_USERNAME and DB_USER must belong to the same InfinityFree account'; exit 1; }
           umask 077
           printf '%s\n' \
             'APP_NAME=RetailMind' \
@@ -59,9 +67,9 @@ jobs:
       - name: Deploy to InfinityFree
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
+          server: ${{ env.FTP_SERVER }}
+          username: ${{ env.FTP_USERNAME }}
+          password: ${{ env.FTP_PASSWORD }}
           protocol: ftps
           port: 21
           security: strict
@@ -81,10 +89,6 @@ jobs:
 
       # The sync cache can skip .env even if it was removed from the server.
       - name: Upload production environment
-        env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           curl --fail --silent --show-error --ssl-reqd \
             --user "$FTP_USERNAME:$FTP_PASSWORD" \
