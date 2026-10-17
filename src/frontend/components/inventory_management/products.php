@@ -109,6 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($_POST['selling_price'])) {
                 $updateData['selling_price'] = $_POST['selling_price'];
             }
+            if (isset($_POST['status'])) {
+                $updateData['status'] = $_POST['status'];
+            }
             $uploadedPhoto = handle_product_photo_upload($_FILES['product_image'] ?? null);
             if ($uploadedPhoto !== null) {
                 $updateData['product_image'] = $uploadedPhoto;
@@ -1793,6 +1796,14 @@ foreach ($products as $product) {
                         </div>
                         <div id="selling-price-warning" role="alert" style="display:none;color:#b45309;background:#fef3c7;border:1px solid #fde68a;padding:0.625rem 0.875rem;border-radius:6px;font-size:0.875rem;margin-top:-0.25rem;"></div>
 
+                        <label class="form-field" for="edit-status">
+                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Status <span style="color:#dc2626;">*</span></span>
+                            <select name="status" id="edit-status" class="form-input" style="width:100%;">
+                                <option value="active" ${product.status === 'active' ? 'selected' : ''}>Active</option>
+                                <option value="inactive" ${product.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                            </select>
+                        </label>
+
                         <label class="form-field">
                             <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Brand</span>
                             <input type="text" name="brand" id="edit-brand" list="brand-suggestions-list" value="${escapeHtml(product.brand || '')}" class="form-input" style="width:100%;">
@@ -1910,6 +1921,15 @@ foreach ($products as $product) {
                 return;
             }
 
+            const statusInput = document.getElementById('edit-status');
+            const statusVal = statusInput ? statusInput.value.trim() : '';
+            if (statusVal !== 'active' && statusVal !== 'inactive') {
+                errorBox.textContent = "Status must be strictly 'active' or 'inactive'.";
+                errorBox.hidden = false;
+                statusInput?.focus();
+                return;
+            }
+
             const imageInput = document.getElementById('edit-product-image');
             if (imageInput && imageInput.files && imageInput.files[0]) {
                 const file = imageInput.files[0];
@@ -1946,6 +1966,7 @@ foreach ($products as $product) {
                         row.dataset.category = String(product.category_id || 0);
                         row.dataset.categoryName = (product.category_name || '').toLowerCase();
                         row.dataset.price = String(product.unit_price || 0);
+                        row.dataset.status = product.status;
                         row.dataset.search = [product.product_name, product.variant_label || '', product.sku || '', product.barcode || '', product.brand || ''].join(' ').toLowerCase();
                         const copy = row.querySelector('.product-copy');
                         if (copy) {
@@ -1964,6 +1985,29 @@ foreach ($products as $product) {
                         const priceCell = row.querySelector('.column-price');
                         if (priceCell) {
                             priceCell.textContent = formatMoney(product.unit_price);
+                        }
+                        const statusCell = row.querySelector('.status-cell');
+                        if (statusCell) {
+                            let badgeClass = 'inactive';
+                            let badgeText = 'Inactive';
+                            if (product.status === 'active') {
+                                const stockState = row.dataset.stockState || 'available';
+                                const isExpiring = row.dataset.expiring === '1';
+                                if (stockState === 'out') {
+                                    badgeClass = 'out';
+                                    badgeText = 'Out of stock';
+                                } else if (stockState === 'low') {
+                                    badgeClass = 'low';
+                                    badgeText = 'Low stock';
+                                } else if (isExpiring) {
+                                    badgeClass = 'expiring';
+                                    badgeText = 'Expiring soon';
+                                } else {
+                                    badgeClass = 'good';
+                                    badgeText = 'Available';
+                                }
+                            }
+                            statusCell.innerHTML = `<span class="status-badge ${badgeClass}">${escapeHtml(badgeText)}</span>`;
                         }
                     }
                     isDrawerDirty = false;

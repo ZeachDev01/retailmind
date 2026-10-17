@@ -156,7 +156,6 @@ try {
         // Attempt to change read-only fields (MUST BE IGNORED)
         'unit_price' => 999.0,
         'cost_price' => 888.0,
-        'status' => 'inactive',
         'sku' => 'HACKED-SKU',
         'barcode' => 'HACKED-BAR',
         'case_barcode' => 'HACKED-CASE',

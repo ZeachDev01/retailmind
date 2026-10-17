@@ -717,6 +717,17 @@ class ProductService
             $sellingPrice = (float)$existing['unit_price'];
         }
 
+        $hasStatus = array_key_exists('status', $data);
+        if ($hasStatus) {
+            $rawStatus = is_string($data['status']) ? trim($data['status']) : $data['status'];
+            if ($rawStatus !== 'active' && $rawStatus !== 'inactive') {
+                throw new RuntimeException("Status must be strictly 'active' or 'inactive'.");
+            }
+            $status = $rawStatus;
+        } else {
+            $status = $existing['status'] ?? 'active';
+        }
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             StoreWriteGate::begin($this->pdo);
@@ -729,7 +740,8 @@ class ProductService
                      brand = ?,
                      category_id = ?,
                      product_image = ?,
-                     unit_price = ?
+                     unit_price = ?,
+                     status = ?
                  WHERE product_id = ?"
             );
             $updateStmt->execute([
@@ -739,6 +751,7 @@ class ProductService
                 $categoryId,
                 $productImage,
                 $sellingPrice,
+                $status,
                 $productId,
             ]);
 
