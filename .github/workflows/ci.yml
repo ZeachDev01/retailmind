@@ -1,4 +1,4 @@
-name: Deploy to Hostinger
+name: Deploy to InfinityFree
 
 on:
   push:
@@ -56,7 +56,7 @@ jobs:
             "DB_PASSWORD=$DB_PASSWORD" \
             'DB_CHARSET=utf8mb4' > .env
 
-      - name: Deploy to Hostinger
+      - name: Deploy to InfinityFree
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -66,7 +66,7 @@ jobs:
           port: 21
           security: strict
           local-dir: .release/
-          server-dir: /
+          server-dir: /htdocs/
           # Preserve hosted data even if the old repository-wide sync tracked it.
           exclude: |
             **/.git*
@@ -88,4 +88,4 @@ jobs:
         run: |
           curl --fail --silent --show-error --ssl-reqd \
             --user "$FTP_USERNAME:$FTP_PASSWORD" \
-            --upload-file .env "ftp://$FTP_SERVER/.env"
+            --upload-file .env "ftp://$FTP_SERVER/htdocs/.env"

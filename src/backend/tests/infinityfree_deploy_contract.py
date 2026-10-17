@@ -4,6 +4,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[3]
 workflow = (root / '.github/workflows/ci.yml').read_text()
+assert workflow.startswith('name: Deploy to InfinityFree\n')
 assert re.search(r'on:\s+push:\s+branches:\s+- main\b', workflow), 'Only main pushes deploy'
 deploy = workflow.split('\n  deploy:\n', 1)[1]
 assert 'composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader' in deploy
@@ -22,9 +23,9 @@ assert "'SESSION_SECURE_COOKIE=true'" in deploy
 for secret in ['FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD']:
     assert deploy.count('${{ secrets.' + secret + ' }}') == 2, f'{secret} must select the same account for sync and environment upload'
 assert 'protocol: ftps' in deploy and 'security: strict' in deploy
-assert re.search(r'^\s+server-dir: /\s*$', deploy, re.M), 'FTP account is rooted at public_html/shalom'
+assert re.search(r'^\s+server-dir: /htdocs/\s*$', deploy, re.M), 'Upload website files to InfinityFree htdocs'
 assert '"APP_URL=$APP_URL"' in deploy
 assert 'retailmind.infinityfreeapp.com' not in deploy
 assert '--ssl-reqd' in deploy
-assert '--upload-file .env "ftp://$FTP_SERVER/.env"' in deploy
-print('Hostinger deployment contract: passed')
+assert '--upload-file .env "ftp://$FTP_SERVER/htdocs/.env"' in deploy
+print('InfinityFree deployment contract: passed')
