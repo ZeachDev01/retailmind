@@ -22,3 +22,5 @@ A product-level expiration is simpler to display but cannot represent mixed batc
 - Audit legacy product expiration readers and missing or mismatched batches before switching the source of truth. Preserve uncertain legacy dates rather than manufacturing batch history.
 
 See [the context and agreed missing-expiration filter](../batch-expiration-context.md). The user accepted the six policy recommendations and the filter design on 2026-10-18. Acceptance records the design; application implementation has not been requested or performed in this documentation task.
+
+Implementation and test requirements, including atomic batch/total updates and physical reconciliation of existing differences, are recorded in the [specification](../specs/batch-expiration-and-stock-balance.md) and [GitHub issue #216](https://github.com/ZeachDev01/retailmind/issues/216).

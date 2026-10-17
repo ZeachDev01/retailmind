@@ -51,6 +51,8 @@ Example: an opening batch has 20 loaves expiring November 1; receiving adds 30 e
 
 ## Implementation boundaries and checks
 
+The agreed mitigation is to update affected batches, total inventory, and movement history together for every stock change, saving all or none. Receiving adds a new batch; sales deduct eligible batches by FEFO; damage and Supplier Pullouts identify the affected batches; counts record shortages or extras by batch; eligible customer returns preserve original batch lineage. Revalidate quantities under transaction locks so concurrent users cannot deduct the same units. Existing differences require a physical batch count and traceable correction, retaining unknown dates rather than guessing.
+
 Reuse the existing batch storage, receiving transaction, overview, and FEFO allocation. Assess schema/migration, fresh setup, product request validation/forms, fixtures, inventory queries, scanner/POS readers, reports, notifications, and role capabilities together. Supplier returns need a real transactional batch movement with concurrent quantity validation, not independent updates or overwritten totals.
 
 Before retiring product-level expiration reads, audit legacy products without batches and reconcile aggregate stock against batch balances. Never copy the latest product date onto historical batches as if its provenance were known. Inventory counts, approved Stock Issues, customer restocks/refunds, and supplier returns must preserve batch balances and original sale allocation where available. Existing data corrections need a separate, explicit strategy.
@@ -81,3 +83,7 @@ The user confirmed a **Missing Expiration** filter in the existing Stock Overvie
 The filter design is confirmed; it is not an implemented screen. No business-policy questions remain open for the documented scope. Legacy reconciliation and cross-workflow balance checks remain implementation work; any correction that requires choosing unknown historical quantities or dates must be raised separately rather than guessed.
 
 ADR-0013 is accepted for the confirmed decisions. Application implementation is outside this documentation task.
+
+## Implementation specification
+
+The complete agreed behavior, balance mitigation, and user-confirmed testing approach are captured in the [specification](specs/batch-expiration-and-stock-balance.md), published as [GitHub issue #216](https://github.com/ZeachDev01/retailmind/issues/216) with `ready-for-agent`.
