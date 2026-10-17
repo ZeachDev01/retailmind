@@ -7,7 +7,7 @@
 .replenishment-page .topbar { align-items: flex-start; }
 .replenishment-page .topbar h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); letter-spacing: -.025em; }
 .replenishment-page .page-subtitle { margin-top: .5rem; color: var(--muted); }
-.replenishment-page .queue-print, .replenishment-page .alert .btn { min-height: 44px; background: var(--card-bg); border: 1px solid var(--border); gap: .5rem; }
+.replenishment-page .queue-print, .replenishment-page .queue-recalculate, .replenishment-page .alert .btn { min-height: 44px; background: var(--card-bg); border: 1px solid var(--border); gap: .5rem; }
 .queue-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.15fr); gap: 1rem; margin-bottom: 1.5rem; }
 .queue-stat { display: flex; align-items: center; gap: 1.25rem; min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg); }
 .queue-summary a.queue-stat { color: var(--text); text-decoration: none; }

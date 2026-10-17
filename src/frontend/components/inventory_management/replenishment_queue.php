@@ -90,9 +90,12 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 <h1><?= htmlspecialchars($pageTitle) ?></h1>
                 <p class="page-subtitle">Know what needs buying. Receive it when it arrives.</p>
             </div>
-            <?php if ($queue): ?>
-                <button class="btn btn-secondary queue-print no-print" id="queue-download-pdf" type="button" aria-label="Download all recommendations as PDF"><i class="bi bi-download" aria-hidden="true"></i> Download PDF</button>
-            <?php endif; ?>
+            <div class="u-flex-wrap u-flex-gap-sm no-print">
+                <a class="btn btn-secondary queue-recalculate" id="queue-recalculate" href="replenishment_queue.php?recalculate=1" aria-label="Recalculate recommendations"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recalculate Recommendations</a>
+                <?php if ($queue): ?>
+                    <button class="btn btn-secondary queue-print" id="queue-download-pdf" type="button" aria-label="Download all recommendations as PDF"><i class="bi bi-download" aria-hidden="true"></i> Download PDF</button>
+                <?php endif; ?>
+            </div>
         </div>
 
             <?php if ($error): ?>

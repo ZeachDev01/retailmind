@@ -29,6 +29,10 @@ Options -Indexes
     <FilesMatch "\.(css|js|png|jpe?g|webp|svg|ico|woff2?)$">
         Header set Cache-Control "max-age=2592000, public"
     </FilesMatch>
+    <FilesMatch "^sw\.js$">
+        Header set Service-Worker-Allowed "/"
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </FilesMatch>
 </IfModule>
 
 <IfModule mod_rewrite.c>

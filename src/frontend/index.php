@@ -580,6 +580,7 @@ unset($_SESSION['_login_username']);
             }
         })();
     </script>
+    <script src="<?= htmlspecialchars(landing_app_url('assets/js/sw-register.js'), ENT_QUOTES, 'UTF-8') ?>" data-sw="<?= htmlspecialchars(landing_app_url('sw.js'), ENT_QUOTES, 'UTF-8') ?>" data-scope="<?= htmlspecialchars(landing_app_url('/'), ENT_QUOTES, 'UTF-8') ?>" defer></script>
 </body>
 
 </html>

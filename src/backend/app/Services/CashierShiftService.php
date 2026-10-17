@@ -7,6 +7,7 @@ use App\Attention\AttentionSettingsService;
 use App\Attention\SystemClock;
 use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
+use App\Dashboard\StoreOperationsDashboardWorkspace;
 use DomainException;
 use InvalidArgumentException;
 use PDO;
@@ -16,6 +17,7 @@ use Throwable;
 
 require_once __DIR__ . '/../Audit/AuditRecordCategory.php';
 require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
+require_once __DIR__ . '/../Dashboard/StoreOperationsDashboardWorkspace.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 
 /**
@@ -782,6 +784,7 @@ class CashierShiftService
                     'denomination_breakdown' => $breakdown,
                 ]
             );
+            StoreOperationsDashboardWorkspace::invalidateCache();
             return $this->calculateShift((int)$shift['shift_id']);
         });
     }

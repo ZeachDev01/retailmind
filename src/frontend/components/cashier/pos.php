@@ -19,6 +19,7 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SAL
 // Ticket #89: checkout is attributed to the workspace that is active now, so
 // the service judges the same context this page did.
 $actorRole = (string)current_role();
+header('Cache-Control: no-store');
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['recover_checkout'])) {
     header('Content-Type: application/json');
@@ -68,6 +69,135 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 $openShift = $shiftService->getOpenShift($cashierId);
 $posShiftOpen = $openShift !== null;
 $posRegisterLocked = $shiftService->isRegisterLocked($cashierId);
+
+[$catalogScope, $catalogParams] = store_product_scope('p');
+$catalogProducts = [];
+$catalogEtag = null;
+if ($posShiftOpen && !$posRegisterLocked) {
+    try {
+        $etagStmt = $pdo->prepare(
+            "SELECT COUNT(p.product_id) AS total_count,
+                    COALESCE(MAX(p.created_at), '') AS max_product_created,
+                    COALESCE(MAX(i.last_updated), '') AS max_inventory_updated,
+                    COALESCE(SUM(i.quantity_on_hand), 0) AS total_stock,
+                    COALESCE(SUM(p.unit_price), 0) AS total_price
+             FROM products p
+             LEFT JOIN inventory i ON i.product_id = p.product_id
+             WHERE p.status = 'active'{$catalogScope}"
+        );
+        $etagStmt->execute($catalogParams);
+        $meta = $etagStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $rawHash = implode(':', [
+            $meta['total_count'] ?? 0,
+            $meta['max_product_created'] ?? '',
+            $meta['max_inventory_updated'] ?? '',
+            $meta['total_stock'] ?? 0,
+            $meta['total_price'] ?? 0,
+        ]);
+        $catalogEtag = '"' . md5($rawHash) . '"';
+    } catch (Throwable) {
+        $catalogEtag = null;
+    }
+}
+
+$loadCatalogProducts = static function () use ($pdo, $catalogScope, $catalogParams): array {
+    $catalogStmt = $pdo->prepare(
+        "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.product_name, p.unit_price,
+                COALESCE(p.reorder_level, 0) AS reorder_level,
+                COALESCE(p.safety_stock, 0) AS safety_stock,
+                COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+         FROM products p
+         LEFT JOIN inventory i ON i.product_id = p.product_id
+         WHERE p.status = 'active'{$catalogScope}
+         ORDER BY p.product_id ASC"
+    );
+    $catalogStmt->execute($catalogParams);
+    return array_map(static function (array $row): array {
+        return [
+            'product_id' => (int)$row['product_id'],
+            'sku' => (string)($row['sku'] ?? ''),
+            'barcode' => (string)($row['barcode'] ?? ''),
+            'case_barcode' => (string)($row['case_barcode'] ?? ''),
+            'product_name' => (string)$row['product_name'],
+            'unit_price' => (float)$row['unit_price'],
+            'reorder_level' => (int)$row['reorder_level'],
+            'safety_stock' => (int)$row['safety_stock'],
+            'quantity_on_hand' => (int)$row['quantity_on_hand'],
+        ];
+    }, $catalogStmt->fetchAll(PDO::FETCH_ASSOC));
+};
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && in_array(($_GET['action'] ?? ''), ['catalog_preload', 'catalog_sync'], true)) {
+    if (!$posShiftOpen || $posRegisterLocked) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Shift closed or locked']);
+        exit;
+    }
+
+    $clientEtag = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? $_GET['if_none_match'] ?? $_GET['etag'] ?? '');
+    $clientEtag = trim($clientEtag, '"');
+    $serverEtag = trim((string)$catalogEtag, '"');
+
+    if ($clientEtag !== '' && $serverEtag !== '' && $clientEtag === $serverEtag) {
+        http_response_code(304);
+        header('ETag: ' . $catalogEtag);
+        header('Cache-Control: no-cache');
+        exit;
+    }
+
+    $since = trim((string)($_GET['since'] ?? ''));
+    $deltaProducts = null;
+    if ($since !== '') {
+        try {
+            $deltaStmt = $pdo->prepare(
+                "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.product_name, p.unit_price,
+                        COALESCE(p.reorder_level, 0) AS reorder_level,
+                        COALESCE(p.safety_stock, 0) AS safety_stock,
+                        COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+                 FROM products p
+                 LEFT JOIN inventory i ON i.product_id = p.product_id
+                 WHERE p.status = 'active'{$catalogScope}
+                   AND (i.last_updated > ? OR p.created_at > ?)
+                 ORDER BY p.product_id ASC"
+            );
+            $deltaParams = array_merge($catalogParams, [$since, $since]);
+            $deltaStmt->execute($deltaParams);
+            $deltaProducts = array_map(static function (array $row): array {
+                return [
+                    'product_id' => (int)$row['product_id'],
+                    'sku' => (string)($row['sku'] ?? ''),
+                    'barcode' => (string)($row['barcode'] ?? ''),
+                    'case_barcode' => (string)($row['case_barcode'] ?? ''),
+                    'product_name' => (string)$row['product_name'],
+                    'unit_price' => (float)$row['unit_price'],
+                    'reorder_level' => (int)$row['reorder_level'],
+                    'safety_stock' => (int)$row['safety_stock'],
+                    'quantity_on_hand' => (int)$row['quantity_on_hand'],
+                ];
+            }, $deltaStmt->fetchAll(PDO::FETCH_ASSOC));
+        } catch (Throwable) {
+            $deltaProducts = null;
+        }
+    }
+
+    $isDelta = $deltaProducts !== null;
+    $responseProducts = $isDelta ? $deltaProducts : $loadCatalogProducts();
+
+    header('Content-Type: application/json');
+    header('Cache-Control: no-cache');
+    if ($catalogEtag !== null) {
+        header('ETag: ' . $catalogEtag);
+    }
+    echo json_encode([
+        'success' => true,
+        'etag' => $catalogEtag,
+        'server_time' => date('Y-m-d H:i:s'),
+        'delta' => $isDelta,
+        'catalog' => $responseProducts
+    ], JSON_THROW_ON_ERROR);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_lookup') {
     csrf_verify();
@@ -166,8 +296,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     $cart = json_decode($_POST['cart'], true) ?: [];
     $payment_method = in_array($_POST['payment_method'] ?? '', ['cash', 'card', 'ewallet'], true)
         ? $_POST['payment_method'] : 'cash';
+    $attemptToken = (string)($_POST['checkout_attempt_id'] ?? $_POST['checkout_attempt'] ?? '');
     $paymentDetails = [
-        'checkout_attempt' => (string)($_POST['checkout_attempt'] ?? ''),
+        'checkout_attempt' => $attemptToken,
+        'checkout_attempt_id' => $attemptToken,
         'cash_received' => $_POST['cash_received'] ?? 0,
         'payment_reference' => $_POST['payment_reference'] ?? '',
         'payment_method' => $payment_method,
@@ -200,13 +332,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         // not the account's stored role, decides who may sell.
         $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
         $_SESSION['completed_checkout_sale'] = (int)$result['sale_id'];
-        header('Location: ' . app_url('components/cashier/pos.php?sale_id=' . $result['sale_id'] . '&checkout=complete'));
+        $receiptUrl = app_url('components/cashier/pos.php?sale_id=' . $result['sale_id'] . '&checkout=complete');
+
+        $isJson = (stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
+            || (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest');
+        if ($isJson) {
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            echo json_encode(['success' => true, 'sale_id' => $result['sale_id'], 'receipt_url' => $receiptUrl], JSON_THROW_ON_ERROR);
+            exit;
+        }
+
+        header('Location: ' . $receiptUrl);
         exit;
+    } catch (StockConflictException $e) {
+        http_response_code(409);
+        $conflicts = $e->getConflicts();
+        $isJson = (($_POST['action'] ?? '') === 'review_quote')
+            || (stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
+            || (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest');
+        if ($isJson) {
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            echo json_encode([
+                'success' => false,
+                'error' => 'stock_conflict',
+                'message' => $e->getMessage(),
+                'conflicts' => $conflicts,
+            ], JSON_THROW_ON_ERROR);
+            exit;
+        }
+        $checkout_error = $e->getMessage();
     } catch (Throwable $e) {
         $checkout_error = \App\Support\OperatorAlert::message($e, 'The sale could not finish. Please try again. Tell your Administrator if this keeps happening.');
-        if (($_POST['action'] ?? '') === 'review_quote') {
+        $isJson = (($_POST['action'] ?? '') === 'review_quote')
+            || (stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
+            || (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest');
+        if ($isJson) {
             http_response_code(409);
-            echo json_encode(['message' => $checkout_error], JSON_THROW_ON_ERROR);
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            echo json_encode(['success' => false, 'message' => $checkout_error], JSON_THROW_ON_ERROR);
             exit;
         }
     }
@@ -365,6 +531,9 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             <button type="button" class="quick-grid-toggle" id="quick-grid-toggle" title="Toggle compact product grid" aria-label="Toggle compact product grid" aria-pressed="false">
                                 <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
                             </button>
+                            <button type="button" class="btn btn-small btn-secondary" id="refresh-catalog" title="Refresh catalog">
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Refresh
+                            </button>
                         </div>
                     </div>
 
@@ -448,6 +617,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="checkout">
                     <input type="hidden" name="checkout_attempt" id="checkout-attempt-input">
+                    <input type="hidden" name="checkout_attempt_id" id="checkout-attempt-id-input">
                     <input type="hidden" name="quote_token" id="quote-token-input">
                     <input type="hidden" name="payment_verified" value="0">
                     <input type="hidden" name="cart" id="cart-input">
@@ -555,6 +725,25 @@ $quickCategoryIcon = static function (string $categoryName): string {
     </div>
 </div>
 
+<div id="stock-conflict-modal" class="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="stock-conflict-title">
+    <div class="checkout-dialog">
+        <div class="checkout-dialog-header">
+            <div>
+                <h3 id="stock-conflict-title">Stock conflict detected</h3>
+                <p>Live inventory changed. Adjust affected quantities or remove depleted items to continue.</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeStockConflictModal()" aria-label="Close stock conflict dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+        <div class="checkout-dialog-body">
+            <div id="stock-conflict-content"></div>
+        </div>
+        <div class="checkout-dialog-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeStockConflictModal()">Keep reviewing</button>
+            <button type="button" class="btn" id="confirm-conflict-adjustments-btn" onclick="applyStockConflictAdjustments()"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>Proceed with updated cart</button>
+        </div>
+    </div>
+</div>
+
 <div id="void-modal" class="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="void-title">
     <div class="checkout-dialog">
         <div class="checkout-dialog-header">
@@ -626,6 +815,9 @@ let posAudioContext = null;
 
 const quickProducts = <?= json_encode($quickProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const quickProductById = new Map(quickProducts.map(product => [Number(product.product_id), product]));
+const posCatalogPreload = <?= json_encode(($posShiftOpen && !$posRegisterLocked) ? $loadCatalogProducts() : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const posCatalogEtag = <?= json_encode($catalogEtag) ?>;
+const posCatalogServerTime = <?= json_encode(date('Y-m-d H:i:s')) ?>;
 const skuInput = document.getElementById('sku-input');
 const scannerResult = document.getElementById('scanner-result');
 const scannerArea = document.getElementById('scanner-area');
@@ -649,6 +841,7 @@ const voidReason = document.getElementById('void-reason');
 const discardModal = document.getElementById('discard-modal');
 const discardReason = document.getElementById('discard-reason');
 const discardNote = document.getElementById('discard-note');
+const stockConflictModal = document.getElementById('stock-conflict-modal');
 let discardingHeldSaleId = 0;
 const checkoutButton = document.getElementById('checkout-button');
 const confirmCheckoutButton = document.getElementById('confirm-checkout-button');
@@ -884,14 +1077,311 @@ function showRecentScan(product, code, status = 'success') {
            <div class="recent-scan-price">&#8369;${money(product.price)}</div>`
         : `<div class="recent-scan-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
            <div class="recent-scan-copy"><strong>Scan not added</strong><span>${escapeHtml(code)}</span></div>
-           <div class="recent-scan-price">—</div>`;
+            <div class="recent-scan-price">—</div>`;
 }
+
+const POS_CATALOG_DB_NAME = 'retailmind_pos';
+const POS_CATALOG_DB_VERSION = 1;
+const POS_CATALOG_STORE = 'products';
+let posDb = null;
+const catalogProductMap = new Map();
+
+function initPosCatalogDb(items = []) {
+    return new Promise((resolve) => {
+        if (typeof indexedDB === 'undefined') return resolve(null);
+        const req = indexedDB.open(POS_CATALOG_DB_NAME, POS_CATALOG_DB_VERSION);
+        req.onupgradeneeded = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(POS_CATALOG_STORE)) {
+                const store = db.createObjectStore(POS_CATALOG_STORE, { keyPath: 'product_id' });
+                store.createIndex('sku', 'sku', { unique: false });
+                store.createIndex('barcode', 'barcode', { unique: false });
+                store.createIndex('case_barcode', 'case_barcode', { unique: false });
+            }
+        };
+        req.onsuccess = event => {
+            posDb = event.target.result;
+            window.posDb = posDb;
+            if (Array.isArray(items) && items.length > 0) {
+                try {
+                    const tx = posDb.transaction(POS_CATALOG_STORE, 'readwrite');
+                    const store = tx.objectStore(POS_CATALOG_STORE);
+                    store.clear();
+                    for (const item of items) {
+                        store.put(item);
+                        catalogProductMap.set(Number(item.product_id), {
+                            ...item,
+                            initial_stock: Number(item.quantity_on_hand)
+                        });
+                    }
+                    tx.oncomplete = () => {
+                        syncAllCatalogStock();
+                        resolve(posDb);
+                    };
+                    tx.onerror = () => resolve(posDb);
+                } catch (e) {
+                    resolve(posDb);
+                }
+            } else {
+                try {
+                    const tx = posDb.transaction(POS_CATALOG_STORE, 'readonly');
+                    const store = tx.objectStore(POS_CATALOG_STORE);
+                    const getAllReq = store.getAll();
+                    getAllReq.onsuccess = () => {
+                        if (Array.isArray(getAllReq.result)) {
+                            for (const item of getAllReq.result) {
+                                catalogProductMap.set(Number(item.product_id), {
+                                    ...item,
+                                    initial_stock: Number(item.quantity_on_hand)
+                                });
+                            }
+                        }
+                        syncAllCatalogStock();
+                        resolve(posDb);
+                    };
+                    getAllReq.onerror = () => resolve(posDb);
+                } catch (e) {
+                    resolve(posDb);
+                }
+            }
+        };
+        req.onerror = () => resolve(null);
+    });
+}
+
+function syncCatalogStock(productId) {
+    const id = Number(productId);
+    const item = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap)?.get(id);
+    if (!item) return;
+    if (item.initial_stock === undefined) {
+        item.initial_stock = Number(item.quantity_on_hand);
+    }
+    const cartQty = Number(cart[id]?.qty || 0);
+    item.quantity_on_hand = Math.max(0, item.initial_stock - cartQty);
+}
+
+function syncAllCatalogStock() {
+    const map = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap);
+    if (!map) return;
+    for (const id of map.keys()) syncCatalogStock(id);
+}
+
+function lookupProductInIndexedDB(code) {
+    const db = (typeof posDb !== 'undefined' ? posDb : (window.posDb || null));
+    if (!db) return Promise.resolve(null);
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction(POS_CATALOG_STORE, 'readonly');
+            const store = tx.objectStore(POS_CATALOG_STORE);
+            let resolved = false;
+            const upperCode = code.toUpperCase();
+            const requests = [
+                store.index('barcode').get(code),
+                store.index('sku').get(code),
+                store.index('case_barcode').get(code)
+            ];
+            if (code !== upperCode) {
+                requests.push(store.index('sku').get(upperCode));
+            }
+            let pending = requests.length;
+
+            const checkDone = () => {
+                pending--;
+                if (pending === 0 && !resolved) resolve(null);
+            };
+
+            requests.forEach(req => {
+                req.onsuccess = () => {
+                    if (req.result && !resolved) {
+                        resolved = true;
+                        resolve(req.result);
+                    } else {
+                        checkDone();
+                    }
+                };
+                req.onerror = checkDone;
+            });
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+function getLocalStock(productId) {
+    const id = Number(productId);
+    const inMem = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap)?.get(id);
+    if (inMem) return inMem.quantity_on_hand;
+    return cart[id]?.stock !== undefined ? (cart[id].stock - (cart[id].qty || 0)) : null;
+}
+
+const CATALOG_SYNC_INTERVAL_MS = 300000;
+let catalogSyncTimer = null;
+let currentCatalogEtag = typeof posCatalogEtag !== 'undefined' ? (posCatalogEtag || '') : '';
+let lastCatalogSyncTime = typeof posCatalogServerTime !== 'undefined' ? (posCatalogServerTime || '') : '';
+
+function applyCatalogDelta(items = []) {
+    return new Promise((resolve) => {
+        const db = (typeof posDb !== 'undefined' ? posDb : (window.posDb || null));
+        if (!db || !Array.isArray(items) || items.length === 0) {
+            return resolve(false);
+        }
+        try {
+            const tx = db.transaction(POS_CATALOG_STORE, 'readwrite');
+            const store = tx.objectStore(POS_CATALOG_STORE);
+            for (const item of items) {
+                store.put(item);
+                const id = Number(item.product_id);
+                const map = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap);
+                if (map) {
+                    const existing = map.get(id);
+                    map.set(id, {
+                        ...(existing || {}),
+                        ...item,
+                        initial_stock: Number(item.quantity_on_hand)
+                    });
+                    if (typeof syncCatalogStock === 'function') syncCatalogStock(id);
+                }
+                if (typeof quickProductById !== 'undefined' && quickProductById && quickProductById.has(id)) {
+                    const qp = quickProductById.get(id);
+                    if (item.unit_price !== undefined) qp.price = Number(item.unit_price);
+                    if (item.quantity_on_hand !== undefined) qp.quantity_on_hand = Number(item.quantity_on_hand);
+                }
+            }
+            tx.oncomplete = () => {
+                if (typeof renderQuickProducts === 'function') renderQuickProducts();
+                resolve(true);
+            };
+            tx.onerror = () => resolve(false);
+        } catch (e) {
+            resolve(false);
+        }
+    });
+}
+
+async function syncCatalog(isManual = false) {
+    if (!posShiftOpen || (typeof cartWorkspace !== 'undefined' && cartWorkspace.context?.locked)) {
+        return { success: false, reason: 'Shift closed or locked' };
+    }
+    const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : 'http://127.0.0.1';
+    const url = new URL(barcodeApiUrl, origin);
+    url.searchParams.set('action', 'catalog_sync');
+    if (lastCatalogSyncTime) {
+        url.searchParams.set('since', lastCatalogSyncTime);
+    }
+    if (currentCatalogEtag) {
+        url.searchParams.set('if_none_match', currentCatalogEtag);
+    }
+
+    const headers = {};
+    if (currentCatalogEtag) {
+        headers['If-None-Match'] = currentCatalogEtag;
+    }
+
+    try {
+        const res = await fetch(url.toString(), { headers });
+        if (res.status === 304) {
+            if (isManual) {
+                showCartMessage('Catalog is already up to date.', 'info');
+            }
+            return { success: true, notModified: true, updated: 0 };
+        }
+
+        if (res.status === 200) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.catalog)) {
+                const etag = res.headers?.get ? res.headers.get('ETag') : data.etag;
+                if (etag) currentCatalogEtag = etag;
+                if (data.server_time) lastCatalogSyncTime = data.server_time;
+
+                if (data.catalog.length > 0) {
+                    await applyCatalogDelta(data.catalog);
+                }
+                if (isManual) {
+                    const count = data.catalog.length;
+                    showCartMessage(count > 0 ? `Catalog refreshed with ${count} products.` : 'Catalog is already up to date.', 'success');
+                }
+                return { success: true, notModified: false, updated: data.catalog.length };
+            }
+        }
+
+        if (isManual) {
+            showCartMessage('Failed to refresh catalog.', 'warning');
+        }
+        return { success: false };
+    } catch (err) {
+        if (isManual) {
+            showCartMessage('Could not reach server to refresh catalog.', 'warning');
+        }
+        return { success: false, error: err };
+    }
+}
+
+function startCatalogSyncLoop() {
+    if (catalogSyncTimer) clearInterval(catalogSyncTimer);
+    if (!posShiftOpen || (typeof cartWorkspace !== 'undefined' && cartWorkspace.context?.locked)) {
+        return;
+    }
+    catalogSyncTimer = setInterval(async () => {
+        if (!posShiftOpen || (typeof cartWorkspace !== 'undefined' && cartWorkspace.context?.locked)) {
+            return;
+        }
+        try {
+            await syncCatalog(false);
+        } catch (err) {
+            console.warn('Background catalog sync failed:', err);
+        }
+    }, CATALOG_SYNC_INTERVAL_MS);
+}
+
+window.initPosCatalogDb = initPosCatalogDb;
+window.lookupProductInIndexedDB = lookupProductInIndexedDB;
+window.catalogProductMap = catalogProductMap;
+window.getLocalStock = getLocalStock;
+window.applyCatalogDelta = applyCatalogDelta;
+window.syncCatalog = syncCatalog;
+window.startCatalogSyncLoop = startCatalogSyncLoop;
+window.CATALOG_SYNC_INTERVAL_MS = CATALOG_SYNC_INTERVAL_MS;
 
 async function fetchProductByCode(code) {
     const normalized = String(code || '').trim();
     if (normalized === '') {
         showCartMessage('Enter a SKU or barcode to add.', 'error');
         return null;
+    }
+
+    const db = (typeof posDb !== 'undefined' ? posDb : (window.posDb || null));
+    const lookupFn = (typeof lookupProductInIndexedDB === 'function' ? lookupProductInIndexedDB : window.lookupProductInIndexedDB);
+    if (db && lookupFn) {
+        try {
+            const localProduct = await lookupFn(normalized);
+            if (localProduct) {
+                const productId = Number(localProduct.product_id);
+                const catalogMap = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap);
+                const inMem = catalogMap?.get(productId);
+                const initialStock = inMem?.initial_stock !== undefined ? inMem.initial_stock : Number(localProduct.quantity_on_hand);
+                const currentQty = Number(cart[productId]?.qty || 0);
+
+                if (currentQty >= initialStock) {
+                    showRecentScan(null, normalized, 'warning');
+                    showCartMessage(`Insufficient stock. Only ${initialStock} available.`, 'warning');
+                    return null;
+                }
+
+                return {
+                    product_id: productId,
+                    sku: localProduct.sku,
+                    barcode: localProduct.barcode,
+                    case_barcode: localProduct.case_barcode,
+                    name: localProduct.product_name,
+                    price: Number(localProduct.unit_price),
+                    quantity_on_hand: initialStock,
+                    reorder_level: Number(localProduct.reorder_level || 0),
+                    safety_stock: Number(localProduct.safety_stock || 0)
+                };
+            }
+        } catch (dbErr) {
+            console.warn('Local catalog lookup error:', dbErr);
+        }
     }
 
     try {
@@ -922,6 +1412,7 @@ async function fetchProductByCode(code) {
         showCartMessage(message, message.startsWith('Insufficient stock') ? 'warning' : 'error');
         return null;
     } catch (error) {
+        showRecentScan(null, normalized, 'warning');
         showCartMessage('Product lookup failed. Check the network or login session.', 'error');
         return null;
     }
@@ -980,6 +1471,7 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
         sku,
         barcode
     };
+    if (typeof syncCatalogStock === 'function') syncCatalogStock(productId);
     renderCart();
 
     const remaining = availableStock - cart[productId].qty;
@@ -1011,6 +1503,7 @@ function updateCartQty(id, newQty) {
     } else {
         cart[id].qty = qty;
     }
+    if (typeof syncCatalogStock === 'function') syncCatalogStock(id);
     renderCart();
     showCartMessage('Cart updated successfully.', 'info');
 }
@@ -1029,6 +1522,7 @@ function removeFromCart(id) {
     }
     const itemName = cart[id].name;
     delete cart[id];
+    if (typeof syncCatalogStock === 'function') syncCatalogStock(id);
     renderCart();
     showCartMessage(`${itemName} removed from the cart.`, 'info');
 }
@@ -1184,6 +1678,10 @@ function validateCheckout(requirePayment = true) {
 
 async function checkoutNow() {
     if (checkoutSubmitting || !checkoutAttempt.ready || window.cartWorkspace?.busy) return;
+    if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
+        showCartMessage('Checkout requires an active internet connection. Please check your network and try again.', 'error');
+        return;
+    }
     if (!validateCheckout(false)) {
         return;
     }
@@ -1192,10 +1690,14 @@ async function checkoutNow() {
     checkoutButton.disabled = true;
     if (window.cartWorkspace) cartWorkspace.busy = true;
     try {
-        if (window.cartWorkspace && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
+        if (window.cartWorkspace && resumedHeldSaleId && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
         if (!validateCheckout(false)) return;
         quote = await checkoutQuote.review();
     } catch (error) {
+        if (error.conflicts && error.conflicts.length) {
+            showStockConflictModal(error.conflicts);
+            return;
+        }
         showCartMessage(error.message, 'error');
         return;
     } finally {
@@ -1251,6 +1753,10 @@ function closeCheckoutConfirm() {
 
 async function submitConfirmedCheckout() {
     if (checkoutSubmitting) return;
+    if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
+        showCartMessage('Checkout requires an active internet connection. Please check your network and try again.', 'error');
+        return;
+    }
     if (!checkoutAttempt.ready) {
         showCartMessage('Recover the previous checkout before collecting another payment.', 'error');
         return;
@@ -1274,6 +1780,7 @@ async function submitConfirmedCheckout() {
     confirmCheckoutButton.disabled = true;
     confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
     try {
+        await checkoutQuote.review();
         await checkoutAttempt.save(cart);
         checkoutForm.submit();
     } catch (error) {
@@ -1281,12 +1788,146 @@ async function submitConfirmedCheckout() {
         checkoutConfirmed = false;
         confirmCheckoutButton.disabled = false;
         confirmCheckoutButton.textContent = 'Confirm payment';
+        closeCheckoutConfirm();
+        if (error.conflicts && error.conflicts.length) {
+            showStockConflictModal(error.conflicts);
+            return;
+        }
         const message = !navigator.locks
             ? 'Checkout recovery requires a browser supporting Web Locks. Open Point of Sale using HTTPS or http://localhost/retailmind before collecting payment.'
-            : 'Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.';
+            : (error.message || 'Checkout could not be saved for recovery. Reload before collecting another payment. Tell your Administrator if this keeps happening.');
         showCartMessage(message, 'error');
     }
 }
+
+let activeStockConflicts = [];
+
+function showStockConflictModal(conflicts) {
+    activeStockConflicts = conflicts || [];
+    renderStockConflictItems();
+    RetailMindUI.openOverlay(stockConflictModal);
+    const firstAction = stockConflictModal.querySelector('button, input');
+    if (firstAction) firstAction.focus();
+}
+
+function closeStockConflictModal() {
+    RetailMindUI.closeOverlay(stockConflictModal);
+    activeStockConflicts = [];
+    checkoutButton.focus();
+}
+
+function renderStockConflictItems() {
+    const container = document.getElementById('stock-conflict-content');
+    if (!container) return;
+    if (!activeStockConflicts.length) {
+        container.innerHTML = '<p>No stock conflicts detected.</p>';
+        return;
+    }
+    let html = `<p class="conflict-modal-desc">Available inventory is less than requested. Adjust quantities or remove items to proceed.</p>
+    <table class="conflict-items-table" style="width:100%; border-collapse:collapse; margin:1rem 0;">
+        <thead>
+            <tr style="text-align:left; border-bottom:1px solid var(--border-color, #ccc);">
+                <th style="padding:0.5rem;">Item</th>
+                <th style="padding:0.5rem; text-align:center;">Requested</th>
+                <th style="padding:0.5rem; text-align:center;">Available</th>
+                <th style="padding:0.5rem; text-align:right;">Action</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    for (const item of activeStockConflicts) {
+        const id = Number(item.product_id);
+        const name = escapeHtml(item.product_name);
+        const requested = Number(item.requested_qty);
+        const available = Number(item.available_stock);
+        const currentInCart = cart[id] ? Number(cart[id].qty) : 0;
+
+        html += `<tr data-conflict-id="${id}" style="border-bottom:1px solid var(--border-color, #eee);">
+            <td style="padding:0.5rem;"><strong class="conflict-product-name">${name}</strong></td>
+            <td style="padding:0.5rem; text-align:center;" class="conflict-requested-qty">${requested}</td>
+            <td style="padding:0.5rem; text-align:center;"><strong class="conflict-available-stock ${available > 0 ? 'text-warning' : 'text-danger'}">${available}</strong></td>
+            <td style="padding:0.5rem; text-align:right;">`;
+
+        if (available > 0) {
+            html += `<div style="display:inline-flex; align-items:center; gap:0.25rem;">
+                <input type="number" min="1" max="${available}" value="${Math.min(currentInCart || available, available)}"
+                       class="conflict-qty-input" data-product-id="${id}" style="width:60px; padding:0.25rem;"
+                       onchange="updateConflictItemQty(${id}, Number(this.value), ${available})">
+                <button type="button" class="btn btn-sm btn-secondary adjust-conflict-qty-btn" onclick="adjustConflictItemQty(${id}, ${available})">Set to ${available}</button>
+                <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem(${id})">Remove</button>
+            </div>`;
+        } else {
+            html += `<span class="badge" style="background:#dc3545; color:#fff; padding:0.25rem 0.5rem; border-radius:4px; margin-right:0.5rem;">Depleted</span>
+                     <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem(${id})">Remove</button>`;
+        }
+
+        html += `</td></tr>`;
+    }
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+}
+
+function updateConflictItemQty(productId, qty, maxAvailable) {
+    productId = Number(productId);
+    const validQty = Math.max(1, Math.min(Number(qty) || 1, maxAvailable));
+    if (cart[productId]) {
+        cart[productId].qty = validQty;
+        cart[productId].stock = maxAvailable;
+        renderCart();
+        persistCart();
+    }
+}
+
+function adjustConflictItemQty(productId, targetQty) {
+    productId = Number(productId);
+    if (cart[productId]) {
+        cart[productId].qty = targetQty;
+        cart[productId].stock = targetQty;
+        renderCart();
+        persistCart();
+        renderStockConflictItems();
+    }
+}
+
+function removeConflictItem(productId) {
+    productId = Number(productId);
+    if (cart[productId]) {
+        delete cart[productId];
+        renderCart();
+        persistCart();
+    }
+    activeStockConflicts = activeStockConflicts.filter(c => Number(c.product_id) !== productId);
+    renderStockConflictItems();
+}
+
+function applyStockConflictAdjustments() {
+    for (const conflict of activeStockConflicts) {
+        const id = Number(conflict.product_id);
+        const avail = Number(conflict.available_stock);
+        if (avail <= 0) {
+            delete cart[id];
+        } else if (cart[id] && cart[id].qty > avail) {
+            cart[id].qty = avail;
+            cart[id].stock = avail;
+        }
+    }
+    renderCart();
+    persistCart();
+    closeStockConflictModal();
+    if (Object.keys(cart).length === 0) {
+        showCartMessage('All conflicted items were removed. Cart is empty.', 'info');
+        return;
+    }
+    checkoutNow();
+}
+
+window.showStockConflictModal = showStockConflictModal;
+window.closeStockConflictModal = closeStockConflictModal;
+window.adjustConflictItemQty = adjustConflictItemQty;
+window.removeConflictItem = removeConflictItem;
+window.applyStockConflictAdjustments = applyStockConflictAdjustments;
+window.checkoutNow = checkoutNow;
 
 async function apiHeldSale(action, payload = {}) {
     return cartWorkspace.request(action, payload);
@@ -1440,6 +2081,7 @@ function restoreState() {
         cartReviewUnresolved = !!saved.unresolved;
     }
     resumedHeldSaleInput.value = resumedHeldSaleId ? String(resumedHeldSaleId) : '';
+    if (typeof syncAllCatalogStock === 'function') syncAllCatalogStock();
     renderCart();
     loadHeldSales();
     if (Object.keys(cart).length && performance.getEntriesByType('navigation')[0]?.type === 'reload') {
@@ -1583,6 +2225,19 @@ cashQuick.addEventListener('click', event => {
         setQuickTender(button.dataset.tender === 'exact' ? getNetTotal() : button.dataset.tender);
     }
 });
+const refreshCatalogBtn = document.getElementById('refresh-catalog');
+if (refreshCatalogBtn) {
+    refreshCatalogBtn.addEventListener('click', async () => {
+        try {
+            refreshCatalogBtn.disabled = true;
+            await syncCatalog(true);
+        } catch (e) {
+            showCartMessage('Could not reach server to refresh catalog.', 'warning');
+        } finally {
+            refreshCatalogBtn.disabled = false;
+        }
+    });
+}
 let quickSearchTimer = null;
 skuInput.addEventListener('input', () => {
     clearTimeout(quickSearchTimer);
@@ -1698,12 +2353,13 @@ checkoutForm.addEventListener('submit', event => {
     }
 });
 
-[checkoutModal, voidModal, discardModal].forEach(modal => {
+[checkoutModal, voidModal, discardModal, stockConflictModal].filter(Boolean).forEach(modal => {
     modal.addEventListener('mousedown', event => {
         if (event.target === modal) {
             if (modal === checkoutModal) { closeCheckoutConfirm(); }
             else if (modal === voidModal) { closeVoidModal(); }
-            else { closeDiscardModal(); }
+            else if (modal === discardModal) { closeDiscardModal(); }
+            else if (modal === stockConflictModal) { closeStockConflictModal(); }
         }
     });
 });
@@ -1733,6 +2389,8 @@ document.addEventListener('keydown', event => {
             closeVoidModal();
         } else if (discardModal.classList.contains('open')) {
             closeDiscardModal();
+        } else if (stockConflictModal && stockConflictModal.classList.contains('open')) {
+            closeStockConflictModal();
         }
         return;
     }
@@ -1744,6 +2402,9 @@ document.addEventListener('keydown', event => {
 
 renderQuickProducts();
 restoreState();
+initPosCatalogDb(typeof posCatalogPreload !== 'undefined' ? posCatalogPreload : []).then(() => {
+    startCatalogSyncLoop();
+});
 if (cashierClock) {
     updateClock();
     setInterval(updateClock, 30000);

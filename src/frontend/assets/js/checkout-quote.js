@@ -28,7 +28,11 @@ class CheckoutQuote {
         } catch {
             throw new Error('The final quote is unavailable. Check your connection and try again before collecting payment.');
         }
-        if (!response.ok) throw new Error(outcome.message || 'The final quote is unavailable. Try again.');
+        if (!response.ok) {
+            const error = new Error(outcome.message || 'The final quote is unavailable. Try again.');
+            if (outcome.conflicts) error.conflicts = outcome.conflicts;
+            throw error;
+        }
         if (inputs !== this.inputSnapshot()) throw new Error('The cart or discount changed. Review the final quote again.');
         this.inputs = inputs;
         this.reviewed = outcome.quote;

@@ -14,6 +14,7 @@ require_once __DIR__ . '/CashierShiftService.php';
 // so the cart and the sale it became are settled in one transaction.
 require_once __DIR__ . '/HeldSaleService.php';
 require_once __DIR__ . '/../Receipts/ReceiptDetailsService.php';
+require_once __DIR__ . '/StockConflictException.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\CashierShiftService;
@@ -76,7 +77,7 @@ class SalesWorkflowService
             try {
                 return $this->checkoutOnce($cart, $userId, $actorRole, $paymentMethod, $paymentDetails);
             } catch (PDOException $e) {
-                if ($retry >= 20 || !in_array((int)($e->errorInfo[1] ?? 0), [1205, 1213], true)) {
+                if ($retry >= 20 || !in_array((int)($e->errorInfo[1] ?? 0), [1062, 1205, 1213], true)) {
                     throw $e;
                 }
                 usleep(100000);
@@ -179,9 +180,10 @@ class SalesWorkflowService
     public function recoverAttempt(string $attempt, int $userId, string $actorRole, ?string $fingerprint = null): ?array
     {
         $this->requireCashierWorkspace($actorRole);
-        $this->attemptIdentity(['checkout_attempt' => $attempt]);
+        $cleanAttempt = strtolower(str_replace('-', '', $attempt));
+        $this->attemptIdentity(['checkout_attempt' => $cleanAttempt]);
         $statement = $this->pdo->prepare('SELECT request_hash, result_json FROM checkout_attempts WHERE cashier_id = ? AND attempt_id = ?');
-        $statement->execute([$userId, $attempt]);
+        $statement->execute([$userId, $cleanAttempt]);
         $saved = $statement->fetch(PDO::FETCH_ASSOC);
         if (!$saved) {
             return null;
@@ -239,10 +241,11 @@ class SalesWorkflowService
     private function attemptIdentity(array $details): ?string
     {
         // Non-browser service callers retain their existing checkout interface.
-        if (!array_key_exists('checkout_attempt', $details)) {
+        if (!array_key_exists('checkout_attempt', $details) && !array_key_exists('checkout_attempt_id', $details)) {
             return null;
         }
-        $attempt = (string)$details['checkout_attempt'];
+        $raw = (string)($details['checkout_attempt_id'] ?? $details['checkout_attempt'] ?? '');
+        $attempt = strtolower(str_replace('-', '', $raw));
         if (!preg_match('/^[a-f0-9]{32}$/D', $attempt)) {
             throw new DomainException('A valid checkout attempt is required. Reload the point of sale.');
         }
@@ -323,14 +326,45 @@ class SalesWorkflowService
     {
         $total = 0;
         $items = [];
+        $conflicts = [];
 
         foreach ($cleanCart as $item) {
             $product = $this->lockProductForCheckout($item['product_id']);
             if (!$product) {
-                throw new RuntimeException("Product #{$item['product_id']} no longer exists.");
+                $conflicts[] = [
+                    'product_id' => $item['product_id'],
+                    'product_name' => "Product #{$item['product_id']}",
+                    'requested_qty' => $item['qty'],
+                    'available_stock' => 0,
+                ];
+                continue;
             }
-            if ($product['quantity_on_hand'] < $item['qty']) {
-                throw new RuntimeException("Not enough stock for product #{$item['product_id']} (only {$product['quantity_on_hand']} left).");
+
+            $availableStock = (int)$product['quantity_on_hand'];
+            $batchCountStmt = $this->pdo->prepare(
+                "SELECT COUNT(*) FROM product_batches WHERE product_id = ? AND remaining_quantity > 0"
+            );
+            $batchCountStmt->execute([$item['product_id']]);
+            if ((int)$batchCountStmt->fetchColumn() > 0) {
+                $batchSellableStmt = $this->pdo->prepare(
+                    "SELECT COALESCE(SUM(remaining_quantity), 0)
+                     FROM product_batches
+                     WHERE product_id = ?
+                       AND remaining_quantity > 0
+                       AND (expiration_date IS NULL OR expiration_date >= CURDATE())"
+                );
+                $batchSellableStmt->execute([$item['product_id']]);
+                $availableStock = min($availableStock, (int)$batchSellableStmt->fetchColumn());
+            }
+
+            if ($availableStock < $item['qty']) {
+                $conflicts[] = [
+                    'product_id' => $item['product_id'],
+                    'product_name' => (string)($product['product_name'] ?? "product #{$item['product_id']}"),
+                    'requested_qty' => $item['qty'],
+                    'available_stock' => max(0, $availableStock),
+                ];
+                continue;
             }
 
             $batchPlan = $this->buildFefoBatchPlan($item['product_id'], $item['qty']);
@@ -351,6 +385,10 @@ class SalesWorkflowService
                 'available_stock' => (int)$product['quantity_on_hand'],
                 'batch_state' => $batchState->fetchAll(PDO::FETCH_ASSOC),
             ];
+        }
+
+        if (!empty($conflicts)) {
+            throw new StockConflictException($conflicts);
         }
 
         return ['total' => $total, 'items' => $items];

@@ -245,7 +245,7 @@ $checks = [
     ],
     'Receipt History uses a server-side DataTable' => [
         'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 25', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
+        'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 10', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
         'forbidden' => ['function performSearch()', 'fetchAll();\n}'],
     ],
     'Receipt History workspace exposes receipt filters and view actions' => [
@@ -652,6 +652,57 @@ $checks = [
     'The closing form names the held sales that are in the way' => [
         'file' => 'src/frontend/components/cashier/shifts.php',
         'needles' => ['unresolvedHeldSales', 'before closing.'],
+    ],
+    'Unified root Service Worker caches static assets and fetches fresh session pages' => [
+        'file' => 'src/frontend/sw.js',
+        'needles' => [
+            'retailmind-static-v2',
+            "fetch(event.request, {cache: 'no-store'})",
+            'caches.open(STATIC_CACHE)',
+            'SKIP_WAITING',
+            'self.skipWaiting()',
+            'self.clients.claim()',
+        ],
+        'forbidden' => ['SHELL_CACHE'],
+    ],
+    'Service Worker registration helper listens for waiting lifecycle updates' => [
+        'file' => 'src/frontend/assets/js/sw-register.js',
+        'needles' => [
+            'navigator.serviceWorker.register',
+            'showUpdateBanner',
+            'Update available — Tap to reload',
+            'SKIP_WAITING',
+            'controllerchange',
+        ],
+    ],
+    'Shared shell and landing register unified service worker' => [
+        'file' => 'src/frontend/components/sidebar.php',
+        'needles' => ['assets/js/sw-register.js', 'sw.js'],
+    ],
+    'Completed Sale Receipt view endpoints emit immutable browser caching headers' => [
+        'file' => 'src/frontend/components/invoice/sales.php',
+        'needles' => [
+            'receipt_send_cache_headers',
+            'receipt_fetch_sale($pdo, $sale_id, $storeId)',
+        ],
+    ],
+    'Thermal reprint layouts emit immutable browser caching headers' => [
+        'file' => 'src/backend/app/Views/sale_receipt_support.php',
+        'needles' => [
+            'function receipt_send_cache_headers',
+            'private, max-age=86400, immutable',
+            'HTTP_IF_NONE_MATCH',
+            '304',
+        ],
+    ],
+    'Active or draft checkout states are strictly excluded from immutable caching headers' => [
+        'file' => 'src/frontend/components/cashier/pos.php',
+        'needles' => [
+            "header('Cache-Control: no-store')",
+        ],
+        'forbidden' => [
+            'max-age=86400, immutable',
+        ],
     ],
 ];
 $failures = [];

@@ -14,8 +14,10 @@ use Throwable;
 
 final class StoreOperationsDashboardWorkspace
 {
-    private const REFRESH_SECONDS = 300;
-    private const RANGES = [7, 30, 90];
+    public const REFRESH_SECONDS = 300;
+    public const RANGES = [7, 30, 90];
+
+    private static array $memoryCache = [];
 
     private const ACTIONS = [
         ['label' => 'Store Staff', 'description' => 'Manage Cashiers and Inventory Managers', 'icon' => 'bi-people', 'destination' => 'components/user_manager/user_manager.php', 'capability' => RoleCapabilityPolicy::MANAGE_USERS],
@@ -34,6 +36,92 @@ final class StoreOperationsDashboardWorkspace
     ) {
     }
 
+    public static function invalidateCache(?string $role = null, ?int $days = null): void
+    {
+        if ($role !== null && $days !== null) {
+            unset(self::$memoryCache["{$role}_{$days}"]);
+            $file = self::cacheFilePath($role, $days);
+            if (is_file($file)) {
+                @unlink($file);
+            }
+            return;
+        }
+
+        if ($role !== null) {
+            foreach (self::RANGES as $r) {
+                unset(self::$memoryCache["{$role}_{$r}"]);
+                $file = self::cacheFilePath($role, $r);
+                if (is_file($file)) {
+                    @unlink($file);
+                }
+            }
+            return;
+        }
+
+        self::$memoryCache = [];
+        $prefix = substr(md5(__DIR__), 0, 8);
+        $files = glob(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'retailmind_' . $prefix . '_dashboard_*.json');
+        if ($files) {
+            foreach ($files as $file) {
+                @unlink($file);
+            }
+        }
+    }
+
+    private static function cacheFilePath(string $role, int $days): string
+    {
+        $prefix = substr(md5(__DIR__), 0, 8);
+        return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'retailmind_' . $prefix . '_dashboard_' . $role . '_' . $days . '.json';
+    }
+
+    private static function isCacheValid(array $entry, int $nowTs, string $todayDatePh, \DateTimeZone $tz): bool
+    {
+        if (($nowTs - (int)($entry['timestamp'] ?? 0)) >= self::REFRESH_SECONDS) {
+            return false;
+        }
+        $entryDatePh = (new DateTimeImmutable('@' . (int)$entry['timestamp']))->setTimezone($tz)->format('Y-m-d');
+        if ($entryDatePh !== $todayDatePh) {
+            return false;
+        }
+        $ns = $entry['data']['net_sales'] ?? null;
+        return is_array($ns) && isset($ns['periods']['week'], $ns['periods']['month'], $ns['periods']['today']);
+    }
+
+    private static function getCached(string $role, int $days, DateTimeImmutable $now): ?array
+    {
+        $key = "{$role}_{$days}";
+        $nowTs = $now->getTimestamp();
+        $tz = new \DateTimeZone('Asia/Manila');
+        $todayDatePh = $now->setTimezone($tz)->format('Y-m-d');
+
+        if (isset(self::$memoryCache[$key]) && self::isCacheValid(self::$memoryCache[$key], $nowTs, $todayDatePh, $tz)) {
+            return self::$memoryCache[$key]['data'];
+        }
+        $file = self::cacheFilePath($role, $days);
+        if (is_file($file)) {
+            $content = @file_get_contents($file);
+            if ($content !== false) {
+                $entry = json_decode($content, true);
+                if (is_array($entry) && self::isCacheValid($entry, $nowTs, $todayDatePh, $tz)) {
+                    self::$memoryCache[$key] = $entry;
+                    return $entry['data'];
+                }
+            }
+        }
+        return null;
+    }
+
+    private static function setCached(string $role, int $days, DateTimeImmutable $now, array $data): void
+    {
+        $key = "{$role}_{$days}";
+        $entry = [
+            'timestamp' => $now->getTimestamp(),
+            'data' => $data,
+        ];
+        self::$memoryCache[$key] = $entry;
+        @file_put_contents(self::cacheFilePath($role, $days), json_encode($entry), LOCK_EX);
+    }
+
     public function load(string $actorRole, int $days = 30): array
     {
         if ($actorRole !== 'admin' || !$this->policy->allows($actorRole, RoleCapabilityPolicy::STORE_OPERATIONS)) {
@@ -42,6 +130,12 @@ final class StoreOperationsDashboardWorkspace
 
         $days = in_array($days, self::RANGES, true) ? $days : 30;
         $now = $this->clock->now();
+
+        $cached = self::getCached($actorRole, $days, $now);
+        if ($cached !== null) {
+            return $cached;
+        }
+
         try {
             $settings = new AttentionSettingsService($this->pdo, $this->clock);
             $thresholds = $settings->thresholdsFor($actorRole);
@@ -52,8 +146,9 @@ final class StoreOperationsDashboardWorkspace
             ));
             $exceptions = $this->exceptions($now, $days, $thresholds);
             $headline = $this->headline($now, $days, $thresholds);
+            $netSales = $this->netSales($now);
 
-            return [
+            $data = [
                 'role' => $actorRole,
                 'range_days' => $days,
                 'state' => $exceptions === [] ? 'empty' : 'ready',
@@ -65,10 +160,14 @@ final class StoreOperationsDashboardWorkspace
                 'shifts' => $this->shifts(),
                 'forecast' => $this->forecast(),
                 'inventory' => $this->inventory(),
+                'net_sales' => $netSales,
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
                 'message' => $exceptions === [] ? 'No Store-operational exceptions currently require action.' : null,
             ];
+
+            self::setCached($actorRole, $days, $now, $data);
+            return $data;
         } catch (Throwable $exception) {
             error_log('Store-operations dashboard load failed: ' . $exception->getMessage());
             return [
@@ -83,6 +182,7 @@ final class StoreOperationsDashboardWorkspace
                 'shifts' => [],
                 'forecast' => [],
                 'inventory' => [],
+                'net_sales' => null,
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
                 'message' => 'Current Store operations could not be loaded. Refresh to try again.',
@@ -156,6 +256,244 @@ final class StoreOperationsDashboardWorkspace
                 'SELECT COUNT(*) FROM sale_reversals WHERE created_at >= ? AND created_at < ?',
                 [$startValue, $endValue]
             ),
+        ];
+    }
+
+    private function netSales(DateTimeImmutable $now): array
+    {
+        $tz = new \DateTimeZone('Asia/Manila');
+        $nowPh = $now->setTimezone($tz);
+        $asOfStr = $nowPh->format('Y-m-d H:i:s');
+
+        // Today boundary: local midnight
+        $todayStart = $nowPh->setTime(0, 0, 0);
+        $todayStartStr = $todayStart->format('Y-m-d H:i:s');
+        $currentHour = (int)$nowPh->format('G');
+
+        // Week boundary: starts Monday 00:00:00
+        $dayOfWeek = (int)$nowPh->format('N'); // 1 = Monday, 7 = Sunday
+        $daysFromMonday = $dayOfWeek - 1;
+        $weekStart = $nowPh->modify("-{$daysFromMonday} days")->setTime(0, 0, 0);
+        $weekStartStr = $weekStart->format('Y-m-d H:i:s');
+
+        // Month boundary: starts 1st of month 00:00:00
+        $monthStart = $nowPh->setDate((int)$nowPh->format('Y'), (int)$nowPh->format('n'), 1)->setTime(0, 0, 0);
+        $monthStartStr = $monthStart->format('Y-m-d H:i:s');
+        $currentDayOfMonth = (int)$nowPh->format('j');
+
+        $earliestStartStr = min($todayStartStr, $weekStartStr, $monthStartStr);
+
+        $salesRows = $this->rows(
+            'SELECT total_amount, sale_date FROM sales WHERE sale_date >= ? AND sale_date <= ?',
+            [$earliestStartStr, $asOfStr]
+        );
+        $refundRows = $this->rows(
+            'SELECT refund_amount, created_at FROM cash_refunds WHERE created_at >= ? AND created_at <= ?',
+            [$earliestStartStr, $asOfStr]
+        );
+
+        // Buckets initialization
+        $todayCents = [];
+        for ($h = 0; $h <= $currentHour; $h++) {
+            $todayCents[$h] = ['sales' => 0, 'refunds' => 0];
+        }
+
+        $weekCents = [];
+        $weekDays = [];
+        for ($d = 0; $d < $dayOfWeek; $d++) {
+            $dDate = $weekStart->modify("+{$d} days");
+            $weekDays[$d] = [
+                'date' => $dDate->format('Y-m-d'),
+                'day' => $dDate->format('D'),
+                'label' => $dDate->format('D'),
+            ];
+            $weekCents[$d] = ['sales' => 0, 'refunds' => 0];
+        }
+
+        $monthCents = [];
+        $monthDays = [];
+        for ($d = 1; $d <= $currentDayOfMonth; $d++) {
+            $dDate = $monthStart->modify('+' . ($d - 1) . ' days');
+            $monthDays[$d] = [
+                'date' => $dDate->format('Y-m-d'),
+                'day' => $d,
+                'label' => $dDate->format('M j'),
+            ];
+            $monthCents[$d] = ['sales' => 0, 'refunds' => 0];
+        }
+
+        // Aggregate sales
+        foreach ($salesRows as $row) {
+            $saleDt = (new DateTimeImmutable((string)$row['sale_date'], $tz))->setTimezone($tz);
+            $saleStr = $saleDt->format('Y-m-d H:i:s');
+            $amountCents = (int)round((float)$row['total_amount'] * 100);
+
+            if ($saleStr >= $todayStartStr && $saleStr <= $asOfStr) {
+                $h = (int)$saleDt->format('G');
+                if ($h >= 0 && $h <= $currentHour) {
+                    $todayCents[$h]['sales'] += $amountCents;
+                }
+            }
+            if ($saleStr >= $weekStartStr && $saleStr <= $asOfStr) {
+                $dIdx = (int)$saleDt->format('N') - 1;
+                if ($dIdx >= 0 && $dIdx < $dayOfWeek) {
+                    $weekCents[$dIdx]['sales'] += $amountCents;
+                }
+            }
+            if ($saleStr >= $monthStartStr && $saleStr <= $asOfStr) {
+                $dNum = (int)$saleDt->format('j');
+                if ($dNum >= 1 && $dNum <= $currentDayOfMonth) {
+                    $monthCents[$dNum]['sales'] += $amountCents;
+                }
+            }
+        }
+
+        // Aggregate refunds
+        foreach ($refundRows as $row) {
+            $refDt = (new DateTimeImmutable((string)$row['created_at'], $tz))->setTimezone($tz);
+            $refStr = $refDt->format('Y-m-d H:i:s');
+            $amountCents = (int)round((float)$row['refund_amount'] * 100);
+
+            if ($refStr >= $todayStartStr && $refStr <= $asOfStr) {
+                $h = (int)$refDt->format('G');
+                if ($h >= 0 && $h <= $currentHour) {
+                    $todayCents[$h]['refunds'] += $amountCents;
+                }
+            }
+            if ($refStr >= $weekStartStr && $refStr <= $asOfStr) {
+                $dIdx = (int)$refDt->format('N') - 1;
+                if ($dIdx >= 0 && $dIdx < $dayOfWeek) {
+                    $weekCents[$dIdx]['refunds'] += $amountCents;
+                }
+            }
+            if ($refStr >= $monthStartStr && $refStr <= $asOfStr) {
+                $dNum = (int)$refDt->format('j');
+                if ($dNum >= 1 && $dNum <= $currentDayOfMonth) {
+                    $monthCents[$dNum]['refunds'] += $amountCents;
+                }
+            }
+        }
+
+        // Assemble Today
+        $todayPoints = [];
+        $todaySales = 0;
+        $todayRefunds = 0;
+        for ($h = 0; $h <= $currentHour; $h++) {
+            $salesCents = $todayCents[$h]['sales'];
+            $refundsCents = $todayCents[$h]['refunds'];
+            $todaySales += $salesCents;
+            $todayRefunds += $refundsCents;
+            $todayPoints[] = [
+                'hour' => $h,
+                'label' => sprintf('%02d:00', $h),
+                'date' => $todayStart->format('Y-m-d'),
+                'sales' => (float)($salesCents / 100),
+                'refunds' => (float)($refundsCents / 100),
+                'net_sales' => (float)(($salesCents - $refundsCents) / 100),
+            ];
+        }
+
+        // Assemble Week
+        $weekPoints = [];
+        $weekSales = 0;
+        $weekRefunds = 0;
+        for ($d = 0; $d < $dayOfWeek; $d++) {
+            $salesCents = $weekCents[$d]['sales'];
+            $refundsCents = $weekCents[$d]['refunds'];
+            $weekSales += $salesCents;
+            $weekRefunds += $refundsCents;
+            $weekPoints[] = [
+                'day' => $weekDays[$d]['day'],
+                'label' => $weekDays[$d]['label'],
+                'date' => $weekDays[$d]['date'],
+                'sales' => (float)($salesCents / 100),
+                'refunds' => (float)($refundsCents / 100),
+                'net_sales' => (float)(($salesCents - $refundsCents) / 100),
+            ];
+        }
+
+        // Assemble Month
+        $monthPoints = [];
+        $monthSales = 0;
+        $monthRefunds = 0;
+        for ($d = 1; $d <= $currentDayOfMonth; $d++) {
+            $salesCents = $monthCents[$d]['sales'];
+            $refundsCents = $monthCents[$d]['refunds'];
+            $monthSales += $salesCents;
+            $monthRefunds += $refundsCents;
+            $monthPoints[] = [
+                'day' => $monthDays[$d]['day'],
+                'label' => $monthDays[$d]['label'],
+                'date' => $monthDays[$d]['date'],
+                'sales' => (float)($salesCents / 100),
+                'refunds' => (float)($refundsCents / 100),
+                'net_sales' => (float)(($salesCents - $refundsCents) / 100),
+            ];
+        }
+
+        $todayData = [
+            'period' => 'today',
+            'label' => "Today's Net Sales",
+            'short_label' => 'Today',
+            'interval_type' => 'hourly',
+            'interval_label' => 'Hour',
+            'status' => 'ongoing',
+            'as_of' => $asOfStr,
+            'timezone' => 'Asia/Manila',
+            'total' => (float)(($todaySales - $todayRefunds) / 100),
+            'sales_total' => (float)($todaySales / 100),
+            'refunds_total' => (float)($todayRefunds / 100),
+            'has_activity' => ($todaySales > 0 || $todayRefunds > 0),
+            'points' => $todayPoints,
+        ];
+
+        $weekData = [
+            'period' => 'week',
+            'label' => "This Week's Net Sales",
+            'short_label' => 'This Week',
+            'interval_type' => 'daily',
+            'interval_label' => 'Day',
+            'status' => 'ongoing',
+            'as_of' => $asOfStr,
+            'timezone' => 'Asia/Manila',
+            'total' => (float)(($weekSales - $weekRefunds) / 100),
+            'sales_total' => (float)($weekSales / 100),
+            'refunds_total' => (float)($weekRefunds / 100),
+            'has_activity' => ($weekSales > 0 || $weekRefunds > 0),
+            'points' => $weekPoints,
+        ];
+
+        $monthData = [
+            'period' => 'month',
+            'label' => "This Month's Net Sales",
+            'short_label' => 'This Month',
+            'interval_type' => 'daily',
+            'interval_label' => 'Day',
+            'status' => 'ongoing',
+            'as_of' => $asOfStr,
+            'timezone' => 'Asia/Manila',
+            'total' => (float)(($monthSales - $monthRefunds) / 100),
+            'sales_total' => (float)($monthSales / 100),
+            'refunds_total' => (float)($monthRefunds / 100),
+            'has_activity' => ($monthSales > 0 || $monthRefunds > 0),
+            'points' => $monthPoints,
+        ];
+
+        return [
+            'period' => 'today',
+            'status' => 'ongoing',
+            'as_of' => $asOfStr,
+            'timezone' => 'Asia/Manila',
+            'total' => $todayData['total'],
+            'sales_total' => $todayData['sales_total'],
+            'refunds_total' => $todayData['refunds_total'],
+            'has_activity' => $todayData['has_activity'],
+            'points' => $todayData['points'],
+            'periods' => [
+                'today' => $todayData,
+                'week' => $weekData,
+                'month' => $monthData,
+            ],
         ];
     }
 
