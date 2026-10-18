@@ -4,6 +4,13 @@
 function table_columns(PDO $pdo, string $table): array
 {
     $columns = [];
+    $driver = (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+    if ($driver === 'sqlite') {
+        foreach ($pdo->query("PRAGMA table_info(`{$table}`)")->fetchAll(PDO::FETCH_ASSOC) as $column) {
+            $columns[$column['name']] = true;
+        }
+        return $columns;
+    }
     foreach ($pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC) as $column) {
         $columns[$column['Field']] = true;
     }
@@ -179,6 +186,12 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ensure_table_column($pdo, 'stock_receiving', 'received_packages', 'INT NOT NULL DEFAULT 0 AFTER received_qty');
     ensure_table_column($pdo, 'stock_receiving', 'units_per_package_used', 'INT NOT NULL DEFAULT 1 AFTER received_packages');
 
+    ensure_table_column($pdo, 'product_batches', 'cost_price', 'DECIMAL(10,2) NULL AFTER expiration_date');
+    ensure_table_column($pdo, 'sale_item_batches', 'unit_cost', 'DECIMAL(10,2) NULL AFTER quantity');
+    ensure_table_column($pdo, 'sale_item_batches', 'cost_price', 'DECIMAL(10,2) NULL AFTER unit_cost');
+    ensure_table_column($pdo, 'sale_item_batches', 'cost_status', "ENUM('recorded','estimated','missing') NOT NULL DEFAULT 'missing' AFTER cost_price");
+    ensure_table_column($pdo, 'sale_item_batches', 'cost_source', 'VARCHAR(50) NULL AFTER cost_status');
+    ensure_table_column($pdo, 'sale_item_batches', 'cost_provenance', 'VARCHAR(50) NULL AFTER cost_source');
 
     $stmt = $pdo->prepare(
         "INSERT INTO schema_migrations (migration_key, description) VALUES (?, ?)

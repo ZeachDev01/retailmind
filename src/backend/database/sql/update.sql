@@ -1499,6 +1499,40 @@ DEALLOCATE PREPARE rm_stmt;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180004_supplier_pullouts','Record batch-specific Supplier Pullouts under Inventory Control (ticket #224)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+-- 202610180005_sold_stock_cost_snapshots: Gross Profit: preserve sold-stock costs during checkout (ticket #228)
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='product_batches' AND column_name='cost_price'), 'ALTER TABLE `product_batches` ADD COLUMN `cost_price` DECIMAL(10,2) NULL AFTER `expiration_date`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='unit_cost'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `unit_cost` DECIMAL(10,2) NULL AFTER `quantity`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='cost_price'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `cost_price` DECIMAL(10,2) NULL AFTER `unit_cost`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='cost_status'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `cost_status` ENUM(''recorded'',''estimated'',''missing'') NOT NULL DEFAULT ''missing'' AFTER `cost_price`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='cost_source'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `cost_source` VARCHAR(50) NULL AFTER `cost_status`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='cost_provenance'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `cost_provenance` VARCHAR(50) NULL AFTER `cost_source`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180005_sold_stock_cost_snapshots','Gross Profit: preserve sold-stock costs during checkout (ticket #228)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
-SELECT 'RetailMind SQL update completed through 202610180004_supplier_pullouts' AS result;
+SELECT 'RetailMind SQL update completed through 202610180005_sold_stock_cost_snapshots' AS result;
+

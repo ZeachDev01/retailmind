@@ -402,7 +402,10 @@ class SalesWorkflowService
                 continue;
             }
 
-            $batchPlan = $this->buildFefoBatchPlan($item['product_id'], $item['qty']);
+            $productCost = isset($product['cost_price']) && $product['cost_price'] !== null && $product['cost_price'] !== ''
+                ? (float)$product['cost_price']
+                : null;
+            $batchPlan = $this->buildFefoBatchPlan($item['product_id'], $item['qty'], $productCost);
             $batchState = $this->pdo->prepare('SELECT batch_id, remaining_quantity, expiration_date, date_received FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY batch_id' . $this->rowLock());
             $batchState->execute([$item['product_id']]);
             $unitPrice = (float)$product['unit_price'];
@@ -431,8 +434,10 @@ class SalesWorkflowService
 
     private function lockProductForCheckout(int $productId): ?array
     {
+        $prodCols = $this->getTableColumns('products');
+        $costSelect = isset($prodCols['cost_price']) ? ', p.cost_price' : '';
         $stmt = $this->pdo->prepare(
-            "SELECT p.unit_price, p.category_id, p.status, p.product_name, i.quantity_on_hand
+            "SELECT p.unit_price, p.category_id, p.status, p.product_name, i.quantity_on_hand{$costSelect}
              FROM products p JOIN inventory i ON p.product_id = i.product_id
              WHERE p.product_id = ? AND p.status = 'active'" . $this->rowLock()
         );
@@ -795,10 +800,46 @@ class SalesWorkflowService
 
     private function recordSaleItemBatch(int $saleItemId, array $batchAllocation): void
     {
+        $batchCols = $this->getTableColumns('sale_item_batches');
+        $columns = ['sale_item_id', 'batch_id', 'quantity'];
+        $placeholders = ['?', '?', '?'];
+        $values = [$saleItemId, $batchAllocation['batch_id'], $batchAllocation['quantity']];
+
+        $unitCost = $batchAllocation['unit_cost'] ?? null;
+        $costStatus = $batchAllocation['cost_status'] ?? 'missing';
+        $costSource = $batchAllocation['cost_source'] ?? null;
+        $costProvenance = $batchAllocation['cost_provenance'] ?? ($costSource ?? $costStatus);
+
+        if (isset($batchCols['unit_cost'])) {
+            $columns[] = 'unit_cost';
+            $placeholders[] = '?';
+            $values[] = $unitCost;
+        }
+        if (isset($batchCols['cost_price'])) {
+            $columns[] = 'cost_price';
+            $placeholders[] = '?';
+            $values[] = $unitCost;
+        }
+        if (isset($batchCols['cost_status'])) {
+            $columns[] = 'cost_status';
+            $placeholders[] = '?';
+            $values[] = $costStatus;
+        }
+        if (isset($batchCols['cost_source'])) {
+            $columns[] = 'cost_source';
+            $placeholders[] = '?';
+            $values[] = $costSource;
+        }
+        if (isset($batchCols['cost_provenance'])) {
+            $columns[] = 'cost_provenance';
+            $placeholders[] = '?';
+            $values[] = $costProvenance;
+        }
+
         $this->pdo->prepare(
-            "INSERT INTO sale_item_batches (sale_item_id, batch_id, quantity)
-             VALUES (?, ?, ?)"
-        )->execute([$saleItemId, $batchAllocation['batch_id'], $batchAllocation['quantity']]);
+            "INSERT INTO sale_item_batches (" . implode(', ', $columns) . ")
+             VALUES (" . implode(', ', $placeholders) . ")"
+        )->execute($values);
     }
 
     private function decrementInventory(int $productId, int $quantity): void
@@ -814,30 +855,39 @@ class SalesWorkflowService
         }
     }
 
-    private function getSalesColumns(): array
+    private function getTableColumns(string $table): array
     {
-        static $columns = null;
-        if ($columns !== null) {
-            return $columns;
+        static $cache = [];
+        if (isset($cache[$table])) {
+            return $cache[$table];
         }
 
-        $columns = [];
-        if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
-            foreach ($this->pdo->query('SHOW COLUMNS FROM sales')->fetchAll(PDO::FETCH_ASSOC) as $column) {
-                $columns[$column['Field']] = true;
+        $cols = [];
+        try {
+            if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+                $rawCols = $this->pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($rawCols as $col) {
+                    $cols[$col['Field']] = true;
+                }
+            } else {
+                $rawCols = $this->pdo->query("PRAGMA table_info(`{$table}`)")->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($rawCols as $col) {
+                    $cols[$col['name']] = true;
+                }
             }
-
-            return $columns;
+        } catch (Throwable) {
+            $cols = [];
         }
 
-        foreach ($this->pdo->query('PRAGMA table_info(sales)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
-            $columns[$column['name']] = true;
-        }
-
-        return $columns;
+        return $cache[$table] = $cols;
     }
 
-    private function buildFefoBatchPlan(int $productId, int $quantity): array
+    private function getSalesColumns(): array
+    {
+        return $this->getTableColumns('sales');
+    }
+
+    private function buildFefoBatchPlan(int $productId, int $quantity, ?float $productCost = null): array
     {
         $batchCountStmt = $this->pdo->prepare(
             "SELECT COUNT(*) FROM product_batches WHERE product_id = ? AND remaining_quantity > 0"
@@ -847,20 +897,62 @@ class SalesWorkflowService
             return [];
         }
 
+        if ($productCost === null) {
+            try {
+                $prodCols = $this->getTableColumns('products');
+                if (isset($prodCols['cost_price'])) {
+                    $pStmt = $this->pdo->prepare("SELECT cost_price FROM products WHERE product_id = ?");
+                    $pStmt->execute([$productId]);
+                    $val = $pStmt->fetchColumn();
+                    if ($val !== false && $val !== null && $val !== '') {
+                        $productCost = (float)$val;
+                    }
+                }
+            } catch (Throwable) {
+                // Table might not exist in some unit tests
+            }
+        }
+
+        $pbCols = $this->getTableColumns('product_batches');
+        $srCols = $this->getTableColumns('stock_receiving');
+
+        $selectCols = ['pb.batch_id', 'pb.remaining_quantity', 'pb.expiration_date'];
+        if (isset($pbCols['cost_price'])) {
+            $selectCols[] = 'pb.cost_price AS batch_cost_price';
+        } else {
+            $selectCols[] = 'NULL AS batch_cost_price';
+        }
+
+        $hasSrJoin = false;
+        if (isset($pbCols['receiving_id']) && !empty($srCols)) {
+            $hasSrJoin = true;
+            $selectCols[] = isset($srCols['cost_price']) ? 'sr.cost_price AS receiving_cost_price' : 'NULL AS receiving_cost_price';
+            $selectCols[] = isset($srCols['total_cost']) ? 'sr.total_cost AS receiving_total_cost' : 'NULL AS receiving_total_cost';
+            $selectCols[] = isset($srCols['accepted_qty']) ? 'sr.accepted_qty AS receiving_accepted_qty' : 'NULL AS receiving_accepted_qty';
+            $selectCols[] = isset($srCols['received_qty']) ? 'sr.received_qty AS receiving_received_qty' : 'NULL AS receiving_received_qty';
+        } else {
+            $selectCols[] = 'NULL AS receiving_cost_price';
+            $selectCols[] = 'NULL AS receiving_total_cost';
+            $selectCols[] = 'NULL AS receiving_accepted_qty';
+            $selectCols[] = 'NULL AS receiving_received_qty';
+        }
+
         $todayManila = $this->todayManila();
-        $stmt = $this->pdo->prepare(
-            "SELECT batch_id, remaining_quantity, expiration_date
-             FROM product_batches
-             WHERE product_id = ?
-               AND remaining_quantity > 0
-               AND (expiration_date IS NULL OR expiration_date >= ?)
-             ORDER BY
-               CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
-               expiration_date ASC,
-               date_received ASC,
-               batch_id ASC
-             " . $this->rowLock()
-        );
+        $sql = "SELECT " . implode(', ', $selectCols) . "
+                FROM product_batches pb ";
+        if ($hasSrJoin) {
+            $sql .= "LEFT JOIN stock_receiving sr ON sr.receiving_id = pb.receiving_id ";
+        }
+        $sql .= "WHERE pb.product_id = ?
+                   AND pb.remaining_quantity > 0
+                   AND (pb.expiration_date IS NULL OR pb.expiration_date >= ?)
+                 ORDER BY
+                   CASE WHEN pb.expiration_date IS NULL THEN 1 ELSE 0 END,
+                   pb.expiration_date ASC,
+                   pb.date_received ASC,
+                   pb.batch_id ASC" . $this->rowLock();
+
+        $stmt = $this->pdo->prepare($sql);
         $stmt->execute([$productId, $todayManila]);
 
         $remaining = $quantity;
@@ -875,11 +967,45 @@ class SalesWorkflowService
                 continue;
             }
 
+            $unitCost = null;
+            $costStatus = 'missing';
+            $costSource = null;
+
+            if ($batch['batch_cost_price'] !== null && $batch['batch_cost_price'] !== '') {
+                $unitCost = round((float)$batch['batch_cost_price'], 2);
+                $costStatus = 'recorded';
+                $costSource = 'batch';
+            } elseif ($batch['receiving_cost_price'] !== null && $batch['receiving_cost_price'] !== '') {
+                $unitCost = round((float)$batch['receiving_cost_price'], 2);
+                $costStatus = 'recorded';
+                $costSource = 'receiving';
+            } elseif ($batch['receiving_total_cost'] !== null && (float)$batch['receiving_total_cost'] > 0) {
+                $acceptedQty = (int)($batch['receiving_accepted_qty'] ?: ($batch['receiving_received_qty'] ?: 0));
+                if ($acceptedQty > 0) {
+                    $unitCost = round((float)$batch['receiving_total_cost'] / $acceptedQty, 2);
+                    $costStatus = 'recorded';
+                    $costSource = 'receiving';
+                }
+            } elseif ($productCost !== null && $productCost > 0) {
+                $unitCost = round((float)$productCost, 2);
+                $costStatus = 'estimated';
+                $costSource = 'product';
+            } else {
+                $unitCost = null;
+                $costStatus = 'missing';
+                $costSource = null;
+            }
+
             $plan[] = [
                 'batch_id' => (int)$batch['batch_id'],
                 'quantity' => $take,
                 'available_quantity' => (int)$batch['remaining_quantity'],
                 'expiration_date' => $batch['expiration_date'],
+                'unit_cost' => $unitCost,
+                'cost_price' => $unitCost,
+                'cost_status' => $costStatus,
+                'cost_source' => $costSource,
+                'cost_provenance' => $costSource ?? $costStatus,
             ];
             $remaining -= $take;
         }
