@@ -249,6 +249,7 @@ $pdo->exec("
         user_id INTEGER PRIMARY KEY,
         notify_low_stock INTEGER DEFAULT 1,
         notify_expiring_stock INTEGER DEFAULT 1,
+        notify_inapp INTEGER DEFAULT 1,
         low_stock_threshold INTEGER DEFAULT NULL
     );
     INSERT INTO notification_preferences (user_id) VALUES (1), (2);

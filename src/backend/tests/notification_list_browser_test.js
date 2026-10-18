@@ -211,7 +211,7 @@ const fixture = action => {
         await page.locator('#landing-login-password').fill(data.password);
         await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         await page.goto(url);
-        assert.equal(await active.getByRole('heading', {name: 'Expired bread—waiting for supplier collection: Reminder Bread'}).count(), 1);
+        assert.equal(await active.getByRole('heading', {name: 'Expired stock—waiting for supplier collection: Reminder Bread'}).count(), 1);
         assert.match(await active.getByRole('link', {name: 'Record Supplier Pullout'}).getAttribute('href'), /product_id=901&batch_id=901$/);
         await submit(page.getByRole('button', {name: 'Mark all as read', exact: true}));
         await page.goto(url + '?view=unread');

@@ -1545,3 +1545,8 @@ SET SESSION sql_mode = @rm_old_sql_mode;
 SELECT 'RetailMind SQL update completed through 202610180006_historical_sale_cost_recovery' AS result;
 
 
+
+-- 202610190001_attention_notification_type: Allow the daily shared attention writer.
+ALTER TABLE notifications MODIFY COLUMN type
+    ENUM('low_stock','replenishment','adjustment','system','fiscal_period','expiring_stock','expired_stock','attention') NOT NULL;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610190001_attention_notification_type','Allow shared attention notifications in the daily operational check') ON DUPLICATE KEY UPDATE description=VALUES(description);

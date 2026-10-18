@@ -470,6 +470,7 @@ $assert(str_contains($updateSql, '202610180004_supplier_pullouts'), 'update.sql 
 
 // A read alert follows the physical batch through partial and final collection.
 require_once __DIR__ . '/../app/Services/NotificationService.php';
+$pdo->exec('CREATE TABLE notification_preferences (user_id INTEGER PRIMARY KEY, notify_inapp INTEGER DEFAULT 1)');
 $pdo->exec('ALTER TABLE products ADD COLUMN warning_lead_time_days INTEGER NULL');
 $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, warning_lead_time_days) VALUES (3, 'BREAD-REMINDER', '10003', 'Reminder Bread', 2)");
 $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (3, 10)');
@@ -484,7 +485,7 @@ $assert(isset($reminders[4]) && $reminders[4]['active'] && (int)$reminders[4]['r
 $assert($reminders[4]['title'] === 'Prepare for supplier collection: Reminder Bread', 'Expiration day is not expired');
 $pdo->exec('UPDATE notifications SET is_read = 1 WHERE reference_id = 4');
 $reminders = $notifications->getBatchReminders($managerId, '2026-10-26');
-$assert($reminders[4]['active'] && $reminders[4]['title'] === 'Expired bread—waiting for supplier collection: Reminder Bread', 'Read reminder remains active after Manila expiration day');
+$assert($reminders[4]['active'] && $reminders[4]['title'] === 'Expired stock—waiting for supplier collection: Reminder Bread', 'Read reminder remains active after Manila expiration day');
 $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 10, 'Checks, reading and date transition leave physical stock unchanged');
 $partial = $pulloutService->recordPullout(['product_id' => 3, 'batch_id' => 4, 'quantity' => 8, 'reason' => 'Supplier collection'], $managerId);
 $reminders = $notifications->getBatchReminders($managerId, '2026-10-26');

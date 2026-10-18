@@ -56,61 +56,59 @@ class NotificationService
         if (!$users) {
             return;
         }
+        foreach ($this->getEligibleExpiryReminders($days) as $reminder) {
+            foreach ($users as $user) {
+                $userId = (int)$user['user_id'];
+                $batchId = (int)$reminder['batch_id'];
+                $exists = $reminder['type'] === 'expired_stock'
+                    ? $this->hasBatchNotification($userId, 'expired_stock', $batchId)
+                    : $this->hasBatchThresholdNotification($userId, $batchId, $reminder['threshold']);
+                if (!$exists) {
+                    $this->createNotification($userId, $reminder['type'], $reminder['title'],
+                        $reminder['message'], $batchId, $reminder['reference_type']);
+                }
+            }
+        }
+    }
 
+    /** Shared eligibility and wording for transaction checks and scheduled delivery. */
+    public function getEligibleExpiryReminders(int $days = 30): array
+    {
         $thresholds = $this->getExpiryAlertThresholds($days);
         $maxDays = max($thresholds);
-
+        $reminders = [];
         foreach ($this->getExpiringBatches($maxDays, false) as $batch) {
             $daysRemaining = (int)$batch['days_remaining'];
-            if ($daysRemaining < 0) {
-                continue;
-            }
-
-            $leadTime = (isset($batch['warning_lead_time_days']) && $batch['warning_lead_time_days'] !== null && $batch['warning_lead_time_days'] !== '')
-                ? (int)$batch['warning_lead_time_days']
-                : null;
-
-            if ($leadTime !== null) {
-                if ($daysRemaining > $leadTime) {
+            $leadTime = $batch['warning_lead_time_days'];
+            if ($leadTime !== null && $leadTime !== '') {
+                if ($daysRemaining > (int)$leadTime) {
                     continue;
                 }
-                $threshold = $leadTime;
+                $threshold = (int)$leadTime;
             } else {
-                $eligible = array_values(array_filter($thresholds, static fn(int $threshold): bool => $daysRemaining <= $threshold));
+                $eligible = array_filter($thresholds, static fn(int $threshold): bool => $daysRemaining <= $threshold);
                 if (!$eligible) {
                     continue;
                 }
                 $threshold = min($eligible);
             }
-
-            foreach ($users as $user) {
-                if (!$this->hasBatchThresholdNotification((int)$user['user_id'], (int)$batch['batch_id'], $threshold)) {
-                    $this->createNotification(
-                        (int)$user['user_id'],
-                        'expiring_stock',
-                        "Expiry {$threshold}-Day Alert: " . $batch['product_name'],
-                        "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expires on {$batch['expiration_date']} ({$daysRemaining} day(s) remaining). Stock: {$batch['remaining_quantity']}.",
-                        (int)$batch['batch_id'],
-                        'product_batch_expiry_' . $threshold
-                    );
-                }
-            }
+            $reminders[] = $batch + [
+                'type' => 'expiring_stock',
+                'threshold' => $threshold,
+                'reference_type' => 'product_batch_expiry_' . $threshold,
+                'title' => "Expiry {$threshold}-Day Alert: " . $batch['product_name'],
+                'message' => "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expires on {$batch['expiration_date']} ({$daysRemaining} day(s) remaining). Stock: {$batch['remaining_quantity']}.",
+            ];
         }
-
         foreach ($this->getExpiringBatches($maxDays, true) as $batch) {
-            foreach ($users as $user) {
-                if (!$this->hasBatchNotification((int)$user['user_id'], 'expired_stock', (int)$batch['batch_id'])) {
-                    $this->createNotification(
-                        (int)$user['user_id'],
-                        'expired_stock',
-                        'Expired Stock Blocked: ' . $batch['product_name'],
-                        "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expired on {$batch['expiration_date']}. Remaining: {$batch['remaining_quantity']}.",
-                        (int)$batch['batch_id'],
-                        'product_batch'
-                    );
-                }
-            }
+            $reminders[] = $batch + [
+                'type' => 'expired_stock',
+                'reference_type' => 'product_batch',
+                'title' => 'Expired stock—waiting for supplier collection: ' . $batch['product_name'],
+                'message' => "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expired on {$batch['expiration_date']}. Remaining: {$batch['remaining_quantity']}.",
+            ];
         }
+        return $reminders;
     }
 
     /** Current batch state for existing alerts, independent of read status or history pagination. */
@@ -137,7 +135,7 @@ class NotificationService
             $batch['active'] = $daysRemaining !== null && (int)$batch['remaining_quantity'] > 0
                 && $daysRemaining <= (int)($batch['warning_lead_time_days'] ?? $threshold);
             $batch['title'] = ($daysRemaining !== null && $daysRemaining < 0
-                ? 'Expired bread—waiting for supplier collection: ' : 'Prepare for supplier collection: ') . $batch['product_name'];
+                ? 'Expired stock—waiting for supplier collection: ' : 'Prepare for supplier collection: ') . $batch['product_name'];
             $batch['message'] = "Batch {$batch['batch_number']} (#{$batch['batch_id']}) of {$batch['product_name']} ({$batch['sku']}). Expiration: "
                 . ($expiration ?? 'Not recorded') . ". Remaining: {$batch['remaining_quantity']}.";
             $reminders[(int)$batch['batch_id']] = $batch;
@@ -196,7 +194,9 @@ class NotificationService
             "SELECT DISTINCT u.user_id
              FROM users u
              JOIN roles r ON r.role_id = u.role_id
+             LEFT JOIN notification_preferences np ON np.user_id = u.user_id
              WHERE u.status = 'active'
+               AND COALESCE(np.notify_inapp, 1) = 1
                AND r.role_name IN ('super_admin', 'admin', 'inventory_manager')"
         )->fetchAll();
     }
