@@ -35,48 +35,78 @@ class InventoryService
         ];
     }
 
-    public function getExpiringSoonBatches(int $days = 30): array
+    public function getExpiringSoonBatches(int $days = 30, ?string $todayDate = null): array
     {
+        $today = $todayDate ?? \App\Services\PhilippineTime::today();
         [$scopeSql, $scopeParams] = $this->storeProductScope();
+        $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+
+        if ($driver === 'sqlite') {
+            $diffExpr = "CAST(ROUND(julianday(pb.expiration_date) - julianday(?)) AS INTEGER)";
+            $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity,
+                           pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name,
+                           p.warning_lead_time_days,
+                           {$diffExpr} AS days_remaining
+                    FROM product_batches pb
+                    JOIN products p ON p.product_id = pb.product_id
+                    WHERE pb.remaining_quantity > 0{$scopeSql}
+                      AND pb.expiration_date IS NOT NULL
+                      AND {$diffExpr} >= 0
+                      AND {$diffExpr} <= COALESCE(p.warning_lead_time_days, ?)
+                    ORDER BY pb.expiration_date ASC, p.product_name ASC";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute(array_merge([$today], $scopeParams, [$today, $today, $days]));
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
         $stmt = $this->pdo->prepare(
             "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity,
-                    pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name
+                    pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name,
+                    p.warning_lead_time_days,
+                    DATEDIFF(pb.expiration_date, ?) AS days_remaining
              FROM product_batches pb
              JOIN products p ON p.product_id = pb.product_id
              WHERE pb.remaining_quantity > 0{$scopeSql}
-               AND pb.expiration_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
+               AND pb.expiration_date IS NOT NULL
+               AND DATEDIFF(pb.expiration_date, ?) >= 0
+               AND DATEDIFF(pb.expiration_date, ?) <= COALESCE(p.warning_lead_time_days, ?)
              ORDER BY pb.expiration_date ASC, p.product_name ASC"
         );
-        $stmt->execute(array_merge($scopeParams, [$days]));
-        return $stmt->fetchAll();
+        $stmt->execute(array_merge([$today], $scopeParams, [$today, $today, $days]));
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function getExpiredBatches(): array
+    public function getExpiredBatches(?string $todayDate = null): array
     {
+        $today = $todayDate ?? \App\Services\PhilippineTime::today();
         [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
             "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity,
-                    pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name
+                    pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name,
+                    p.warning_lead_time_days
              FROM product_batches pb
              JOIN products p ON p.product_id = pb.product_id
              WHERE pb.remaining_quantity > 0{$scopeSql}
-               AND pb.expiration_date < CURDATE()
+               AND pb.expiration_date IS NOT NULL
+               AND pb.expiration_date < ?
              ORDER BY pb.expiration_date ASC, p.product_name ASC"
         );
-        $stmt->execute($scopeParams);
-        return $stmt->fetchAll();
+        $stmt->execute(array_merge($scopeParams, [$today]));
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function getFefoRecommendations(): array
+    public function getFefoRecommendations(?string $todayDate = null): array
     {
+        $today = $todayDate ?? \App\Services\PhilippineTime::today();
         [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
             "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity,
-                    pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name
+                    pb.expiration_date, pb.date_received, pb.supplier, p.sku, p.product_name,
+                    p.warning_lead_time_days
              FROM product_batches pb
              JOIN products p ON p.product_id = pb.product_id
              WHERE pb.remaining_quantity > 0{$scopeSql}
-               AND (pb.expiration_date IS NULL OR pb.expiration_date >= CURDATE())
+               AND (pb.expiration_date IS NULL OR pb.expiration_date >= ?)
              ORDER BY
                CASE WHEN pb.expiration_date IS NULL THEN 1 ELSE 0 END,
                pb.expiration_date ASC,
@@ -84,8 +114,8 @@ class InventoryService
                p.product_name ASC
              LIMIT 10"
         );
-        $stmt->execute($scopeParams);
-        return $stmt->fetchAll();
+        $stmt->execute(array_merge($scopeParams, [$today]));
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     private function storeProductScope(): array
@@ -99,7 +129,7 @@ class InventoryService
 
     public function getProductsWithBatchSummaries(?string $todayDate = null): array
     {
-        $today = $todayDate ?? (new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+        $today = $todayDate ?? \App\Services\PhilippineTime::today();
         [$scopeSql, $scopeParams] = $this->storeProductScope();
 
         $stmt = $this->pdo->prepare(
@@ -191,7 +221,7 @@ class InventoryService
             return [];
         }
 
-        $today = $todayDate ?? (new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+        $today = $todayDate ?? \App\Services\PhilippineTime::today();
 
         $hasReceivingTable = true;
         try {

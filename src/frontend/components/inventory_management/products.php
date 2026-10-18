@@ -124,6 +124,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($_POST['safety_stock'])) {
                 $updateData['safety_stock'] = $_POST['safety_stock'];
             }
+            if (isset($_POST['warning_lead_time_days'])) {
+                $updateData['warning_lead_time_days'] = trim((string)$_POST['warning_lead_time_days']) === '' ? null : $_POST['warning_lead_time_days'];
+            }
             $uploadedPhoto = handle_product_photo_upload($_FILES['product_image'] ?? null);
             if ($uploadedPhoto !== null) {
                 $updateData['product_image'] = $uploadedPhoto;
@@ -208,6 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'product_image' => $productImage,
                 'status' => $_POST['status'] ?? 'active',
                 'initial_stock_quantity' => $initialQuantity,
+                'warning_lead_time_days' => trim((string)($_POST['warning_lead_time_days'] ?? '')) === '' ? null : $_POST['warning_lead_time_days'],
             ], (int)$_SESSION['user_id']);
 
             $newProductStmt = $pdo->prepare(
@@ -1135,7 +1139,10 @@ foreach ($products as $product) {
                                     $expiredQty = (int)($product['expired_quantity'] ?? 0);
                                     $todayManila = \App\Services\PhilippineTime::today();
                                     $todayTs = strtotime($todayManila);
-                                    $limitTs = strtotime('+30 days', $todayTs);
+                                    $leadDays = (isset($product['warning_lead_time_days']) && $product['warning_lead_time_days'] !== null && $product['warning_lead_time_days'] !== '')
+                                        ? (int)$product['warning_lead_time_days']
+                                        : 30;
+                                    $limitTs = strtotime("+{$leadDays} days", $todayTs);
                                     $expiring = $expiration !== '' && strtotime($expiration) !== false && strtotime($expiration) <= $limitTs && strtotime($expiration) >= $todayTs;
                                     $isExpired = $expiredQty > 0;
                                     $status = (string)($product['status'] ?? 'active');
@@ -1343,6 +1350,7 @@ foreach ($products as $product) {
                             <div class="form-group"><label>Safety Stock</label><input type="number" min="0" name="safety_stock" value="0"></div>
                             <div class="form-group"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
                             <div class="form-group"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>
+                            <div class="form-group"><label for="warning-lead-time-days">Expiry Warning Lead Time (Days)</label><input id="warning-lead-time-days" type="number" min="1" step="1" name="warning_lead_time_days" placeholder="Default (30)"></div>
                             <div class="form-group full" id="starting-stock-expiration-group" hidden><label for="starting-stock-expiration">Starting Stock Expiration</label><input type="date" id="starting-stock-expiration" name="expiration_date"></div>
                         </div>
                     </section>
@@ -1806,7 +1814,7 @@ foreach ($products as $product) {
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
-        <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
+        <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div><div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
     </div>`;
             renderProductDrawerQuantity(product);
         }
@@ -1908,6 +1916,11 @@ foreach ($products as $product) {
                                 <option value="">Uncategorized</option>
                                 ${categoryOptions}
                             </select>
+                        </label>
+
+                        <label class="form-field" for="edit-warning-lead-time">
+                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Expiry Warning Lead Time (Days) <small style="font-weight:normal;color:#6b7280;">(Blank uses default 30 days)</small></span>
+                            <input type="number" step="1" min="1" max="2147483647" name="warning_lead_time_days" id="edit-warning-lead-time" value="${product.warning_lead_time_days !== null && product.warning_lead_time_days !== undefined && product.warning_lead_time_days !== '' ? Number(product.warning_lead_time_days) : ''}" placeholder="Default (30)" class="form-input" style="width:100%;">
                         </label>
 
                         <div class="form-field">
@@ -2057,6 +2070,17 @@ foreach ($products as $product) {
                 errorBox.hidden = false;
                 safetyInput?.focus();
                 return;
+            }
+
+            const leadTimeInput = document.getElementById('edit-warning-lead-time');
+            if (leadTimeInput) {
+                const leadTimeVal = leadTimeInput.value.trim();
+                if (leadTimeVal !== '' && (!/^\d+$/.test(leadTimeVal) || Number(leadTimeVal) < 1 || Number(leadTimeVal) > 2147483647)) {
+                    errorBox.textContent = 'Expiry warning lead time must be a whole number of at least 1 day.';
+                    errorBox.hidden = false;
+                    leadTimeInput.focus();
+                    return;
+                }
             }
 
             const imageInput = document.getElementById('edit-product-image');

@@ -122,6 +122,7 @@ try {
             base_unit TEXT NOT NULL DEFAULT 'piece',
             receiving_unit TEXT NOT NULL DEFAULT 'package',
             expiration_date TEXT DEFAULT NULL,
+            warning_lead_time_days INTEGER DEFAULT NULL,
             product_image TEXT DEFAULT NULL,
             status TEXT NOT NULL DEFAULT 'active',
             branch_id INTEGER NOT NULL DEFAULT 1,

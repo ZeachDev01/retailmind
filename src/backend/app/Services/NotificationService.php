@@ -57,13 +57,30 @@ class NotificationService
 
         $thresholds = $this->getExpiryAlertThresholds($days);
         $maxDays = max($thresholds);
+
         foreach ($this->getExpiringBatches($maxDays, false) as $batch) {
             $daysRemaining = (int)$batch['days_remaining'];
-            $eligible = array_values(array_filter($thresholds, static fn(int $threshold): bool => $daysRemaining <= $threshold));
-            if (!$eligible) {
+            if ($daysRemaining < 0) {
                 continue;
             }
-            $threshold = min($eligible);
+
+            $leadTime = (isset($batch['warning_lead_time_days']) && $batch['warning_lead_time_days'] !== null && $batch['warning_lead_time_days'] !== '')
+                ? (int)$batch['warning_lead_time_days']
+                : null;
+
+            if ($leadTime !== null) {
+                if ($daysRemaining > $leadTime) {
+                    continue;
+                }
+                $threshold = $leadTime;
+            } else {
+                $eligible = array_values(array_filter($thresholds, static fn(int $threshold): bool => $daysRemaining <= $threshold));
+                if (!$eligible) {
+                    continue;
+                }
+                $threshold = min($eligible);
+            }
+
             foreach ($users as $user) {
                 if (!$this->hasBatchThresholdNotification((int)$user['user_id'], (int)$batch['batch_id'], $threshold)) {
                     $this->createNotification(
@@ -152,21 +169,65 @@ class NotificationService
 
     private function getExpiringBatches(int $days, bool $expired): array
     {
-        $dateFilter = $expired
-            ? 'pb.expiration_date < CURDATE()'
-            : 'pb.expiration_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)';
+        $today = \App\Services\PhilippineTime::today();
+        $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
-        $stmt = $this->pdo->prepare(
-            "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                    DATEDIFF(pb.expiration_date, CURDATE()) AS days_remaining, p.sku, p.product_name
-             FROM product_batches pb
-             JOIN products p ON p.product_id = pb.product_id
-             WHERE pb.remaining_quantity > 0
-               AND {$dateFilter}
-             ORDER BY pb.expiration_date ASC, p.product_name ASC"
-        );
-        $expired ? $stmt->execute() : $stmt->execute([$days]);
-        return $stmt->fetchAll();
+        if ($driver === 'sqlite') {
+            $diffExpr = "CAST(ROUND(julianday(pb.expiration_date) - julianday(?)) AS INTEGER)";
+            if ($expired) {
+                $sql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
+                               {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
+                        FROM product_batches pb
+                        JOIN products p ON p.product_id = pb.product_id
+                        WHERE pb.remaining_quantity > 0
+                          AND pb.expiration_date IS NOT NULL
+                          AND pb.expiration_date < ?
+                        ORDER BY pb.expiration_date ASC, p.product_name ASC";
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute([$today, $today]);
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+
+            $sql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
+                           {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
+                    FROM product_batches pb
+                    JOIN products p ON p.product_id = pb.product_id
+                    WHERE pb.remaining_quantity > 0
+                      AND pb.expiration_date IS NOT NULL
+                      AND pb.expiration_date >= ?
+                      AND {$diffExpr} <= COALESCE(p.warning_lead_time_days, ?)
+                    ORDER BY pb.expiration_date ASC, p.product_name ASC";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$today, $today, $today, $days]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        if ($expired) {
+            $sql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
+                           DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
+                    FROM product_batches pb
+                    JOIN products p ON p.product_id = pb.product_id
+                    WHERE pb.remaining_quantity > 0
+                      AND pb.expiration_date IS NOT NULL
+                      AND pb.expiration_date < ?
+                    ORDER BY pb.expiration_date ASC, p.product_name ASC";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$today, $today]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        $sql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
+                       DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
+                FROM product_batches pb
+                JOIN products p ON p.product_id = pb.product_id
+                WHERE pb.remaining_quantity > 0
+                  AND pb.expiration_date IS NOT NULL
+                  AND pb.expiration_date >= ?
+                  AND DATEDIFF(pb.expiration_date, ?) <= COALESCE(p.warning_lead_time_days, ?)
+                ORDER BY pb.expiration_date ASC, p.product_name ASC";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$today, $today, $today, $days]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
 
@@ -182,6 +243,7 @@ class NotificationService
 
     private function hasBatchNotificationToday(int $userId, string $type, int $batchId): bool
     {
+        $today = \App\Services\PhilippineTime::today();
         $stmt = $this->pdo->prepare(
             "SELECT notification_id
              FROM notifications
@@ -189,9 +251,9 @@ class NotificationService
                AND type = ?
                AND reference_id = ?
                AND reference_type = 'product_batch'
-               AND DATE(created_at) = CURDATE()"
+               AND DATE(created_at) = ?"
         );
-        $stmt->execute([$userId, $type, $batchId]);
+        $stmt->execute([$userId, $type, $batchId, $today]);
         return (bool)$stmt->fetch();
     }
 }

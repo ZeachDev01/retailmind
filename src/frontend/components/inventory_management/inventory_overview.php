@@ -302,14 +302,22 @@ $chartDataJson = json_encode([
                     <tbody>
                     <?php foreach ($fefo_recommendations as $batch): ?>
                     <?php
-                        $expirationTimestamp = !empty($batch['expiration_date']) ? strtotime((string)$batch['expiration_date']) : false;
-                        $daysRemaining = $expirationTimestamp === false ? null : (int)floor(($expirationTimestamp - strtotime('today')) / 86400);
+                        $todayManila = \App\Services\PhilippineTime::today();
+                        $expDate = !empty($batch['expiration_date']) ? trim((string)$batch['expiration_date']) : null;
+                        $daysRemaining = null;
+                        if ($expDate !== null && $expDate !== '') {
+                            $daysRemaining = (int)round((strtotime($expDate) - strtotime($todayManila)) / 86400);
+                        }
+                        $urgencyThreshold = (isset($batch['warning_lead_time_days']) && $batch['warning_lead_time_days'] !== null && $batch['warning_lead_time_days'] !== '')
+                            ? (int)$batch['warning_lead_time_days']
+                            : 7;
+                        $isUrgent = ($daysRemaining !== null && $daysRemaining >= 0 && $daysRemaining <= $urgencyThreshold);
                     ?>
                     <tr>
                         <td><strong><?= htmlspecialchars($batch['product_name']) ?></strong><small><?= htmlspecialchars($batch['sku']) ?></small></td>
                         <td><?= htmlspecialchars($batch['batch_number'] ?? '-') ?></td>
                         <td><?= number_format((int)$batch['remaining_quantity']) ?></td>
-                        <td><span class="expiry-status <?= $daysRemaining !== null && $daysRemaining <= 7 ? 'expiry-status--urgent' : '' ?>"><?= htmlspecialchars($batch['expiration_date'] ?? 'No expiration date') ?></span><?php if ($daysRemaining !== null): ?><small><?= $daysRemaining < 0 ? abs($daysRemaining) . ' days overdue' : $daysRemaining . ' days remaining' ?></small><?php endif; ?></td>
+                        <td><span class="expiry-status <?= $isUrgent ? 'expiry-status--urgent' : '' ?>"><?= htmlspecialchars($batch['expiration_date'] ?? 'No expiration date') ?></span><?php if ($daysRemaining !== null): ?><small><?= $daysRemaining < 0 ? abs($daysRemaining) . ' days overdue' : $daysRemaining . ' days remaining' ?></small><?php endif; ?></td>
                         <td><?= htmlspecialchars($batch['supplier'] ?? '-') ?></td>
                     </tr>
                     <?php endforeach; ?>

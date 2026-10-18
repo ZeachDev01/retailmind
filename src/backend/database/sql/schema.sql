@@ -965,6 +965,7 @@ CREATE TABLE `products` (
   `base_unit` varchar(40) NOT NULL DEFAULT 'piece',
   `receiving_unit` varchar(40) NOT NULL DEFAULT 'package',
   `expiration_date` date DEFAULT NULL,
+  `warning_lead_time_days` int(11) DEFAULT NULL,
   `product_image` varchar(255) DEFAULT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
   `created_by` int(11) DEFAULT NULL,
@@ -1921,6 +1922,7 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010001_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610170001_cancel_checkout_attempts','Retain cancelled checkout identities without creating a sale') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010003_safe_refund_exceptions','Preserve external settlement and specific Cash Refund exception attribution (#113)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610040001_user_theme','Personal display theme for every Staff account') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180003_product_warning_lead_time','Optional warning_lead_time_days on products (ticket #223)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- Forecast defaults; retain any configured values.
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_history_days','30');

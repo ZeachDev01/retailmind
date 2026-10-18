@@ -1435,6 +1435,12 @@ CREATE TABLE IF NOT EXISTS `stock_issue_batches` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180002_stock_issue_batches','Track affected batches deducted during stock issue approval') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='products' AND column_name='warning_lead_time_days'), 'ALTER TABLE `products` ADD COLUMN `warning_lead_time_days` INT NULL AFTER `expiration_date`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180003_product_warning_lead_time','Optional warning_lead_time_days on products (ticket #223)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
-SELECT 'RetailMind SQL update completed through 202610180002_stock_issue_batches' AS result;
+SELECT 'RetailMind SQL update completed through 202610180003_product_warning_lead_time' AS result;

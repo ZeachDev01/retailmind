@@ -86,6 +86,13 @@ class ProductService
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
         $initialStock = $this->validateStockSetting($data['initial_stock_quantity'] ?? 0, 'Starting quantity', 0);
         $productExpirationDate = ($initialStock > 0) ? $expirationDate : null;
+        $warningLeadTimeDays = $this->validateWarningLeadTime($data['warning_lead_time_days'] ?? null);
+        if ($warningLeadTimeDays !== null || $initialStock > 0) {
+            $role = function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? null);
+            if ($role !== null && $role !== 'inventory_manager') {
+                throw new RuntimeException('Only the active Inventory Manager workspace can mutate stock or warning overrides.');
+            }
+        }
         $branchId = function_exists('store_scope_id')
             ? store_scope_id($this->pdo)
             : (new App\Store\StoreScope($this->pdo))->id();
@@ -137,8 +144,8 @@ class ProductService
                     sku, barcode, case_barcode, parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
                     quantity_purchased, quantity_sold, reorder_level, supplier, preferred_supplier,
                     supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, base_unit, receiving_unit, expiration_date,
-                    product_image, status, created_by, branch_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    warning_lead_time_days, product_image, status, created_by, branch_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $barcode,
@@ -163,6 +170,7 @@ class ProductService
                 $baseUnit,
                 $receivingUnit,
                 $productExpirationDate,
+                $warningLeadTimeDays,
                 $productImage !== '' ? $productImage : null,
                 $status,
                 $userId,
@@ -816,6 +824,11 @@ class ProductService
             ? $this->validateStockSetting($data['safety_stock'], 'Safety stock', 0)
             : (int)$existing['safety_stock'];
 
+        $hasWarningLeadTime = array_key_exists('warning_lead_time_days', $data);
+        $warningLeadTimeDays = $hasWarningLeadTime
+            ? $this->validateWarningLeadTime($data['warning_lead_time_days'])
+            : (isset($existing['warning_lead_time_days']) && $existing['warning_lead_time_days'] !== null && $existing['warning_lead_time_days'] !== '' ? (int)$existing['warning_lead_time_days'] : null);
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             StoreWriteGate::begin($this->pdo);
@@ -833,7 +846,8 @@ class ProductService
                      units_per_package = ?,
                      minimum_order_quantity = ?,
                      reorder_level = ?,
-                     safety_stock = ?
+                     safety_stock = ?,
+                     warning_lead_time_days = ?
                  WHERE product_id = ?"
             );
             $updateStmt->execute([
@@ -848,6 +862,7 @@ class ProductService
                 $minimumOrderQuantity,
                 $reorderLevel,
                 $safetyStock,
+                $warningLeadTimeDays,
                 $productId,
             ]);
 
@@ -867,6 +882,9 @@ class ProductService
                 $updated['minimum_order_quantity'] = (int)$updated['minimum_order_quantity'];
                 $updated['reorder_level'] = (int)$updated['reorder_level'];
                 $updated['safety_stock'] = (int)$updated['safety_stock'];
+                $updated['warning_lead_time_days'] = ($updated['warning_lead_time_days'] !== null && $updated['warning_lead_time_days'] !== '')
+                    ? (int)$updated['warning_lead_time_days']
+                    : null;
                 if ($warning !== null) {
                     $updated['warning'] = $warning;
                 }
@@ -926,6 +944,15 @@ class ProductService
         }
 
         return $int;
+    }
+
+    private function validateWarningLeadTime(mixed $value): ?int
+    {
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return null;
+        }
+
+        return $this->validateStockSetting($value, 'Expiry warning lead time', 1);
     }
 
     private function storeProductScope(): array
