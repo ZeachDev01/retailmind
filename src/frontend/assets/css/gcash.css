@@ -1,0 +1,27 @@
+.gcash-notice { padding: 1rem; border: 1px solid var(--border); border-left: 4px solid var(--cashier-blue); border-radius: 10px; background: var(--cashier-blue-soft); line-height: 1.6; }
+.gcash-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.gcash-reference-field, .gcash-form > .gcash-actions { grid-column: 1 / -1; }
+.gcash-field { display: grid; gap: .4rem; min-width: 0; }
+.gcash-field small, .gcash-help, .gcash-camera p { color: var(--muted); line-height: 1.6; }
+.gcash-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin-top: .5rem; }
+#gcash-duplicate { color: var(--theme-danger-text, #b91c1c); font-weight: 600; }
+.gcash-camera { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+.gcash-camera video { display: block; width: min(100%, 640px); max-height: 400px; background: #111; border-radius: 10px; }
+#gcash-ocr-review { max-width: 640px; margin-top: .75rem; }
+#gcash-ocr-use { margin-top: .5rem; }
+.gcash-history { margin-top: 1rem; }
+.gcash-table-wrap { overflow: auto; }
+.gcash-table-wrap table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.gcash-table-wrap th, .gcash-table-wrap td { padding: .75rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+.gcash-table-wrap small { display: block; color: var(--muted); margin-top: .25rem; max-width: 260px; overflow-wrap: anywhere; }
+.gcash-status { display: inline-block; padding: .2rem .55rem; border-radius: 999px; background: var(--cashier-blue-soft); font-weight: 600; }
+.gcash-status-verified { color: var(--theme-success-text, #15803d); background: var(--theme-success-surface, #f0fdf4); }
+.gcash-status-rejected { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }
+.gcash-pagination { justify-content: flex-end; }
+#gcash-review-dialog { width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
+#gcash-review-dialog::backdrop { background: rgb(0 0 0 / .55); }
+.gcash-confirm { display: flex; align-items: flex-start; gap: .6rem; margin: 1rem 0; line-height: 1.5; }
+.gcash-confirm input { flex-shrink: 0; margin-top: .3rem; }
+#gcash-review-summary { overflow-wrap: anywhere; font-weight: 600; }
+#gcash-workspace [hidden] { display: none !important; }
+@media (max-width: 600px) { .gcash-form { grid-template-columns: minmax(0, 1fr); } .gcash-actions .btn { flex: 1 1 auto; white-space: normal; } }
