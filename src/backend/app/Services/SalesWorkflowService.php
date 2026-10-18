@@ -16,8 +16,10 @@ require_once __DIR__ . '/CashierShiftService.php';
 require_once __DIR__ . '/HeldSaleService.php';
 require_once __DIR__ . '/../Receipts/ReceiptDetailsService.php';
 require_once __DIR__ . '/StockConflictException.php';
+require_once __DIR__ . '/../Dashboard/StoreOperationsDashboardWorkspace.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Dashboard\StoreOperationsDashboardWorkspace;
 use App\Services\CashierShiftService;
 use App\Services\HeldSaleService;
 use App\Receipts\ReceiptDetailsService;
@@ -162,6 +164,7 @@ class SalesWorkflowService
                     ->execute([$userId, $attempt, $fingerprint, $saleId, json_encode($result, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION)]);
             }
             $this->pdo->commit();
+            StoreOperationsDashboardWorkspace::invalidateCache();
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();

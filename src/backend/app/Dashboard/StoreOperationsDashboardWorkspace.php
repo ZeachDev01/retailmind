@@ -2,11 +2,14 @@
 
 namespace App\Dashboard;
 
+require_once __DIR__ . '/../Services/GrossProfitService.php';
+
 use App\Attention\AttentionRuleService;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
 use App\Attention\DatabaseAttentionSignalSource;
 use App\Authorization\RoleCapabilityPolicy;
+use App\Services\GrossProfitService;
 use DateTimeImmutable;
 use DomainException;
 use PDO;
@@ -74,7 +77,7 @@ final class StoreOperationsDashboardWorkspace
         return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'retailmind_' . $prefix . '_dashboard_' . $role . '_' . $days . '.json';
     }
 
-    private static function isCacheValid(array $entry, int $nowTs, string $todayDatePh, \DateTimeZone $tz): bool
+    private static function isCacheValid(array $entry, int $nowTs, string $todayDatePh, \DateTimeZone $tz, string $role = 'admin'): bool
     {
         if (($nowTs - (int)($entry['timestamp'] ?? 0)) >= self::REFRESH_SECONDS) {
             return false;
@@ -84,7 +87,16 @@ final class StoreOperationsDashboardWorkspace
             return false;
         }
         $ns = $entry['data']['net_sales'] ?? null;
-        return is_array($ns) && isset($ns['periods']['week'], $ns['periods']['month'], $ns['periods']['today']);
+        if (!is_array($ns) || !isset($ns['periods']['week'], $ns['periods']['month'], $ns['periods']['today'])) {
+            return false;
+        }
+        if ($role === 'admin') {
+            $gp = $entry['data']['gross_profit'] ?? null;
+            if (!is_array($gp) || !isset($gp['periods']['week'], $gp['periods']['month'], $gp['periods']['today'])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static function getCached(string $role, int $days, DateTimeImmutable $now): ?array
@@ -94,17 +106,25 @@ final class StoreOperationsDashboardWorkspace
         $tz = new \DateTimeZone('Asia/Manila');
         $todayDatePh = $now->setTimezone($tz)->format('Y-m-d');
 
-        if (isset(self::$memoryCache[$key]) && self::isCacheValid(self::$memoryCache[$key], $nowTs, $todayDatePh, $tz)) {
-            return self::$memoryCache[$key]['data'];
+        if (isset(self::$memoryCache[$key]) && self::isCacheValid(self::$memoryCache[$key], $nowTs, $todayDatePh, $tz, $role)) {
+            $cached = self::$memoryCache[$key]['data'];
+            if ($role !== 'admin' && isset($cached['gross_profit'])) {
+                unset($cached['gross_profit']);
+            }
+            return $cached;
         }
         $file = self::cacheFilePath($role, $days);
         if (is_file($file)) {
             $content = @file_get_contents($file);
             if ($content !== false) {
                 $entry = json_decode($content, true);
-                if (is_array($entry) && self::isCacheValid($entry, $nowTs, $todayDatePh, $tz)) {
+                if (is_array($entry) && self::isCacheValid($entry, $nowTs, $todayDatePh, $tz, $role)) {
                     self::$memoryCache[$key] = $entry;
-                    return $entry['data'];
+                    $cached = $entry['data'];
+                    if ($role !== 'admin' && isset($cached['gross_profit'])) {
+                        unset($cached['gross_profit']);
+                    }
+                    return $cached;
                 }
             }
         }
@@ -113,6 +133,9 @@ final class StoreOperationsDashboardWorkspace
 
     private static function setCached(string $role, int $days, DateTimeImmutable $now, array $data): void
     {
+        if ($role !== 'admin') {
+            unset($data['gross_profit']);
+        }
         $key = "{$role}_{$days}";
         $entry = [
             'timestamp' => $now->getTimestamp(),
@@ -147,6 +170,7 @@ final class StoreOperationsDashboardWorkspace
             $exceptions = $this->exceptions($now, $days, $thresholds);
             $headline = $this->headline($now, $days, $thresholds);
             $netSales = $this->netSales($now);
+            $grossProfit = ($actorRole === 'admin') ? $this->grossProfit($now) : null;
 
             $data = [
                 'role' => $actorRole,
@@ -161,6 +185,7 @@ final class StoreOperationsDashboardWorkspace
                 'forecast' => $this->forecast(),
                 'inventory' => $this->inventory(),
                 'net_sales' => $netSales,
+                'gross_profit' => $grossProfit,
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
                 'message' => $exceptions === [] ? 'No Store-operational exceptions currently require action.' : null,
@@ -183,6 +208,7 @@ final class StoreOperationsDashboardWorkspace
                 'forecast' => [],
                 'inventory' => [],
                 'net_sales' => null,
+                'gross_profit' => null,
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
                 'message' => 'Current Store operations could not be loaded. Refresh to try again.',
@@ -694,4 +720,32 @@ final class StoreOperationsDashboardWorkspace
         $statement->execute($parameters);
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    private function grossProfit(DateTimeImmutable $now): ?array
+    {
+        try {
+            $tz = new \DateTimeZone('Asia/Manila');
+            $asOfStr = $now->setTimezone($tz)->format('Y-m-d H:i:s');
+            $service = new GrossProfitService($this->pdo);
+
+            $today = $service->calculate(['period' => 'today', 'as_of' => $now])['summary'];
+            $week = $service->calculate(['period' => 'week', 'as_of' => $now])['summary'];
+            $month = $service->calculate(['period' => 'month', 'as_of' => $now])['summary'];
+
+            return [
+                'status' => 'ongoing',
+                'as_of' => $asOfStr,
+                'timezone' => 'Asia/Manila',
+                'periods' => [
+                    'today' => $today,
+                    'week' => $week,
+                    'month' => $month,
+                ],
+            ];
+        } catch (Throwable $exception) {
+            error_log('Store-operations dashboard gross profit computation failed: ' . $exception->getMessage());
+            return null;
+        }
+    }
 }
+

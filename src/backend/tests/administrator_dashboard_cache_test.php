@@ -66,20 +66,22 @@ try {
         'CREATE TABLE roles (role_id INTEGER PRIMARY KEY, role_name TEXT)',
         'CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, username TEXT, password_hash TEXT, role_id INTEGER, branch_id INTEGER, status TEXT, must_change_password INTEGER DEFAULT 0)',
         'CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT, branch_id INTEGER, status TEXT DEFAULT "active")',
-        'CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, cashier_id INTEGER, shift_id INTEGER, total_amount REAL, payment_method TEXT, discount_type TEXT, discount_value REAL, discount_amount REAL, sale_date TEXT)',
+        'CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, cashier_id INTEGER, shift_id INTEGER, gross_amount REAL, total_amount REAL, payment_method TEXT, discount_type TEXT, discount_value REAL, discount_amount REAL, sale_date TEXT)',
         'CREATE TABLE sale_items (sale_item_id INTEGER PRIMARY KEY, sale_id INTEGER, product_id INTEGER, quantity INTEGER, unit_price REAL, subtotal REAL)',
-        'CREATE TABLE sale_item_batches (sale_item_batch_id INTEGER PRIMARY KEY, sale_item_id INTEGER, batch_id INTEGER, quantity INTEGER)',
-        'CREATE TABLE product_batches (batch_id INTEGER PRIMARY KEY, product_id INTEGER, remaining_quantity INTEGER, cost_price REAL, expiry_date TEXT)',
+        'CREATE TABLE categories (category_id INTEGER PRIMARY KEY, category_name TEXT)',
+        'CREATE TABLE sale_item_batches (sale_item_batch_id INTEGER PRIMARY KEY, sale_item_id INTEGER, batch_id INTEGER, quantity INTEGER, unit_cost REAL, cost_status TEXT)',
+        'CREATE TABLE product_batches (batch_id INTEGER PRIMARY KEY, product_id INTEGER, remaining_quantity INTEGER, cost_price REAL, expiration_date TEXT, date_received TEXT)',
         'CREATE TABLE sale_reversals (reversal_id INTEGER PRIMARY KEY, sale_id INTEGER, reversal_type TEXT, status TEXT, reason TEXT, settlement_method TEXT, refund_amount REAL, created_at TEXT)',
         'CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, cashier_id INTEGER, register_id INTEGER, opening_cash REAL, expected_cash REAL, actual_cash REAL, cash_variance REAL, opened_at TEXT DEFAULT CURRENT_TIMESTAMP, status TEXT DEFAULT "open", locked_at TEXT, closed_at TEXT, closed_by INTEGER, closing_notes TEXT, variance_threshold REAL, variance_review_required INTEGER DEFAULT 0, payment_totals TEXT, intervention_reason TEXT, reviewed_at TEXT)',
         'CREATE TABLE cash_drawer_movements (movement_id INTEGER PRIMARY KEY, shift_id INTEGER, cashier_id INTEGER, movement_type TEXT, amount REAL, reason TEXT, note TEXT, recorded_by INTEGER, recorded_at TEXT DEFAULT CURRENT_TIMESTAMP)',
         'CREATE TABLE cash_refunds (refund_id INTEGER PRIMARY KEY, sale_id INTEGER, shift_id INTEGER, cashier_id INTEGER, refund_amount REAL, payment_method TEXT, reason TEXT, note TEXT, original_cashier_id INTEGER, approved_by INTEGER, exception_reason TEXT, payment_reference TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)',
         'CREATE TABLE cash_refund_items (refund_item_id INTEGER PRIMARY KEY, refund_id INTEGER, sale_item_id INTEGER, product_id INTEGER, quantity INTEGER, unit_price REAL, subtotal REAL, disposition TEXT)',
-        'CREATE TABLE products (product_id INTEGER PRIMARY KEY, product_name TEXT, sku TEXT, barcode TEXT, branch_id INTEGER, unit_price REAL, cost_price REAL, reorder_level INTEGER, quantity_sold INTEGER DEFAULT 0, status TEXT)',
+        'CREATE TABLE products (product_id INTEGER PRIMARY KEY, product_name TEXT, sku TEXT, barcode TEXT, branch_id INTEGER, category_id INTEGER DEFAULT 1, unit_price REAL, cost_price REAL, reorder_level INTEGER, quantity_sold INTEGER DEFAULT 0, status TEXT)',
         'CREATE TABLE inventory (product_id INTEGER PRIMARY KEY, quantity_on_hand INTEGER)',
         'CREATE TABLE inventory_adjustments (adjustment_id INTEGER PRIMARY KEY, product_id INTEGER, adjustment_qty INTEGER, adjustment_type TEXT, reported_by INTEGER, shift_id INTEGER, reason TEXT, status TEXT, approved_by INTEGER, approved_at TEXT, review_notes TEXT, reported_at TEXT DEFAULT CURRENT_TIMESTAMP)',
         'CREATE TABLE stock_issue_revisions (revision_id INTEGER PRIMARY KEY, adjustment_id INTEGER, actor_id INTEGER, action TEXT, from_status TEXT, to_status TEXT, old_values TEXT, new_values TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)',
         'CREATE TABLE stock_movements (movement_id INTEGER PRIMARY KEY, product_id INTEGER, change_qty INTEGER, reason TEXT, moved_by INTEGER, adjustment_id INTEGER, moved_at TEXT DEFAULT CURRENT_TIMESTAMP)',
+        'CREATE TABLE stock_issue_batches (id INTEGER PRIMARY KEY AUTOINCREMENT, adjustment_id INTEGER NOT NULL, batch_id INTEGER NOT NULL, quantity INTEGER NOT NULL)',
         'CREATE TABLE fiscal_periods (period_id INTEGER PRIMARY KEY, period_name TEXT, start_date TEXT, end_date TEXT, status TEXT)',
         'CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT, completed_at TEXT)',
         'CREATE TABLE demand_forecasts (product_id INTEGER, job_id INTEGER, readiness_level TEXT)',
@@ -106,9 +108,10 @@ try {
         (2, 'Cashier One', 'cashier1', '{$password}', 2, 1, 'active', 0),
         (3, 'Inventory Manager', 'inventory1', '{$password}', 3, 1, 'active', 0)");
     $pdo->exec("INSERT INTO registers VALUES (1, 'Register 1', 1, 'active')");
-    $pdo->exec("INSERT INTO products VALUES (10, 'Coffee Beans', 'SKU-COF', '123456', 1, 100, 50, 5, 10, 'active')");
+    $pdo->exec("INSERT INTO categories VALUES (1, 'General')");
+    $pdo->exec("INSERT INTO products VALUES (10, 'Coffee Beans', 'SKU-COF', '123456', 1, 1, 100, 50, 5, 10, 'active')");
     $pdo->exec("INSERT INTO inventory VALUES (10, 50)");
-    $pdo->exec("INSERT INTO product_batches VALUES (1, 10, 50, 50, '2027-01-01')");
+    $pdo->exec("INSERT INTO product_batches VALUES (1, 10, 50, 50, '2027-01-01', '2026-10-01')");
     $pdo->exec("INSERT INTO fiscal_periods VALUES (1, 'October 2026', '2026-10-01', '2026-10-31', 'open')");
 
     $initialTime = new DateTimeImmutable('2026-10-16 10:00:00');
@@ -359,6 +362,60 @@ try {
     $novRolloverView = $workspace->load('admin', 30);
     $assert($pdo->queryCount > 0, 'Crossing into new month must invalidate cache');
     $assert(count($novRolloverView['net_sales']['periods']['month']['points']) === 1, 'New month rollover has 1 daily bucket');
+
+    // 13. Gross profit admin payload cached & validated
+    $clock->set(new DateTimeImmutable('2026-10-17 14:00:00'));
+    StoreOperationsDashboardWorkspace::invalidateCache();
+    $pdo->queryCount = 0;
+    $adminView = $workspace->load('admin', 30);
+    $assert(isset($adminView['gross_profit']), 'Admin view must have gross_profit');
+    $assert(isset($adminView['gross_profit']['periods']['today']), 'Admin view must have gross_profit today period');
+    $assert(isset($adminView['gross_profit']['periods']['week']), 'Admin view must have gross_profit week period');
+    $assert(isset($adminView['gross_profit']['periods']['month']), 'Admin view must have gross_profit month period');
+
+    // Repeat load: cache hit with 0 queries
+    $pdo->queryCount = 0;
+    $repeatAdminView = $workspace->load('admin', 30);
+    $assert($pdo->queryCount === 0, 'Repeat load must return cached gross_profit with 0 queries');
+    $assert($repeatAdminView['gross_profit'] === $adminView['gross_profit'], 'Cached gross_profit matches exactly');
+
+    // 14. Older cached payload missing gross_profit forces reload for admin
+    StoreOperationsDashboardWorkspace::invalidateCache();
+    $payloadNoGp = [
+        'timestamp' => $clock->now()->getTimestamp(),
+        'data' => [
+            'role' => 'admin',
+            'range_days' => 30,
+            'state' => 'ready',
+            'headline' => [],
+            'exceptions' => [],
+            'comparison' => [],
+            'staff' => [],
+            'shifts' => [],
+            'forecast' => [],
+            'inventory' => [],
+            'actions' => [],
+            'freshness' => ['generated_at' => '2026-10-17 14:00:00', 'stale_after' => '2026-10-17 14:05:00', 'refresh_seconds' => 300, 'is_stale' => false],
+            'message' => null,
+            'net_sales' => $adminView['net_sales'],
+        ],
+    ];
+    file_put_contents($cacheFile, json_encode($payloadNoGp));
+
+    $pdo->queryCount = 0;
+    $reloadedAdminView = $workspace->load('admin', 30);
+    $assert($pdo->queryCount > 0, 'Cached payload missing gross_profit must force database reload for admin');
+    $assert(isset($reloadedAdminView['gross_profit']), 'Reloaded payload must include gross_profit');
+
+    // 15. Invalidation on sale and refund
+    $pdo->queryCount = 0;
+    $workspace->load('admin', 30);
+    $assert($pdo->queryCount === 0, 'Cache is primed before sale invalidation');
+
+    StoreOperationsDashboardWorkspace::invalidateCache();
+    $pdo->queryCount = 0;
+    $afterSaleView = $workspace->load('admin', 30);
+    $assert($pdo->queryCount > 0, 'Cache invalidation on sale/refund must trigger database reload');
 
 } catch (Throwable $e) {
     $failures[] = 'Administrator dashboard cache integration test threw: ' . $e->getMessage() . "\n" . $e->getTraceAsString();
