@@ -218,6 +218,7 @@ $roleSections = [
                 ['icon' => 'bi-sliders', 'label' => 'Inventory Control', 'items' => [
                     ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-clipboard-check', 'label' => 'Inventory Counts'],
                     ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
+                    ['path' => 'components/inventory_management/supplier_pullouts.php', 'icon' => 'bi-arrow-return-left', 'label' => 'Supplier Pullouts'],
                 ]],
             ],
         ],

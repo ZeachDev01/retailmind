@@ -1441,6 +1441,64 @@ EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180003_product_warning_lead_time','Optional warning_lead_time_days on products (ticket #223)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+CREATE TABLE IF NOT EXISTS `supplier_pullouts` (
+  `pullout_id` int(11) NOT NULL AUTO_INCREMENT,
+  `product_id` int(11) NOT NULL,
+  `batch_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `supplier` varchar(150) DEFAULT NULL,
+  `pulled_by` int(11) NOT NULL,
+  `pulled_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `notes` text DEFAULT NULL,
+  PRIMARY KEY (`pullout_id`),
+  KEY `idx_supplier_pullouts_product` (`product_id`),
+  KEY `idx_supplier_pullouts_batch` (`batch_id`),
+  KEY `idx_supplier_pullouts_pulled_by` (`pulled_by`),
+  KEY `idx_supplier_pullouts_pulled_at` (`pulled_at`),
+  CONSTRAINT `fk_supplier_pullouts_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
+  CONSTRAINT `fk_supplier_pullouts_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`),
+  CONSTRAINT `fk_supplier_pullouts_user` FOREIGN KEY (`pulled_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_movements' AND column_name='reason' AND column_type NOT LIKE '%''supplier_pullout''%'),
+  'ALTER TABLE `stock_movements` MODIFY COLUMN `reason` ENUM(''purchase'',''sale'',''adjustment'',''return'',''supplier_pullout'') NOT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_movements' AND column_name='pullout_id'), 'ALTER TABLE `stock_movements` ADD COLUMN `pullout_id` INT NULL AFTER `adjustment_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='stock_movements' AND index_name='idx_stock_movements_pullout'), 'ALTER TABLE `stock_movements` ADD INDEX `idx_stock_movements_pullout` (`pullout_id`)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='stock_movements' AND column_name='pullout_id' AND referenced_table_name='supplier_pullouts' AND referenced_column_name='pullout_id'), 'ALTER TABLE `stock_movements` ADD CONSTRAINT `fk_stock_movements_pullout` FOREIGN KEY (`pullout_id`) REFERENCES `supplier_pullouts` (`pullout_id`) ON DELETE SET NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='stock_receiving') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='pullout_id'), 'ALTER TABLE `stock_receiving` ADD COLUMN `pullout_id` INT NULL AFTER `group_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='stock_receiving') AND NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND index_name='idx_stock_receiving_pullout_id'), 'ALTER TABLE `stock_receiving` ADD INDEX `idx_stock_receiving_pullout_id` (`pullout_id`)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='stock_receiving') AND NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='stock_receiving' AND column_name='pullout_id' AND referenced_table_name='supplier_pullouts' AND referenced_column_name='pullout_id'), 'ALTER TABLE `stock_receiving` ADD CONSTRAINT `fk_stock_receiving_pullout` FOREIGN KEY (`pullout_id`) REFERENCES `supplier_pullouts` (`pullout_id`) ON DELETE SET NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180004_supplier_pullouts','Record batch-specific Supplier Pullouts under Inventory Control (ticket #224)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
-SELECT 'RetailMind SQL update completed through 202610180003_product_warning_lead_time' AS result;
+SELECT 'RetailMind SQL update completed through 202610180004_supplier_pullouts' AS result;

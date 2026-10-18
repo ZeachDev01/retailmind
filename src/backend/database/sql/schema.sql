@@ -1311,18 +1311,21 @@ CREATE TABLE `stock_movements` (
   `movement_id` int(11) NOT NULL AUTO_INCREMENT,
   `product_id` int(11) NOT NULL,
   `change_qty` int(11) NOT NULL,
-  `reason` enum('purchase','sale','adjustment','return') NOT NULL,
+  `reason` enum('purchase','sale','adjustment','return','supplier_pullout') NOT NULL,
   `moved_by` int(11) DEFAULT NULL,
   `adjustment_id` int(11) DEFAULT NULL,
+  `pullout_id` int(11) DEFAULT NULL,
   `moved_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`movement_id`),
   KEY `idx_stock_movements_product_id` (`product_id`),
   KEY `idx_stock_movements_moved_at` (`moved_at`),
   KEY `idx_stock_movements_adjustment` (`adjustment_id`),
+  KEY `idx_stock_movements_pullout` (`pullout_id`),
   KEY `moved_by` (`moved_by`),
   CONSTRAINT `stock_movements_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `stock_movements_ibfk_2` FOREIGN KEY (`moved_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `fk_stock_movements_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_stock_movements_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_stock_movements_pullout` FOREIGN KEY (`pullout_id`) REFERENCES `supplier_pullouts` (`pullout_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=19723 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1396,6 +1399,34 @@ CREATE TABLE `stock_predictions` (
 -- Table structure for table `stock_receiving`
 --
 
+--
+-- Table structure for table `supplier_pullouts`
+--
+
+DROP TABLE IF EXISTS `supplier_pullouts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `supplier_pullouts` (
+  `pullout_id` int(11) NOT NULL AUTO_INCREMENT,
+  `product_id` int(11) NOT NULL,
+  `batch_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `supplier` varchar(150) DEFAULT NULL,
+  `pulled_by` int(11) NOT NULL,
+  `pulled_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `notes` text DEFAULT NULL,
+  PRIMARY KEY (`pullout_id`),
+  KEY `idx_supplier_pullouts_product` (`product_id`),
+  KEY `idx_supplier_pullouts_batch` (`batch_id`),
+  KEY `idx_supplier_pullouts_pulled_by` (`pulled_by`),
+  KEY `idx_supplier_pullouts_pulled_at` (`pulled_at`),
+  CONSTRAINT `fk_supplier_pullouts_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
+  CONSTRAINT `fk_supplier_pullouts_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`),
+  CONSTRAINT `fk_supplier_pullouts_user` FOREIGN KEY (`pulled_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 DROP TABLE IF EXISTS `stock_receiving_groups`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -1437,11 +1468,14 @@ CREATE TABLE `stock_receiving` (
   `discrepancy_qty` int(11) NOT NULL DEFAULT 0,
   `discrepancy_notes` text DEFAULT NULL,
   `notes` text DEFAULT NULL,
+  `pullout_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`receiving_id`),
   KEY `idx_stock_receiving_group_id` (`group_id`),
+  KEY `idx_stock_receiving_pullout_id` (`pullout_id`),
   KEY `product_id` (`product_id`),
   KEY `received_by` (`received_by`),
   CONSTRAINT `fk_stock_receiving_group` FOREIGN KEY (`group_id`) REFERENCES `stock_receiving_groups` (`group_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_stock_receiving_pullout` FOREIGN KEY (`pullout_id`) REFERENCES `supplier_pullouts` (`pullout_id`) ON DELETE SET NULL,
   CONSTRAINT `stock_receiving_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `stock_receiving_ibfk_3` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=469 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
