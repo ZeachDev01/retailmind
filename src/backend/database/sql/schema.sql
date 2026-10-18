@@ -1326,6 +1326,27 @@ CREATE TABLE `stock_movements` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `stock_issue_batches`
+--
+
+DROP TABLE IF EXISTS `stock_issue_batches`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `stock_issue_batches` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `adjustment_id` int(11) NOT NULL,
+  `batch_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_stock_issue_batches_adjustment` (`adjustment_id`),
+  KEY `idx_stock_issue_batches_batch` (`batch_id`),
+  CONSTRAINT `fk_stock_issue_batches_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_stock_issue_batches_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `stock_predictions`
 --
 

@@ -1421,6 +1421,20 @@ CREATE TABLE IF NOT EXISTS `inventory_count_batches` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180001_inventory_count_batches','Track batch-level counted quantities, shortages, extras, and undated reconciliation items') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+CREATE TABLE IF NOT EXISTS `stock_issue_batches` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `adjustment_id` int(11) NOT NULL,
+  `batch_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_stock_issue_batches_adjustment` (`adjustment_id`),
+  KEY `idx_stock_issue_batches_batch` (`batch_id`),
+  CONSTRAINT `fk_stock_issue_batches_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_stock_issue_batches_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180002_stock_issue_batches','Track affected batches deducted during stock issue approval') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
-SELECT 'RetailMind SQL update completed through 202610180001_inventory_count_batches' AS result;
+SELECT 'RetailMind SQL update completed through 202610180002_stock_issue_batches' AS result;

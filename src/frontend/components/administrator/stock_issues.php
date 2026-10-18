@@ -249,6 +249,32 @@ try {
                         <?php endforeach; ?>
                     <?php endif; ?>
 
+                    <h4>Deducted batches</h4>
+                    <?php if (empty($detail['batches'])): ?>
+                        <p>No batch attribution recorded.</p>
+                    <?php else: ?>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Batch</th>
+                                        <th>Expiration</th>
+                                        <th>Quantity Deducted</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($detail['batches'] as $batch): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($batch['batch_number'] ?? ('#' . $batch['batch_id'])) ?></td>
+                                            <td><?= htmlspecialchars($batch['expiration_date'] ?? 'Not recorded') ?></td>
+                                            <td>-<?= (int)$batch['quantity'] ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+
                     <h4>Linked stock movements</h4>
                     <?php if (empty($detail['stock_movements'])): ?>
                         <p>No stock movement is linked to this report (approvals record one; rejections and returns never change inventory).</p>
