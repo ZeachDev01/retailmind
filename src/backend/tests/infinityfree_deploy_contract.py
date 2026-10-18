@@ -1,4 +1,4 @@
-"""Verify the current single-production-account deployment workflow."""
+"""Verify InfinityFree deployment with independently configured database credentials."""
 import re
 from pathlib import Path
 
@@ -28,7 +28,7 @@ for secret in ['FTP_USERNAME', 'FTP_PASSWORD']:
     assert f'test -n "${secret}"' in deploy
 for variable in ['FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD']:
     assert '${{ env.' + variable + ' }}' in deploy
-assert 'test "$FTP_USERNAME" = "$DB_USER"' in deploy, 'Reject mismatched hosting accounts before upload'
+assert 'test "$FTP_USERNAME" = "$DB_USER"' not in deploy, 'Allow a separate Hostinger database user'
 assert 'protocol: ftps' in deploy and 'security: strict' in deploy
 assert re.search(r'^\s+server-dir: /htdocs/\s*$', deploy, re.M), 'Upload website files to InfinityFree htdocs'
 assert '"APP_URL=$APP_URL"' in deploy
