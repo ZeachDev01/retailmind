@@ -45,7 +45,7 @@ if ($isHosted) {
         'port' => env('DB_PORT', '3306'),
         'database' => env('DB_NAME', 'u845277124_shalom'),
         'username' => env('DB_USER', 'u845277124_shalom'),
-        'password' => env('DB_PASSWORD', ''),
+        'password' => env('DB_PASSWORD', 'Shalom3185'),
         'charset' => env('DB_CHARSET', 'utf8mb4'),
     ];
 
