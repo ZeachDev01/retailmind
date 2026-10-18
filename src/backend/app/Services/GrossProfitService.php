@@ -153,6 +153,14 @@ class GrossProfitService
 
         $saleIds = array_map(static fn($s) => (int)$s['sale_id'], $sales);
 
+        $recoverHistorical = !empty($filters['recover_historical']) || !empty($filters['establish_historical']);
+        if ($recoverHistorical && !empty($saleIds)) {
+            $this->establishHistoricalCosts($saleIds, [
+                'store_id' => $storeId,
+                'fallback_to_product_cost' => $filters['fallback_to_product_cost'] ?? true,
+            ]);
+        }
+
         // Fetch all lines for these sales to calculate sale-level discount allocations
         $saleLinesBySale = [];
         $saleItemsMap = [];
@@ -745,4 +753,334 @@ class GrossProfitService
 
         return $cache[$table] = $cols;
     }
+
+    /**
+     * Establishes stable historical cost snapshots for older sales.
+     *
+     * Provenance hierarchy:
+     * 1. Sale item batch allocation -> product_batches -> cost_price (recorded, batch)
+     * 2. Product batch -> stock_receiving -> cost_price / total_cost normalized to base unit (recorded, receiving)
+     * 3. Current product catalog cost_price > 0 (estimated, product)
+     * 4. Null / zero default -> missing / incomplete (never assume zero)
+     *
+     * Unallocated quantities (opening stock / missing batch links) receive estimated
+     * fallback or missing treatment and are persisted as explicit allocation snapshots.
+     *
+     * @param int[]|null $saleIds Optional specific sale IDs to establish.
+     * @param array $options Options: ['store_id' => int, 'force' => bool, 'fallback_to_product_cost' => bool]
+     * @return array{processed_sales: int, established_lines: int, recovered_allocations: int}
+     */
+    public function establishHistoricalCosts(?array $saleIds = null, array $options = []): array
+    {
+        $storeId = max(0, (int)($options['store_id'] ?? 0));
+        $force = !empty($options['force']);
+        $fallbackToProductCost = $options['fallback_to_product_cost'] ?? true;
+
+        if ($saleIds !== null) {
+            $targetSaleIds = array_values(array_filter(array_map('intval', $saleIds)));
+        } else {
+            $sql = "SELECT DISTINCT s.sale_id
+                    FROM sales s
+                    JOIN sale_items si ON si.sale_id = s.sale_id";
+            $where = [];
+            $params = [];
+            if ($storeId > 0) {
+                $sql .= " JOIN products p ON p.product_id = si.product_id";
+                $where[] = "p.branch_id = ?";
+                $params[] = $storeId;
+            }
+            if (!$force) {
+                $where[] = "(
+                    NOT EXISTS (SELECT 1 FROM sale_item_batches sib WHERE sib.sale_item_id = si.sale_item_id)
+                    OR EXISTS (
+                        SELECT 1 FROM sale_item_batches sib2
+                        WHERE sib2.sale_item_id = si.sale_item_id
+                          AND (sib2.unit_cost IS NULL AND (sib2.cost_source IS NULL OR sib2.cost_source = ''))
+                    )
+                    OR (
+                        (SELECT COALESCE(SUM(sib3.quantity), 0) FROM sale_item_batches sib3 WHERE sib3.sale_item_id = si.sale_item_id) < si.quantity
+                    )
+                )";
+            }
+            if (!empty($where)) {
+                $sql .= " WHERE " . implode(' AND ', $where);
+            }
+            $sql .= " ORDER BY s.sale_id ASC";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
+            $targetSaleIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        }
+
+        if (empty($targetSaleIds)) {
+            return [
+                'processed_sales' => 0,
+                'established_lines' => 0,
+                'recovered_allocations' => 0,
+            ];
+        }
+
+        $sibCols = $this->getTableColumns('sale_item_batches');
+        $hasUnitCost = isset($sibCols['unit_cost']);
+        $hasCostPrice = isset($sibCols['cost_price']);
+        $hasCostStatus = isset($sibCols['cost_status']);
+        $hasCostSource = isset($sibCols['cost_source']);
+        $hasCostProvenance = isset($sibCols['cost_provenance']);
+
+        $processedSales = count($targetSaleIds);
+        $establishedLines = 0;
+        $recoveredCount = 0;
+        $batchIdIsNullable = $this->isBatchIdNullable();
+
+        foreach ($targetSaleIds as $sId) {
+            $prodCols = $this->getTableColumns('products');
+            $costCol = isset($prodCols['cost_price']) ? 'p.cost_price' : 'NULL AS cost_price';
+            $branchCol = isset($prodCols['branch_id']) ? 'p.branch_id' : '1 AS branch_id';
+
+            $itemStmt = $this->pdo->prepare(
+                "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity, si.unit_price, si.subtotal,
+                        {$costCol} AS product_cost_price, {$branchCol} AS branch_id
+                 FROM sale_items si
+                 JOIN products p ON p.product_id = si.product_id
+                 WHERE si.sale_id = ?
+                 ORDER BY si.sale_item_id ASC"
+            );
+            $itemStmt->execute([$sId]);
+            $items = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($items as $si) {
+                if ($storeId > 0 && (int)$si['branch_id'] !== $storeId) {
+                    continue;
+                }
+
+                $siId = (int)$si['sale_item_id'];
+                $lineQty = (int)$si['quantity'];
+                $prodCost = $si['product_cost_price'] !== null && $si['product_cost_price'] !== ''
+                    ? (float)$si['product_cost_price'] : null;
+
+                $selectAllocCols = ['sib.sale_item_batch_id', 'sib.sale_item_id', 'sib.batch_id', 'sib.quantity'];
+                if ($hasUnitCost) $selectAllocCols[] = 'sib.unit_cost';
+                if ($hasCostStatus) $selectAllocCols[] = 'sib.cost_status';
+                if ($hasCostSource) $selectAllocCols[] = 'sib.cost_source';
+                if ($hasCostProvenance) $selectAllocCols[] = 'sib.cost_provenance';
+
+                $allocStmt = $this->pdo->prepare(
+                    "SELECT " . implode(', ', $selectAllocCols) . "
+                     FROM sale_item_batches sib
+                     WHERE sib.sale_item_id = ?
+                     ORDER BY sib.sale_item_batch_id ASC"
+                );
+                $allocStmt->execute([$siId]);
+                $existingAllocs = $allocStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $allocatedQty = 0;
+                $lineTouched = false;
+
+                foreach ($existingAllocs as $alloc) {
+                    $allocatedQty += (int)$alloc['quantity'];
+                    $sibId = (int)$alloc['sale_item_batch_id'];
+
+                    if (!$force) {
+                        $alreadyCosted = isset($alloc['unit_cost']) && $alloc['unit_cost'] !== null
+                            && in_array($alloc['cost_status'] ?? '', ['recorded', 'estimated'], true);
+                        $alreadySourced = !empty($alloc['cost_source']);
+                        if ($alreadyCosted || $alreadySourced) {
+                            continue;
+                        }
+                    }
+
+                    $resolved = $this->resolveUnitProvenanceCost(
+                        (int)$si['product_id'],
+                        isset($alloc['batch_id']) && $alloc['batch_id'] !== null ? (int)$alloc['batch_id'] : null,
+                        $prodCost,
+                        $fallbackToProductCost
+                    );
+
+                    $updateCols = [];
+                    $updateVals = [];
+                    if ($hasUnitCost) { $updateCols[] = 'unit_cost = ?'; $updateVals[] = $resolved['unit_cost']; }
+                    if ($hasCostPrice) { $updateCols[] = 'cost_price = ?'; $updateVals[] = $resolved['unit_cost']; }
+                    if ($hasCostStatus) { $updateCols[] = 'cost_status = ?'; $updateVals[] = $resolved['cost_status']; }
+                    if ($hasCostSource) { $updateCols[] = 'cost_source = ?'; $updateVals[] = $resolved['cost_source']; }
+                    if ($hasCostProvenance) { $updateCols[] = 'cost_provenance = ?'; $updateVals[] = $resolved['cost_provenance']; }
+
+                    if (!empty($updateCols)) {
+                        $updateVals[] = $sibId;
+                        $upStmt = $this->pdo->prepare("UPDATE sale_item_batches SET " . implode(', ', $updateCols) . " WHERE sale_item_batch_id = ?");
+                        $upStmt->execute($updateVals);
+                        $recoveredCount++;
+                        $lineTouched = true;
+                    }
+                }
+
+                // Check for unallocated quantities (opening stock / missing batch records)
+                $unallocatedQty = $lineQty - $allocatedQty;
+                if ($unallocatedQty > 0) {
+                    $resolved = $this->resolveUnitProvenanceCost(
+                        (int)$si['product_id'],
+                        null,
+                        $prodCost,
+                        $fallbackToProductCost
+                    );
+
+                    $insertCols = ['sale_item_id', 'batch_id', 'quantity'];
+                    $insertVals = [$siId, $batchIdIsNullable ? null : 0, $unallocatedQty];
+                    $insertPlaceholders = ['?', '?', '?'];
+
+                    if ($hasUnitCost) { $insertCols[] = 'unit_cost'; $insertPlaceholders[] = '?'; $insertVals[] = $resolved['unit_cost']; }
+                    if ($hasCostPrice) { $insertCols[] = 'cost_price'; $insertPlaceholders[] = '?'; $insertVals[] = $resolved['unit_cost']; }
+                    if ($hasCostStatus) { $insertCols[] = 'cost_status'; $insertPlaceholders[] = '?'; $insertVals[] = $resolved['cost_status']; }
+                    if ($hasCostSource) { $insertCols[] = 'cost_source'; $insertPlaceholders[] = '?'; $insertVals[] = $resolved['cost_source']; }
+                    if ($hasCostProvenance) { $insertCols[] = 'cost_provenance'; $insertPlaceholders[] = '?'; $insertVals[] = $resolved['cost_provenance']; }
+
+                    $inStmt = $this->pdo->prepare("INSERT INTO sale_item_batches (" . implode(', ', $insertCols) . ") VALUES (" . implode(', ', $insertPlaceholders) . ")");
+                    $inStmt->execute($insertVals);
+                    $recoveredCount++;
+                    $lineTouched = true;
+                }
+
+                if ($lineTouched) {
+                    $establishedLines++;
+                }
+            }
+        }
+
+        return [
+            'processed_sales' => $processedSales,
+            'established_lines' => $establishedLines,
+            'recovered_allocations' => $recoveredCount,
+        ];
+    }
+
+    /**
+     * Alias for establishHistoricalCosts.
+     */
+    public function recoverHistoricalCosts(?array $saleIds = null, array $options = []): array
+    {
+        return $this->establishHistoricalCosts($saleIds, $options);
+    }
+
+    /**
+     * Resolves individual unit provenance cost from batch, receiving, or product estimate.
+     *
+     * @return array{unit_cost: ?float, cost_status: string, cost_source: ?string, cost_provenance: ?string}
+     */
+    public function resolveUnitProvenanceCost(
+        int $productId,
+        ?int $batchId,
+        ?float $productCost,
+        bool $fallbackToProductCost = true
+    ): array {
+        $unitCost = null;
+        $costStatus = self::STATUS_INCOMPLETE;
+        $costSource = null;
+        $costProvenance = null;
+
+        if ($batchId !== null && $batchId > 0) {
+            $pbCols = $this->getTableColumns('product_batches');
+            $costCol = isset($pbCols['cost_price']) ? 'pb.cost_price' : 'NULL AS cost_price';
+            $recIdCol = isset($pbCols['receiving_id']) ? 'pb.receiving_id' : 'NULL AS receiving_id';
+
+            $pbStmt = $this->pdo->prepare("SELECT pb.batch_id, {$costCol}, {$recIdCol} FROM product_batches pb WHERE pb.batch_id = ?");
+            $pbStmt->execute([$batchId]);
+            $batch = $pbStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($batch) {
+                // 1. Direct batch purchase cost
+                if ($batch['cost_price'] !== null && $batch['cost_price'] !== '') {
+                    $unitCost = round((float)$batch['cost_price'], 2);
+                    $costStatus = self::STATUS_RECORDED;
+                    $costSource = 'batch';
+                    $costProvenance = 'batch';
+                } elseif (!empty($batch['receiving_id'])) {
+                    // 2. Receiving provenance
+                    $srCols = $this->getTableColumns('stock_receiving');
+                    if (!empty($srCols)) {
+                        $srCostCol = isset($srCols['cost_price']) ? 'sr.cost_price' : 'NULL AS cost_price';
+                        $srTotalCol = isset($srCols['total_cost']) ? 'sr.total_cost' : 'NULL AS total_cost';
+                        $srAcceptedCol = isset($srCols['accepted_qty']) ? 'sr.accepted_qty' : 'NULL AS accepted_qty';
+                        $srReceivedCol = isset($srCols['received_qty']) ? 'sr.received_qty' : 'NULL AS received_qty';
+
+                        $srStmt = $this->pdo->prepare("SELECT {$srCostCol}, {$srTotalCol}, {$srAcceptedCol}, {$srReceivedCol} FROM stock_receiving sr WHERE sr.receiving_id = ?");
+                        $srStmt->execute([(int)$batch['receiving_id']]);
+                        $receiving = $srStmt->fetch(PDO::FETCH_ASSOC);
+
+                        if ($receiving) {
+                            $totalCost = $receiving['total_cost'] !== null && $receiving['total_cost'] !== '' ? (float)$receiving['total_cost'] : null;
+                            $acceptedQty = (int)($receiving['accepted_qty'] ?: ($receiving['received_qty'] ?: 0));
+
+                            if ($totalCost !== null && $totalCost > 0 && $acceptedQty > 0) {
+                                $unitCost = round($totalCost / $acceptedQty, 2);
+                                $costStatus = self::STATUS_RECORDED;
+                                $costSource = 'receiving';
+                                $costProvenance = 'receiving';
+                            } elseif ($receiving['cost_price'] !== null && $receiving['cost_price'] !== '') {
+                                $rawCost = (float)$receiving['cost_price'];
+                                $unitCost = round($rawCost, 2);
+                                $costStatus = self::STATUS_RECORDED;
+                                $costSource = 'receiving';
+                                $costProvenance = 'receiving';
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Current product catalog cost fallback
+        if ($costStatus === self::STATUS_INCOMPLETE && $fallbackToProductCost) {
+            if ($productCost !== null && $productCost > 0) {
+                $unitCost = round($productCost, 2);
+                $costStatus = self::STATUS_ESTIMATED;
+                $costSource = 'product';
+                $costProvenance = $batchId ? 'batch_missing_source' : 'unallocated';
+            } else {
+                // Ambiguous zero default or null remains uncertain
+                $unitCost = null;
+                $costStatus = self::STATUS_INCOMPLETE;
+                $costSource = 'missing';
+                $costProvenance = $batchId ? 'batch_missing_source' : 'unallocated';
+            }
+        }
+
+        return [
+            'unit_cost' => $unitCost,
+            'cost_status' => $costStatus === self::STATUS_INCOMPLETE ? 'missing' : $costStatus,
+            'cost_source' => $costSource,
+            'cost_provenance' => $costProvenance,
+        ];
+    }
+
+    private function isBatchIdNullable(): bool
+    {
+        static $nullable = null;
+        if ($nullable !== null) {
+            return $nullable;
+        }
+
+        try {
+            $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'sqlite') {
+                $stmt = $this->pdo->query("PRAGMA table_info('sale_item_batches')");
+                if ($stmt) {
+                    while ($col = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                        if (($col['name'] ?? '') === 'batch_id') {
+                            return $nullable = ((int)($col['notnull'] ?? 0) === 0);
+                        }
+                    }
+                }
+            } else {
+                $stmt = $this->pdo->query("SHOW COLUMNS FROM `sale_item_batches` LIKE 'batch_id'");
+                if ($stmt) {
+                    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if ($row) {
+                        return $nullable = (strtoupper($row['Null'] ?? '') === 'YES');
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $nullable = true;
+    }
 }
+

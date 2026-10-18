@@ -1133,7 +1133,7 @@ DROP TABLE IF EXISTS `sale_item_batches`;
 CREATE TABLE `sale_item_batches` (
   `sale_item_batch_id` int(11) NOT NULL AUTO_INCREMENT,
   `sale_item_id` int(11) NOT NULL,
-  `batch_id` int(11) NOT NULL,
+  `batch_id` int(11) DEFAULT NULL,
   `quantity` int(11) NOT NULL,
   `unit_cost` decimal(10,2) DEFAULT NULL,
   `cost_price` decimal(10,2) DEFAULT NULL,

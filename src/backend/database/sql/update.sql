@@ -1532,7 +1532,16 @@ DEALLOCATE PREPARE rm_stmt;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180005_sold_stock_cost_snapshots','Gross Profit: preserve sold-stock costs during checkout (ticket #228)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+-- 202610180006_historical_sale_cost_recovery: Gross Profit: establish stable historical costs for older sales (ticket #230)
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='batch_id' AND is_nullable='NO'), 'ALTER TABLE `sale_item_batches` MODIFY COLUMN `batch_id` INT(11) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180006_historical_sale_cost_recovery','Gross Profit: establish stable historical costs for older sales (ticket #230)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
-SELECT 'RetailMind SQL update completed through 202610180005_sold_stock_cost_snapshots' AS result;
+SELECT 'RetailMind SQL update completed through 202610180006_historical_sale_cost_recovery' AS result;
+
 
