@@ -30,7 +30,7 @@ $reportCatalog = [
 ];
 
 if (current_role() === 'admin') {
-    $reportCatalog['gross_profit'] = 'Gross Profit';
+    $reportCatalog['gross_profit'] = 'Gross Profit Report';
 }
 
 function normalize_date(string $value, string $default): string
@@ -560,18 +560,68 @@ if (!array_key_exists($selectedReport, $reportCatalog)) {
     $selectedReport = 'sales_period';
 }
 
+$tz = new DateTimeZone(PhilippineTime::ZONE);
+$nowPh = new DateTimeImmutable('now', $tz);
+$todayPh = $nowPh->format('Y-m-d');
+$dayOfWeek = (int)$nowPh->format('N');
+$daysFromMonday = $dayOfWeek - 1;
+$weekStartPh = $nowPh->modify("-{$daysFromMonday} days")->format('Y-m-d');
+$monthStartPh = $nowPh->setDate((int)$nowPh->format('Y'), (int)$nowPh->format('n'), 1)->format('Y-m-d');
+
+$requestedPeriod = request_value('period', '');
+$rawFrom = request_value('from', '');
+$rawTo = request_value('to', '');
+
+if ($requestedPeriod === 'today') {
+    $fromVal = $todayPh;
+    $toVal = $todayPh;
+    $activePeriod = 'today';
+} elseif ($requestedPeriod === 'week') {
+    $fromVal = $weekStartPh;
+    $toVal = $todayPh;
+    $activePeriod = 'week';
+} elseif ($requestedPeriod === 'month') {
+    $fromVal = $monthStartPh;
+    $toVal = $todayPh;
+    $activePeriod = 'month';
+} elseif ($rawFrom !== '' || $rawTo !== '') {
+    $fromVal = $rawFrom;
+    $toVal = $rawTo !== '' ? $rawTo : $todayPh;
+    if ($fromVal === $todayPh && $toVal === $todayPh) {
+        $activePeriod = 'today';
+    } elseif ($fromVal === $weekStartPh && $toVal === $todayPh) {
+        $activePeriod = 'week';
+    } elseif ($fromVal === $monthStartPh && $toVal === $todayPh) {
+        $activePeriod = 'month';
+    } else {
+        $activePeriod = 'custom';
+    }
+} else {
+    $fromVal = $monthStartPh;
+    $toVal = $todayPh;
+    $activePeriod = 'month';
+}
+
+$validationError = null;
+$fromDateObj = DateTimeImmutable::createFromFormat('!Y-m-d', $fromVal, $tz);
+$toDateObj = DateTimeImmutable::createFromFormat('!Y-m-d', $toVal, $tz);
+
+if ($fromDateObj === false || $fromDateObj->format('Y-m-d') !== $fromVal
+    || $toDateObj === false || $toDateObj->format('Y-m-d') !== $toVal) {
+    $validationError = 'Choose a valid Philippine calendar date.';
+} elseif (strcmp($fromVal, $toVal) > 0) {
+    $validationError = 'Start date must not be after end date.';
+}
+
 $filters = [
     'store_id' => store_scope_id($pdo),
-    'from' => normalize_date(request_value('from', date('Y-m-01')), date('Y-m-01')),
-    'to' => normalize_date(request_value('to', date('Y-m-d')), date('Y-m-d')),
+    'from' => $fromVal,
+    'to' => $toVal,
     'product_id' => max(0, (int)request_value('product_id', '0')),
     'category_id' => max(0, (int)request_value('category_id', '0')),
     'granularity' => request_value('granularity', 'daily'),
+    'period' => $activePeriod,
 ];
-
-if (strtotime($filters['from']) > strtotime($filters['to'])) {
-    [$filters['from'], $filters['to']] = [$filters['to'], $filters['from']];
-}
 
 $productStatement = $pdo->prepare(
     "SELECT p.product_id, COALESCE(p.barcode, p.sku) AS sku, p.product_name
@@ -588,7 +638,21 @@ $categoryStatement = $pdo->prepare(
 );
 $categoryStatement->execute([$filters['store_id']]);
 $categories = $categoryStatement->fetchAll();
-$reportData = run_report($pdo, $selectedReport, $filters);
+
+$reportData = ['headers' => [], 'rows' => [], 'metrics' => [], 'summary' => null];
+$loadError = null;
+
+if ($validationError === null) {
+    try {
+        $reportData = run_report($pdo, $selectedReport, $filters);
+    } catch (InvalidArgumentException $e) {
+        $validationError = $e->getMessage();
+    } catch (DomainException $e) {
+        throw $e;
+    } catch (\Throwable $e) {
+        $loadError = 'Gross profit report data could not be loaded.';
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
@@ -596,31 +660,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'expor
     if ($exportReport === 'gross_profit') {
         GrossProfitService::enforceAdministratorWorkspace(current_role());
     }
-    log_activity(
-        $pdo,
-        (int)$_SESSION['user_id'],
-        'Report generation',
-        'Reports',
-        null,
-        null,
-        [
-            'report_type' => $selectedReport,
-            'format' => 'csv',
-            'filters' => $filters,
-            'row_count' => count($reportData['rows']),
-        ]
-    );
-    send_csv($selectedReport . '_' . date('Ymd_His') . '.csv', $reportData['rows'], $reportData['headers']);
+    if ($validationError === null && !empty($reportData['rows'])) {
+        log_activity(
+            $pdo,
+            (int)$_SESSION['user_id'],
+            'Report generation',
+            'Reports',
+            null,
+            null,
+            [
+                'report_type' => $selectedReport,
+                'format' => 'csv',
+                'filters' => $filters,
+                'row_count' => count($reportData['rows']),
+            ]
+        );
+        send_csv($selectedReport . '_' . date('Ymd_His') . '.csv', $reportData['rows'], $reportData['headers']);
+    }
 }
 
 $totalRows = count($reportData['rows']);
+$pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Report Generation';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head><?php retailmind_theme_head(); ?>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Report Generation</title>
+<title><?= htmlspecialchars($pageTitle) ?></title>
 <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
 </head>
@@ -630,13 +697,20 @@ $totalRows = count($reportData['rows']);
     <main class="main-content">
         <div class="topbar">
             <div>
-                <h1>Report Generation</h1>
-                <p class="page-subtitle">Sales, inventory, stock movement, forecast, and variance reporting.</p>
+                <h1 id="page-heading"><?= htmlspecialchars($pageTitle) ?></h1>
+                <p class="page-subtitle"><?= $selectedReport === 'gross_profit' ? 'Product gross profit, net sales, costs, and margins.' : 'Sales, inventory, stock movement, forecast, and variance reporting.' ?></p>
             </div>
+            <?php if ($selectedReport === 'gross_profit'): ?>
+                <div class="topbar-actions">
+                    <a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php') . '?' . http_build_query(array_filter(['period' => in_array($activePeriod, ['today', 'week', 'month'], true) ? $activePeriod : null, 'from' => $filters['from'], 'to' => $filters['to']]))) ?>" class="btn btn-secondary back-to-dashboard-btn" id="back-to-dashboard">
+                        &larr; Back to dashboard
+                    </a>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="dashboard-section report-filters">
-            <form method="GET" class="report-filter-grid">
+            <form method="GET" class="report-filter-grid" id="report-filter-form">
                 <div class="form-group">
                     <label for="report">Report</label>
                     <select id="report" name="report">
@@ -645,14 +719,27 @@ $totalRows = count($reportData['rows']);
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="form-group" id="granularity_group">
-                    <label for="granularity">Sales Period</label>
-                    <select id="granularity" name="granularity">
-                        <?php foreach (['daily' => 'Daily', 'weekly' => 'Weekly', 'monthly' => 'Monthly'] as $key => $label): ?>
-                            <option value="<?= htmlspecialchars($key) ?>" <?= $filters['granularity'] === $key ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                <?php if ($selectedReport === 'gross_profit'): ?>
+                    <div class="form-group period-controls-group" id="period_group">
+                        <label>Period</label>
+                        <div class="period-controls" role="group" aria-label="Report period">
+                            <a href="?report=gross_profit&period=today" class="period-btn <?= $activePeriod === 'today' ? 'is-active' : '' ?>" data-period="today">Today</a>
+                            <a href="?report=gross_profit&period=week" class="period-btn <?= $activePeriod === 'week' ? 'is-active' : '' ?>" data-period="week">This Week</a>
+                            <a href="?report=gross_profit&period=month" class="period-btn <?= $activePeriod === 'month' ? 'is-active' : '' ?>" data-period="month">This Month</a>
+                            <span class="period-btn <?= $activePeriod === 'custom' ? 'is-active' : '' ?>" data-period="custom">Custom</span>
+                        </div>
+                        <input type="hidden" name="period" id="period_input" value="<?= htmlspecialchars($activePeriod) ?>">
+                    </div>
+                <?php else: ?>
+                    <div class="form-group" id="granularity_group">
+                        <label for="granularity">Sales Period</label>
+                        <select id="granularity" name="granularity">
+                            <?php foreach (['daily' => 'Daily', 'weekly' => 'Weekly', 'monthly' => 'Monthly'] as $key => $label): ?>
+                                <option value="<?= htmlspecialchars($key) ?>" <?= $filters['granularity'] === $key ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                <?php endif; ?>
                 <div class="form-group">
                     <label for="from">From</label>
                     <input type="date" id="from" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
@@ -687,84 +774,301 @@ $totalRows = count($reportData['rows']);
             </form>
         </div>
 
-        <div class="dashboard-section u-mt-15">
-            <div class="section-header">
-                <div>
-                    <h2><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
-                    <div class="report-meta">
-                        <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
-                        <span><?= number_format($totalRows) ?> row<?= $totalRows === 1 ? '' : 's' ?></span>
+        <?php if ($validationError !== null): ?>
+            <div class="alert alert-danger u-my-1" role="alert" id="gp-validation-error"><?= htmlspecialchars($validationError) ?></div>
+        <?php elseif ($loadError !== null): ?>
+            <div class="alert alert-danger u-my-1" role="alert" id="gp-load-error"><?= htmlspecialchars($loadError) ?></div>
+        <?php endif; ?>
+
+        <?php if ($validationError === null && $loadError === null): ?>
+            <?php if ($selectedReport === 'gross_profit'): ?>
+                <!-- Gross Profit Layout C -->
+                <div class="dashboard-section u-mt-15">
+                    <div class="section-header">
+                        <div>
+                            <h2 id="gross-profit-heading">Gross Profit Report</h2>
+                            <div class="report-meta">
+                                <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
+                                <span><?= number_format($totalRows) ?> product<?= $totalRows === 1 ? '' : 's' ?></span>
+                                <span class="badge"><?= ucfirst($activePeriod) ?></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="gross-profit-layout-c">
+                        <!-- Left Panel on desktop: Product Table -->
+                        <div class="gp-table-panel">
+                            <p class="net-units-note" id="net-units-explanation">
+                                <strong>Net units:</strong> Units sold minus units refunded in the selected period. Products refunded with no sales in this period appear with negative net units and do not indicate lifetime customer holdings.
+                            </p>
+
+                            <div class="gp-table-wrap" tabindex="0" role="region" aria-label="Products gross profit table container">
+                                <table class="gp-product-table" aria-label="Gross Profit by Product">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Product</th>
+                                            <th scope="col" class="num-cell">Net Units</th>
+                                            <th scope="col" class="num-cell">Net Sales</th>
+                                            <th scope="col" class="num-cell">Product Cost</th>
+                                            <th scope="col" class="num-cell">Gross Profit</th>
+                                            <th scope="col">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($reportData['rows'] as $row): 
+                                            $raw = $row['raw'] ?? [];
+                                            $isInc = !empty($raw['is_incomplete']);
+                                            $profitVal = $raw['gross_profit'] ?? null;
+                                            $costVal = $raw['net_cost'] ?? null;
+                                            $salesVal = (float)($raw['net_sales'] ?? 0);
+                                            $unitsVal = (int)($raw['net_units'] ?? 0);
+                                            $statusVal = strtolower((string)($raw['status'] ?? 'recorded'));
+                                        ?>
+                                            <tr>
+                                                <td>
+                                                    <div class="product-identity">
+                                                        <span class="product-name font-weight-bold"><?= htmlspecialchars($row['Product']) ?></span>
+                                                        <span class="product-meta text-muted small"><?= htmlspecialchars($row['SKU']) ?> &middot; <?= htmlspecialchars($row['Category']) ?></span>
+                                                    </div>
+                                                </td>
+                                                <td class="num-cell <?= $unitsVal < 0 ? 'is-negative' : '' ?>">
+                                                    <?= number_format($unitsVal) ?>
+                                                </td>
+                                                <td class="num-cell <?= $salesVal < 0 ? 'is-negative' : '' ?>">
+                                                    <?= $salesVal < 0 ? '-₱' : '₱' ?><?= number_format(abs($salesVal), 2) ?>
+                                                </td>
+                                                <td class="num-cell <?= $costVal !== null && $costVal < 0 ? 'is-negative' : '' ?>">
+                                                    <?= $isInc ? '—' : ($costVal !== null && $costVal < 0 ? '-₱' . number_format(abs($costVal), 2) : '₱' . number_format((float)$costVal, 2)) ?>
+                                                </td>
+                                                <td class="num-cell <?= $profitVal !== null && $profitVal < 0 ? 'is-negative' : '' ?>">
+                                                    <?= $isInc ? '—' : ($profitVal !== null && $profitVal < 0 ? '-₱' . number_format(abs($profitVal), 2) : '₱' . number_format((float)$profitVal, 2)) ?>
+                                                </td>
+                                                <td>
+                                                    <span class="profit-status-badge status-<?= $statusVal ?>"><?= htmlspecialchars(ucfirst($statusVal)) ?></span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        <?php if (empty($reportData['rows'])): ?>
+                                            <tr>
+                                                <td colspan="6" class="empty-table-message" style="text-align:center; padding: 2.5rem 1rem; color: var(--muted);">
+                                                    No sales or refund activity in the selected period.
+                                                </td>
+                                            </tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel on desktop: At a glance summary -->
+                        <div class="gp-summary-panel">
+                            <?php 
+                                $summary = $reportData['summary'] ?? [];
+                                $sumStatus = (string)($summary['status'] ?? 'recorded');
+                                $isSumInc = $sumStatus === 'incomplete';
+                                $sumNetSales = (float)($summary['total_net_sales'] ?? 0);
+                                $sumNetCost = $summary['total_net_cost'] ?? null;
+                                $sumProfit = $summary['total_gross_profit'] ?? null;
+                                $sumMargin = $summary['total_margin'] ?? null;
+                            ?>
+                            <div class="gp-glance-card" id="at-a-glance-summary">
+                                <h3>At a glance</h3>
+                                <div class="glance-summary-list">
+                                    <div class="glance-line">
+                                        <span class="glance-label">Sales before deductions</span>
+                                        <span class="glance-val" id="glance-gross-sales">₱<?= number_format((float)($summary['total_gross_sales'] ?? 0), 2) ?></span>
+                                    </div>
+                                    <div class="glance-line">
+                                        <span class="glance-label">Less discounts</span>
+                                        <span class="glance-val deduction" id="glance-discounts">-₱<?= number_format((float)($summary['total_discounts'] ?? 0), 2) ?></span>
+                                    </div>
+                                    <div class="glance-line">
+                                        <span class="glance-label">Less refunds issued</span>
+                                        <span class="glance-val deduction" id="glance-refunds">-₱<?= number_format((float)($summary['total_refunds'] ?? 0), 2) ?></span>
+                                    </div>
+                                    <div class="glance-line highlight-net">
+                                        <span class="glance-label">Net Sales</span>
+                                        <span class="glance-val <?= $sumNetSales < 0 ? 'is-negative' : '' ?>" id="glance-net-sales"><?= $sumNetSales < 0 ? '-₱' : '₱' ?><?= number_format(abs($sumNetSales), 2) ?></span>
+                                    </div>
+                                    <div class="glance-line">
+                                        <span class="glance-label">Less cost of products sold</span>
+                                        <span class="glance-val <?= $isSumInc ? 'is-incomplete' : 'deduction' ?>" id="glance-net-cost">
+                                            <?= $isSumInc || $sumNetCost === null ? '—' : ($sumNetCost < 0 ? '₱' . number_format(abs($sumNetCost), 2) : '-₱' . number_format($sumNetCost, 2)) ?>
+                                        </span>
+                                    </div>
+                                    <div class="glance-line highlight-profit <?= !$isSumInc && $sumProfit !== null ? ($sumProfit > 0 && $sumStatus === 'recorded' ? 'is-positive' : ($sumProfit < 0 ? 'is-negative' : '')) : '' ?>">
+                                        <span class="glance-label">Gross Profit</span>
+                                        <span class="glance-val <?= !$isSumInc && $sumProfit !== null && $sumProfit < 0 ? 'is-negative' : '' ?>" id="glance-gross-profit">
+                                            <?= $isSumInc || $sumProfit === null ? '—' : ($sumProfit < 0 ? '-₱' . number_format(abs($sumProfit), 2) : '₱' . number_format($sumProfit, 2)) ?>
+                                        </span>
+                                    </div>
+                                    <?php if ($sumStatus === 'recorded' && $sumNetSales > 0 && $sumMargin !== null): ?>
+                                        <div class="glance-margin-badge" id="glance-margin">
+                                            <span>Profit Margin:</span>
+                                            <strong class="<?= $sumMargin < 0 ? 'is-negative' : '' ?>"><?= number_format($sumMargin, 2) ?>%</strong>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <?php if ($isSumInc): ?>
+                                    <div class="profit-incomplete-explanation" id="profit-incomplete-explanation" role="alert">
+                                        <span class="alert-icon" aria-hidden="true">⚠️</span>
+                                        <div>
+                                            <strong><?= (int)($summary['affected_lines_count'] ?? 0) ?> affected sold line<?= ($summary['affected_lines_count'] ?? 0) === 1 ? '' : 's' ?></strong> missing cost snapshots.
+                                            Full cost, gross profit, and margin are withheld to prevent misleading financial totals.
+                                        </div>
+                                    </div>
+                                    <div class="known-costs-subtotal" id="known-costs-subtotal">
+                                        <h4>Known-Cost Subtotal (Partial)</h4>
+                                        <div class="known-subtotal-grid">
+                                            <div><span class="known-label">Known Net Sales</span> <span class="known-val">₱<?= number_format((float)($summary['known_net_sales'] ?? 0), 2) ?></span></div>
+                                            <div><span class="known-label">Known Product Cost</span> <span class="known-val">₱<?= number_format((float)($summary['known_net_cost'] ?? 0), 2) ?></span></div>
+                                            <div><span class="known-label">Known Gross Profit</span> <span class="known-val">₱<?= number_format((float)($summary['known_gross_profit'] ?? 0), 2) ?></span></div>
+                                            <?php if (($summary['known_margin'] ?? null) !== null): ?>
+                                                <div><span class="known-label">Known Margin</span> <span class="known-val"><?= number_format((float)$summary['known_margin'], 2) ?>%</span></div>
+                                            <?php endif; ?>
+                                        </div>
+                                        <p class="small text-muted" style="margin: 0.5rem 0 0;">Excludes sale lines missing cost snapshots.</p>
+                                    </div>
+                                <?php endif; ?>
+
+                                <details class="profit-return-help" id="profit-return-help">
+                                    <summary>How returns affect profit</summary>
+                                    <div class="return-help-drawer">
+                                        <p><strong>Restockable returns:</strong> Items returned to sellable inventory reverse their original product cost in this period.</p>
+                                        <p><strong>Damaged / Disposed returns:</strong> Unsellable items do not reverse product cost, resulting in an operational loss of the merchandise cost.</p>
+                                    </div>
+                                </details>
+
+                                <p class="profit-exclusion-note" id="profit-exclusion-note">Gross profit reflects product revenue minus product cost. Rent, wages, electricity, and other operating expenses are excluded.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="report-actions no-print">
+                        <form method="POST">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="export_csv">
+                            <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
+                            <input type="hidden" name="period" value="<?= htmlspecialchars($activePeriod) ?>">
+                            <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
+                            <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
+                            <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
+                            <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
+                            <button type="submit" class="btn" id="export-csv-btn">Export CSV</button>
+                        </form>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
                     </div>
                 </div>
-            </div>
-            <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
-            <?php if (in_array($selectedReport, ['sales_period', 'sales_product', 'sales_category', 'sales_cashier', 'fast_moving', 'slow_moving'], true)): ?>
-                <p class="section-description">Refunds are shown separately from original sales and grouped by the sale date.</p>
-            <?php elseif ($selectedReport === 'refunds'): ?>
-                <p class="section-description">Refunds are listed by the date they were issued.</p>
-            <?php endif; ?>
-
-            <?php if (!empty($reportData['metrics'])): ?>
-                <div class="card-grid u-my-1">
-                    <?php foreach ($reportData['metrics'] as $label => $value): ?>
-                        <div class="stat-card">
-                            <div class="value"><?= htmlspecialchars((string)$value) ?></div>
-                            <div class="label"><?= htmlspecialchars((string)$label) ?></div>
+            <?php else: ?>
+                <!-- Ordinary Reports (preserved) -->
+                <div class="dashboard-section u-mt-15">
+                    <div class="section-header">
+                        <div>
+                            <h2><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
+                            <div class="report-meta">
+                                <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
+                                <span><?= number_format($totalRows) ?> row<?= $totalRows === 1 ? '' : 's' ?></span>
+                            </div>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
+                    <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
+                    <?php if (in_array($selectedReport, ['sales_period', 'sales_product', 'sales_category', 'sales_cashier', 'fast_moving', 'slow_moving'], true)): ?>
+                        <p class="section-description">Refunds are shown separately from original sales and grouped by the sale date.</p>
+                    <?php elseif ($selectedReport === 'refunds'): ?>
+                        <p class="section-description">Refunds are listed by the date they were issued.</p>
+                    <?php endif; ?>
+
+                    <?php if (!empty($reportData['metrics'])): ?>
+                        <div class="card-grid u-my-1">
+                            <?php foreach ($reportData['metrics'] as $label => $value): ?>
+                                <div class="stat-card">
+                                    <div class="value"><?= htmlspecialchars((string)$value) ?></div>
+                                    <div class="label"><?= htmlspecialchars((string)$label) ?></div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <?php foreach ($reportData['headers'] as $header): ?>
+                                        <th><?= htmlspecialchars($header) ?></th>
+                                    <?php endforeach; ?>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($reportData['rows'] as $row): ?>
+                                    <tr>
+                                        <?php foreach ($reportData['headers'] as $header): ?>
+                                            <td><?= htmlspecialchars((string)($row[$header] ?? '')) ?></td>
+                                        <?php endforeach; ?>
+                                    </tr>
+                                <?php endforeach; ?>
+                                <?php if (!$reportData['rows']): ?>
+                                    <tr><td colspan="<?= max(1, count($reportData['headers'])) ?>" style="text-align:center;color:var(--muted);">No records match these filters.</td></tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="report-actions no-print">
+                        <form method="POST">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="export_csv">
+                            <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
+                            <input type="hidden" name="granularity" value="<?= htmlspecialchars($filters['granularity']) ?>">
+                            <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
+                            <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
+                            <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
+                            <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
+                            <button type="submit" class="btn">Export CSV</button>
+                        </form>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
+                    </div>
                 </div>
             <?php endif; ?>
-
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <?php foreach ($reportData['headers'] as $header): ?>
-                                <th><?= htmlspecialchars($header) ?></th>
-                            <?php endforeach; ?>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($reportData['rows'] as $row): ?>
-                            <tr>
-                                <?php foreach ($reportData['headers'] as $header): ?>
-                                    <td><?= htmlspecialchars((string)($row[$header] ?? '')) ?></td>
-                                <?php endforeach; ?>
-                            </tr>
-                        <?php endforeach; ?>
-                        <?php if (!$reportData['rows']): ?>
-                            <tr><td colspan="<?= max(1, count($reportData['headers'])) ?>" style="text-align:center;color:var(--muted);">No records match these filters.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="report-actions no-print">
-                <form method="POST">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="export_csv">
-                    <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
-                    <input type="hidden" name="granularity" value="<?= htmlspecialchars($filters['granularity']) ?>">
-                    <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
-                    <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
-                    <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
-                    <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
-                    <button type="submit" class="btn">Export CSV</button>
-                </form>
-                <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
-                <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
-            </div>
-        </div>
+        <?php endif; ?>
     </main>
 </div>
 <script>
 const reportSelect = document.getElementById('report');
 const granularityGroup = document.getElementById('granularity_group');
-function syncGranularity() {
-    granularityGroup.style.display = reportSelect.value === 'sales_period' ? '' : 'none';
+const periodGroup = document.getElementById('period_group');
+function syncReportControls() {
+    if (granularityGroup) {
+        granularityGroup.style.display = reportSelect.value === 'sales_period' ? '' : 'none';
+    }
+    if (periodGroup) {
+        periodGroup.style.display = reportSelect.value === 'gross_profit' ? '' : 'none';
+    }
 }
-reportSelect.addEventListener('change', syncGranularity);
-syncGranularity();
+if (reportSelect) {
+    reportSelect.addEventListener('change', () => {
+        syncReportControls();
+        const form = document.getElementById('report-filter-form');
+        if (form) form.submit();
+    });
+    syncReportControls();
+}
+
+const fromInput = document.getElementById('from');
+const toInput = document.getElementById('to');
+const periodInput = document.getElementById('period_input');
+if (fromInput && toInput && periodInput) {
+    const onDateChange = () => {
+        periodInput.value = 'custom';
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.classList.toggle('is-active', btn.getAttribute('data-period') === 'custom');
+        });
+    };
+    fromInput.addEventListener('change', onDateChange);
+    toInput.addEventListener('change', onDateChange);
+}
 </script>
 </body>
 </html>

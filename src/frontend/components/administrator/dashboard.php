@@ -86,7 +86,7 @@ $profitRange = $activeProfitData['date_range'] ?? [];
 $activeProfitFrom = (string)($profitRange['from'] ?? date('Y-m-d'));
 $activeProfitTo = (string)($profitRange['to'] ?? date('Y-m-d'));
 
-$profitReportUrl = app_url('components/report/report_generation.php') . '?report=gross_profit&from=' . urlencode($activeProfitFrom) . '&to=' . urlencode($activeProfitTo);
+$profitReportUrl = app_url('components/report/report_generation.php') . '?report=gross_profit&from=' . urlencode($activeProfitFrom) . '&to=' . urlencode($activeProfitTo) . '&period=' . urlencode($selectedPeriod);
 $headlineOrder = [
     'sales_cash_exceptions' => ['Sales & cash exceptions', 'bi-exclamation-diamond'],
     'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam'],

@@ -691,6 +691,7 @@ class GrossProfitService
                 'Refunds' => number_format((float)$r['refunds'], 2),
                 'Net Sales' => number_format((float)$r['net_sales'], 2),
                 'Net Cost' => $r['is_incomplete'] ? '-' : number_format((float)$r['net_cost'], 2),
+                'Product Cost' => $r['is_incomplete'] ? '-' : number_format((float)$r['net_cost'], 2),
                 'Gross Profit' => $r['is_incomplete'] ? '-' : number_format((float)$r['gross_profit'], 2),
                 'Margin' => $r['margin'] !== null ? number_format((float)$r['margin'], 2) . '%' : '-',
                 'Status' => ucfirst((string)$r['status']),
