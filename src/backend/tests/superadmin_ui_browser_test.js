@@ -257,6 +257,90 @@ const fixture = action => {
                     for (const tab of await page.locator('[data-analytics-tab]').all()) await tab.tap();
                 }
                 if (inventory && screen === 'inventory_management/inventory_overview') {
+                    assert.equal(await page.locator('#overview-product-view').isVisible(), true, 'Product lookup is visible on entry');
+                    const rows = page.locator('[data-overview-product-row]:visible');
+                    const search = page.locator('#overview-product-search');
+                    const category = page.locator('#overview-category-filter');
+                    const status = page.locator('#overview-filter-select');
+                    assert.equal(await rows.count(), 10);
+                    await page.locator('#overview-page-next').tap();
+                    for (const query of ['  REPORT PAGINATION ITEM 164  ', 'report-164', 'lookup brand', 'theme-barcode']) {
+                        await search.fill(query);
+                        assert.equal(await rows.count(), 1, 'Search includes name, SKU/barcode and brand across all pages');
+                        assert.equal(await page.locator('#overview-page-status').innerText(), 'Page 1 of 1');
+                    }
+                    await search.fill('report pagination');
+                    await category.selectOption({label: 'Tea & Coffee'});
+                    assert.equal(await rows.count(), 1, 'Search combines with category');
+                    await status.selectOption('out');
+                    assert.equal(await rows.count(), 0, 'Stock status combines with search and category');
+                    assert.equal(await page.locator('#overview-product-empty').isVisible(), true);
+                    assert.equal(await page.locator('#overview-product-pagination').isVisible(), false);
+                    await status.selectOption('all');
+                    await search.fill('no-product-matches-this');
+                    assert.equal(await rows.count(), 0);
+                    await search.fill('');
+                    assert.equal(await rows.count(), 1, 'Clearing search preserves category');
+                    await category.selectOption('');
+                    assert.equal(await rows.count(), 10);
+                    await page.locator('#overview-page-next').tap();
+                    assert.equal(await page.locator('#overview-page-status').innerText(), 'Page 2 of 7');
+                    await category.selectOption({label: 'Tea & Coffee'});
+                    assert.equal(await page.locator('#overview-page-status').innerText(), 'Page 1 of 1');
+                    await category.selectOption('');
+                    const productHeader = page.locator('.overview-product-table th').filter({has: page.getByRole('button', {name: 'Product', exact: true})});
+                    const productSort = productHeader.getByRole('button', {name: 'Product', exact: true});
+                    await page.locator('#overview-page-next').tap();
+                    await productSort.click({timeout: 1500});
+                    assert.equal(await productHeader.getAttribute('aria-sort'), 'ascending');
+                    assert.equal(await rows.first().locator('.overview-product-name strong').innerText(), 'Report pagination item 100');
+                    assert.equal(await page.locator('#overview-page-status').innerText(), 'Page 1 of 7', 'Sorting resets pagination');
+                    await productSort.focus();
+                    await page.keyboard.press('Enter');
+                    assert.equal(await productHeader.getAttribute('aria-sort'), 'descending');
+                    assert.equal(await rows.first().locator('.overview-product-name strong').innerText(), 'Theme Test Item', 'Descending sort includes products beyond the first page');
+                    await search.fill('report pagination');
+                    assert.equal(await rows.first().locator('.overview-product-name strong').innerText(), 'Report pagination item 164', 'Search retains sort order');
+                    await search.fill('');
+                    await productSort.click();
+                    for (const label of ['Selling Price', 'Cost Price', 'On Hand']) {
+                        const sort = page.getByRole('button', {name: label, exact: true});
+                        await sort.click({timeout: 1500});
+                        assert.equal(await rows.first().locator('.overview-product-name strong').innerText(), 'Report pagination item 100', label + ' sorts numbers ascending');
+                        await sort.click();
+                        assert.equal(await rows.first().locator('.overview-product-name strong').innerText(), 'Report pagination item 102', label + ' sorts numbers descending, including thousands');
+                        assert.equal(await productHeader.getAttribute('aria-sort'), 'none', 'Only the active column announces sort direction');
+                    }
+                    const dateSort = page.getByRole('button', {name: 'Next Expiration', exact: true});
+                    await dateSort.click({timeout: 1500});
+                    assert.deepEqual(await rows.locator('.overview-next-exp').allTextContents(), ['2099-02-01', '2099-12-01', '—', '—', '—', '—', '—', '—', '—', '—'], 'Dates ascend with missing dates last');
+                    await dateSort.click();
+                    assert.deepEqual(await rows.locator('.overview-next-exp').allTextContents(), ['2099-12-01', '2099-02-01', '—', '—', '—', '—', '—', '—', '—', '—'], 'Missing dates stay last when descending');
+                    for (const [label, column, ascending, descending] of [
+                        ['SKU / Barcode', 2, 'REPORT-100', 'THEME-ITEM'],
+                        ['Category', 3, 'Tea & Coffee', 'Uncategorized'],
+                        ['Expired Qty', 7, '0', '12'],
+                        ['Status', 10, 'Expired', 'Low stock'],
+                    ]) {
+                        const sort = page.getByRole('button', {name: label, exact: true});
+                        await sort.click({timeout: 1500});
+                        assert.ok((await rows.first().locator('td').nth(column).innerText()).trim().startsWith(ascending), label + ' ascends');
+                        await sort.click();
+                        assert.ok((await rows.first().locator('td').nth(column).innerText()).trim().startsWith(descending), label + ' descends');
+                    }
+                    await page.getByRole('button', {name: 'Expired Qty', exact: true}).click();
+                    await page.getByRole('button', {name: 'Expired Qty', exact: true}).click();
+                    await status.selectOption('expired');
+                    assert.equal(await rows.count(), 3);
+                    assert.equal(await rows.first().locator('.overview-product-name strong').innerText(), 'Report pagination item 102', 'Status filtering retains numeric descending order');
+                    await status.selectOption('all');
+                    await search.fill('no-product-matches-this');
+                    await dateSort.click();
+                    assert.equal(await rows.count(), 0, 'Sorting an empty result is safe');
+                    await search.fill('');
+                    await productSort.click();
+                    assert.equal(await page.locator('.overview-product-table th').filter({hasText: 'Actions'}).getByRole('button').count(), 0, 'Actions stays unsorted');
+                    await page.locator('#overview-back').tap();
                     await page.locator('#overview-tab-fefo').tap();
                     assert.equal(await page.locator('#overview-tab-fefo').getAttribute('aria-selected'), 'true');
                     await page.keyboard.press('ArrowLeft');
