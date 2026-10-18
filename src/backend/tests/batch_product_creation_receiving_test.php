@@ -37,6 +37,7 @@ try {
     class SqliteTestPdo extends PDO {
         #[\ReturnTypeWillChange]
         public function prepare(string $query, array $options = []): PDOStatement|false {
+            $query = str_replace('DATE_ADD(CURDATE(), INTERVAL ? DAY)', "strftime('%Y-%m-%d', CURDATE(), '+' || ? || ' days')", $query);
             return parent::prepare(preg_replace('/\s+FOR\s+UPDATE\b/i', '', $query), $options);
         }
         #[\ReturnTypeWillChange]
@@ -485,6 +486,7 @@ try {
         'product_name' => 'Artisan Sourdough Bread',
         'selling_price' => 35.00,
         'reorder_level' => 15,
+        'expiration_date' => '2029-01-01', // Catalog edits cannot alter batch dates or legacy evidence.
     ], 1);
 
     $breadProdAfterEdit = $pdo->query("SELECT * FROM products WHERE product_id = {$breadId}")->fetch(PDO::FETCH_ASSOC);
@@ -580,9 +582,129 @@ try {
     $assert($invAfterBread === $invBeforeBread, 'Line 1 product inventory on hand unchanged on rollback');
     $assert($invAfterUndated === $invBeforeUndated, 'Line 2 product inventory on hand unchanged on rollback');
 
+    echo "Testing starting quantity validation at the public creation workflow...\n";
+    foreach ([-1, '1.5', '2147483648', [], true] as $invalidQuantity) {
+        $rejected = false;
+        try {
+            $productService->createProduct([
+                'product_name' => 'Invalid starting quantity',
+                'initial_stock_quantity' => $invalidQuantity,
+            ], 1);
+        } catch (RuntimeException $e) {
+            $rejected = true;
+        }
+        $assert($rejected, 'Invalid starting quantity rejected: ' . json_encode($invalidQuantity));
+    }
+
+    // The retained legacy HTTP purchase action uses this public service workflow too.
+    echo "Testing legacy stock purchase preserves batch dates and product evidence...\n";
+    $productService->purchaseStock([
+        'search_term' => 'Artisan Sourdough Bread',
+        'purchase_quantity' => 4,
+        'purchase_cost_price' => 15,
+        'expiration_date' => '2027-02-28',
+    ], 1);
+    $legacyBatches = $pdo->query("SELECT * FROM product_batches WHERE product_id = {$breadId} ORDER BY batch_id")->fetchAll(PDO::FETCH_ASSOC);
+    $assert(count($legacyBatches) === 5, 'Legacy purchase creates a distinct batch');
+    $assert($legacyBatches[4]['expiration_date'] === '2027-02-28' && (int)$legacyBatches[4]['remaining_quantity'] === 4, 'Legacy purchase retains supplied date and quantity');
+    $assert($legacyBatches[0]['expiration_date'] === '2026-11-01', 'Legacy purchase preserves opening batch date');
+    $assert($pdo->query("SELECT expiration_date FROM products WHERE product_id = {$breadId}")->fetchColumn() === '2026-11-01', 'Legacy purchase preserves original Product-date evidence');
+    $assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$breadId}")->fetchColumn() === 79, 'Legacy purchase increases current inventory by four');
+
+    echo "Testing legacy purchase rejects a missing current balance...\n";
+    $pdo->exec("DELETE FROM inventory WHERE product_id = {$zeroStockId}");
+    $missingBalanceRejected = false;
+    try {
+        $productService->purchaseStock(['search_term' => 'Zero Stock Loaf', 'product_name' => 'Zero Stock Loaf',
+            'purchase_quantity' => 3, 'expiration_date' => '2027-01-01'], 1);
+    } catch (RuntimeException $e) {
+        $missingBalanceRejected = true;
+    }
+    $assert($missingBalanceRejected, 'Legacy purchase refuses missing inventory rather than recording unbalanced stock or a duplicate Product');
+
+    // Fail at the last write, not input validation: preceding batches and totals must roll back too.
+    echo "Testing storage-failure rollback for multi-product receiving and opening stock...\n";
+    $savedState = static function () use ($pdo): array {
+        $state = [];
+        foreach (['products', 'inventory', 'product_batches', 'stock_receiving_groups', 'stock_receiving', 'stock_movements', 'purchase_history', 'activity_log'] as $table) {
+            $state[$table] = $pdo->query("SELECT * FROM {$table} ORDER BY 1")->fetchAll(PDO::FETCH_ASSOC);
+        }
+        return $state;
+    };
+    $stateBefore = $savedState();
+    $pdo->exec("CREATE TRIGGER fail_receiving_movement BEFORE INSERT ON stock_movements
+        WHEN NEW.product_id = {$undatedId} BEGIN SELECT RAISE(ABORT, 'Injected movement failure'); END");
+    $storageFailed = false;
+    try {
+        $receivingService->receiveShoppingTrip([
+            ['product_id' => $breadId, 'received_qty' => 2, 'cost_price' => '15.00', 'expiration_date' => '2027-03-01'],
+            ['product_id' => $undatedId, 'received_qty' => 3, 'cost_price' => '50.00'],
+        ], ['supplier' => 'Storage rollback fixture'], 1);
+    } catch (RuntimeException $e) {
+        $storageFailed = true;
+    } finally {
+        $pdo->exec('DROP TRIGGER fail_receiving_movement');
+    }
+    $assert($storageFailed && !$pdo->inTransaction(), 'Receiving storage failure closes the failed transaction');
+    $assert($savedState() === $stateBefore, 'Storage failure rolls back both Products, totals, batches, receiving, movements, and purchase history');
+
+    $pdo->exec("CREATE TRIGGER fail_opening_movement BEFORE INSERT ON stock_movements
+        BEGIN SELECT RAISE(ABORT, 'Injected opening movement failure'); END");
+    $openingFailed = false;
+    try {
+        $productService->createProduct(['product_name' => 'Failed Opening Batch', 'initial_stock_quantity' => 7,
+            'expiration_date' => '2027-03-01'], 1);
+    } catch (RuntimeException $e) {
+        $openingFailed = true;
+    } finally {
+        $pdo->exec('DROP TRIGGER fail_opening_movement');
+    }
+    $assert($openingFailed && !$pdo->inTransaction(), 'Opening movement failure closes the failed transaction');
+    $assert($savedState() === $stateBefore, 'Opening failure leaves no Product, inventory, batch, purchase history, or movement');
+
+    echo "Testing Fiscal Period protection for starting stock and receiving...\n";
+    $pdo->exec("UPDATE fiscal_periods SET status = 'closed'");
+    $closedState = $savedState();
+    foreach (['opening', 'receiving'] as $workflow) {
+        $blocked = false;
+        try {
+            if ($workflow === 'opening') {
+                $productService->createProduct(['product_name' => 'Closed period opening', 'initial_stock_quantity' => 1], 1);
+            } else {
+                $receivingService->receiveStock(['product_id' => $breadId, 'received_qty' => 1], 1);
+            }
+        } catch (RuntimeException $e) {
+            $blocked = true;
+        }
+        $assert($blocked && $savedState() === $closedState, "Closed Fiscal Period blocks {$workflow} without any saved stock changes");
+    }
+    $pdo->exec("UPDATE fiscal_periods SET status = 'open'");
+
+    echo "Testing successful atomic multi-product receiving...\n";
+    $received = $receivingService->receiveShoppingTrip([
+        ['product_id' => $breadId, 'received_qty' => 2, 'expiration_date' => '2027-03-01'],
+        ['product_id' => $undatedId, 'received_qty' => 3],
+    ], ['supplier' => 'Successful trip'], 1);
+    $assert(count($received) === 2 && $received[0]['group_id'] === $received[1]['group_id'], 'Both Products saved under one receiving entry');
+    $assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$breadId}")->fetchColumn() === 81, 'Successful trip increases bread total from 79 to 81');
+    $assert((int)$pdo->query("SELECT SUM(remaining_quantity) FROM product_batches WHERE product_id = {$breadId}")->fetchColumn() === 81, 'Bread batch quantities equal the committed total');
+    $assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$undatedId}")->fetchColumn() === 18, 'Successful trip increases merchandise total from 15 to 18');
+    $assert((int)$pdo->query("SELECT SUM(remaining_quantity) FROM product_batches WHERE product_id = {$undatedId}")->fetchColumn() === 18, 'Undated merchandise batches equal the committed total');
+
+    $stateBefore = $savedState();
+    foreach ([['purchase_quantity' => '1.5'], ['expiration_date' => '2026-02-31']] as $invalidPurchase) {
+        $invalidRejected = false;
+        try {
+            $productService->purchaseStock(array_replace(['search_term' => 'Artisan Sourdough Bread', 'purchase_quantity' => 1], $invalidPurchase), 1);
+        } catch (RuntimeException $e) {
+            $invalidRejected = true;
+        }
+        $assert($invalidRejected && $savedState() === $stateBefore, 'Legacy purchase rejects invalid quantities/dates without saving changes');
+    }
+
 } catch (Throwable $e) {
     $failures[] = "Unexpected exception: " . $e->getMessage() . "\n" . $e->getTraceAsString();
-    fwrite(STDERR, "  fail - Unexpected exception: {$e->getMessage()}\n");
+    fwrite(STDERR, "  fail - Unexpected exception: {$e->getMessage()}\n{$e->getTraceAsString()}\n");
 }
 
 if (!empty($failures)) {

@@ -31,7 +31,7 @@ class ProductService
            $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand
              FROM products p
-             JOIN inventory i ON p.product_id = i.product_id
+             LEFT JOIN inventory i ON p.product_id = i.product_id
                WHERE (p.barcode = ? OR p.case_barcode = ? OR p.sku = ? OR p.product_name = ?){$scopeSql}
              LIMIT 1"
         );
@@ -44,7 +44,7 @@ class ProductService
         $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand
              FROM products p
-             JOIN inventory i ON p.product_id = i.product_id
+             LEFT JOIN inventory i ON p.product_id = i.product_id
              WHERE (p.barcode LIKE ? OR p.case_barcode LIKE ? OR p.product_name LIKE ?){$scopeSql}
              ORDER BY p.product_name
              LIMIT 1"
@@ -81,7 +81,7 @@ class ProductService
         $batchNumber = trim((string)($data['batch_number'] ?? ''));
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
-        $initialStock = max(0, (int)($data['initial_stock_quantity'] ?? 0));
+        $initialStock = $this->validateStockSetting($data['initial_stock_quantity'] ?? 0, 'Starting quantity', 0);
         $productExpirationDate = ($initialStock > 0) ? $expirationDate : null;
         $branchId = function_exists('store_scope_id')
             ? store_scope_id($this->pdo)
@@ -210,7 +210,7 @@ class ProductService
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
         $searchTerm = trim((string)($data['search_term'] ?? ''));
-        $purchaseQuantity = max(0, (int)($data['purchase_quantity'] ?? 0));
+        $purchaseQuantity = $this->validateStockSetting($data['purchase_quantity'] ?? 0, 'Purchase quantity', 1);
         $costPrice = (float)($data['purchase_cost_price'] ?? 0);
         $purchaseDate = (($data['purchase_date'] ?? '') !== '') ? $data['purchase_date'] : date('Y-m-d H:i:s');
         $barcode = trim((string)($data['barcode'] ?? ''));
@@ -231,7 +231,7 @@ class ProductService
         $receivingUnit = trim((string)($data['receiving_unit'] ?? 'package')) ?: 'package';
         $caseBarcode = trim((string)($data['case_barcode'] ?? ''));
         $rawExpiration = $data['expiration_date'] ?? null;
-        $expirationDate = $this->validateCalendarDate($rawExpiration);
+        $expirationDate = validate_calendar_date($rawExpiration);
         $batchNumber = trim((string)($data['batch_number'] ?? ''));
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
@@ -249,6 +249,19 @@ class ProductService
         StoreWriteGate::begin($this->pdo);
         try {
             if ($existingProduct) {
+                $balanceStmt = $this->pdo->prepare(
+                    'SELECT i.quantity_on_hand, p.quantity_purchased FROM products p
+                     JOIN inventory i ON i.product_id = p.product_id WHERE p.product_id = ? FOR UPDATE'
+                );
+                $balanceStmt->execute([(int)$existingProduct['product_id']]);
+                $balance = $balanceStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$balance) {
+                    throw new RuntimeException('Inventory record not found for selected product.');
+                }
+                if ((int)$balance['quantity_on_hand'] + $purchaseQuantity > 2147483647
+                    || (int)$balance['quantity_purchased'] + $purchaseQuantity > 2147483647) {
+                    throw new RuntimeException('Purchase quantity would exceed the supported stock total.');
+                }
                 $previousProduct = $existingProduct;
                 $updateParts = ['quantity_purchased = quantity_purchased + ?', 'cost_price = ?'];
                 $params = [$purchaseQuantity, $costPrice];
@@ -292,10 +305,6 @@ class ProductService
                 if ($hasUnitsPerPackage) {
                     $updateParts[] = 'units_per_package = ?';
                     $params[] = $unitsPerPackage;
-                }
-                if ($expirationDate !== null) {
-                    $updateParts[] = 'expiration_date = ?';
-                    $params[] = $expirationDate;
                 }
                 if ($productImage !== '') {
                     $updateParts[] = 'product_image = ?';
