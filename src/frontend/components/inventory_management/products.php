@@ -1131,11 +1131,16 @@ foreach ($products as $product) {
                                     $threshold = max((int)($product['reorder_level'] ?? 0), (int)($product['safety_stock'] ?? 0));
                                     $stockState = $quantity <= 0 ? 'out' : ($quantity <= $threshold ? 'low' : 'available');
                                     $barcode = trim((string)($product['barcode'] ?? ''));
-                                    $expiration = (string)($product['expiration_date'] ?? '');
-                                    $expiring = $expiration !== '' && strtotime($expiration) !== false && strtotime($expiration) <= strtotime('+30 days') && strtotime($expiration) >= strtotime('today');
+                                    $expiration = (string)($product['next_expiration_date'] ?? '');
+                                    $expiredQty = (int)($product['expired_quantity'] ?? 0);
+                                    $todayManila = \App\Services\PhilippineTime::today();
+                                    $todayTs = strtotime($todayManila);
+                                    $limitTs = strtotime('+30 days', $todayTs);
+                                    $expiring = $expiration !== '' && strtotime($expiration) !== false && strtotime($expiration) <= $limitTs && strtotime($expiration) >= $todayTs;
+                                    $isExpired = $expiredQty > 0;
                                     $status = (string)($product['status'] ?? 'active');
-                                    $displayStatus = $status !== 'active' ? 'inactive' : ($stockState === 'out' ? 'out' : ($stockState === 'low' ? 'low' : ($expiring ? 'expiring' : 'good')));
-                                    $statusText = $status !== 'active' ? 'Inactive' : ($stockState === 'out' ? 'Out of stock' : ($stockState === 'low' ? 'Low stock' : ($expiring ? 'Expiring soon' : 'Available')));
+                                    $displayStatus = $status !== 'active' ? 'inactive' : ($stockState === 'out' ? 'out' : ($isExpired ? 'expired' : ($stockState === 'low' ? 'low' : ($expiring ? 'expiring' : 'good'))));
+                                    $statusText = $status !== 'active' ? 'Inactive' : ($stockState === 'out' ? 'Out of stock' : ($isExpired ? 'Expired' : ($stockState === 'low' ? 'Low stock' : ($expiring ? 'Expiring soon' : 'Available'))));
                                 ?>
                                     <tr data-product-id="<?= (int)$product['product_id'] ?>"
                                         data-name="<?= htmlspecialchars(strtolower((string)$product['product_name']), ENT_QUOTES) ?>"
@@ -1801,7 +1806,7 @@ foreach ($products as $product) {
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
-        <div class="detail-item"><span>Expiration</span><strong>${escapeHtml(safe(product.expiration_date))}</strong></div><div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
+        <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
     </div>`;
             renderProductDrawerQuantity(product);
         }
@@ -2320,11 +2325,11 @@ foreach ($products as $product) {
             return `"${String(value ?? '').replace(/"/g, '""')}"`;
         }
         document.getElementById('export-products').addEventListener('click', () => {
-            const header = ['Product', 'SKU', 'Barcode', 'Brand', 'Category', 'Selling Price', 'Cost Price', 'Current Stock', 'Status'];
+            const header = ['Product', 'SKU', 'Barcode', 'Brand', 'Category', 'Selling Price', 'Cost Price', 'Current Stock', 'Next Expiration', 'Status'];
             const lines = [header.map(csvCell).join(',')];
             filteredRows.forEach(row => {
                 const product = productsById[Number(row.dataset.productId)];
-                lines.push([product.product_name, product.sku, product.barcode, product.brand, product.category_name, product.unit_price, product.cost_price, product.quantity_on_hand, product.status].map(csvCell).join(','));
+                lines.push([product.product_name, product.sku, product.barcode, product.brand, product.category_name, product.unit_price, product.cost_price, product.quantity_on_hand, product.next_expiration_date || '—', product.status].map(csvCell).join(','));
             });
             const blob = new Blob([lines.join('\n')], {
                 type: 'text/csv;charset=utf-8'

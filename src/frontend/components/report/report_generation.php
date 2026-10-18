@@ -3,8 +3,10 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
+require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Services\PhilippineTime;
 
 require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
@@ -502,21 +504,21 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ];
 
         case 'expiration':
+            $todayManila = PhilippineTime::today();
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
                         COALESCE(pb.batch_number, '-') AS batch_number,
-                        COALESCE(pb.remaining_quantity, i.quantity_on_hand, 0) AS quantity,
-                        COALESCE(pb.expiration_date, p.expiration_date) AS expiration_date,
-                        DATEDIFF(COALESCE(pb.expiration_date, p.expiration_date), CURDATE()) AS days_remaining
-                 FROM products p
-                 LEFT JOIN inventory i ON i.product_id = p.product_id
+                        pb.remaining_quantity AS quantity,
+                        pb.expiration_date AS expiration_date,
+                        DATEDIFF(pb.expiration_date, ?) AS days_remaining
+                 FROM product_batches pb
+                 JOIN products p ON p.product_id = pb.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
-                 LEFT JOIN product_batches pb ON pb.product_id = p.product_id AND pb.expiration_date IS NOT NULL AND pb.remaining_quantity > 0
-                 WHERE COALESCE(pb.expiration_date, p.expiration_date) IS NOT NULL {$productSql}
-                 ORDER BY expiration_date ASC, p.product_name"
+                 WHERE pb.expiration_date IS NOT NULL AND pb.remaining_quantity > 0 {$productSql}
+                 ORDER BY pb.expiration_date ASC, p.product_name"
             );
-            $stmt->execute($productParams);
+            $stmt->execute(array_merge([$todayManila], $productParams));
             return [
                 'headers' => ['SKU', 'Product', 'Category', 'Batch', 'Qty', 'Expiration Date', 'Days Remaining', 'Status'],
                 'rows' => array_map(static function ($row) {

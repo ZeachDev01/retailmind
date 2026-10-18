@@ -637,16 +637,27 @@ class ProductService
 
     public function getProductsForManagement(): array
     {
+        $todayManila = \App\Services\PhilippineTime::today();
         [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
-            "SELECT p.*, i.quantity_on_hand, c.category_name
+            "SELECT p.*, i.quantity_on_hand, c.category_name,
+                    CASE WHEN i.quantity_on_hand > 0 THEN b.next_expiration_date ELSE NULL END AS next_expiration_date,
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_quantity, 0) ELSE 0 END AS expired_quantity
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
              LEFT JOIN categories c ON p.category_id = c.category_id
+             LEFT JOIN (
+                 SELECT product_id,
+                        MIN(CASE WHEN expiration_date >= ? THEN expiration_date END) AS next_expiration_date,
+                        SUM(CASE WHEN expiration_date < ? THEN remaining_quantity ELSE 0 END) AS expired_quantity
+                 FROM product_batches
+                 WHERE remaining_quantity > 0 AND expiration_date IS NOT NULL
+                 GROUP BY product_id
+             ) b ON b.product_id = p.product_id
              WHERE 1 = 1{$scopeSql}
              ORDER BY p.product_name"
         );
-        $stmt->execute($scopeParams);
+        $stmt->execute(array_merge([$todayManila, $todayManila], $scopeParams));
         return $stmt->fetchAll();
     }
 

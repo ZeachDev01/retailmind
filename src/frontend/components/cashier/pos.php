@@ -223,23 +223,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
             throw new InvalidArgumentException('Enter or scan a valid barcode.');
         }
         require_once __DIR__ . '/../../../backend/app/Services/ProductCodeLookupService.php';
+        require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
         $match = (new ProductCodeLookupService($pdo))->lookup($code);
         if ($match['outcome'] !== ProductCodeLookupService::OUTCOME_MATCH) {
             throw new InvalidArgumentException($match['outcome'] === ProductCodeLookupService::OUTCOME_AMBIGUOUS
                 ? 'This barcode matches multiple products. Use product search.' : 'Product not found. Try product search.');
         }
+        $todayManila = App\Services\PhilippineTime::today();
         $statement = $pdo->prepare(
             "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.unit_price,
                     p.reorder_level, p.safety_stock,
                     LEAST(COALESCE(i.quantity_on_hand, 0), COALESCE((
-                        SELECT SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= CURDATE()
+                        SELECT SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ?
                                         THEN remaining_quantity ELSE 0 END)
                         FROM product_batches WHERE product_id = p.product_id AND remaining_quantity > 0
                     ), i.quantity_on_hand, 0)) AS quantity_on_hand
              FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id
              WHERE p.product_id = ? AND p.status = 'active'"
         );
-        $statement->execute([$match['product']['product_id']]);
+        $statement->execute([$todayManila, $match['product']['product_id']]);
         $product = $statement->fetch(PDO::FETCH_ASSOC);
         $quantities = json_decode((string)($_POST['quantities'] ?? '{}'), true);
         $quantity = is_array($quantities) ? ($quantities[$match['product']['product_id']] ?? 0) : null;

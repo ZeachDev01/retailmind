@@ -1,6 +1,8 @@
 <?php
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../../../backend/includes/auth.php';
+require_once __DIR__ . '/../../../../backend/app/Services/PhilippineTime.php';
+use App\Services\PhilippineTime;
 require_role(['admin','super_admin','inventory_manager','cashier']);
 App\Core\Session::closeWrite();
 
@@ -11,15 +13,17 @@ $category = (int)($_GET['category'] ?? 0);
 $limit = max(1, min(30, (int)($_GET['limit'] ?? 12)));
 $managementSearch = (($_GET['scope'] ?? '') === 'all') && in_array(current_role(), ['admin', 'super_admin', 'inventory_manager'], true);
 
+$todayManila = PhilippineTime::today();
+
 $select = "SELECT p.product_id,p.sku,p.barcode,p.case_barcode,p.parent_product_id,p.variant_label,p.product_name,p.unit_price,
                   COALESCE(p.reorder_level,0) reorder_level,COALESCE(p.safety_stock,0) safety_stock,
                   LEAST(i.quantity_on_hand,COALESCE(b.sellable_quantity,i.quantity_on_hand)) quantity_on_hand,
-                  b.next_expiration_date
+                  CASE WHEN i.quantity_on_hand > 0 THEN b.next_expiration_date ELSE NULL END AS next_expiration_date
            FROM products p JOIN inventory i ON i.product_id=p.product_id
            LEFT JOIN (
              SELECT product_id,
-                    SUM(CASE WHEN expiration_date IS NULL OR expiration_date>=CURDATE() THEN remaining_quantity ELSE 0 END) sellable_quantity,
-                    MIN(CASE WHEN expiration_date IS NULL OR expiration_date>=CURDATE() THEN expiration_date END) next_expiration_date
+                    SUM(CASE WHEN expiration_date IS NULL OR expiration_date>=? THEN remaining_quantity ELSE 0 END) sellable_quantity,
+                    MIN(CASE WHEN expiration_date>=? THEN expiration_date END) next_expiration_date
              FROM product_batches WHERE remaining_quantity>0 GROUP BY product_id
            ) b ON b.product_id=p.product_id
            WHERE 1=1";
@@ -27,7 +31,7 @@ if (!$managementSearch) {
     $select .= " AND p.status='active' AND i.quantity_on_hand>0
                   AND COALESCE(b.sellable_quantity,i.quantity_on_hand)>0";
 }
-$params = [];
+$params = [$todayManila, $todayManila];
 if ($id > 0) {
     $select .= ' AND p.product_id=?';
     $params[] = $id;
