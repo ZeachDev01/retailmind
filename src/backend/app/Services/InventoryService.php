@@ -157,7 +157,7 @@ class InventoryService
              WHERE pb.product_id IN ({$inPlaceholders})
              ORDER BY
                 pb.product_id ASC,
-                CASE WHEN pb.expiration_date IS NULL OR pb.expiration_date = '' THEN 1 ELSE 0 END ASC,
+                CASE WHEN pb.expiration_date IS NULL THEN 1 ELSE 0 END ASC,
                 pb.expiration_date ASC,
                 pb.date_received ASC,
                 pb.batch_id ASC"
@@ -239,13 +239,13 @@ class InventoryService
         $orderBySql = "
             ORDER BY
                 CASE
-                    WHEN pb.remaining_quantity > 0 AND pb.expiration_date IS NOT NULL AND pb.expiration_date != '' AND pb.expiration_date >= ? THEN 1
-                    WHEN pb.remaining_quantity > 0 AND (pb.expiration_date IS NULL OR pb.expiration_date = '') THEN 2
+                    WHEN pb.remaining_quantity > 0 AND pb.expiration_date IS NOT NULL AND pb.expiration_date >= ? THEN 1
+                    WHEN pb.remaining_quantity > 0 AND pb.expiration_date IS NULL THEN 2
                     WHEN pb.remaining_quantity > 0 THEN 3
                     ELSE 4
                 END ASC,
                 CASE
-                    WHEN pb.remaining_quantity > 0 AND pb.expiration_date IS NOT NULL AND pb.expiration_date != '' THEN pb.expiration_date
+                    WHEN pb.remaining_quantity > 0 AND pb.expiration_date IS NOT NULL THEN pb.expiration_date
                     ELSE pb.date_received
                 END ASC,
                 pb.batch_id ASC";

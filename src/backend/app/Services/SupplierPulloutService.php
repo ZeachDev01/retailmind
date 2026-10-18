@@ -290,7 +290,7 @@ class SupplierPulloutService
              FROM product_batches pb
              WHERE pb.product_id = ? AND pb.remaining_quantity > 0
              ORDER BY
-                CASE WHEN pb.expiration_date IS NOT NULL AND pb.expiration_date != '' THEN 0 ELSE 1 END,
+                CASE WHEN pb.expiration_date IS NOT NULL THEN 0 ELSE 1 END,
                 pb.expiration_date ASC,
                 pb.batch_id ASC"
         );
