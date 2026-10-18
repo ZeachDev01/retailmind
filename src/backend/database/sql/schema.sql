@@ -1984,6 +1984,25 @@ INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_dai
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_day','Sunday');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_time','01:00');
 
+CREATE TABLE `gcash_transactions` (
+  `transaction_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `transaction_type` enum('Cash-In','Cash-Out','Payment') NOT NULL,
+  `reference_number` varchar(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `cashier_id` int NOT NULL,
+  `verification_status` enum('Pending','Verified','Rejected') NOT NULL DEFAULT 'Pending',
+  `verified_by` int DEFAULT NULL,
+  `verification_note` varchar(500) DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`transaction_id`),
+  UNIQUE KEY `uq_gcash_reference` (`reference_number`),
+  KEY `idx_gcash_cashier_history` (`cashier_id`,`transaction_id`),
+  KEY `fk_gcash_reviewer` (`verified_by`),
+  CONSTRAINT `fk_gcash_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_reviewer` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE ml_jobs (
     job_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     trigger_type VARCHAR(50) NOT NULL COMMENT 'e.g. forecast_generation, model_retraining',

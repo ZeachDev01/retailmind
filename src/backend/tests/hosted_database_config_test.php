@@ -16,6 +16,7 @@ foreach (['HOST', 'PORT', 'NAME', 'USER', 'PASSWORD', 'CHARSET', 'CONNECTION'] a
 }
 
 $config = require __DIR__ . '/../config/database.php';
+restore_exception_handler();
 foreach (['host' => 'HOST', 'port' => 'PORT', 'database' => 'NAME', 'username' => 'USER', 'password' => 'PASSWORD', 'charset' => 'CHARSET', 'driver' => 'CONNECTION'] as $field => $key) {
     if ($config[$field] !== 'current-' . $key) {
         throw new RuntimeException('Standard database setting must take priority: ' . $field);
@@ -23,11 +24,21 @@ foreach (['host' => 'HOST', 'port' => 'PORT', 'database' => 'NAME', 'username' =
 }
 
 $_ENV['DB_HOST'] = '';
+$_ENV['DB_NAME'] = '';
+$_ENV['DB_USER'] = '';
+$config = require __DIR__ . '/../config/database.php';
+foreach (['host' => 'localhost', 'database' => 'u845277124_shalom', 'username' => 'u845277124_shalom', 'password' => 'current-PASSWORD'] as $field => $value) {
+    if ($config[$field] !== $value) {
+        throw new RuntimeException('Hostinger defaults and environment password must be used: ' . $field);
+    }
+}
+
+$_ENV['DB_PASSWORD'] = '';
 try {
     require __DIR__ . '/../config/database.php';
-    throw new RuntimeException('Legacy settings must not replace a missing DB_HOST.');
+    throw new RuntimeException('Hosted database password must come from the environment.');
 } catch (RuntimeException $exception) {
-    if (strpos($exception->getMessage(), 'Hosted database credentials are missing: host') !== 0) {
+    if (strpos($exception->getMessage(), 'Hosted database credentials are missing: password') !== 0) {
         throw $exception;
     }
 }
