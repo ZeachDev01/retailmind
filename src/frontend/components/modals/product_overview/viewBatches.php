@@ -13,7 +13,7 @@
             </button>
         </header>
         <div class="rm-modal-body">
-            <div id="view-batches-reconciliation-alert" class="alert alert-warning view-batches-alert" style="display:none;">
+            <div id="view-batches-reconciliation-alert" class="alert alert-warning view-batches-alert" data-rm-alert-processed="1" style="display:none;">
                 <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
                 <span id="view-batches-reconciliation-text"><strong>Reconciliation Exception:</strong> Total physical recorded on-hand stock exceeds the sum of tracked batches. A physical inventory count and correction is required.</span>
             </div>
