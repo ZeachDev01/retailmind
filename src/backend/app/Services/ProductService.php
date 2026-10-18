@@ -2,6 +2,7 @@
 // app/Services/ProductService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/PhilippineTime.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
@@ -13,10 +14,12 @@ class ProductService
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
 
-    public function __construct(PDO $pdo)
-    {
+    public function __construct(
+        PDO $pdo,
+        ?NotificationService $notificationService = null
+    ) {
         $this->pdo = $pdo;
-        $this->notificationService = new NotificationService($pdo);
+        $this->notificationService = $notificationService ?? new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
     }
 
@@ -251,7 +254,7 @@ class ProductService
             if ($existingProduct) {
                 $balanceStmt = $this->pdo->prepare(
                     'SELECT i.quantity_on_hand, p.quantity_purchased FROM products p
-                     JOIN inventory i ON i.product_id = p.product_id WHERE p.product_id = ? FOR UPDATE'
+                     JOIN inventory i ON i.product_id = p.product_id WHERE p.product_id = ?' . $this->rowLock()
                 );
                 $balanceStmt->execute([(int)$existingProduct['product_id']]);
                 $balance = $balanceStmt->fetch(PDO::FETCH_ASSOC);
@@ -441,8 +444,7 @@ class ProductService
                 "SELECT p.product_id, p.sku, p.product_name, i.quantity_on_hand
                  FROM products p
                  JOIN inventory i ON i.product_id = p.product_id
-                  WHERE p.product_id = ?{$scopeSql}
-                 FOR UPDATE"
+                  WHERE p.product_id = ?{$scopeSql}" . $this->rowLock()
             );
               $beforeStmt->execute(array_merge([$productId], $scopeParams));
             $before = $beforeStmt->fetch();
@@ -458,6 +460,49 @@ class ProductService
 
             if ($stmt->rowCount() === 0) {
                 throw new RuntimeException('Adjustment would take stock below zero.');
+            }
+
+            if ($qtyChange > 0) {
+                $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
+                $this->pdo->prepare(
+                    "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
+                     VALUES (?, ?, ?, NULL, ?)"
+                )->execute([$productId, $qtyChange, $qtyChange, $nowManila]);
+            } elseif ($qtyChange < 0) {
+                $deductRemaining = abs($qtyChange);
+                $batchStmt = $this->pdo->prepare(
+                    "SELECT batch_id, remaining_quantity
+                     FROM product_batches
+                     WHERE product_id = ? AND remaining_quantity > 0
+                     ORDER BY
+                         CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
+                         expiration_date ASC,
+                         date_received ASC,
+                         batch_id ASC" . $this->rowLock()
+                );
+                $batchStmt->execute([$productId]);
+                $batches = $batchStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                foreach ($batches as $batch) {
+                    if ($deductRemaining <= 0) {
+                        break;
+                    }
+                    $take = min($deductRemaining, (int)$batch['remaining_quantity']);
+                    if ($take > 0) {
+                        $batchUpd = $this->pdo->prepare(
+                            "UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ? AND remaining_quantity >= ?"
+                        );
+                        $batchUpd->execute([$take, (int)$batch['batch_id'], $take]);
+                        if ($batchUpd->rowCount() === 0) {
+                            throw new RuntimeException("Concurrent change detected while adjusting batch #{$batch['batch_id']}.");
+                        }
+                        $deductRemaining -= $take;
+                    }
+                }
+
+                if (!empty($batches) && $deductRemaining > 0) {
+                    throw new RuntimeException('Insufficient batch stock to satisfy adjustment deduction.');
+                }
             }
 
             $this->pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, ?, ?)")
@@ -501,7 +546,7 @@ class ProductService
         try {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
             $stmt = $this->pdo->prepare(
-                "SELECT product_id, sku, barcode, product_name FROM products WHERE product_id = ?{$scopeSql} FOR UPDATE"
+                "SELECT product_id, sku, barcode, product_name FROM products WHERE product_id = ?{$scopeSql}" . $this->rowLock()
             );
             $stmt->execute(array_merge([$productId], $scopeParams));
             $product = $stmt->fetch();
@@ -902,5 +947,10 @@ class ProductService
             $dateReceived,
             $supplier,
         ]);
+    }
+
+    private function rowLock(): string
+    {
+        return $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
     }
 }

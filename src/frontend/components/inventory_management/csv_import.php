@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
+require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
 require_role(['admin', 'inventory_manager']);
 
 $message = '';
@@ -224,6 +225,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $sku = trim($row[0] ?? '');
                     $qty = (int)($row[1] ?? 0);
 
+                    if ($qty <= 0) {
+                        $failed++;
+                        $errors[] = "Row " . ($successful + $failed) . ": Quantity to add must be greater than zero";
+                        continue;
+                    }
+
                     if (!$sku) {
                         $failed++;
                         $errors[] = "Row " . ($successful + $failed) . ": SKU is required";
@@ -241,17 +248,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         continue;
                     }
 
-                    if ($qty !== 0) {
-                        $fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
-                    }
+                    $fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
+
+                    App\Store\StoreWriteGate::begin($pdo);
 
                     // Update inventory
                     $product_id = $prod['product_id'];
+                    $rowLock = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
                     $beforeInvStmt = $pdo->prepare(
                         "SELECT i.product_id, i.quantity_on_hand
                          FROM inventory i
                          JOIN products p ON p.product_id = i.product_id
-                         WHERE i.product_id = ? AND p.branch_id = ?"
+                         WHERE i.product_id = ? AND p.branch_id = ?" . $rowLock
                     );
                     $beforeInvStmt->execute([(int)$product_id, $import_store_id]);
                     $beforeInventory = $beforeInvStmt->fetch();
@@ -259,12 +267,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         throw new RuntimeException("Inventory record for SKU '$sku' was not found in this Store.");
                     }
                     $inv_upd = $pdo->prepare(
-                        "UPDATE inventory i
-                         JOIN products p ON p.product_id = i.product_id
-                         SET i.quantity_on_hand = i.quantity_on_hand + ?
-                         WHERE i.product_id = ? AND p.branch_id = ?"
+                        "UPDATE inventory
+                         SET quantity_on_hand = quantity_on_hand + ?
+                         WHERE product_id = ?"
                     );
-                    App\Store\StoreWriteGate::execute($pdo, $inv_upd, [$qty, $product_id, $import_store_id]);
+                    App\Store\StoreWriteGate::execute($pdo, $inv_upd, [$qty, $product_id]);
+
+                    if ($qty > 0) {
+                        $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
+                        $batch_ins = $pdo->prepare(
+                            "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
+                             VALUES (?, ?, ?, NULL, ?)"
+                        );
+                        App\Store\StoreWriteGate::execute($pdo, $batch_ins, [$product_id, $qty, $qty, $nowManila]);
+                    }
 
                     // Log stock movement
                     $mov_ins = $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
@@ -284,8 +300,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $afterInventory
                     );
 
+                    $pdo->commit();
                     $successful++;
                 } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                     $failed++;
                     $errors[] = 'Row ' . ($successful + $failed) . ': ' . \App\Support\OperatorAlert::message($e, 'This row could not be imported. Check the row values and try again. Tell your Administrator if this keeps happening.');
                 }

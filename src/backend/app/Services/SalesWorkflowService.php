@@ -2,6 +2,7 @@
 // app/Services/SalesWorkflowService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/PhilippineTime.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
@@ -304,7 +305,8 @@ class SalesWorkflowService
 
     public function getActiveProducts(): array
     {
-        return $this->pdo->query(
+        $todayManila = $this->todayManila();
+        $stmt = $this->pdo->prepare(
             "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.unit_price,
                     COALESCE(p.reorder_level, 0) AS reorder_level,
                     COALESCE(p.safety_stock, 0) AS safety_stock,
@@ -316,8 +318,8 @@ class SalesWorkflowService
              FROM products p JOIN inventory i ON p.product_id = i.product_id
              LEFT JOIN (
                  SELECT product_id,
-                        SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= CURDATE() THEN remaining_quantity ELSE 0 END) AS sellable_quantity,
-                        MIN(CASE WHEN expiration_date IS NULL OR expiration_date >= CURDATE() THEN expiration_date ELSE NULL END) AS next_expiration_date
+                        SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ? THEN remaining_quantity ELSE 0 END) AS sellable_quantity,
+                        MIN(CASE WHEN expiration_date IS NULL OR expiration_date >= ? THEN expiration_date ELSE NULL END) AS next_expiration_date
                  FROM product_batches
                  WHERE remaining_quantity > 0
                  GROUP BY product_id
@@ -326,7 +328,9 @@ class SalesWorkflowService
                AND i.quantity_on_hand > 0
                AND COALESCE(batch_available.sellable_quantity, i.quantity_on_hand) > 0
              ORDER BY p.product_name"
-        )->fetchAll();
+        );
+        $stmt->execute([$todayManila, $todayManila]);
+        return $stmt->fetchAll();
     }
 
     private function sanitizeCart(array $cart): array
@@ -376,14 +380,15 @@ class SalesWorkflowService
             );
             $batchCountStmt->execute([$item['product_id']]);
             if ((int)$batchCountStmt->fetchColumn() > 0) {
+                $todayManila = $this->todayManila();
                 $batchSellableStmt = $this->pdo->prepare(
                     "SELECT COALESCE(SUM(remaining_quantity), 0)
                      FROM product_batches
                      WHERE product_id = ?
                        AND remaining_quantity > 0
-                       AND (expiration_date IS NULL OR expiration_date >= CURDATE())"
+                       AND (expiration_date IS NULL OR expiration_date >= ?)"
                 );
-                $batchSellableStmt->execute([$item['product_id']]);
+                $batchSellableStmt->execute([$item['product_id'], $todayManila]);
                 $availableStock = min($availableStock, (int)$batchSellableStmt->fetchColumn());
             }
 
@@ -842,12 +847,13 @@ class SalesWorkflowService
             return [];
         }
 
+        $todayManila = $this->todayManila();
         $stmt = $this->pdo->prepare(
             "SELECT batch_id, remaining_quantity, expiration_date
              FROM product_batches
              WHERE product_id = ?
                AND remaining_quantity > 0
-               AND (expiration_date IS NULL OR expiration_date >= CURDATE())
+               AND (expiration_date IS NULL OR expiration_date >= ?)
              ORDER BY
                CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
                expiration_date ASC,
@@ -855,7 +861,7 @@ class SalesWorkflowService
                batch_id ASC
              " . $this->rowLock()
         );
-        $stmt->execute([$productId]);
+        $stmt->execute([$productId, $todayManila]);
 
         $remaining = $quantity;
         $plan = [];
@@ -879,9 +885,23 @@ class SalesWorkflowService
         }
 
         if ($remaining > 0) {
-            throw new RuntimeException("Not enough non-expired batch stock for product #{$productId}.");
+            $productStmt = $this->pdo->prepare('SELECT product_name FROM products WHERE product_id = ?');
+            $productStmt->execute([$productId]);
+            $productName = $productStmt->fetchColumn() ?: "product #{$productId}";
+            $available = $quantity - $remaining;
+            throw new StockConflictException([[
+                'product_id' => $productId,
+                'product_name' => (string)$productName,
+                'requested_qty' => $quantity,
+                'available_stock' => max(0, $available),
+            ]]);
         }
 
         return $plan;
+    }
+
+    private function todayManila(): string
+    {
+        return (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d');
     }
 }

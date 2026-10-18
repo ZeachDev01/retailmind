@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../app/Services/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../app/Services/ProductService.php';
+require_once __DIR__ . '/../../app/Services/PhilippineTime.php';
 require_role(['admin', 'inventory_manager']);
 
 $message = '';
@@ -185,6 +186,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $sku = trim($row[0] ?? '');
                     $qty = (int)($row[1] ?? 0);
 
+                    if ($qty <= 0) {
+                        $failed++;
+                        $errors[] = "Row " . ($successful + $failed) . ": Quantity to add must be greater than zero";
+                        continue;
+                    }
+
                     if (!$sku) {
                         $failed++;
                         $errors[] = "Row " . ($successful + $failed) . ": SKU is required";
@@ -202,17 +209,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         continue;
                     }
 
-                    if ($qty !== 0) {
-                        $fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
-                    }
+                    $fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
+
+                    App\Store\StoreWriteGate::begin($pdo);
 
                     // Update inventory
                     $product_id = $prod['product_id'];
-                    $beforeInvStmt = $pdo->prepare("SELECT product_id, quantity_on_hand FROM inventory WHERE product_id = ?");
+                    $rowLock = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+                    $beforeInvStmt = $pdo->prepare("SELECT product_id, quantity_on_hand FROM inventory WHERE product_id = ?" . $rowLock);
                     $beforeInvStmt->execute([(int)$product_id]);
                     $beforeInventory = $beforeInvStmt->fetch();
                     $inv_upd = $pdo->prepare("UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?");
                     App\Store\StoreWriteGate::execute($pdo, $inv_upd, [$qty, $product_id]);
+
+                    if ($qty > 0) {
+                        $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
+                        $batch_ins = $pdo->prepare(
+                            "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
+                             VALUES (?, ?, ?, NULL, ?)"
+                        );
+                        App\Store\StoreWriteGate::execute($pdo, $batch_ins, [$product_id, $qty, $qty, $nowManila]);
+                    }
 
                     // Log stock movement
                     $mov_ins = $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) 
@@ -232,8 +249,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $afterInventory
                     );
 
+                    $pdo->commit();
                     $successful++;
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                     $failed++;
                     $errors[] = "Row " . ($successful + $failed) . ": " . $e->getMessage();
                 }
