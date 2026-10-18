@@ -980,8 +980,13 @@ document.addEventListener('DOMContentLoaded', function () {
                             actionHtml = '<a href="' + escapeBatchHtml(b.return_to_supplier_url) + '" class="btn btn-sm btn-outline-danger btn-return-supplier"><i class="bi bi-arrow-return-left"></i> Return to Supplier</a>';
                         }
 
+                        let sourceBadge = '<span class="badge">' + escapeBatchHtml(b.source) + '</span>';
+                        if (b.pullout_id) {
+                            sourceBadge += ' <small class="text-muted d-block">Pullout #' + escapeBatchHtml(String(b.pullout_id)) + '</small>';
+                        }
+
                         tr.innerHTML = '<td><strong>' + escapeBatchHtml(b.batch_number) + '</strong></td>' +
-                            '<td><span class="badge">' + escapeBatchHtml(b.source) + '</span></td>' +
+                            '<td>' + sourceBadge + '</td>' +
                             '<td><strong>' + Number(b.remaining_quantity).toLocaleString() + '</strong></td>' +
                             '<td>' + expLabel + '</td>' +
                             '<td>' + daysLabel + '</td>' +

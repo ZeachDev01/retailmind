@@ -221,11 +221,12 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                 <th>Recorded By</th>
                                 <th>Notes</th>
                                 <th>Replacement</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($pulloutHistory)): ?>
-                                <tr><td class="u-empty-cell" colspan="11">No supplier pullouts recorded yet.</td></tr>
+                                <tr><td class="u-empty-cell" colspan="12">No supplier pullouts recorded yet.</td></tr>
                             <?php else: ?>
                                 <?php foreach ($pulloutHistory as $row): ?>
                                     <tr>
@@ -240,10 +241,31 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                         <td><?= htmlspecialchars($row['pulled_by_name']) ?></td>
                                         <td><?= htmlspecialchars($row['notes'] ?? '—') ?></td>
                                         <td>
-                                            <?php if (!empty($row['replacement_receiving_id'])): ?>
-                                                <span class="badge badge-success">Received #<?= (int)$row['replacement_receiving_id'] ?></span>
+                                            <?php
+                                            $totalReplaced = (int)($row['total_replaced_qty'] ?? 0);
+                                            $repCount = (int)($row['replacement_count'] ?? 0);
+                                            ?>
+                                            <?php if ($totalReplaced > 0): ?>
+                                                <span class="badge badge-success">Replaced: <?= number_format($totalReplaced) ?> units</span>
+                                                <?php if ($repCount > 1): ?>
+                                                    <small class="text-muted d-block">(<?= $repCount ?> receipts)</small>
+                                                <?php endif; ?>
                                             <?php else: ?>
-                                                <span class="text-muted">Pending</span>
+                                                <span class="text-muted">Pending replacement</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($canMutate): ?>
+                                                <?php
+                                                $receivingUrl = function_exists('app_url')
+                                                    ? app_url('components/report/stock_receiving.php?pullout_id=' . (int)$row['pullout_id'] . '&product_id=' . (int)$row['product_id'])
+                                                    : '../report/stock_receiving.php?pullout_id=' . (int)$row['pullout_id'] . '&product_id=' . (int)$row['product_id'];
+                                                ?>
+                                                <a href="<?= htmlspecialchars($receivingUrl) ?>" class="btn btn-small btn-secondary" title="Receive replacement goods for this pullout">
+                                                    <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Receive Replacement
+                                                </a>
+                                            <?php else: ?>
+                                                <span class="text-muted">—</span>
                                             <?php endif; ?>
                                         </td>
                                     </tr>

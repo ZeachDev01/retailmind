@@ -144,6 +144,9 @@ try {
                                                     <small><?= htmlspecialchars($line['expiration_date'] ?: '-') ?></small>
                                                 </td>
                                                 <td>
+                                                    <?php if (!empty($line['pullout_id'])): ?>
+                                                        <span class="badge badge-info">Replacement (Pullout #<?= (int)$line['pullout_id'] ?>)</span><br>
+                                                    <?php endif; ?>
                                                     <?= htmlspecialchars(implode(' · ', array_filter([$line['discrepancy_notes'], $line['notes']]))) ?: '-' ?>
                                                 </td>
                                             </tr>

@@ -224,10 +224,16 @@ class InventoryService
         $today = $todayDate ?? \App\Services\PhilippineTime::today();
 
         $hasReceivingTable = true;
+        $hasPulloutId = true;
         try {
-            $this->pdo->query("SELECT 1 FROM stock_receiving LIMIT 1");
+            $this->pdo->query("SELECT pullout_id FROM stock_receiving LIMIT 1");
         } catch (Throwable) {
-            $hasReceivingTable = false;
+            $hasPulloutId = false;
+            try {
+                $this->pdo->query("SELECT 1 FROM stock_receiving LIMIT 1");
+            } catch (Throwable) {
+                $hasReceivingTable = false;
+            }
         }
 
         $orderBySql = "
@@ -245,19 +251,21 @@ class InventoryService
                 pb.batch_id ASC";
 
         if ($hasReceivingTable) {
+            $pulloutExpr = $hasPulloutId ? 'sr.pullout_id' : 'NULL AS pullout_id';
             $stmt = $this->pdo->prepare(
                 "SELECT
                     pb.*,
                     sr.notes AS receiving_notes,
                     sr.discrepancy_type,
-                    sr.discrepancy_notes
+                    sr.discrepancy_notes,
+                    {$pulloutExpr}
                  FROM product_batches pb
                  LEFT JOIN stock_receiving sr ON pb.receiving_id = sr.receiving_id
                  WHERE pb.product_id = ?" . $orderBySql
             );
         } else {
             $stmt = $this->pdo->prepare(
-                "SELECT pb.*, NULL AS receiving_notes, NULL AS discrepancy_type, NULL AS discrepancy_notes
+                "SELECT pb.*, NULL AS receiving_notes, NULL AS discrepancy_type, NULL AS discrepancy_notes, NULL AS pullout_id
                  FROM product_batches pb
                  WHERE pb.product_id = ?" . $orderBySql
             );
@@ -317,7 +325,10 @@ class InventoryService
             $discrepancyTypeLower = strtolower((string)($row['discrepancy_type'] ?? ''));
             $discrepancyNotesLower = strtolower((string)($row['discrepancy_notes'] ?? ''));
 
+            $pulloutId = !empty($row['pullout_id']) ? (int)$row['pullout_id'] : null;
+
             if (
+                $pulloutId !== null ||
                 str_contains($batchNumLower, 'replace') ||
                 str_contains($supplierLower, 'replace') ||
                 str_contains($receivingNotesLower, 'replace') ||
@@ -358,6 +369,7 @@ class InventoryService
                 'status' => $status,
                 'days_remaining' => $daysRemaining,
                 'return_to_supplier_url' => $returnUrl,
+                'pullout_id' => $pulloutId,
             ];
         }
 
