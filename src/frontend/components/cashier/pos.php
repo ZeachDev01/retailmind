@@ -484,7 +484,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
         <h1 class="sr-only">Point of Sale</h1>
         <?php foreach ([[$checkout_error, 'error'], [$lock_error, 'error'], [$checkout_notice, 'success']] as [$notice, $noticeType]): ?>
             <?php if ($notice !== ''): ?>
-                <script>RetailMindUI.toast(<?= json_encode($notice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, <?= json_encode($noticeType) ?>, undefined, 3000);</script>
+                <script>RetailMindUI.toast(<?= json_encode($notice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, <?= json_encode($noticeType) ?>, undefined, 4300);</script>
             <?php endif; ?>
         <?php endforeach; ?>
         <?php if ($posRegisterLocked): ?>
@@ -511,7 +511,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
             </section>
         <?php else: ?>
         <?php if ($posShiftOpen): ?>
-            <script>RetailMindUI.toast(<?= json_encode('Register: ' . ($openShift['register_name'] ?? 'Unassigned') . ' · Shift #' . (int)$openShift['shift_id'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'info', 'Register ready', 3000);</script>
+            <script>RetailMindUI.toast(<?= json_encode('Register: ' . ($openShift['register_name'] ?? 'Unassigned') . ' · Shift #' . (int)$openShift['shift_id'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'info', 'Register ready', 4300);</script>
         <?php endif; ?>
         <?php if (!$posShiftOpen): ?>
             <div class="pos-alert error" role="note" data-rm-alert-processed="1"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a Cashier Shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
@@ -1057,7 +1057,7 @@ function getLowStockThreshold(item) {
 
 function showCartMessage(message, type = 'info') {
     const kind = ['error', 'warning', 'success', 'info'].includes(type) ? type : 'info';
-    return RetailMindUI.toast(message, kind, undefined, 3000);
+    return RetailMindUI.toast(message, kind, undefined, 4300);
 }
 
 function playScanTone(success = true) {
@@ -1498,7 +1498,7 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
     if (Number.isFinite(availableStock) && remaining <= getLowStockThreshold(cart[productId])) {
         showCartMessage(`Product added to cart. Low stock: ${remaining} left.`, 'warning');
     } else {
-        showCartMessage('Product added to cart.', 'success');
+        RetailMindUI.toast('Product added to cart.', 'success', undefined, 2500);
     }
     return true;
 }

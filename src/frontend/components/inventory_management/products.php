@@ -1450,7 +1450,7 @@ foreach ($products as $product) {
     <script src="<?= htmlspecialchars(app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')) ?>"></script>
     <script>
         const pageNotice = <?= json_encode($pageNotice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-        if (pageNotice) RetailMindUI.toast(pageNotice.message, pageNotice.type, undefined, pageNotice.type === 'warning' ? 20000 : 3000);
+        if (pageNotice) RetailMindUI.toast(pageNotice.message, pageNotice.type, undefined, pageNotice.type === 'warning' ? 20000 : 4300);
         const PRODUCT_PHOTO_LIMIT_MESSAGE = <?= json_encode(PRODUCT_PHOTO_LIMIT_MESSAGE) ?>;
         const productData = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const canDirectAdjust = <?= $canDirectAdjust ? 'true' : 'false' ?>;
@@ -2706,7 +2706,7 @@ foreach ($products as $product) {
             });
             if (confirmed) {
                 clearFormState();
-                RetailMindUI.alert('Form reset. All data has been cleared.', 'info', 'Form cleared');
+                RetailMindUI.toast('Form reset. All data has been cleared.', 'info', 'Form cleared');
             }
         });
 

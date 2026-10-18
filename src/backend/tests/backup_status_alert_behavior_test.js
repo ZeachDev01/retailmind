@@ -272,14 +272,14 @@ async function main() {
         "unsaved form input must be preserved while paused",
       );
       check(
-        harness.alerts.length === 1 && harness.alerts[0].kind === "warning",
-        "a refused save must be reported in the shared Operator Alert kind",
+        harness.toasts.length === 1 && harness.toasts[0].kind === "warning" && harness.alerts.length === 0,
+        "a refused save must show a warning toast without a modal",
       );
       check(
-        harness.alerts[0].message.includes(PAUSE_NOTICE) &&
-          /wait a moment and save again/i.test(harness.alerts[0].message),
+        harness.toasts[0].message.includes(PAUSE_NOTICE) &&
+          /wait a moment and save again/i.test(harness.toasts[0].message),
         "a refused save must tell the operator to try again, got: " +
-          (harness.alerts[0] || {}).message,
+          (harness.toasts[0] || {}).message,
       );
 
       const getForm = { method: "get", dataset: {} };

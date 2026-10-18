@@ -34,7 +34,9 @@ const {chromium} = require('playwright');
             document.querySelector('main').append(success);
             RetailMindUI.initPageContent();
         });
-        assert.equal(await page.evaluate(() => capturedAlerts[0]?.icon), 'success', 'Actual success feedback must still appear');
+        await page.locator('.rm-toast.success').waitFor();
+        assert.equal(await page.locator('.rm-toast.success span').textContent(), 'Supplier pullout recorded.', 'Actual success feedback appears as a toast');
+        assert.deepEqual(await page.evaluate(() => capturedAlerts), [], 'Routine feedback must not open SweetAlert');
         console.log('Inventory Overview alerts: passed (no false Attention popup; inline reconciliation and success feedback preserved)');
     } finally {
         await browser.close();

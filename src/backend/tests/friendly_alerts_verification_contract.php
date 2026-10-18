@@ -303,11 +303,11 @@ try {
         $assert(!is_dir($root . '/' . $relative), 'Out of scope: no translation directory may be added (' . $relative . ')');
     }
 
-    // Toast look, position, and timing stay; only the grey tech line was added.
+    // Toast look and position stay; routine feedback expires after 4.3 seconds.
     $contains($modalsCss, '.rm-toast {', 'The base toast styling must stay in place');
     $contains($modalsCss, 'rm-toast-tech', 'The debug tech line style must exist');
     $contains($ui, '#rm-toast-stack', 'The toast stack position must stay in place');
-    $contains($ui, '4800', 'The default toast duration must stay in place');
+    $contains($ui, 'kind === "warning" ? 20000 : 4300', 'Warnings stay longer; routine toasts last 4.3 seconds');
 
     // No automatic retry logic was introduced in the alert core.
     foreach (['ui.js' => $ui, 'OperatorAlert.php' => $alertSource, 'ErrorFallback.php' => $fallbackSource] as $name => $source) {

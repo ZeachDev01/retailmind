@@ -52,13 +52,10 @@ const fixture = action => {
             const destination = origin + '/components/administrator/stock_issues.php?error=' + encodeURIComponent('Stock issue oversight is limited to Administrators, Inventory Managers, and Cashiers viewing their own reports.');
             if (partial) await page.evaluate(url => RetailMindNavigation.navigate(url), destination);
             else await page.goto(destination);
-            await page.getByRole('heading', {name: 'Unable to continue'}).waitFor();
-            const ok = page.getByRole('button', {name: 'OK', exact: true});
-            assert.equal(await ok.isEnabled(), true);
-            assert.ok((await ok.getAttribute('class')).includes('btn-primary'), 'OK has a clear primary action style');
-            await page.waitForTimeout(250); // Let the reduced-motion opening transition finish before dismissing.
-            await ok.click({timeout: 5000});
-            await page.locator('.swal2-container').waitFor({state: 'detached', timeout: 5000});
+            await page.locator('.rm-toast.error').waitFor();
+            assert.equal(await page.locator('.swal2-container').count(), 0, 'URL feedback uses a nonblocking toast');
+            await page.locator('.rm-toast.error .rm-toast-close').click();
+            await page.locator('.rm-toast.error').waitFor({state: 'detached'});
             await page.goto(origin + '/components/administrator/dashboard.php');
             await page.addStyleTag({content: '@keyframes delayed-alert-close { from { opacity: 0; } to { opacity: 0; } } .swal2-hide { animation: delayed-alert-close 60s !important; }'});
             for (const kind of ['success', 'info', 'warning', 'error']) {
@@ -77,8 +74,8 @@ const fixture = action => {
         await page.locator('.swal2-container').waitFor({state: 'detached', timeout: 5000});
         assert.equal(await page.locator('.swal2-container').count(), 0, 'Navigation removes alerts before their page handlers are discarded');
         await page.evaluate(() => { RetailMindUI.queueAlert('New page error', 'error'); });
-        await page.locator('.swal2-close').click();
-        await page.locator('.swal2-container').waitFor({state: 'detached', timeout: 5000});
+        await page.locator('.rm-toast.error .rm-toast-close').click();
+        await page.locator('.rm-toast.error').waitFor({state: 'detached', timeout: 5000});
         for (const partial of [false, true]) {
             await page.setViewportSize(partial ? {width: 390, height: 844} : {width: 1280, height: 800});
             const destination = origin + '/components/administrator/stock_issues.php?detail=2147483647';

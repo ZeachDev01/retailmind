@@ -84,6 +84,19 @@ The filter design is confirmed; it is not an implemented screen. No business-pol
 
 ADR-0013 is accepted for the confirmed decisions. Application implementation is outside this documentation task.
 
+## Bread pullout reminder discussion — 2026-10-19
+
+Confirmed in discussion; application behavior has not been changed:
+
+- The reminder means prepare bread for supplier collection before its printed expiration. Staff record the quantity actually collected; a reminder is not a completed pullout.
+- Inventory Managers receive the actionable reminder; Administrators retain oversight.
+- Show the reminder in-app according to the Product's warning lead time, rather than a fixed two-day bread rule. Check daily using Asia/Manila dates even when no stock transaction occurs.
+- Keep the reminder actionable while the affected batch has bread remaining, including after a partial pullout. Reading it does not complete collection.
+- An unset product override retains existing channel defaults under the already agreed warning policy.
+- After expiration, change the reminder to **Expired bread—waiting for supplier collection**. Keep it visible until all remaining bread in that batch is recorded as removed. Expiration itself does not deduct stock.
+
+All discussion questions above are settled. The user confirmed testing through existing reminder and stock-removal workflows. The [reminder specification](specs/bread-pullout-reminders.md) is published as [GitHub issue #233](https://github.com/ZeachDev01/retailmind/issues/233), labelled `ready-for-agent`. This records the agreed design only; application implementation was not requested in this discussion.
+
 ## Implementation specification
 
 The complete agreed behavior, balance mitigation, and user-confirmed testing approach are captured in the [specification](specs/batch-expiration-and-stock-balance.md), published as [GitHub issue #216](https://github.com/ZeachDev01/retailmind/issues/216) with `ready-for-agent`.

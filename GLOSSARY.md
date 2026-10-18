@@ -4,6 +4,10 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**Bread Pullout Reminder**:
+An expiry-based prompt to prepare bread for supplier collection before its printed expiration date. It does not represent a completed collection.
+_Avoid_: Completed pullout, stock deduction, supplier collection schedule
+
 **Receipt History**:
 The store-wide immutable audit record of customer sale receipts, used for lookup, customer reprints, and dispute verification.
 _Avoid_: Sales (when referring to the receipt list), Transactions

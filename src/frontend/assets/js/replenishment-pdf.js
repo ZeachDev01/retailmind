@@ -62,7 +62,7 @@
             pdf.save('replenishment-recommendations.pdf');
         } catch (error) {
             console.error('Replenishment PDF download failed', error);
-            window.alert('Could not download the PDF. Reload the page and try again.');
+            window.RetailMindUI.toast('Could not download the PDF. Reload the page and try again.', 'error');
         } finally {
             button.disabled = false;
         }
