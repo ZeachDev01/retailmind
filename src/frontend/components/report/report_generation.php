@@ -4,8 +4,10 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
+require_once __DIR__ . '/../../../backend/app/Services/GrossProfitService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Services\GrossProfitService;
 use App\Services\PhilippineTime;
 
 require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
@@ -23,10 +25,13 @@ $reportCatalog = [
     'stock_movements' => 'Stock Movement History',
     'adjustments' => 'Damaged, Missing and Expired Items',
     'forecast_actual' => 'Forecast Versus Actual Demand',
-    'gross_profit' => 'Gross Profit Estimate',
     'expiration' => 'Expiration Report',
     'count_variance' => 'Physical-Count Variance Report',
 ];
+
+if (current_role() === 'admin') {
+    $reportCatalog['gross_profit'] = 'Gross Profit';
+}
 
 function normalize_date(string $value, string $default): string
 {
@@ -61,7 +66,7 @@ function send_csv(string $filename, array $rows, array $headers): void
     $output = fopen('php://output', 'w');
     fputcsv($output, $headers);
     foreach ($rows as $row) {
-        fputcsv($output, array_map(static fn($value) => (string)$value, array_values($row)));
+        fputcsv($output, array_map(static fn($header) => (string)($row[$header] ?? ''), $headers));
     }
     fclose($output);
     exit;
@@ -474,34 +479,8 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ];
 
         case 'gross_profit':
-            $stmt = $pdo->prepare(
-                "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name,
-                        COALESCE(c.category_name, 'Uncategorized') AS category_name,
-                        COALESCE(SUM(si.quantity), 0) AS units_sold,
-                        COALESCE(SUM(si.subtotal), 0) AS revenue,
-                        COALESCE(SUM(si.quantity * p.cost_price), 0) AS estimated_cost,
-                        COALESCE(SUM(si.subtotal - (si.quantity * p.cost_price)), 0) AS gross_profit
-                 FROM sale_items si
-                 JOIN sales s ON s.sale_id = si.sale_id
-                 JOIN products p ON p.product_id = si.product_id
-                 LEFT JOIN categories c ON c.category_id = p.category_id
-                 WHERE s.sale_date BETWEEN ? AND ? {$productSql}
-                 GROUP BY p.product_id, sku, p.product_name, category_name
-                 ORDER BY gross_profit DESC"
-            );
-            $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
-            return [
-                'headers' => ['SKU', 'Product', 'Category', 'Units Sold', 'Revenue', 'Estimated Cost', 'Gross Profit'],
-                'rows' => array_map(static fn($row) => [
-                    'SKU' => $row['sku'],
-                    'Product' => $row['product_name'],
-                    'Category' => $row['category_name'],
-                    'Units Sold' => (int)$row['units_sold'],
-                    'Revenue' => money_value($row['revenue']),
-                    'Estimated Cost' => money_value($row['estimated_cost']),
-                    'Gross Profit' => money_value($row['gross_profit']),
-                ], $stmt->fetchAll()),
-            ];
+            GrossProfitService::enforceAdministratorWorkspace(current_role());
+            return (new GrossProfitService($pdo))->runReport($filters);
 
         case 'expiration':
             $todayManila = PhilippineTime::today();
@@ -574,6 +553,9 @@ function run_report(PDO $pdo, string $report, array $filters): array
 }
 
 $selectedReport = request_value('report', 'sales_period');
+if ($selectedReport === 'gross_profit') {
+    GrossProfitService::enforceAdministratorWorkspace(current_role());
+}
 if (!array_key_exists($selectedReport, $reportCatalog)) {
     $selectedReport = 'sales_period';
 }
@@ -610,6 +592,10 @@ $reportData = run_report($pdo, $selectedReport, $filters);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
+    $exportReport = request_value('report', 'sales_period');
+    if ($exportReport === 'gross_profit') {
+        GrossProfitService::enforceAdministratorWorkspace(current_role());
+    }
     log_activity(
         $pdo,
         (int)$_SESSION['user_id'],
