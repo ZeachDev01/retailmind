@@ -7,7 +7,7 @@ const { chromium } = require('playwright');
     try {
         const css = ['style', 'notifications', 'theme'].map(name => fs.readFileSync(`src/frontend/assets/css/${name}.css`, 'utf8')).join('\n');
         const source = fs.readFileSync('src/frontend/components/notification/notifications.php', 'utf8');
-        const start = source.indexOf('<article class="notification-item');
+        const start = source.indexOf('<article class="notification-item <?=');
         const card = source.slice(start, source.indexOf('<?php endforeach; ?>', start)).replace(/<\?[\s\S]*?\?>/g, '');
         assert(card.includes('btn-mark-read'), 'Fixture uses the shipped notification card');
         const page = await browser.newPage();

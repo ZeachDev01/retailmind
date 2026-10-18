@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
+require_once __DIR__ . '/../../../backend/app/Services/NotificationService.php';
 
 $user_id = (int)$_SESSION['user_id'];
 $category_labels = [
@@ -61,6 +62,10 @@ $list_where = $where . ($view === 'unread' ? ' AND is_read = FALSE' : '');
 $stmt = $pdo->prepare('SELECT notification_id, type, title, message, reference_type, reference_id, is_read, created_at FROM notifications WHERE ' . $list_where . ' ORDER BY created_at DESC, notification_id DESC LIMIT ' . (int)$limit);
 $stmt->execute($params);
 $notifications = $stmt->fetchAll();
+$batch_reminders = (new NotificationService($pdo))->getBatchReminders($user_id);
+$inventory_workspace = in_array(current_role(), ['inventory_manager', 'admin', 'super_admin'], true);
+$active_batch_reminders = $inventory_workspace
+    ? array_filter($batch_reminders, static fn(array $reminder): bool => $reminder['active']) : [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -81,6 +86,28 @@ $notifications = $stmt->fetchAll();
                 <h1>Notifications</h1>
                 <p>Review unread Store updates and mark them as read when you're done.</p>
             </header>
+
+            <?php if ($active_batch_reminders): ?>
+                <section class="active-batch-reminders" aria-label="Active batch reminders">
+                    <h2>Active batch reminders</h2>
+                    <p>Reading an alert does not complete collection. Record stock only when it is physically removed.</p>
+                    <div class="notification-list">
+                    <?php foreach ($active_batch_reminders as $reminder): ?>
+                        <article class="notification-item">
+                            <div class="notification-content">
+                                <h3><?= htmlspecialchars($reminder['title']) ?></h3>
+                                <p><?= htmlspecialchars($reminder['message']) ?></p>
+                                <?php if (current_role() === 'inventory_manager'): ?>
+                                    <a class="mark-all-btn" href="<?= htmlspecialchars(app_url('components/inventory_management/supplier_pullouts.php?' . http_build_query(['product_id' => $reminder['product_id'], 'batch_id' => $reminder['batch_id']]))) ?>">Record Supplier Pullout</a>
+                                <?php else: ?>
+                                    <a class="mark-all-btn" href="<?= htmlspecialchars(app_url('components/inventory_management/supplier_pullouts.php?' . http_build_query(['product_id' => $reminder['product_id'], 'batch_id' => $reminder['batch_id']]))) ?>">View Supplier Pullout History</a>
+                                <?php endif; ?>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
 
             <div class="notification-toolbar">
             <nav class="notification-views" aria-label="Notification view">
@@ -129,6 +156,17 @@ $notifications = $stmt->fetchAll();
             <?php else: ?>
                 <section class="notification-list" aria-label="<?= $view === 'unread' ? 'Unread notifications' : 'All notifications' ?><?= $category === '' ? '' : ': ' . htmlspecialchars($category_labels[$category] ?? ucfirst(str_replace('_', ' ', $category))) ?>">
                 <?php foreach ($notifications as $notif): ?>
+                    <?php
+                    $batch_history = in_array($notif['type'], ['expiring_stock', 'expired_stock', 'system'], true)
+                        && ($notif['reference_type'] === 'product_batch' || str_starts_with($notif['reference_type'] ?? '', 'product_batch_expiry_'));
+                    if ($batch_history) {
+                        $reminder = $batch_reminders[(int)$notif['reference_id']] ?? null;
+                        $notif['title'] = 'Expiry alert history: ' . $notif['title'];
+                        $notif['message'] = $reminder
+                            ? "Batch {$reminder['batch_number']} (#{$reminder['batch_id']}). Expiration: " . ($reminder['expiration_date'] ?? 'Not recorded') . ". Current remaining: {$reminder['remaining_quantity']}. " . ($reminder['active'] ? 'See Active batch reminders for current work.' : 'No active reminder.')
+                            : 'Historical alert. The referenced batch is no longer available.';
+                    }
+                    ?>
                     <article class="notification-item <?= $notif['is_read'] ? '' : 'unread' ?>">
                         <div class="notification-content">
                             <div class="notification-meta"><span><?= htmlspecialchars($category_labels[$notif['type']] ?? ucfirst(str_replace('_', ' ', $notif['type']))) ?></span><?php if (!$notif['is_read']): ?><span class="notification-unread-label">Unread</span><?php endif; ?><span class="notification-time"><?= htmlspecialchars(format_display_datetime($notif['created_at'])) ?></span></div>

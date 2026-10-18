@@ -4,10 +4,12 @@
 class NotificationService
 {
     private PDO $pdo;
+    private \App\Attention\Clock $clock;
 
-    public function __construct(PDO $pdo)
+    public function __construct(PDO $pdo, ?\App\Attention\Clock $clock = null)
     {
         $this->pdo = $pdo;
+        $this->clock = $clock ?? new \App\Attention\SystemClock();
     }
 
     public function checkAndNotifyLowStock(): void
@@ -97,7 +99,7 @@ class NotificationService
 
         foreach ($this->getExpiringBatches($maxDays, true) as $batch) {
             foreach ($users as $user) {
-                if (!$this->hasBatchNotificationToday((int)$user['user_id'], 'expired_stock', (int)$batch['batch_id'])) {
+                if (!$this->hasBatchNotification((int)$user['user_id'], 'expired_stock', (int)$batch['batch_id'])) {
                     $this->createNotification(
                         (int)$user['user_id'],
                         'expired_stock',
@@ -109,6 +111,38 @@ class NotificationService
                 }
             }
         }
+    }
+
+    /** Current batch state for existing alerts, independent of read status or history pagination. */
+    public function getBatchReminders(int $userId, ?string $todayDate = null): array
+    {
+        $today = $todayDate ?? $this->clock->now()->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d');
+        $threshold = max($this->getExpiryAlertThresholds(30));
+        $stmt = $this->pdo->prepare(
+            "SELECT DISTINCT pb.batch_id, pb.product_id, pb.batch_number, pb.expiration_date,
+                    pb.remaining_quantity, p.product_name, p.sku, p.warning_lead_time_days
+             FROM notifications n
+             JOIN product_batches pb ON pb.batch_id = n.reference_id
+             JOIN products p ON p.product_id = pb.product_id
+             WHERE n.user_id = ? AND (n.reference_type = 'product_batch' OR n.reference_type LIKE 'product_batch_expiry_%')
+               AND n.type IN ('expiring_stock', 'expired_stock', 'system')
+             ORDER BY pb.expiration_date, pb.batch_id"
+        );
+        $stmt->execute([$userId]);
+        $reminders = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $batch) {
+            $expiration = $batch['expiration_date'];
+            $daysRemaining = $expiration === null ? null : (int)(new DateTimeImmutable($today, new DateTimeZone('Asia/Manila')))
+                ->diff(new DateTimeImmutable($expiration, new DateTimeZone('Asia/Manila')))->format('%r%a');
+            $batch['active'] = $daysRemaining !== null && (int)$batch['remaining_quantity'] > 0
+                && $daysRemaining <= (int)($batch['warning_lead_time_days'] ?? $threshold);
+            $batch['title'] = ($daysRemaining !== null && $daysRemaining < 0
+                ? 'Expired bread—waiting for supplier collection: ' : 'Prepare for supplier collection: ') . $batch['product_name'];
+            $batch['message'] = "Batch {$batch['batch_number']} (#{$batch['batch_id']}) of {$batch['product_name']} ({$batch['sku']}). Expiration: "
+                . ($expiration ?? 'Not recorded') . ". Remaining: {$batch['remaining_quantity']}.";
+            $reminders[(int)$batch['batch_id']] = $batch;
+        }
+        return $reminders;
     }
 
     private function getExpiryAlertThresholds(int $fallbackDays): array
@@ -169,7 +203,7 @@ class NotificationService
 
     private function getExpiringBatches(int $days, bool $expired): array
     {
-        $today = \App\Services\PhilippineTime::today();
+        $today = $this->clock->now()->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d');
         $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
         if ($driver === 'sqlite') {
@@ -241,19 +275,17 @@ class NotificationService
         return (bool)$stmt->fetch();
     }
 
-    private function hasBatchNotificationToday(int $userId, string $type, int $batchId): bool
+    private function hasBatchNotification(int $userId, string $type, int $batchId): bool
     {
-        $today = \App\Services\PhilippineTime::today();
         $stmt = $this->pdo->prepare(
             "SELECT notification_id
              FROM notifications
              WHERE user_id = ?
                AND type = ?
                AND reference_id = ?
-               AND reference_type = 'product_batch'
-               AND DATE(created_at) = ?"
+               AND reference_type = 'product_batch' LIMIT 1"
         );
-        $stmt->execute([$userId, $type, $batchId, $today]);
+        $stmt->execute([$userId, $type, $batchId]);
         return (bool)$stmt->fetch();
     }
 }

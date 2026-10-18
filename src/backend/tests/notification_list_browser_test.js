@@ -200,6 +200,35 @@ const fixture = action => {
         await submit(page.getByRole('button', {name: 'Mark as read', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 0, 'Last individual unread item reaches caught-up state');
         assert.equal(await page.getByRole('heading', {name: "You're all caught up"}).count(), 1);
+        fixture('bread_create');
+        const active = page.getByRole('region', {name: 'Active batch reminders', exact: true});
+        await page.goto(url);
+        assert.match(await active.innerText(), /COLLECT-10.*Expiration: 2000-10-25\. Remaining: 10\./s);
+        assert.equal(await active.getByRole('link', {name: 'Record Supplier Pullout'}).count(), 0, 'Administrator oversight offers no mutation shortcut');
+        await page.goto(origin + '/components/auth/logout.php');
+        await page.goto(origin + '/?login=1');
+        await page.locator('#landing-login-username').fill('theme_inventory_manager');
+        await page.locator('#landing-login-password').fill(data.password);
+        await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+        await page.goto(url);
+        assert.equal(await active.getByRole('heading', {name: 'Expired bread—waiting for supplier collection: Reminder Bread'}).count(), 1);
+        assert.match(await active.getByRole('link', {name: 'Record Supplier Pullout'}).getAttribute('href'), /product_id=901&batch_id=901$/);
+        await submit(page.getByRole('button', {name: 'Mark all as read', exact: true}));
+        await page.goto(url + '?view=unread');
+        assert.equal(await active.locator('article').count(), 1, 'Reading does not hide active work in Unread view');
+        fixture('bread_partial');
+        await page.reload();
+        assert.match(await active.innerText(), /Remaining: 2\./);
+        for (const width of [320, 1440]) {
+            await page.setViewportSize({width, height: 900});
+            assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Active reminders fit viewport');
+            await page.screenshot({path: path.join(output, 'bread-' + width + '.png'), fullPage: true});
+        }
+        fixture('bread_final');
+        await page.reload();
+        assert.equal(await active.count(), 0, 'Final removal immediately clears active work');
+        await page.goto(url);
+        assert.match(await page.locator('.notification-list').innerText(), /Expiry alert history:.*Current remaining: 0\./s, 'Depleted notification remains clearly historical');
         console.log('Notification list: passed; screenshots ' + output);
     } finally {
         if (browser) await browser.close();

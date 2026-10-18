@@ -262,7 +262,11 @@ $_SESSION['user'] = ['role_name' => 'inventory_manager', 'user_id' => 1];
 
 $productService = new ProductService($pdo);
 $inventoryService = new InventoryService($pdo);
-$notificationService = new NotificationService($pdo);
+$notificationClock = new class implements \App\Attention\Clock {
+    public string $instant = '2026-10-18T00:00:00+08:00';
+    public function now(): DateTimeImmutable { return new DateTimeImmutable($this->instant); }
+};
+$notificationService = new NotificationService($pdo, $notificationClock);
 
 // --- 3. Test Product Service Validation & Permissions ---
 echo "Testing ProductService createProduct and updateProductCatalogDetails validation & workspace checks...\n";
@@ -502,6 +506,15 @@ $notificationService->checkAndNotifyExpiringStock(30);
 $countAfter = (int)$pdo->query("SELECT COUNT(*) FROM notifications")->fetchColumn();
 
 $assert($countBefore === $countAfter, 'checkAndNotifyExpiringStock does not duplicate existing milestone or expired notifications');
+
+$notificationClock->instant = '2026-11-06T00:00:00+08:00';
+$notificationService->checkAndNotifyExpiringStock();
+$currentReminders = $notificationService->getBatchReminders(1);
+$milk25 = array_values(array_filter($currentReminders, static fn(array $row): bool => $row['batch_number'] === 'MILK-25DAYS'));
+$assert(count($milk25) === 1 && $milk25[0]['active'], 'Later global milestone presents one current condition for the same batch');
+$milestones = $pdo->query("SELECT reference_type FROM notifications WHERE user_id = 1 AND reference_id = " . (int)$milk25[0]['batch_id'])->fetchAll(PDO::FETCH_COLUMN);
+$assert(in_array('product_batch_expiry_30', $milestones, true) && in_array('product_batch_expiry_7', $milestones, true), 'Current condition retains applicable default milestone history');
+$notificationClock->instant = '2026-10-18T00:00:00+08:00';
 
 
 // --- 7. Test Depleted Stock Excluded From Warnings and Notifications ---

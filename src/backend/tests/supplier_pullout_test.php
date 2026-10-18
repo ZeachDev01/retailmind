@@ -468,6 +468,50 @@ $assert(str_contains($schemaSql, "'supplier_pullout'"), 'schema.sql includes sup
 $updateSql = file_get_contents(__DIR__ . '/../database/sql/update.sql');
 $assert(str_contains($updateSql, '202610180004_supplier_pullouts'), 'update.sql includes 202610180004_supplier_pullouts');
 
+// A read alert follows the physical batch through partial and final collection.
+require_once __DIR__ . '/../app/Services/NotificationService.php';
+$pdo->exec('ALTER TABLE products ADD COLUMN warning_lead_time_days INTEGER NULL');
+$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, warning_lead_time_days) VALUES (3, 'BREAD-REMINDER', '10003', 'Reminder Bread', 2)");
+$pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (3, 10)');
+$pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, expiration_date) VALUES (4, 3, 'COLLECT-10', 10, 10, '2026-10-25')");
+$clock = new class implements \App\Attention\Clock {
+    public function now(): DateTimeImmutable { return new DateTimeImmutable('2026-10-23T00:00:00+08:00'); }
+};
+$notifications = new NotificationService($pdo, $clock);
+$notifications->checkAndNotifyExpiringStock(30);
+$reminders = $notifications->getBatchReminders($managerId, '2026-10-25');
+$assert(isset($reminders[4]) && $reminders[4]['active'] && (int)$reminders[4]['remaining_quantity'] === 10, 'Expiration day keeps ten units actionable');
+$assert($reminders[4]['title'] === 'Prepare for supplier collection: Reminder Bread', 'Expiration day is not expired');
+$pdo->exec('UPDATE notifications SET is_read = 1 WHERE reference_id = 4');
+$reminders = $notifications->getBatchReminders($managerId, '2026-10-26');
+$assert($reminders[4]['active'] && $reminders[4]['title'] === 'Expired bread—waiting for supplier collection: Reminder Bread', 'Read reminder remains active after Manila expiration day');
+$assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 10, 'Checks, reading and date transition leave physical stock unchanged');
+$partial = $pulloutService->recordPullout(['product_id' => 3, 'batch_id' => 4, 'quantity' => 8, 'reason' => 'Supplier collection'], $managerId);
+$reminders = $notifications->getBatchReminders($managerId, '2026-10-26');
+$assert($reminders[4]['active'] && str_contains($reminders[4]['message'], 'Remaining: 2.'), 'Partial collection immediately presents two remaining units');
+$assert($partial['remaining_batch_qty'] === 2 && $partial['new_on_hand'] === 2, 'Eight-unit collection deducts batch and inventory together');
+$final = $pulloutService->recordPullout(['product_id' => 3, 'batch_id' => 4, 'quantity' => 2, 'reason' => 'Final supplier collection'], $managerId);
+$reminders = $notifications->getBatchReminders($managerId, '2026-10-26');
+$assert(!$reminders[4]['active'] && $final['remaining_batch_qty'] === 0 && $final['new_on_hand'] === 0, 'Final collection immediately clears active work');
+$assert(count($pulloutService->getPullouts(['product_id' => 3])) === 2 && isset($reminders[4]), 'Completed collection retains pullout and notification history');
+
+$pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, expiration_date) VALUES (5, 3, 'COLLECT-SECOND', 3, 3, '2026-10-25'), (6, 3, 'UNDATED', 2, 2, NULL)");
+$pdo->exec('UPDATE inventory SET quantity_on_hand = 5 WHERE product_id = 3');
+$notifications->checkAndNotifyExpiringStock();
+$notifications->checkAndNotifyExpiringStock();
+$reminders = $notifications->getBatchReminders($managerId, '2026-10-25');
+$assert(!$reminders[4]['active'] && $reminders[5]['active'] && !isset($reminders[6]), 'Another batch stays independent; undated stock has no date reminder');
+$secondBatchAlerts = array_filter(get_unread_notifications($pdo, $managerId), static fn(array $alert): bool => (int)$alert['reference_id'] === 5);
+$assert(count($secondBatchAlerts) === 1, 'Repeated checks do not duplicate the same batch milestone');
+$laterClock = new class implements \App\Attention\Clock {
+    public function now(): DateTimeImmutable { return new DateTimeImmutable('2026-10-26T16:01:00Z'); }
+};
+$laterNotifications = new NotificationService($pdo, $laterClock);
+$laterNotifications->checkAndNotifyExpiringStock();
+$laterNotifications->checkAndNotifyExpiringStock();
+$expiredBatchAlerts = array_filter(get_unread_notifications($pdo, $managerId), static fn(array $alert): bool => (int)$alert['reference_id'] === 5 && $alert['type'] === 'expired_stock');
+$assert(count($expiredBatchAlerts) === 1 && $laterNotifications->getBatchReminders($managerId)[5]['active'], 'Repeated expired checks retain one active condition and one expired alert');
+
 // Summary
 if (!empty($failures)) {
     echo "\nFailed assertions (" . count($failures) . "):\n";

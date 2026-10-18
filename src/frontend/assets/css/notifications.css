@@ -1,4 +1,8 @@
 .notifications-page { min-width: 0; }
+.active-batch-reminders { margin-bottom: 2rem; }
+.active-batch-reminders > h2 { margin: 0 0 .5rem; font-size: 1.2rem; }
+.active-batch-reminders > p { margin-bottom: 1rem; max-width: 72ch; color: var(--muted); }
+.active-batch-reminders h3 { margin: 0 0 .5rem; font-size: 1rem; overflow-wrap: anywhere; }
 .notification-heading { margin-bottom: 1.5rem; }
 .notification-heading h1 { font-size: 1.8rem; line-height: 1.2; margin-bottom: .5rem; }
 .notification-heading p { color: var(--muted); max-width: 72ch; }

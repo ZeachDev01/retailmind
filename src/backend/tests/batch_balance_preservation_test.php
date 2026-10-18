@@ -412,10 +412,16 @@ $assert((int)$fefoActive['quantity_on_hand'] === 20, 'Sellable quantity excludes
 $assert($fefoActive['next_expiration_date'] === $tomorrowManila, 'Next expiration date is earliest non-expired batch (tomorrow)');
 
 // Sale A: Buy 7 units. Should take all 4 from Batch 1012 (tomorrow), then 3 from Batch 1013 (next week).
+$pdo->exec('ALTER TABLE products ADD COLUMN warning_lead_time_days INTEGER NULL');
+$reminderService = new NotificationService($pdo);
+$reminderService->createNotification($managerId, 'expiring_stock', 'Expiry tomorrow', 'Four loaves', 1012, 'product_batch_expiry_7');
+$assert($reminderService->getBatchReminders($managerId, $tomorrowManila)[1012]['active'], 'Expiring batch is actionable before sale');
 $cartA = [['product_id' => 101, 'qty' => 7]];
 $detailsA = ['cash_received' => 200.00, 'payment_method' => 'cash'];
 $saleA = $salesWorkflow->checkout($cartA, $cashierId, 'cashier', 'cash', $detailsA);
 $assert(is_array($saleA) && ($saleA['sale_id'] ?? 0) > 0, 'Sale A of 7 units completes successfully');
+$soldReminder = $reminderService->getBatchReminders($managerId, $tomorrowManila)[1012];
+$assert(!$soldReminder['active'] && (int)$soldReminder['remaining_quantity'] === 0, 'Sale depletion immediately clears reminder while preserving its history');
 
 $rem1011 = (int)$pdo->query('SELECT remaining_quantity FROM product_batches WHERE batch_id = 1011')->fetchColumn();
 $rem1012 = (int)$pdo->query('SELECT remaining_quantity FROM product_batches WHERE batch_id = 1012')->fetchColumn();
