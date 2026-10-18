@@ -1403,6 +1403,24 @@ DROP TABLE IF EXISTS `supplier_products`;
 DROP TABLE IF EXISTS `suppliers`;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610150003_retire_procurement_storage','Retire development procurement storage; preserve receiving and operational records') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+CREATE TABLE IF NOT EXISTS `inventory_count_batches` (
+  `count_batch_id` int(11) NOT NULL AUTO_INCREMENT,
+  `count_id` int(11) NOT NULL,
+  `batch_id` int(11) DEFAULT NULL,
+  `system_quantity` int(11) NOT NULL DEFAULT 0,
+  `physical_quantity` int(11) NOT NULL DEFAULT 0,
+  `difference_qty` int(11) NOT NULL DEFAULT 0,
+  `expiration_date` date DEFAULT NULL,
+  `batch_number` varchar(100) DEFAULT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`count_batch_id`),
+  KEY `idx_inventory_count_batches_count_id` (`count_id`),
+  KEY `idx_inventory_count_batches_batch_id` (`batch_id`),
+  CONSTRAINT `fk_inventory_count_batches_count` FOREIGN KEY (`count_id`) REFERENCES `inventory_counts` (`count_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_inventory_count_batches_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180001_inventory_count_batches','Track batch-level counted quantities, shortages, extras, and undated reconciliation items') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
-SELECT 'RetailMind SQL update completed through 202610150003_retire_procurement_storage' AS result;
+SELECT 'RetailMind SQL update completed through 202610180001_inventory_count_batches' AS result;

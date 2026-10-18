@@ -38,6 +38,39 @@ $canMutateInventory = has_capability(\App\Authorization\RoleCapabilityPolicy::MU
 $correctionFormActive = $correctReport !== null
     && $canMutateInventory;
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
+    if ($_GET['action'] === 'batch_coverage') {
+        header('Content-Type: application/json');
+        try {
+            $productId = (int)($_GET['product_id'] ?? 0);
+            if ($productId <= 0) {
+                throw new RuntimeException('Product is required.');
+            }
+            $coverage = $countService->getProductBatchCoverage($productId);
+            echo json_encode(['success' => true, 'coverage' => $coverage]);
+        } catch (Throwable $e) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+    if ($_GET['action'] === 'count_batches') {
+        header('Content-Type: application/json');
+        try {
+            $countId = (int)($_GET['count_id'] ?? 0);
+            if ($countId <= 0) {
+                throw new RuntimeException('Count is required.');
+            }
+            $batches = $countService->getCountBatches($countId);
+            echo json_encode(['success' => true, 'batches' => $batches]);
+        } catch (Throwable $e) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
     csrf_verify();
@@ -184,6 +217,35 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             </div>
                         </div>
 
+                        <div id="batch_reconciliation_section" class="form-group" hidden>
+                            <div id="batch_mismatch_alert" class="alert-error" style="margin-bottom: 12px; padding: 10px; border-radius: 4px;" hidden></div>
+                            <div id="unbatched_stock_alert" class="alert" style="margin-bottom: 12px; padding: 10px; border-radius: 4px; background: #fff3cd; color: #856404; border: 1px solid #ffeeba;" hidden></div>
+
+                            <label>Physical Count by Batch</label>
+                            <p class="section-description">Count quantities present for each batch. Added stock without a confirmed date remains explicitly undated.</p>
+                            <div class="table-wrap" style="margin-bottom: 12px;">
+                                <table id="batch_counts_table">
+                                    <thead>
+                                        <tr>
+                                            <th>Batch</th>
+                                            <th>Expiration</th>
+                                            <th>Status</th>
+                                            <th>System</th>
+                                            <th>Counted</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="batch_counts_tbody"></tbody>
+                                </table>
+                            </div>
+
+                            <div id="extra_batches_container" style="margin-bottom: 12px;">
+                                <div id="extra_batches_list"></div>
+                                <?php if ($canMutateInventory): ?>
+                                    <button type="button" id="add_extra_batch_btn" class="btn btn-small btn-secondary">+ Add Extra / Found Batch</button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <label for="physical_quantity">Physically Counted Quantity</label>
                             <input type="number" name="physical_quantity" id="physical_quantity" min="0" required <?= $canMutateInventory ? '' : 'readonly' ?>>
@@ -260,7 +322,14 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                                 <br><small class="muted"><?= htmlspecialchars($count['product_name']) ?></small>
                                             </td>
                                             <td><?= (int)$count['system_quantity'] ?></td>
-                                            <td><?= (int)$count['physical_quantity'] ?></td>
+                                            <td>
+                                                <?= (int)$count['physical_quantity'] ?>
+                                                <?php if (!empty($count['batch_count'])): ?>
+                                                    <br><button type="button" class="btn btn-small btn-secondary btn-view-batches" data-count-id="<?= (int)$count['count_id'] ?>" style="margin-top: 4px; padding: 2px 6px; font-size: 11px;">
+                                                        <?= (int)$count['batch_count'] ?> batch<?= (int)$count['batch_count'] === 1 ? '' : 'es' ?>
+                                                    </button>
+                                                <?php endif; ?>
+                                            </td>
                                             <td>
                                                 <strong class="<?= $difference < 0 ? 'diff-negative' : ($difference > 0 ? 'diff-positive' : '') ?>">
                                                     <?= $difference > 0 ? '+' . $difference : $difference ?>
@@ -316,6 +385,14 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     </div>
                 </div>
             </div>
+
+            <dialog id="batch_detail_modal" style="padding: 20px; border-radius: 8px; border: 1px solid #ccc; max-width: 650px; width: 90%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 id="batch_detail_title" style="margin: 0;">Count Batches</h3>
+                    <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('batch_detail_modal').close()">Close</button>
+                </div>
+                <div id="batch_detail_body"></div>
+            </dialog>
         </main>
     </div>
 
@@ -354,14 +431,222 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             }
         }
 
-        productSelect.addEventListener('change', updatePreview);
+        productSelect.addEventListener('change', function () {
+            updatePreview();
+            fetchBatchCoverage(productSelect.value);
+        });
         physicalInput.addEventListener('input', updatePreview);
         useSystemQuantity.addEventListener('click', function () {
-            physicalInput.value = productSelect.selectedOptions[0].dataset.systemQty;
-            physicalInput.dispatchEvent(new Event('input', { bubbles: true }));
-            physicalInput.focus();
+            if (activeCoverage && activeCoverage.batches && activeCoverage.batches.length > 0) {
+                const inputs = batchSection.querySelectorAll('tbody .batch-count-input');
+                inputs.forEach(function (inp) {
+                    if (inp.dataset.systemQty !== undefined) {
+                        inp.value = inp.dataset.systemQty;
+                    }
+                });
+                recomputeTotalFromBatches();
+            } else {
+                physicalInput.value = productSelect.selectedOptions[0].dataset.systemQty;
+                physicalInput.dispatchEvent(new Event('input', { bubbles: true }));
+                physicalInput.focus();
+            }
         });
         updatePreview();
+        if (productSelect.value) {
+            fetchBatchCoverage(productSelect.value);
+        }
+
+        const batchSection = document.getElementById('batch_reconciliation_section');
+        const batchMismatchAlert = document.getElementById('batch_mismatch_alert');
+        const unbatchedAlert = document.getElementById('unbatched_stock_alert');
+        const batchTbody = document.getElementById('batch_counts_tbody');
+        const extraBatchesList = document.getElementById('extra_batches_list');
+        const addExtraBatchBtn = document.getElementById('add_extra_batch_btn');
+        const batchDetailModal = document.getElementById('batch_detail_modal');
+        const batchDetailTitle = document.getElementById('batch_detail_title');
+        const batchDetailBody = document.getElementById('batch_detail_body');
+        let extraBatchIndex = 0;
+        let activeCoverage = null;
+
+        function fetchBatchCoverage(productId) {
+            if (!productId || productId <= 0) {
+                if (batchSection) batchSection.hidden = true;
+                activeCoverage = null;
+                return;
+            }
+            fetch('inventory_counts.php?action=batch_coverage&product_id=' + encodeURIComponent(productId), {
+                headers: { Accept: 'application/json' }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !data.coverage) return;
+                    activeCoverage = data.coverage;
+                    renderBatchSection(data.coverage);
+                })
+                .catch(() => {});
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, function (m) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m];
+            });
+        }
+
+        function renderBatchSection(coverage) {
+            if (!batchSection) return;
+            batchSection.hidden = false;
+            extraBatchesList.replaceChildren();
+
+            if (coverage.has_mismatch) {
+                batchMismatchAlert.hidden = false;
+                const diff = Math.abs(coverage.on_hand - coverage.batch_sum);
+                const desc = coverage.on_hand > coverage.batch_sum
+                    ? 'Unbatched stock: ' + diff
+                    : 'Batches exceed on-hand by ' + diff;
+                batchMismatchAlert.textContent = 'Reconciliation Exception: System on hand (' + coverage.on_hand + ') does not match total batches (' + coverage.batch_sum + '). ' + desc + '. Count physical batches to reconcile.';
+            } else {
+                batchMismatchAlert.hidden = true;
+            }
+            unbatchedAlert.hidden = true;
+
+            batchTbody.replaceChildren();
+            if (!coverage.batches || coverage.batches.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="5" class="muted" style="text-align:center; padding:12px;">No active batches recorded. Enter unbatched or found stock using "+ Add Extra / Found Batch" below.</td>';
+                batchTbody.appendChild(tr);
+            } else {
+                coverage.batches.forEach(function (b, idx) {
+                    const tr = document.createElement('tr');
+                    const bNum = b.batch_number ? b.batch_number : (b.receiving_id ? 'Received batch #' + b.batch_id : 'Opening stock');
+                    const bExp = b.expiration_date ? b.expiration_date : 'Not recorded';
+                    const statusBadge = b.is_expired
+                        ? '<span class="status-pill status-rejected" style="font-size:11px;">Expired</span>'
+                        : '<span class="status-pill status-approved" style="font-size:11px;">Active</span>';
+
+                    tr.innerHTML = `
+                        <td><strong>${escapeHtml(bNum)}</strong></td>
+                        <td>${escapeHtml(bExp)}</td>
+                        <td>${statusBadge}</td>
+                        <td>${b.remaining_quantity}</td>
+                        <td>
+                            <input type="hidden" name="batches[${idx}][batch_id]" value="${b.batch_id}">
+                            <input type="number" class="batch-count-input" name="batches[${idx}][physical_quantity]"
+                                   min="0" style="width: 80px;" data-system-qty="${b.remaining_quantity}"
+                                   placeholder="0" <?= $canMutateInventory ? '' : 'readonly' ?>>
+                        </td>
+                    `;
+                    batchTbody.appendChild(tr);
+                });
+            }
+
+            attachBatchInputListeners();
+        }
+
+        function attachBatchInputListeners() {
+            if (!batchSection) return;
+            const inputs = batchSection.querySelectorAll('.batch-count-input');
+            inputs.forEach(function (inp) {
+                inp.removeEventListener('input', recomputeTotalFromBatches);
+                inp.addEventListener('input', recomputeTotalFromBatches);
+            });
+        }
+
+        function recomputeTotalFromBatches() {
+            if (!batchSection) return;
+            const inputs = batchSection.querySelectorAll('.batch-count-input');
+            if (inputs.length === 0) return;
+            let sum = 0;
+            let hasAny = false;
+            inputs.forEach(function (inp) {
+                if (inp.value !== '') {
+                    hasAny = true;
+                    sum += parseInt(inp.value, 10) || 0;
+                }
+            });
+            if (hasAny) {
+                physicalInput.value = sum;
+                updatePreview();
+            }
+        }
+
+        if (addExtraBatchBtn) {
+            addExtraBatchBtn.addEventListener('click', function () {
+                const key = 'extra_' + (++extraBatchIndex);
+                const div = document.createElement('div');
+                div.className = 'extra-batch-row';
+                div.style.cssText = 'border:1px dashed #ccc; padding:10px; margin-bottom:8px; border-radius:4px; background:rgba(0,0,0,0.02);';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <strong>Extra / Found Stock Batch</strong>
+                        <button type="button" class="btn btn-small btn-secondary remove-batch-btn" style="padding:1px 6px;">&times; Remove</button>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                        <div class="form-group" style="margin-bottom:4px;">
+                            <label style="font-size:12px;">Counted Quantity *</label>
+                            <input type="number" class="batch-count-input" name="batches[${key}][physical_quantity]" min="1" required style="width:100%;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:4px;">
+                            <label style="font-size:12px;">Expiration date (leave blank if not recorded)</label>
+                            <input type="date" name="batches[${key}][expiration_date]" style="width:100%;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:4px;">
+                            <label style="font-size:12px;">Batch number / label (optional)</label>
+                            <input type="text" name="batches[${key}][batch_number]" placeholder="e.g. FOUND-01" style="width:100%;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:4px;">
+                            <label style="font-size:12px;">Notes (optional)</label>
+                            <input type="text" name="batches[${key}][notes]" placeholder="e.g. Unbatched shelf stock" style="width:100%;">
+                        </div>
+                    </div>
+                `;
+                div.querySelector('.remove-batch-btn').addEventListener('click', function () {
+                    div.remove();
+                    recomputeTotalFromBatches();
+                });
+                extraBatchesList.appendChild(div);
+                attachBatchInputListeners();
+            });
+        }
+
+        // View batches in recent counts
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn-view-batches');
+            if (!btn) return;
+            const countId = btn.dataset.countId;
+            if (!countId || !batchDetailModal) return;
+            batchDetailTitle.textContent = 'Batches for Count #' + countId;
+            batchDetailBody.innerHTML = '<p class="muted">Loading batch details...</p>';
+            batchDetailModal.showModal();
+            fetch('inventory_counts.php?action=count_batches&count_id=' + encodeURIComponent(countId), {
+                headers: { Accept: 'application/json' }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !data.batches || data.batches.length === 0) {
+                        batchDetailBody.innerHTML = '<p class="muted">No batch breakdown recorded.</p>';
+                        return;
+                    }
+                    let html = '<div class="table-wrap"><table><thead><tr><th>Batch</th><th>Expiration</th><th>System</th><th>Counted</th><th>Diff</th><th>Notes</th></tr></thead><tbody>';
+                    data.batches.forEach(function (b) {
+                        const bNum = b.batch_number ? b.batch_number : (b.original_batch_number ? b.original_batch_number : (b.batch_id ? 'Batch #' + b.batch_id : 'Added / Found'));
+                        const bExp = b.expiration_date ? b.expiration_date : (b.original_expiration_date ? b.original_expiration_date : 'Not recorded');
+                        const diff = b.difference_qty > 0 ? '+' + b.difference_qty : b.difference_qty;
+                        html += `<tr>
+                            <td><strong>${escapeHtml(bNum)}</strong></td>
+                            <td>${escapeHtml(bExp)}</td>
+                            <td>${b.system_quantity}</td>
+                            <td>${b.physical_quantity}</td>
+                            <td>${diff}</td>
+                            <td>${escapeHtml(b.notes || '-')}</td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table></div>';
+                    batchDetailBody.innerHTML = html;
+                })
+                .catch(() => {
+                    batchDetailBody.innerHTML = '<p class="alert-error">Failed to load batch details.</p>';
+                });
+        });
 
         const productSearch = document.getElementById('product_search');
         const productResults = document.getElementById('product_results');

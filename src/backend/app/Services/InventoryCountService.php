@@ -20,17 +20,82 @@ class InventoryCountService
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
     }
 
+    public function getProductBatchCoverage(int $productId): array
+    {
+        if ($productId <= 0) {
+            throw new RuntimeException('Product is required.');
+        }
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare(
+            "SELECT p.product_id, p.sku, p.product_name, i.quantity_on_hand
+             FROM products p
+             JOIN inventory i ON i.product_id = p.product_id
+             WHERE p.product_id = ?{$scopeSql}"
+        );
+        $stmt->execute(array_merge([$productId], $scopeParams));
+        $product = $stmt->fetch();
+        if (!$product) {
+            throw new RuntimeException('Inventory record not found for the selected product.');
+        }
+
+        $onHand = (int)$product['quantity_on_hand'];
+
+        $batchStmt = $this->pdo->prepare(
+            "SELECT batch_id, product_id, receiving_id, batch_number, quantity, remaining_quantity,
+                    expiration_date, date_received, supplier
+             FROM product_batches
+             WHERE product_id = ? AND remaining_quantity > 0
+             ORDER BY (expiration_date IS NULL) ASC, expiration_date ASC, date_received ASC, batch_id ASC"
+        );
+        $batchStmt->execute([$productId]);
+        $batches = $batchStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $batchSum = 0;
+        $today = date('Y-m-d');
+        foreach ($batches as &$batch) {
+            $batch['batch_id'] = (int)$batch['batch_id'];
+            $batch['quantity'] = (int)$batch['quantity'];
+            $batch['remaining_quantity'] = (int)$batch['remaining_quantity'];
+            $batch['is_expired'] = !empty($batch['expiration_date']) && $batch['expiration_date'] < $today;
+            $batchSum += $batch['remaining_quantity'];
+        }
+        unset($batch);
+
+        $unbatchedQty = max(0, $onHand - $batchSum);
+        $hasMismatch = ($onHand !== $batchSum);
+
+        return [
+            'product_id' => $productId,
+            'sku' => (string)$product['sku'],
+            'product_name' => (string)$product['product_name'],
+            'on_hand' => $onHand,
+            'batch_sum' => $batchSum,
+            'unbatched_qty' => $unbatchedQty,
+            'has_mismatch' => $hasMismatch,
+            'batches' => $batches,
+        ];
+    }
+
+    public function getCountBatches(int $countId): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT icb.*, pb.batch_number AS original_batch_number, pb.expiration_date AS original_expiration_date
+             FROM inventory_count_batches icb
+             LEFT JOIN product_batches pb ON pb.batch_id = icb.batch_id
+             WHERE icb.count_id = ?
+             ORDER BY icb.count_batch_id ASC"
+        );
+        $stmt->execute([$countId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function recordCount(array $data, int $userId): int
     {
         $productId = (int)($data['product_id'] ?? 0);
-        $physicalQty = (int)($data['physical_quantity'] ?? -1);
         $reason = trim((string)($data['discrepancy_reason'] ?? ''));
         $relatedAdjustmentId = (int)($data['related_adjustment_id'] ?? 0);
         if ($productId <= 0) {
             throw new RuntimeException('Product is required.');
-        }
-        if ($physicalQty < 0) {
-            throw new RuntimeException('Physically counted quantity cannot be negative.');
         }
         if ($reason === '') {
             throw new RuntimeException('Reason for discrepancy is required.');
@@ -45,6 +110,72 @@ class InventoryCountService
         }
 
         $this->fiscalPeriodGuard->assertOpenNow('inventory_counts', 'inventory count');
+
+        $rawBatches = $data['batches'] ?? null;
+        $hasBatches = is_array($rawBatches) && count($rawBatches) > 0;
+        $batchEntries = [];
+        $totalBatchPhysical = 0;
+
+        if ($hasBatches) {
+            $seenBatchIds = [];
+            foreach ($rawBatches as $b) {
+                $bId = !empty($b['batch_id']) ? (int)$b['batch_id'] : null;
+                $bQtyRaw = $b['physical_quantity'] ?? null;
+                if ($bId === null && ($bQtyRaw === null || $bQtyRaw === '' || (int)$bQtyRaw <= 0)) {
+                    continue;
+                }
+                if ($bQtyRaw === null || $bQtyRaw === '' || (int)$bQtyRaw < 0) {
+                    throw new RuntimeException('Batch physically counted quantity cannot be negative.');
+                }
+                $bQty = (int)$bQtyRaw;
+
+                if ($bId !== null) {
+                    if (isset($seenBatchIds[$bId])) {
+                        throw new RuntimeException('Duplicate batch line in count submission.');
+                    }
+                    $seenBatchIds[$bId] = true;
+                }
+
+                $bExp = null;
+                if (!empty($b['expiration_date'])) {
+                    $bExp = validate_calendar_date($b['expiration_date']);
+                }
+                $bNum = isset($b['batch_number']) && trim((string)$b['batch_number']) !== ''
+                    ? trim((string)$b['batch_number'])
+                    : null;
+                $bNotes = isset($b['notes']) && trim((string)$b['notes']) !== ''
+                    ? trim((string)$b['notes'])
+                    : null;
+
+                $batchEntries[] = [
+                    'batch_id' => $bId,
+                    'physical_quantity' => $bQty,
+                    'expiration_date' => $bExp,
+                    'batch_number' => $bNum,
+                    'notes' => $bNotes,
+                ];
+                $totalBatchPhysical += $bQty;
+            }
+
+            if (count($batchEntries) > 0) {
+                if (isset($data['physical_quantity']) && $data['physical_quantity'] !== '') {
+                    $physicalQty = (int)$data['physical_quantity'];
+                    if ($physicalQty !== $totalBatchPhysical) {
+                        throw new RuntimeException('Physically counted quantity does not match the sum of batch quantities.');
+                    }
+                } else {
+                    $physicalQty = $totalBatchPhysical;
+                }
+            } else {
+                $physicalQty = (int)($data['physical_quantity'] ?? -1);
+            }
+        } else {
+            $physicalQty = (int)($data['physical_quantity'] ?? -1);
+        }
+
+        if ($physicalQty < 0) {
+            throw new RuntimeException('Physically counted quantity cannot be negative.');
+        }
 
         StoreWriteGate::begin($this->pdo);
         try {
@@ -82,6 +213,52 @@ class InventoryCountService
             ]);
 
             $countId = (int)$this->pdo->lastInsertId();
+
+            if (count($batchEntries) > 0) {
+                $batchInsertStmt = $this->pdo->prepare(
+                    "INSERT INTO inventory_count_batches (
+                        count_id, batch_id, system_quantity, physical_quantity, difference_qty,
+                        expiration_date, batch_number, notes
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+
+                $batchCheckStmt = $this->pdo->prepare(
+                    "SELECT remaining_quantity, expiration_date, batch_number
+                     FROM product_batches
+                     WHERE batch_id = ? AND product_id = ?{$this->forUpdate()}"
+                );
+
+                foreach ($batchEntries as $entry) {
+                    $entryBatchId = $entry['batch_id'];
+                    if ($entryBatchId !== null) {
+                        $batchCheckStmt->execute([$entryBatchId, $productId]);
+                        $productBatch = $batchCheckStmt->fetch(PDO::FETCH_ASSOC);
+                        if (!$productBatch) {
+                            throw new RuntimeException("Selected batch #{$entryBatchId} not found for this product.");
+                        }
+                        $batchSystemQty = (int)$productBatch['remaining_quantity'];
+                        $batchExp = $productBatch['expiration_date'];
+                        $batchNum = $productBatch['batch_number'];
+                    } else {
+                        $batchSystemQty = 0;
+                        $batchExp = $entry['expiration_date'];
+                        $batchNum = $entry['batch_number'];
+                    }
+
+                    $diff = $entry['physical_quantity'] - $batchSystemQty;
+                    $batchInsertStmt->execute([
+                        $countId,
+                        $entryBatchId,
+                        $batchSystemQty,
+                        $entry['physical_quantity'],
+                        $diff,
+                        $batchExp,
+                        $batchNum,
+                        $entry['notes'],
+                    ]);
+                }
+            }
+
             $this->pdo->commit();
             return $countId;
         } catch (Throwable $e) {
@@ -105,8 +282,7 @@ class InventoryCountService
                 "SELECT ic.*
                  FROM inventory_counts ic
                  JOIN products p ON p.product_id = ic.product_id
-                 WHERE ic.count_id = ?{$scopeSql}
-                 FOR UPDATE"
+                 WHERE ic.count_id = ?{$scopeSql}{$this->forUpdate()}"
             );
             $stmt->execute(array_merge([$countId], $scopeParams));
             $count = $stmt->fetch();
@@ -128,8 +304,7 @@ class InventoryCountService
             $inventoryStmt = $this->pdo->prepare(
                 "SELECT quantity_on_hand
                  FROM inventory
-                 WHERE product_id = ?
-                 FOR UPDATE"
+                 WHERE product_id = ?{$this->forUpdate()}"
             );
             $inventoryStmt->execute([$productId]);
             $inventory = $inventoryStmt->fetch();
@@ -143,13 +318,74 @@ class InventoryCountService
                 throw new RuntimeException('Stock has changed since this count was recorded. Please record a fresh count before approval.');
             }
 
+            $cbStmt = $this->pdo->prepare(
+                "SELECT * FROM inventory_count_batches WHERE count_id = ? ORDER BY count_batch_id ASC{$this->forUpdate()}"
+            );
+            $cbStmt->execute([$countId]);
+            $countBatches = $cbStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!empty($countBatches)) {
+                // Lock and revalidate all batch lines
+                foreach ($countBatches as $cb) {
+                    $batchId = !empty($cb['batch_id']) ? (int)$cb['batch_id'] : null;
+                    if ($batchId !== null) {
+                        $pbStmt = $this->pdo->prepare(
+                            "SELECT remaining_quantity FROM product_batches WHERE batch_id = ? AND product_id = ?{$this->forUpdate()}"
+                        );
+                        $pbStmt->execute([$batchId, $productId]);
+                        $currentBatch = $pbStmt->fetch(PDO::FETCH_ASSOC);
+                        if (!$currentBatch) {
+                            throw new RuntimeException('Batch record not found for this count.');
+                        }
+                        if ((int)$currentBatch['remaining_quantity'] !== (int)$cb['system_quantity']) {
+                            throw new RuntimeException('Stock has changed since this count was recorded. Please record a fresh count before approval.');
+                        }
+                    }
+                }
+
+                // Apply batch updates
+                $batchUpdateStmt = $this->pdo->prepare(
+                    "UPDATE product_batches
+                     SET remaining_quantity = ?
+                     WHERE batch_id = ?"
+                );
+                $batchInsertStmt = $this->pdo->prepare(
+                    "INSERT INTO product_batches (
+                        product_id, receiving_id, batch_number, quantity, remaining_quantity,
+                        expiration_date, date_received, supplier, created_at
+                    ) VALUES (?, NULL, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP)"
+                );
+
+                $hasBatchAdjustments = false;
+                foreach ($countBatches as $countBatch) {
+                    $batchId = !empty($countBatch['batch_id']) ? (int)$countBatch['batch_id'] : null;
+                    $physicalBatchQty = (int)$countBatch['physical_quantity'];
+                    if ((int)$countBatch['difference_qty'] !== 0) {
+                        $hasBatchAdjustments = true;
+                    }
+                    if ($batchId !== null) {
+                        $batchUpdateStmt->execute([$physicalBatchQty, $batchId]);
+                    } else {
+                        if ($physicalBatchQty > 0) {
+                            $batchInsertStmt->execute([
+                                $productId,
+                                $countBatch['batch_number'],
+                                $physicalBatchQty,
+                                $physicalBatchQty,
+                                $countBatch['expiration_date'],
+                            ]);
+                        }
+                    }
+                }
+            }
+
             $this->pdo->prepare(
                 "UPDATE inventory
                  SET quantity_on_hand = ?
                  WHERE product_id = ?"
             )->execute([(int)$count['physical_quantity'], $productId]);
 
-            if ($differenceQty !== 0) {
+            if ($differenceQty !== 0 || !empty($hasBatchAdjustments)) {
                 $this->pdo->prepare(
                     "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
                      VALUES (?, ?, 'adjustment', ?)"
@@ -195,6 +431,7 @@ class InventoryCountService
         }
     }
 
+
     public function rejectCount(int $countId, int $userId): void
     {
         if ($countId <= 0) {
@@ -235,7 +472,8 @@ class InventoryCountService
         $stmt = $this->pdo->prepare(
             "SELECT ic.*, p.sku, p.product_name,
                     counted_user.full_name AS counted_by_name,
-                    approved_user.full_name AS approved_by_name
+                    approved_user.full_name AS approved_by_name,
+                    (SELECT COUNT(*) FROM inventory_count_batches icb WHERE icb.count_id = ic.count_id) AS batch_count
              FROM inventory_counts ic
              JOIN products p ON p.product_id = ic.product_id
              JOIN users counted_user ON counted_user.user_id = ic.counted_by

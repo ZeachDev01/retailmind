@@ -711,6 +711,31 @@ CREATE TABLE `inventory_counts` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `inventory_count_batches`
+--
+
+DROP TABLE IF EXISTS `inventory_count_batches`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `inventory_count_batches` (
+  `count_batch_id` int(11) NOT NULL AUTO_INCREMENT,
+  `count_id` int(11) NOT NULL,
+  `batch_id` int(11) DEFAULT NULL,
+  `system_quantity` int(11) NOT NULL DEFAULT 0,
+  `physical_quantity` int(11) NOT NULL DEFAULT 0,
+  `difference_qty` int(11) NOT NULL DEFAULT 0,
+  `expiration_date` date DEFAULT NULL,
+  `batch_number` varchar(100) DEFAULT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`count_batch_id`),
+  KEY `idx_inventory_count_batches_count_id` (`count_id`),
+  KEY `idx_inventory_count_batches_batch_id` (`batch_id`),
+  CONSTRAINT `fk_inventory_count_batches_count` FOREIGN KEY (`count_id`) REFERENCES `inventory_counts` (`count_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_inventory_count_batches_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `login_attempts`
 --
 
