@@ -1,4 +1,4 @@
-name: Deploy to InfinityFree
+name: Deploy to Hostinger
 
 on:
   push:
@@ -10,7 +10,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      FTP_SERVER: ftpupload.net
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_SERVER_DIR: ./
       FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
@@ -45,6 +46,7 @@ jobs:
           test -n "$DB_NAME" || { echo 'Missing DB_NAME secret'; exit 1; }
           test -n "$DB_USER" || { echo 'Missing DB_USER secret'; exit 1; }
           test -n "$DB_PASSWORD" || { echo 'Missing DB_PASSWORD secret'; exit 1; }
+          test -n "$FTP_SERVER" || { echo 'Missing FTP_SERVER secret'; exit 1; }
           test -n "$FTP_USERNAME" || { echo 'Missing FTP_USERNAME secret'; exit 1; }
           test -n "$FTP_PASSWORD" || { echo 'Missing FTP_PASSWORD secret'; exit 1; }
           umask 077
@@ -63,7 +65,7 @@ jobs:
             "DB_PASSWORD=$DB_PASSWORD" \
             'DB_CHARSET=utf8mb4' > .env
 
-      - name: Deploy to InfinityFree
+      - name: Deploy to Hostinger
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ env.FTP_SERVER }}
@@ -73,7 +75,7 @@ jobs:
           port: 21
           security: strict
           local-dir: .release/
-          server-dir: /htdocs/
+          server-dir: ${{ env.FTP_SERVER_DIR }}
           # Preserve hosted data even if the old repository-wide sync tracked it.
           exclude: |
             **/.git*
@@ -91,4 +93,4 @@ jobs:
         run: |
           curl --fail --silent --show-error --ssl-reqd \
             --user "$FTP_USERNAME:$FTP_PASSWORD" \
-            --upload-file .env "ftp://$FTP_SERVER/htdocs/.env"
+            --upload-file .env "ftp://$FTP_SERVER/$FTP_SERVER_DIR.env"
