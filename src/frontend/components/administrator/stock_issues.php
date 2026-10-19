@@ -33,6 +33,16 @@ $categoryLabels = [
 $categoryLabel = static function (string $category) use ($categoryLabels): string {
     return $categoryLabels[$category] ?? ucfirst($category);
 };
+$formatIssueQty = static function (array $row): string {
+    $fType = $row['form'] ?? 'piece';
+    $repQty = (int)($row['reported_qty'] ?? 0);
+    $baseQty = abs((int)($row['adjustment_qty'] ?? 0));
+    if ($fType === 'pack' && $repQty > 0) {
+        return "-{$repQty} " . ($repQty === 1 ? 'pack' : 'packs') . " ({$baseQty} pcs)";
+    }
+    $q = $repQty > 0 ? $repQty : $baseQty;
+    return "-{$q} " . ($q === 1 ? 'piece' : 'pieces');
+};
 
 $filters = [
     'status' => trim((string)($_GET['status'] ?? '')),
@@ -203,7 +213,7 @@ try {
                                 </span>
                             </div>
                             <div class="u-text-right">
-                                <div class="adjustment-qty">-<?= abs((int)$report['adjustment_qty']) ?></div>
+                                <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
                                 <span class="adjustment-status <?= htmlspecialchars($report['status']) ?>">
                                     <?= htmlspecialchars(ucfirst($report['status'])) ?>
                                 </span>
@@ -267,7 +277,7 @@ try {
                                         <tr>
                                             <td><?= htmlspecialchars($batch['batch_number'] ?? ('#' . $batch['batch_id'])) ?></td>
                                             <td><?= htmlspecialchars($batch['expiration_date'] ?? 'Not recorded') ?></td>
-                                            <td>-<?= (int)$batch['quantity'] ?></td>
+                                            <td><?= ($batch['form'] ?? 'piece') === 'pack' && (int)($batch['reported_qty'] ?? 0) > 0 ? '-' . (int)$batch['reported_qty'] . ' pack(s) (' . (int)$batch['quantity'] . ' pcs)' : '-' . (int)$batch['quantity'] . ' pc(s)' ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -371,7 +381,7 @@ try {
                                             <br><small class="muted"><?= htmlspecialchars($row['sku']) ?></small>
                                         </td>
                                         <td><?= htmlspecialchars($categoryLabel((string)$row['adjustment_type'])) ?></td>
-                                        <td>-<?= abs((int)$row['adjustment_qty']) ?></td>
+                                        <td><?= htmlspecialchars($formatIssueQty($row)) ?></td>
                                         <td>
                                             <span class="adjustment-status <?= htmlspecialchars($row['status']) ?>">
                                                 <?= htmlspecialchars(ucfirst($row['status'])) ?>

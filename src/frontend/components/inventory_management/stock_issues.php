@@ -78,6 +78,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$formatIssueQty = static function (array $row): string {
+    $fType = $row['form'] ?? 'piece';
+    $repQty = (int)($row['reported_qty'] ?? 0);
+    $baseQty = abs((int)($row['adjustment_qty'] ?? 0));
+    if ($fType === 'pack' && $repQty > 0) {
+        return "-{$repQty} " . ($repQty === 1 ? 'pack' : 'packs') . " ({$baseQty} pcs)";
+    }
+    $q = $repQty > 0 ? $repQty : $baseQty;
+    return "-{$q} " . ($q === 1 ? 'piece' : 'pieces');
+};
 $pending = $stockIssueService->getPendingReports();
 $pendingCount = $stockIssueService->getPendingCount();
 $returned = $stockIssueService->getReturnedReports();
@@ -142,7 +152,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$report['adjustment_qty']) ?></div>
+                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
                                     <span class="adjustment-status pending">Pending</span>
                                 </div>
                             </div>
@@ -253,7 +263,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$report['adjustment_qty']) ?></div>
+                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
                                     <span class="adjustment-status returned">Returned</span>
                                 </div>
                             </div>
@@ -295,7 +305,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$review['adjustment_qty']) ?></div>
+                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($review)) ?></div>
                                     <span class="adjustment-status <?= htmlspecialchars($review['status']) ?>">
                                         <?= htmlspecialchars(ucfirst($review['status'])) ?>
                                     </span>
@@ -313,7 +323,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                         <strong>Deducted batches:</strong>
                                         <ul class="u-mt-1" style="margin-left: 1.25rem;">
                                             <?php foreach ($reviewBatches as $rb): ?>
-                                                <li>Batch <?= htmlspecialchars($rb['batch_number'] ?? ('#' . $rb['batch_id'])) ?><?= !empty($rb['expiration_date']) ? ' (Exp: ' . htmlspecialchars($rb['expiration_date']) . ')' : '' ?>: -<?= (int)$rb['quantity'] ?></li>
+                                                <li>Batch <?= htmlspecialchars($rb['batch_number'] ?? ('#' . $rb['batch_id'])) ?><?= !empty($rb['expiration_date']) ? ' (Exp: ' . htmlspecialchars($rb['expiration_date']) . ')' : '' ?>: <?= ($rb['form'] ?? 'piece') === 'pack' && (int)($rb['reported_qty'] ?? 0) > 0 ? '-' . (int)$rb['reported_qty'] . ' pack(s) (' . (int)$rb['quantity'] . ' pcs)' : '-' . (int)$rb['quantity'] . ' pc(s)' ?></li>
                                             <?php endforeach; ?>
                                         </ul>
                                     </div>

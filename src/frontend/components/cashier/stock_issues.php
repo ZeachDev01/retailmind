@@ -30,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stockIssueService->editReport($adjustmentId, $cashierId, [
                 'category' => $_POST['category'] ?? '',
                 'quantity' => $_POST['quantity'] ?? 0,
+                'form' => $_POST['form'] ?? 'piece',
                 'explanation' => $_POST['explanation'] ?? '',
             ]);
             $message = "Report #{$adjustmentId} updated. It keeps its current state until reviewed or resubmitted.";
@@ -52,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'product_id' => $_POST['product_id'] ?? 0,
                 'category' => $_POST['category'] ?? '',
                 'quantity' => $_POST['quantity'] ?? 0,
+                'form' => $_POST['form'] ?? 'piece',
                 'explanation' => $_POST['explanation'] ?? '',
             ], $cashierId);
 
@@ -157,6 +159,14 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                                 <div class="type-info" id="type-info"></div>
                             </div>
                             <div class="form-group">
+                                <label for="form" class="required">Stock form</label>
+                                <select name="form" id="form" required <?= $openShift ? '' : 'disabled' ?>>
+                                    <option value="piece">Loose Piece(s)</option>
+                                    <option value="pack" id="form-option-pack" disabled>Sealed Pack(s)</option>
+                                </select>
+                                <small id="form-hint" class="muted">Piece by default. Pack enabled only if Sales Pack configured.</small>
+                            </div>
+                            <div class="form-group">
                                 <label for="quantity" class="required">Quantity affected</label>
                                 <input type="number" name="quantity" id="quantity" min="1" step="1" required placeholder="Units affected" <?= $openShift ? '' : 'disabled' ?>>
                             </div>
@@ -198,7 +208,19 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                                         </span>
                                     </div>
                                     <div class="u-text-right">
-                                        <div class="adjustment-qty">-<?= abs((int)$adj['adjustment_qty']) ?></div>
+                                        <?php
+                                        $fType = $adj['form'] ?? 'piece';
+                                        $repQty = (int)($adj['reported_qty'] ?? 0);
+                                        $baseQty = abs((int)$adj['adjustment_qty']);
+                                        if ($fType === 'pack' && $repQty > 0) {
+                                            $qtyLabel = "-{$repQty} " . ($repQty === 1 ? 'pack' : 'packs') . " ({$baseQty} pcs)";
+                                        } elseif ($repQty > 0) {
+                                            $qtyLabel = "-{$repQty} " . ($repQty === 1 ? 'piece' : 'pieces');
+                                        } else {
+                                            $qtyLabel = "-{$baseQty} " . ($baseQty === 1 ? 'piece' : 'pieces');
+                                        }
+                                        ?>
+                                        <div class="adjustment-qty"><?= htmlspecialchars($qtyLabel) ?></div>
                                         <span class="adjustment-status <?= htmlspecialchars($adj['status']) ?>">
                                             <?= htmlspecialchars(ucfirst($adj['status'])) ?>
                                         </span>
@@ -236,8 +258,17 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                                                 </select>
                                             </div>
                                             <div class="form-group">
+                                                <label for="edit-form-<?= (int)$adj['adjustment_id'] ?>">Stock form</label>
+                                                <select name="form" id="edit-form-<?= (int)$adj['adjustment_id'] ?>">
+                                                    <option value="piece" <?= ($adj['form'] ?? 'piece') === 'piece' ? 'selected' : '' ?>>Loose Piece(s)</option>
+                                                    <?php if (!empty($adj['pack_size']) && (int)$adj['pack_size'] > 1): ?>
+                                                        <option value="pack" <?= ($adj['form'] ?? '') === 'pack' ? 'selected' : '' ?>>Sealed Pack(s) (Pack of <?= (int)$adj['pack_size'] ?>)</option>
+                                                    <?php endif; ?>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
                                                 <label for="edit-qty-<?= (int)$adj['adjustment_id'] ?>">Quantity</label>
-                                                <input type="number" name="quantity" id="edit-qty-<?= (int)$adj['adjustment_id'] ?>" min="1" step="1" value="<?= abs((int)$adj['adjustment_qty']) ?>" required>
+                                                <input type="number" name="quantity" id="edit-qty-<?= (int)$adj['adjustment_id'] ?>" min="1" step="1" value="<?= (int)($adj['reported_qty'] ?: abs((int)$adj['adjustment_qty'])) ?>" required>
                                             </div>
                                         </div>
                                         <div class="form-group">
@@ -286,13 +317,38 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
             }[char]));
         }
 
-        function selectProduct(product) {
+        function updateFormSelect(packSize) {
+            const formSelect = document.getElementById('form');
+            const packOpt = document.getElementById('form-option-pack');
+            const formHint = document.getElementById('form-hint');
+            if (!formSelect || !packOpt) return;
+            if (packSize && packSize > 1) {
+                packOpt.disabled = false;
+                packOpt.textContent = 'Sealed Pack(s) (Pack of ' + packSize + ')';
+                if (formHint) formHint.textContent = '1 pack = ' + packSize + ' base units';
+            } else {
+                packOpt.disabled = true;
+                packOpt.textContent = 'Sealed Pack(s) (N/A)';
+                formSelect.value = 'piece';
+                if (formHint) formHint.textContent = 'Piece by default. Pack enabled only if Sales Pack configured.';
+            }
+        }
+
+        function selectProduct(product, scannedCode = '') {
             productIdField.value = product.product_id;
             document.getElementById('selected-product-name').textContent = product.name || product.product_name;
             document.getElementById('selected-product-code').textContent = product.sku || product.barcode || '';
             document.getElementById('selected-product-stock').textContent = 'Stock ' + (product.quantity_on_hand ?? '?');
             selectedCard.hidden = false;
             resultsBox.innerHTML = '';
+            const pSize = Number(product.pack_size || 0);
+            updateFormSelect(pSize);
+            const formSelect = document.getElementById('form');
+            if (formSelect && scannedCode && product.pack_barcode && scannedCode === product.pack_barcode && pSize > 1) {
+                formSelect.value = 'pack';
+            } else if (formSelect) {
+                formSelect.value = 'piece';
+            }
             selectedCard.scrollIntoView({
                 block: 'nearest'
             });
@@ -301,6 +357,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         document.getElementById('clear-product').addEventListener('click', () => {
             productIdField.value = '';
             selectedCard.hidden = true;
+            updateFormSelect(0);
         });
 
         function renderResults(products, emptyMessage) {
@@ -322,14 +379,14 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         }
 
         let lookupAbortController = null;
-        async function lookup(url, emptyMessage, selectMatch = false) {
+        async function lookup(url, emptyMessage, selectMatch = false, scannedCode = '') {
             if (lookupAbortController) lookupAbortController.abort();
             lookupAbortController = new AbortController();
             try {
                 const response = await fetch(url, { signal: lookupAbortController.signal });
                 const data = await response.json();
                 const products = response.ok && data.success ? (data.products || []) : [];
-                if (selectMatch && products.length === 1) selectProduct(products[0]);
+                if (selectMatch && products.length === 1) selectProduct(products[0], scannedCode);
                 else renderResults(products, products.length > 1 ? 'More than one product matches. Select the correct product.' : emptyMessage);
             } catch (error) {
                 if (error && error.name === 'AbortError') return;
@@ -342,7 +399,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
             clearTimeout(searchTimer);
             productIdField.value = '';
             selectedCard.hidden = true;
-            return lookup(productsApiUrl + '?code=' + encodeURIComponent(code) + '&limit=5', 'No active product with available stock matches that barcode.', true);
+            return lookup(productsApiUrl + '?code=' + encodeURIComponent(code) + '&limit=5', 'No active product with available stock matches that barcode.', true, code);
         }
         barcodeInput.addEventListener('keydown', event => {
             if (event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;

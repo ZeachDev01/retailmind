@@ -53,8 +53,23 @@ class StockIssueService
 
         $productId = (int)($data['product_id'] ?? 0);
         $category = strtolower(trim((string)($data['category'] ?? $data['adjustment_type'] ?? '')));
-        $quantity = (int)($data['quantity'] ?? $data['adjustment_qty'] ?? 0);
+        $rawQty = $data['quantity'] ?? $data['adjustment_qty'] ?? null;
+        if (!is_int($rawQty) && !(is_string($rawQty) && preg_match('/^-?\d+$/D', trim($rawQty)))) {
+            throw new RuntimeException('Quantity must be a positive whole number of units.');
+        }
+        if (is_string($rawQty) && (float)trim($rawQty) > 2147483647) {
+            throw new RuntimeException('Quantity is too large.');
+        }
+        $quantity = (int)$rawQty;
+        if ($quantity > 2147483647) {
+            throw new RuntimeException('Quantity is too large.');
+        }
         $explanation = trim((string)($data['explanation'] ?? $data['reason'] ?? ''));
+
+        $form = strtolower(trim((string)($data['form'] ?? $data['selling_form'] ?? 'piece')));
+        if (!in_array($form, ['piece', 'pack'], true)) {
+            throw new RuntimeException('Invalid stock form. Select piece or pack.');
+        }
 
         $this->validateReportFields($productId, $category, $quantity, $explanation);
 
@@ -65,22 +80,46 @@ class StockIssueService
         try {
             $shift = (new \App\Services\CashierShiftService($this->pdo))->lockOpenShift($cashierId, true);
             [$scopeSql, $scopeParams] = $this->productScope();
+            $hasPackCol = $this->hasColumn('products', 'pack_size');
+            $packSelect = $hasPackCol ? ', p.pack_size' : '';
             $productStmt = $this->pdo->prepare(
-                "SELECT p.product_id FROM products p WHERE p.product_id = ? AND p.status = 'active'{$scopeSql}{$this->forUpdate()}"
+                "SELECT p.product_id{$packSelect} FROM products p WHERE p.product_id = ? AND p.status = 'active'{$scopeSql}{$this->forUpdate()}"
             );
             $productStmt->execute(array_merge([$productId], $scopeParams));
-            if (!$productStmt->fetch()) {
+            $product = $productStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$product) {
                 throw new RuntimeException('Active product not found.');
             }
 
-            $stmt = $this->pdo->prepare(
-                "INSERT INTO inventory_adjustments
-                    (product_id, adjustment_qty, adjustment_type, reported_by, shift_id, reason, status)
-                 VALUES (?, ?, ?, ?, ?, ?, 'pending')"
-            );
-            // Stored negative: reported units are unavailable, but remain sellable
-            // (inventory untouched) until a manager approves the deduction.
-            $stmt->execute([$productId, -$quantity, $category, $cashierId, (int)$shift['shift_id'], $explanation]);
+            $packSize = !empty($product['pack_size']) && (int)$product['pack_size'] > 1 ? (int)$product['pack_size'] : null;
+            if ($form === 'pack') {
+                if ($packSize === null) {
+                    throw new RuntimeException('Cannot report pack issue for product without Sales Pack configured.');
+                }
+                if (((float)$quantity * (float)$packSize) > 2147483647) {
+                    throw new RuntimeException('Resulting unit quantity is too large.');
+                }
+                $baseUnitQty = $quantity * $packSize;
+            } else {
+                $baseUnitQty = $quantity;
+            }
+
+            $hasFormCols = $this->hasColumn('inventory_adjustments', 'form');
+            if ($hasFormCols) {
+                $stmt = $this->pdo->prepare(
+                    "INSERT INTO inventory_adjustments
+                        (product_id, adjustment_qty, adjustment_type, reported_by, shift_id, reason, status, form, reported_qty, pack_size)
+                     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)"
+                );
+                $stmt->execute([$productId, -$baseUnitQty, $category, $cashierId, (int)$shift['shift_id'], $explanation, $form, $quantity, $packSize]);
+            } else {
+                $stmt = $this->pdo->prepare(
+                    "INSERT INTO inventory_adjustments
+                        (product_id, adjustment_qty, adjustment_type, reported_by, shift_id, reason, status)
+                     VALUES (?, ?, ?, ?, ?, ?, 'pending')"
+                );
+                $stmt->execute([$productId, -$baseUnitQty, $category, $cashierId, (int)$shift['shift_id'], $explanation]);
+            }
             $adjustmentId = (int)$this->pdo->lastInsertId();
 
             $this->insertRevision(
@@ -92,10 +131,13 @@ class StockIssueService
                 [],
                 [
                     'product_id' => $productId,
-                    'adjustment_qty' => -$quantity,
+                    'adjustment_qty' => -$baseUnitQty,
                     'adjustment_type' => $category,
                     'reason' => $explanation,
                     'status' => 'pending',
+                    'form' => $form,
+                    'reported_qty' => $quantity,
+                    'pack_size' => $packSize,
                 ]
             );
 
@@ -110,10 +152,13 @@ class StockIssueService
                     'adjustment_id' => $adjustmentId,
                     'product_id' => $productId,
                     'adjustment_type' => $category,
-                    'adjustment_qty' => -$quantity,
+                    'adjustment_qty' => -$baseUnitQty,
                     'shift_id' => (int)$shift['shift_id'],
                     'reason' => $explanation,
                     'status' => 'pending',
+                    'form' => $form,
+                    'reported_qty' => $quantity,
+                    'pack_size' => $packSize,
                 ]
             );
 
@@ -166,11 +211,27 @@ class StockIssueService
             $hasQuantity = array_key_exists('quantity', $data) || array_key_exists('adjustment_qty', $data);
             $hasCategory = array_key_exists('category', $data) || array_key_exists('adjustment_type', $data);
             $hasExplanation = array_key_exists('explanation', $data) || array_key_exists('reason', $data);
-            if (!$hasQuantity && !$hasCategory && !$hasExplanation) {
+            $hasForm = array_key_exists('form', $data) || array_key_exists('selling_form', $data);
+            if (!$hasQuantity && !$hasCategory && !$hasExplanation && !$hasForm) {
                 throw new RuntimeException('No changes supplied for the report.');
             }
 
-            $quantity = $hasQuantity ? (int)($data['quantity'] ?? $data['adjustment_qty'] ?? 0) : abs((int)$report['adjustment_qty']);
+            if ($hasQuantity) {
+                $rawQty = $data['quantity'] ?? $data['adjustment_qty'] ?? null;
+                if (!is_int($rawQty) && !(is_string($rawQty) && preg_match('/^-?\d+$/D', trim($rawQty)))) {
+                    throw new RuntimeException('Quantity must be a positive whole number of units.');
+                }
+                if (is_string($rawQty) && (float)trim($rawQty) > 2147483647) {
+                    throw new RuntimeException('Quantity is too large.');
+                }
+                $quantity = (int)$rawQty;
+                if ($quantity > 2147483647) {
+                    throw new RuntimeException('Quantity is too large.');
+                }
+            } else {
+                $repQ = (int)($report['reported_qty'] ?? 0);
+                $quantity = $repQ > 0 ? $repQ : abs((int)$report['adjustment_qty']);
+            }
             $category = $hasCategory
                 ? strtolower(trim((string)($data['category'] ?? $data['adjustment_type'] ?? '')))
                 : (string)$report['adjustment_type'];
@@ -180,28 +241,67 @@ class StockIssueService
 
             $this->validateReportFields((int)$report['product_id'], $category, $quantity, $explanation);
 
+            $hasFormCols = $this->hasColumn('inventory_adjustments', 'form');
+            $form = $hasFormCols ? strtolower(trim((string)($data['form'] ?? $report['form'] ?? 'piece'))) : 'piece';
+            if ($form !== 'piece' && $form !== 'pack') {
+                throw new RuntimeException('Invalid stock form. Select piece or pack.');
+            }
+
+            $packSize = null;
+            if ($this->hasColumn('products', 'pack_size')) {
+                $pStmt = $this->pdo->prepare('SELECT pack_size FROM products WHERE product_id = ?');
+                $pStmt->execute([(int)$report['product_id']]);
+                $rawPack = $pStmt->fetchColumn();
+                $packSize = $rawPack !== false && (int)$rawPack > 1 ? (int)$rawPack : null;
+            }
+
+            if ($form === 'pack') {
+                if ($packSize === null) {
+                    throw new RuntimeException('Cannot report pack issue for product without Sales Pack configured.');
+                }
+                if (((float)$quantity * (float)$packSize) > 2147483647) {
+                    throw new RuntimeException('Resulting unit quantity is too large.');
+                }
+                $baseUnitQty = $quantity * $packSize;
+            } else {
+                $baseUnitQty = $quantity;
+            }
+
             $oldValues = [
                 'adjustment_qty' => (int)$report['adjustment_qty'],
                 'adjustment_type' => (string)$report['adjustment_type'],
                 'reason' => (string)($report['reason'] ?? ''),
                 'status' => (string)$report['status'],
+                'form' => $report['form'] ?? 'piece',
+                'reported_qty' => (int)($report['reported_qty'] ?? abs((int)$report['adjustment_qty'])),
             ];
             $newValues = [
-                'adjustment_qty' => -$quantity,
+                'adjustment_qty' => -$baseUnitQty,
                 'adjustment_type' => $category,
                 'reason' => $explanation,
                 'status' => (string)$report['status'],
+                'form' => $form,
+                'reported_qty' => $quantity,
             ];
             if ($oldValues === $newValues) {
                 throw new RuntimeException('No changes supplied for the report.');
             }
 
-            $update = $this->pdo->prepare(
-                "UPDATE inventory_adjustments
-                  SET adjustment_qty = ?, adjustment_type = ?, reason = ?
-                  WHERE adjustment_id = ? AND reported_by = ? AND status IN ('pending', 'returned')"
-            );
-            $update->execute([-$quantity, $category, $explanation, $adjustmentId, $cashierId]);
+            if ($hasFormCols) {
+                $update = $this->pdo->prepare(
+                    "UPDATE inventory_adjustments
+                      SET adjustment_qty = ?, reported_qty = ?, form = ?, pack_size = ?, adjustment_type = ?, reason = ?
+                      WHERE adjustment_id = ? AND reported_by = ? AND status IN ('pending', 'returned')"
+                );
+                $update->execute([-$baseUnitQty, $quantity, $form, $packSize, $category, $explanation, $adjustmentId, $cashierId]);
+            } else {
+                $update = $this->pdo->prepare(
+                    "UPDATE inventory_adjustments
+                      SET adjustment_qty = ?, adjustment_type = ?, reason = ?
+                      WHERE adjustment_id = ? AND reported_by = ? AND status IN ('pending', 'returned')"
+                );
+                $update->execute([-$baseUnitQty, $category, $explanation, $adjustmentId, $cashierId]);
+            }
             if ($update->rowCount() === 0) {
                 throw new RuntimeException('This report changed while editing. Refresh and try again.');
             }
@@ -496,8 +596,10 @@ class StockIssueService
         StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
+            $hasPackCol = $this->hasColumn('products', 'pack_size');
+            $packSelect = $hasPackCol ? ', p.pack_size AS product_pack_size' : '';
             $reportStmt = $this->pdo->prepare(
-                "SELECT ia.* FROM inventory_adjustments ia
+                "SELECT ia.*{$packSelect} FROM inventory_adjustments ia
                   JOIN products p ON p.product_id = ia.product_id
                   WHERE ia.adjustment_id = ?{$scopeSql}{$this->forUpdate()}"
             );
@@ -514,8 +616,17 @@ class StockIssueService
             $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
 
             $productId = (int)$report['product_id'];
-            $quantity = abs((int)$report['adjustment_qty']);
-            if ($quantity <= 0) {
+            $form = $report['form'] ?? 'piece';
+            $rawPackSize = !empty($report['pack_size']) ? (int)$report['pack_size'] : (!empty($report['product_pack_size']) ? (int)$report['product_pack_size'] : null);
+            $packSize = $rawPackSize !== null && $rawPackSize > 1 ? $rawPackSize : null;
+            $hasPack = $packSize !== null;
+
+            $reportedQty = (int)($report['reported_qty'] ?? 0);
+            if ($reportedQty <= 0) {
+                $reportedQty = abs((int)$report['adjustment_qty']);
+            }
+            $baseUnitQty = abs((int)$report['adjustment_qty']);
+            if ($baseUnitQty <= 0) {
                 throw new RuntimeException('Report quantity is invalid.');
             }
             $cashierId = (int)$report['reported_by'];
@@ -529,9 +640,9 @@ class StockIssueService
                 throw new RuntimeException('Inventory record not found for this report.');
             }
             $available = (int)$inventory['quantity_on_hand'];
-            if ($available < $quantity) {
+            if ($available < $baseUnitQty) {
                 throw new RuntimeException(
-                    "Insufficient available stock ({$available} on hand, {$quantity} reported). Approval refused; inventory unchanged."
+                    "Insufficient available stock ({$available} on hand, {$baseUnitQty} reported). Approval refused; inventory unchanged."
                 );
             }
 
@@ -584,15 +695,17 @@ class StockIssueService
                 }
 
                 $sumAllocated = array_sum($allocations);
-                if ($sumAllocated !== $quantity) {
+                if ($sumAllocated !== $reportedQty) {
                     throw new RuntimeException(
-                        "Allocated batch quantity ({$sumAllocated}) does not match reported quantity ({$quantity})."
+                        "Allocated batch quantity ({$sumAllocated}) does not match reported quantity ({$reportedQty})."
                     );
                 }
 
-                foreach ($allocations as $batchId => $allocQty) {
+                $hasBatchCols = $this->hasColumn('product_batches', 'sealed_quantity');
+                $formSelect = $hasBatchCols ? ', sealed_quantity, loose_quantity' : '';
+                foreach ($allocations as $batchId => $allocReportedUnits) {
                     $batchStmt = $this->pdo->prepare(
-                        "SELECT batch_id, product_id, remaining_quantity
+                        "SELECT batch_id, product_id, remaining_quantity{$formSelect}
                          FROM product_batches
                          WHERE batch_id = ?{$this->forUpdate()}"
                     );
@@ -604,12 +717,37 @@ class StockIssueService
                     if ((int)$batch['product_id'] !== $productId) {
                         throw new RuntimeException("Batch #{$batchId} does not belong to product #{$productId}.");
                     }
-                    if ((int)$batch['remaining_quantity'] < $allocQty) {
-                        throw new RuntimeException(
-                            "Insufficient stock in batch #{$batchId} ({$batch['remaining_quantity']} available, {$allocQty} allocated)."
-                        );
+
+                    if ($form === 'pack') {
+                        $availPacks = (int)($batch['sealed_quantity'] ?? 0);
+                        if ($availPacks < $allocReportedUnits) {
+                            throw new RuntimeException(
+                                "Insufficient sealed pack stock in batch #{$batchId} ({$availPacks} available, {$allocReportedUnits} allocated)."
+                            );
+                        }
+                        $allocBaseUnits = $allocReportedUnits * ($packSize ?? 1);
+                    } else {
+                        if ($hasPack && $hasBatchCols) {
+                            $availLoose = (int)($batch['loose_quantity'] ?? 0);
+                            if ($availLoose < $allocReportedUnits) {
+                                throw new RuntimeException(
+                                    "Insufficient loose stock in batch #{$batchId} ({$availLoose} available, {$allocReportedUnits} allocated)."
+                                );
+                            }
+                        } else {
+                            if ((int)$batch['remaining_quantity'] < $allocReportedUnits) {
+                                throw new RuntimeException(
+                                    "Insufficient stock in batch #{$batchId} ({$batch['remaining_quantity']} available, {$allocReportedUnits} allocated)."
+                                );
+                            }
+                        }
+                        $allocBaseUnits = $allocReportedUnits;
                     }
-                    $finalAllocations[$batchId] = $allocQty;
+
+                    $finalAllocations[$batchId] = [
+                        'reported_units' => $allocReportedUnits,
+                        'base_units' => $allocBaseUnits,
+                    ];
                 }
             } else {
                 if ($this->hasBatchesTable()) {
@@ -618,8 +756,10 @@ class StockIssueService
                     $totalBatches = (int)$countStmt->fetchColumn();
 
                     if ($totalBatches > 0) {
+                        $hasBatchCols = $this->hasColumn('product_batches', 'sealed_quantity');
+                        $formSelect = $hasBatchCols ? ', sealed_quantity, loose_quantity' : '';
                         $fefoStmt = $this->pdo->prepare(
-                            "SELECT batch_id, remaining_quantity, expiration_date
+                            "SELECT batch_id, remaining_quantity{$formSelect}, expiration_date
                              FROM product_batches
                              WHERE product_id = ? AND remaining_quantity > 0
                              ORDER BY
@@ -631,46 +771,119 @@ class StockIssueService
                         $fefoStmt->execute([$productId]);
                         $availableBatches = $fefoStmt->fetchAll(PDO::FETCH_ASSOC);
 
-                        $needed = $quantity;
+                        $needed = $reportedQty;
                         foreach ($availableBatches as $batch) {
                             if ($needed <= 0) {
                                 break;
                             }
-                            $take = min($needed, (int)$batch['remaining_quantity']);
-                            if ($take > 0) {
-                                $finalAllocations[(int)$batch['batch_id']] = $take;
-                                $needed -= $take;
+                            if ($form === 'pack') {
+                                $avail = (int)($batch['sealed_quantity'] ?? 0);
+                                $take = min($needed, $avail);
+                                if ($take > 0) {
+                                    $finalAllocations[(int)$batch['batch_id']] = [
+                                        'reported_units' => $take,
+                                        'base_units' => $take * ($packSize ?? 1),
+                                    ];
+                                    $needed -= $take;
+                                }
+                            } else {
+                                if ($hasPack && $hasBatchCols) {
+                                    $avail = (int)($batch['loose_quantity'] ?? 0);
+                                } else {
+                                    $avail = (int)$batch['remaining_quantity'];
+                                }
+                                $take = min($needed, $avail);
+                                if ($take > 0) {
+                                    $finalAllocations[(int)$batch['batch_id']] = [
+                                        'reported_units' => $take,
+                                        'base_units' => $take,
+                                    ];
+                                    $needed -= $take;
+                                }
                             }
                         }
 
                         if ($needed > 0) {
-                            throw new RuntimeException(
-                                "Insufficient batch stock available for product #{$productId} ({$needed} units unallocated)."
-                            );
+                            if ($form === 'pack') {
+                                throw new RuntimeException(
+                                    "Insufficient sealed pack stock available for product #{$productId} ({$needed} packs unallocated). Approval refused; inventory unchanged."
+                                );
+                            } elseif ($hasPack) {
+                                throw new RuntimeException(
+                                    "Insufficient loose stock available for product #{$productId} ({$needed} units unallocated). Approval refused; inventory unchanged."
+                                );
+                            } else {
+                                throw new RuntimeException(
+                                    "Insufficient batch stock available for product #{$productId} ({$needed} units unallocated). Approval refused; inventory unchanged."
+                                );
+                            }
                         }
                     }
                 }
             }
 
             if (!empty($finalAllocations)) {
-                $deductBatchStmt = $this->pdo->prepare(
-                    'UPDATE product_batches
-                     SET remaining_quantity = remaining_quantity - ?
-                     WHERE batch_id = ? AND remaining_quantity >= ?'
-                );
-                $recordBatchStmt = $this->pdo->prepare(
-                    'INSERT INTO stock_issue_batches (adjustment_id, batch_id, quantity)
-                     VALUES (?, ?, ?)'
-                );
+                $hasBatchCols = $this->hasColumn('product_batches', 'sealed_quantity');
+                $hasSibCols = $this->hasColumn('stock_issue_batches', 'form');
 
-                foreach ($finalAllocations as $batchId => $allocQty) {
-                    $deductBatchStmt->execute([$allocQty, $batchId, $allocQty]);
+                if ($form === 'pack') {
+                    $deductBatchStmt = $this->pdo->prepare(
+                        'UPDATE product_batches
+                         SET sealed_quantity = sealed_quantity - ?,
+                             remaining_quantity = remaining_quantity - ?
+                         WHERE batch_id = ? AND sealed_quantity >= ? AND remaining_quantity >= ?'
+                    );
+                } else {
+                    if ($hasBatchCols) {
+                        $deductBatchStmt = $this->pdo->prepare(
+                            'UPDATE product_batches
+                             SET loose_quantity = loose_quantity - ?,
+                                 remaining_quantity = remaining_quantity - ?
+                             WHERE batch_id = ? AND loose_quantity >= ? AND remaining_quantity >= ?'
+                        );
+                    } else {
+                        $deductBatchStmt = $this->pdo->prepare(
+                            'UPDATE product_batches
+                             SET remaining_quantity = remaining_quantity - ?
+                             WHERE batch_id = ? AND remaining_quantity >= ?'
+                        );
+                    }
+                }
+
+                if ($hasSibCols) {
+                    $recordBatchStmt = $this->pdo->prepare(
+                        'INSERT INTO stock_issue_batches (adjustment_id, batch_id, quantity, form, reported_qty)
+                         VALUES (?, ?, ?, ?, ?)'
+                    );
+                } else {
+                    $recordBatchStmt = $this->pdo->prepare(
+                        'INSERT INTO stock_issue_batches (adjustment_id, batch_id, quantity)
+                         VALUES (?, ?, ?)'
+                    );
+                }
+
+                foreach ($finalAllocations as $batchId => $alloc) {
+                    $repUnits = $alloc['reported_units'];
+                    $bUnits = $alloc['base_units'];
+                    if ($form === 'pack') {
+                        $deductBatchStmt->execute([$repUnits, $bUnits, $batchId, $repUnits, $bUnits]);
+                    } else {
+                        if ($hasBatchCols) {
+                            $deductBatchStmt->execute([$repUnits, $bUnits, $batchId, $repUnits, $bUnits]);
+                        } else {
+                            $deductBatchStmt->execute([$bUnits, $batchId, $bUnits]);
+                        }
+                    }
                     if ($deductBatchStmt->rowCount() === 0) {
                         throw new RuntimeException(
                             "Batch #{$batchId} stock changed while reviewing. Approval refused; inventory unchanged."
                         );
                     }
-                    $recordBatchStmt->execute([$adjustmentId, $batchId, $allocQty]);
+                    if ($hasSibCols) {
+                        $recordBatchStmt->execute([$adjustmentId, $batchId, $bUnits, $form, $repUnits]);
+                    } else {
+                        $recordBatchStmt->execute([$adjustmentId, $batchId, $bUnits]);
+                    }
                 }
             }
 
@@ -679,7 +892,7 @@ class StockIssueService
                 'UPDATE inventory SET quantity_on_hand = quantity_on_hand - ?
                   WHERE product_id = ? AND quantity_on_hand >= ?'
             );
-            $deductStmt->execute([$quantity, $productId, $quantity]);
+            $deductStmt->execute([$baseUnitQty, $productId, $baseUnitQty]);
             if ($deductStmt->rowCount() === 0) {
                 throw new RuntimeException('Stock changed while reviewing. Approval refused; inventory unchanged.');
             }
@@ -695,7 +908,7 @@ class StockIssueService
             $this->pdo->prepare(
                 'INSERT INTO stock_movements (product_id, change_qty, reason, moved_by, adjustment_id)
                  VALUES (?, ?, ?, ?, ?)'
-            )->execute([$productId, -$quantity, 'adjustment', $approverId, $adjustmentId]);
+            )->execute([$productId, -$baseUnitQty, 'adjustment', $approverId, $adjustmentId]);
 
             $reviewStmt = $this->pdo->prepare(
                 "UPDATE inventory_adjustments
@@ -709,8 +922,10 @@ class StockIssueService
 
             $newRevisionValues = [
                 'status' => 'approved',
-                'quantity_on_hand' => $available - $quantity,
-                'deducted_qty' => $quantity,
+                'quantity_on_hand' => $available - $baseUnitQty,
+                'deducted_qty' => $baseUnitQty,
+                'form' => $form,
+                'reported_qty' => $reportedQty,
                 'review_notes' => $notes,
             ];
             if (!empty($finalAllocations)) {
@@ -741,8 +956,10 @@ class StockIssueService
                 [
                     'adjustment_id' => $adjustmentId,
                     'status' => 'approved',
-                    'quantity_on_hand' => $available - $quantity,
-                    'deducted_qty' => $quantity,
+                    'quantity_on_hand' => $available - $baseUnitQty,
+                    'deducted_qty' => $baseUnitQty,
+                    'form' => $form,
+                    'reported_qty' => $reportedQty,
                     'detail' => $auditDetail,
                     'batches' => $finalAllocations ?: null,
                 ]
@@ -945,10 +1162,8 @@ class StockIssueService
 
         [$scopeSql, $scopeParams] = $this->productScope();
         $stmt = $this->pdo->prepare(
-            "SELECT ia.adjustment_id, ia.product_id, ia.adjustment_qty, ia.adjustment_type,
-                    ia.reported_by, ia.shift_id, ia.reported_at, ia.reason, ia.status,
-                    ia.approved_by, ia.approved_at, ia.review_notes,
-                    p.sku, p.product_name,
+            "SELECT ia.*,
+                    p.sku, p.product_name{$this->packSizeSelect()},
                     reporter.full_name AS cashier_name,
                     reviewer.full_name AS reviewer_name
              FROM inventory_adjustments ia
@@ -1037,9 +1252,11 @@ class StockIssueService
     public function getReport(int $adjustmentId): ?array
     {
         [$scopeSql, $scopeParams] = $this->productScope();
+        $hasPackCol = $this->hasColumn('products', 'pack_size');
+        $packSelect = $hasPackCol ? ', p.pack_size AS product_pack_size' : '';
         $stmt = $this->pdo->prepare(
             "SELECT ia.*,
-                    p.sku, p.product_name,
+                    p.sku, p.product_name{$packSelect},
                     reporter.full_name AS cashier_name,
                     reviewer.full_name AS reviewer_name
              FROM inventory_adjustments ia
@@ -1080,10 +1297,8 @@ class StockIssueService
     {
         [$scopeSql, $scopeParams] = $this->productScope();
         $stmt = $this->pdo->prepare(
-            "SELECT ia.adjustment_id, ia.product_id, ia.adjustment_qty, ia.adjustment_type,
-                    ia.reported_by, ia.shift_id, ia.reported_at, ia.reason, ia.status,
-                    ia.approved_at, ia.review_notes,
-                    p.sku, p.product_name,
+            "SELECT ia.*,
+                    p.sku, p.product_name{$this->packSizeSelect()},
                     u.full_name AS cashier_name,
                     COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
              FROM inventory_adjustments ia
@@ -1105,10 +1320,8 @@ class StockIssueService
         $limit = max(1, min(100, $limit));
         [$scopeSql, $scopeParams] = $this->productScope();
         $stmt = $this->pdo->prepare(
-            "SELECT ia.adjustment_id, ia.product_id, ia.adjustment_qty, ia.adjustment_type,
-                    ia.reported_by, ia.shift_id, ia.reported_at, ia.reason, ia.status,
-                    ia.approved_by, ia.approved_at, ia.review_notes,
-                    p.sku, p.product_name,
+            "SELECT ia.*,
+                    p.sku, p.product_name{$this->packSizeSelect()},
                     reporter.full_name AS cashier_name,
                     reviewer.full_name AS reviewer_name
              FROM inventory_adjustments ia
@@ -1148,9 +1361,8 @@ class StockIssueService
         [$scopeSql, $scopeParams] = $this->productScope();
         // LIMIT cannot be bound portably, so it is clamped to an integer above.
         $stmt = $this->pdo->prepare(
-            "SELECT ia.adjustment_id, ia.product_id, ia.adjustment_qty, ia.adjustment_type,
-                    ia.shift_id, ia.reported_at, ia.reason, ia.status, ia.approved_at, ia.review_notes,
-                    p.sku, p.product_name,
+            "SELECT ia.*,
+                    p.sku, p.product_name{$this->packSizeSelect()},
                     reviewer.full_name AS reviewer_name
              FROM inventory_adjustments ia
              JOIN products p ON p.product_id = ia.product_id
@@ -1172,10 +1384,8 @@ class StockIssueService
         [$scopeSql, $scopeParams] = $this->productScope();
         // LIMIT cannot be bound portably, so it is clamped to an integer above.
         $stmt = $this->pdo->prepare(
-            "SELECT ia.adjustment_id, ia.product_id, ia.adjustment_qty, ia.adjustment_type,
-                    ia.reported_by, ia.shift_id, ia.reported_at, ia.reason, ia.status,
-                    ia.approved_by, ia.approved_at, ia.review_notes,
-                    p.sku, p.product_name,
+            "SELECT ia.*,
+                    p.sku, p.product_name{$this->packSizeSelect()},
                     reporter.full_name AS cashier_name,
                     reviewer.full_name AS reviewer_name
              FROM inventory_adjustments ia
@@ -1206,8 +1416,10 @@ class StockIssueService
         if ($productId <= 0 || !$this->hasBatchesTable()) {
             return [];
         }
+        $hasBatchCols = $this->hasColumn('product_batches', 'sealed_quantity');
+        $formSelect = $hasBatchCols ? ', pb.sealed_quantity, pb.loose_quantity' : '';
         $stmt = $this->pdo->prepare(
-            "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.quantity, pb.remaining_quantity,
+            "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.quantity, pb.remaining_quantity{$formSelect},
                     pb.expiration_date, pb.date_received, pb.supplier
              FROM product_batches pb
              WHERE pb.product_id = ? AND pb.remaining_quantity > 0
@@ -1230,8 +1442,10 @@ class StockIssueService
             return [];
         }
         try {
+            $hasSibCols = $this->hasColumn('stock_issue_batches', 'form');
+            $sibFormSelect = $hasSibCols ? ', sib.form, sib.reported_qty' : '';
             $stmt = $this->pdo->prepare(
-                "SELECT sib.id, sib.adjustment_id, sib.batch_id, sib.quantity, sib.created_at,
+                "SELECT sib.id, sib.adjustment_id, sib.batch_id, sib.quantity{$sibFormSelect}, sib.created_at,
                         pb.batch_number, pb.expiration_date
                  FROM stock_issue_batches sib
                  LEFT JOIN product_batches pb ON pb.batch_id = sib.batch_id
@@ -1248,7 +1462,7 @@ class StockIssueService
     /**
      * Recommend FEFO batch allocations for a given product and quantity.
      */
-    public function recommendBatchAllocation(int $productId, int $quantity): array
+    public function recommendBatchAllocation(int $productId, int $quantity, string $form = 'piece'): array
     {
         if ($quantity <= 0) {
             return [];
@@ -1260,7 +1474,12 @@ class StockIssueService
             if ($needed <= 0) {
                 break;
             }
-            $take = min($needed, (int)$batch['remaining_quantity']);
+            if ($form === 'pack') {
+                $avail = (int)($batch['sealed_quantity'] ?? 0);
+            } else {
+                $avail = isset($batch['loose_quantity']) ? (int)$batch['loose_quantity'] : (int)$batch['remaining_quantity'];
+            }
+            $take = min($needed, $avail);
             if ($take > 0) {
                 $allocations[(int)$batch['batch_id']] = $take;
                 $needed -= $take;
@@ -1421,6 +1640,27 @@ class StockIssueService
         try {
             $this->pdo->query('SELECT 1 FROM product_batches LIMIT 1');
             return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function packSizeSelect(): string
+    {
+        return $this->hasColumn('products', 'pack_size') ? ', p.pack_size AS product_pack_size' : '';
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        try {
+            $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'sqlite') {
+                $cols = $this->pdo->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_COLUMN, 1);
+                return in_array($column, $cols, true);
+            }
+            $stmt = $this->pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE ?");
+            $stmt->execute([$column]);
+            return (bool)$stmt->fetch();
         } catch (Throwable) {
             return false;
         }
