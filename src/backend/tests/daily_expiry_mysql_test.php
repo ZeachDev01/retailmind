@@ -77,9 +77,15 @@ try {
     $pdo->exec('UPDATE inventory SET quantity_on_hand=30 WHERE product_id=100');
     $daily('2026-10-21T12:00:00+08:00');
     $assert($active('2026-10-21') === [1003,1004], 'Unset Product override retains default 60-day milestone beyond the removed fixed 30-day window');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='admin@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 1,
+        'A repeated Manila-day check does not repeat email for a recipient using both channels');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 2,
+        'The existing email-only repeated-invocation behavior is preserved');
     $pdo->exec("INSERT INTO store_settings (setting_key,setting_value) VALUES ('expiry_alert_days','7,3') ON DUPLICATE KEY UPDATE setting_value='7,3'");
     $daily('2026-10-22T12:00:00+08:00');
     $assert($active('2026-10-22') === [1003], 'Global governance applies only to unset overrides; two-day Product is still before its boundary');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='admin@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 2,
+        'An email from the previous Manila day does not suppress the next daily email');
     $daily('2026-10-23T12:00:00+08:00');
     $assert($active('2026-10-23') === [1001,1002,1003], 'Two-day Product qualifies October 23 with independent batches');
     $historyCount = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id=3 AND type='expiring_stock' AND reference_id IN (1001,1002,1003)")->fetchColumn();

@@ -67,10 +67,18 @@ function scheduled_alert(PDO $pdo, array $recipient, string $title, string $body
 require_once dirname(__DIR__) . '/app/Services/NotificationService.php';
 $expiryNotifications = new NotificationService($pdo, $clock);
 $expiryNotifications->checkAndNotifyExpiringStock();
-// shortcut: repeated job invocations may repeat expiry emails; track deliveries if multiple daily runs are required.
+// shortcut: email-only recipients retain repeated-run attempts; track deliveries if that behavior needs changing.
 foreach ($expiryNotifications->getEligibleExpiryReminders() as $reminder) {
     foreach ($recipients as $recipient) {
         if (!empty($recipient['notify_email']) && !empty($recipient['email'])) {
+            if (!empty($recipient['notify_inapp']) && App\Database\Schema::tableExists($pdo, 'email_delivery_log')) {
+                $check = $pdo->prepare("SELECT 1 FROM email_delivery_log WHERE recipient = ? AND subject = ?
+                    AND created_at >= CURDATE() AND created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY) LIMIT 1");
+                $check->execute([(string)$recipient['email'], $reminder['title']]);
+                if ($check->fetchColumn()) {
+                    continue;
+                }
+            }
             send_email_notification((string)$recipient['email'], $reminder['title'], $reminder['message']);
         }
     }

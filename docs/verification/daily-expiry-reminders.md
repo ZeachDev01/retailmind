@@ -16,6 +16,8 @@ The integration test covers two- and five-day warning boundaries, defaults beyon
 
 Expired wording is `Expired stock—waiting for supplier collection` for every Product, following the user's implementation clarification. No bread classifier is added.
 
+The final review also caught a same-day email regression for recipients using both delivery channels. A failing repeated-run integration assertion reproduced it. The daily path now reuses `email_delivery_log` to suppress the same recipient/subject on the same Manila date, preserving the former scheduled guard without creating another in-app notification. Coverage verifies the next day's email still runs and the preexisting email-only repeated-invocation behavior remains unchanged.
+
 Existing Product warning, Supplier Pullout, Replacement Stock, attention, fresh-schema and notification-list browser checks cover compatibility. Release verification builds the existing package and checks that `src/backend/scripts/run_notifications.php` is included unchanged. No other operational scripts or ML service are added to the hosted package.
 
 ## Scheduler evidence and remaining verification
