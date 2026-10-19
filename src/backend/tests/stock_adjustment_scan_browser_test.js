@@ -33,11 +33,11 @@ const script = source.slice(source.indexOf('        const adjustmentModal ='), s
         assert.equal(await page.locator('#stock-adjust-modal select').count(), 0, 'product search and selection use a single field');
         await search.pressSequentially('00123456', { delay: 5 });
         await search.press('Enter');
-        assert.equal(await page.locator('[name=product_id]').inputValue(), '1', 'scan selects exact barcode despite another code sharing its prefix');
+        assert.equal(await page.locator('#stock-adjust-modal [name=product_id]').inputValue(), '1', 'scan selects exact barcode despite another code sharing its prefix');
         assert.match(await page.locator('#adjust-product-status').textContent(), /Milk 1L/);
         assert.equal(await page.locator('[name="qty_change"]').inputValue(), '', 'scanning never changes stock quantity');
         await search.pressSequentially('99887766', { delay: 5 });
-        assert.equal(await page.locator('[name=product_id]').inputValue(), '3', 'next scan replaces the selected code and searches without Enter');
+        assert.equal(await page.locator('#stock-adjust-modal [name=product_id]').inputValue(), '3', 'next scan replaces the selected code and searches without Enter');
         await page.locator('[name="qty_change"]').fill('5');
         await page.locator('[name="adjustment_reason"]').fill('Verified physical-count correction');
         await page.evaluate(() => {
@@ -51,23 +51,23 @@ const script = source.slice(source.indexOf('        const adjustmentModal ='), s
         assert.equal(await page.evaluate(() => window.adjustmentSubmissions), 0, 'scanner Enter never submits a valid adjustment');
         await search.fill('  mIlK  ');
         assert.match(await page.locator('#adjust-product-status').textContent(), /2 matching products/, 'name search ignores case and surrounding spaces');
-        assert.equal(await page.locator('[name=product_id]').inputValue(), '', 'ambiguous name requires choosing a product');
+        assert.equal(await page.locator('#stock-adjust-modal [name=product_id]').inputValue(), '', 'ambiguous name requires choosing a product');
         const milkLabel = await page.locator('#adjust-product-options option[data-product-id=\"2\"]').getAttribute('value');
         await search.fill(milkLabel);
-        assert.equal(await page.locator('[name=product_id]').inputValue(), '2', 'choosing a suggestion selects its product');
+        assert.equal(await page.locator('#stock-adjust-modal [name=product_id]').inputValue(), '2', 'choosing a suggestion selects its product');
         await search.fill('not-a-product');
-        assert.equal(await page.locator('[name=product_id]').inputValue(), '', 'unknown scan clears a previous selection');
+        assert.equal(await page.locator('#stock-adjust-modal [name=product_id]').inputValue(), '', 'unknown scan clears a previous selection');
         assert.match(await page.locator('#adjust-product-status').textContent(), /No matching product/);
         assert.equal(await search.evaluate(input => input.checkValidity()), false);
         await search.fill('milk-02');
-        assert.equal(await page.locator('[name=product_id]').inputValue(), '2', 'SKU finds a zero-stock product for adjustment');
+        assert.equal(await page.locator('#stock-adjust-modal [name=product_id]').inputValue(), '2', 'SKU finds a zero-stock product for adjustment');
         await page.evaluate(() => {
             RetailMindUI.closeOverlay(document.getElementById('stock-adjust-modal'));
             RetailMindUI.openOverlay(document.getElementById('stock-adjust-modal'));
         });
         assert.equal(await search.inputValue(), milkLabel, 'reopening displays the selected product');
         assert.equal(await page.locator('#adjust-product-options option').count(), 3, 'all product suggestions stay available');
-        assert.equal(await page.locator('[name=product_id]').inputValue(), '2', 'reopening preserves the selected product');
+        assert.equal(await page.locator('#stock-adjust-modal [name=product_id]').inputValue(), '2', 'reopening preserves the selected product');
         await search.fill('milk');
         await page.evaluate(() => RetailMindUI.closeOverlay(document.getElementById('stock-adjust-modal')));
         await page.evaluate(() => document.body.insertAdjacentHTML('beforeend', '<div id="product-drawer" class="rm-drawer-overlay"><section role="dialog"><button id="drawer-adjust-stock">Adjust Stock</button></section></div>'));
@@ -81,13 +81,17 @@ const script = source.slice(source.indexOf('        const adjustmentModal ='), s
             RetailMindUI.openOverlay(document.getElementById('product-drawer'));
         ` });
         await page.getByRole('button', { name: 'Adjust Stock', exact: true }).click();
-        assert.equal(await page.locator('[name=product_id]').inputValue(), '3', 'drawer preselection works after searching for a different product');
+        assert.equal(await page.locator('#stock-adjust-modal [name=product_id]').inputValue(), '3', 'drawer preselection works after searching for a different product');
         await page.waitForFunction(() => getComputedStyle(document.getElementById('product-drawer')).visibility === 'hidden');
+        await search.fill('s');
+        await search.focus();
         const output = fs.mkdtempSync(path.join(os.tmpdir(), 'retailmind-stock-adjustment-'));
         for (const width of [1440, 390]) {
             await page.setViewportSize({ width, height: 1000 });
             const bounds = await search.boundingBox();
             assert(bounds.x >= 0 && bounds.x + bounds.width <= width, `${width}: search fits viewport`);
+            const statusBounds = await page.locator('#adjust-product-status').boundingBox();
+            assert(statusBounds.y - bounds.y - bounds.height <= 16, `${width}: search help stays beside its field`);
             await page.screenshot({ path: path.join(output, `${width}.png`) });
         }
         console.log(`Stock adjustment scan/search: passed; screenshots: ${output}`);
