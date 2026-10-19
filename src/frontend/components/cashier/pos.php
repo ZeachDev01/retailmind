@@ -229,9 +229,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
             throw new InvalidArgumentException($match['outcome'] === ProductCodeLookupService::OUTCOME_AMBIGUOUS
                 ? 'This barcode matches multiple products. Use product search.' : 'Product not found. Try product search.');
         }
+        if ($match['matched_code_kind'] === ProductCodeLookupService::KIND_CASE_BARCODE) {
+            throw new InvalidArgumentException('Case barcodes are for receiving only. Scan the piece or pack barcode.');
+        }
+
+        $isPackScan = ($match['matched_code_kind'] === ProductCodeLookupService::KIND_PACK_BARCODE);
+        $sellingForm = $isPackScan ? 'pack' : 'piece';
+
         $todayManila = App\Services\PhilippineTime::today();
         $statement = $pdo->prepare(
-            "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.unit_price,
+            "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.pack_barcode, p.pack_size, p.pack_price, p.product_name, p.unit_price,
                     p.reorder_level, p.safety_stock,
                     LEAST(COALESCE(i.quantity_on_hand, 0), COALESCE((
                         SELECT SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ?
@@ -243,14 +250,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
         );
         $statement->execute([$todayManila, $match['product']['product_id']]);
         $product = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!$product) {
+            throw new InvalidArgumentException('Product not found. Try product search.');
+        }
+
+        $packSize = isset($product['pack_size']) && $product['pack_size'] !== null ? (int)$product['pack_size'] : null;
+        $packPrice = isset($product['pack_price']) && $product['pack_price'] !== null ? (float)$product['pack_price'] : null;
+        $hasPackConfig = $packSize !== null && $packSize > 1 && $packPrice !== null && $packPrice > 0;
+
+        if ($isPackScan && !$hasPackConfig) {
+            throw new InvalidArgumentException('This product does not have an active Sales Pack configured.');
+        }
+
+        if ($isPackScan) {
+            $batchPacksStmt = $pdo->prepare(
+                "SELECT COALESCE(SUM(pb.sealed_quantity), 0)
+                 FROM product_batches pb
+                 WHERE pb.product_id = ?
+                   AND pb.remaining_quantity > 0
+                   AND (pb.expiration_date IS NULL OR pb.expiration_date >= ?)"
+            );
+            $batchPacksStmt->execute([$product['product_id'], $todayManila]);
+            $availableStock = (int)$batchPacksStmt->fetchColumn();
+            $formPrice = $packPrice;
+        } else {
+            $availableStock = (int)$product['quantity_on_hand'];
+            $formPrice = (float)$product['unit_price'];
+        }
+
         $quantities = json_decode((string)($_POST['quantities'] ?? '{}'), true);
-        $quantity = is_array($quantities) ? ($quantities[$match['product']['product_id']] ?? 0) : null;
-        if (!is_int($quantity) || $quantity < 0) {
+        $cartKey = $product['product_id'] . ':' . $sellingForm;
+        $quantity = 0;
+        $existingPacks = 0;
+        $existingPieces = 0;
+        if (is_array($quantities)) {
+            $existingPacks = (int)($quantities[$product['product_id'] . ':pack'] ?? 0);
+            $existingPieces = (int)($quantities[$product['product_id'] . ':piece'] ?? ($quantities[$product['product_id']] ?? 0));
+            if (isset($quantities[$cartKey])) {
+                $quantity = (int)$quantities[$cartKey];
+            } elseif (isset($quantities[$product['product_id']]) && !$isPackScan) {
+                $quantity = (int)$quantities[$product['product_id']];
+            }
+        }
+        if ($quantity < 0 || $existingPacks < 0 || $existingPieces < 0) {
             throw new InvalidArgumentException('Invalid cart quantity. Review the cart before scanning.');
         }
-        if (!$product || $quantity >= (int)$product['quantity_on_hand']) {
-            throw new InvalidArgumentException('Insufficient stock. Only ' . (int)($product['quantity_on_hand'] ?? 0) . ' available.');
+
+        $effectivePackSize = ($hasPackConfig && $packSize > 1) ? $packSize : 1;
+        $totalDemandedBaseUnits = (($existingPacks + ($isPackScan ? 1 : 0)) * $effectivePackSize) + $existingPieces + ($isPackScan ? 0 : 1);
+        $onHandBaseUnits = (int)$product['quantity_on_hand'];
+
+        if ($isPackScan && ($availableStock < 1 || ($existingPacks + 1) > $availableStock)) {
+            throw new InvalidArgumentException('Insufficient sealed pack stock. Only ' . $availableStock . ' available.');
         }
+        if ($totalDemandedBaseUnits > $onHandBaseUnits) {
+            throw new InvalidArgumentException($isPackScan
+                ? 'Insufficient stock to add pack. Only ' . $onHandBaseUnits . ' base units available.'
+                : 'Insufficient stock. Only ' . $onHandBaseUnits . ' available.');
+        }
+
+        $product['selling_form'] = $sellingForm;
+        $product['price'] = $formPrice;
+        $product['pack_size'] = $packSize;
+        $product['available_stock'] = $availableStock;
+
         echo json_encode(['success' => true, 'product' => $product], JSON_THROW_ON_ERROR);
     } catch (InvalidArgumentException $e) {
         http_response_code(409);
@@ -400,22 +463,32 @@ require __DIR__ . '/../../../backend/app/Views/sale_receipt_support.php';
 // CashierShiftService::LOCKED_MESSAGE — no second instance is built to read it.
 $heldSaleDiscardReasons = \App\Services\HeldSaleService::DISCARD_REASONS;
 
+require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
+$todayManila = \App\Services\PhilippineTime::today();
 [$quickProductScope, $quickProductParams] = store_product_scope('p');
 $quickProductStmt = $pdo->prepare(
-    "SELECT p.product_id, p.sku, p.barcode, p.product_name, p.variant_label, p.unit_price,
+    "SELECT p.product_id, p.sku, p.barcode, p.pack_barcode, p.pack_size, p.pack_price, p.product_name, p.variant_label, p.unit_price,
             p.product_image, p.category_id, c.category_name,
             COALESCE(p.reorder_level, 0) AS reorder_level,
             COALESCE(p.safety_stock, 0) AS safety_stock,
             COALESCE(p.quantity_sold, 0) AS quantity_sold,
-            COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+            COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
+            COALESCE(batch_packs.sealed_packs, 0) AS sealed_packs
      FROM products p
      LEFT JOIN inventory i ON i.product_id = p.product_id
      LEFT JOIN categories c ON c.category_id = p.category_id
+     LEFT JOIN (
+         SELECT product_id, SUM(sealed_quantity) AS sealed_packs
+         FROM product_batches
+         WHERE remaining_quantity > 0
+           AND (expiration_date IS NULL OR expiration_date >= ?)
+         GROUP BY product_id
+     ) batch_packs ON batch_packs.product_id = p.product_id
      WHERE p.status = 'active'{$quickProductScope}
      ORDER BY COALESCE(p.quantity_sold, 0) DESC, p.product_name
      LIMIT 120"
 );
-$quickProductStmt->execute($quickProductParams);
+$quickProductStmt->execute(array_merge([$todayManila], $quickProductParams));
 $quickProducts = array_map(static function (array $product): array {
     $image = trim((string)($product['product_image'] ?? ''));
     if ($image !== '' && !preg_match('#^(?:https?://|data:image/|/)#i', $image)) {
@@ -429,8 +502,12 @@ $quickProducts = array_map(static function (array $product): array {
         'name' => (string)$product['product_name'] . (!empty($product['variant_label']) ? ' - ' . $product['variant_label'] : ''),
         'sku' => (string)($product['sku'] ?? ''),
         'barcode' => (string)($product['barcode'] ?? ''),
+        'pack_barcode' => (string)($product['pack_barcode'] ?? ''),
+        'pack_size' => isset($product['pack_size']) && $product['pack_size'] !== null ? (int)$product['pack_size'] : null,
+        'pack_price' => isset($product['pack_price']) && $product['pack_price'] !== null ? (float)$product['pack_price'] : null,
         'price' => (float)$product['unit_price'],
         'quantity_on_hand' => (int)$product['quantity_on_hand'],
+        'sealed_packs' => (int)($product['sealed_packs'] ?? 0),
         'reorder_level' => (int)$product['reorder_level'],
         'safety_stock' => (int)$product['safety_stock'],
         'quantity_sold' => (int)$product['quantity_sold'],
@@ -961,12 +1038,20 @@ function quickProductStockState(product) {
     return stock <= 0 ? 'out' : (stock <= threshold ? 'low' : 'available');
 }
 
-function addQuickProduct(productId) {
+function addQuickProduct(productId, sellingForm = 'piece') {
     const product = quickProductById.get(Number(productId));
     if (!product || Number(product.quantity_on_hand) <= 0) {
         return;
     }
-    addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode);
+    const isPack = sellingForm === 'pack';
+    if (isPack && Number(product.sealed_packs || 0) <= 0) {
+        showCartMessage('Insufficient sealed pack stock.', 'warning');
+        return;
+    }
+    const price = isPack && product.pack_price ? product.pack_price : product.price;
+    const packSize = isPack ? product.pack_size : null;
+    const availableStock = isPack ? Number(product.sealed_packs || 0) : Number(product.quantity_on_hand);
+    addToCart(product.product_id, product.name, price, availableStock, product.reorder_level, product.safety_stock, product.sku, product.barcode, sellingForm, packSize);
 }
 
 function updateQuickProductAvailability() {
@@ -974,20 +1059,61 @@ function updateQuickProductAvailability() {
         const product = quickProductById.get(Number(card.dataset.productId));
         if (!product) return;
         const stock = Number(product.quantity_on_hand);
-        const quantity = Number(cart[product.product_id]?.qty || 0);
-        const remaining = stock - quantity;
+        const hasPack = Number(product.pack_size) > 1 && Number(product.pack_price) > 0;
         const action = card.querySelector('.quick-product-action');
-        card.classList.toggle('selected', quantity > 0);
+
         if (stock <= 0) {
+            card.classList.remove('selected');
             action.innerHTML = '<button type="button" class="quick-product-add" disabled>Out of stock</button>';
-        } else if (quantity > 0) {
-            action.innerHTML = `<div class="quick-product-stepper" aria-label="${escapeHtml(product.name)} quantity">
-                <button type="button" data-quick-decrease="${Number(product.product_id)}" aria-label="Decrease ${escapeHtml(product.name)}"><i class="bi bi-dash-lg" aria-hidden="true"></i></button>
-                <strong>${quantity}</strong>
-                <button type="button" data-quick-add="${Number(product.product_id)}" aria-label="Add another ${escapeHtml(product.name)}" ${remaining <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
-            </div>`;
+            return;
+        }
+
+        if (hasPack) {
+            const pieceQty = Number(cart[`${product.product_id}:piece`]?.qty || cart[product.product_id]?.qty || 0);
+            const packQty = Number(cart[`${product.product_id}:pack`]?.qty || 0);
+            const sealedStock = Number(product.sealed_packs || 0);
+            const remainingPacks = sealedStock - packQty;
+            const totalBaseInCart = (packQty * Number(product.pack_size)) + pieceQty;
+            const remainingBase = stock - totalBaseInCart;
+            card.classList.toggle('selected', pieceQty > 0 || packQty > 0);
+
+            let pieceHtml = '';
+            if (pieceQty > 0) {
+                pieceHtml = `<div class="quick-product-stepper" aria-label="${escapeHtml(product.name)} piece quantity">
+                    <button type="button" data-quick-decrease="${Number(product.product_id)}:piece" aria-label="Decrease piece"><i class="bi bi-dash-lg" aria-hidden="true"></i></button>
+                    <strong>${pieceQty} pc</strong>
+                    <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" aria-label="Add piece" ${remainingBase <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+                </div>`;
+            } else {
+                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remainingBase <= 0 ? 'disabled' : ''} style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-plus-lg" aria-hidden="true"></i>Piece</button>`;
+            }
+
+            let packHtml = '';
+            if (packQty > 0) {
+                packHtml = `<div class="quick-product-stepper" aria-label="${escapeHtml(product.name)} pack quantity">
+                    <button type="button" data-quick-decrease="${Number(product.product_id)}:pack" aria-label="Decrease pack"><i class="bi bi-dash-lg" aria-hidden="true"></i></button>
+                    <strong>${packQty} pk</strong>
+                    <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" aria-label="Add pack" ${(remainingPacks <= 0 || remainingBase < Number(product.pack_size)) ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+                </div>`;
+            } else {
+                const packDisabled = (sealedStock <= 0 || remainingBase < Number(product.pack_size));
+                packHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" ${packDisabled ? 'disabled' : ''} style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-box-seam" aria-hidden="true"></i>Pack of ${product.pack_size}</button>`;
+            }
+
+            action.innerHTML = `<div style="display:flex;gap:0.35rem;width:100%;align-items:center;">${pieceHtml}${packHtml}</div>`;
         } else {
-            action.innerHTML = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}"><i class="bi bi-plus-lg" aria-hidden="true"></i>Add to Cart</button>`;
+            const quantity = Number(cart[`${product.product_id}:piece`]?.qty || cart[product.product_id]?.qty || 0);
+            const remaining = stock - quantity;
+            card.classList.toggle('selected', quantity > 0);
+            if (quantity > 0) {
+                action.innerHTML = `<div class="quick-product-stepper" aria-label="${escapeHtml(product.name)} quantity">
+                    <button type="button" data-quick-decrease="${Number(product.product_id)}:piece" aria-label="Decrease ${escapeHtml(product.name)}"><i class="bi bi-dash-lg" aria-hidden="true"></i></button>
+                    <strong>${quantity}</strong>
+                    <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" aria-label="Add another ${escapeHtml(product.name)}" ${remaining <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+                </div>`;
+            } else {
+                action.innerHTML = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remaining <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i>Add to Cart</button>`;
+            }
         }
     });
 }
@@ -1011,13 +1137,17 @@ function renderQuickProducts() {
         const stockState = quickProductStockState(product);
         const stockLabel = stockState === 'out' ? 'Out of stock' : `${stock} in stock`;
         const warning = stockState === 'low' ? '<span class="quick-stock-warning"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>Low stock</span>' : '';
+        const hasPack = Number(product.pack_size) > 1 && Number(product.pack_price) > 0;
+        const priceLabel = hasPack
+            ? `<span><strong>&#8369;${money(product.price)}</strong> / pc &middot; <strong>&#8369;${money(product.pack_price)}</strong> / pk</span>`
+            : `<strong>&#8369;${money(product.price)}</strong>`;
         return `<article class="quick-product-card ${stockState === 'out' ? 'out-of-stock' : ''}" data-product-id="${Number(product.product_id)}">
             <div class="quick-product-image">${quickProductMedia(product)}${warning}</div>
             <div class="quick-product-details">
                 <strong class="quick-product-name" title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong>
                 <span class="quick-product-sku">${escapeHtml(product.category_name)} &middot; ${escapeHtml(product.sku || product.barcode || 'No SKU')}</span>
                 <div class="quick-product-meta">
-                    <strong>&#8369;${money(product.price)}</strong>
+                    ${priceLabel}
                     <span class="quick-product-stock ${stockState}"><i class="bi bi-circle-fill" aria-hidden="true"></i>${stockLabel}</span>
                 </div>
                 <div class="quick-product-action"></div>
@@ -1091,9 +1221,11 @@ function showRecentScan(product, code, status = 'success') {
     }
     recentScan.classList.toggle('warning', status !== 'success');
     pulseRecentScan();
+    const isPack = product && product.selling_form === 'pack';
+    const formNote = isPack ? ` [Pack of ${product.pack_size || 1}]` : '';
     recentScan.innerHTML = product
         ? `<div class="recent-scan-icon"><i class="bi bi-check2" aria-hidden="true"></i></div>
-           <div class="recent-scan-copy"><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(code)} &middot; Stock ${Number(product.quantity_on_hand)}</span></div>
+           <div class="recent-scan-copy"><strong>${escapeHtml(product.name)}${formNote}</strong><span>${escapeHtml(code)} &middot; Stock ${Number(product.quantity_on_hand)}</span></div>
            <div class="recent-scan-price">&#8369;${money(product.price)}</div>`
         : `<div class="recent-scan-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
            <div class="recent-scan-copy"><strong>Scan not added</strong><span>${escapeHtml(code)}</span></div>
@@ -1176,8 +1308,16 @@ function syncCatalogStock(productId) {
     if (item.initial_stock === undefined) {
         item.initial_stock = Number(item.quantity_on_hand);
     }
-    const cartQty = Number(cart[id]?.qty || 0);
-    item.quantity_on_hand = Math.max(0, item.initial_stock - cartQty);
+    let totalPiecesInCart = 0;
+    for (const [key, cartItem] of Object.entries(cart)) {
+        const itemPid = cartItem.product_id ? Number(cartItem.product_id) : parseInt(key, 10);
+        if (itemPid === id) {
+            const form = cartItem.selling_form || (String(key).endsWith(':pack') ? 'pack' : 'piece');
+            const mult = (form === 'pack' && cartItem.pack_size) ? Number(cartItem.pack_size) : 1;
+            totalPiecesInCart += Number(cartItem.qty || 0) * mult;
+        }
+    }
+    item.quantity_on_hand = Math.max(0, item.initial_stock - totalPiecesInCart);
 }
 
 function syncAllCatalogStock() {
@@ -1197,8 +1337,7 @@ function lookupProductInIndexedDB(code) {
             const upperCode = code.toUpperCase();
             const requests = [
                 store.index('barcode').get(code),
-                store.index('sku').get(code),
-                store.index('case_barcode').get(code)
+                store.index('sku').get(code)
             ];
             if (code !== upperCode) {
                 requests.push(store.index('sku').get(upperCode));
@@ -1379,7 +1518,10 @@ async function fetchProductByCode(code) {
                 const catalogMap = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap);
                 const inMem = catalogMap?.get(productId);
                 const initialStock = inMem?.initial_stock !== undefined ? inMem.initial_stock : Number(localProduct.quantity_on_hand);
-                const currentQty = Number(cart[productId]?.qty || 0);
+                const packQty = Number(cart[`${productId}:pack`]?.qty || 0);
+                const pieceQty = Number(cart[`${productId}:piece`]?.qty || cart[productId]?.qty || 0);
+                const packSize = Number(localProduct.pack_size || 1);
+                const currentQty = (packQty * packSize) + pieceQty;
 
                 if (currentQty >= initialStock) {
                     showRecentScan(null, normalized, 'warning');
@@ -1418,10 +1560,12 @@ async function fetchProductByCode(code) {
                 sku: data.product.sku,
                 barcode: data.product.barcode,
                 name: data.product.product_name,
-                price: Number(data.product.unit_price),
-                quantity_on_hand: Number(data.product.quantity_on_hand),
+                price: Number(data.product.price !== undefined ? data.product.price : data.product.unit_price),
+                quantity_on_hand: Number(data.product.available_stock !== undefined ? data.product.available_stock : data.product.quantity_on_hand),
                 reorder_level: Number(data.product.reorder_level || 0),
-                safety_stock: Number(data.product.safety_stock || 0)
+                safety_stock: Number(data.product.safety_stock || 0),
+                selling_form: data.product.selling_form || 'piece',
+                pack_size: data.product.pack_size ? Number(data.product.pack_size) : null
             };
 
             return entry;
@@ -1459,7 +1603,7 @@ async function addScannedCode(code) {
     const product = await fetchProductByCode(code);
     if (!product) return;
 
-    if (!addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode)) return;
+    if (!addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode, product.selling_form, product.pack_size)) return;
     showRecentScan(product, code);
     scannerResult.innerHTML = `<strong>Item added</strong><span>${escapeHtml(product.name)}</span>`;
 }
@@ -1471,31 +1615,79 @@ function cartChangesAllowed() {
     return true;
 }
 
-function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '') {
+function cartLineKey(productId, form = 'piece') {
+    return `${Number(productId)}:${form === 'pack' ? 'pack' : 'piece'}`;
+}
+
+function resolveCartKey(id, form = null) {
+    if (cart[id]) return id;
+    const strId = String(id);
+    if (strId.includes(':')) {
+        const [rawPid, keyForm] = strId.split(':');
+        const targetForm = form || keyForm;
+        const targetKey = cartLineKey(rawPid, targetForm);
+        if (cart[targetKey]) return targetKey;
+        if (targetForm === 'piece' && cart[rawPid]) return rawPid;
+        return targetKey;
+    }
+    const pid = Number(strId);
+    if (form) {
+        const direct = cartLineKey(pid, form);
+        if (cart[direct]) return direct;
+        if (form === 'piece' && cart[pid]) return pid;
+        return direct;
+    }
+    const pieceKey = `${pid}:piece`;
+    if (cart[pieceKey]) return pieceKey;
+    const packKey = `${pid}:pack`;
+    if (cart[packKey]) return packKey;
+    return id;
+}
+
+function cartItemForm(key, item = null) {
+    if (item?.selling_form) return item.selling_form;
+    return String(key).endsWith(':pack') ? 'pack' : 'piece';
+}
+
+function cartItemProductId(key, item = null) {
+    if (item?.product_id) return Number(item.product_id);
+    return Number(String(key).split(':')[0]) || 0;
+}
+
+function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '', sellingForm = 'piece', packSize = null) {
     if (!cartChangesAllowed()) return false;
     const productId = Number(id);
-    const currentQty = cart[productId]?.qty || 0;
+    const form = sellingForm === 'pack' ? 'pack' : 'piece';
+    const lineKey = cartLineKey(productId, form);
+    const currentKey = resolveCartKey(lineKey, form);
+    const currentQty = cart[currentKey]?.qty || 0;
     const availableStock = Number(stock);
     if (currentQty + 1 > availableStock) {
-        showCartMessage('Insufficient stock.', 'warning');
+        showCartMessage(form === 'pack' ? 'Insufficient sealed pack stock.' : 'Insufficient stock.', 'warning');
         return false;
     }
 
-    cart[productId] = {
+    cart[lineKey] = {
+        product_id: productId,
         name,
         price: Number(price),
         qty: currentQty + 1,
+        selling_form: form,
+        pack_size: packSize !== null && packSize !== undefined ? Number(packSize) : null,
         stock: Number.isFinite(availableStock) ? availableStock : undefined,
         reorder_level: Number(reorderLevel || 0),
         safety_stock: Number(safetyStock || 0),
         sku,
         barcode
     };
+    if (currentKey !== lineKey && cart[currentKey]) {
+        delete cart[currentKey];
+    }
     if (typeof syncCatalogStock === 'function') syncCatalogStock(productId);
     renderCart();
 
-    const remaining = availableStock - cart[productId].qty;
-    if (Number.isFinite(availableStock) && remaining <= getLowStockThreshold(cart[productId])) {
+    const remaining = availableStock - cart[lineKey].qty;
+    if (Number.isFinite(availableStock) && remaining <= getLowStockThreshold(cart[lineKey])) {
         showCartMessage(`Product added to cart. Low stock: ${remaining} left.`, 'warning');
     } else {
         RetailMindUI.toast('Product added to cart.', 'success', undefined, 2500);
@@ -1505,7 +1697,8 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
 
 function updateCartQty(id, newQty) {
     if (!cartChangesAllowed()) return;
-    const item = cart[id];
+    const key = (typeof resolveCartKey === 'function') ? resolveCartKey(id) : (cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id)));
+    const item = cart[key];
     if (!item) {
         return;
     }
@@ -1521,28 +1714,32 @@ function updateCartQty(id, newQty) {
         renderCart();
         showCartMessage('Insufficient stock.', 'warning'); return;
     } else {
-        cart[id].qty = qty;
+        cart[key].qty = qty;
     }
-    if (typeof syncCatalogStock === 'function') syncCatalogStock(id);
+    const pid = (typeof cartItemProductId === 'function') ? cartItemProductId(key, item) : (item.product_id || parseInt(key, 10));
+    if (typeof syncCatalogStock === 'function') syncCatalogStock(pid);
     renderCart();
     showCartMessage('Cart updated successfully.', 'info');
 }
 
 function changeCartQty(id, delta) {
-    const item = cart[id];
+    const key = (typeof resolveCartKey === 'function') ? resolveCartKey(id) : (cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id)));
+    const item = cart[key];
     if (item) {
-        updateCartQty(id, item.qty + delta);
+        updateCartQty(key, item.qty + delta);
     }
 }
 
 function removeFromCart(id) {
     if (!cartChangesAllowed()) return;
-    if (!cart[id]) {
+    const key = (typeof resolveCartKey === 'function') ? resolveCartKey(id) : (cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id)));
+    if (!cart[key]) {
         return;
     }
-    const itemName = cart[id].name;
-    delete cart[id];
-    if (typeof syncCatalogStock === 'function') syncCatalogStock(id);
+    const itemName = cart[key].name;
+    const pid = (typeof cartItemProductId === 'function') ? cartItemProductId(key, cart[key]) : (cart[key].product_id || parseInt(key, 10));
+    delete cart[key];
+    if (typeof syncCatalogStock === 'function') syncCatalogStock(pid);
     renderCart();
     showCartMessage(`${itemName} removed from the cart.`, 'info');
 }
@@ -1587,12 +1784,17 @@ function renderCart() {
             const warning = remaining !== null && remaining <= threshold
                 ? `<span class="stock-warning">Only ${remaining} left after sale</span>`
                 : '';
+            const isPack = item.selling_form === 'pack';
+            const formBadge = isPack
+                ? `<span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600;">Pack of ${item.pack_size || 1}</span>`
+                : `<span class="badge" style="background:#f3f4f6;color:#4b5563;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:500;">Piece</span>`;
+            const escapedId = escapeHtml(String(id));
 
             rows += `<tr>
-                <td><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</td>
-                <td><div class="cart-actions"><button type="button" class="qty-btn" onclick="changeCartQty(${Number(id)}, -1)" aria-label="Decrease ${escapeHtml(item.name)} quantity">−</button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" onchange="updateCartQty(${Number(id)}, Number(this.value))" aria-label="${escapeHtml(item.name)} quantity"><button type="button" class="qty-btn" onclick="changeCartQty(${Number(id)}, 1)" aria-label="Increase ${escapeHtml(item.name)} quantity">+</button></div></td>
+                <td><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</td>
+                <td><div class="cart-actions"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', -1)" aria-label="Decrease ${escapeHtml(item.name)} quantity">−</button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" onchange="updateCartQty('${escapedId}', Number(this.value))" aria-label="${escapeHtml(item.name)} quantity"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', 1)" aria-label="Increase ${escapeHtml(item.name)} quantity">+</button></div></td>
                 <td><strong>&#8369;${money(subtotal)}</strong></td>
-                <td><button type="button" class="remove-item-btn" onclick="removeFromCart(${Number(id)})" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
+                <td><button type="button" class="remove-item-btn" onclick="removeFromCart('${escapedId}')" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
             </tr>`;
         }
     }
@@ -1663,7 +1865,15 @@ function setQuickTender(value) {
 }
 
 function validateCheckout(requirePayment = true) {
-    const payload = Object.entries(cart).map(([product_id, item]) => ({ product_id: Number(product_id), qty: Number(item.qty) }));
+    const payload = Object.entries(cart).map(([key, item]) => {
+        const pid = item.product_id ? Number(item.product_id) : parseInt(key, 10);
+        const form = item.selling_form || (String(key).endsWith(':pack') ? 'pack' : 'piece');
+        return {
+            product_id: pid,
+            selling_form: form,
+            qty: Number(item.qty)
+        };
+    });
     if (payload.length === 0) {
         showCartMessage('Cart is empty. Add items before checkout.', 'error');
         skuInput.focus();
@@ -1738,7 +1948,11 @@ async function checkoutNow() {
     checkoutSummary.innerHTML = `
         <table class="review-items" aria-label="Items in this sale">
             <thead><tr><th scope="col">Item</th><th scope="col">Qty</th><th scope="col">Amount</th></tr></thead>
-            <tbody>${quote.sale.items.map(item => `<tr><td><strong>${escapeHtml(item.product_name)}</strong><small>₱${money(item.unit_price)} each</small></td><td>${item.quantity}</td><td>₱${money(item.subtotal)}</td></tr>`).join('')}</tbody>
+            <tbody>${quote.sale.items.map(item => {
+                const isPack = item.selling_form === 'pack';
+                const formBadge = isPack ? ` <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:0.75rem;padding:2px 6px;border-radius:4px;">Pack of ${item.pack_size || 1}</span>` : '';
+                return `<tr><td><strong>${escapeHtml(item.product_name)}${formBadge}</strong><small>₱${money(item.unit_price)} each</small></td><td>${item.quantity}</td><td>₱${money(item.subtotal)}</td></tr>`;
+            }).join('')}</tbody>
         </table>
         <div class="review-details">
             <p><strong>Eligible promotions:</strong> ${quote.eligible_promotions.map(p => escapeHtml(p.promotion_name)).join(', ') || 'None'}</p>
@@ -1857,12 +2071,16 @@ function renderStockConflictItems() {
 
     for (const item of activeStockConflicts) {
         const id = Number(item.product_id);
-        const name = escapeHtml(item.product_name);
+        const form = item.selling_form === 'pack' ? 'pack' : 'piece';
+        const lineKey = cartLineKey(id, form);
+        const name = escapeHtml(item.product_name) + `<span class="badge" style="margin-left:0.35rem;font-size:0.75rem;background:#6c757d;color:#fff;padding:0.15rem 0.35rem;border-radius:3px;">${form === 'pack' ? 'Pack' : 'Piece'}</span>`;
         const requested = Number(item.requested_qty);
         const available = Number(item.available_stock);
-        const currentInCart = cart[id] ? Number(cart[id].qty) : 0;
+        const resolvedKey = resolveCartKey(lineKey, form);
+        const currentInCart = cart[resolvedKey] ? Number(cart[resolvedKey].qty) : (cart[id] && form === 'piece' ? Number(cart[id].qty) : 0);
+        const escapedKey = escapeHtml(lineKey);
 
-        html += `<tr data-conflict-id="${id}" style="border-bottom:1px solid var(--border-color, #eee);">
+        html += `<tr data-conflict-key="${escapedKey}" style="border-bottom:1px solid var(--border-color, #eee);">
             <td style="padding:0.5rem;"><strong class="conflict-product-name">${name}</strong></td>
             <td style="padding:0.5rem; text-align:center;" class="conflict-requested-qty">${requested}</td>
             <td style="padding:0.5rem; text-align:center;"><strong class="conflict-available-stock ${available > 0 ? 'text-warning' : 'text-danger'}">${available}</strong></td>
@@ -1871,14 +2089,14 @@ function renderStockConflictItems() {
         if (available > 0) {
             html += `<div style="display:inline-flex; align-items:center; gap:0.25rem;">
                 <input type="number" min="1" max="${available}" value="${Math.min(currentInCart || available, available)}"
-                       class="conflict-qty-input" data-product-id="${id}" style="width:60px; padding:0.25rem;"
-                       onchange="updateConflictItemQty(${id}, Number(this.value), ${available})">
-                <button type="button" class="btn btn-sm btn-secondary adjust-conflict-qty-btn" onclick="adjustConflictItemQty(${id}, ${available})">Set to ${available}</button>
-                <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem(${id})">Remove</button>
+                       class="conflict-qty-input" data-conflict-key="${escapedKey}" style="width:60px; padding:0.25rem;"
+                       onchange="updateConflictItemQty('${escapedKey}', Number(this.value), ${available})">
+                <button type="button" class="btn btn-sm btn-secondary adjust-conflict-qty-btn" onclick="adjustConflictItemQty('${escapedKey}', ${available})">Set to ${available}</button>
+                <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem('${escapedKey}')">Remove</button>
             </div>`;
         } else {
             html += `<span class="badge" style="background:#dc3545; color:#fff; padding:0.25rem 0.5rem; border-radius:4px; margin-right:0.5rem;">Depleted</span>
-                     <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem(${id})">Remove</button>`;
+                     <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem('${escapedKey}')">Remove</button>`;
         }
 
         html += `</td></tr>`;
@@ -1888,48 +2106,50 @@ function renderStockConflictItems() {
     container.innerHTML = html;
 }
 
-function updateConflictItemQty(productId, qty, maxAvailable) {
-    productId = Number(productId);
+function updateConflictItemQty(lineKey, qty, maxAvailable) {
     const validQty = Math.max(1, Math.min(Number(qty) || 1, maxAvailable));
-    if (cart[productId]) {
-        cart[productId].qty = validQty;
-        cart[productId].stock = maxAvailable;
+    const key = resolveCartKey(lineKey);
+    if (cart[key]) {
+        cart[key].qty = validQty;
+        cart[key].stock = maxAvailable;
         renderCart();
         persistCart();
     }
 }
 
-function adjustConflictItemQty(productId, targetQty) {
-    productId = Number(productId);
-    if (cart[productId]) {
-        cart[productId].qty = targetQty;
-        cart[productId].stock = targetQty;
+function adjustConflictItemQty(lineKey, targetQty) {
+    const key = resolveCartKey(lineKey);
+    if (cart[key]) {
+        cart[key].qty = targetQty;
+        cart[key].stock = targetQty;
         renderCart();
         persistCart();
         renderStockConflictItems();
     }
 }
 
-function removeConflictItem(productId) {
-    productId = Number(productId);
-    if (cart[productId]) {
-        delete cart[productId];
-        renderCart();
-        persistCart();
-    }
-    activeStockConflicts = activeStockConflicts.filter(c => Number(c.product_id) !== productId);
+function removeConflictItem(lineKey) {
+    const key = resolveCartKey(lineKey);
+    const pid = cartItemProductId(key, cart[key]);
+    delete cart[key];
+    if (typeof syncCatalogStock === 'function') syncCatalogStock(pid);
+    renderCart();
+    persistCart();
+    activeStockConflicts = activeStockConflicts.filter(c => cartLineKey(c.product_id, c.selling_form) !== String(lineKey));
     renderStockConflictItems();
 }
 
 function applyStockConflictAdjustments() {
     for (const conflict of activeStockConflicts) {
-        const id = Number(conflict.product_id);
+        const form = conflict.selling_form === 'pack' ? 'pack' : 'piece';
+        const lineKey = cartLineKey(conflict.product_id, form);
         const avail = Number(conflict.available_stock);
+        const key = resolveCartKey(lineKey, form);
         if (avail <= 0) {
-            delete cart[id];
-        } else if (cart[id] && cart[id].qty > avail) {
-            cart[id].qty = avail;
-            cart[id].stock = avail;
+            delete cart[key];
+        } else if (cart[key] && cart[key].qty > avail) {
+            cart[key].qty = avail;
+            cart[key].stock = avail;
         }
     }
     renderCart();
@@ -1942,12 +2162,19 @@ function applyStockConflictAdjustments() {
     checkoutNow();
 }
 
-window.showStockConflictModal = showStockConflictModal;
-window.closeStockConflictModal = closeStockConflictModal;
-window.adjustConflictItemQty = adjustConflictItemQty;
-window.removeConflictItem = removeConflictItem;
-window.applyStockConflictAdjustments = applyStockConflictAdjustments;
-window.checkoutNow = checkoutNow;
+if (typeof window !== 'undefined') {
+    window.cartLineKey = cartLineKey;
+    window.resolveCartKey = resolveCartKey;
+    window.cartItemForm = cartItemForm;
+    window.cartItemProductId = cartItemProductId;
+    window.showStockConflictModal = showStockConflictModal;
+    window.closeStockConflictModal = closeStockConflictModal;
+    window.updateConflictItemQty = updateConflictItemQty;
+    window.adjustConflictItemQty = adjustConflictItemQty;
+    window.removeConflictItem = removeConflictItem;
+    window.applyStockConflictAdjustments = applyStockConflictAdjustments;
+    window.checkoutNow = checkoutNow;
+}
 
 async function apiHeldSale(action, payload = {}) {
     return cartWorkspace.request(action, payload);
@@ -2275,12 +2502,12 @@ quickCategoryFilters.addEventListener('click', event => {
 quickProductGrid.addEventListener('click', event => {
     const addButton = event.target.closest('[data-quick-add]');
     if (addButton && !addButton.disabled) {
-        addQuickProduct(addButton.dataset.quickAdd);
+        addQuickProduct(addButton.dataset.quickAdd, addButton.dataset.sellingForm || 'piece');
         return;
     }
     const decreaseButton = event.target.closest('[data-quick-decrease]');
     if (decreaseButton) {
-        changeCartQty(Number(decreaseButton.dataset.quickDecrease), -1);
+        changeCartQty(decreaseButton.dataset.quickDecrease, -1);
     }
 });
 quickGridToggle.addEventListener('click', () => {
