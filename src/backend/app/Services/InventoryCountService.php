@@ -124,8 +124,8 @@ class InventoryCountService
                 if ($bId === null && ($bQtyRaw === null || $bQtyRaw === '' || (int)$bQtyRaw <= 0)) {
                     continue;
                 }
-                if ($bQtyRaw === null || $bQtyRaw === '' || (int)$bQtyRaw < 0) {
-                    throw new RuntimeException('Batch physically counted quantity cannot be negative.');
+                if ($bQtyRaw === null || $bQtyRaw === '' || (!is_int($bQtyRaw) && (!is_string($bQtyRaw) || !preg_match('/^\d+$/D', (string)$bQtyRaw)))) {
+                    throw new RuntimeException('Batch physically counted quantity must be a non-negative whole number.');
                 }
                 $bQty = (int)$bQtyRaw;
 
@@ -159,7 +159,11 @@ class InventoryCountService
 
             if (count($batchEntries) > 0) {
                 if (isset($data['physical_quantity']) && $data['physical_quantity'] !== '') {
-                    $physicalQty = (int)$data['physical_quantity'];
+                    $rawPhys = $data['physical_quantity'];
+                    if (!is_int($rawPhys) && (!is_string($rawPhys) || !preg_match('/^\d+$/D', (string)$rawPhys))) {
+                        throw new RuntimeException('Physically counted quantity must be a non-negative whole number.');
+                    }
+                    $physicalQty = (int)$rawPhys;
                     if ($physicalQty !== $totalBatchPhysical) {
                         throw new RuntimeException('Physically counted quantity does not match the sum of batch quantities.');
                     }
@@ -167,10 +171,18 @@ class InventoryCountService
                     $physicalQty = $totalBatchPhysical;
                 }
             } else {
-                $physicalQty = (int)($data['physical_quantity'] ?? -1);
+                $rawPhys = $data['physical_quantity'] ?? null;
+                if ($rawPhys === null || $rawPhys === '' || (!is_int($rawPhys) && (!is_string($rawPhys) || !preg_match('/^\d+$/D', (string)$rawPhys)))) {
+                    throw new RuntimeException('Physically counted quantity must be a non-negative whole number.');
+                }
+                $physicalQty = (int)$rawPhys;
             }
         } else {
-            $physicalQty = (int)($data['physical_quantity'] ?? -1);
+            $rawPhys = $data['physical_quantity'] ?? null;
+            if ($rawPhys === null || $rawPhys === '' || (!is_int($rawPhys) && (!is_string($rawPhys) || !preg_match('/^\d+$/D', (string)$rawPhys)))) {
+                throw new RuntimeException('Physically counted quantity must be a non-negative whole number.');
+            }
+            $physicalQty = (int)$rawPhys;
         }
 
         if ($physicalQty < 0) {

@@ -68,12 +68,12 @@ class ProductService
         $categoryId = (($data['category_id'] ?? '') !== '') ? (int)$data['category_id'] : null;
         $costPrice = (float)($data['cost_price'] ?? 0);
         $sellingPrice = (float)($data['selling_price'] ?? 0);
-        $reorderLevel = (int)($data['reorder_level'] ?? 10);
+        $reorderLevel = $this->validateStockSetting($data['reorder_level'] ?? 10, 'Reorder level', 0);
         $preferredSupplier = trim((string)($data['preferred_supplier'] ?? ($data['supplier'] ?? '')));
         $supplierLeadTimeDays = max(0, (int)($data['supplier_lead_time_days'] ?? 7));
-        $safetyStock = max(0, (int)($data['safety_stock'] ?? 0));
-        $minimumOrderQuantity = max(1, (int)($data['minimum_order_quantity'] ?? 1));
-        $unitsPerPackage = max(1, (int)($data['units_per_package'] ?? 1));
+        $safetyStock = $this->validateStockSetting($data['safety_stock'] ?? 0, 'Safety stock', 0);
+        $minimumOrderQuantity = $this->validateStockSetting($data['minimum_order_quantity'] ?? 1, 'Minimum order quantity', 1);
+        $unitsPerPackage = $this->validateStockSetting($data['units_per_package'] ?? 1, 'Units per package', 1);
         $baseUnit = trim((string)($data['base_unit'] ?? 'piece')) ?: 'piece';
         $receivingUnit = trim((string)($data['receiving_unit'] ?? 'package')) ?: 'package';
         $caseBarcode = trim((string)($data['case_barcode'] ?? ''));

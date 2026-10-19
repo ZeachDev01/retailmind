@@ -1317,7 +1317,7 @@ foreach ($products as $product) {
                                 <select id="product-base-unit" data-unit-field="base_unit">
                                     <option value="piece">Piece</option><option value="bottle">Bottle</option><option value="can">Can</option><option value="sachet">Sachet</option>
                                     <option value="stick">Stick</option><option value="pack">Pack</option><option value="bag">Bag</option><option value="box">Box</option>
-                                    <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option>
+                                    <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option><option value="pouch">Pouch</option>
                                     <option value="">Other…</option>
                                 </select>
                                 <div data-unit-custom hidden>

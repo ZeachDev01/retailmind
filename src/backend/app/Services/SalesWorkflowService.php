@@ -340,11 +340,19 @@ class SalesWorkflowService
     {
         $quantities = [];
         foreach ($cart as $item) {
-            $productId = (int)($item['product_id'] ?? 0);
-            $qty = (int)($item['qty'] ?? 0);
-            if ($productId > 0 && $qty > 0) {
-                $quantities[$productId] = ($quantities[$productId] ?? 0) + $qty;
+            if (!is_array($item)) {
+                throw new DomainException('Your cart is empty or invalid.');
             }
+            $productId = (int)($item['product_id'] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+            $rawQty = $item['qty'] ?? null;
+            if (!is_int($rawQty) && (!is_string($rawQty) || !preg_match('/^[1-9]\d*$/D', (string)$rawQty))) {
+                throw new DomainException('Cart quantity must be a positive whole number.');
+            }
+            $qty = (int)$rawQty;
+            $quantities[$productId] = ($quantities[$productId] ?? 0) + $qty;
         }
 
         ksort($quantities);
