@@ -1,1 +1,99 @@
 #supplier-pullouts .mb-6{margin-bottom:1.5rem}#supplier-pullouts .flex{display:flex}#supplier-pullouts .table{display:table}#supplier-pullouts .grid{display:grid}#supplier-pullouts .hidden{display:none}#supplier-pullouts .w-full{width:100%}#supplier-pullouts .min-w-0{min-width:0}#supplier-pullouts .max-w-full{max-width:100%}#supplier-pullouts .cursor-pointer{cursor:pointer}#supplier-pullouts .grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}#supplier-pullouts .gap-2{gap:.5rem}#supplier-pullouts .gap-6{gap:1.5rem}#supplier-pullouts .overflow-x-auto{overflow-x:auto}#supplier-pullouts .rounded-lg{border-radius:.5rem}#supplier-pullouts .border{border-width:1px}#supplier-pullouts .border-0{border-width:0}#supplier-pullouts .border-b{border-bottom-width:1px}#supplier-pullouts .border-b-2{border-bottom-width:2px}#supplier-pullouts .border-solid{border-style:solid}#supplier-pullouts .border-\[var\(--border\)\]{border-color:var(--border)}#supplier-pullouts .border-blue-600{--tw-border-opacity:1;border-color:rgb(37 99 235/var(--tw-border-opacity,1))}#supplier-pullouts .border-transparent{border-color:transparent}#supplier-pullouts .bg-transparent{background-color:transparent}#supplier-pullouts .px-3{padding-left:.75rem;padding-right:.75rem}#supplier-pullouts .px-4{padding-left:1rem;padding-right:1rem}#supplier-pullouts .py-2{padding-top:.5rem;padding-bottom:.5rem}#supplier-pullouts .py-3{padding-top:.75rem;padding-bottom:.75rem}#supplier-pullouts .text-right{text-align:right}#supplier-pullouts .text-sm{font-size:.875rem;line-height:1.25rem}#supplier-pullouts .font-semibold{font-weight:600}#supplier-pullouts .text-\[var\(--muted\)\]{color:var(--muted)}#supplier-pullouts .text-\[var\(--theme-info-text\2c \#2563eb\)\]{color:var(--theme-info-text,#2563eb)}#supplier-pullouts .\[font-variant-numeric\:tabular-nums\]{font-variant-numeric:tabular-nums}#supplier-pullouts .hover\:bg-\[var\(--surface-soft\)\]:hover{background-color:var(--surface-soft)}#supplier-pullouts .focus\:border-blue-600:focus{--tw-border-opacity:1;border-color:rgb(37 99 235/var(--tw-border-opacity,1))}#supplier-pullouts .focus\:\[box-shadow\:var\(--focus-ring\)\]:focus{box-shadow:var(--focus-ring)}@media (min-width:768px){#supplier-pullouts .md\:col-span-2{grid-column:span 2/span 2}#supplier-pullouts .md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}}#supplier-pullouts :is(.\[\&_th\]\:bg-\[var\(--surface-soft\)\] th){background-color:var(--surface-soft)}
+/* Strong control edges keep blank fields visible without placeholder text. */
+#supplier-pullouts .pullout-form-card {
+    max-width: 60rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card-bg);
+    overflow: hidden;
+}
+
+#supplier-pullouts .pullout-form-card > .card-body {
+    padding: 2rem;
+}
+
+#supplier-pullouts #pullout-form {
+    column-gap: 1.5rem;
+    row-gap: 1.5rem;
+    align-items: start;
+}
+
+#supplier-pullouts #pullout-form label strong {
+    font-weight: 600;
+}
+
+#supplier-pullouts #pullout-form .pullout-optional {
+    color: var(--muted);
+    font-size: .875rem;
+    font-weight: 400;
+}
+
+#supplier-pullouts #batch-help {
+    display: block;
+    margin-top: .5rem;
+    color: var(--muted);
+    font-size: .8125rem;
+    line-height: 1.5;
+}
+
+#supplier-pullouts #pullout-form .form-actions {
+    justify-content: flex-end;
+    margin-top: .5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+@media (max-width: 767px) {
+    #supplier-pullouts .pullout-form-card > .card-body {
+        padding: 1.25rem;
+    }
+
+    #supplier-pullouts #btn-submit-pullout {
+        width: 100%;
+    }
+}
+
+#supplier-pullouts #pullout-form label {
+    display: block;
+    margin-bottom: .5rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+#supplier-pullouts #pullout-form .form-control {
+    min-height: 48px;
+    padding: .75rem .9rem;
+    border: 1px solid #718096;
+    border-radius: 10px;
+    background-color: #fff;
+    color: var(--text);
+    font: inherit;
+}
+
+#supplier-pullouts #pullout-form textarea.form-control {
+    min-height: 96px;
+    resize: vertical;
+}
+
+#supplier-pullouts #pullout-form .form-control:hover:not(:disabled) {
+    border-color: var(--primary);
+}
+
+#supplier-pullouts #pullout-form .form-control:focus {
+    border-color: var(--primary);
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+#supplier-pullouts #pullout-form > div:focus-within > label {
+    color: var(--primary);
+}
+
+html[data-theme="dark"] #supplier-pullouts #pullout-form .form-control {
+    border-color: #8295b1 !important;
+}
+
+html[data-theme="dark"] #supplier-pullouts #pullout-form .form-control:is(:hover, :focus):not(:disabled) {
+    border-color: var(--primary) !important;
+}

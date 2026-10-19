@@ -57,6 +57,7 @@ function render(canMutate) {
                 await page.addScriptTag({path: path.join(frontend, 'assets/js/ui.js')});
                 await page.evaluate(() => RetailMindUI.initPageContent());
                 await page.locator('.rm-toast-close').evaluateAll(buttons => buttons.forEach(button => button.click()));
+                assert.equal(await page.locator('main [placeholder]').count(), 0, 'All fields, including generated search, have no placeholders');
                 const record = page.getByRole('tab', {name: 'Record Pullout', exact: true});
                 const history = page.getByRole('tab', {name: 'Pullout History', exact: true});
                 assert.equal(await record.getAttribute('aria-selected'), 'true');
@@ -68,14 +69,32 @@ function render(canMutate) {
                     assert.equal(columns, width === 390 ? 1 : 2);
                     assert.equal(await page.locator('#reason').evaluate(el => el.closest('form').contains(el)), true);
                     assert.equal(await page.locator('#pullout-form > div').count(), 7, 'Every field and submit action stays in the grid');
-                    assert.equal(await page.locator('#reason').evaluate(el => getComputedStyle(el).boxShadow !== 'none'), true, 'Focused input has a theme focus ring');
+                    for (const theme of ['light', 'dark']) {
+                        await page.addStyleTag({path: path.join(frontend, 'assets/css/theme.css')});
+                        await page.locator('html').evaluate((el, theme) => { el.dataset.theme = theme; }, theme);
+                        await page.locator('#reason').focus();
+                        const focus = await page.locator('#reason').evaluate(el => {
+                            const style = getComputedStyle(el);
+                            return {outline: style.outlineStyle, width: style.outlineWidth, height: el.getBoundingClientRect().height};
+                        });
+                        assert.equal(focus.outline, 'solid', 'Focused fields have a visible outline');
+                        assert.equal(focus.width, '2px');
+                        assert.ok(focus.height >= 48, 'Fields have comfortable touch targets');
+                        assert.equal(await page.locator('label[for="reason"]').evaluate(el => getComputedStyle(el).color), theme === 'dark' ? 'rgb(96, 165, 250)' : 'rgb(37, 99, 235)', 'Active label uses the theme action color');
+                        await page.locator('#reason').blur();
+                        const border = await page.locator('#quantity').evaluate(el => getComputedStyle(el).borderColor);
+                        assert.equal(border, theme === 'dark' ? 'rgb(130, 149, 177)' : 'rgb(113, 128, 150)', 'Blank fields retain strong borders');
+                        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+                        await page.screenshot({path: path.join(screenshots, `${width}-${theme}-fields.png`)});
+                    }
+                    await page.locator('html').evaluate(el => { el.dataset.theme = 'light'; });
                 }
                 await history.click();
                 assert.equal(await history.getAttribute('aria-selected'), 'true');
                 assert.equal(await history.evaluate(el => getComputedStyle(el).borderBottomColor), 'rgb(37, 99, 235)');
                 assert.equal(await page.locator('#pullout-record-panel').isVisible(), false);
                 await page.getByRole('button', {name: 'Page 2', exact: true}).click();
-                const search = page.getByRole('searchbox', {name: 'Search table'});
+                const search = page.getByRole('searchbox', {name: 'Search pullouts'});
                 await search.fill('Test product');
                 await page.waitForTimeout(200);
                 await page.getByRole('button', {name: 'Page 2', exact: true}).click();
