@@ -66,7 +66,7 @@ Cashiers reconcile service cash and wallet balances at opening, closing, and han
 
 ### Automatic service fees
 
-The same schedule applies to cash-in and cash-out. Principal amounts are positive whole pesos. Service fees and resulting collections may contain centavos. Existing reference-log amount limits are not automatically a guarantee that a transfer is permitted by GCash; provider limits are not defined by this specification.
+The same schedule applies to cash-in and cash-out. Principal amounts are positive whole pesos within Store operational ceilings (PHP 1 to PHP 50,000 per transaction, settled in #237; distinct from provider authorization limits). Service fees and resulting collections may contain centavos. Existing reference-log amount limits are not automatically a guarantee that a transfer is permitted by GCash; provider limits are not defined by this specification.
 
 | Principal amount (PHP) | Fee (PHP) |
 | --- | --- |
@@ -134,8 +134,8 @@ Principal means the amount loaded for cash-in or cash requested for cash-out. Th
 - Extend persisted records to identify principal, fee, fee payment method, Cashier, active shift/service responsibility, timestamps, reference, status, confirmation evidence, and cash/wallet effects. Opening and closing records retain actual and expected balances and separate differences.
 - Completed means the verified wallet transfer and required physical exchange both occurred. The old Verified flag must not silently imply this stronger meaning.
 - Needs checking means the exchange is unfinished or uncertain. Preserve which actual movements occurred and any known reference, with an explanatory note. Do not force a fabricated reference when a transfer has not happened.
-- The exact resolution actions and permissions for Needs checking are still policy decisions, as noted below. Completion and resolution must never repost an already recorded movement.
-- Completed records cannot be deleted or silently overwritten. Corrections require a linked, audited record of the actual money correction; exact approval policy remains open.
+- Responsible Cashiers may flag exchanges Needs checking with required explanatory notes. Completion and resolution preserve already recorded money movements and never duplicate balance impacts (#237).
+- Completed records cannot be deleted or silently overwritten. Corrections require a linked, audited adjusting record authorized by an Administrator (#237).
 - Enforce one responsible Cashier at a time for the shared service cash box and wallet, including concurrent requests.
 - Completion, movement posting, fee attribution, and audit recording must succeed or fail together. Repeated requests, duplicate references, and simultaneous confirmations cannot post the same exchange twice. Reload history after uncertain responses.
 - Retain existing authentication, workspace restrictions, CSRF protection, validation, and audit protections for new operations. Validate money and state transitions on the server.
@@ -146,7 +146,7 @@ Principal means the amount loaded for cash-in or cash requested for cash-out. Th
 - Show expected service cash, expected wallet funds, their last actual-check time, cash-in principal total, cash-out principal total, fees split by cash/wallet, and Needs checking items. Clearly label computed balances Expected; there is no live balance API.
 - Administrator navigation adds GCash Overview with Store-wide summaries, date filters, Cashier history, differences, and unresolved activity. Historical activity filters must not be mistaken for the current wallet balance.
 - Opening records the counted service cash and actual checked wallet balance. Closing compares both against expected balances and retains separate shortage/excess figures.
-- Connect handover to the existing shift workflow without treating the shared wallet as a newly created wallet each shift. Record acceptance of actual balances and preserve the outgoing reconciliation. Exact exception/forced-close rules remain open.
+- Connect handover to the existing shift workflow without treating the shared wallet as a newly created wallet each shift. Record acceptance of actual balances and preserve the outgoing reconciliation. Unresolved Needs checking items do not block shift closing; approved carryover transfers accountability to the incoming shift or flags items for Administrator resolution (#237). Closing count discrepancies cannot be erased; Administrators may record approved reconciliation notes/waivers without altering shortage/excess amounts (#237). In emergencies, an Administrator conducts emergency handover by counting physical cash and checking wallet balance in the GCash app (#237).
 - Use Philippine time for timestamps and reporting-day boundaries. Keep the existing UI's accessible labels, keyboard operation, and readable status feedback.
 
 ### Existing-data transition
@@ -167,7 +167,7 @@ The user confirmed reuse of the existing GCash browser/API workflow tests, focus
 - Extend existing reference parser tests for normalization, leading zeroes, supported payloads, ambiguous captures, and rejection of unsupported references. Browser tests simulate scanner keyboard input and controlled camera-reading results; they do not prove physical hardware compatibility.
 - Reuse Cashier Shift opening/reconciliation contract patterns to verify separate Product and service counts, preserved wallet continuity, shortages/excesses, and handover ownership.
 - Verify legacy rows remain readable and do not affect newly opened tracked balances. Verify migrations, fresh-install schema, and backup retention for added records.
-- Resolve the operational policy questions below before writing acceptance tests for their specific outcomes. No tests were executed for this specification-only task.
+- Operational policies are settled (#237): acceptance tests in tickets #238–#244 will cover funding authority and cross-fund logging, immutable adjustments and discrepancy waivers, non-blocking shift closing with carryover, PHP 1–PHP 50,000 transaction ceilings with insufficient-balance blocks, and gross fee reporting without customer-facing provider deductions. No tests were executed for this specification-only task.
 
 ## Out of Scope
 
@@ -178,16 +178,38 @@ The user confirmed reuse of the existing GCash browser/API workflow tests, focus
 - A third cash-out method that deducts the fee from a principal-sized transfer; only Fee via GCash and Fee in cash are confirmed.
 - Configurable rate administration, fee discounts/overrides, and inferred reconstruction of historical service balances.
 
-## Further Notes
+## Settled Operational Policies
 
-Confirmed in the design discussion: dedicated service cash and wallet; one responsible Cashier; manual GCash-app transfers; whole-peso principal; the supplied fee schedule; two cash-out fee methods; opening/closing checks; separate Cashier and Administrator overviews; and reuse of reference capture.
+All 5 operational policies were settled and approved on 2026-10-19 under ticket [#237](https://github.com/ZeachDev01/retailmind/issues/237) for implementation across tickets #238–#244:
 
-The following remain unresolved and must not be treated as approved policies or silently guessed during implementation:
+### Policy 1: Funding, Replenishment, and Fund Transfers
+- **Authority**: Only a Store Administrator or Manager may initiate or execute replenishment and withdrawal of GCash Service Cash and Service Wallet funds.
+- **Cashier handoff & receipt**: The responsible Cashier may request replenishment when service cash or wallet funds run low, and must confirm and record physical or wallet receipt upon actual handover.
+- **Cross-fund transfers**: Any transfer between Service Cash and the Product cash drawer requires explicit Administrator authorization, logged with reason, amount, timestamp, movement type, and Administrator credentials.
+- **Owner money movements**: Injections or withdrawals of owner capital must be recorded with external documentation (bank deposit reference, transfer confirmation, or signed receipt).
+- **Immediate recording**: Every actual movement must be recorded at occurrence. Undocumented transfers are prohibited; reopening shifts with new balances cannot be used to mask unrecorded fund movements.
 
-1. Who may replenish or withdraw wallet/cash funds, and how transfers between service funds, Product cash, and owner money are recorded. Until recorded as actual movements, these events invalidate expected balances; reopening with a new balance must not hide them.
-2. Who can resolve partial exchanges, authorize corrections, waive discrepancies, or perform emergency handover. A Needs checking item must preserve actual money effects regardless of its eventual resolution.
-3. Whether unresolved exchanges block GCash closing or all shift closing, and how approved carryover works. No ordinary closing should silently erase an unresolved obligation.
-4. Whether provider charges exist, who bears them, and how they affect balances. Display service fees earned as gross fees; do not claim net profit without cost information.
-5. Exact operational amount ceilings and any balance-insufficiency override policy. Store tracking limits must not be advertised as provider authorization limits.
+### Policy 2: Exceptions, Adjustments, and Emergency Handover
+- **Needs checking**: The responsible Cashier may mark an incomplete, interrupted, or uncertain exchange as `Needs checking` with mandatory explanatory notes.
+- **Preservation of money effects**: Completing or resolving a `Needs checking` record preserves already recorded money movements; the system must never repost or duplicate an existing balance impact.
+- **Immutable finalized records**: Completed exchanges cannot be deleted or silently overwritten. Corrections require linked, audited adjusting records authorized by an Administrator.
+- **Discrepancy waivers**: Discrepancies (shortages or excesses) at shift closing cannot be deleted or zeroed out. An Administrator may record an approved reconciliation note or waiver, but the underlying counted variance remains on permanent record.
+- **Emergency handover**: If the responsible Cashier becomes abruptly unavailable or incapacitated, an Administrator performs an emergency handover by counting physical service cash, checking the current wallet balance in the GCash app, and recording an administrative handover to reassign control or seal the shift.
 
-This specification captures the current understanding and identifies these remaining operational decisions. It does not claim those details have been agreed or that the feature is implemented.
+### Policy 3: Closing, Carryover, and Unresolved Obligations
+- **Non-blocking closing**: Unresolved `Needs checking` exchanges do not block Cashier Shift closing or POS drawer closing.
+- **Approved carryover**: During shift closing, all unresolved `Needs checking` items must be acknowledged. Approved carryover transfers the unresolved obligation to the incoming shift or leaves it flagged for Administrator resolution.
+- **Reconciliation transparency**: Shift closing cash and wallet counts reconcile against actual movements that occurred. Unresolved exchange obligations remain visible in GCash history without altering or distorting shift cash reconciliation figures.
+
+### Policy 4: Amount Ceilings and Balance Checks
+- **Operational ceiling**: Transactions are restricted to whole pesos from PHP 1 to PHP 50,000 per transaction.
+- **Store tracking limit**: The PHP 50,000 ceiling is a Store operational and risk tracking limit, distinct from customer-specific GCash wallet tier limits or provider transaction ceilings.
+- **Balance sufficiency**:
+  - Cash-Out requires sufficient Service Cash on hand to pay out the requested cash principal.
+  - Cash-In requires sufficient Service Wallet balance to transfer the requested principal.
+- **Insufficient balance handling**: Transactions cannot proceed if available service funds are insufficient; the cashier must wait until replenishment is recorded, or mark the exchange `Needs checking` if an external provider transfer already completed outside RetailMind. Silent negative balance overrides are prohibited.
+
+### Policy 5: Provider Charges and Fee Accounting
+- **Provider charge absorption**: Standard provider charges (e.g. bank cash-in fees or wallet top-up processing fees), if incurred, are borne by the Store as store operational expenses outside the customer exchange.
+- **Customer rate integrity**: Customers are charged strictly according to the Store's posted fee schedule without hidden provider fee passthrough or deductions.
+- **Gross fee reporting**: Service earnings are tracked and reported strictly as gross fees earned, delineated into cash fee vs wallet fee. Net profit calculations are not displayed in service overviews unless formal cost records are integrated.
