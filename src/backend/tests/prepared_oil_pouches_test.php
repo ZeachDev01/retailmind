@@ -317,10 +317,34 @@ try {
 
     $throws(
         static fn() => $salesWorkflow->checkout([
+            ['product_id' => $oil250Id, 'qty' => 0],
+        ], $cashierId, 'cashier', 'cash', ['cash_received' => 20.00]),
+        DomainException::class,
+        'Checkout rejects integer 0 qty'
+    );
+
+    $throws(
+        static fn() => $salesWorkflow->checkout([
             ['product_id' => $oil250Id, 'qty' => -1],
         ], $cashierId, 'cashier', 'cash', ['cash_received' => 20.00]),
-        Throwable::class,
-        'Checkout rejects negative qty'
+        DomainException::class,
+        'Checkout rejects negative integer -1 qty'
+    );
+
+    $throws(
+        static fn() => $salesWorkflow->checkout([
+            ['product_id' => $oil250Id, 'qty' => '0'],
+        ], $cashierId, 'cashier', 'cash', ['cash_received' => 20.00]),
+        DomainException::class,
+        'Checkout rejects string 0 qty'
+    );
+
+    $throws(
+        static fn() => $salesWorkflow->checkout([
+            ['product_id' => $oil250Id, 'qty' => '-1'],
+        ], $cashierId, 'cashier', 'cash', ['cash_received' => 20.00]),
+        DomainException::class,
+        'Checkout rejects string -1 qty'
     );
 
     // Sell 3 pouches of Oil 250 mL at PHP 20 each
@@ -401,6 +425,38 @@ try {
         'Refund rejects fractional string quantity 0.5'
     );
 
+    $throws(
+        static fn() => $refundService->refund($cashierId, 'cashier', (int)$sale1['sale_id'], [
+            $sale1ItemId => ['quantity' => 0, 'disposition' => 'restockable'],
+        ], 'customer_return'),
+        DomainException::class,
+        'Refund rejects integer 0 quantity'
+    );
+
+    $throws(
+        static fn() => $refundService->refund($cashierId, 'cashier', (int)$sale1['sale_id'], [
+            $sale1ItemId => ['quantity' => -1, 'disposition' => 'restockable'],
+        ], 'customer_return'),
+        DomainException::class,
+        'Refund rejects negative integer -1 quantity'
+    );
+
+    $throws(
+        static fn() => $refundService->refund($cashierId, 'cashier', (int)$sale1['sale_id'], [
+            $sale1ItemId => ['quantity' => '0', 'disposition' => 'restockable'],
+        ], 'customer_return'),
+        DomainException::class,
+        'Refund rejects string 0 quantity'
+    );
+
+    $throws(
+        static fn() => $refundService->refund($cashierId, 'cashier', (int)$sale1['sale_id'], [
+            $sale1ItemId => ['quantity' => '-1', 'disposition' => 'restockable'],
+        ], 'customer_return'),
+        DomainException::class,
+        'Refund rejects string -1 quantity'
+    );
+
     // Refund 1 whole pouch of Oil 250 mL
     $refundId = $refundService->refund($cashierId, 'cashier', (int)$sale1['sale_id'], [
         $sale1ItemId => ['quantity' => 1, 'disposition' => 'restockable'],
@@ -464,6 +520,41 @@ try {
         ], $inventoryManagerId),
         Throwable::class,
         'Count rejects fractional batch physical_quantity'
+    );
+
+    $throws(
+        static fn() => $countService->recordCount([
+            'product_id' => $oil250Id,
+            'physical_quantity' => -1,
+            'discrepancy_reason' => 'Cycle count test',
+        ], $inventoryManagerId),
+        RuntimeException::class,
+        'Count rejects negative integer -1 physical_quantity'
+    );
+
+    $throws(
+        static fn() => $countService->recordCount([
+            'product_id' => $oil250Id,
+            'physical_quantity' => '-1',
+            'discrepancy_reason' => 'Cycle count test',
+        ], $inventoryManagerId),
+        RuntimeException::class,
+        'Count rejects negative string -1 physical_quantity'
+    );
+
+    $throws(
+        static fn() => $countService->recordCount([
+            'product_id' => $oil250Id,
+            'discrepancy_reason' => 'Cycle count test',
+            'batches' => [
+                [
+                    'batch_id' => $currentBatch250['batch_id'] ?? 1,
+                    'physical_quantity' => -1,
+                ],
+            ],
+        ], $inventoryManagerId),
+        RuntimeException::class,
+        'Count rejects negative batch physical_quantity'
     );
 
     // Record valid whole count of 19 pouches (found 1 extra pouch)

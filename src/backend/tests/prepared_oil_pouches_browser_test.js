@@ -67,10 +67,33 @@ const { chromium } = require('playwright');
             await baseUnitSelect.selectOption('pouch');
             await page.getByLabel('Receiving Unit', { exact: true }).selectOption('box');
 
-            // 3. Test starting stock validation: whole integer pouches
+            // 3. Test starting stock validation: whole integer pouches, rejecting invalid/fractional
             await page.evaluate(() => setWizardStep(4));
             const initialQtyInput = page.locator('#initial-stock-quantity');
+
+            // Rejects fractional quantity (2.5)
+            await initialQtyInput.fill('2.5');
+            const isInvalidFractional = await page.evaluate(() => {
+                const qtyInput = document.getElementById('initial-stock-quantity');
+                return !qtyInput.validity.valid && !validateStep(4);
+            });
+            assert.ok(isInvalidFractional, 'Fractional pouch quantity is rejected by browser validation');
+
+            // Rejects negative quantity (-1)
+            await initialQtyInput.fill('-1');
+            const isInvalidNegative = await page.evaluate(() => {
+                const qtyInput = document.getElementById('initial-stock-quantity');
+                return !qtyInput.validity.valid && !validateStep(4);
+            });
+            assert.ok(isInvalidNegative, 'Negative pouch quantity is rejected by browser validation');
+
+            // Accepts valid whole integer quantity
             await initialQtyInput.fill('10');
+            const isValidInteger = await page.evaluate(() => {
+                const qtyInput = document.getElementById('initial-stock-quantity');
+                return qtyInput.validity.valid && validateStep(4);
+            });
+            assert.ok(isValidInteger, 'Whole integer pouch quantity is accepted');
             assert.equal(await initialQtyInput.inputValue(), '10', 'Accepts whole integer pouch quantity');
 
             // Submit product 1

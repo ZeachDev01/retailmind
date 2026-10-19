@@ -544,8 +544,9 @@ class CashRefundService
             $saleItemId = (int)$saleItemId;
             $line = is_array($line) ? $line : [];
             $rawQuantity = $line['quantity'] ?? null;
-            if (!is_int($rawQuantity) && (!is_string($rawQuantity) || !preg_match('/^[1-9]\d*$/D', (string)$rawQuantity))) {
-                throw new DomainException('Refund quantity must be a positive whole number.');
+            $isPositiveInt = (is_int($rawQuantity) && $rawQuantity > 0) || (is_string($rawQuantity) && preg_match('/^[1-9]\d*$/D', $rawQuantity));
+            if (!$isPositiveInt) {
+                throw new DomainException('Refund item quantity must be a positive whole number.');
             }
             $quantity = (int)$rawQuantity;
             $disposition = trim((string)($line['disposition'] ?? ''));

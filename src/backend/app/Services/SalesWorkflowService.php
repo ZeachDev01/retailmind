@@ -348,8 +348,9 @@ class SalesWorkflowService
                 continue;
             }
             $rawQty = $item['qty'] ?? null;
-            if (!is_int($rawQty) && (!is_string($rawQty) || !preg_match('/^[1-9]\d*$/D', (string)$rawQty))) {
-                throw new DomainException('Cart quantity must be a positive whole number.');
+            $isPositiveInt = (is_int($rawQty) && $rawQty > 0) || (is_string($rawQty) && preg_match('/^[1-9]\d*$/D', $rawQty));
+            if (!$isPositiveInt) {
+                throw new DomainException('Cart item quantity must be a positive whole number.');
             }
             $qty = (int)$rawQty;
             $quantities[$productId] = ($quantities[$productId] ?? 0) + $qty;
