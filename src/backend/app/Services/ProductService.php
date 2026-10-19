@@ -114,11 +114,16 @@ class ProductService
             $this->assertBarcodeAvailable($caseBarcode);
         }
 
+        $sku = trim((string)($data['sku'] ?? '')) ?: $barcode;
+        if ($sku !== $barcode) {
+            $this->assertBarcodeAvailable($sku);
+        }
+
         $packConfig = $this->validatePackConfiguration(
             $data,
             $sellingPrice,
             $barcode,
-            $barcode,
+            $sku,
             $caseBarcode
         );
         $packSize = $packConfig !== null ? $packConfig['pack_size'] : null;
@@ -128,30 +133,38 @@ class ProductService
         $hasStartingPacks = array_key_exists('starting_packs', $data) && $data['starting_packs'] !== null && $data['starting_packs'] !== '';
         $hasStartingLoose = array_key_exists('starting_loose', $data) && $data['starting_loose'] !== null && $data['starting_loose'] !== '';
 
-        if ($hasStartingPacks) {
-            $rawPacks = $data['starting_packs'];
-            if ((!is_int($rawPacks) && (!is_string($rawPacks) || !ctype_digit(trim($rawPacks)))) || (int)$rawPacks < 0) {
-                throw new RuntimeException('Starting packs must be a whole non-negative number.');
+        if ($packConfig === null) {
+            if ($hasStartingPacks && (int)$data['starting_packs'] > 0) {
+                throw new RuntimeException('Cannot specify starting packs for a product without a Sales Pack configuration.');
             }
-            $startingPacks = (int)$rawPacks;
-        } else {
             $startingPacks = 0;
-        }
-
-        if ($startingPacks > 0 && $packConfig === null) {
-            throw new RuntimeException('Cannot specify starting packs for a product without a Sales Pack configuration.');
-        }
-
-        if ($hasStartingLoose) {
-            $rawLoose = $data['starting_loose'];
-            if ((!is_int($rawLoose) && (!is_string($rawLoose) || !ctype_digit(trim($rawLoose)))) || (int)$rawLoose < 0) {
-                throw new RuntimeException('Starting loose pieces must be a whole non-negative number.');
+            if (array_key_exists('initial_stock_quantity', $data) && $data['initial_stock_quantity'] !== null && $data['initial_stock_quantity'] !== '') {
+                $startingLoose = $this->validateStockSetting($data['initial_stock_quantity'], 'Starting quantity', 0);
+            } else {
+                $startingLoose = $hasStartingLoose ? $this->validateStockSetting($data['starting_loose'], 'Starting loose pieces', 0) : 0;
             }
-            $startingLoose = (int)$rawLoose;
-        } elseif (array_key_exists('initial_stock_quantity', $data) && $data['initial_stock_quantity'] !== null && $data['initial_stock_quantity'] !== '') {
-            $startingLoose = $this->validateStockSetting($data['initial_stock_quantity'], 'Starting quantity', 0);
         } else {
-            $startingLoose = 0;
+            if ($hasStartingPacks) {
+                $rawPacks = $data['starting_packs'];
+                if ((!is_int($rawPacks) && (!is_string($rawPacks) || !ctype_digit(trim($rawPacks)))) || (int)$rawPacks < 0) {
+                    throw new RuntimeException('Starting packs must be a whole non-negative number.');
+                }
+                $startingPacks = (int)$rawPacks;
+            } else {
+                $startingPacks = 0;
+            }
+
+            if ($hasStartingLoose) {
+                $rawLoose = $data['starting_loose'];
+                if ((!is_int($rawLoose) && (!is_string($rawLoose) || !ctype_digit(trim($rawLoose)))) || (int)$rawLoose < 0) {
+                    throw new RuntimeException('Starting loose pieces must be a whole non-negative number.');
+                }
+                $startingLoose = (int)$rawLoose;
+            } elseif (array_key_exists('initial_stock_quantity', $data) && $data['initial_stock_quantity'] !== null && $data['initial_stock_quantity'] !== '') {
+                $startingLoose = $this->validateStockSetting($data['initial_stock_quantity'], 'Starting quantity', 0);
+            } else {
+                $startingLoose = 0;
+            }
         }
 
         $multiplier = $packSize ?? 1;
@@ -185,11 +198,6 @@ class ProductService
         } else {
             $parentProductId = 0;
             $variantLabel = '';
-        }
-
-        $sku = trim((string)($data['sku'] ?? '')) ?: $barcode;
-        if ($sku !== $barcode) {
-            $this->assertBarcodeAvailable($sku);
         }
 
         if ($initialStock > 0) {
@@ -354,10 +362,21 @@ class ProductService
                     $params[] = $categoryId;
                 }
                 if ($sellingPrice > 0) {
+                    if (!empty($existingProduct['pack_size']) && !empty($existingProduct['pack_price'])) {
+                        $pSize = (int)$existingProduct['pack_size'];
+                        $pPrice = (float)$existingProduct['pack_price'];
+                        if ($pPrice >= round($pSize * $sellingPrice, 2)) {
+                            throw new RuntimeException(sprintf(
+                                'Pack price (₱%s) must be lower than contents count times piece price (%d × ₱%s = ₱%s).',
+                                number_format($pPrice, 2),
+                                $pSize,
+                                number_format($sellingPrice, 2),
+                                number_format($pSize * $sellingPrice, 2)
+                            ));
+                        }
+                    }
                     $updateParts[] = 'unit_price = ?';
                     $params[] = $sellingPrice;
-                    
-
                 }
                 if ($reorderLevel > 0) {
                     $updateParts[] = 'reorder_level = ?';
@@ -923,7 +942,7 @@ class ProductService
             ? trim((string)$data['product_image'])
             : $existing['product_image'];
 
-        $hasSellingPrice = array_key_exists('selling_price', $data);
+        $hasSellingPrice = array_key_exists('selling_price', $data) || array_key_exists('unit_price', $data);
         $costPrice = (float)($existing['cost_price'] ?? 0);
         $warning = null;
 
@@ -943,7 +962,7 @@ class ProductService
         }
 
         if ($hasSellingPrice) {
-            $rawPrice = $data['selling_price'];
+            $rawPrice = $data['selling_price'] ?? $data['unit_price'];
             $trimmedPrice = is_string($rawPrice) ? trim($rawPrice) : $rawPrice;
             if ($trimmedPrice === null || $trimmedPrice === '' || !is_numeric($trimmedPrice)) {
                 throw new RuntimeException('Selling price must be a valid number greater than 0.');
@@ -1036,6 +1055,16 @@ class ProductService
             $newPackSize = $existingPackSize;
             $newPackBarcode = $existingPackBarcode;
             $newPackPrice = $existingPackPrice;
+
+            if ($hasSellingPrice && $newPackSize !== null && $newPackPrice !== null && $newPackPrice >= round($newPackSize * $sellingPrice, 2)) {
+                throw new RuntimeException(sprintf(
+                    'Pack price (₱%s) must be lower than contents count times piece price (%d × ₱%s = ₱%s).',
+                    number_format($newPackPrice, 2),
+                    $newPackSize,
+                    number_format($sellingPrice, 2),
+                    number_format($newPackSize * $sellingPrice, 2)
+                ));
+            }
         }
 
         $ownsTransaction = !$this->pdo->inTransaction();
@@ -1224,6 +1253,225 @@ class ProductService
             $supplier,
             $costPrice,
         ]);
+    }
+
+    public function reconcilePhysicalStock(int $productId, int $sealedPacks, int $loosePieces, string $reason, int $userId): array
+    {
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+        }
+        $role = function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? null);
+        if ($role !== 'inventory_manager') {
+            throw new RuntimeException('Only the active Inventory Manager workspace can reconcile stock.');
+        }
+        if ($productId <= 0) {
+            throw new RuntimeException('Invalid product selected.');
+        }
+        $trimmedReason = trim($reason);
+        if (strlen($trimmedReason) < 8) {
+            throw new RuntimeException('Specific reconciliation reason of at least 8 characters is required.');
+        }
+        if ($sealedPacks < 0 || $loosePieces < 0) {
+            throw new RuntimeException('Physical counts must be whole non-negative numbers.');
+        }
+
+        StoreWriteGate::begin($this->pdo);
+        try {
+            [$scopeSql, $scopeParams] = $this->storeProductScope();
+            $stmt = $this->pdo->prepare(
+                "SELECT p.product_id, p.product_name, p.pack_size, p.pack_barcode, p.pack_price, i.quantity_on_hand
+                 FROM products p
+                 JOIN inventory i ON i.product_id = p.product_id
+                 WHERE p.product_id = ?{$scopeSql}" . $this->rowLock()
+            );
+            $stmt->execute(array_merge([$productId], $scopeParams));
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$product) {
+                throw new RuntimeException('Product or inventory record not found.');
+            }
+
+            $packSize = isset($product['pack_size']) && (int)$product['pack_size'] > 1 ? (int)$product['pack_size'] : null;
+            if ($sealedPacks > 0 && $packSize === null) {
+                throw new RuntimeException('Cannot reconcile sealed packs for a product without a Sales Pack configuration.');
+            }
+
+            $multiplier = $packSize ?? 1;
+            if ($sealedPacks > 0 && ($sealedPacks > 2147483647 / $multiplier)) {
+                throw new RuntimeException('Reconciled physical stock exceeds the supported stock total.');
+            }
+            $newTotal = ($sealedPacks * $multiplier) + $loosePieces;
+            if ($newTotal < 0 || $newTotal > 2147483647) {
+                throw new RuntimeException('Reconciled physical stock exceeds the supported stock total.');
+            }
+
+            $currentTotal = (int)$product['quantity_on_hand'];
+            $delta = $newTotal - $currentTotal;
+
+            $this->pdo->prepare("UPDATE inventory SET quantity_on_hand = ? WHERE product_id = ?")
+                ->execute([$newTotal, $productId]);
+
+            if ($delta > 0) {
+                $latestBatchStmt = $this->pdo->prepare(
+                    "SELECT batch_id FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY batch_id DESC LIMIT 1" . $this->rowLock()
+                );
+                $latestBatchStmt->execute([$productId]);
+                $latestBatchId = $latestBatchStmt->fetchColumn();
+                if ($latestBatchId) {
+                    $this->pdo->prepare("UPDATE product_batches SET remaining_quantity = remaining_quantity + ?, quantity = quantity + ? WHERE batch_id = ?")
+                        ->execute([$delta, $delta, (int)$latestBatchId]);
+                } else {
+                    $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
+                    $this->pdo->prepare(
+                        "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
+                         VALUES (?, ?, ?, NULL, ?)"
+                    )->execute([$productId, $delta, $delta, $nowManila]);
+                }
+            } elseif ($delta < 0) {
+                $deductRemaining = abs($delta);
+                $deductBatchStmt = $this->pdo->prepare(
+                    "SELECT batch_id, remaining_quantity
+                     FROM product_batches
+                     WHERE product_id = ? AND remaining_quantity > 0
+                     ORDER BY
+                         CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
+                         expiration_date ASC,
+                         date_received ASC,
+                         batch_id ASC" . $this->rowLock()
+                );
+                $deductBatchStmt->execute([$productId]);
+                $deductBatches = $deductBatchStmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($deductBatches as $batch) {
+                    if ($deductRemaining <= 0) {
+                        break;
+                    }
+                    $take = min($deductRemaining, (int)$batch['remaining_quantity']);
+                    if ($take > 0) {
+                        $this->pdo->prepare(
+                            "UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ?"
+                        )->execute([$take, (int)$batch['batch_id']]);
+                        $deductRemaining -= $take;
+                    }
+                }
+            }
+
+            $batchStmt = $this->pdo->prepare(
+                "SELECT batch_id, remaining_quantity, sealed_quantity, loose_quantity
+                 FROM product_batches
+                 WHERE product_id = ? AND remaining_quantity > 0
+                 ORDER BY
+                     CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
+                     expiration_date ASC,
+                     batch_id ASC" . $this->rowLock()
+            );
+            $batchStmt->execute([$productId]);
+            $batches = $batchStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!empty($batches)) {
+                $remSealed = $sealedPacks;
+                foreach ($batches as $b) {
+                    $bRem = (int)$b['remaining_quantity'];
+                    $bCapPacks = $multiplier > 1 ? (int)floor($bRem / $multiplier) : 0;
+                    $allocSealed = min($remSealed, $bCapPacks);
+                    $allocLoose = $bRem - ($allocSealed * $multiplier);
+
+                    $this->pdo->prepare(
+                        "UPDATE product_batches SET sealed_quantity = ?, loose_quantity = ? WHERE batch_id = ?"
+                    )->execute([$allocSealed, $allocLoose, (int)$b['batch_id']]);
+
+                    $remSealed -= $allocSealed;
+                }
+            } elseif ($newTotal > 0) {
+                $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
+                $this->createBatchRecord($productId, 'RECON-' . date('YmdHis'), $newTotal, null, $nowManila, null, $sealedPacks, $loosePieces);
+            }
+
+            if ($delta !== 0) {
+                $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
+                $this->pdo->prepare(
+                    "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, ?, ?)"
+                )->execute([$productId, $delta, 'Physical reconciliation: ' . $trimmedReason, $userId]);
+            }
+
+            log_activity(
+                $this->pdo,
+                $userId,
+                'Physical stock reconciliation',
+                'Inventory',
+                $productId,
+                ['quantity_on_hand' => $currentTotal],
+                [
+                    'quantity_on_hand' => $newTotal,
+                    'sealed_packs' => $sealedPacks,
+                    'loose_pieces' => $loosePieces,
+                    'delta' => $delta,
+                    'reason' => $trimmedReason,
+                ]
+            );
+
+            $this->pdo->commit();
+            $this->notificationService->checkAndNotifyLowStock();
+            $this->notificationService->checkAndNotifyExpiringStock();
+
+            $todayManila = \App\Services\PhilippineTime::today();
+            $fetchStmt = $this->pdo->prepare(
+                "SELECT p.*, i.quantity_on_hand, c.category_name,
+                        CASE WHEN i.quantity_on_hand > 0 THEN b.next_expiration_date ELSE NULL END AS next_expiration_date,
+                        CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_quantity, 0) ELSE 0 END AS expired_quantity,
+                        CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.physical_sealed_packs, 0) ELSE 0 END AS physical_sealed_packs,
+                        CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.physical_loose_pieces, i.quantity_on_hand) ELSE 0 END AS physical_loose_pieces,
+                        CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.saleable_sealed_packs, 0) ELSE 0 END AS saleable_sealed_packs,
+                        CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.saleable_loose_pieces, i.quantity_on_hand) ELSE 0 END AS saleable_loose_pieces,
+                        CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_sealed_packs, 0) ELSE 0 END AS expired_sealed_packs,
+                        CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_loose_pieces, 0) ELSE 0 END AS expired_loose_pieces
+                 FROM products p
+                 JOIN inventory i ON p.product_id = i.product_id
+                 LEFT JOIN categories c ON p.category_id = c.category_id
+                 LEFT JOIN (
+                     SELECT product_id,
+                            MIN(CASE WHEN expiration_date >= ? THEN expiration_date END) AS next_expiration_date,
+                            SUM(CASE WHEN expiration_date < ? THEN remaining_quantity ELSE 0 END) AS expired_quantity,
+                            SUM(sealed_quantity) AS physical_sealed_packs,
+                            SUM(loose_quantity) AS physical_loose_pieces,
+                            SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ? THEN sealed_quantity ELSE 0 END) AS saleable_sealed_packs,
+                            SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ? THEN loose_quantity ELSE 0 END) AS saleable_loose_pieces,
+                            SUM(CASE WHEN expiration_date < ? THEN sealed_quantity ELSE 0 END) AS expired_sealed_packs,
+                            SUM(CASE WHEN expiration_date < ? THEN loose_quantity ELSE 0 END) AS expired_loose_pieces
+                     FROM product_batches
+                     WHERE remaining_quantity > 0 AND product_id = ?
+                     GROUP BY product_id
+                 ) b ON b.product_id = p.product_id
+                 WHERE p.product_id = ?"
+            );
+            $fetchStmt->execute([$todayManila, $todayManila, $todayManila, $todayManila, $todayManila, $todayManila, $productId, $productId]);
+            $reconciledProduct = $fetchStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            if ($reconciledProduct) {
+                $reconciledProduct['quantity_on_hand'] = (int)$reconciledProduct['quantity_on_hand'];
+                $reconciledProduct['unit_price'] = (float)$reconciledProduct['unit_price'];
+                $reconciledProduct['cost_price'] = (float)$reconciledProduct['cost_price'];
+                $reconciledProduct['selling_price'] = (float)$reconciledProduct['unit_price'];
+                $reconciledProduct['pack_size'] = isset($reconciledProduct['pack_size']) && $reconciledProduct['pack_size'] !== null ? (int)$reconciledProduct['pack_size'] : null;
+                $reconciledProduct['pack_price'] = isset($reconciledProduct['pack_price']) && $reconciledProduct['pack_price'] !== null ? (float)$reconciledProduct['pack_price'] : null;
+                $reconciledProduct['physical_sealed_packs'] = (int)($reconciledProduct['physical_sealed_packs'] ?? $sealedPacks);
+                $reconciledProduct['physical_loose_pieces'] = (int)($reconciledProduct['physical_loose_pieces'] ?? $loosePieces);
+                $reconciledProduct['saleable_sealed_packs'] = (int)($reconciledProduct['saleable_sealed_packs'] ?? 0);
+                $reconciledProduct['saleable_loose_pieces'] = (int)($reconciledProduct['saleable_loose_pieces'] ?? 0);
+                $reconciledProduct['expired_sealed_packs'] = (int)($reconciledProduct['expired_sealed_packs'] ?? 0);
+                $reconciledProduct['expired_loose_pieces'] = (int)($reconciledProduct['expired_loose_pieces'] ?? 0);
+                $reconciledProduct['expired_quantity'] = (int)($reconciledProduct['expired_quantity'] ?? 0);
+            }
+
+            return $reconciledProduct ?: [
+                'product_id' => $productId,
+                'quantity_on_hand' => $newTotal,
+                'physical_sealed_packs' => $sealedPacks,
+                'physical_loose_pieces' => $loosePieces,
+            ];
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
     private function rowLock(): string

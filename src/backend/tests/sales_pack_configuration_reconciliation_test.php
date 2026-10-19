@@ -667,6 +667,80 @@ foreach ($batches as $b) {
 $assert($hasExpiredBatch, 'Expired batch identified with Expired status');
 $assert($hasActiveBatch, 'Active batch identified with Active status');
 
+// 15. Test: Selling price update rejects price that violates pack_price < pack_size * selling_price
+echo "Testing selling price reduction guard against existing pack price...\n";
+$sellingGuardProdId = $productService->createProduct([
+    'barcode' => 'SELL-GUARD-PC',
+    'product_name' => 'Selling Guard Product',
+    'unit_price' => 20.00,
+    'pack_size' => 6,
+    'pack_barcode' => 'SELL-GUARD-PK',
+    'pack_price' => 100.00, // 6 * 20 = 120 > 100
+], 1);
+
+try {
+    // Lower unit_price to 15: 6 * 15 = 90 <= 100
+    $productService->updateProductCatalogDetails($sellingGuardProdId, [
+        'product_name' => 'Selling Guard Product',
+        'unit_price' => 15.00,
+    ], 1);
+    $failures[] = 'Lowering unit_price below pack price parity should have failed';
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), 'must be lower than contents count times piece price'), 'Selling price reduction violating pack price parity rejected: ' . $e->getMessage());
+}
+
+// 16. Test: pack_barcode cannot collide with an existing product SKU
+echo "Testing pack_barcode collision with existing SKU...\n";
+$skuProdId = $productService->createProduct([
+    'sku' => 'CUSTOM-SKU-99',
+    'barcode' => 'REG-BARCODE-99',
+    'product_name' => 'Custom SKU Product',
+    'unit_price' => 10.00,
+], 1);
+
+try {
+    $productService->createProduct([
+        'barcode' => 'OTHER-BARCODE-99',
+        'product_name' => 'Colliding Pack Barcode Product',
+        'unit_price' => 10.00,
+        'pack_size' => 5,
+        'pack_barcode' => 'CUSTOM-SKU-99', // Collides with existing product SKU
+        'pack_price' => 45.00,
+    ], 1);
+    $failures[] = 'Pack barcode matching existing SKU should have been rejected';
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), 'already assigned'), 'Pack barcode colliding with SKU rejected: ' . $e->getMessage());
+}
+
+// 17. Test: reconcilePhysicalStock updates inventory, distributes batches, records delta movement and activity log
+echo "Testing physical stock reconciliation...\n";
+$reconProdId = $productService->createProduct([
+    'barcode' => 'RECON-TEST-PC',
+    'product_name' => 'Recon Test Biscuit',
+    'unit_price' => 10.00,
+    'pack_size' => 10,
+    'pack_barcode' => 'RECON-TEST-PK',
+    'pack_price' => 90.00,
+    'starting_packs' => 3,
+    'starting_loose' => 5, // 3 * 10 + 5 = 35 Base Units
+], 1);
+
+// Physical shelf count: 4 packs and 2 loose pieces = 42 Base Units (delta = +7)
+$reconRes = $productService->reconcilePhysicalStock($reconProdId, 4, 2, 'Verified annual physical inventory count', 1);
+$assert((int)$reconRes['quantity_on_hand'] === 42, 'Reconciliation updated quantity_on_hand to 42');
+$assert((int)$reconRes['physical_sealed_packs'] === 4, 'Reconciliation reports 4 sealed packs');
+$assert((int)$reconRes['physical_loose_pieces'] === 2, 'Reconciliation reports 2 loose pieces');
+
+// Check movement recorded
+$mvt = $pdo->query("SELECT * FROM stock_movements WHERE product_id = {$reconProdId} AND reason LIKE '%reconciliation%' ORDER BY movement_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$assert($mvt !== false, 'Stock movement recorded for reconciliation');
+$assert((int)$mvt['change_qty'] === 7, 'Stock movement change_qty is +7');
+$assert((int)$mvt['moved_by'] === 1, 'Stock movement moved_by is user 1');
+
+// Check activity log
+$act = $pdo->query("SELECT * FROM activity_log WHERE user_id = 1 AND action = 'Physical stock reconciliation' ORDER BY log_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$assert($act !== false, 'Activity log recorded for physical stock reconciliation');
+
 if (!empty($failures)) {
     echo "\nFailed with " . count($failures) . " failure(s):\n";
     foreach ($failures as $f) {

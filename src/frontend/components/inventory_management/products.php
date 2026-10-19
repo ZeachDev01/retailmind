@@ -201,6 +201,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $productImage = handle_product_photo_upload($_FILES['product_image'] ?? null) ?? '';
 
 
+            $stockMode = $_POST['starting_stock_mode'] ?? 'pieces';
+            $hasPackConfig = !empty($_POST['pack_size']) && (int)$_POST['pack_size'] > 1;
+            $startingPacks = null;
+            $startingLoose = null;
+            if ($stockMode === 'packs' && $hasPackConfig) {
+                $startingPacks = isset($_POST['starting_packs']) && trim((string)$_POST['starting_packs']) !== '' ? $_POST['starting_packs'] : null;
+                $startingLoose = isset($_POST['starting_loose']) && trim((string)$_POST['starting_loose']) !== '' ? $_POST['starting_loose'] : null;
+            }
+
             $productId = $productService->createProduct([
                 'barcode' => $_POST['barcode'] ?? '',
                 'product_name' => $_POST['product_name'] ?? '',
@@ -227,8 +236,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'pack_size' => !empty($_POST['pack_size']) ? $_POST['pack_size'] : null,
                 'pack_barcode' => !empty($_POST['pack_barcode']) ? $_POST['pack_barcode'] : null,
                 'pack_price' => !empty($_POST['pack_price']) ? $_POST['pack_price'] : null,
-                'starting_packs' => isset($_POST['starting_packs']) && trim((string)$_POST['starting_packs']) !== '' ? $_POST['starting_packs'] : null,
-                'starting_loose' => isset($_POST['starting_loose']) && trim((string)$_POST['starting_loose']) !== '' ? $_POST['starting_loose'] : null,
+                'starting_packs' => $startingPacks,
+                'starting_loose' => $startingLoose,
             ], (int)$_SESSION['user_id']);
 
             $newProductStmt = $pdo->prepare(
@@ -284,6 +293,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect_products('success', 'Emergency inventory adjustment recorded.');
         } catch (Throwable $e) {
             redirect_products('error', \App\Support\OperatorAlert::message($e, 'The stock adjustment could not be saved. Check the quantity and try again. Tell your Administrator if this keeps happening.'));
+        }
+    }
+
+    if ($action === 'reconcile_sales_pack_stock') {
+        csrf_verify();
+        try {
+            $productId = (int)($_POST['product_id'] ?? 0);
+            $sealedPacks = (int)($_POST['sealed_packs'] ?? 0);
+            $loosePieces = (int)($_POST['loose_pieces'] ?? 0);
+            $reason = trim((string)($_POST['reconciliation_reason'] ?? ''));
+
+            $result = $productService->reconcilePhysicalStock($productId, $sealedPacks, $loosePieces, $reason, (int)$_SESSION['user_id']);
+
+            $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+                || (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'));
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['success' => true, 'product' => $result]);
+                exit;
+            }
+            redirect_products('success', 'Physical stock reconciled successfully.');
+        } catch (Throwable $e) {
+            $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+                || (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'));
+            if ($isAjax) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+                exit;
+            }
+            redirect_products('error', $e->getMessage());
         }
     }
 
@@ -1214,7 +1254,7 @@ foreach ($products as $product) {
                                         </td>
                                         <td class="column-price mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
                                         <td class="column-cost mobile-hide">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
-                                        <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small style="color:var(--text-muted);"><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
+                                        <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small style="color:var(--text-muted);"><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php if (!empty($product['expired_sealed_packs']) || !empty($product['expired_loose_pieces'])): ?><br><small style="color:var(--danger, #dc2626);"><?= (int)($product['expired_sealed_packs'] ?? 0) ?> pk, <?= (int)($product['expired_loose_pieces'] ?? 0) ?> loose expired</small><?php endif; ?><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">
                                             <div class="row-actions">
@@ -1398,8 +1438,8 @@ foreach ($products as $product) {
                                             <input id="starting-packages-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
                                         </div>
                                         <div>
-                                            <label for="starting-package-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
-                                            <input id="starting-package-loose-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                            <label for="starting-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
+                                            <input id="starting-loose-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
                                         </div>
                                     </div>
                                     <small class="field-help" id="stock-package-calc-preview" style="display:block;margin-top:0.4rem;font-weight:600;color:var(--primary, #0d6efd);">0 packages × 1 + 0 pieces = 0 pieces total</small>
@@ -1411,8 +1451,8 @@ foreach ($products as $product) {
                                             <input id="starting-packs-count" name="starting_packs" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
                                         </div>
                                         <div>
-                                            <label for="starting-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
-                                            <input id="starting-loose-count" name="starting_loose" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                            <label for="starting-pack-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
+                                            <input id="starting-pack-loose-count" name="starting_loose" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
                                         </div>
                                     </div>
                                     <small class="field-help" id="stock-sales-pack-calc-preview" style="display:block;margin-top:0.4rem;font-weight:600;color:var(--primary, #0d6efd);">0 packs × 0 + 0 pieces = 0 pieces total</small>
@@ -1479,6 +1519,30 @@ foreach ($products as $product) {
                         <div class="form-group"><label>Specific Approved Reason</label><input name="adjustment_reason" minlength="8" required placeholder="Example: Verified physical-count correction"></div>
                     </div>
                     <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-danger" type="submit">Apply Adjustment</button></footer>
+                </form>
+            </section>
+        </div>
+
+        <div class="rm-modal-overlay" id="pack-reconcile-modal" aria-hidden="true">
+            <section class="rm-modal u-modal-form" role="dialog" aria-modal="true" aria-labelledby="reconcile-title">
+                <header class="rm-modal-header">
+                    <div>
+                        <h2 id="reconcile-title">Physical Sales Pack Reconciliation</h2>
+                        <p>Record verified physical counts of sealed packs and loose pieces.</p>
+                    </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
+                </header>
+                <form method="POST" id="pack-reconcile-form" data-confirm="This will reconcile batch balances to match verified physical pack counts." data-confirm-title="Confirm pack reconciliation" data-confirm-button="Apply reconciliation">
+                    <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="reconcile_sales_pack_stock">
+                        <input type="hidden" name="product_id" id="reconcile-product-id">
+                        <div class="form-group"><label>Product</label><input type="text" id="reconcile-product-name" readonly class="form-input"></div>
+                        <div class="form-grid">
+                            <div class="form-group"><label for="reconcile-sealed-packs">Physical Sealed Packs</label><input type="number" min="0" step="1" name="sealed_packs" id="reconcile-sealed-packs" required value="0"></div>
+                            <div class="form-group"><label for="reconcile-loose-pieces">Physical Loose Pieces</label><input type="number" min="0" step="1" name="loose_pieces" id="reconcile-loose-pieces" required value="0"></div>
+                        </div>
+                        <p id="reconcile-calc-preview" style="font-weight:600;color:var(--primary);margin:0.25rem 0 0.75rem;"></p>
+                        <div class="form-group"><label for="reconcile-reason">Specific Approved Reason *</label><input name="reconciliation_reason" id="reconcile-reason" minlength="8" required placeholder="Example: Verified shelf count reconciliation"></div>
+                    </div>
+                    <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-primary" type="submit">Apply Reconciliation</button></footer>
                 </form>
             </section>
         </div>
@@ -1856,11 +1920,32 @@ foreach ($products as $product) {
             const quantity = Number(product.quantity_on_hand || 0);
             const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
             const stockLabel = quantity <= 0 ? 'Out of stock' : quantity <= threshold ? 'Low stock' : 'Available';
-            const quantityActions = canDirectAdjust ? `<div class="product-quantity-actions"><button type="button" class="btn btn-icon" id="drawer-adjust-stock"><i class="bi bi-sliders" aria-hidden="true"></i>Adjust Stock</button></div>` : '';
+            const hasPackConfig = product.pack_size && Number(product.pack_size) > 1;
+            let actionsHtml = '';
+            if (canDirectAdjust) {
+                actionsHtml += `<button type="button" class="btn btn-icon" id="drawer-adjust-stock"><i class="bi bi-sliders" aria-hidden="true"></i>Adjust Stock</button>`;
+                if (hasPackConfig) {
+                    actionsHtml += `<button type="button" class="btn btn-secondary btn-icon" id="drawer-reconcile-pack"><i class="bi bi-box-seam" aria-hidden="true"></i>Reconcile Stock</button>`;
+                }
+            }
+            const quantityActions = actionsHtml ? `<div class="product-quantity-actions">${actionsHtml}</div>` : '';
+
+            let packGridItems = '';
+            if (hasPackConfig) {
+                const expSealed = Number(product.expired_sealed_packs || 0);
+                const expLoose = Number(product.expired_loose_pieces || 0);
+                const expiredNotice = (expSealed > 0 || expLoose > 0)
+                    ? `<div class="detail-item full" style="color:var(--danger, #dc2626);"><span>Expired Stock (Non-saleable)</span><strong>${expSealed} pk, ${expLoose} loose (${expSealed * Number(product.pack_size) + expLoose} pcs)</strong></div>`
+                    : '';
+                packGridItems = `
+        <div class="detail-item"><span>Physical Pack Stock</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} loose</strong></div>
+        <div class="detail-item"><span>Saleable Pack Stock</span><strong>${Number(product.saleable_sealed_packs || 0)} pk / ${Number(product.saleable_loose_pieces || 0)} loose</strong></div>${expiredNotice}`;
+            }
+
             const quantityPanel = document.getElementById('product-panel-quantity');
             if (quantityPanel) {
                 quantityPanel.innerHTML = `<div class="detail-grid">
-        <div class="detail-item"><span>Current Stock</span><strong>${quantity.toLocaleString()} — ${stockLabel}</strong></div><div class="detail-item"><span>Reorder / Safety</span><strong>${Number(product.reorder_level || 0)} / ${Number(product.safety_stock || 0)}</strong></div>
+        <div class="detail-item"><span>Current Stock</span><strong>${quantity.toLocaleString()} — ${stockLabel}</strong></div><div class="detail-item"><span>Reorder / Safety</span><strong>${Number(product.reorder_level || 0)} / ${Number(product.safety_stock || 0)}</strong></div>${packGridItems}
         <div class="detail-item"><span>MOQ / Units per Case</span><strong>${Number(product.minimum_order_quantity || 1)} / ${Number(product.units_per_package || 1)}</strong></div><div class="detail-item"><span>Units</span><strong>${escapeHtml(safe(product.base_unit))} / ${escapeHtml(safe(product.receiving_unit))}</strong></div>
         <div class="detail-item"><span>Lead Time</span><strong>${Number(product.supplier_lead_time_days || 0)} day(s)</strong></div><div class="detail-item"><span>Preferred Supplier</span><strong>${escapeHtml(safe(product.preferred_supplier || product.supplier))}</strong></div>
     </div>${quantityActions}`;
@@ -1871,6 +1956,23 @@ foreach ($products as $product) {
                     RetailMindUI.closeOverlay(document.getElementById('product-drawer'));
                     openModal('stock-adjust-modal');
                     document.querySelector('#stock-adjust-modal [name="qty_change"]')?.focus();
+                });
+                const drawerReconcileButton = document.getElementById('drawer-reconcile-pack');
+                if (drawerReconcileButton) drawerReconcileButton.addEventListener('click', () => {
+                    const form = document.getElementById('pack-reconcile-form');
+                    if (form) form.dataset.packSize = String(product.pack_size || 1);
+                    const prodIdInput = document.getElementById('reconcile-product-id');
+                    const prodNameInput = document.getElementById('reconcile-product-name');
+                    const sealedInput = document.getElementById('reconcile-sealed-packs');
+                    const looseInput = document.getElementById('reconcile-loose-pieces');
+                    if (prodIdInput) prodIdInput.value = String(product.product_id);
+                    if (prodNameInput) prodNameInput.value = `${safe(product.sku)} — ${product.product_name}`;
+                    if (sealedInput) sealedInput.value = String(Number(product.physical_sealed_packs || 0));
+                    if (looseInput) looseInput.value = String(Number(product.physical_loose_pieces || 0));
+                    updateReconcilePreview();
+                    RetailMindUI.closeOverlay(document.getElementById('product-drawer'));
+                    openModal('pack-reconcile-modal');
+                    sealedInput?.focus();
                 });
             }
             const actionsPanel = document.getElementById('product-panel-actions');
@@ -2216,70 +2318,7 @@ foreach ($products as $product) {
                 const result = await response.json();
                 if (result.success && result.product) {
                     Object.assign(product, result.product);
-                    const row = document.querySelector(`tr[data-product-id="${product.product_id}"]`);
-                    if (row) {
-                        row.dataset.name = (product.product_name || '').toLowerCase();
-                        row.dataset.category = String(product.category_id || 0);
-                        row.dataset.categoryName = (product.category_name || '').toLowerCase();
-                        row.dataset.price = String(product.unit_price || 0);
-                        row.dataset.cost = String(product.cost_price || 0);
-                        row.dataset.status = product.status;
-                        row.dataset.search = [product.product_name, product.variant_label || '', product.sku || '', product.barcode || '', product.brand || ''].join(' ').toLowerCase();
-                        const copy = row.querySelector('.product-copy');
-                        if (copy) {
-                            const brandText = product.brand || 'No brand';
-                            const variantText = product.variant_label ? ` · ${product.variant_label}` : '';
-                            copy.innerHTML = `<strong>${escapeHtml(product.product_name)}</strong><span>${escapeHtml(brandText)}${escapeHtml(variantText)}</span>`;
-                        }
-                        const thumb = row.querySelector('.product-thumb');
-                        if (thumb) {
-                            if (product.product_image) {
-                                thumb.innerHTML = `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot;></i>'">`;
-                            } else {
-                                thumb.innerHTML = '<i class="bi bi-box-seam"></i>';
-                            }
-                        }
-                        const priceCell = row.querySelector('.column-price');
-                        const costCell = row.querySelector('.column-cost');
-                        if (costCell) costCell.textContent = formatMoney(product.cost_price);
-                        if (priceCell) {
-                            priceCell.textContent = formatMoney(product.unit_price);
-                        }
-                        const stockCell = row.querySelector('.stock-cell');
-                        if (stockCell) {
-                            let packBreakdown = '';
-                            if (product.pack_size && Number(product.pack_size) > 1) {
-                                packBreakdown = `<br><small style="color:var(--text-muted);">${Number(product.physical_sealed_packs || 0)} packs, ${Number(product.physical_loose_pieces || 0)} loose</small>`;
-                            }
-                            stockCell.innerHTML = `<span class="stock-value">${Number(product.quantity_on_hand || 0).toLocaleString()}</span>${packBreakdown}<br><small>Reorder at ${Number(product.reorder_level || 0).toLocaleString()}</small>`;
-                        }
-                        const statusCell = row.querySelector('.status-cell');
-                        if (statusCell) {
-                            let badgeClass = 'inactive';
-                            let badgeText = 'Inactive';
-                            if (product.status === 'active') {
-                                const quantity = Number(product.quantity_on_hand || 0);
-                                const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
-                                const stockState = quantity <= 0 ? 'out' : (quantity <= threshold ? 'low' : 'available');
-                                row.dataset.stockState = stockState;
-                                const isExpiring = row.dataset.expiring === '1';
-                                if (stockState === 'out') {
-                                    badgeClass = 'out';
-                                    badgeText = 'Out of stock';
-                                } else if (stockState === 'low') {
-                                    badgeClass = 'low';
-                                    badgeText = 'Low stock';
-                                } else if (isExpiring) {
-                                    badgeClass = 'expiring';
-                                    badgeText = 'Expiring soon';
-                                } else {
-                                    badgeClass = 'good';
-                                    badgeText = 'Available';
-                                }
-                            }
-                            statusCell.innerHTML = `<span class="status-badge ${badgeClass}">${escapeHtml(badgeText)}</span>`;
-                        }
-                    }
+                    updateProductTableRow(product);
                     isDrawerDirty = false;
                     renderProductDrawerReadOnly(product);
                     if (result.warning) {
@@ -2300,6 +2339,147 @@ foreach ($products as $product) {
                     saveBtn.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Save changes';
                 }
             }
+        function updateProductTableRow(product) {
+            const row = document.querySelector(`tr[data-product-id="${product.product_id}"]`);
+            if (!row) return;
+            row.dataset.name = (product.product_name || '').toLowerCase();
+            row.dataset.category = String(product.category_id || 0);
+            row.dataset.categoryName = (product.category_name || '').toLowerCase();
+            row.dataset.price = String(product.unit_price || 0);
+            row.dataset.cost = String(product.cost_price || 0);
+            row.dataset.status = product.status;
+            row.dataset.search = [product.product_name, product.variant_label || '', product.sku || '', product.barcode || '', product.brand || ''].join(' ').toLowerCase();
+            const copy = row.querySelector('.product-copy');
+            if (copy) {
+                const brandText = product.brand || 'No brand';
+                const variantText = product.variant_label ? ` · ${product.variant_label}` : '';
+                copy.innerHTML = `<strong>${escapeHtml(product.product_name)}</strong><span>${escapeHtml(brandText)}${escapeHtml(variantText)}</span>`;
+            }
+            const thumb = row.querySelector('.product-thumb');
+            if (thumb) {
+                if (product.product_image) {
+                    thumb.innerHTML = `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot;></i>'">`;
+                } else {
+                    thumb.innerHTML = '<i class="bi bi-box-seam"></i>';
+                }
+            }
+            const priceCell = row.querySelector('.column-price');
+            const costCell = row.querySelector('.column-cost');
+            if (costCell) costCell.textContent = formatMoney(product.cost_price);
+            if (priceCell) priceCell.textContent = formatMoney(product.unit_price);
+            const stockCell = row.querySelector('.stock-cell');
+            if (stockCell) {
+                let packBreakdown = '';
+                if (product.pack_size && Number(product.pack_size) > 1) {
+                    packBreakdown = `<br><small style="color:var(--text-muted);">${Number(product.physical_sealed_packs || 0)} packs, ${Number(product.physical_loose_pieces || 0)} loose</small>`;
+                    const expSealed = Number(product.expired_sealed_packs || 0);
+                    const expLoose = Number(product.expired_loose_pieces || 0);
+                    if (expSealed > 0 || expLoose > 0) {
+                        packBreakdown += `<br><small style="color:var(--danger, #dc2626);">${expSealed} pk, ${expLoose} loose expired</small>`;
+                    }
+                }
+                stockCell.innerHTML = `<span class="stock-value">${Number(product.quantity_on_hand || 0).toLocaleString()}</span>${packBreakdown}<br><small>Reorder at ${Number(product.reorder_level || 0).toLocaleString()}</small>`;
+            }
+            const statusCell = row.querySelector('.status-cell');
+            if (statusCell) {
+                let badgeClass = 'inactive';
+                let badgeText = 'Inactive';
+                if (product.status === 'active') {
+                    const quantity = Number(product.quantity_on_hand || 0);
+                    const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
+                    const stockState = quantity <= 0 ? 'out' : (quantity <= threshold ? 'low' : 'available');
+                    row.dataset.stockState = stockState;
+                    const isExpiring = row.dataset.expiring === '1';
+                    if (stockState === 'out') {
+                        badgeClass = 'out';
+                        badgeText = 'Out of stock';
+                    } else if (stockState === 'low') {
+                        badgeClass = 'low';
+                        badgeText = 'Low stock';
+                    } else if (isExpiring) {
+                        badgeClass = 'expiring';
+                        badgeText = 'Expiring soon';
+                    } else {
+                        badgeClass = 'good';
+                        badgeText = 'Available';
+                    }
+                }
+                statusCell.innerHTML = `<span class="status-badge ${badgeClass}">${escapeHtml(badgeText)}</span>`;
+            }
+        }
+
+        function updateReconcilePreview() {
+            const form = document.getElementById('pack-reconcile-form');
+            if (!form) return;
+            const packSize = Number(form.dataset.packSize || 1);
+            const sealed = Math.max(0, parseInt(document.getElementById('reconcile-sealed-packs')?.value || '0', 10) || 0);
+            const loose = Math.max(0, parseInt(document.getElementById('reconcile-loose-pieces')?.value || '0', 10) || 0);
+            const total = (sealed * packSize) + loose;
+            const preview = document.getElementById('reconcile-calc-preview');
+            if (preview) {
+                preview.textContent = `Calculated total: ${sealed} pack(s) of ${packSize} + ${loose} loose = ${total.toLocaleString()} Base Unit(s)`;
+            }
+        }
+
+        document.getElementById('reconcile-sealed-packs')?.addEventListener('input', updateReconcilePreview);
+        document.getElementById('reconcile-loose-pieces')?.addEventListener('input', updateReconcilePreview);
+
+        const reconcileForm = document.getElementById('pack-reconcile-form');
+        if (reconcileForm) {
+            reconcileForm.addEventListener('submit', async event => {
+                event.preventDefault();
+                const reason = (document.getElementById('reconcile-reason')?.value || '').trim();
+                if (reason.length < 8) {
+                    RetailMindUI.toast('Enter a specific approved reason of at least 8 characters.', 'error');
+                    return;
+                }
+                const confirmed = await RetailMindUI.confirm({
+                    title: 'Confirm pack reconciliation',
+                    message: 'This will reconcile batch balances to match verified physical pack counts.',
+                    confirmText: 'Apply reconciliation',
+                    danger: false
+                });
+                if (!confirmed) return;
+
+                const submitBtn = reconcileForm.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Applying...';
+                }
+
+                try {
+                    const formData = new FormData(reconcileForm);
+                    const response = await fetch('products.php', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        }
+                    });
+                    const result = await response.json();
+                    if (result.success && result.product) {
+                        const prod = productsById[result.product.product_id] || {};
+                        Object.assign(prod, result.product);
+                        productsById[result.product.product_id] = prod;
+                        updateProductTableRow(prod);
+                        if (currentDrawerProductId === prod.product_id) {
+                            renderProductDrawerReadOnly(prod);
+                        }
+                        RetailMindUI.closeOverlay(document.getElementById('pack-reconcile-modal'));
+                        RetailMindUI.toast('Physical stock reconciled successfully.', 'success');
+                    } else {
+                        RetailMindUI.toast(result.error || 'Reconciliation failed.', 'error');
+                    }
+                } catch (e) {
+                    RetailMindUI.toast(e.message || 'Network error during reconciliation.', 'error');
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Apply Reconciliation';
+                    }
+                }
+            });
         }
 
         function openProductDrawer(id) {
@@ -2630,9 +2810,9 @@ foreach ($products as $product) {
         const startingStockExpGroup = document.getElementById('starting-stock-expiration-group');
         const startingStockExpInput = document.getElementById('starting-stock-expiration');
         const startingPackagesCount = document.getElementById('starting-packages-count');
-        const startingPackageLooseCount = document.getElementById('starting-package-loose-count');
-        const startingPacksCount = document.getElementById('starting-packs-count');
         const startingLooseCount = document.getElementById('starting-loose-count');
+        const startingPacksCount = document.getElementById('starting-packs-count');
+        const startingPackLooseCount = document.getElementById('starting-pack-loose-count');
         const packSizeInput = document.getElementById('create-pack-size');
         const unitsPerPkgInput = document.getElementById('units-per-package');
         const stockCalcPreview = document.getElementById('stock-package-calc-preview');
@@ -2651,7 +2831,7 @@ foreach ($products as $product) {
 
         function updatePackageStockCalc() {
             const pkgs = Math.max(0, parseInt(startingPackagesCount?.value, 10) || 0);
-            const loose = Math.max(0, parseInt(startingPackageLooseCount?.value, 10) || 0);
+            const loose = Math.max(0, parseInt(startingLooseCount?.value, 10) || 0);
             const units = Math.max(1, parseInt(unitsPerPkgInput?.value, 10) || 1);
             const total = (pkgs * units) + loose;
             if (initialStockInput) {
@@ -2668,7 +2848,7 @@ foreach ($products as $product) {
         function updateSalesPackStockCalc() {
             const psize = Math.max(1, parseInt(packSizeInput?.value, 10) || 1);
             const pks = Math.max(0, parseInt(startingPacksCount?.value, 10) || 0);
-            const loose = Math.max(0, parseInt(startingLooseCount?.value, 10) || 0);
+            const loose = Math.max(0, parseInt(startingPackLooseCount?.value, 10) || 0);
             const total = (pks * psize) + loose;
             if (initialStockInput) {
                 initialStockInput.value = total;
@@ -2690,16 +2870,18 @@ foreach ($products as $product) {
             const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
             if (isPackages) {
                 const units = Math.max(1, parseInt(unitsPerPkgInput?.value, 10) || 1);
-                if (startingPackagesCount && startingPackageLooseCount) {
+                if (startingPackagesCount && startingLooseCount) {
                     startingPackagesCount.value = Math.floor(currentTotal / units);
-                    startingPackageLooseCount.value = currentTotal % units;
+                    startingLooseCount.value = currentTotal % units;
                 }
                 updatePackageStockCalc();
             } else if (isPacks) {
-                const psize = Math.max(1, parseInt(packSizeInput?.value, 10) || 1);
-                if (startingPacksCount && startingLooseCount) {
-                    startingPacksCount.value = Math.floor(currentTotal / psize);
-                    startingLooseCount.value = currentTotal % psize;
+                // Never infer packs by dividing total. Leave packs as 0 or empty for explicit physical count entry.
+                if (startingPacksCount && !startingPacksCount.value) {
+                    startingPacksCount.value = '0';
+                }
+                if (startingPackLooseCount && !startingPackLooseCount.value) {
+                    startingPackLooseCount.value = '0';
                 }
                 updateSalesPackStockCalc();
             } else {
@@ -2713,9 +2895,9 @@ foreach ($products as $product) {
         initialStockInput?.addEventListener('input', updateStartingStockExpirationVisibility);
         initialStockInput?.addEventListener('change', updateStartingStockExpirationVisibility);
         startingPackagesCount?.addEventListener('input', updatePackageStockCalc);
-        startingPackageLooseCount?.addEventListener('input', updatePackageStockCalc);
+        startingLooseCount?.addEventListener('input', updatePackageStockCalc);
         startingPacksCount?.addEventListener('input', updateSalesPackStockCalc);
-        startingLooseCount?.addEventListener('input', updateSalesPackStockCalc);
+        startingPackLooseCount?.addEventListener('input', updateSalesPackStockCalc);
         unitsPerPkgInput?.addEventListener('input', () => {
             const checkedMode = addProductForm?.querySelector('input[name="starting_stock_mode"]:checked')?.value;
             if (checkedMode === 'packages') updatePackageStockCalc();
