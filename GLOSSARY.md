@@ -4,6 +4,18 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**GCash Service**:
+A customer cash-in or cash-out exchange handled by the Store, separate from a Product purchase or its payment.
+_Avoid_: Product sale, GCash product payment
+
+**GCash Service Cash**:
+The physical money kept in a dedicated cash box or pouch for GCash Services, separate from the product-sale drawer.
+_Avoid_: Product-sale cash, wallet balance
+
+**GCash Service Wallet**:
+The single Store-owned GCash wallet dedicated to GCash Services. It is separate from personal wallets and accounts receiving Product payments.
+_Avoid_: Personal wallet, product-payment account
+
 **Bread Pullout Reminder**:
 An expiry-based prompt to prepare bread for supplier collection before its printed expiration date. It does not represent a completed collection.
 _Avoid_: Completed pullout, stock deduction, supplier collection schedule
