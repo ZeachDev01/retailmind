@@ -229,6 +229,22 @@ function ensure_operational_updates_schema(PDO $pdo): void
     } catch (Throwable $e) {}
     if ($gcashTableExists) {
         ensure_table_column($pdo, 'gcash_transactions', 'session_id', 'INT NULL AFTER transaction_id');
+        ensure_table_column($pdo, 'gcash_transactions', 'shift_id', 'INT NULL AFTER session_id');
+        ensure_table_column($pdo, 'gcash_transactions', 'principal_amount', 'DECIMAL(12,2) NULL AFTER amount');
+        ensure_table_column($pdo, 'gcash_transactions', 'fee_amount', 'DECIMAL(12,2) NULL AFTER principal_amount');
+        ensure_table_column($pdo, 'gcash_transactions', 'fee_method', "ENUM('cash','wallet') NULL AFTER fee_amount");
+        ensure_table_column($pdo, 'gcash_transactions', 'service_cash_delta', 'DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER fee_method');
+        ensure_table_column($pdo, 'gcash_transactions', 'wallet_delta', 'DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER service_cash_delta');
+        ensure_table_column($pdo, 'gcash_transactions', 'gross_fee', 'DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER wallet_delta');
+        ensure_table_column($pdo, 'gcash_transactions', 'confirmed_wallet', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER cashier_id');
+        ensure_table_column($pdo, 'gcash_transactions', 'confirmed_cash', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER confirmed_wallet');
+        ensure_table_column($pdo, 'gcash_transactions', 'notes', 'TEXT NULL AFTER confirmed_cash');
+        ensure_table_column($pdo, 'gcash_transactions', 'completed_at', 'DATETIME NULL AFTER reviewed_at');
+        if ($driver !== 'sqlite') {
+            $pdo->exec("ALTER TABLE gcash_transactions
+                MODIFY COLUMN reference_number VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
+                MODIFY COLUMN verification_status ENUM('Pending','Verified','Rejected','Completed','Needs checking') NOT NULL DEFAULT 'Pending'");
+        }
     }
 
     $stmt = $pdo->prepare(

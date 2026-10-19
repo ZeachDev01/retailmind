@@ -15,8 +15,9 @@
 .gcash-table-wrap th, .gcash-table-wrap td { padding: .75rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
 .gcash-table-wrap small { display: block; color: var(--muted); margin-top: .25rem; max-width: 260px; overflow-wrap: anywhere; }
 .gcash-status { display: inline-block; padding: .2rem .55rem; border-radius: 999px; background: var(--cashier-blue-soft); font-weight: 600; }
-.gcash-status-verified { color: var(--theme-success-text, #15803d); background: var(--theme-success-surface, #f0fdf4); }
+.gcash-status-verified, .gcash-status-completed { color: var(--theme-success-text, #15803d); background: var(--theme-success-surface, #f0fdf4); }
 .gcash-status-rejected { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }
+.gcash-status-needs-checking { color: var(--theme-warning-text, #b45309); background: var(--theme-warning-surface, #fffbeb); }
 .gcash-pagination { justify-content: flex-end; }
 #gcash-review-dialog { width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
 #gcash-review-dialog::backdrop { background: rgb(0 0 0 / .55); }
@@ -37,8 +38,9 @@
 .gcash-session-banner.active { border-left: 4px solid var(--theme-success, #16a34a); background: var(--theme-success-surface, #f0fdf4); }
 .gcash-session-banner.closed { border-left: 4px solid var(--muted); }
 .gcash-session-banner.locked { border-left: 4px solid var(--theme-danger, #dc2626); background: var(--theme-danger-surface, #fef2f2); }
-#gcash-open-dialog, #gcash-close-dialog, #gcash-handover-dialog { width: min(540px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
-#gcash-open-dialog::backdrop, #gcash-close-dialog::backdrop, #gcash-handover-dialog::backdrop { background: rgb(0 0 0 / .55); }
+#gcash-open-dialog, #gcash-close-dialog, #gcash-handover-dialog, #gcash-needs-checking-dialog { width: min(540px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
+#gcash-open-dialog::backdrop, #gcash-close-dialog::backdrop, #gcash-handover-dialog::backdrop, #gcash-needs-checking-dialog::backdrop { background: rgb(0 0 0 / .55); }
+.gcash-cash-in-confirm-group { grid-column: 1 / -1; padding: .5rem .75rem; background: var(--surface-bg, #fff); border: 1px solid var(--border); border-radius: 8px; }
 .gcash-variance-positive { color: var(--theme-success-text, #15803d); font-weight: 600; }
 .gcash-variance-negative { color: var(--theme-danger-text, #b91c1c); font-weight: 600; }
 .gcash-variance-zero { color: var(--muted); font-weight: 600; }

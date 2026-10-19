@@ -123,8 +123,20 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         </div>
                     </div>
                 </section>
+                <div id="gcash-cash-in-confirm-group" class="gcash-cash-in-confirm-group" hidden>
+                    <label class="gcash-confirm" id="gcash-confirm-wallet-label">
+                        <input type="checkbox" id="gcash-confirm-wallet" name="confirmed_wallet">
+                        <span id="gcash-confirm-wallet-text">I confirmed the wallet transfer of PHP 0.00 in the authorized GCash app</span>
+                    </label>
+                    <label class="gcash-confirm" id="gcash-confirm-cash-label">
+                        <input type="checkbox" id="gcash-confirm-cash" name="confirmed_cash">
+                        <span id="gcash-confirm-cash-text">I confirmed receipt of PHP 0.00 physical cash at the counter</span>
+                    </label>
+                </div>
                 <div class="gcash-actions">
-                    <button class="btn" type="submit" id="gcash-save">Save as Pending</button>
+                    <button class="btn" type="button" id="gcash-complete-cash-in" hidden>Complete Cash-In</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-needs-checking-btn" hidden>Hold as Needs checking</button>
+                    <button class="btn btn-secondary" type="submit" id="gcash-save">Save as Pending</button>
                     <button class="btn btn-secondary" type="button" id="gcash-manual">Manual entry / USB scan</button>
                     <button class="btn btn-secondary" type="button" id="gcash-camera-open">Camera OCR (Tesseract.js)</button>
                 </div>
@@ -256,6 +268,43 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="gcash-actions">
                     <button class="btn" type="submit" id="gcash-handover-submit">Confirm Handover</button>
                     <button class="btn btn-secondary" type="button" id="gcash-handover-cancel">Cancel</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog id="gcash-needs-checking-dialog" aria-labelledby="gcash-needs-checking-title">
+            <form id="gcash-needs-checking-form">
+                <h2 id="gcash-needs-checking-title">Hold Cash-In as Needs checking</h2>
+                <p>Record known movements and hold for investigation. A fabricated reference is never required.</p>
+                <div class="gcash-preview-grid" style="margin-bottom: 1rem;">
+                    <div class="gcash-preview-item">
+                        <span class="gcash-preview-label">Principal amount</span>
+                        <span class="gcash-preview-value" id="gcash-nc-preview-principal">₱0.00</span>
+                    </div>
+                    <div class="gcash-preview-item">
+                        <span class="gcash-preview-label">Service fee (cash)</span>
+                        <span class="gcash-preview-value" id="gcash-nc-preview-fee">₱0.00</span>
+                    </div>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-nc-reference">Reference number (optional, if known)</label>
+                    <input class="pos-input" id="gcash-nc-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="32" placeholder="Leave blank if not yet available">
+                </div>
+                <p style="margin-top: .75rem; margin-bottom: .25rem; font-weight: 600;">Accountable movements confirmed:</p>
+                <label class="gcash-confirm">
+                    <input type="checkbox" id="gcash-nc-cash-collected" name="cash_collected">
+                    <span>Physical cash collected at counter (<span id="gcash-nc-cash-text">₱0.00</span>)</span>
+                </label>
+                <label class="gcash-confirm">
+                    <input type="checkbox" id="gcash-nc-wallet-sent" name="wallet_sent">
+                    <span>Wallet funds sent to customer (<span id="gcash-nc-wallet-text">₱0.00</span>)</span>
+                </label>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-nc-notes">Explanatory notes (minimum 5 characters, required)</label>
+                    <textarea class="pos-input" id="gcash-nc-notes" name="notes" minlength="5" maxlength="500" required rows="3" placeholder="Explain what happened, which partial movements occurred, or why this transaction needs checking."></textarea>
+                </div>
+                <div class="gcash-actions">
+                    <button class="btn" type="submit" id="gcash-nc-submit">Save as Needs checking</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-nc-cancel">Cancel</button>
                 </div>
             </form>
         </dialog>

@@ -195,13 +195,80 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'No page overflow at ' + width);
         }
 
+        // Ticket #240: Complete Cash-In with accountable movements
+        await page.locator('#gcash-type').selectOption('Cash-In');
+        await page.locator('#gcash-amount').fill('1000');
+        await reference.fill('0012345678910');
+        await reference.press('Enter');
+        await page.getByText('Reference captured. Review the number and amount; payment remains unverified.', {exact: true}).waitFor();
+
+        const completeBtn = page.locator('#gcash-complete-cash-in');
+        assert.equal(await completeBtn.isVisible(), true);
+        assert.equal(await completeBtn.isDisabled(), true);
+
+        await page.locator('#gcash-confirm-wallet').check();
+        assert.equal(await completeBtn.isDisabled(), true, 'Requires both confirmations');
+
+        await page.locator('#gcash-confirm-cash').check();
+        assert.equal(await completeBtn.isDisabled(), false, 'Both confirmations enable Complete Cash-In');
+
+        await completeBtn.click();
+        await page.locator('#gcash-history-body .gcash-status-completed').waitFor();
+
+        const firstRow = page.locator('#gcash-history-body tr').first();
+        assert.equal(await firstRow.locator('.gcash-status-completed').textContent(), 'Completed');
+        assert.equal(await firstRow.getByRole('button', {name: 'Correct', exact: true}).isDisabled(), true, 'Completed record correction disabled');
+
+        // Ticket #240: Hold as Needs checking with partial movements
+        await page.locator('#gcash-type').selectOption('Cash-In');
+        await page.locator('#gcash-amount').fill('500');
+        await page.locator('#gcash-needs-checking-btn').click();
+        await page.locator('#gcash-needs-checking-dialog').waitFor();
+        await page.locator('#gcash-nc-notes').fill('Customer paid cash, wallet transfer pending');
+        await page.locator('#gcash-nc-cash-collected').check();
+        await page.locator('#gcash-nc-wallet-sent').uncheck();
+        await page.locator('#gcash-nc-submit').click();
+        await page.locator('#gcash-history-body .gcash-status-needs-checking').waitFor();
+
+        // Ticket #240: API tests for record_cash_in
+        const staleApi = await post({
+            action: 'record_cash_in',
+            outcome: 'Completed',
+            principal: 1000,
+            reference: '0012345678911',
+            confirmed_wallet: true,
+            confirmed_cash: true,
+            preview_fee: 5.00
+        });
+        assert.equal(staleApi.status(), 422, 'Stale totals rejected');
+
+        const unconfirmedApi = await post({
+            action: 'record_cash_in',
+            outcome: 'Completed',
+            principal: 1000,
+            reference: '0012345678912',
+            confirmed_wallet: false,
+            confirmed_cash: true
+        });
+        assert.equal(unconfirmedApi.status(), 422, 'Incomplete confirmation rejected');
+
+        const dupRefApi = await post({
+            action: 'record_cash_in',
+            outcome: 'Completed',
+            principal: 1000,
+            reference: '0012345678910',
+            confirmed_wallet: true,
+            confirmed_cash: true
+        });
+        assert.equal(dupRefApi.status(), 409, 'Duplicate reference rejected');
+
         // Ticket #239: Reconcile and close session
         await page.locator('#gcash-close-session-btn').click();
         await page.locator('#gcash-close-expected-cash').waitFor();
-        assert.equal(await page.locator('#gcash-close-expected-cash').textContent(), '₱2,010.00');
-        assert.equal(await page.locator('#gcash-close-expected-wallet').textContent(), '₱4,000.00');
-        await page.locator('#gcash-close-cash').fill('2010');
-        await page.locator('#gcash-close-wallet').fill('4000');
+        assert.equal(await page.locator('#gcash-close-expected-cash').textContent(), '₱3,530.00');
+        assert.equal(await page.locator('#gcash-close-expected-wallet').textContent(), '₱3,000.00');
+        await page.locator('#gcash-close-cash').fill('3530');
+        await page.locator('#gcash-close-wallet').fill('3000');
         await page.locator('#gcash-close-submit').click();
         await page.locator('#gcash-session-status').filter({hasText: 'Closed'}).waitFor();
 

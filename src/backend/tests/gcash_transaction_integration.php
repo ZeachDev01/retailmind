@@ -16,11 +16,19 @@ $refuse = static function (callable $work) use ($check): void {
     $check(false, 'Expected request to be refused.');
 };
 $service = new GCashTransactionService($pdo, ['min_length' => 13, 'max_length' => 13]);
-if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race'], true)) {
+if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--cash-in-race'], true)) {
     for ($attempt = 0; $attempt < 5; $attempt++) {
         try {
             if ($argv[2] === '--save-race') { $service->save(4, '0000000000004', '1', 'Payment'); }
             elseif ($argv[2] === '--open-race') { $service->openSession((int)$argv[3], 1000.0, 5000.0); }
+            elseif ($argv[2] === '--cash-in-race') {
+                $service->recordCashIn((int)$argv[3], [
+                    'principal' => 100,
+                    'reference' => '0000000000999',
+                    'confirmed_wallet' => true,
+                    'confirmed_cash' => true,
+                ]);
+            }
             else { $service->review(4, (int)$argv[3], 'Verified', true, 'Matched authorized records during concurrent review'); }
             echo 'accepted';
             break;
@@ -251,6 +259,152 @@ sort($raceOutcomes);
 $check($raceOutcomes === ['accepted', 'duplicate'], 'Concurrent open must accept exactly one session');
 
 $pdo->exec("UPDATE gcash_service_sessions SET status='closed', closed_at=NOW() WHERE status='open'");
+
+// 11. Ticket #240: Accountable Cash-In movements
+$sess5 = $service->openSession(4, 1000.00, 5000.00);
+
+// Unlocked register check / wrong cashier
+$refuse(fn() => (new GCashTransactionService($pdo, ['min_length' => 13, 'max_length' => 13]))->recordCashIn(5, [
+    'principal' => 1000,
+    'reference' => '0000000000101',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]));
+
+// Stale preview totals rejected
+$refuse(fn() => $service->recordCashIn(4, [
+    'principal' => 1000,
+    'reference' => '0000000000101',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+    'preview_fee' => 5.00,
+]));
+
+// Incomplete confirmations rejected
+$refuse(fn() => $service->recordCashIn(4, [
+    'principal' => 1000,
+    'reference' => '0000000000101',
+    'confirmed_wallet' => false,
+    'confirmed_cash' => true,
+]));
+
+// Wallet balance sufficiency check (attempt Cash-In greater than available wallet)
+$refuse(fn() => $service->recordCashIn(4, [
+    'principal' => 6000,
+    'reference' => '0000000000101',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]));
+
+// Completed PHP 1,000 Cash-In: adds PHP 1,010 service cash, subtracts PHP 1,000 wallet, earns PHP 10 cash fee
+$posSnapshotBefore = $snapshot();
+$cashInTxId = $service->recordCashIn(4, [
+    'principal' => 1000,
+    'reference' => '0000000000101',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+    'preview_fee' => 10.00,
+    'preview_counter_collect' => 1010.00,
+    'preview_wallet_transfer' => 1000.00,
+]);
+$check($cashInTxId > 0, 'Cash-In recorded successfully');
+
+$posSnapshotAfter = $snapshot();
+$check($posSnapshotBefore === $posSnapshotAfter, 'Product sales, inventory, and POS cash drawer totals must remain unchanged');
+
+$txRow = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id=' . $cashInTxId)->fetch(PDO::FETCH_ASSOC);
+$check((float)$txRow['principal_amount'] === 1000.00, 'Principal preserved');
+$check((float)$txRow['fee_amount'] === 10.00, 'Fee amount preserved');
+$check($txRow['fee_method'] === 'cash', 'Fee method preserved');
+$check((float)$txRow['service_cash_delta'] === 1010.00, 'Service cash delta +1010');
+$check((float)$txRow['wallet_delta'] === -1000.00, 'Wallet delta -1000');
+$check((float)$txRow['gross_fee'] === 10.00, 'Gross fee 10');
+$check((int)$txRow['shift_id'] === 1, 'Shift ID recorded');
+$check((int)$txRow['confirmed_wallet'] === 1 && (int)$txRow['confirmed_cash'] === 1, 'Confirmations recorded');
+$check($txRow['verification_status'] === 'Completed', 'Status is Completed');
+$check(!empty($txRow['completed_at']), 'completed_at timestamp recorded');
+
+// Completed record cannot be reviewed or modified
+$refuse(fn() => $service->review(4, $cashInTxId, 'Verified', true, 'Cannot re-review Completed'));
+
+// Expected balances reflect completed Cash-In
+$expAfterCompleted = $service->calculateSessionExpected($sess5);
+$check($expAfterCompleted['expected_service_cash'] === 2010.00, 'Expected service cash is 2010.00');
+$check($expAfterCompleted['expected_wallet_balance'] === 4000.00, 'Expected wallet balance is 4000.00');
+
+// Duplicate reference rejection
+$refuse(fn() => $service->recordCashIn(4, [
+    'principal' => 500,
+    'reference' => '0000000000101',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]));
+
+// Needs checking test: partial movements (cash collected at counter, wallet not yet sent), no reference
+$refuse(fn() => $service->recordCashIn(4, [
+    'principal' => 500,
+    'outcome' => 'Needs checking',
+    'notes' => 'bad',
+]));
+
+$ncTxId = $service->recordCashIn(4, [
+    'principal' => 500,
+    'outcome' => 'Needs checking',
+    'confirmed_cash' => true,
+    'confirmed_wallet' => false,
+    'notes' => 'Customer paid cash at counter, wallet transfer app connection timed out',
+]);
+$ncRow = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id=' . $ncTxId)->fetch(PDO::FETCH_ASSOC);
+$check($ncRow['reference_number'] === null, 'Needs checking preserves NULL reference when none available');
+$check($ncRow['verification_status'] === 'Needs checking', 'Status is Needs checking');
+$check((float)$ncRow['service_cash_delta'] === 510.00, 'Service cash delta +510 recorded');
+$check((float)$ncRow['wallet_delta'] === 0.00, 'Wallet delta 0 for unsent wallet transfer');
+$check((float)$ncRow['gross_fee'] === 0.00, 'Gross fee 0 when transfer incomplete');
+
+$expAfterNC = $service->calculateSessionExpected($sess5);
+$check($expAfterNC['expected_service_cash'] === 2520.00, 'Expected service cash reflects partial cash collection (2520.00)');
+$check($expAfterNC['expected_wallet_balance'] === 4000.00, 'Expected wallet balance unaffected by unsent wallet (4000.00)');
+
+// Audit failure rollback for Cash-In
+$pdo->exec("CREATE TRIGGER gcash_cash_in_audit_fail BEFORE INSERT ON activity_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Audit injection fail'");
+try {
+    $auditFailThrew = false;
+    try {
+        $service->recordCashIn(4, [
+            'principal' => 200,
+            'reference' => '0000000000102',
+            'confirmed_wallet' => true,
+            'confirmed_cash' => true,
+        ]);
+    } catch (PDOException $e) { $auditFailThrew = true; }
+    $check($auditFailThrew, 'Cash-In must throw on audit failure');
+    $check((int)$pdo->query("SELECT COUNT(*) FROM gcash_transactions WHERE reference_number='0000000000102'")->fetchColumn() === 0, 'Audit failure must roll back cash in record');
+} finally { $pdo->exec('DROP TRIGGER gcash_cash_in_audit_fail'); }
+
+// Concurrent Cash-In race on same reference
+$cashInRaceProcesses = [];
+foreach ([1, 2] as $worker) {
+    $pipes = [];
+    $proc = proc_open([PHP_BINARY, __FILE__, $database, '--cash-in-race', '4'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $check(is_resource($proc), 'Concurrent cash-in worker must start.');
+    $cashInRaceProcesses[] = [$proc, $pipes];
+}
+$cashInRaceOutcomes = [];
+foreach ($cashInRaceProcesses as [$proc, $pipes]) {
+    $cashInRaceOutcomes[] = stream_get_contents($pipes[1]);
+    $err = stream_get_contents($pipes[2]);
+    fclose($pipes[1]); fclose($pipes[2]);
+    $check(proc_close($proc) === 0, $err);
+}
+sort($cashInRaceOutcomes);
+$check($cashInRaceOutcomes === ['accepted', 'duplicate'], 'Concurrent cash in must accept exactly one reference');
+
+// Legacy rows preserved and isolated
+$pdo->exec("INSERT INTO gcash_transactions (session_id, transaction_type, reference_number, amount, cashier_id, verification_status) VALUES (NULL, 'Payment', '0000000000199', 50.00, 4, 'Verified')");
+$legacyRow = $pdo->query("SELECT * FROM gcash_transactions WHERE reference_number='0000000000199'")->fetch(PDO::FETCH_ASSOC);
+$check($legacyRow['session_id'] === null && $legacyRow['verification_status'] === 'Verified', 'Legacy row preserved');
+
+$service->closeSession(4, 2520.00, 3900.00, 'Closing session 5', 1);
 
 echo "GCash MySQL integration: passed\n";
 

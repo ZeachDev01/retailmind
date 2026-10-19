@@ -42,14 +42,17 @@ try {
         if (strlen($raw) > 4096) { throw new DomainException('Request too large.'); }
         $input = json_decode($raw, true);
         if (!is_array($input)) { throw new DomainException('Invalid request.'); }
-        foreach (['action', 'reference', 'amount', 'type', 'status', 'note', 'notes', 'fee_method', 'reason'] as $key) {
-            if (isset($input[$key]) && !is_string($input[$key])) { throw new DomainException('Invalid field: ' . $key); }
+        foreach (['action', 'reference', 'amount', 'type', 'status', 'note', 'notes', 'fee_method', 'reason', 'outcome'] as $key) {
+            if (isset($input[$key]) && !is_string($input[$key]) && !($key === 'reference' && $input[$key] === null)) { throw new DomainException('Invalid field: ' . $key); }
         }
         if (isset($input['principal']) && !is_string($input['principal']) && !is_int($input['principal'])) {
             throw new DomainException('Invalid field: principal');
         }
         $cashierId = (int)$_SESSION['user_id'];
-        if (($input['action'] ?? '') === 'preview') {
+        if (($input['action'] ?? '') === 'record_cash_in') {
+            $id = $service->recordCashIn($cashierId, $input);
+            $result = ['id' => $id, 'transaction_id' => $id];
+        } elseif (($input['action'] ?? '') === 'preview') {
             $preview = $service->calculatePreview($input['type'] ?? '', $input['principal'] ?? '', $input['fee_method'] ?? null);
             $result = ['preview' => $preview] + $preview;
         } elseif (($input['action'] ?? '') === 'open_session') {

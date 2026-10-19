@@ -15,7 +15,31 @@
     const scanStatus = message => { el('scan-status').textContent = message; };
     const updateSave = () => {
         const canSave = !currentSession || currentSession.is_controlling_cashier;
-        save.disabled = !canSave || saving || checking || duplicate || !parser.valid(reference.value, rules);
+        const type = el('type')?.value || 'Cash-In';
+        const isCashIn = type === 'Cash-In';
+        const validRef = parser.valid(reference.value, rules);
+        const validPrincipal = validatePrincipal(el('amount')?.value) !== null;
+
+        save.disabled = !canSave || saving || checking || duplicate || !validRef;
+
+        const completeBtn = el('complete-cash-in');
+        if (completeBtn) {
+            completeBtn.hidden = !isCashIn;
+            const walletConfirmed = Boolean(el('confirm-wallet')?.checked);
+            const cashConfirmed = Boolean(el('confirm-cash')?.checked);
+            completeBtn.disabled = !canSave || saving || checking || duplicate || !validRef || !validPrincipal || !walletConfirmed || !cashConfirmed;
+        }
+
+        const ncBtn = el('needs-checking-btn');
+        if (ncBtn) {
+            ncBtn.hidden = !isCashIn;
+            ncBtn.disabled = !canSave || saving || duplicate || !validPrincipal;
+        }
+
+        const confirmGroup = el('cash-in-confirm-group');
+        if (confirmGroup) {
+            confirmGroup.hidden = !isCashIn;
+        }
     };
 
     function disableTransactionForm(disabled) {
@@ -23,6 +47,8 @@
         el('amount').disabled = disabled;
         el('type').disabled = disabled;
         if (el('fee-method')) el('fee-method').disabled = disabled;
+        if (el('confirm-wallet')) el('confirm-wallet').disabled = disabled;
+        if (el('confirm-cash')) el('confirm-cash').disabled = disabled;
         el('manual').disabled = disabled;
         el('camera-open').disabled = disabled;
         updateSave();
@@ -265,6 +291,26 @@
         document.getElementById('preview-wallet-transfer').textContent = formatPhp(preview.walletTransfer);
         document.getElementById('preview-net-cash').textContent = formatPhp(preview.netServiceCash, true);
         document.getElementById('preview-net-wallet').textContent = formatPhp(preview.netWallet, true);
+
+        if (el('confirm-wallet-text')) {
+            el('confirm-wallet-text').textContent = 'I confirmed the wallet transfer of ' + formatPhp(preview.walletTransfer) + ' in the authorized GCash app';
+        }
+        if (el('confirm-cash-text')) {
+            el('confirm-cash-text').textContent = 'I confirmed receipt of ' + formatPhp(preview.counterCollect) + ' physical cash at the counter';
+        }
+        if (el('nc-preview-principal')) {
+            el('nc-preview-principal').textContent = formatPhp(preview.principal);
+        }
+        if (el('nc-preview-fee')) {
+            el('nc-preview-fee').textContent = formatPhp(preview.fee);
+        }
+        if (el('nc-cash-text')) {
+            el('nc-cash-text').textContent = formatPhp(preview.counterCollect);
+        }
+        if (el('nc-wallet-text')) {
+            el('nc-wallet-text').textContent = formatPhp(preview.walletTransfer);
+        }
+        updateSave();
     }
 
     window.GCashPreview = { calculateFee, calculatePreview, validatePrincipal };
@@ -272,8 +318,135 @@
     el('amount').addEventListener('input', updatePreview);
     el('type').addEventListener('change', updatePreview);
     el('fee-method')?.addEventListener('change', updatePreview);
+    el('confirm-wallet')?.addEventListener('change', updateSave);
+    el('confirm-cash')?.addEventListener('change', updateSave);
 
     el('manual').addEventListener('click', () => { reference.focus(); reference.select(); if (reference.value.trim()) checkReference(); });
+
+    if (el('complete-cash-in')) {
+        el('complete-cash-in').addEventListener('click', async () => {
+            if (saving) return;
+            const validPrincipal = validatePrincipal(el('amount').value);
+            if (!validPrincipal) {
+                notify('Enter a whole-peso principal amount from 1 to 50,000.', 'warning');
+                el('amount').focus();
+                return;
+            }
+            if (!el('confirm-wallet')?.checked || !el('confirm-cash')?.checked) {
+                notify('Confirm both wallet transfer and physical cash receipt before completing.', 'warning');
+                return;
+            }
+            saving = true;
+            updateSave();
+            try {
+                if (!await checkReference() || !el('form').reportValidity()) return;
+                const preview = calculatePreview('Cash-In', validPrincipal);
+                const body = {
+                    action: 'record_cash_in',
+                    outcome: 'Completed',
+                    principal: validPrincipal,
+                    reference: reference.value,
+                    confirmed_wallet: true,
+                    confirmed_cash: true,
+                    preview_fee: preview.fee,
+                    preview_counter_collect: preview.counterCollect,
+                    preview_wallet_transfer: preview.walletTransfer,
+                };
+                for (const input of el('form').elements) input.disabled = true;
+                const data = await request(null, body);
+                el('form').reset();
+                if (el('confirm-wallet')) el('confirm-wallet').checked = false;
+                if (el('confirm-cash')) el('confirm-cash').checked = false;
+                updatePreview();
+                duplicate = false;
+                scanStatus('Cash-In completed successfully.');
+                notify('GCash Cash-In #' + data.id + ' completed.', 'success');
+                page = 1;
+                await loadHistory();
+                await loadSessionStatus();
+            } catch (error) {
+                notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
+                await loadHistory();
+                await loadSessionStatus();
+            } finally {
+                saving = false;
+                if (!currentSession || currentSession.is_controlling_cashier) {
+                    for (const input of el('form').elements) input.disabled = false;
+                }
+                updateSave();
+                updatePreview();
+            }
+        });
+    }
+
+    if (el('needs-checking-btn')) {
+        el('needs-checking-btn').addEventListener('click', () => {
+            const validPrincipal = validatePrincipal(el('amount').value);
+            if (!validPrincipal) {
+                notify('Enter a whole-peso principal amount from 1 to 50,000.', 'warning');
+                el('amount').focus();
+                return;
+            }
+            updatePreview();
+            el('nc-reference').value = reference.value.trim();
+            el('nc-cash-collected').checked = Boolean(el('confirm-cash')?.checked);
+            el('nc-wallet-sent').checked = Boolean(el('confirm-wallet')?.checked);
+            el('nc-notes').value = '';
+            el('needs-checking-dialog').showModal();
+            el('nc-notes').focus();
+        });
+        el('nc-cancel')?.addEventListener('click', () => el('needs-checking-dialog').close());
+        el('needs-checking-form')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const validPrincipal = validatePrincipal(el('amount').value);
+            if (!validPrincipal) {
+                notify('Enter a whole-peso principal amount from 1 to 50,000.', 'warning');
+                return;
+            }
+            const notes = el('nc-notes').value.trim();
+            if (notes.length < 5) {
+                notify('Enter an explanatory note of at least 5 characters.', 'warning');
+                el('nc-notes').focus();
+                return;
+            }
+            const refVal = el('nc-reference').value.trim();
+            const preview = calculatePreview('Cash-In', validPrincipal);
+            const submitBtn = el('nc-submit');
+            submitBtn.disabled = true;
+            try {
+                const body = {
+                    action: 'record_cash_in',
+                    outcome: 'Needs checking',
+                    principal: validPrincipal,
+                    reference: refVal || null,
+                    confirmed_cash: el('nc-cash-collected').checked,
+                    confirmed_wallet: el('nc-wallet-sent').checked,
+                    notes: notes,
+                    preview_fee: preview.fee,
+                    preview_counter_collect: preview.counterCollect,
+                    preview_wallet_transfer: preview.walletTransfer,
+                };
+                const data = await request(null, body);
+                el('needs-checking-dialog').close();
+                el('form').reset();
+                if (el('confirm-wallet')) el('confirm-wallet').checked = false;
+                if (el('confirm-cash')) el('confirm-cash').checked = false;
+                updatePreview();
+                duplicate = false;
+                notify('Cash-In held as Needs checking (#' + data.id + ').', 'success');
+                page = 1;
+                await loadHistory();
+                await loadSessionStatus();
+            } catch (error) {
+                notify(error.message + ' Refresh history before retrying.', 'error');
+                await loadHistory();
+                await loadSessionStatus();
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    }
+
     el('form').addEventListener('submit', async event => {
         event.preventDefault();
         if (saving) return;
@@ -327,18 +500,40 @@
                 const date = document.createElement('small');
                 date.textContent = transaction.created_at;
                 id.append(date);
-                cell(row, transaction.reference_number);
+                cell(row, transaction.reference_number || '—');
                 cell(row, transaction.transaction_type);
-                cell(row, '₱' + Number(transaction.amount).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+
+                const amountCell = cell(row, '₱' + Number(transaction.amount).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                if (transaction.principal_amount !== null && transaction.principal_amount !== undefined) {
+                    const feeInfo = document.createElement('small');
+                    const fee = Number(transaction.fee_amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
+                    const feeMethod = transaction.fee_method || 'cash';
+                    feeInfo.textContent = `Fee: ₱${fee} (${feeMethod})`;
+                    amountCell.append(feeInfo);
+                }
+                if (Number(transaction.service_cash_delta || 0) !== 0 || Number(transaction.wallet_delta || 0) !== 0) {
+                    const deltas = document.createElement('small');
+                    const cashDelta = formatPhp(Number(transaction.service_cash_delta || 0), true);
+                    const walletDelta = formatPhp(Number(transaction.wallet_delta || 0), true);
+                    deltas.textContent = `Cash: ${cashDelta} · Wallet: ${walletDelta}`;
+                    amountCell.append(deltas);
+                }
+
                 const statusCell = cell(row, '');
                 const status = document.createElement('span');
-                status.className = 'gcash-status gcash-status-' + transaction.verification_status.toLowerCase();
+                const statusKey = String(transaction.verification_status).toLowerCase().replace(/\s+/g, '-');
+                status.className = 'gcash-status gcash-status-' + statusKey;
                 status.textContent = transaction.verification_status;
                 statusCell.append(status);
                 if (transaction.session_id === null || transaction.session_id === undefined) {
                     const legacy = document.createElement('small');
                     legacy.textContent = 'Legacy reference';
                     statusCell.append(legacy);
+                }
+                if (transaction.notes) {
+                    const note = document.createElement('small');
+                    note.textContent = transaction.notes;
+                    statusCell.append(note);
                 }
                 if (transaction.verification_note) {
                     const note = document.createElement('small');
@@ -352,9 +547,17 @@
                     button.addEventListener('click', () => {
                         reviewRow = transaction;
                         el('review-form').reset();
-                        el('review-summary').textContent = '#' + transaction.transaction_id + ' · ' + transaction.reference_number + ' · ' + transaction.transaction_type + ' · PHP ' + transaction.amount;
+                        el('review-summary').textContent = '#' + transaction.transaction_id + ' · ' + (transaction.reference_number || 'No ref') + ' · ' + transaction.transaction_type + ' · PHP ' + transaction.amount;
                         el('review-dialog').showModal();
                     });
+                    actions.append(button);
+                } else if (transaction.verification_status === 'Completed' || transaction.verification_status === 'Needs checking') {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn btn-secondary';
+                    button.disabled = true;
+                    button.title = 'Correction workflow is not yet available';
+                    button.textContent = 'Correct';
                     actions.append(button);
                 } else { actions.textContent = 'Reviewed'; }
                 el('history-body').append(row);
