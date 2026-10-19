@@ -602,15 +602,82 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const adminContext = await browser.newContext();
         await adminContext.route('https://**/*', route => route.fulfill({status: 200, body: ''}));
         const adminPage = await adminContext.newPage();
+        adminPage.on('pageerror', error => errors.push(error.message));
         await login(adminPage, 'admin');
+
+        // Ticket #244: Cashier API remains 403 forbidden for admin
         assert.equal((await adminContext.request.get(api)).status(), 403, 'Admin workspace must not access cashier API');
         assert.equal((await adminContext.request.post(api, {data: {action: 'save'}})).status(), 403);
+
+        // Ticket #244: Sidebar navigation contains GCash Overview
+        await adminPage.goto(origin + '/components/administrator/dashboard.php');
+        const adminNav = await adminPage.locator('.sidebar-nav a').allTextContents();
+        assert.equal(adminNav.some(label => label.trim() === 'GCash Overview'), true, 'Sidebar has GCash Overview link for Administrator');
+
+        // Ticket #244: Access granted to Administrator GCash Overview
+        const overviewRes = await adminPage.goto(origin + '/components/administrator/gcash_overview.php');
+        assert.equal(overviewRes.status(), 200, 'Admin can access GCash Overview');
+
+        // Verify Current Expected Balances top section
+        const expectedCashEl = adminPage.locator('#admin-expected-cash');
+        const expectedWalletEl = adminPage.locator('#admin-expected-wallet');
+        await expectedCashEl.waitFor();
+        await expectedWalletEl.waitFor();
+        const initialExpectedCash = await expectedCashEl.textContent();
+        assert.equal(initialExpectedCash.startsWith('₱'), true, 'Expected cash is formatted with peso sign');
+
+        // Verify Filtered Activity Metrics cards
+        const cashInMetricEl = adminPage.locator('#admin-metric-cash-in-principal');
+        await cashInMetricEl.waitFor();
+
+        // Verify Date Filtering with Philippine reporting-day boundaries
+        await adminPage.locator('#filter-start-date').fill('2026-01-01');
+        await adminPage.locator('#filter-end-date').fill('2026-01-02');
+        await Promise.all([
+            adminPage.waitForURL(url => url.search.includes('start_date=2026-01-01')),
+            adminPage.locator('#btn-apply-filters').click()
+        ]);
+        assert.equal(await adminPage.locator('#admin-metric-cash-in-principal').textContent(), '₱0.00', 'Past date filter has zero cash-in activity');
+        // Critical: Current Expected Balances remain unaffected by historical date filter
+        assert.equal(await adminPage.locator('#admin-expected-cash').textContent(), initialExpectedCash, 'Current expected balances unaffected by historical date filter');
+
+        // Reset filter
+        await Promise.all([
+            adminPage.waitForURL(url => !url.search.includes('start_date=2026-01-01')),
+            adminPage.locator('#btn-reset-filters').click()
+        ]);
+
+        // Reconciliation Differences Section
+        const diffTable = adminPage.locator('#gcash-admin-diff-table');
+        await diffTable.waitFor();
+        assert.equal(await diffTable.isVisible(), true, 'Reconciliation differences section is displayed');
+        const diffText = await diffTable.textContent();
+        assert.equal(diffText.includes('Waived') || diffText.includes('Variance') || diffText.includes('Session'), true, 'Reconciliation table contains session differences');
+
+        // Unresolved Activities Section
+        const ncTable = adminPage.locator('#gcash-admin-nc-table');
+        await ncTable.waitFor();
+        assert.equal(await ncTable.isVisible(), true, 'Unresolved activities section is displayed');
+
+        // Store-wide Transaction History Table & Legacy reference distinction
+        const historyTable = adminPage.locator('#gcash-admin-history-table');
+        await historyTable.waitFor();
+        const historyContent = await historyTable.textContent();
+        assert.equal(historyContent.includes('Legacy reference'), true, 'Legacy reference distinction badge visible in history');
+
+        // Responsive Viewport Verification (375px mobile, 768px tablet, 1440px desktop)
+        for (const width of [375, 768, 1440]) {
+            await adminPage.setViewportSize({width, height: 900});
+            assert.equal(await adminPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'No page overflow at ' + width + ' on admin GCash overview');
+        }
+
+        await adminPage.screenshot({path: path.join(output, 'gcash-admin-overview.png'), fullPage: true});
         assert.deepEqual(errors, []);
         const integration = run('src/backend/tests/gcash_transaction_integration.php', [database]).trim();
         assert.equal(integration, 'GCash MySQL integration: passed');
         console.log(integration);
-        console.log('GCash browser: passed (HID, duplicates, pending verification, CSRF, permissions, OCR confirmation, responsive layout)');
-        console.log('Screenshot: ' + path.join(output, 'gcash.png'));
+        console.log('GCash browser: passed (Cashier workflow, Administrator oversight, date filtering, differences, responsive layout)');
+        console.log('Screenshots: ' + path.join(output, 'gcash.png') + ', ' + path.join(output, 'gcash-admin-overview.png'));
     } finally {
         if (browser) await browser.close();
         if (server && server.exitCode === null) { const exited = new Promise(resolve => server.once('exit', resolve)); server.kill(); await exited; }

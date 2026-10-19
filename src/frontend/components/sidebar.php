@@ -197,6 +197,7 @@ $administratorSections = [
             ['path' => 'components/administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Store Overview'],
             ['icon' => 'bi-shop', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
             ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
+            ['path' => 'components/administrator/gcash_overview.php', 'icon' => 'bi-wallet2', 'label' => 'GCash Overview'],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'bi-percent', 'label' => 'Promotions'],
             ['path' => 'components/administrator/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Oversight'],
             ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Store Reports', 'items' => $administratorReportItems],

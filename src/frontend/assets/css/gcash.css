@@ -38,8 +38,8 @@
 .gcash-session-banner.active { border-left: 4px solid var(--theme-success, #16a34a); background: var(--theme-success-surface, #f0fdf4); }
 .gcash-session-banner.closed { border-left: 4px solid var(--muted); }
 .gcash-session-banner.locked { border-left: 4px solid var(--theme-danger, #dc2626); background: var(--theme-danger-surface, #fef2f2); }
-#gcash-open-dialog, #gcash-close-dialog, #gcash-handover-dialog, #gcash-needs-checking-dialog, #gcash-funding-dialog, #gcash-resolve-dialog, #gcash-correction-dialog, #gcash-waiver-dialog { width: min(540px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
-#gcash-open-dialog::backdrop, #gcash-close-dialog::backdrop, #gcash-handover-dialog::backdrop, #gcash-needs-checking-dialog::backdrop, #gcash-funding-dialog::backdrop, #gcash-resolve-dialog::backdrop, #gcash-correction-dialog::backdrop, #gcash-waiver-dialog::backdrop { background: rgb(0 0 0 / .55); }
+#gcash-open-dialog, #gcash-close-dialog, #gcash-handover-dialog, #gcash-needs-checking-dialog, #gcash-funding-dialog, #gcash-resolve-dialog, #gcash-correction-dialog, #gcash-waiver-dialog, #gcash-admin-waiver-dialog { width: min(540px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
+#gcash-open-dialog::backdrop, #gcash-close-dialog::backdrop, #gcash-handover-dialog::backdrop, #gcash-needs-checking-dialog::backdrop, #gcash-funding-dialog::backdrop, #gcash-resolve-dialog::backdrop, #gcash-correction-dialog::backdrop, #gcash-waiver-dialog::backdrop, #gcash-admin-waiver-dialog::backdrop { background: rgb(0 0 0 / .55); }
 .gcash-cash-in-confirm-group { grid-column: 1 / -1; padding: .5rem .75rem; background: var(--surface-bg, #fff); border: 1px solid var(--border); border-radius: 8px; }
 .gcash-variance-positive { color: var(--theme-success-text, #15803d); font-weight: 600; }
 .gcash-variance-negative { color: var(--theme-danger-text, #b91c1c); font-weight: 600; }
@@ -72,5 +72,5 @@
 .gcash-nc-title { font-weight: 600; font-size: .95rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .gcash-nc-meta { font-size: .85rem; color: var(--muted); }
 .gcash-empty-msg { color: var(--muted); font-size: .9rem; padding: .5rem 0; font-style: italic; }
-@media (max-width: 600px) { .gcash-form { grid-template-columns: minmax(0, 1fr); } .gcash-actions .btn { flex: 1 1 auto; white-space: normal; } .gcash-preview-grid { grid-template-columns: 1fr; } .gcash-nc-card { flex-direction: column; align-items: flex-start; } }
+@media (max-width: 600px) { .gcash-form { grid-template-columns: minmax(0, 1fr); } .gcash-actions .btn { flex: 1 1 auto; white-space: normal; } .gcash-preview-grid { grid-template-columns: 1fr; } .gcash-nc-card { flex-direction: column; align-items: flex-start; } .gcash-filter-bar { flex-direction: column; } .gcash-filter-bar .gcash-field, .gcash-filter-bar .gcash-actions { width: 100% !important; flex: 1 1 auto !important; } }
 

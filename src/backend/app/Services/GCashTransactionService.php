@@ -301,6 +301,318 @@ final class GCashTransactionService
         return ['transactions' => $txs, 'has_next' => count($rows) > 25, 'page' => $page];
     }
 
+    public function adminOverview(array $filters = []): array
+    {
+        $role = $filters['actor_role'] ?? (function_exists('current_role') ? current_role() : null) ?? ($_SESSION['role'] ?? null);
+        if (!in_array($role, ['admin', 'super_admin'], true)) {
+            if (!empty($filters['approver_username']) && !empty($filters['approver_password'])) {
+                $this->authorizeAdmin($filters['approver_username'], $filters['approver_password']);
+            } else {
+                throw new DomainException('Administrator authorization required.', 403);
+            }
+        }
+
+        $openSession = $this->getCurrentSession();
+        $currentExpectedCash = 0.0;
+        $currentExpectedWallet = 0.0;
+        $lastCheckedAt = null;
+        $lastCheckedFormatted = '—';
+        $controllingCashierId = null;
+        $controllingCashierName = null;
+        $sessionStatus = 'closed';
+
+        if ($openSession) {
+            $expected = $this->calculateSessionExpected((int)$openSession['session_id']);
+            $currentExpectedCash = (float)$expected['expected_service_cash'];
+            $currentExpectedWallet = (float)$expected['expected_wallet_balance'];
+            $lastCheckedAt = $openSession['opened_at'];
+            $lastCheckedFormatted = PhilippineTime::format($openSession['opened_at']);
+            $controllingCashierId = (int)$openSession['cashier_id'];
+            $controllingCashierName = $openSession['cashier_name'];
+            $sessionStatus = 'open';
+        } else {
+            $closedStmt = $this->pdo()->prepare(
+                "SELECT s.*, u.full_name AS cashier_name, u.username AS cashier_username
+                 FROM gcash_service_sessions s
+                 JOIN users u ON s.cashier_id = u.user_id
+                 WHERE s.status = 'closed'
+                 ORDER BY s.session_id DESC
+                 LIMIT 1"
+            );
+            $closedStmt->execute();
+            $latestClosed = $closedStmt->fetch(PDO::FETCH_ASSOC);
+            if ($latestClosed) {
+                $currentExpectedCash = (float)($latestClosed['closing_service_cash'] ?? $latestClosed['expected_service_cash'] ?? 0.0);
+                $currentExpectedWallet = (float)($latestClosed['closing_wallet_balance'] ?? $latestClosed['expected_wallet_balance'] ?? 0.0);
+                $lastCheckedAt = $latestClosed['closed_at'] ?? $latestClosed['opened_at'];
+                $lastCheckedFormatted = PhilippineTime::format($lastCheckedAt);
+                $sessionStatus = 'closed';
+            }
+        }
+
+        $startDate = !empty($filters['start_date']) ? trim((string)$filters['start_date']) : null;
+        $endDate = !empty($filters['end_date']) ? trim((string)$filters['end_date']) : null;
+        $cashierId = !empty($filters['cashier_id']) ? filter_var($filters['cashier_id'], FILTER_VALIDATE_INT) : null;
+        if ($cashierId === false || $cashierId <= 0) {
+            $cashierId = null;
+        }
+
+        if ($startDate !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) {
+            throw new DomainException('Enter a valid start date (YYYY-MM-DD).');
+        }
+        if ($endDate !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+            throw new DomainException('Enter a valid end date (YYYY-MM-DD).');
+        }
+        if ($startDate !== null && $endDate !== null && $startDate > $endDate) {
+            throw new DomainException('Start date cannot be after end date.');
+        }
+
+        $whereConditions = [];
+        $whereParams = [];
+
+        if ($startDate !== null) {
+            $whereConditions[] = 't.created_at >= ?';
+            $whereParams[] = $startDate . ' 00:00:00';
+        }
+        if ($endDate !== null) {
+            $whereConditions[] = 't.created_at <= ?';
+            $whereParams[] = $endDate . ' 23:59:59';
+        }
+        if ($cashierId !== null) {
+            $whereConditions[] = 't.cashier_id = ?';
+            $whereParams[] = $cashierId;
+        }
+        $whereSql = $whereConditions !== [] ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+
+        $totalsStmt = $this->pdo()->prepare(
+            "SELECT
+                COUNT(*) AS total_transactions,
+                COALESCE(SUM(CASE WHEN t.transaction_type = 'Cash-In' AND t.verification_status = 'Completed' THEN t.principal_amount ELSE 0 END), 0) AS cash_in_principal,
+                COALESCE(SUM(CASE WHEN t.transaction_type = 'Cash-Out' AND t.verification_status = 'Completed' THEN t.principal_amount ELSE 0 END), 0) AS cash_out_principal,
+                COALESCE(SUM(CASE WHEN t.fee_method = 'cash' AND t.verification_status = 'Completed' THEN t.gross_fee ELSE 0 END), 0) AS gross_fees_cash,
+                COALESCE(SUM(CASE WHEN t.fee_method = 'wallet' AND t.verification_status = 'Completed' THEN t.gross_fee ELSE 0 END), 0) AS gross_fees_wallet
+            FROM gcash_transactions t
+            {$whereSql}"
+        );
+        $totalsStmt->execute($whereParams);
+        $totals = $totalsStmt->fetch(PDO::FETCH_ASSOC);
+        $cashInPrincipal = round((float)($totals['cash_in_principal'] ?? 0), 2);
+        $cashOutPrincipal = round((float)($totals['cash_out_principal'] ?? 0), 2);
+        $grossFeesCash = round((float)($totals['gross_fees_cash'] ?? 0), 2);
+        $grossFeesWallet = round((float)($totals['gross_fees_wallet'] ?? 0), 2);
+        $totalTransactions = (int)($totals['total_transactions'] ?? 0);
+
+        $ncSql = "SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username
+                  FROM gcash_transactions t
+                  JOIN users u ON t.cashier_id = u.user_id
+                  WHERE t.verification_status = 'Needs checking'";
+        $ncParams = [];
+        if ($cashierId !== null) {
+            $ncSql .= " AND t.cashier_id = ?";
+            $ncParams[] = $cashierId;
+        }
+        $ncSql .= " ORDER BY t.transaction_id DESC";
+        $ncStmt = $this->pdo()->prepare($ncSql);
+        $ncStmt->execute($ncParams);
+        $unresolved = [];
+        foreach ($ncStmt->fetchAll(PDO::FETCH_ASSOC) as $nc) {
+            $isLegacy = ($nc['session_id'] === null);
+            $nc['is_legacy'] = $isLegacy;
+            $nc['created_at_formatted'] = PhilippineTime::format($nc['created_at']);
+            $nc['time_formatted'] = PhilippineTime::format($nc['created_at']);
+            $nc['principal_amount'] = $nc['principal_amount'] !== null ? (float)$nc['principal_amount'] : null;
+            $nc['fee_amount'] = $nc['fee_amount'] !== null ? (float)$nc['fee_amount'] : null;
+            $nc['gross_fee'] = (float)$nc['gross_fee'];
+            $nc['service_cash_delta'] = (float)$nc['service_cash_delta'];
+            $nc['wallet_delta'] = (float)$nc['wallet_delta'];
+            if ($isLegacy) {
+                $nc['fee_location'] = null;
+            } elseif ($nc['fee_method'] === 'cash') {
+                $nc['fee_location'] = 'cash';
+            } elseif ($nc['fee_method'] === 'wallet') {
+                $nc['fee_location'] = 'wallet';
+            } elseif ($nc['transaction_type'] === 'Cash-In') {
+                $nc['fee_location'] = 'cash';
+            } else {
+                $nc['fee_location'] = null;
+            }
+            $unresolved[] = $nc;
+        }
+
+        $diffSql = "SELECT s.*,
+                           u.full_name AS cashier_name,
+                           u.username AS cashier_username,
+                           cb.full_name AS closed_by_name,
+                           wb.full_name AS waived_by_name
+                    FROM gcash_service_sessions s
+                    JOIN users u ON s.cashier_id = u.user_id
+                    LEFT JOIN users cb ON s.closed_by = cb.user_id
+                    LEFT JOIN users wb ON s.waived_by = wb.user_id
+                    WHERE s.status = 'closed'
+                      AND (s.cash_variance != 0 OR s.wallet_variance != 0)";
+        $diffParams = [];
+        if ($cashierId !== null) {
+            $diffSql .= " AND s.cashier_id = ?";
+            $diffParams[] = $cashierId;
+        }
+        $diffSql .= " ORDER BY s.session_id DESC";
+        $diffStmt = $this->pdo()->prepare($diffSql);
+        $diffStmt->execute($diffParams);
+        $differences = [];
+        foreach ($diffStmt->fetchAll(PDO::FETCH_ASSOC) as $d) {
+            $differences[] = [
+                'session_id' => (int)$d['session_id'],
+                'shift_id' => (int)$d['shift_id'],
+                'cashier_id' => (int)$d['cashier_id'],
+                'cashier_name' => $d['cashier_name'] ?? $d['cashier_username'],
+                'cashier_username' => $d['cashier_username'],
+                'expected_service_cash' => (float)$d['expected_service_cash'],
+                'expected_wallet_balance' => (float)$d['expected_wallet_balance'],
+                'closing_service_cash' => (float)$d['closing_service_cash'],
+                'closing_wallet_balance' => (float)$d['closing_wallet_balance'],
+                'cash_variance' => (float)$d['cash_variance'],
+                'wallet_variance' => (float)$d['wallet_variance'],
+                'closing_notes' => (string)($d['closing_notes'] ?? ''),
+                'closed_at' => $d['closed_at'],
+                'closed_at_formatted' => PhilippineTime::format($d['closed_at']),
+                'closed_by' => $d['closed_by'] !== null ? (int)$d['closed_by'] : null,
+                'closed_by_name' => $d['closed_by_name'] ?? null,
+                'waiver_notes' => $d['waiver_notes'],
+                'waived_by' => $d['waived_by'] !== null ? (int)$d['waived_by'] : null,
+                'waived_by_name' => $d['waived_by_name'] ?? null,
+                'waived_at' => $d['waived_at'],
+                'waived_at_formatted' => $d['waived_at'] ? PhilippineTime::format($d['waived_at']) : null,
+                'is_waived' => $d['waived_at'] !== null,
+            ];
+        }
+
+        $page = max(1, min(100000, (int)($filters['page'] ?? 1)));
+        $limit = max(10, min(100, (int)($filters['limit'] ?? 50)));
+        $offset = ($page - 1) * $limit;
+
+        $txSql = "SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username
+                  FROM gcash_transactions t
+                  JOIN users u ON t.cashier_id = u.user_id
+                  {$whereSql}
+                  ORDER BY t.transaction_id DESC
+                  LIMIT " . ($limit + 1) . " OFFSET {$offset}";
+        $txStmt = $this->pdo()->prepare($txSql);
+        $txStmt->execute($whereParams);
+        $rows = $txStmt->fetchAll(PDO::FETCH_ASSOC);
+        $hasNext = count($rows) > $limit;
+        $txs = array_slice($rows, 0, $limit);
+
+        if ($txs !== []) {
+            $ids = array_map(static fn($r) => (int)$r['transaction_id'], $txs);
+            $inClause = implode(',', $ids);
+            $adjStmt = $this->pdo()->query("SELECT * FROM gcash_adjustments WHERE transaction_id IN ({$inClause}) ORDER BY adjustment_id ASC");
+            $adjsByTx = [];
+            foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $adj) {
+                $adjsByTx[$adj['transaction_id']][] = $adj;
+            }
+            foreach ($txs as &$tx) {
+                $tx['adjustments'] = $adjsByTx[$tx['transaction_id']] ?? [];
+                $isLegacy = ($tx['session_id'] === null);
+                $tx['is_legacy'] = $isLegacy;
+                if ($isLegacy) {
+                    $tx['shift_id'] = null;
+                    $tx['principal_amount'] = null;
+                    $tx['fee_amount'] = null;
+                    $tx['fee_method'] = null;
+                    $tx['gross_fee'] = 0.00;
+                    $tx['fee_location'] = null;
+                } else {
+                    $tx['principal_amount'] = $tx['principal_amount'] !== null ? (float)$tx['principal_amount'] : null;
+                    $tx['fee_amount'] = $tx['fee_amount'] !== null ? (float)$tx['fee_amount'] : null;
+                    $tx['gross_fee'] = (float)$tx['gross_fee'];
+                    $tx['service_cash_delta'] = (float)$tx['service_cash_delta'];
+                    $tx['wallet_delta'] = (float)$tx['wallet_delta'];
+                    if ($tx['fee_method'] === 'cash') {
+                        $tx['fee_location'] = 'cash';
+                    } elseif ($tx['fee_method'] === 'wallet') {
+                        $tx['fee_location'] = 'wallet';
+                    } elseif ($tx['transaction_type'] === 'Cash-In') {
+                        $tx['fee_location'] = 'cash';
+                    } else {
+                        $tx['fee_location'] = null;
+                    }
+                }
+                $tx['created_at_formatted'] = PhilippineTime::format($tx['created_at']);
+                $tx['reviewed_at_formatted'] = $tx['reviewed_at'] ? PhilippineTime::format($tx['reviewed_at']) : null;
+                $tx['completed_at_formatted'] = $tx['completed_at'] ? PhilippineTime::format($tx['completed_at']) : null;
+                $tx['time_formatted'] = PhilippineTime::format($tx['completed_at'] ?? $tx['reviewed_at'] ?? $tx['created_at']);
+            }
+            unset($tx);
+        }
+
+        $cashiers = [];
+        try {
+            $cashierStmt = $this->pdo()->query(
+                "SELECT DISTINCT u.user_id, u.full_name, u.username
+                 FROM users u
+                 JOIN roles r ON u.role_id = r.role_id
+                 WHERE r.role_name = 'cashier' OR u.user_id IN (SELECT DISTINCT cashier_id FROM gcash_transactions)
+                 ORDER BY u.full_name ASC"
+            );
+            $cashiers = $cashierStmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {}
+
+        return [
+            'current_expected_balances' => [
+                'expected_service_cash' => $currentExpectedCash,
+                'expected_wallet_balance' => $currentExpectedWallet,
+                'last_checked_at' => $lastCheckedAt,
+                'last_checked_formatted' => $lastCheckedFormatted,
+                'controlling_cashier_id' => $controllingCashierId,
+                'controlling_cashier_name' => $controllingCashierName,
+                'session_status' => $sessionStatus,
+            ],
+            'current_expected_service_cash' => $currentExpectedCash,
+            'current_expected_wallet_balance' => $currentExpectedWallet,
+            'last_checked_at' => $lastCheckedAt,
+            'last_checked_formatted' => $lastCheckedFormatted,
+            'controlling_cashier_id' => $controllingCashierId,
+            'controlling_cashier_name' => $controllingCashierName,
+            'session_status' => $sessionStatus,
+
+            'filtered_activity' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'cashier_id' => $cashierId,
+                'cash_in_principal' => $cashInPrincipal,
+                'cash_out_principal' => $cashOutPrincipal,
+                'gross_fees_cash' => $grossFeesCash,
+                'gross_fees_wallet' => $grossFeesWallet,
+                'gross_fees_total' => round($grossFeesCash + $grossFeesWallet, 2),
+                'total_transactions' => $totalTransactions,
+            ],
+            'cash_in_principal' => $cashInPrincipal,
+            'cash_out_principal' => $cashOutPrincipal,
+            'gross_fees_cash' => $grossFeesCash,
+            'gross_fees_wallet' => $grossFeesWallet,
+            'gross_fees_total' => round($grossFeesCash + $grossFeesWallet, 2),
+            'total_transactions' => $totalTransactions,
+
+            'unresolved_activity' => $unresolved,
+            'needs_checking' => $unresolved,
+            'unresolved_count' => count($unresolved),
+            'needs_checking_count' => count($unresolved),
+
+            'reconciliation_differences' => $differences,
+            'differences_count' => count($differences),
+
+            'transactions' => $txs,
+            'has_next' => $hasNext,
+            'page' => $page,
+            'cashiers' => $cashiers,
+            'filters' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'cashier_id' => $cashierId,
+            ],
+        ];
+    }
+
     public function getCurrentSession(): ?array
     {
         $stmt = $this->pdo()->prepare(

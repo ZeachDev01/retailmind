@@ -1091,9 +1091,109 @@ foreach ($hOther['transactions'] as $tx) {
     $check((int)$tx['cashier_id'] === $newUserId, 'Other cashier history only sees own rows');
 }
 
-// Close session 10 cleanly
+// Close session 10 cleanly or test ticket #244 Administrator GCash overview
+// Ticket #244: Administrator GCash Overview oversight
+
+// 1. Authorization check: non-admin roles refused
+$refuse(static fn() => $service->adminOverview(['actor_role' => 'cashier']));
+$refuse(static fn() => $service->adminOverview(['actor_role' => 'inventory_manager']));
+$refuse(static fn() => $service->adminOverview([]));
+
+// 2. Admin access granted and current expected balances computed
+$adminOv = $service->adminOverview(['actor_role' => 'admin']);
+$superOv = $service->adminOverview(['actor_role' => 'super_admin']);
+$check($adminOv['current_expected_balances']['expected_service_cash'] > 0, 'Current expected service cash computed');
+$check($adminOv['current_expected_balances']['expected_wallet_balance'] > 0, 'Current expected wallet balance computed');
+$check($adminOv['session_status'] === 'open', 'Session status open');
+$check($adminOv['controlling_cashier_id'] === 4, 'Controlling cashier id matches session 10');
+
+// 3. Store-wide activity aggregation across cashiers
+$expectedTotals = $pdo->query(
+    "SELECT
+        COUNT(*) AS total_transactions,
+        COALESCE(SUM(CASE WHEN transaction_type = 'Cash-In' AND verification_status = 'Completed' THEN principal_amount ELSE 0 END), 0) AS cash_in_principal,
+        COALESCE(SUM(CASE WHEN transaction_type = 'Cash-Out' AND verification_status = 'Completed' THEN principal_amount ELSE 0 END), 0) AS cash_out_principal,
+        COALESCE(SUM(CASE WHEN fee_method = 'cash' AND verification_status = 'Completed' THEN gross_fee ELSE 0 END), 0) AS gross_fees_cash,
+        COALESCE(SUM(CASE WHEN fee_method = 'wallet' AND verification_status = 'Completed' THEN gross_fee ELSE 0 END), 0) AS gross_fees_wallet
+    FROM gcash_transactions"
+)->fetch(PDO::FETCH_ASSOC);
+
+$check((float)$adminOv['cash_in_principal'] === (float)$expectedTotals['cash_in_principal'], 'Store cash in principal');
+$check((float)$adminOv['cash_out_principal'] === (float)$expectedTotals['cash_out_principal'], 'Store cash out principal');
+$check((float)$adminOv['gross_fees_cash'] === (float)$expectedTotals['gross_fees_cash'], 'Store gross fees cash');
+$check((float)$adminOv['gross_fees_wallet'] === (float)$expectedTotals['gross_fees_wallet'], 'Store gross fees wallet');
+$check((int)$adminOv['total_transactions'] === (int)$expectedTotals['total_transactions'], 'Store total transactions aggregated');
+
+// 4. Store-wide unresolved activity visibility
+$check($adminOv['unresolved_count'] >= 2, 'Store-wide unresolved count includes all cashiers');
+$foundNc4 = false;
+$foundNcOther = false;
+foreach ($adminOv['unresolved_activity'] as $item) {
+    if ((int)$item['transaction_id'] === $nc4Id) $foundNc4 = true;
+    if ((int)$item['cashier_id'] === $newUserId) $foundNcOther = true;
+}
+$check($foundNc4 && $foundNcOther, 'Both cashier 4 and other cashier unresolved items visible in admin overview');
+
+// 5. Philippine date boundaries filtering
+$today = App\Services\PhilippineTime::today();
+$dateFiltered = $service->adminOverview(['actor_role' => 'admin', 'start_date' => $today, 'end_date' => $today]);
+$check((float)$dateFiltered['cash_in_principal'] === (float)$expectedTotals['cash_in_principal'], 'Date filtered today matches');
+$pastFiltered = $service->adminOverview(['actor_role' => 'admin', 'start_date' => '2026-01-01', 'end_date' => '2026-01-02']);
+$check((float)$pastFiltered['cash_in_principal'] === 0.00, 'Past date range has zero principal');
+$check($pastFiltered['current_expected_service_cash'] === $adminOv['current_expected_service_cash'], 'Current expected balances unaffected by historical date filter');
+$refuse(static fn() => $service->adminOverview(['actor_role' => 'admin', 'start_date' => '2026-10-20', 'end_date' => '2026-10-10']));
+$refuse(static fn() => $service->adminOverview(['actor_role' => 'admin', 'start_date' => 'invalid-date']));
+
+// 6. Cashier filter
+$cashier4Filtered = $service->adminOverview(['actor_role' => 'admin', 'cashier_id' => 4]);
+$check((float)$cashier4Filtered['cash_in_principal'] === (float)$expectedTotals['cash_in_principal'], 'Cashier 4 filter matches');
+$otherFiltered = $service->adminOverview(['actor_role' => 'admin', 'cashier_id' => $newUserId]);
+$check((float)$otherFiltered['cash_in_principal'] === 0.00, 'Other cashier has zero completed cash-in');
+$check($otherFiltered['unresolved_count'] === 1, 'Other cashier unresolved isolated when cashier filtered');
+
+// 7. Legacy reference exclusion from financial totals
+$legacyFoundInAdmin = false;
+foreach ($adminOv['transactions'] as $tx) {
+    if ((int)$tx['transaction_id'] === $id) {
+        $legacyFoundInAdmin = true;
+        $check($tx['is_legacy'] === true, 'Admin history marks legacy true');
+        $check($tx['shift_id'] === null, 'Admin history legacy has null shift');
+        $check($tx['principal_amount'] === null, 'Admin history legacy has null principal');
+        $check($tx['gross_fee'] === 0.00, 'Admin history legacy has 0 gross fee');
+        $check($tx['fee_location'] === null, 'Admin history legacy has null fee location');
+    }
+}
+$check($legacyFoundInAdmin, 'Legacy transaction present in admin history');
+
+// 8. Close session 10 with non-zero variance and verify reconciliation differences & waiver
 $exp10 = $service->calculateSessionExpected($sess10);
-$service->closeSession(4, (float)$exp10['expected_service_cash'], (float)$exp10['expected_wallet_balance'], 'Session 10 test close', 1);
+$closeResult = $service->closeSession(4, (float)$exp10['expected_service_cash'] - 20.00, (float)$exp10['expected_wallet_balance'], 'Session 10 test close with variance', 1);
+$check((float)$closeResult['cash_variance'] === -20.00, 'Session 10 closed with cash variance');
+
+$afterCloseOv = $service->adminOverview(['actor_role' => 'admin']);
+$check($afterCloseOv['session_status'] === 'closed', 'Session status now closed');
+$check($afterCloseOv['differences_count'] >= 1, 'Reconciliation differences tracked');
+$sess10Diff = null;
+foreach ($afterCloseOv['reconciliation_differences'] as $diff) {
+    if ($diff['session_id'] === $sess10) { $sess10Diff = $diff; break; }
+}
+$check($sess10Diff !== null, 'Session 10 variance found in reconciliation differences');
+$check((float)$sess10Diff['cash_variance'] === -20.00, 'Session 10 cash variance matches');
+$check($sess10Diff['is_waived'] === false, 'Session 10 variance initially not waived');
+
+// Waive discrepancy
+$service->waiveDiscrepancy(1, 'admin', $sess10, 'Approved manager variance waiver');
+$afterWaiveOv = $service->adminOverview(['actor_role' => 'admin']);
+$waivedFound = false;
+foreach ($afterWaiveOv['reconciliation_differences'] as $diff) {
+    if ($diff['session_id'] === $sess10) {
+        $waivedFound = true;
+        $check($diff['is_waived'] === true, 'Session 10 variance marked waived');
+        $check($diff['waiver_notes'] === 'Approved manager variance waiver', 'Waiver notes recorded');
+        break;
+    }
+}
+$check($waivedFound, 'Waived session verified in reconciliation differences');
 
 echo "GCash MySQL integration: passed\n";
 
