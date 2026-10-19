@@ -448,27 +448,6 @@ class HeldSaleService
         }
     }
 
-    private function getTableColumns(string $table): array
-    {
-        $cols = [];
-        try {
-            if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
-                $rawCols = $this->pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
-                foreach ($rawCols as $col) {
-                    $cols[$col['Field']] = true;
-                }
-            } else {
-                $rawCols = $this->pdo->query("PRAGMA table_info(`{$table}`)")->fetchAll(PDO::FETCH_ASSOC);
-                foreach ($rawCols as $col) {
-                    $cols[$col['name']] = true;
-                }
-            }
-        } catch (\Throwable) {
-            $cols = [];
-        }
-        return $cols;
-    }
-
     /** Revalidate without altering requested lines or reserving products. */
     public function reviewCart(array $cart): array
     {
@@ -477,27 +456,18 @@ class HeldSaleService
         $proposal = [];
         $changes = [];
 
-        $prodCols = $this->getTableColumns('products');
-        $batchCols = $this->getTableColumns('product_batches');
+        $prodCols = \SalesWorkflowService::getTableColumns($this->pdo, 'products');
 
         $selectCols = ['p.product_name', 'p.unit_price'];
-        foreach (['sku', 'barcode', 'case_barcode', 'pack_barcode', 'pack_size', 'pack_price', 'status', 'reorder_level', 'safety_stock'] as $col) {
+        foreach (['sku', 'barcode', 'case_barcode', 'pack_barcode', 'pack_size', 'pack_price', 'status', 'reorder_level', 'safety_stock', 'cost_price'] as $col) {
             $selectCols[] = isset($prodCols[$col]) ? "p.{$col}" : "NULL AS {$col}";
         }
         $selectCols[] = 'i.quantity_on_hand';
         $stmt = $this->pdo->prepare("SELECT " . implode(', ', $selectCols) . "
             FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id WHERE p.product_id = ?");
 
-        $hasBatches = !empty($batchCols);
-        $hasSealed = isset($batchCols['sealed_quantity']);
-        $batchPacksStmt = ($hasBatches && $hasSealed) ? $this->pdo->prepare(
-            "SELECT COALESCE(SUM(pb.sealed_quantity), 0)
-             FROM product_batches pb
-             WHERE pb.product_id = ?
-               AND pb.remaining_quantity > 0
-               AND (pb.expiration_date IS NULL OR pb.expiration_date >= ?)"
-        ) : null;
-        $todayManila = (new \DateTimeImmutable('now', new \DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d');
+        $parsedLines = [];
+        $demandsByProduct = [];
 
         foreach ($cart as $id => $line) {
             if (!is_array($line)) {
@@ -550,6 +520,66 @@ class HeldSaleService
             ]);
             $requested[$id] = $requestedLine;
 
+            $parsedLines[] = [
+                'id' => $id,
+                'product_id' => $productId,
+                'selling_form' => $sellingForm,
+                'qty' => $qty,
+                'price' => $price,
+                'name' => $name,
+                'product' => $product,
+                'pack_size' => $packSize,
+                'pack_price' => $packPrice,
+                'has_pack_config' => $hasPackConfig,
+                'current_price' => $currentPrice,
+            ];
+
+            if ($product && $product['status'] === 'active') {
+                if (!isset($demandsByProduct[$productId])) {
+                    $demandsByProduct[$productId] = [
+                        'pack' => 0,
+                        'piece' => 0,
+                        'product' => $product,
+                        'pack_size' => $packSize,
+                        'has_pack_config' => $hasPackConfig,
+                    ];
+                }
+                if ($sellingForm !== 'pack' || $hasPackConfig) {
+                    $demandsByProduct[$productId][$sellingForm] += $qty;
+                }
+            }
+        }
+
+        // Run combined demand planning for each active product in the cart
+        $productPlans = [];
+        foreach ($demandsByProduct as $productId => $info) {
+            $costPrice = isset($info['product']['cost_price']) && $info['product']['cost_price'] !== null && $info['product']['cost_price'] !== ''
+                ? (float)$info['product']['cost_price'] : null;
+            $productPlans[$productId] = \SalesWorkflowService::planCombinedDemand(
+                $this->pdo,
+                $productId,
+                (string)$info['product']['product_name'],
+                $info['pack'],
+                $info['piece'],
+                $info['pack_size'],
+                $costPrice,
+                $info['has_pack_config'],
+                (int)($info['product']['quantity_on_hand'] ?? 0)
+            );
+        }
+
+        foreach ($parsedLines as $item) {
+            $id = $item['id'];
+            $product = $item['product'];
+            $name = $item['name'];
+            $qty = $item['qty'];
+            $sellingForm = $item['selling_form'];
+            $hasPackConfig = $item['has_pack_config'];
+            $packSize = $item['pack_size'];
+            $currentPrice = $item['current_price'];
+            $price = $item['price'];
+            $productId = $item['product_id'];
+
             if (!$product || $product['status'] !== 'active') {
                 $changes[] = $name . ': unavailable; proposed removal of ' . $qty . ' unit(s).';
                 continue;
@@ -560,15 +590,11 @@ class HeldSaleService
                 continue;
             }
 
+            $plan = $productPlans[$productId] ?? null;
             if ($sellingForm === 'pack') {
-                if ($batchPacksStmt !== null) {
-                    $batchPacksStmt->execute([$productId, $todayManila]);
-                    $stock = (int)$batchPacksStmt->fetchColumn();
-                } else {
-                    $stock = 0;
-                }
+                $stock = $plan ? (int)$plan['allocated_packs'] : 0;
             } else {
-                $stock = (int)$product['quantity_on_hand'];
+                $stock = $plan ? (int)$plan['allocated_pieces'] : 0;
             }
 
             if ($stock < 1) {

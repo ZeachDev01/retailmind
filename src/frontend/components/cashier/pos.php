@@ -281,20 +281,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
         $quantities = json_decode((string)($_POST['quantities'] ?? '{}'), true);
         $cartKey = $product['product_id'] . ':' . $sellingForm;
         $quantity = 0;
+        $existingPacks = 0;
+        $existingPieces = 0;
         if (is_array($quantities)) {
+            $existingPacks = (int)($quantities[$product['product_id'] . ':pack'] ?? 0);
+            $existingPieces = (int)($quantities[$product['product_id'] . ':piece'] ?? ($quantities[$product['product_id']] ?? 0));
             if (isset($quantities[$cartKey])) {
                 $quantity = (int)$quantities[$cartKey];
             } elseif (isset($quantities[$product['product_id']]) && !$isPackScan) {
                 $quantity = (int)$quantities[$product['product_id']];
             }
         }
-        if ($quantity < 0) {
+        if ($quantity < 0 || $existingPacks < 0 || $existingPieces < 0) {
             throw new InvalidArgumentException('Invalid cart quantity. Review the cart before scanning.');
         }
-        if ($availableStock < 1 || $quantity >= $availableStock) {
+
+        $effectivePackSize = ($hasPackConfig && $packSize > 1) ? $packSize : 1;
+        $totalDemandedBaseUnits = (($existingPacks + ($isPackScan ? 1 : 0)) * $effectivePackSize) + $existingPieces + ($isPackScan ? 0 : 1);
+        $onHandBaseUnits = (int)$product['quantity_on_hand'];
+
+        if ($isPackScan && ($availableStock < 1 || ($existingPacks + 1) > $availableStock)) {
+            throw new InvalidArgumentException('Insufficient sealed pack stock. Only ' . $availableStock . ' available.');
+        }
+        if ($totalDemandedBaseUnits > $onHandBaseUnits) {
             throw new InvalidArgumentException($isPackScan
-                ? 'Insufficient sealed pack stock. Only ' . $availableStock . ' available.'
-                : 'Insufficient stock. Only ' . (int)$product['quantity_on_hand'] . ' available.');
+                ? 'Insufficient stock to add pack. Only ' . $onHandBaseUnits . ' base units available.'
+                : 'Insufficient stock. Only ' . $onHandBaseUnits . ' available.');
         }
 
         $product['selling_form'] = $sellingForm;
@@ -451,6 +463,8 @@ require __DIR__ . '/../../../backend/app/Views/sale_receipt_support.php';
 // CashierShiftService::LOCKED_MESSAGE — no second instance is built to read it.
 $heldSaleDiscardReasons = \App\Services\HeldSaleService::DISCARD_REASONS;
 
+require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
+$todayManila = \App\Services\PhilippineTime::today();
 [$quickProductScope, $quickProductParams] = store_product_scope('p');
 $quickProductStmt = $pdo->prepare(
     "SELECT p.product_id, p.sku, p.barcode, p.pack_barcode, p.pack_size, p.pack_price, p.product_name, p.variant_label, p.unit_price,
@@ -458,15 +472,23 @@ $quickProductStmt = $pdo->prepare(
             COALESCE(p.reorder_level, 0) AS reorder_level,
             COALESCE(p.safety_stock, 0) AS safety_stock,
             COALESCE(p.quantity_sold, 0) AS quantity_sold,
-            COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+            COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
+            COALESCE(batch_packs.sealed_packs, 0) AS sealed_packs
      FROM products p
      LEFT JOIN inventory i ON i.product_id = p.product_id
      LEFT JOIN categories c ON c.category_id = p.category_id
+     LEFT JOIN (
+         SELECT product_id, SUM(sealed_quantity) AS sealed_packs
+         FROM product_batches
+         WHERE remaining_quantity > 0
+           AND (expiration_date IS NULL OR expiration_date >= ?)
+         GROUP BY product_id
+     ) batch_packs ON batch_packs.product_id = p.product_id
      WHERE p.status = 'active'{$quickProductScope}
      ORDER BY COALESCE(p.quantity_sold, 0) DESC, p.product_name
      LIMIT 120"
 );
-$quickProductStmt->execute($quickProductParams);
+$quickProductStmt->execute(array_merge([$todayManila], $quickProductParams));
 $quickProducts = array_map(static function (array $product): array {
     $image = trim((string)($product['product_image'] ?? ''));
     if ($image !== '' && !preg_match('#^(?:https?://|data:image/|/)#i', $image)) {
@@ -485,6 +507,7 @@ $quickProducts = array_map(static function (array $product): array {
         'pack_price' => isset($product['pack_price']) && $product['pack_price'] !== null ? (float)$product['pack_price'] : null,
         'price' => (float)$product['unit_price'],
         'quantity_on_hand' => (int)$product['quantity_on_hand'],
+        'sealed_packs' => (int)($product['sealed_packs'] ?? 0),
         'reorder_level' => (int)$product['reorder_level'],
         'safety_stock' => (int)$product['safety_stock'],
         'quantity_sold' => (int)$product['quantity_sold'],
@@ -1021,9 +1044,14 @@ function addQuickProduct(productId, sellingForm = 'piece') {
         return;
     }
     const isPack = sellingForm === 'pack';
+    if (isPack && Number(product.sealed_packs || 0) <= 0) {
+        showCartMessage('Insufficient sealed pack stock.', 'warning');
+        return;
+    }
     const price = isPack && product.pack_price ? product.pack_price : product.price;
     const packSize = isPack ? product.pack_size : null;
-    addToCart(product.product_id, product.name, price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode, sellingForm, packSize);
+    const availableStock = isPack ? Number(product.sealed_packs || 0) : Number(product.quantity_on_hand);
+    addToCart(product.product_id, product.name, price, availableStock, product.reorder_level, product.safety_stock, product.sku, product.barcode, sellingForm, packSize);
 }
 
 function updateQuickProductAvailability() {
@@ -1043,6 +1071,10 @@ function updateQuickProductAvailability() {
         if (hasPack) {
             const pieceQty = Number(cart[`${product.product_id}:piece`]?.qty || cart[product.product_id]?.qty || 0);
             const packQty = Number(cart[`${product.product_id}:pack`]?.qty || 0);
+            const sealedStock = Number(product.sealed_packs || 0);
+            const remainingPacks = sealedStock - packQty;
+            const totalBaseInCart = (packQty * Number(product.pack_size)) + pieceQty;
+            const remainingBase = stock - totalBaseInCart;
             card.classList.toggle('selected', pieceQty > 0 || packQty > 0);
 
             let pieceHtml = '';
@@ -1050,10 +1082,10 @@ function updateQuickProductAvailability() {
                 pieceHtml = `<div class="quick-product-stepper" aria-label="${escapeHtml(product.name)} piece quantity">
                     <button type="button" data-quick-decrease="${Number(product.product_id)}:piece" aria-label="Decrease piece"><i class="bi bi-dash-lg" aria-hidden="true"></i></button>
                     <strong>${pieceQty} pc</strong>
-                    <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" aria-label="Add piece"><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+                    <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" aria-label="Add piece" ${remainingBase <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
                 </div>`;
             } else {
-                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-plus-lg" aria-hidden="true"></i>Piece</button>`;
+                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remainingBase <= 0 ? 'disabled' : ''} style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-plus-lg" aria-hidden="true"></i>Piece</button>`;
             }
 
             let packHtml = '';
@@ -1061,10 +1093,11 @@ function updateQuickProductAvailability() {
                 packHtml = `<div class="quick-product-stepper" aria-label="${escapeHtml(product.name)} pack quantity">
                     <button type="button" data-quick-decrease="${Number(product.product_id)}:pack" aria-label="Decrease pack"><i class="bi bi-dash-lg" aria-hidden="true"></i></button>
                     <strong>${packQty} pk</strong>
-                    <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" aria-label="Add pack"><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+                    <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" aria-label="Add pack" ${(remainingPacks <= 0 || remainingBase < Number(product.pack_size)) ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
                 </div>`;
             } else {
-                packHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-box-seam" aria-hidden="true"></i>Pack of ${product.pack_size}</button>`;
+                const packDisabled = (sealedStock <= 0 || remainingBase < Number(product.pack_size));
+                packHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" ${packDisabled ? 'disabled' : ''} style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-box-seam" aria-hidden="true"></i>Pack of ${product.pack_size}</button>`;
             }
 
             action.innerHTML = `<div style="display:flex;gap:0.35rem;width:100%;align-items:center;">${pieceHtml}${packHtml}</div>`;
@@ -1079,7 +1112,7 @@ function updateQuickProductAvailability() {
                     <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" aria-label="Add another ${escapeHtml(product.name)}" ${remaining <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
                 </div>`;
             } else {
-                action.innerHTML = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece"><i class="bi bi-plus-lg" aria-hidden="true"></i>Add to Cart</button>`;
+                action.innerHTML = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remaining <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i>Add to Cart</button>`;
             }
         }
     });
@@ -1485,7 +1518,10 @@ async function fetchProductByCode(code) {
                 const catalogMap = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap);
                 const inMem = catalogMap?.get(productId);
                 const initialStock = inMem?.initial_stock !== undefined ? inMem.initial_stock : Number(localProduct.quantity_on_hand);
-                const currentQty = Number(cart[productId]?.qty || 0);
+                const packQty = Number(cart[`${productId}:pack`]?.qty || 0);
+                const pieceQty = Number(cart[`${productId}:piece`]?.qty || cart[productId]?.qty || 0);
+                const packSize = Number(localProduct.pack_size || 1);
+                const currentQty = (packQty * packSize) + pieceQty;
 
                 if (currentQty >= initialStock) {
                     showRecentScan(null, normalized, 'warning');
@@ -1579,16 +1615,55 @@ function cartChangesAllowed() {
     return true;
 }
 
+function cartLineKey(productId, form = 'piece') {
+    return `${Number(productId)}:${form === 'pack' ? 'pack' : 'piece'}`;
+}
+
+function resolveCartKey(id, form = null) {
+    if (cart[id]) return id;
+    const strId = String(id);
+    if (strId.includes(':')) {
+        const [rawPid, keyForm] = strId.split(':');
+        const targetForm = form || keyForm;
+        const targetKey = cartLineKey(rawPid, targetForm);
+        if (cart[targetKey]) return targetKey;
+        if (targetForm === 'piece' && cart[rawPid]) return rawPid;
+        return targetKey;
+    }
+    const pid = Number(strId);
+    if (form) {
+        const direct = cartLineKey(pid, form);
+        if (cart[direct]) return direct;
+        if (form === 'piece' && cart[pid]) return pid;
+        return direct;
+    }
+    const pieceKey = `${pid}:piece`;
+    if (cart[pieceKey]) return pieceKey;
+    const packKey = `${pid}:pack`;
+    if (cart[packKey]) return packKey;
+    return id;
+}
+
+function cartItemForm(key, item = null) {
+    if (item?.selling_form) return item.selling_form;
+    return String(key).endsWith(':pack') ? 'pack' : 'piece';
+}
+
+function cartItemProductId(key, item = null) {
+    if (item?.product_id) return Number(item.product_id);
+    return Number(String(key).split(':')[0]) || 0;
+}
+
 function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '', sellingForm = 'piece', packSize = null) {
     if (!cartChangesAllowed()) return false;
     const productId = Number(id);
     const form = sellingForm === 'pack' ? 'pack' : 'piece';
-    const lineKey = `${productId}:${form}`;
-    const currentKey = cart[lineKey] ? lineKey : (cart[productId] && form === 'piece' ? productId : lineKey);
+    const lineKey = cartLineKey(productId, form);
+    const currentKey = resolveCartKey(lineKey, form);
     const currentQty = cart[currentKey]?.qty || 0;
     const availableStock = Number(stock);
     if (currentQty + 1 > availableStock) {
-        showCartMessage('Insufficient stock.', 'warning');
+        showCartMessage(form === 'pack' ? 'Insufficient sealed pack stock.' : 'Insufficient stock.', 'warning');
         return false;
     }
 
@@ -1622,7 +1697,7 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
 
 function updateCartQty(id, newQty) {
     if (!cartChangesAllowed()) return;
-    const key = cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id));
+    const key = (typeof resolveCartKey === 'function') ? resolveCartKey(id) : (cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id)));
     const item = cart[key];
     if (!item) {
         return;
@@ -1641,14 +1716,14 @@ function updateCartQty(id, newQty) {
     } else {
         cart[key].qty = qty;
     }
-    const pid = item.product_id || parseInt(key, 10);
+    const pid = (typeof cartItemProductId === 'function') ? cartItemProductId(key, item) : (item.product_id || parseInt(key, 10));
     if (typeof syncCatalogStock === 'function') syncCatalogStock(pid);
     renderCart();
     showCartMessage('Cart updated successfully.', 'info');
 }
 
 function changeCartQty(id, delta) {
-    const key = cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id));
+    const key = (typeof resolveCartKey === 'function') ? resolveCartKey(id) : (cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id)));
     const item = cart[key];
     if (item) {
         updateCartQty(key, item.qty + delta);
@@ -1657,12 +1732,12 @@ function changeCartQty(id, delta) {
 
 function removeFromCart(id) {
     if (!cartChangesAllowed()) return;
-    const key = cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id));
+    const key = (typeof resolveCartKey === 'function') ? resolveCartKey(id) : (cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id)));
     if (!cart[key]) {
         return;
     }
     const itemName = cart[key].name;
-    const pid = cart[key].product_id || parseInt(key, 10);
+    const pid = (typeof cartItemProductId === 'function') ? cartItemProductId(key, cart[key]) : (cart[key].product_id || parseInt(key, 10));
     delete cart[key];
     if (typeof syncCatalogStock === 'function') syncCatalogStock(pid);
     renderCart();
@@ -1996,12 +2071,16 @@ function renderStockConflictItems() {
 
     for (const item of activeStockConflicts) {
         const id = Number(item.product_id);
-        const name = escapeHtml(item.product_name);
+        const form = item.selling_form === 'pack' ? 'pack' : 'piece';
+        const lineKey = cartLineKey(id, form);
+        const name = escapeHtml(item.product_name) + `<span class="badge" style="margin-left:0.35rem;font-size:0.75rem;background:#6c757d;color:#fff;padding:0.15rem 0.35rem;border-radius:3px;">${form === 'pack' ? 'Pack' : 'Piece'}</span>`;
         const requested = Number(item.requested_qty);
         const available = Number(item.available_stock);
-        const currentInCart = cart[id] ? Number(cart[id].qty) : Number(cart[`${id}:piece`]?.qty || cart[`${id}:pack`]?.qty || 0);
+        const resolvedKey = resolveCartKey(lineKey, form);
+        const currentInCart = cart[resolvedKey] ? Number(cart[resolvedKey].qty) : (cart[id] && form === 'piece' ? Number(cart[id].qty) : 0);
+        const escapedKey = escapeHtml(lineKey);
 
-        html += `<tr data-conflict-id="${id}" style="border-bottom:1px solid var(--border-color, #eee);">
+        html += `<tr data-conflict-key="${escapedKey}" style="border-bottom:1px solid var(--border-color, #eee);">
             <td style="padding:0.5rem;"><strong class="conflict-product-name">${name}</strong></td>
             <td style="padding:0.5rem; text-align:center;" class="conflict-requested-qty">${requested}</td>
             <td style="padding:0.5rem; text-align:center;"><strong class="conflict-available-stock ${available > 0 ? 'text-warning' : 'text-danger'}">${available}</strong></td>
@@ -2010,14 +2089,14 @@ function renderStockConflictItems() {
         if (available > 0) {
             html += `<div style="display:inline-flex; align-items:center; gap:0.25rem;">
                 <input type="number" min="1" max="${available}" value="${Math.min(currentInCart || available, available)}"
-                       class="conflict-qty-input" data-product-id="${id}" style="width:60px; padding:0.25rem;"
-                       onchange="updateConflictItemQty(${id}, Number(this.value), ${available})">
-                <button type="button" class="btn btn-sm btn-secondary adjust-conflict-qty-btn" onclick="adjustConflictItemQty(${id}, ${available})">Set to ${available}</button>
-                <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem(${id})">Remove</button>
+                       class="conflict-qty-input" data-conflict-key="${escapedKey}" style="width:60px; padding:0.25rem;"
+                       onchange="updateConflictItemQty('${escapedKey}', Number(this.value), ${available})">
+                <button type="button" class="btn btn-sm btn-secondary adjust-conflict-qty-btn" onclick="adjustConflictItemQty('${escapedKey}', ${available})">Set to ${available}</button>
+                <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem('${escapedKey}')">Remove</button>
             </div>`;
         } else {
             html += `<span class="badge" style="background:#dc3545; color:#fff; padding:0.25rem 0.5rem; border-radius:4px; margin-right:0.5rem;">Depleted</span>
-                     <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem(${id})">Remove</button>`;
+                     <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem('${escapedKey}')">Remove</button>`;
         }
 
         html += `</td></tr>`;
@@ -2027,10 +2106,9 @@ function renderStockConflictItems() {
     container.innerHTML = html;
 }
 
-function updateConflictItemQty(productId, qty, maxAvailable) {
-    productId = Number(productId);
+function updateConflictItemQty(lineKey, qty, maxAvailable) {
     const validQty = Math.max(1, Math.min(Number(qty) || 1, maxAvailable));
-    const key = cart[productId] ? productId : (cart[`${productId}:piece`] ? `${productId}:piece` : (cart[`${productId}:pack`] ? `${productId}:pack` : productId));
+    const key = resolveCartKey(lineKey);
     if (cart[key]) {
         cart[key].qty = validQty;
         cart[key].stock = maxAvailable;
@@ -2039,9 +2117,8 @@ function updateConflictItemQty(productId, qty, maxAvailable) {
     }
 }
 
-function adjustConflictItemQty(productId, targetQty) {
-    productId = Number(productId);
-    const key = cart[productId] ? productId : (cart[`${productId}:piece`] ? `${productId}:piece` : (cart[`${productId}:pack`] ? `${productId}:pack` : productId));
+function adjustConflictItemQty(lineKey, targetQty) {
+    const key = resolveCartKey(lineKey);
     if (cart[key]) {
         cart[key].qty = targetQty;
         cart[key].stock = targetQty;
@@ -2051,26 +2128,25 @@ function adjustConflictItemQty(productId, targetQty) {
     }
 }
 
-function removeConflictItem(productId) {
-    productId = Number(productId);
-    delete cart[productId];
-    delete cart[`${productId}:piece`];
-    delete cart[`${productId}:pack`];
+function removeConflictItem(lineKey) {
+    const key = resolveCartKey(lineKey);
+    const pid = cartItemProductId(key, cart[key]);
+    delete cart[key];
+    if (typeof syncCatalogStock === 'function') syncCatalogStock(pid);
     renderCart();
     persistCart();
-    activeStockConflicts = activeStockConflicts.filter(c => Number(c.product_id) !== productId);
+    activeStockConflicts = activeStockConflicts.filter(c => cartLineKey(c.product_id, c.selling_form) !== String(lineKey));
     renderStockConflictItems();
 }
 
 function applyStockConflictAdjustments() {
     for (const conflict of activeStockConflicts) {
-        const id = Number(conflict.product_id);
+        const form = conflict.selling_form === 'pack' ? 'pack' : 'piece';
+        const lineKey = cartLineKey(conflict.product_id, form);
         const avail = Number(conflict.available_stock);
-        const key = cart[id] ? id : (cart[`${id}:piece`] ? `${id}:piece` : (cart[`${id}:pack`] ? `${id}:pack` : id));
+        const key = resolveCartKey(lineKey, form);
         if (avail <= 0) {
-            delete cart[id];
-            delete cart[`${id}:piece`];
-            delete cart[`${id}:pack`];
+            delete cart[key];
         } else if (cart[key] && cart[key].qty > avail) {
             cart[key].qty = avail;
             cart[key].stock = avail;
@@ -2086,12 +2162,19 @@ function applyStockConflictAdjustments() {
     checkoutNow();
 }
 
-window.showStockConflictModal = showStockConflictModal;
-window.closeStockConflictModal = closeStockConflictModal;
-window.adjustConflictItemQty = adjustConflictItemQty;
-window.removeConflictItem = removeConflictItem;
-window.applyStockConflictAdjustments = applyStockConflictAdjustments;
-window.checkoutNow = checkoutNow;
+if (typeof window !== 'undefined') {
+    window.cartLineKey = cartLineKey;
+    window.resolveCartKey = resolveCartKey;
+    window.cartItemForm = cartItemForm;
+    window.cartItemProductId = cartItemProductId;
+    window.showStockConflictModal = showStockConflictModal;
+    window.closeStockConflictModal = closeStockConflictModal;
+    window.updateConflictItemQty = updateConflictItemQty;
+    window.adjustConflictItemQty = adjustConflictItemQty;
+    window.removeConflictItem = removeConflictItem;
+    window.applyStockConflictAdjustments = applyStockConflictAdjustments;
+    window.checkoutNow = checkoutNow;
+}
 
 async function apiHeldSale(action, payload = {}) {
     return cartWorkspace.request(action, payload);

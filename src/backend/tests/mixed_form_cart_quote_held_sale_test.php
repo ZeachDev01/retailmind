@@ -263,10 +263,10 @@ $quote = $service->reviewQuote($mixedCart, 1, 'cashier');
 $assert(count($quote['sale']['items']) === 2, 'Mixed cart maintains 2 distinct lines for same Product');
 $assert($quote['total'] === 130.00, 'Total is 100.00 (pack) + 30.00 (pieces) = 130.00');
 
-// Test 1.3: Quote fingerprint distinguishes between 1 pack vs 1 piece
-$attemptA = $service->attemptFingerprintForTest([['product_id' => 1, 'selling_form' => 'pack', 'qty' => 1]], 'cash', []);
-$attemptB = $service->attemptFingerprintForTest([['product_id' => 1, 'selling_form' => 'piece', 'qty' => 1]], 'cash', []);
-$assert($attemptA !== $attemptB, 'Quote fingerprint differs between pack and piece of the same product');
+// Test 1.3: Quote state hash distinguishes between 1 pack vs 1 piece
+$quoteA = $service->reviewQuote([['product_id' => 1, 'selling_form' => 'pack', 'qty' => 1]], 1, 'cashier');
+$quoteB = $service->reviewQuote([['product_id' => 1, 'selling_form' => 'piece', 'qty' => 1]], 1, 'cashier');
+$assert($quoteA['state_hash'] !== $quoteB['state_hash'], 'Quote state hash differs between pack and piece of the same product');
 
 // Test 1.4: 12 loose pieces retain piece pricing (120.00), not automatic pack pricing
 $twelvePiecesCart = [['product_id' => 1, 'selling_form' => 'piece', 'qty' => 12]];

@@ -94,8 +94,8 @@ function updateQuickProductAvailability() {}
 
 vm.runInContext(getHelpers, context);
 
-// Extract addToCart through validateCheckout
-const startSlice = source.indexOf('function addToCart(');
+// Extract cartLineKey/addToCart through validateCheckout
+const startSlice = source.indexOf('function cartLineKey(');
 const endSlice = source.indexOf('async function checkoutNow(');
 assert.ok(startSlice !== -1 && endSlice !== -1, 'functions found in source');
 vm.runInContext(source.slice(startSlice, endSlice), context);
@@ -163,5 +163,54 @@ context.removeFromCart('1:pack');
 assert.equal(context.cart['1:pack'], undefined, 'Pack line removed');
 assert.ok(context.cart['1:piece'], 'Piece line preserved');
 assert.equal(context.getCartTotal(), 20.0, 'Total is 2 * 10 = 20');
+
+// 9. Composite key helpers
+assert.equal(context.cartLineKey(5, 'pack'), '5:pack');
+assert.equal(context.cartLineKey(5, 'piece'), '5:piece');
+assert.equal(context.cartItemForm('5:pack'), 'pack');
+assert.equal(context.cartItemForm('5:piece'), 'piece');
+assert.equal(context.cartItemProductId('5:pack'), 5);
+
+// 10. Sealed pack stock limit in addToCart
+alerts.length = 0;
+context.addToCart(2, 'Product B', 50.0, 1, 0, 0, 'SKU-B', 'BAR-B-PK', 'pack', 6);
+assert.ok(context.cart['2:pack'], 'First pack added');
+const addedSecond = context.addToCart(2, 'Product B', 50.0, 1, 0, 0, 'SKU-B', 'BAR-B-PK', 'pack', 6);
+assert.equal(addedSecond, false, 'Second pack refused by sealed stock limit');
+assert.equal(alerts.at(-1)[0], 'Insufficient sealed pack stock.');
+
+// 11. Stock conflict modal keyed by composite line key
+const conflictSlice = source.slice(source.indexOf('let activeStockConflicts = [];'), source.indexOf('async function apiHeldSale('));
+context.stockConflictModal = getMockElement('stock-conflict-modal');
+context.RetailMindUI.openOverlay = () => {};
+context.RetailMindUI.closeOverlay = () => {};
+vm.runInContext(conflictSlice, context);
+
+// Setup cart with both forms for product 3
+context.cart['3:piece'] = { product_id: 3, name: 'Product C', qty: 5, price: 10, selling_form: 'piece' };
+context.cart['3:pack'] = { product_id: 3, name: 'Product C (Pack)', qty: 2, price: 100, selling_form: 'pack', pack_size: 10 };
+
+// Render conflict targeting only the pack form
+const conflicts = [{
+    product_id: 3,
+    selling_form: 'pack',
+    product_name: 'Product C',
+    requested_qty: 2,
+    available_stock: 1
+}];
+context.showStockConflictModal(conflicts);
+const modalHtml = getMockElement('stock-conflict-content').innerHTML;
+assert.ok(modalHtml.includes('3:pack'), 'Conflict modal targets 3:pack key');
+assert.ok(modalHtml.includes('Pack'), 'Conflict modal displays Pack badge');
+
+// Adjust only the pack line
+context.adjustConflictItemQty('3:pack', 1);
+assert.equal(context.cart['3:pack'].qty, 1, 'Pack line adjusted to 1');
+assert.equal(context.cart['3:piece'].qty, 5, 'Piece line preserved at 5');
+
+// Remove only the pack line via conflict action
+context.removeConflictItem('3:pack');
+assert.equal(context.cart['3:pack'], undefined, 'Pack line removed via conflict');
+assert.equal(context.cart['3:piece'].qty, 5, 'Piece line remains untouched in cart');
 
 console.log('POS Mixed-Form Cart JS tests PASSED!');
