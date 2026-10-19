@@ -19,13 +19,15 @@ const frontend = path.resolve(__dirname, '../../frontend');
             const html = execFileSync(process.env.PHP_BINARY || 'php', [], {
                 encoding: 'utf8',
                 input: `<?php
+                    require_once '${path.join(frontend, '../backend/app/Services/PhilippineTime.php').replace(/\\/g, '/')}';
                     $lowStockProductIds = $expiredProductIds = $expiringProductIds = [];
                     $products = [];
                     foreach ([1234.5, 0, null] as $id => $cost) {
                         $products[] = ['product_id' => $id + 1, 'product_name' => 'Product ' . $id,
                             'brand' => 'Test', 'sku' => 'SKU-' . $id, 'barcode' => '123456789' . $id,
                             'category_name' => 'Test', 'unit_price' => 1500, 'cost_price' => $cost,
-                            'quantity_on_hand' => 10, 'reorder_level' => 2];
+                            'quantity_on_hand' => [10, 0, 1][$id], 'reorder_level' => 2,
+                            'next_expiration' => null];
                     }
                 ?>${table}`,
             });
@@ -40,13 +42,14 @@ const frontend = path.resolve(__dirname, '../../frontend');
             const headers = (await page.locator('thead th').allTextContents()).map(text => text.trim());
             const sellingIndex = headers.indexOf('Selling Price');
             const productsPage = file === 'products.php';
-            assert.equal(headers[sellingIndex - (productsPage ? 1 : 3)], 'Product', 'Comparison columns immediately follow Product');
+            assert.equal(headers[sellingIndex - (productsPage ? 1 : 4)], 'Product', 'Comparison columns follow Product and inventory status');
             assert.ok(sellingIndex >= 0, 'Selling Price remains visible');
             assert.equal(headers[sellingIndex + 1], 'Cost Price', 'Cost Price appears immediately beside Selling Price');
             if (productsPage) {
                 assert.ok(!headers.includes('SKU / Barcode'), 'Products table omits SKU / Barcode');
                 assert.ok(!headers.includes('Category'), 'Products table omits Category');
             } else {
+                assert.equal(headers[headers.indexOf('Product') + 1], 'Status', 'Inventory status appears immediately after Product');
                 assert.deepEqual(headers.slice(sellingIndex - 2, sellingIndex + 2), ['SKU / Barcode', 'Category', 'Selling Price', 'Cost Price']);
             }
             const rows = page.locator('tbody tr');
@@ -57,8 +60,31 @@ const frontend = path.resolve(__dirname, '../../frontend');
                 assert.equal((await cells.nth(sellingIndex + 1).innerText()).trim(), expectedCost);
                 assert.equal(await cells.nth(sellingIndex + 1).isVisible(), true);
                 if (!productsPage) {
+                    assert.equal((await cells.nth(headers.indexOf('Status')).innerText()).trim(), ['Available', 'Out of stock', 'Low stock'][index]);
                     assert.equal((await cells.nth(sellingIndex - 2).innerText()).replace(/\s+/g, ' ').trim(), `SKU-${index} 123456789${index}`);
                     assert.equal((await cells.nth(sellingIndex - 1).innerText()).trim(), 'Test');
+                }
+            }
+            if (!productsPage) {
+                await page.locator('body').evaluate(body => body.insertAdjacentHTML('beforeend', `
+                    <div id="overview-default-view"></div><div id="overview-product-view"></div>
+                    <div id="overview-product-empty"></div><input id="overview-product-search">
+                    <select id="overview-category-filter"><option value=""></option></select>
+                    <div id="overview-product-pagination"></div><span id="overview-page-summary"></span>
+                    <span id="overview-page-status"></span><button id="overview-page-previous"></button>
+                    <button id="overview-page-next"></button><button id="overview-back"></button>`));
+                const script = source.slice(source.indexOf('    const productView ='), source.indexOf("    productSearch.addEventListener('input'"));
+                await page.addScriptTag({ content: "const defaultView = document.getElementById('overview-default-view');" + script });
+                for (const [column, ascending, descending] of [
+                    ['Status', ['Product 0', 'Product 2', 'Product 1'], ['Product 1', 'Product 2', 'Product 0']],
+                    ['Cost Price', ['Product 1', 'Product 2', 'Product 0'], ['Product 0', 'Product 1', 'Product 2']],
+                    ['SKU / Barcode', ['Product 0', 'Product 1', 'Product 2'], ['Product 2', 'Product 1', 'Product 0']],
+                ]) {
+                    const sort = page.getByRole('button', { name: column, exact: true });
+                    await sort.click();
+                    assert.deepEqual(await rows.locator('.overview-product-name strong').allTextContents(), ascending, `${column}: ascending sort uses the matching cell`);
+                    await sort.click();
+                    assert.deepEqual(await rows.locator('.overview-product-name strong').allTextContents(), descending, `${column}: descending sort uses the matching cell`);
                 }
             }
             if (file === 'products.php') {

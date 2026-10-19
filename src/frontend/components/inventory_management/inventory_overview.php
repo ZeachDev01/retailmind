@@ -292,15 +292,15 @@ $chartDataJson = json_encode([
                         <tr>
                             <th class="overview-select-cell"><input type="checkbox" id="overview-select-all" aria-label="Select all visible products"></th>
                             <th aria-sort="none"><button type="button" data-sort-column="1">Product <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="2">SKU / Barcode <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="3">Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="4" data-sort-type="number">Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="5" data-sort-type="number">Cost Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="6" data-sort-type="number">On Hand <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="7" data-sort-type="number">Expired Qty <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="2">Status <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="3">SKU / Barcode <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="4">Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="5" data-sort-type="number">Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="6" data-sort-type="number">Cost Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="7" data-sort-type="number">On Hand <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="8" data-sort-type="number">Expired Qty <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th class="overview-col-undated" style="display:none;">Qty Without Date</th>
-                            <th aria-sort="none"><button type="button" data-sort-column="9" data-sort-type="date">Next Expiration <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="10">Status <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="10" data-sort-type="date">Next Expiration <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -328,6 +328,7 @@ $chartDataJson = json_encode([
                     <tr data-overview-product-row data-category="<?= htmlspecialchars($productCategory) ?>" data-search="<?= htmlspecialchars(implode(' ', [$product['product_name'], $product['brand'] ?? '', $product['sku'] ?? '', $product['barcode'] ?? ''])) ?>" data-stock-state="<?= $stockState ?>" data-low="<?= $isLowStock ? '1' : '0' ?>" data-expiring="<?= $isExpiring ? '1' : '0' ?>" data-expired="<?= $isExpired ? '1' : '0' ?>" data-missing-exp="<?= $hasMissingExp ? '1' : '0' ?>" data-unbatched="<?= $hasUnbatched ? '1' : '0' ?>">
                         <td class="overview-select-cell"><input type="checkbox" class="overview-row-select" aria-label="Select <?= htmlspecialchars($product['product_name']) ?>"></td>
                         <td data-sort-value="<?= htmlspecialchars($product['product_name']) ?>"><div class="overview-product-name"><span class="overview-product-thumb"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span><strong><?= htmlspecialchars($product['product_name']) ?></strong><small><?= htmlspecialchars($product['brand'] ?: 'No brand') ?></small></span></div></td>
+                        <td><span class="overview-stock-status overview-stock-status--<?= $statusClass ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
                         <td data-sort-value="<?= htmlspecialchars(($product['sku'] ?? '') . ' ' . ($product['barcode'] ?? '')) ?>"><strong><?= htmlspecialchars($product['sku'] ?? '-') ?></strong><small><?= htmlspecialchars($product['barcode'] ?: 'Not assigned') ?></small></td>
                         <td><?= htmlspecialchars($productCategory) ?></td>
                         <td data-sort-value="<?= (float)($product['unit_price'] ?? 0) ?>">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
@@ -357,7 +358,6 @@ $chartDataJson = json_encode([
                             <?php endif; ?>
                         </td>
                         <td data-sort-value="<?= htmlspecialchars($product['next_expiration'] ?? '') ?>"><span class="overview-next-exp"><?= $nextExp ?></span></td>
-                        <td><span class="overview-stock-status overview-stock-status--<?= $statusClass ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
                         <td>
                             <button type="button" class="btn btn-sm btn-quiet btn-view-batches" data-product-id="<?= $productId ?>" data-product-name="<?= htmlspecialchars($product['product_name']) ?>" data-unbatched="<?= $hasUnbatched ? '1' : '0' ?>" data-unbatched-qty="<?= $unbatchedQty ?>" title="View Batches">
                                 <i class="bi bi-boxes" aria-hidden="true"></i> View Batches
