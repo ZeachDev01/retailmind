@@ -116,6 +116,14 @@ class InventoryCountService
         $batchEntries = [];
         $totalBatchPhysical = 0;
 
+        $parseNonNegativeInt = static function ($val, string $msg): int {
+            $isNonNegativeInt = (is_int($val) && $val >= 0) || (is_string($val) && preg_match('/^\d+$/D', $val));
+            if (!$isNonNegativeInt) {
+                throw new RuntimeException($msg);
+            }
+            return (int)$val;
+        };
+
         if ($hasBatches) {
             $seenBatchIds = [];
             foreach ($rawBatches as $b) {
@@ -124,10 +132,7 @@ class InventoryCountService
                 if ($bId === null && ($bQtyRaw === null || $bQtyRaw === '' || (int)$bQtyRaw <= 0)) {
                     continue;
                 }
-                if ($bQtyRaw === null || $bQtyRaw === '' || (int)$bQtyRaw < 0) {
-                    throw new RuntimeException('Batch physically counted quantity cannot be negative.');
-                }
-                $bQty = (int)$bQtyRaw;
+                $bQty = $parseNonNegativeInt($bQtyRaw, 'Batch physically counted quantity must be a non-negative whole number.');
 
                 if ($bId !== null) {
                     if (isset($seenBatchIds[$bId])) {
@@ -159,7 +164,7 @@ class InventoryCountService
 
             if (count($batchEntries) > 0) {
                 if (isset($data['physical_quantity']) && $data['physical_quantity'] !== '') {
-                    $physicalQty = (int)$data['physical_quantity'];
+                    $physicalQty = $parseNonNegativeInt($data['physical_quantity'], 'Physically counted quantity must be a non-negative whole number.');
                     if ($physicalQty !== $totalBatchPhysical) {
                         throw new RuntimeException('Physically counted quantity does not match the sum of batch quantities.');
                     }
@@ -167,14 +172,10 @@ class InventoryCountService
                     $physicalQty = $totalBatchPhysical;
                 }
             } else {
-                $physicalQty = (int)($data['physical_quantity'] ?? -1);
+                $physicalQty = $parseNonNegativeInt($data['physical_quantity'] ?? null, 'Physically counted quantity must be a non-negative whole number.');
             }
         } else {
-            $physicalQty = (int)($data['physical_quantity'] ?? -1);
-        }
-
-        if ($physicalQty < 0) {
-            throw new RuntimeException('Physically counted quantity cannot be negative.');
+            $physicalQty = $parseNonNegativeInt($data['physical_quantity'] ?? null, 'Physically counted quantity must be a non-negative whole number.');
         }
 
         StoreWriteGate::begin($this->pdo);

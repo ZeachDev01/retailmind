@@ -1371,7 +1371,7 @@ foreach ($products as $product) {
                                 <select id="product-base-unit" data-unit-field="base_unit">
                                     <option value="piece">Piece</option><option value="bottle">Bottle</option><option value="can">Can</option><option value="sachet">Sachet</option>
                                     <option value="stick">Stick</option><option value="pack">Pack</option><option value="bag">Bag</option><option value="box">Box</option>
-                                    <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option>
+                                    <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option><option value="pouch">Pouch</option>
                                     <option value="">Other…</option>
                                 </select>
                                 <div data-unit-custom hidden>
@@ -1512,9 +1512,15 @@ foreach ($products as $product) {
                 </header>
                 <form method="POST" data-confirm="This will directly change the current stock quantity and create an audit record." data-confirm-title="Confirm emergency adjustment" data-confirm-button="Apply adjustment" data-confirm-danger="1">
                     <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="adjust">
-                        <div class="form-group"><label>Product</label><select name="product_id" id="adjust-product-select" required>
-                                <option value="">Select product</option><?php foreach ($activeProducts as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= htmlspecialchars($product['sku'] . ' — ' . $product['product_name']) ?> (<?= (int)$product['quantity_on_hand'] ?> on hand)</option><?php endforeach; ?>
-                            </select></div>
+                        <div class="form-group">
+                            <label for="adjust-product-search">Scan barcode or search products</label>
+                            <input type="search" id="adjust-product-search" list="adjust-product-options" required autocomplete="off" placeholder="Scan barcode or type a name or SKU" aria-describedby="adjust-product-status">
+                            <input type="hidden" name="product_id" id="adjust-product-id">
+                            <datalist id="adjust-product-options">
+                                <?php foreach ($activeProducts as $product): ?><option value="<?= htmlspecialchars($product['sku'] . ' — ' . $product['product_name'] . ' (' . (int)$product['quantity_on_hand'] . ' on hand)', ENT_QUOTES) ?>" data-product-id="<?= (int)$product['product_id'] ?>" data-sku="<?= htmlspecialchars($product['sku'], ENT_QUOTES) ?>" data-barcode="<?= htmlspecialchars($product['barcode'] ?? '', ENT_QUOTES) ?>" label="<?= htmlspecialchars($product['barcode'] ?? '', ENT_QUOTES) ?>"></option><?php endforeach; ?>
+                            </datalist>
+                            <small id="adjust-product-status" role="status">Scan into this field or type to find a product.</small>
+                        </div>
                         <div class="form-group"><label>Quantity Change</label><input type="number" name="qty_change" required placeholder="Use 5 to add or -3 to remove"></div>
                         <div class="form-group"><label>Specific Approved Reason</label><input name="adjustment_reason" minlength="8" required placeholder="Example: Verified physical-count correction"></div>
                     </div>
@@ -1616,6 +1622,44 @@ foreach ($products as $product) {
         let sortKey = 'name';
         let sortDirection = 1;
         const selectedIds = new Set();
+
+        const adjustmentModal = document.getElementById('stock-adjust-modal');
+        if (adjustmentModal) {
+            const search = document.getElementById('adjust-product-search');
+            const selectedProduct = document.getElementById('adjust-product-id');
+            const status = document.getElementById('adjust-product-status');
+            const options = Array.from(document.getElementById('adjust-product-options').options);
+            function searchAdjustmentProducts() {
+                const term = search.value.trim().toLowerCase();
+                const exact = term ? options.filter(option => [option.value, option.dataset.sku, option.dataset.barcode]
+                    .some(code => code.toLowerCase() === term)) : [];
+                const matches = exact.length ? exact : options.filter(option =>
+                    `${option.value} ${option.dataset.barcode}`.toLowerCase().includes(term));
+                selectedProduct.value = term && matches.length === 1 ? matches[0].dataset.productId : '';
+                search.setCustomValidity(selectedProduct.value ? '' : 'Choose a matching product from the suggestions.');
+                status.textContent = !term ? 'Scan into this field or type to find a product.'
+                    : !matches.length ? 'No matching product. Try another barcode, name or SKU.'
+                    : matches.length === 1 ? `${matches[0].value} selected.`
+                    : `${matches.length} matching products. Choose a suggestion or keep typing.`;
+            }
+            search.addEventListener('input', searchAdjustmentProducts);
+            search.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' || event.isComposing) return;
+                event.preventDefault();
+                searchAdjustmentProducts();
+                search.select();
+            });
+            function showAdjustmentProduct() {
+                search.value = options.find(option => option.dataset.productId === selectedProduct.value)?.value || '';
+                searchAdjustmentProducts();
+            }
+            selectedProduct.addEventListener('change', showAdjustmentProduct);
+            adjustmentModal.addEventListener('retailmind:overlayopen', () => {
+                showAdjustmentProduct();
+                search.focus();
+                search.select();
+            });
+        }
 
         function openModal(id) {
             RetailMindUI.openOverlay(document.getElementById(id));
@@ -1951,10 +1995,13 @@ foreach ($products as $product) {
     </div>${quantityActions}`;
                 const drawerAdjustButton = document.getElementById('drawer-adjust-stock');
                 if (drawerAdjustButton) drawerAdjustButton.addEventListener('click', () => {
-                    const productSelect = document.getElementById('adjust-product-select');
-                    if (productSelect) productSelect.value = String(product.product_id);
+                    const productSelect = document.getElementById('adjust-product-id');
                     RetailMindUI.closeOverlay(document.getElementById('product-drawer'));
                     openModal('stock-adjust-modal');
+                    if (productSelect) {
+                        productSelect.value = String(product.product_id);
+                        productSelect.dispatchEvent(new Event('change'));
+                    }
                     document.querySelector('#stock-adjust-modal [name="qty_change"]')?.focus();
                 });
                 const drawerReconcileButton = document.getElementById('drawer-reconcile-pack');
