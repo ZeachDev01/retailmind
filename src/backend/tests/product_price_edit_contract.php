@@ -32,7 +32,7 @@ try {
 
     $assert(str_contains($productsSource, "name=\"selling_price\""), 'products.php includes selling_price input field');
     $assert(str_contains($productsSource, 'id="edit-selling-price"'), 'products.php provides edit-selling-price ID for price input');
-    $assert(str_contains($productsSource, 'Cost Price') && str_contains($productsSource, 'Read-only'), 'products.php displays cost price as read-only');
+    $assert(str_contains($productsSource, 'name="cost_price" id="edit-cost-price"'), 'products.php includes editable cost price');
     $assert(str_contains($productsSource, 'id="selling-price-warning"'), 'products.php includes selling-price-warning container');
     $assert(str_contains($productsSource, 'below cost price'), 'products.php includes inline warning check for price below cost');
     $assert(str_contains($productsSource, "dataset.price = String(product.unit_price"), 'products.php updates dataset.price on catalog save');
@@ -77,6 +77,7 @@ try {
             category_id INTEGER DEFAULT NULL,
             unit_price REAL NOT NULL DEFAULT 0.0,
             cost_price REAL NOT NULL DEFAULT 0.0,
+            warning_lead_time_days INTEGER DEFAULT NULL,
             quantity_purchased INTEGER NOT NULL DEFAULT 0,
             quantity_sold INTEGER NOT NULL DEFAULT 0,
             reorder_level INTEGER NOT NULL DEFAULT 10,
@@ -204,7 +205,7 @@ try {
         $GLOBALS['test_active_role'] = $role;
         $_SESSION['role'] = $role;
         try {
-            $service->updateProductCatalogDetails(1, ['product_name' => 'Original Juice', 'selling_price' => 60.0], 1);
+            $service->updateProductCatalogDetails(1, ['product_name' => 'Original Juice', 'selling_price' => 60.0, 'cost_price' => 40.0], 1);
             $assert(false, "Service should reject edit from workspace: '{$role}'");
         } catch (Throwable $e) {
             $assert(str_contains(strtolower($e->getMessage()), 'inventory manager'), "Non-inventory_manager workspace '{$role}' rejected with actionable message");
@@ -282,7 +283,7 @@ try {
     $stmt->execute();
     $preserved = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $assert((float)$preserved['cost_price'] === 30.0, 'Cost price strictly preserved (read-only)');
+    $assert((float)$preserved['cost_price'] === 30.0, 'Cost price preserved when omitted');
     $assert($preserved['sku'] === 'SKU-001', 'SKU preserved');
     $assert($preserved['barcode'] === 'BAR-001', 'Barcode preserved');
     $assert($preserved['case_barcode'] === 'CASE-001', 'Case barcode preserved');
@@ -305,6 +306,31 @@ try {
 
     $histReceipt = $pdo->query('SELECT details_json FROM sale_receipt_details WHERE sale_id = 10')->fetchColumn();
     $assert(str_contains($histReceipt, '"unit_price":50'), 'Historical receipt details snapshot preserved byte-for-byte');
+
+    // Cost edits update the catalog, validate input, and compare against the saved selling price.
+    foreach ([null, '', 'bad', '12oops', -0.001, -1, INF, NAN, [], true, 100000000, 1000000000] as $invalidCost) {
+        $before = (float)$pdo->query('SELECT cost_price FROM products WHERE product_id = 1')->fetchColumn();
+        try {
+            $service->updateProductCatalogDetails(1, ['product_name' => 'Original Juice', 'cost_price' => $invalidCost], 1);
+            $assert(false, 'Invalid cost must be rejected: ' . var_export($invalidCost, true));
+        } catch (RuntimeException $e) {
+            $assert(str_contains(strtolower($e->getMessage()), 'cost price'), 'Invalid cost rejected with an actionable error');
+        }
+        $assert((float)$pdo->query('SELECT cost_price FROM products WHERE product_id = 1')->fetchColumn() === $before, 'Rejected cost leaves stored value unchanged');
+    }
+    $costUpdate = $service->updateProductCatalogDetails(1, ['product_name' => 'Original Juice', 'cost_price' => '80.556'], 1);
+    $assert($costUpdate['cost_price'] === 80.56, 'Cost is persisted and returned rounded to cents');
+    $assert((float)$pdo->query('SELECT cost_price FROM products WHERE product_id = 1')->fetchColumn() === 80.56, 'DB stores edited cost');
+    $assert(!empty($costUpdate['warning']), 'Cost-only increase warns when above selling price');
+    $zeroCost = $service->updateProductCatalogDetails(1, ['product_name' => 'Original Juice', 'cost_price' => 0], 1);
+    $assert($zeroCost['cost_price'] === 0.0, 'Zero cost is allowed');
+    $assert(empty($zeroCost['warning']), 'Lower cost clears below-cost warning');
+    $bothPrices = $service->updateProductCatalogDetails(1, ['product_name' => 'Original Juice', 'cost_price' => 90, 'selling_price' => 75], 1);
+    $assert(!empty($bothPrices['warning']), 'Combined edits compare against the new cost');
+    $service->updateProductCatalogDetails(1, ['product_name' => 'Original Juice', 'cost_price' => 30], 1);
+
+    $assert($pdo->query('SELECT details_json FROM sale_receipt_details WHERE sale_id = 10')->fetchColumn() === $histReceipt, 'Cost edits preserve historical receipt snapshot');
+    $assert((float)$pdo->query('SELECT unit_price FROM sale_items WHERE sale_item_id = 101')->fetchColumn() === 50.0, 'Cost edits preserve historical sale price');
 
     // 7. Held sale resumption refreshes to new price and flags change report
     // Simulate held cart created when price was 50.00

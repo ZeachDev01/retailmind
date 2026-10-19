@@ -110,6 +110,16 @@ const fixture = action => {
         await submit(page.getByRole('button', {name: 'Apply filter', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 10);
         assert.equal(await page.locator('.notification-content h2').first().textContent(), 'Notice 13');
+        const productNotice = page.locator('.notification-item').first();
+        assert.equal(new URL(await productNotice.locator('.notification-product-link').getAttribute('href'), origin).searchParams.get('q'), 'NOTICE-13');
+        const categoryBox = await productNotice.locator('.notification-category').boundingBox();
+        await Promise.all([page.waitForNavigation(), page.mouse.click(categoryBox.x + categoryBox.width / 2, categoryBox.y + categoryBox.height / 2)]);
+        assert.equal(new URL(page.url()).pathname, '/components/inventory_management/products.php');
+        await page.waitForFunction(() => document.getElementById('product-search')?.value === 'NOTICE-13');
+        assert.equal(await page.locator('#product-search').inputValue(), 'NOTICE-13', 'Notification automatically searches the product SKU');
+        assert.equal(await page.locator('tr[data-product-id="1013"]').isVisible(), true);
+        assert.equal(await page.locator('tr[data-product-id="1012"]').isVisible(), false);
+        await page.goto(url + '?category=low_stock');
         await submit(page.locator('.notification-views a').filter({hasText: 'Unread'}));
         await submit(page.getByRole('button', {name: 'Mark category as read', exact: true}));
         assert.equal(await page.locator('#notification-category').inputValue(), 'low_stock');
@@ -213,6 +223,10 @@ const fixture = action => {
         await page.goto(url);
         assert.equal(await active.getByRole('heading', {name: 'Expired stock—waiting for supplier collection: Reminder Bread'}).count(), 1);
         assert.match(await active.getByRole('link', {name: 'Record Supplier Pullout'}).getAttribute('href'), /product_id=901&batch_id=901$/);
+        await submit(active.locator('.notification-product-link'));
+        await page.waitForFunction(() => document.getElementById('product-search')?.value === 'REMINDER-BREAD');
+        assert.equal(await page.locator('#product-search').inputValue(), 'REMINDER-BREAD', 'Batch reminders open product search');
+        await page.goto(url);
         await submit(page.getByRole('button', {name: 'Mark all as read', exact: true}));
         await page.goto(url + '?view=unread');
         assert.equal(await active.locator('article').count(), 1, 'Reading does not hide active work in Unread view');

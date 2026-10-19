@@ -80,21 +80,21 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
     <title>Supplier Pullouts - Inventory Control</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/supplier_pullouts.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/supplier_pullouts.css')) ?>">
 </head>
 <body>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <main class="main-content">
-        <div class="topbar">
-            <div>
-                <h1>Supplier Pullouts</h1>
-                <p class="page-subtitle">Record physical stock returned to or collected by suppliers. Deducts batch and inventory atomically.</p>
-            </div>
-            <?php if (!$canMutate): ?>
-                <span class="badge-role">Read-Only Oversight</span>
-            <?php else: ?>
-                <span class="badge-role">Inventory Manager</span>
-            <?php endif; ?>
+    <main id="supplier-pullouts" class="main-content">
+        <div class="mb-6 flex gap-2 border-0 border-b border-solid border-[var(--border)]" role="tablist" aria-label="Supplier pullouts">
+            <button type="button" id="pullout-record-tab" role="tab" aria-controls="pullout-record-panel" aria-selected="true" tabindex="0"
+                    class="pullout-tab cursor-pointer border-0 border-b-2 border-solid border-blue-600 bg-transparent px-4 py-3 text-sm font-semibold text-[var(--theme-info-text,#2563eb)] hover:bg-[var(--surface-soft)]">
+                Record Pullout
+            </button>
+            <button type="button" id="pullout-history-tab" role="tab" aria-controls="pullout-history-panel" aria-selected="false" tabindex="-1"
+                    class="pullout-tab cursor-pointer border-0 border-b-2 border-solid border-transparent bg-transparent px-4 py-3 text-sm font-semibold text-[var(--muted)] hover:bg-[var(--surface-soft)]">
+                Pullout History
+            </button>
         </div>
 
         <?php if ($message): ?>
@@ -105,93 +105,90 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
             <div class="message error"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
 
+        <div id="pullout-record-panel" role="tabpanel" aria-labelledby="pullout-record-tab" tabindex="0" class="min-w-0">
         <?php if (!$canMutate): ?>
             <div class="alert alert-info u-mb-3">
                 <i class="bi bi-info-circle-fill" aria-hidden="true"></i>
                 <strong>Read-Only Oversight:</strong> Only an authorized active Inventory Manager workspace may record stock pullouts. Administrators retain complete oversight over pullout records and movement history.
             </div>
         <?php else: ?>
-            <section class="card u-mb-4">
+            <section class="card">
                 <header class="card-header">
                     <h2>Record Supplier Pullout</h2>
                 </header>
                 <div class="card-body">
-                    <form method="POST" id="pullout-form">
+                    <form method="POST" id="pullout-form" class="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
 
-                        <div class="form-row">
-                            <div class="form-group col-md-6">
-                                <label for="product_id"><strong>Product *</strong></label>
-                                <select name="product_id" id="product_id" class="form-control" required>
-                                    <option value="">-- Select Product --</option>
-                                    <?php foreach ($products as $p): ?>
-                                        <option value="<?= (int)$p['product_id'] ?>" <?= (int)$p['product_id'] === $prefillProductId ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($p['product_name']) ?> (SKU: <?= htmlspecialchars($p['sku']) ?>, On Hand: <?= (int)($p['quantity_on_hand'] ?? 0) ?>)
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <div class="form-group col-md-6">
-                                <label for="batch_id"><strong>Batch *</strong></label>
-                                <select name="batch_id" id="batch_id" class="form-control" required>
-                                    <option value="">-- Select Batch --</option>
-                                    <?php if ($prefillBatch): ?>
-                                        <option value="<?= (int)$prefillBatch['batch_id'] ?>"
-                                                data-remaining="<?= (int)$prefillBatch['remaining_quantity'] ?>"
-                                                data-supplier="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>"
-                                                selected>
-                                            <?= htmlspecialchars($prefillBatch['batch_number'] ?? ('#' . $prefillBatch['batch_id'])) ?>
-                                            (Remaining: <?= (int)$prefillBatch['remaining_quantity'] ?>,
-                                            Exp: <?= htmlspecialchars($prefillBatch['expiration_date'] ?? 'None') ?>)
-                                        </option>
-                                    <?php endif; ?>
-                                </select>
-                                <small id="batch-help" class="form-text text-muted">Eligible and expired batches with remaining stock.</small>
-                            </div>
+                        <div class="min-w-0">
+                            <label for="product_id"><strong>Product *</strong></label>
+                            <select name="product_id" id="product_id" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
+                                <option value="">-- Select Product --</option>
+                                <?php foreach ($products as $p): ?>
+                                    <option value="<?= (int)$p['product_id'] ?>" <?= (int)$p['product_id'] === $prefillProductId ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($p['product_name']) ?> (SKU: <?= htmlspecialchars($p['sku']) ?>, On Hand: <?= (int)($p['quantity_on_hand'] ?? 0) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
 
-                        <div class="form-row">
-                            <div class="form-group col-md-4">
-                                <label for="quantity"><strong>Pullout Quantity (Base Units) *</strong></label>
-                                <input type="number"
-                                       name="quantity"
-                                       id="quantity"
-                                       class="form-control"
-                                       min="1"
-                                       step="1"
-                                       max="<?= $prefillBatch ? (int)$prefillBatch['remaining_quantity'] : '' ?>"
-                                       placeholder="e.g. 10"
-                                       required>
-                            </div>
-
-                            <div class="form-group col-md-4">
-                                <label for="reason"><strong>Reason *</strong></label>
-                                <input type="text"
-                                       name="reason"
-                                       id="reason"
-                                       class="form-control"
-                                       placeholder="e.g. Expired stock, Damaged in transit, Supplier recall"
-                                       required>
-                            </div>
-
-                            <div class="form-group col-md-4">
-                                <label for="supplier"><strong>Supplier (Optional)</strong></label>
-                                <input type="text"
-                                       name="supplier"
-                                       id="supplier"
-                                       class="form-control"
-                                       value="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>"
-                                       placeholder="Supplier name or code">
-                            </div>
+                        <div class="min-w-0">
+                            <label for="batch_id"><strong>Batch *</strong></label>
+                            <select name="batch_id" id="batch_id" aria-describedby="batch-help" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
+                                <option value="">-- Select Batch --</option>
+                                <?php if ($prefillBatch): ?>
+                                    <option value="<?= (int)$prefillBatch['batch_id'] ?>"
+                                            data-remaining="<?= (int)$prefillBatch['remaining_quantity'] ?>"
+                                            data-supplier="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>"
+                                            selected>
+                                        <?= htmlspecialchars($prefillBatch['batch_number'] ?? ('#' . $prefillBatch['batch_id'])) ?>
+                                        (Remaining: <?= (int)$prefillBatch['remaining_quantity'] ?>,
+                                        Exp: <?= htmlspecialchars($prefillBatch['expiration_date'] ?? 'None') ?>)
+                                    </option>
+                                <?php endif; ?>
+                            </select>
+                            <small id="batch-help" class="form-text text-muted">Eligible and expired batches with remaining stock.</small>
                         </div>
 
-                        <div class="form-group">
+                        <div class="min-w-0">
+                            <label for="quantity"><strong>Pullout Quantity (Base Units) *</strong></label>
+                            <input type="number"
+                                   name="quantity"
+                                   id="quantity"
+                                   class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
+                                   min="1"
+                                   step="1"
+                                   max="<?= $prefillBatch ? (int)$prefillBatch['remaining_quantity'] : '' ?>"
+                                   placeholder="e.g. 10"
+                                   required>
+                        </div>
+
+                        <div class="min-w-0">
+                            <label for="reason"><strong>Reason *</strong></label>
+                            <input type="text"
+                                   name="reason"
+                                   id="reason"
+                                   class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
+                                   placeholder="e.g. Expired stock, Damaged in transit, Supplier recall"
+                                   required>
+                        </div>
+
+                        <div class="min-w-0">
+                            <label for="supplier"><strong>Supplier (Optional)</strong></label>
+                            <input type="text"
+                                   name="supplier"
+                                   id="supplier"
+                                   class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
+                                   value="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>"
+                                   placeholder="Supplier name or code">
+                        </div>
+
+                        <div class="min-w-0 md:col-span-2">
                             <label for="notes">Notes (Optional)</label>
-                            <textarea name="notes" id="notes" class="form-control" rows="2" placeholder="Reference numbers, pickup staff details, or replacement expectations..."></textarea>
+                            <textarea name="notes" id="notes" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" rows="2" placeholder="Reference numbers, pickup staff details, or replacement expectations..."></textarea>
                         </div>
 
-                        <div class="form-actions u-mt-3">
+                        <div class="form-actions md:col-span-2">
                             <button type="submit" class="btn btn-primary" id="btn-submit-pullout">
                                 <i class="bi bi-arrow-return-left" aria-hidden="true"></i> Record Supplier Pullout
                             </button>
@@ -201,27 +198,29 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
             </section>
         <?php endif; ?>
 
-        <section class="card">
+        </div>
+
+        <section id="pullout-history-panel" class="card min-w-0" role="tabpanel" aria-labelledby="pullout-history-tab" tabindex="0" hidden>
             <header class="card-header">
                 <h2>Supplier Pullout History</h2>
             </header>
             <div class="card-body">
-                <div class="table-wrap">
+                <div class="table-wrap max-w-full overflow-x-auto" role="region" aria-label="Supplier pullout history table" tabindex="0">
                     <table class="table">
-                        <thead>
+                        <thead class="[&_th]:bg-[var(--surface-soft)]">
                             <tr>
-                                <th>Pullout #</th>
-                                <th>Date &amp; Time</th>
-                                <th>Product</th>
-                                <th>Batch #</th>
-                                <th>Expiry</th>
-                                <th>Quantity</th>
-                                <th>Supplier</th>
-                                <th>Reason</th>
-                                <th>Recorded By</th>
-                                <th>Notes</th>
-                                <th>Replacement</th>
-                                <th>Action</th>
+                                <th scope="col">Pullout #</th>
+                                <th scope="col">Date &amp; Time</th>
+                                <th scope="col">Product</th>
+                                <th scope="col">Batch #</th>
+                                <th scope="col">Expiry</th>
+                                <th scope="col" class="text-right [font-variant-numeric:tabular-nums]">Quantity</th>
+                                <th scope="col">Supplier</th>
+                                <th scope="col">Reason</th>
+                                <th scope="col">Recorded By</th>
+                                <th scope="col">Notes</th>
+                                <th scope="col">Replacement</th>
+                                <th scope="col">Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -229,13 +228,13 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                 <tr><td class="u-empty-cell" colspan="12">No supplier pullouts recorded yet.</td></tr>
                             <?php else: ?>
                                 <?php foreach ($pulloutHistory as $row): ?>
-                                    <tr>
+                                    <tr class="hover:bg-[var(--surface-soft)]">
                                         <td>#<?= (int)$row['pullout_id'] ?></td>
                                         <td><?= htmlspecialchars($row['pulled_at']) ?></td>
                                         <td><strong><?= htmlspecialchars($row['product_name']) ?></strong><br><small class="text-muted"><?= htmlspecialchars($row['sku']) ?></small></td>
                                         <td><?= htmlspecialchars($row['batch_number'] ?? ('#' . $row['batch_id'])) ?></td>
                                         <td><?= htmlspecialchars($row['expiration_date'] ?? 'Not recorded') ?></td>
-                                        <td><strong class="text-danger">-<?= number_format((int)$row['quantity']) ?></strong></td>
+                                        <td class="text-right [font-variant-numeric:tabular-nums]"><strong class="text-danger">-<?= number_format((int)$row['quantity']) ?></strong></td>
                                         <td><?= htmlspecialchars($row['supplier'] ?? '—') ?></td>
                                         <td><?= htmlspecialchars($row['reason']) ?></td>
                                         <td><?= htmlspecialchars($row['pulled_by_name']) ?></td>
@@ -342,6 +341,39 @@ document.addEventListener('DOMContentLoaded', function () {
     if (productSelect.value) {
         loadBatchesForProduct(productSelect.value, <?= json_encode($prefillBatchId > 0 ? $prefillBatchId : null) ?>);
     }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const tabs = Array.from(document.querySelectorAll('.pullout-tab'));
+    const activeClasses = ['border-blue-600', 'text-[var(--theme-info-text,#2563eb)]'];
+    const inactiveClasses = ['border-transparent', 'text-[var(--muted)]'];
+
+    function activateTab(selectedTab) {
+        tabs.forEach(tab => {
+            const active = tab === selectedTab;
+            tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
+            activeClasses.forEach(name => tab.classList.toggle(name, active));
+            inactiveClasses.forEach(name => tab.classList.toggle(name, !active));
+            document.getElementById(tab.getAttribute('aria-controls')).hidden = !active;
+        });
+    }
+
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => activateTab(tab));
+        tab.addEventListener('keydown', event => {
+            let nextIndex;
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+            else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = tabs.length - 1;
+            else return;
+            event.preventDefault();
+            activateTab(tabs[nextIndex]);
+            tabs[nextIndex].focus();
+        });
+    });
 });
 </script>
 </body>

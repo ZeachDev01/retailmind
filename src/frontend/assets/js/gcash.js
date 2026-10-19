@@ -14,7 +14,7 @@
     const notify = (message, type = 'info') => window.RetailMindUI.toast(message, type);
     const scanStatus = message => { el('scan-status').textContent = message; };
     const updateSave = () => {
-        const canSave = !currentSession || currentSession.is_controlling_cashier;
+        const canSave = Boolean(currentSession?.is_controlling_cashier);
         const type = el('type')?.value || 'Cash-In';
         const isCashIn = type === 'Cash-In';
         const isCashOut = type === 'Cash-Out';
@@ -47,7 +47,7 @@
 
         const confirmGroup = el('cash-in-confirm-group');
         if (confirmGroup) {
-            confirmGroup.hidden = !(isCashIn || isCashOut);
+            confirmGroup.hidden = !validPrincipal || !(isCashIn || isCashOut);
         }
     };
 
@@ -77,7 +77,7 @@
             statusPill.textContent = 'Closed';
             statusPill.className = 'gcash-status';
             banner.className = 'gcash-session-banner closed';
-            msg.textContent = 'GCash services are currently closed. Count physical service cash and check the Store GCash wallet balance to open responsibility.';
+            msg.textContent = 'Open GCash to start. Count the service cash and check the Store wallet balance.';
             openBtn.hidden = false;
             closeBtn.hidden = true;
             handoverBtn.hidden = true;
@@ -99,7 +99,7 @@
             banner.className = 'gcash-session-banner active';
             const expCash = Number(currentSession.expected_service_cash || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
             const expWallet = Number(currentSession.expected_wallet_balance || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
-            msg.textContent = `Opened at ${currentSession.opened_at} · Expected Service Cash: ₱${expCash} · Expected Wallet: ₱${expWallet}`;
+            msg.textContent = `Expected service cash: ₱${expCash} · Expected wallet: ₱${expWallet}`;
             openBtn.hidden = true;
             closeBtn.hidden = false;
             handoverBtn.hidden = false;
@@ -113,7 +113,7 @@
         statusPill.textContent = `Under control of ${cashierName}`;
         statusPill.className = 'gcash-status gcash-status-rejected';
         banner.className = 'gcash-session-banner locked';
-        msg.textContent = `Controlled by ${cashierName} (@${currentSession.cashier_username || ''}) since ${currentSession.opened_at}. Only one Cashier may control GCash at a time. Product checkout remains available in POS.`;
+        msg.textContent = `GCash is being handled by ${cashierName}. Only that Cashier can record transactions. Point of Sale remains available.`;
         openBtn.hidden = true;
         closeBtn.hidden = true;
         handoverBtn.hidden = true;
@@ -128,10 +128,10 @@
             currentSession = result.session;
             lastClosedSession = result.last_closed_session || null;
             renderSessionStatus();
+            el('session-panel').hidden = false;
         } catch (e) {
-            el('session-status').textContent = 'Unavailable';
-            el('session-status').className = 'gcash-status gcash-status-rejected';
-            el('session-message').textContent = e.message || 'Could not verify GCash session status.';
+            el('session-panel').hidden = true;
+            notify(e.message || 'Could not verify GCash session status.', 'error');
         }
     }
     async function request(params, body, signal) {
@@ -271,9 +271,12 @@
     };
 
     function updatePreview() {
+        el('confirm-wallet').checked = false;
+        el('confirm-cash').checked = false;
         const type = el('type')?.value || 'Cash-In';
         const feeMethodGroup = el('fee-method-group');
         const isCashOut = type === 'Cash-Out';
+        el('review-type').textContent = type;
         if (feeMethodGroup) feeMethodGroup.hidden = !isCashOut;
 
         const amountInput = el('amount');
@@ -287,14 +290,16 @@
 
         if (!principal) {
             contentEl.hidden = true;
+            el('preview-empty').hidden = false;
             statusEl.hidden = false;
             if (raw === '') {
-                statusEl.textContent = 'Enter a whole-peso principal amount from 1 to 50,000 to preview fees and instructions.';
+                statusEl.textContent = isCashOut ? 'Enter an amount to see the fee and cash to pay out.' : 'Enter an amount to see the fee and cash to collect.';
                 amountInput.setCustomValidity('');
             } else {
                 statusEl.textContent = 'Enter a whole-peso principal amount from 1 to 50,000. Principal excludes the fee.';
                 amountInput.setCustomValidity('Enter a whole-peso principal amount from 1 to 50,000.');
             }
+            updateSave();
             return;
         }
 
@@ -303,6 +308,7 @@
         const preview = calculatePreview(type, principal, feeMethod);
 
         statusEl.hidden = true;
+        el('preview-empty').hidden = true;
         contentEl.hidden = false;
         el('preview-instructions').textContent = preview.instructions;
         document.getElementById('preview-fee').textContent = formatPhp(preview.fee);
@@ -398,12 +404,10 @@
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
-                await loadOverview();
             } catch (error) {
                 notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
                 await loadHistory();
                 await loadSessionStatus();
-                await loadOverview();
             } finally {
                 saving = false;
                 if (!currentSession || currentSession.is_controlling_cashier) {
@@ -461,12 +465,10 @@
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
-                await loadOverview();
             } catch (error) {
                 notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
                 await loadHistory();
                 await loadSessionStatus();
-                await loadOverview();
             } finally {
                 saving = false;
                 if (!currentSession || currentSession.is_controlling_cashier) {
@@ -571,12 +573,10 @@
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
-                await loadOverview();
             } catch (error) {
                 notify(error.message + ' Refresh history before retrying.', 'error');
                 await loadHistory();
                 await loadSessionStatus();
-                await loadOverview();
             } finally {
                 submitBtn.disabled = false;
             }
@@ -608,7 +608,6 @@
             page = 1;
             await loadHistory();
             await loadSessionStatus();
-            await loadOverview();
         } catch (error) {
             notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
         } finally {
@@ -622,14 +621,11 @@
     });
     const cell = (row, value) => { const td = row.insertCell(); td.textContent = value; return td; };
 
-    const tabOverview = document.getElementById('tab-overview');
     const tabNewTx = document.getElementById('tab-new-transaction');
     const tabHistory = document.getElementById('tab-history');
-    const panelOverview = document.getElementById('panel-overview');
     const panelNewTx = document.getElementById('panel-new-transaction');
     const panelHistory = document.getElementById('panel-history');
     const tabs = [
-        { id: 'overview', btn: tabOverview, panel: panelOverview },
         { id: 'new-transaction', btn: tabNewTx, panel: panelNewTx },
         { id: 'history', btn: tabHistory, panel: panelHistory }
     ];
@@ -644,7 +640,6 @@
             t.panel.hidden = !isTarget;
             if (isTarget && focusTarget) t.btn.focus();
         });
-        if (targetId === 'overview') loadOverview();
         if (targetId === 'history') loadHistory();
     }
 
@@ -679,97 +674,14 @@
         el('amount')?.focus();
     }
 
-    ['quick-cash-in', 'overview-action-cash-in', 'history-action-cash-in'].forEach(id => {
+    ['history-action-cash-in'].forEach(id => {
         const btn = document.getElementById('gcash-' + id) || document.getElementById(id);
         if (btn) btn.addEventListener('click', () => selectAndStart('Cash-In'));
     });
-    ['quick-cash-out', 'overview-action-cash-out', 'history-action-cash-out'].forEach(id => {
+    ['history-action-cash-out'].forEach(id => {
         const btn = document.getElementById('gcash-' + id) || document.getElementById(id);
         if (btn) btn.addEventListener('click', () => selectAndStart('Cash-Out'));
     });
-
-    async function loadOverview() {
-        try {
-            const data = await request({action: 'overview'});
-            const expCash = document.getElementById('gcash-overview-expected-cash');
-            const expWallet = document.getElementById('gcash-overview-expected-wallet');
-            const cashChecked = document.getElementById('gcash-overview-cash-checked');
-            const walletChecked = document.getElementById('gcash-overview-wallet-checked');
-
-            if (expCash) expCash.textContent = formatPhp(data.expected_service_cash || 0);
-            if (expWallet) expWallet.textContent = formatPhp(data.expected_wallet_balance || 0);
-
-            const lastCheckedStr = data.last_checked_formatted ? ('Last actual check: ' + data.last_checked_formatted) : 'Last actual check: Not checked yet';
-            if (cashChecked) cashChecked.textContent = lastCheckedStr;
-            if (walletChecked) walletChecked.textContent = lastCheckedStr;
-
-            const ciPrin = document.getElementById('gcash-metric-cash-in-principal');
-            const coPrin = document.getElementById('gcash-metric-cash-out-principal');
-            const feesCash = document.getElementById('gcash-metric-fees-cash');
-            const feesWallet = document.getElementById('gcash-metric-fees-wallet');
-
-            if (ciPrin) ciPrin.textContent = formatPhp(data.cash_in_principal || 0);
-            if (coPrin) coPrin.textContent = formatPhp(data.cash_out_principal || 0);
-            if (feesCash) feesCash.textContent = formatPhp(data.gross_fees_cash || 0);
-            if (feesWallet) feesWallet.textContent = formatPhp(data.gross_fees_wallet || 0);
-
-            const ncCount = document.getElementById('gcash-overview-nc-count');
-            const ncList = document.getElementById('gcash-overview-nc-list');
-
-            if (ncCount) ncCount.textContent = (data.needs_checking_count || 0) + ' open';
-
-            if (ncList) {
-                ncList.replaceChildren();
-                const items = data.needs_checking || [];
-                if (items.length === 0) {
-                    const empty = document.createElement('p');
-                    empty.className = 'gcash-empty-msg';
-                    empty.textContent = 'No unresolved Needs checking transactions.';
-                    ncList.append(empty);
-                } else {
-                    for (const item of items) {
-                        const card = document.createElement('div');
-                        card.className = 'gcash-nc-card';
-                        const details = document.createElement('div');
-                        details.className = 'gcash-nc-details';
-
-                        const title = document.createElement('div');
-                        title.className = 'gcash-nc-title';
-                        title.innerHTML = `<strong>#${item.transaction_id}</strong> · <span>${item.transaction_type}</span> <span class="gcash-status gcash-status-needs-checking">Needs checking</span>`;
-
-                        const meta = document.createElement('div');
-                        meta.className = 'gcash-nc-meta';
-                        const prinAmt = formatPhp(item.principal_amount || item.amount || 0);
-                        const feeAmt = formatPhp(item.gross_fee || item.fee_amount || 0);
-                        const ref = item.reference_number || 'No reference';
-                        const time = item.time_formatted || item.created_at;
-                        const shift = item.shift_id ? ('Shift #' + item.shift_id) : 'No shift';
-                        const cashier = item.cashier_name || ('Cashier #' + item.cashier_id);
-                        meta.textContent = `Principal: ${prinAmt} · Fee: ${feeAmt} (${item.fee_method || 'cash'}) · Ref: ${ref} · ${cashier} · ${shift} · ${time}`;
-
-                        details.append(title, meta);
-                        if (item.notes) {
-                            const notesEl = document.createElement('small');
-                            notesEl.style.color = 'var(--muted)';
-                            notesEl.textContent = item.notes;
-                            details.append(notesEl);
-                        }
-
-                        const resolveBtn = document.createElement('button');
-                        resolveBtn.type = 'button';
-                        resolveBtn.className = 'btn btn-secondary';
-                        resolveBtn.textContent = 'Resolve';
-                        resolveBtn.addEventListener('click', () => openResolveDialog(item));
-
-                        card.append(details, resolveBtn);
-                        ncList.append(card);
-                    }
-                }
-            }
-        } catch (_) {
-            // Non-blocking overview update
-        }
-    }
 
     async function loadHistory() {
         const version = ++historyRequest;
@@ -909,7 +821,6 @@
             notify('Transaction marked ' + status + '.', 'success');
             await loadHistory();
             await loadSessionStatus();
-            await loadOverview();
         } catch (error) { notify(error.message + ' Refresh history before retrying.', 'error'); }
         finally { reviewing = false; for (const input of el('review-form').elements) input.disabled = false; }
     }
@@ -1027,7 +938,6 @@
             el('open-dialog').close();
             notify('GCash responsibility opened.', 'success');
             await loadSessionStatus();
-            await loadOverview();
         } catch (error) {
             notify(error.message, 'error');
         } finally {
@@ -1103,7 +1013,6 @@
             el('close-dialog').close();
             notify('GCash responsibility closed.', 'success');
             await loadSessionStatus();
-            await loadOverview();
         } catch (error) {
             notify(error.message, 'error');
         } finally {
@@ -1144,7 +1053,6 @@
                 el('handover-dialog').close();
                 notify('GCash responsibility handed over.', 'success');
                 await loadSessionStatus();
-                await loadOverview();
             } catch (error) {
                 notify(error.message, 'error');
             } finally {
@@ -1181,7 +1089,6 @@
                 notify('Funding movement #' + res.movement_id + ' recorded.', 'success');
                 await loadSessionStatus();
                 await loadHistory();
-                await loadOverview();
             } catch (err) {
                 notify(err.message, 'error');
             } finally {
@@ -1230,7 +1137,6 @@
             notify('Transaction #' + resolveTx.transaction_id + ' resolved.', 'success');
             await loadSessionStatus();
             await loadHistory();
-            await loadOverview();
         } catch (err) {
             notify(err.message, 'error');
         } finally {
@@ -1268,7 +1174,6 @@
             notify('Linked correction #' + res.adjustment_id + ' recorded.', 'success');
             await loadSessionStatus();
             await loadHistory();
-            await loadOverview();
         } catch (err) {
             notify(err.message, 'error');
         } finally {
@@ -1304,7 +1209,6 @@
             el('waiver-dialog').close();
             notify('Discrepancy for session #' + waiverSession.session_id + ' approved/waived.', 'success');
             await loadSessionStatus();
-            await loadOverview();
         } catch (err) {
             notify(err.message, 'error');
         } finally {
@@ -1313,6 +1217,9 @@
     });
 
     window.addEventListener('pagehide', () => { leaving = true; clearTimeout(debounce); lookup?.abort(); closeCamera(); });
-    updateSave(); updatePreview(); loadOverview(); loadHistory(); loadSessionStatus();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('type') === 'cash-out') el('type').value = 'Cash-Out';
+    if (params.get('tab') === 'history') switchTab('history');
+    updateSave(); updatePreview(); loadHistory(); loadSessionStatus();
 })();
 

@@ -772,6 +772,21 @@ class ProductService
         $costPrice = (float)($existing['cost_price'] ?? 0);
         $warning = null;
 
+        if (array_key_exists('cost_price', $data)) {
+            $rawCost = $data['cost_price'];
+            if ((!is_string($rawCost) && !is_int($rawCost) && !is_float($rawCost)) || !is_numeric($rawCost)) {
+                throw new RuntimeException('Cost price must be a valid number of PHP 0 or more.');
+            }
+            $costPrice = (float)$rawCost;
+            if (!is_finite($costPrice) || $costPrice < 0) {
+                throw new RuntimeException('Cost price must be PHP 0 or more.');
+            }
+            $costPrice = round($costPrice, 2);
+            if ($costPrice > 99999999.99) {
+                throw new RuntimeException('Cost price is out of range.');
+            }
+        }
+
         if ($hasSellingPrice) {
             $rawPrice = $data['selling_price'];
             $trimmedPrice = is_string($rawPrice) ? trim($rawPrice) : $rawPrice;
@@ -785,12 +800,11 @@ class ProductService
             if ($sellingPrice > 999999999.99) {
                 throw new RuntimeException('Selling price is out of range.');
             }
-
-            if ($costPrice > 0 && $sellingPrice < $costPrice) {
-                $warning = sprintf('Warning: Selling price (₱%s) is below cost price (₱%s).', number_format($sellingPrice, 2), number_format($costPrice, 2));
-            }
         } else {
             $sellingPrice = (float)$existing['unit_price'];
+        }
+        if ($costPrice > 0 && $sellingPrice < $costPrice) {
+            $warning = sprintf('Warning: Selling price (₱%s) is below cost price (₱%s).', number_format($sellingPrice, 2), number_format($costPrice, 2));
         }
 
         $hasStatus = array_key_exists('status', $data);
@@ -842,6 +856,7 @@ class ProductService
                      category_id = ?,
                      product_image = ?,
                      unit_price = ?,
+                     cost_price = ?,
                      status = ?,
                      units_per_package = ?,
                      minimum_order_quantity = ?,
@@ -857,6 +872,7 @@ class ProductService
                 $categoryId,
                 $productImage,
                 $sellingPrice,
+                $costPrice,
                 $status,
                 $unitsPerPackage,
                 $minimumOrderQuantity,
@@ -877,6 +893,7 @@ class ProductService
             $updated = $fetchStmt->fetch(PDO::FETCH_ASSOC) ?: [];
             if ($updated) {
                 $updated['unit_price'] = (float)$updated['unit_price'];
+                $updated['cost_price'] = (float)$updated['cost_price'];
                 $updated['selling_price'] = (float)$updated['unit_price'];
                 $updated['units_per_package'] = (int)$updated['units_per_package'];
                 $updated['minimum_order_quantity'] = (int)$updated['minimum_order_quantity'];

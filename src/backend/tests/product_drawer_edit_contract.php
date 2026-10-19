@@ -67,6 +67,7 @@ try {
             category_id INTEGER DEFAULT NULL,
             unit_price REAL NOT NULL DEFAULT 0.0,
             cost_price REAL NOT NULL DEFAULT 0.0,
+            warning_lead_time_days INTEGER DEFAULT NULL,
             quantity_purchased INTEGER NOT NULL DEFAULT 0,
             quantity_sold INTEGER NOT NULL DEFAULT 0,
             reorder_level INTEGER NOT NULL DEFAULT 10,
@@ -155,7 +156,6 @@ try {
         'product_image' => 'storage/images/juice_new.png',
         // Attempt to change read-only fields (MUST BE IGNORED)
         'unit_price' => 999.0,
-        'cost_price' => 888.0,
         'sku' => 'HACKED-SKU',
         'barcode' => 'HACKED-BAR',
         'case_barcode' => 'HACKED-CASE',

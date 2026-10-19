@@ -109,6 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($_POST['selling_price'])) {
                 $updateData['selling_price'] = $_POST['selling_price'];
             }
+            if (isset($_POST['cost_price'])) {
+                $updateData['cost_price'] = $_POST['cost_price'];
+            }
             if (isset($_POST['status'])) {
                 $updateData['status'] = $_POST['status'];
             }
@@ -620,6 +623,31 @@ foreach ($products as $product) {
         .product-drawer-panel[hidden],
         #product-drawer-footer[hidden] {
             display: none;
+        }
+
+        .product-edit-intro { margin: 0 0 1.5rem; color: var(--muted); font-size: .85rem; line-height: 1.5; }
+        .product-edit-section { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
+        .product-edit-section > legend { margin-bottom: 1rem; font-size: 1rem; }
+        #product-edit-form .form-field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; margin-bottom: 1rem; }
+        #product-edit-form .form-field > span:first-child,
+        #product-edit-form .form-field > label { font-size: .85rem; font-weight: 600; line-height: 1.5; }
+        #product-edit-form .form-grid { align-items: end; }
+        #product-edit-form small { display: block; color: var(--muted); font-size: .76rem; font-weight: 400; }
+        #product-edit-form .form-input { width: 100%; min-width: 0; min-height: 44px; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; font-size: .9rem; }
+        #product-edit-form .form-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        #product-edit-form .form-input[readonly] { background: var(--surface-soft); color: var(--muted); }
+        #product-edit-form input[type="number"] { font-variant-numeric: tabular-nums; }
+        #product-edit-form input[type="file"] { font-size: .8rem; }
+        #product-edit-form input::file-selector-button { margin-right: .65rem; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); color: var(--text); font: inherit; cursor: pointer; }
+        .product-edit-required { color: var(--theme-danger-text, #b91c1c); }
+        #product-edit-error, #selling-price-warning { margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 10px; font-size: .85rem; line-height: 1.5; }
+        #product-edit-error { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }
+        #selling-price-warning { color: var(--theme-warning-text, #92400e); background: var(--theme-warning-surface, #fef3c7); }
+        .product-edit-actions { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; gap: .75rem; margin: 0; padding: 1rem 0; padding-bottom: max(1rem, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card-bg); }
+        .product-edit-actions .btn { min-height: 44px; }
+        @media (max-width: 480px) {
+            #product-edit-form .form-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+            .product-edit-actions .btn { flex: 1; justify-content: center; }
         }
 
         .product-quantity-actions {
@@ -1757,6 +1785,8 @@ foreach ($products as $product) {
                 panel.hidden = panel.dataset.productPanel !== tabName;
             });
             document.getElementById('product-drawer-footer').hidden = tabName !== 'actions';
+            const editBtn = document.getElementById('product-edit-btn');
+            if (editBtn) editBtn.hidden = tabName !== 'info' || !canEditProduct || isEditingProduct;
         }
 
         document.querySelectorAll('[data-product-tab]').forEach(tab => {
@@ -1808,7 +1838,7 @@ foreach ($products as $product) {
             document.getElementById('product-drawer-title').textContent = product.product_name + (product.variant_label ? ` — ${product.variant_label}` : '');
             document.getElementById('product-drawer-subtitle').textContent = `${safe(product.sku)} · ${safe(product.category_name, 'Uncategorized')}`;
             const editBtn = document.getElementById('product-edit-btn');
-            if (editBtn) editBtn.hidden = !canEditProduct;
+            if (editBtn) editBtn.hidden = !canEditProduct || document.getElementById('product-panel-info').hidden;
             document.getElementById('product-panel-info').innerHTML = `<div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
@@ -1840,108 +1870,104 @@ foreach ($products as $product) {
 
             document.getElementById('product-panel-info').innerHTML = `
                 <form id="product-edit-form" novalidate enctype="multipart/form-data">
-                    <div id="product-edit-error" class="alert alert-danger" role="alert" hidden style="margin-bottom:1rem;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:0.75rem 1rem;border-radius:6px;font-size:0.875rem;"></div>
+                    <div id="product-edit-error" class="alert alert-danger" role="alert" hidden></div>
                     <input type="hidden" name="action" value="update_catalog_details">
                     <input type="hidden" name="product_id" value="${product.product_id}">
                     <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}">
 
-                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                    <p class="product-edit-intro">Update catalog details and stock settings. Required fields are marked *.</p>
+                    <fieldset class="settings-fieldset product-edit-section"><legend>Product information</legend>
                         <label class="form-field">
-                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Product Name <span style="color:#dc2626;">*</span></span>
-                            <input type="text" name="product_name" id="edit-product-name" required value="${escapeHtml(product.product_name || '')}" class="form-input" style="width:100%;">
+                            <span>Product Name <span class="product-edit-required" aria-hidden="true">*</span></span>
+                            <input type="text" name="product_name" id="edit-product-name" required value="${escapeHtml(product.product_name || '')}" class="form-input">
                         </label>
-
                         ${hasParent ? `
                         <label class="form-field">
-                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Variant Label <small style="font-weight:normal;color:#6b7280;">(max 100 characters)</small></span>
-                            <input type="text" name="variant_label" id="edit-variant-label" maxlength="100" value="${escapeHtml(product.variant_label || '')}" class="form-input" style="width:100%;">
+                            <span>Variant Label <small>(max 100 characters)</small></span>
+                            <input type="text" name="variant_label" id="edit-variant-label" maxlength="100" value="${escapeHtml(product.variant_label || '')}" class="form-input">
                         </label>
                         ` : `
                         <div class="form-field">
-                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Variant Label</span>
-                            <span style="color:#6b7280;font-size:0.875rem;">Not a variant product (parent identity preserved)</span>
+                            <span>Variant Label</span>
+                            <span>Not a variant product (parent identity preserved)</span>
                         </div>
                         `}
-
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;">
+                        <div class="form-grid">
                             <label class="form-field">
-                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Cost Price <small style="font-weight:normal;color:#6b7280;">(Read-only)</small></span>
-                                <input type="text" readonly id="edit-cost-price" value="${formatMoney(product.cost_price)}" class="form-input" style="width:100%;background:#f3f4f6;cursor:default;">
+                                <span>Brand</span>
+                                <input type="text" name="brand" id="edit-brand" list="brand-suggestions-list" value="${escapeHtml(product.brand || '')}" class="form-input">
                             </label>
                             <label class="form-field">
-                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Selling Price (₱) <span style="color:#dc2626;">*</span></span>
-                                <input type="number" step="0.01" min="0.01" max="999999999.99" name="selling_price" id="edit-selling-price" required value="${(Number(product.unit_price) || 0).toFixed(2)}" class="form-input" style="width:100%;">
-                            </label>
-                        </div>
-                        <div id="selling-price-warning" role="alert" style="display:none;color:#b45309;background:#fef3c7;border:1px solid #fde68a;padding:0.625rem 0.875rem;border-radius:6px;font-size:0.875rem;margin-top:-0.25rem;"></div>
-
-                        <label class="form-field" for="edit-status">
-                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Status <span style="color:#dc2626;">*</span></span>
-                            <select name="status" id="edit-status" class="form-input" style="width:100%;">
-                                <option value="active" ${product.status === 'active' ? 'selected' : ''}>Active</option>
-                                <option value="inactive" ${product.status === 'inactive' ? 'selected' : ''}>Inactive</option>
-                            </select>
-                        </label>
-
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;">
-                            <label class="form-field" for="edit-units-per-package">
-                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Units per Package/Case <span style="color:#dc2626;">*</span> <small style="font-weight:normal;color:#6b7280;">(${escapeHtml(safe(product.base_unit, 'unit'))}s per ${escapeHtml(safe(product.receiving_unit, 'package'))})</small></span>
-                                <input type="number" step="1" min="1" max="2147483647" name="units_per_package" id="edit-units-per-package" required value="${Number(product.units_per_package || 1)}" class="form-input" style="width:100%;">
-                            </label>
-                            <label class="form-field" for="edit-moq">
-                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Minimum Order Quantity (MOQ) <span style="color:#dc2626;">*</span> <small style="font-weight:normal;color:#6b7280;">(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
-                                <input type="number" step="1" min="1" max="2147483647" name="minimum_order_quantity" id="edit-moq" required value="${Number(product.minimum_order_quantity || 1)}" class="form-input" style="width:100%;">
-                            </label>
-                        </div>
-
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;">
-                            <label class="form-field" for="edit-reorder-level">
-                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Reorder Level <span style="color:#dc2626;">*</span> <small style="font-weight:normal;color:#6b7280;">(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
-                                <input type="number" step="1" min="0" max="2147483647" name="reorder_level" id="edit-reorder-level" required value="${Number(product.reorder_level || 0)}" class="form-input" style="width:100%;">
-                            </label>
-                            <label class="form-field" for="edit-safety-stock">
-                                <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Safety Stock <span style="color:#dc2626;">*</span> <small style="font-weight:normal;color:#6b7280;">(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
-                                <input type="number" step="1" min="0" max="2147483647" name="safety_stock" id="edit-safety-stock" required value="${Number(product.safety_stock || 0)}" class="form-input" style="width:100%;">
-                            </label>
-                        </div>
-
-                        <label class="form-field">
-                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Brand</span>
-                            <input type="text" name="brand" id="edit-brand" list="brand-suggestions-list" value="${escapeHtml(product.brand || '')}" class="form-input" style="width:100%;">
-                        </label>
-
-                        <label class="form-field">
-                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Category</span>
-                            <select name="category_id" id="edit-category-id" class="form-input" style="width:100%;">
+                                <span>Category</span>
+                                <select name="category_id" id="edit-category-id" class="form-input">
                                 <option value="">Uncategorized</option>
                                 ${categoryOptions}
+                                </select>
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label for="edit-product-image">Product Image <small>(JPEG, PNG, GIF, WebP, max 5MB)</small></label>
+                            ${safeLink(product.product_image) ? `<div>Current: <a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open image</a></div>` : ''}
+                            <input type="file" name="product_image" id="edit-product-image" accept="image/jpeg,image/png,image/gif,image/webp" class="form-input">
+                        </div>
+                    </fieldset>
+                    <fieldset class="settings-fieldset product-edit-section"><legend>Pricing & availability</legend>
+                        <div class="form-grid">
+                            <label class="form-field">
+                                <span>Cost Price (₱) <span class="product-edit-required" aria-hidden="true">*</span></span>
+                                <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="edit-cost-price" required value="${(Number(product.cost_price) || 0).toFixed(2)}" class="form-input">
+                            </label>
+                            <label class="form-field">
+                                <span>Selling Price (₱) <span class="product-edit-required" aria-hidden="true">*</span></span>
+                                <input type="number" step="0.01" min="0.01" max="999999999.99" name="selling_price" id="edit-selling-price" required value="${(Number(product.unit_price) || 0).toFixed(2)}" class="form-input">
+                            </label>
+                        </div>
+                        <div id="selling-price-warning" role="alert" style="display:none;"></div>
+                        <label class="form-field" for="edit-status">
+                            <span>Status <span class="product-edit-required" aria-hidden="true">*</span></span>
+                            <select name="status" id="edit-status" class="form-input">
+                            <option value="active" ${product.status === 'active' ? 'selected' : ''}>Active</option>
+                            <option value="inactive" ${product.status === 'inactive' ? 'selected' : ''}>Inactive</option>
                             </select>
                         </label>
-
+                    </fieldset>
+                    <fieldset class="settings-fieldset product-edit-section"><legend>Stock settings</legend>
+                        <div class="form-grid">
+                            <label class="form-field" for="edit-units-per-package">
+                                <span>Units per Package/Case <span class="product-edit-required" aria-hidden="true">*</span> <small>(${escapeHtml(safe(product.base_unit, 'unit'))}s per ${escapeHtml(safe(product.receiving_unit, 'package'))})</small></span>
+                                <input type="number" step="1" min="1" max="2147483647" name="units_per_package" id="edit-units-per-package" required value="${Number(product.units_per_package || 1)}" class="form-input">
+                            </label>
+                            <label class="form-field" for="edit-moq">
+                                <span>Minimum Order Quantity (MOQ) <span class="product-edit-required" aria-hidden="true">*</span> <small>(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
+                                <input type="number" step="1" min="1" max="2147483647" name="minimum_order_quantity" id="edit-moq" required value="${Number(product.minimum_order_quantity || 1)}" class="form-input">
+                            </label>
+                            <label class="form-field" for="edit-reorder-level">
+                                <span>Reorder Level <span class="product-edit-required" aria-hidden="true">*</span> <small>(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
+                                <input type="number" step="1" min="0" max="2147483647" name="reorder_level" id="edit-reorder-level" required value="${Number(product.reorder_level || 0)}" class="form-input">
+                            </label>
+                            <label class="form-field" for="edit-safety-stock">
+                                <span>Safety Stock <span class="product-edit-required" aria-hidden="true">*</span> <small>(in ${escapeHtml(safe(product.base_unit, 'unit'))}s)</small></span>
+                                <input type="number" step="1" min="0" max="2147483647" name="safety_stock" id="edit-safety-stock" required value="${Number(product.safety_stock || 0)}" class="form-input">
+                            </label>
+                        </div>
                         <label class="form-field" for="edit-warning-lead-time">
-                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Expiry Warning Lead Time (Days) <small style="font-weight:normal;color:#6b7280;">(Blank uses default 30 days)</small></span>
-                            <input type="number" step="1" min="1" max="2147483647" name="warning_lead_time_days" id="edit-warning-lead-time" value="${product.warning_lead_time_days !== null && product.warning_lead_time_days !== undefined && product.warning_lead_time_days !== '' ? Number(product.warning_lead_time_days) : ''}" placeholder="Default (30)" class="form-input" style="width:100%;">
+                            <span>Expiry Warning Lead Time (Days) <small>(Blank uses default 30 days)</small></span>
+                            <input type="number" step="1" min="1" max="2147483647" name="warning_lead_time_days" id="edit-warning-lead-time" value="${product.warning_lead_time_days !== null && product.warning_lead_time_days !== undefined && product.warning_lead_time_days !== '' ? Number(product.warning_lead_time_days) : ''}" placeholder="Default (30)" class="form-input">
                         </label>
-
-                        <div class="form-field">
-                            <span style="font-weight:600;display:block;margin-bottom:0.25rem;">Product Image <small style="font-weight:normal;color:#6b7280;">(JPEG, PNG, GIF, WebP, max 5MB)</small></span>
-                            ${safeLink(product.product_image) ? `<div style="margin-bottom:0.35rem;font-size:0.875rem;">Current: <a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open image</a></div>` : ''}
-                            <input type="file" name="product_image" id="edit-product-image" accept="image/jpeg,image/png,image/gif,image/webp" class="form-input" style="width:100%;">
-                        </div>
-
-                        <div style="display:flex;gap:0.75rem;margin-top:0.75rem;">
-                            <button type="submit" class="btn btn-primary" id="product-save-btn"><i class="bi bi-check-lg" aria-hidden="true"></i> Save changes</button>
-                            <button type="button" class="btn btn-secondary" id="product-cancel-btn">Cancel</button>
-                        </div>
+                    </fieldset>
+                    <div class="product-edit-actions">
+                        <button type="button" class="btn btn-secondary" id="product-cancel-btn">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="product-save-btn"><i class="bi bi-check-lg" aria-hidden="true"></i> Save changes</button>
                     </div>
                 </form>
             `;
 
             const priceInput = document.getElementById('edit-selling-price');
             const priceWarning = document.getElementById('selling-price-warning');
-            const costPrice = Number(product.cost_price || 0);
+            const costInput = document.getElementById('edit-cost-price');
 
             function updatePriceWarning() {
+                const costPrice = Number(costInput.value);
                 const val = parseFloat(priceInput.value);
                 if (!isNaN(val) && costPrice > 0 && val < costPrice) {
                     priceWarning.textContent = `Warning: Selling price (${formatMoney(val)}) is below cost price (${formatMoney(costPrice)})`;
@@ -1953,6 +1979,7 @@ foreach ($products as $product) {
             }
             if (priceInput && priceWarning) {
                 priceInput.addEventListener('input', updatePriceWarning);
+                costInput.addEventListener('input', updatePriceWarning);
                 updatePriceWarning();
             }
 
@@ -2010,6 +2037,15 @@ foreach ($products as $product) {
                     variantInput.focus();
                     return;
                 }
+            }
+
+            const costInput = document.getElementById('edit-cost-price');
+            const costPriceVal = costInput?.value.trim() ? Number(costInput.value) : NaN;
+            if (!Number.isFinite(costPriceVal) || costPriceVal < 0 || costPriceVal > 99999999.99) {
+                errorBox.textContent = 'Cost price must be between PHP 0 and PHP 99,999,999.99.';
+                errorBox.hidden = false;
+                costInput?.focus();
+                return;
             }
 
             const priceInput = document.getElementById('edit-selling-price');
@@ -2119,6 +2155,7 @@ foreach ($products as $product) {
                         row.dataset.category = String(product.category_id || 0);
                         row.dataset.categoryName = (product.category_name || '').toLowerCase();
                         row.dataset.price = String(product.unit_price || 0);
+                        row.dataset.cost = String(product.cost_price || 0);
                         row.dataset.status = product.status;
                         row.dataset.search = [product.product_name, product.variant_label || '', product.sku || '', product.barcode || '', product.brand || ''].join(' ').toLowerCase();
                         const copy = row.querySelector('.product-copy');
@@ -2136,6 +2173,8 @@ foreach ($products as $product) {
                             }
                         }
                         const priceCell = row.querySelector('.column-price');
+                        const costCell = row.querySelector('.column-cost');
+                        if (costCell) costCell.textContent = formatMoney(product.cost_price);
                         if (priceCell) {
                             priceCell.textContent = formatMoney(product.unit_price);
                         }
