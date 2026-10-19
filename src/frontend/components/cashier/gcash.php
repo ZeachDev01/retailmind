@@ -23,9 +23,17 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <h1>GCash</h1>
                 <p>Capture a reference. Check the actual transaction. Confirm only after verification.</p>
             </div>
-            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">
-                <i class="bi bi-arrow-left" aria-hidden="true"></i>Back to POS
-            </a>
+            <div class="gcash-topbar-actions">
+                <button type="button" class="btn btn-primary" id="gcash-quick-cash-in" aria-label="Start new Cash-In transaction">
+                    <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>New Cash-In
+                </button>
+                <button type="button" class="btn btn-secondary" id="gcash-quick-cash-out" aria-label="Start new Cash-Out transaction">
+                    <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>New Cash-Out
+                </button>
+                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i>Back to POS
+                </a>
+            </div>
         </header>
         <p class="gcash-notice"><strong>A reference number is not proof of payment.</strong> Check the reference, amount, and transaction type in the authorized receiving GCash account or its transaction records. These records do not post sales or change cash drawer balances.</p>
         <section id="gcash-session-panel" class="pos-panel gcash-session-panel" aria-labelledby="gcash-session-title">
@@ -50,128 +58,264 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <p id="gcash-session-message">Loading responsibility status…</p>
             </div>
         </section>
-        <section class="pos-panel" aria-labelledby="gcash-entry-title">
-            <div class="pos-panel-header">
-                <div class="pos-panel-title">
-                    <div class="pos-panel-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></div>
-                    <div>
-                        <h2 id="gcash-entry-title">New transaction</h2>
-                        <p>Save first as Pending, then verify from transaction history.</p>
-                    </div>
-                </div>
-            </div>
-            <form id="gcash-form" class="gcash-form">
-                <div class="gcash-field gcash-reference-field">
-                    <label class="pos-field-label" for="gcash-reference">GCash reference number</label>
-                    <input class="pos-input" id="gcash-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="2048" required aria-describedby="gcash-reference-help gcash-scan-status gcash-duplicate">
-                    <small id="gcash-reference-help">Numeric reference: <?= $gcashRules['min_length'] === $gcashRules['max_length'] ? $gcashRules['min_length'] : $gcashRules['min_length'] . '–' . $gcashRules['max_length'] ?> digits. Focus here before scanning; Enter checks the scan and never saves.</small>
-                    <span id="gcash-scan-status" role="status" aria-live="polite">Ready for manual entry or USB scanner.</span>
-                    <span id="gcash-duplicate" role="alert" hidden>This reference has already been recorded. Check transaction history before proceeding.</span>
-                </div>
-                <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-amount">Principal amount (PHP)</label>
-                    <input class="pos-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000" aria-describedby="gcash-amount-help">
-                    <small id="gcash-amount-help">Whole pesos only from 1 to 50,000. Principal excludes the fee.</small>
-                </div>
-                <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-type">Transaction type</label>
-                    <select class="pos-input" id="gcash-type" name="type" required>
-                        <option value="Cash-In">Cash-In</option>
-                        <option value="Cash-Out">Cash-Out</option>
-                    </select>
-                </div>
-                <div class="gcash-field" id="gcash-fee-method-group" hidden>
-                    <label class="pos-field-label" for="gcash-fee-method">Fee payment method</label>
-                    <select class="pos-input" id="gcash-fee-method" name="fee_method">
-                        <option value="Fee via GCash">Fee via GCash</option>
-                        <option value="Fee in cash">Fee in cash</option>
-                    </select>
-                    <small id="gcash-fee-method-help">Choose whether the customer transfers fee via GCash or pays fee in cash at the counter.</small>
-                </div>
-                <section id="gcash-preview" class="gcash-preview-panel" aria-labelledby="gcash-preview-title">
-                    <h3 id="gcash-preview-title" class="gcash-preview-heading">Fee &amp; exchange instructions preview</h3>
-                    <div id="gcash-preview-status" class="gcash-preview-status" role="status" aria-live="polite">Enter a whole-peso principal amount from 1 to 50,000 to preview fees and instructions.</div>
-                    <div id="gcash-preview-content" class="gcash-preview-content" hidden>
-                        <div id="gcash-preview-instructions" class="gcash-preview-instructions"></div>
-                        <div class="gcash-preview-grid">
-                            <div class="gcash-preview-item">
-                                <span class="gcash-preview-label">Service fee</span>
-                                <span class="gcash-preview-value" id="preview-fee">₱0.00</span>
-                            </div>
-                            <div class="gcash-preview-item">
-                                <span class="gcash-preview-label">Customer transfers to Store wallet</span>
-                                <span class="gcash-preview-value" id="preview-customer-transfer">₱0.00</span>
-                            </div>
-                            <div class="gcash-preview-item">
-                                <span class="gcash-preview-label">Cash collected at counter</span>
-                                <span class="gcash-preview-value" id="preview-counter-collect">₱0.00</span>
-                            </div>
-                            <div class="gcash-preview-item">
-                                <span class="gcash-preview-label">Cash handed over</span>
-                                <span class="gcash-preview-value" id="preview-cash-payout">₱0.00</span>
-                            </div>
-                            <div class="gcash-preview-item">
-                                <span class="gcash-preview-label">Store wallet sent</span>
-                                <span class="gcash-preview-value" id="preview-wallet-transfer">₱0.00</span>
-                            </div>
-                            <div class="gcash-preview-item">
-                                <span class="gcash-preview-label">Net service cash</span>
-                                <span class="gcash-preview-value" id="preview-net-cash">₱0.00</span>
-                            </div>
-                            <div class="gcash-preview-item">
-                                <span class="gcash-preview-label">Net wallet</span>
-                                <span class="gcash-preview-value" id="preview-net-wallet">₱0.00</span>
-                            </div>
+
+        <div class="gcash-tabs-nav-wrap">
+            <nav class="gcash-tablist" role="tablist" aria-label="GCash sections">
+                <button type="button" role="tab" id="tab-overview" class="gcash-tab active" aria-selected="true" aria-controls="panel-overview" tabindex="0">
+                    <i class="bi bi-speedometer2" aria-hidden="true"></i>Overview
+                </button>
+                <button type="button" role="tab" id="tab-new-transaction" class="gcash-tab" aria-selected="false" aria-controls="panel-new-transaction" tabindex="-1">
+                    <i class="bi bi-plus-circle" aria-hidden="true"></i>New Transaction
+                </button>
+                <button type="button" role="tab" id="tab-history" class="gcash-tab" aria-selected="false" aria-controls="panel-history" tabindex="-1">
+                    <i class="bi bi-clock-history" aria-hidden="true"></i>History
+                </button>
+            </nav>
+        </div>
+
+        <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" tabindex="0" class="gcash-tabpanel">
+            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-balances-title">
+                <div class="pos-panel-header">
+                    <div class="pos-panel-title">
+                        <div class="pos-panel-icon"><i class="bi bi-cash-stack" aria-hidden="true"></i></div>
+                        <div>
+                            <h2 id="gcash-overview-balances-title">Expected Balances</h2>
+                            <p>Expected figures based on counted opening, accountable movements, and adjustments. No live GCash balance API is implied.</p>
                         </div>
                     </div>
-                </section>
-                <div id="gcash-cash-in-confirm-group" class="gcash-cash-in-confirm-group" hidden>
-                    <label class="gcash-confirm" id="gcash-confirm-wallet-label">
-                        <input type="checkbox" id="gcash-confirm-wallet" name="confirmed_wallet">
-                        <span id="gcash-confirm-wallet-text">I confirmed the wallet transfer of PHP 0.00 in the authorized GCash app</span>
-                    </label>
-                    <label class="gcash-confirm" id="gcash-confirm-cash-label">
-                        <input type="checkbox" id="gcash-confirm-cash" name="confirmed_cash">
-                        <span id="gcash-confirm-cash-text">I confirmed receipt of PHP 0.00 physical cash at the counter</span>
-                    </label>
                 </div>
-                <div class="gcash-actions">
-                    <button class="btn" type="button" id="gcash-complete-cash-in" hidden>Complete Cash-In</button>
-                    <button class="btn" type="button" id="gcash-complete-cash-out" hidden>Complete Cash-Out</button>
-                    <button class="btn btn-secondary" type="button" id="gcash-needs-checking-btn" hidden>Hold as Needs checking</button>
-                    <button class="btn btn-secondary" type="submit" id="gcash-save">Save as Pending</button>
-                    <button class="btn btn-secondary" type="button" id="gcash-manual">Manual entry / USB scan</button>
-                    <button class="btn btn-secondary" type="button" id="gcash-camera-open">Camera OCR (Tesseract.js)</button>
-                </div>
-            </form>
-            <p class="gcash-help">USB HID scanners type into the focused field. A 2D scanner can read supported QR codes containing a reference; ordinary scanners cannot read plain text. Merchant payment QR codes may contain no transaction reference. Use manual entry or camera OCR for plain text.</p>
-            <section id="gcash-camera" class="gcash-camera" aria-labelledby="gcash-camera-title" hidden>
-                <h3 id="gcash-camera-title">Read receipt text</h3>
-                <p><strong>Tesseract.js — free OCR library.</strong> Show the reference label clearly. Avoid glare and fill the frame. Receipt images are processed in your browser. Internet access is needed to load the library and language data; no API key is required. Review and correct the suggested reference before using it.</p>
-                <video id="gcash-video" autoplay playsinline muted aria-label="Receipt camera preview"></video>
-                <div class="gcash-actions">
-                    <button class="btn" type="button" id="gcash-capture">Capture and read</button>
-                    <button class="btn btn-secondary" type="button" id="gcash-camera-close">Close camera</button>
-                </div>
-                <p id="gcash-ocr-status" role="status" aria-live="polite"></p>
-                <div id="gcash-ocr-review" hidden>
-                    <label class="pos-field-label" for="gcash-ocr-candidate">Suggested reference — correct before using</label>
-                    <input class="pos-input" id="gcash-ocr-candidate" type="text" inputmode="numeric" autocomplete="off" maxlength="64">
-                    <button class="btn" type="button" id="gcash-ocr-use">Use this reference</button>
+                <div class="gcash-overview-grid gcash-balances-grid">
+                    <div class="gcash-card gcash-card-balance">
+                        <div class="gcash-card-header">
+                            <span class="gcash-card-label">Expected Service Cash</span>
+                            <span class="gcash-badge gcash-badge-expected">Expected</span>
+                        </div>
+                        <div class="gcash-card-value" id="gcash-overview-expected-cash">₱0.00</div>
+                        <div class="gcash-card-sub" id="gcash-overview-cash-checked">Last actual check: Not checked yet</div>
+                    </div>
+                    <div class="gcash-card gcash-card-balance">
+                        <div class="gcash-card-header">
+                            <span class="gcash-card-label">Expected Wallet Balance</span>
+                            <span class="gcash-badge gcash-badge-expected">Expected</span>
+                        </div>
+                        <div class="gcash-card-value" id="gcash-overview-expected-wallet">₱0.00</div>
+                        <div class="gcash-card-sub" id="gcash-overview-wallet-checked">Last actual check: Not checked yet</div>
+                    </div>
                 </div>
             </section>
-        </section>
-        <section class="pos-panel gcash-history" aria-labelledby="gcash-history-title">
-            <div class="pos-panel-header">
-                <div class="pos-panel-title"><div><h2 id="gcash-history-title">Your transaction history</h2><p>Philippine time · Pending records require a separate review.</p></div></div>
-                <button type="button" class="btn btn-secondary" id="gcash-refresh">Refresh</button>
-            </div>
-            <p id="gcash-history-status" role="status" aria-live="polite"></p>
-            <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash transaction history">
-                <table><thead><tr><th>ID / Date</th><th>Reference</th><th>Type</th><th>Amount</th><th>Status / Note</th><th>Review</th></tr></thead><tbody id="gcash-history-body"></tbody></table>
-            </div>
-            <div class="gcash-actions gcash-pagination"><button type="button" class="btn btn-secondary" id="gcash-prev" disabled>Previous</button><span id="gcash-page">Page 1</span><button type="button" class="btn btn-secondary" id="gcash-next" disabled>Next</button></div>
-        </section>
+
+            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-metrics-title">
+                <div class="pos-panel-header">
+                    <div class="pos-panel-title">
+                        <div class="pos-panel-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
+                        <div>
+                            <h2 id="gcash-overview-metrics-title">Current-Shift Activity</h2>
+                            <p>Completed transactions and gross service fees earned in your active shift.</p>
+                        </div>
+                    </div>
+                    <div class="gcash-overview-quick-actions">
+                        <button type="button" class="btn btn-primary" id="gcash-overview-action-cash-in">
+                            <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>New Cash-In
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="gcash-overview-action-cash-out">
+                            <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>New Cash-Out
+                        </button>
+                    </div>
+                </div>
+                <div class="gcash-overview-grid gcash-metrics-grid">
+                    <div class="gcash-card">
+                        <span class="gcash-card-label">Cash-In Principal</span>
+                        <div class="gcash-card-value" id="gcash-metric-cash-in-principal">₱0.00</div>
+                        <div class="gcash-card-sub">Completed customer deposits</div>
+                    </div>
+                    <div class="gcash-card">
+                        <span class="gcash-card-label">Cash-Out Principal</span>
+                        <div class="gcash-card-value" id="gcash-metric-cash-out-principal">₱0.00</div>
+                        <div class="gcash-card-sub">Completed customer withdrawals</div>
+                    </div>
+                    <div class="gcash-card">
+                        <span class="gcash-card-label">Gross Fees (Cash)</span>
+                        <div class="gcash-card-value" id="gcash-metric-fees-cash">₱0.00</div>
+                        <div class="gcash-card-sub">Service fees paid in counter cash</div>
+                    </div>
+                    <div class="gcash-card">
+                        <span class="gcash-card-label">Gross Fees (Wallet)</span>
+                        <div class="gcash-card-value" id="gcash-metric-fees-wallet">₱0.00</div>
+                        <div class="gcash-card-sub">Service fees received via GCash</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-nc-title">
+                <div class="pos-panel-header">
+                    <div class="pos-panel-title">
+                        <div class="pos-panel-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
+                        <div>
+                            <h2 id="gcash-overview-nc-title">Needs Checking Items</h2>
+                            <p>Transactions held for investigation. Resolve before closing responsibility.</p>
+                        </div>
+                    </div>
+                    <span id="gcash-overview-nc-count" class="gcash-status gcash-status-needs-checking">0 open</span>
+                </div>
+                <div id="gcash-overview-nc-list" class="gcash-nc-list">
+                    <p class="gcash-empty-msg">No unresolved Needs checking transactions.</p>
+                </div>
+            </section>
+        </div>
+
+        <div role="tabpanel" id="panel-new-transaction" aria-labelledby="tab-new-transaction" tabindex="0" class="gcash-tabpanel" hidden>
+            <section class="pos-panel" aria-labelledby="gcash-entry-title">
+                <div class="pos-panel-header">
+                    <div class="pos-panel-title">
+                        <div class="pos-panel-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></div>
+                        <div>
+                            <h2 id="gcash-entry-title">New transaction</h2>
+                            <p>Save first as Pending, then verify from transaction history.</p>
+                        </div>
+                    </div>
+                </div>
+                <form id="gcash-form" class="gcash-form">
+                    <div class="gcash-field gcash-reference-field">
+                        <label class="pos-field-label" for="gcash-reference">GCash reference number</label>
+                        <input class="pos-input" id="gcash-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="2048" required aria-describedby="gcash-reference-help gcash-scan-status gcash-duplicate">
+                        <small id="gcash-reference-help">Numeric reference: <?= $gcashRules['min_length'] === $gcashRules['max_length'] ? $gcashRules['min_length'] : $gcashRules['min_length'] . '–' . $gcashRules['max_length'] ?> digits. Focus here before scanning; Enter checks the scan and never saves.</small>
+                        <span id="gcash-scan-status" role="status" aria-live="polite">Ready for manual entry or USB scanner.</span>
+                        <span id="gcash-duplicate" role="alert" hidden>This reference has already been recorded. Check transaction history before proceeding.</span>
+                    </div>
+                    <div class="gcash-field">
+                        <label class="pos-field-label" for="gcash-amount">Principal amount (PHP)</label>
+                        <input class="pos-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000" aria-describedby="gcash-amount-help">
+                        <small id="gcash-amount-help">Whole pesos only from 1 to 50,000. Principal excludes the fee.</small>
+                    </div>
+                    <div class="gcash-field">
+                        <label class="pos-field-label" for="gcash-type">Transaction type</label>
+                        <select class="pos-input" id="gcash-type" name="type" required>
+                            <option value="Cash-In">Cash-In</option>
+                            <option value="Cash-Out">Cash-Out</option>
+                        </select>
+                    </div>
+                    <div class="gcash-field" id="gcash-fee-method-group" hidden>
+                        <label class="pos-field-label" for="gcash-fee-method">Fee payment method</label>
+                        <select class="pos-input" id="gcash-fee-method" name="fee_method">
+                            <option value="Fee via GCash">Fee via GCash</option>
+                            <option value="Fee in cash">Fee in cash</option>
+                        </select>
+                        <small id="gcash-fee-method-help">Choose whether the customer transfers fee via GCash or pays fee in cash at the counter.</small>
+                    </div>
+                    <section id="gcash-preview" class="gcash-preview-panel" aria-labelledby="gcash-preview-title">
+                        <h3 id="gcash-preview-title" class="gcash-preview-heading">Fee &amp; exchange instructions preview</h3>
+                        <div id="gcash-preview-status" class="gcash-preview-status" role="status" aria-live="polite">Enter a whole-peso principal amount from 1 to 50,000 to preview fees and instructions.</div>
+                        <div id="gcash-preview-content" class="gcash-preview-content" hidden>
+                            <div id="gcash-preview-instructions" class="gcash-preview-instructions"></div>
+                            <div class="gcash-preview-grid">
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Service fee</span>
+                                    <span class="gcash-preview-value" id="preview-fee">₱0.00</span>
+                                </div>
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Customer transfers to Store wallet</span>
+                                    <span class="gcash-preview-value" id="preview-customer-transfer">₱0.00</span>
+                                </div>
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Cash collected at counter</span>
+                                    <span class="gcash-preview-value" id="preview-counter-collect">₱0.00</span>
+                                </div>
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Cash handed over</span>
+                                    <span class="gcash-preview-value" id="preview-cash-payout">₱0.00</span>
+                                </div>
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Store wallet sent</span>
+                                    <span class="gcash-preview-value" id="preview-wallet-transfer">₱0.00</span>
+                                </div>
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Net service cash</span>
+                                    <span class="gcash-preview-value" id="preview-net-cash">₱0.00</span>
+                                </div>
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Net wallet</span>
+                                    <span class="gcash-preview-value" id="preview-net-wallet">₱0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <div id="gcash-cash-in-confirm-group" class="gcash-cash-in-confirm-group" hidden>
+                        <label class="gcash-confirm" id="gcash-confirm-wallet-label">
+                            <input type="checkbox" id="gcash-confirm-wallet" name="confirmed_wallet">
+                            <span id="gcash-confirm-wallet-text">I confirmed the wallet transfer of PHP 0.00 in the authorized GCash app</span>
+                        </label>
+                        <label class="gcash-confirm" id="gcash-confirm-cash-label">
+                            <input type="checkbox" id="gcash-confirm-cash" name="confirmed_cash">
+                            <span id="gcash-confirm-cash-text">I confirmed receipt of PHP 0.00 physical cash at the counter</span>
+                        </label>
+                    </div>
+                    <div class="gcash-actions">
+                        <button class="btn" type="button" id="gcash-complete-cash-in" hidden>Complete Cash-In</button>
+                        <button class="btn" type="button" id="gcash-complete-cash-out" hidden>Complete Cash-Out</button>
+                        <button class="btn btn-secondary" type="button" id="gcash-needs-checking-btn" hidden>Hold as Needs checking</button>
+                        <button class="btn btn-secondary" type="submit" id="gcash-save">Save as Pending</button>
+                        <button class="btn btn-secondary" type="button" id="gcash-manual">Manual entry / USB scan</button>
+                        <button class="btn btn-secondary" type="button" id="gcash-camera-open">Camera OCR (Tesseract.js)</button>
+                    </div>
+                </form>
+                <p class="gcash-help">USB HID scanners type into the focused field. A 2D scanner can read supported QR codes containing a reference; ordinary scanners cannot read plain text. Merchant payment QR codes may contain no transaction reference. Use manual entry or camera OCR for plain text.</p>
+                <section id="gcash-camera" class="gcash-camera" aria-labelledby="gcash-camera-title" hidden>
+                    <h3 id="gcash-camera-title">Read receipt text</h3>
+                    <p><strong>Tesseract.js — free OCR library.</strong> Show the reference label clearly. Avoid glare and fill the frame. Receipt images are processed in your browser. Internet access is needed to load the library and language data; no API key is required. Review and correct the suggested reference before using it.</p>
+                    <video id="gcash-video" autoplay playsinline muted aria-label="Receipt camera preview"></video>
+                    <div class="gcash-actions">
+                        <button class="btn" type="button" id="gcash-capture">Capture and read</button>
+                        <button class="btn btn-secondary" type="button" id="gcash-camera-close">Close camera</button>
+                    </div>
+                    <p id="gcash-ocr-status" role="status" aria-live="polite"></p>
+                    <div id="gcash-ocr-review" hidden>
+                        <label class="pos-field-label" for="gcash-ocr-candidate">Suggested reference — correct before using</label>
+                        <input class="pos-input" id="gcash-ocr-candidate" type="text" inputmode="numeric" autocomplete="off" maxlength="64">
+                        <button class="btn" type="button" id="gcash-ocr-use">Use this reference</button>
+                    </div>
+                </section>
+            </section>
+        </div>
+
+        <div role="tabpanel" id="panel-history" aria-labelledby="tab-history" tabindex="0" class="gcash-tabpanel" hidden>
+            <section class="pos-panel gcash-history" aria-labelledby="gcash-history-title">
+                <div class="pos-panel-header">
+                    <div class="pos-panel-title">
+                        <div>
+                            <h2 id="gcash-history-title">Your transaction history</h2>
+                            <p>Philippine time (Asia/Manila) · Strict cashier authorization preserved.</p>
+                        </div>
+                    </div>
+                    <div class="gcash-history-header-actions">
+                        <button type="button" class="btn btn-secondary" id="gcash-history-action-cash-in">New Cash-In</button>
+                        <button type="button" class="btn btn-secondary" id="gcash-history-action-cash-out">New Cash-Out</button>
+                        <button type="button" class="btn btn-secondary" id="gcash-refresh">Refresh</button>
+                    </div>
+                </div>
+                <p id="gcash-history-status" role="status" aria-live="polite">Loading transactions…</p>
+                <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash transaction history">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID / Date</th>
+                                <th>Shift / Cashier</th>
+                                <th>Reference</th>
+                                <th>Type</th>
+                                <th>Principal &amp; Fee</th>
+                                <th>Status / Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gcash-history-body"></tbody>
+                    </table>
+                </div>
+                <div class="gcash-actions gcash-pagination">
+                    <button type="button" class="btn btn-secondary" id="gcash-prev" disabled>Previous</button>
+                    <span id="gcash-page">Page 1</span>
+                    <button type="button" class="btn btn-secondary" id="gcash-next" disabled>Next</button>
+                </div>
+            </section>
+        </div>
         <dialog id="gcash-review-dialog" aria-labelledby="gcash-review-title">
             <form id="gcash-review-form">
                 <h2 id="gcash-review-title">Review transaction</h2>

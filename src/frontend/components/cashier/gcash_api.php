@@ -11,7 +11,9 @@ try {
     $service = new GCashTransactionService($pdo, require __DIR__ . '/../../../backend/config/gcash.php');
     $method = $_SERVER['REQUEST_METHOD'];
     if ($method === 'GET') {
-        if (($_GET['action'] ?? '') === 'session_status') {
+        if (($_GET['action'] ?? '') === 'overview') {
+            $result = $service->cashierOverview((int)$_SESSION['user_id']);
+        } elseif (($_GET['action'] ?? '') === 'session_status') {
             $session = $service->getCurrentSession();
             if ($session) {
                 $expected = $service->calculateSessionExpected((int)$session['session_id']);

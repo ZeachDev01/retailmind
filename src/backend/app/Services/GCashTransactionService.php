@@ -144,10 +144,131 @@ final class GCashTransactionService
         return (bool)$stmt->fetchColumn();
     }
 
+    public function cashierOverview(int $cashierId): array
+    {
+        $shiftService = new CashierShiftService($this->pdo());
+        $shift = $shiftService->getOpenShift($cashierId);
+        $shiftId = $shift ? (int)$shift['shift_id'] : null;
+
+        $session = $this->getCurrentSession();
+        $sessionId = null;
+        $isControlling = false;
+        if ($session && (int)$session['cashier_id'] === $cashierId) {
+            $sessionId = (int)$session['session_id'];
+            $isControlling = true;
+        }
+
+        $expectedCash = 0.0;
+        $expectedWallet = 0.0;
+        $lastCheckedAt = null;
+        $lastCheckedFormatted = null;
+
+        if ($session && $isControlling) {
+            $expected = $this->calculateSessionExpected($sessionId);
+            $expectedCash = (float)$expected['expected_service_cash'];
+            $expectedWallet = (float)$expected['expected_wallet_balance'];
+            $lastCheckedAt = $session['opened_at'];
+            $lastCheckedFormatted = PhilippineTime::format($session['opened_at']);
+        }
+
+        $cashInPrincipal = 0.0;
+        $cashOutPrincipal = 0.0;
+        $grossFeesCash = 0.0;
+        $grossFeesWallet = 0.0;
+
+        if ($sessionId) {
+            $stmt = $this->pdo()->prepare(
+                "SELECT
+                    COALESCE(SUM(CASE WHEN transaction_type = 'Cash-In' AND verification_status = 'Completed' THEN principal_amount ELSE 0 END), 0) AS cash_in_principal,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'Cash-Out' AND verification_status = 'Completed' THEN principal_amount ELSE 0 END), 0) AS cash_out_principal,
+                    COALESCE(SUM(CASE WHEN fee_method = 'cash' AND verification_status = 'Completed' THEN gross_fee ELSE 0 END), 0) AS gross_fees_cash,
+                    COALESCE(SUM(CASE WHEN fee_method = 'wallet' AND verification_status = 'Completed' THEN gross_fee ELSE 0 END), 0) AS gross_fees_wallet
+                FROM gcash_transactions
+                WHERE cashier_id = ? AND session_id = ?"
+            );
+            $stmt->execute([$cashierId, $sessionId]);
+            $metrics = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($metrics) {
+                $cashInPrincipal = round((float)$metrics['cash_in_principal'], 2);
+                $cashOutPrincipal = round((float)$metrics['cash_out_principal'], 2);
+                $grossFeesCash = round((float)$metrics['gross_fees_cash'], 2);
+                $grossFeesWallet = round((float)$metrics['gross_fees_wallet'], 2);
+            }
+        } elseif ($shiftId) {
+            $stmt = $this->pdo()->prepare(
+                "SELECT
+                    COALESCE(SUM(CASE WHEN transaction_type = 'Cash-In' AND verification_status = 'Completed' THEN principal_amount ELSE 0 END), 0) AS cash_in_principal,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'Cash-Out' AND verification_status = 'Completed' THEN principal_amount ELSE 0 END), 0) AS cash_out_principal,
+                    COALESCE(SUM(CASE WHEN fee_method = 'cash' AND verification_status = 'Completed' THEN gross_fee ELSE 0 END), 0) AS gross_fees_cash,
+                    COALESCE(SUM(CASE WHEN fee_method = 'wallet' AND verification_status = 'Completed' THEN gross_fee ELSE 0 END), 0) AS gross_fees_wallet
+                FROM gcash_transactions
+                WHERE cashier_id = ? AND shift_id = ?"
+            );
+            $stmt->execute([$cashierId, $shiftId]);
+            $metrics = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($metrics) {
+                $cashInPrincipal = round((float)$metrics['cash_in_principal'], 2);
+                $cashOutPrincipal = round((float)$metrics['cash_out_principal'], 2);
+                $grossFeesCash = round((float)$metrics['gross_fees_cash'], 2);
+                $grossFeesWallet = round((float)$metrics['gross_fees_wallet'], 2);
+            }
+        }
+
+        $ncSql = "SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username
+                  FROM gcash_transactions t
+                  JOIN users u ON t.cashier_id = u.user_id
+                  WHERE t.cashier_id = ? AND t.verification_status = 'Needs checking'";
+        $ncParams = [$cashierId];
+        if ($sessionId) {
+            $ncSql .= " AND t.session_id = ?";
+            $ncParams[] = $sessionId;
+        } elseif ($shiftId) {
+            $ncSql .= " AND t.shift_id = ?";
+            $ncParams[] = $shiftId;
+        }
+        $ncSql .= " ORDER BY t.transaction_id DESC";
+        $ncStmt = $this->pdo()->prepare($ncSql);
+        $ncStmt->execute($ncParams);
+        $needsChecking = [];
+        foreach ($ncStmt->fetchAll(PDO::FETCH_ASSOC) as $nc) {
+            $nc['is_legacy'] = ($nc['session_id'] === null);
+            $nc['created_at_formatted'] = PhilippineTime::format($nc['created_at']);
+            $nc['time_formatted'] = PhilippineTime::format($nc['created_at']);
+            $nc['principal_amount'] = $nc['principal_amount'] !== null ? (float)$nc['principal_amount'] : null;
+            $nc['fee_amount'] = $nc['fee_amount'] !== null ? (float)$nc['fee_amount'] : null;
+            $nc['gross_fee'] = (float)$nc['gross_fee'];
+            $needsChecking[] = $nc;
+        }
+
+        return [
+            'shift' => $shift,
+            'session' => $isControlling ? $session : null,
+            'is_controlling_cashier' => $isControlling,
+            'expected_service_cash' => $expectedCash,
+            'expected_wallet_balance' => $expectedWallet,
+            'last_checked_at' => $lastCheckedAt,
+            'last_checked_formatted' => $lastCheckedFormatted,
+            'cash_in_principal' => $cashInPrincipal,
+            'cash_out_principal' => $cashOutPrincipal,
+            'gross_fees_cash' => $grossFeesCash,
+            'gross_fees_wallet' => $grossFeesWallet,
+            'gross_fees_total' => round($grossFeesCash + $grossFeesWallet, 2),
+            'needs_checking' => $needsChecking,
+            'needs_checking_count' => count($needsChecking),
+        ];
+    }
+
     public function history(int $cashierId, int $page): array
     {
         $offset = (max(1, min(100000, $page)) - 1) * 25;
-        $stmt = $this->pdo()->prepare('SELECT * FROM gcash_transactions WHERE cashier_id = ? ORDER BY transaction_id DESC LIMIT 26 OFFSET ' . $offset);
+        $stmt = $this->pdo()->prepare(
+            'SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username
+             FROM gcash_transactions t
+             JOIN users u ON t.cashier_id = u.user_id
+             WHERE t.cashier_id = ?
+             ORDER BY t.transaction_id DESC
+             LIMIT 26 OFFSET ' . $offset
+        );
         $stmt->execute([$cashierId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $txs = array_slice($rows, 0, 25);
@@ -161,10 +282,23 @@ final class GCashTransactionService
             }
             foreach ($txs as &$tx) {
                 $tx['adjustments'] = $adjsByTx[$tx['transaction_id']] ?? [];
+                $isLegacy = ($tx['session_id'] === null);
+                $tx['is_legacy'] = $isLegacy;
+                if ($isLegacy) {
+                    $tx['shift_id'] = null;
+                    $tx['principal_amount'] = null;
+                    $tx['fee_amount'] = null;
+                    $tx['fee_method'] = null;
+                    $tx['gross_fee'] = 0.00;
+                }
+                $tx['created_at_formatted'] = PhilippineTime::format($tx['created_at']);
+                $tx['reviewed_at_formatted'] = $tx['reviewed_at'] ? PhilippineTime::format($tx['reviewed_at']) : null;
+                $tx['completed_at_formatted'] = $tx['completed_at'] ? PhilippineTime::format($tx['completed_at']) : null;
+                $tx['time_formatted'] = PhilippineTime::format($tx['completed_at'] ?? $tx['reviewed_at'] ?? $tx['created_at']);
             }
             unset($tx);
         }
-        return ['transactions' => $txs, 'has_next' => count($rows) > 25];
+        return ['transactions' => $txs, 'has_next' => count($rows) > 25, 'page' => $page];
     }
 
     public function getCurrentSession(): ?array

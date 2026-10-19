@@ -149,6 +149,11 @@ if ($argv[1] === 'gates') {
     $pdo->exec('UPDATE users SET must_change_password=1 WHERE user_id=1');
     $pdo->exec('UPDATE cashier_shifts SET locked_at=CURRENT_TIMESTAMP WHERE shift_id=1'); exit;
 }
+if ($argv[1] === 'gcash_legacy') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("INSERT INTO gcash_transactions (cashier_id, reference_number, transaction_type, amount, verification_status, created_at) VALUES (4, '0012345678990', 'Cash-In', 500.00, 'Verified', NOW())");
+    exit;
+}
 $pdo->exec("CREATE DATABASE `{$database}`");
 $pdo->exec("USE `{$database}`");
 preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../../database/sql/schema.sql'), $tables);

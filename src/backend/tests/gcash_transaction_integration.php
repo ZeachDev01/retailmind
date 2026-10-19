@@ -1014,5 +1014,86 @@ $check($newSessRow['status'] === 'open' && (int)$newSessRow['cashier_id'] === $n
 // Close new session cleanly
 $service->closeSession($newUserId, 1000.00, 2000.00, 'Closing handed-over session', 0);
 
+// Ticket #243: Cashier Overview, fee split, needs_checking scoping, and history cashier authorization
+$sess10 = $service->openSession(4, 2000.00, 5000.00);
+$ciId = $service->recordCashIn(4, [
+    'principal' => 1000,
+    'reference' => '0000000000701',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]);
+$co1Id = $service->recordCashOut(4, [
+    'principal' => 500,
+    'fee_method' => 'Fee via GCash',
+    'reference' => '0000000000702',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]);
+$co2Id = $service->recordCashOut(4, [
+    'principal' => 300,
+    'fee_method' => 'Fee in cash',
+    'reference' => '0000000000703',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]);
+$nc4Id = $service->recordCashIn(4, [
+    'outcome' => 'Needs checking',
+    'principal' => 400,
+    'notes' => 'Customer left before wallet confirmation',
+    'confirmed_cash' => true,
+    'confirmed_wallet' => false,
+]);
+
+// Overview for cashier 4
+$ov4 = $service->cashierOverview(4);
+$check($ov4['is_controlling_cashier'] === true, 'Cashier 4 controls session 10');
+$check($ov4['expected_service_cash'] > 0 && $ov4['expected_wallet_balance'] > 0, 'Expected balances calculated');
+$check($ov4['last_checked_at'] !== null && $ov4['last_checked_formatted'] !== null, 'Last checked timestamp present');
+$check((float)$ov4['cash_in_principal'] === 1000.00, 'Cash-in principal total matches completed only');
+$check((float)$ov4['cash_out_principal'] === 800.00, 'Cash-out principal total matches completed');
+$check((float)$ov4['gross_fees_cash'] === 15.00, 'Gross fees in cash split (10 CI + 5 CO)');
+$check((float)$ov4['gross_fees_wallet'] === 10.00, 'Gross fees in wallet split (10 CO)');
+$check($ov4['needs_checking_count'] === 1, 'Only 1 unresolved needs checking for cashier 4');
+$check((int)$ov4['needs_checking'][0]['transaction_id'] === $nc4Id, 'Needs checking transaction matches');
+$check($ov4['needs_checking'][0]['time_formatted'] !== '', 'Needs checking has Philippine time');
+$check($ov4['needs_checking'][0]['cashier_name'] !== '', 'Needs checking has Cashier name');
+
+// Scoping: Needs checking for another cashier
+$pdo->prepare("INSERT INTO gcash_transactions (session_id, shift_id, transaction_type, reference_number, amount, principal_amount, fee_amount, fee_method, cashier_id, verification_status, notes) VALUES (?, ?, 'Cash-In', '0000000000799', 200, 200, 5, 'cash', ?, 'Needs checking', 'Other cashier held item')")
+    ->execute([$sess10, $newShiftId, $newUserId]);
+
+// Cashier 4 overview must NOT see other cashier's needs checking
+$ov4After = $service->cashierOverview(4);
+$check($ov4After['needs_checking_count'] === 1, 'Needs checking strictly scoped to cashier');
+
+// Cashier history authorization: cashier 4 only sees cashier 4 rows
+$h4 = $service->history(4, 1);
+foreach ($h4['transactions'] as $tx) {
+    $check((int)$tx['cashier_id'] === 4, 'History strictly scoped to authorized cashier');
+}
+
+// Legacy record flags
+$legacyFound = false;
+foreach ($h4['transactions'] as $tx) {
+    if ((int)$tx['transaction_id'] === $id) {
+        $legacyFound = true;
+        $check($tx['is_legacy'] === true, 'Legacy transaction marked is_legacy true');
+        $check($tx['shift_id'] === null, 'Legacy transaction has no shift assigned');
+        $check($tx['principal_amount'] === null, 'Legacy transaction has no inferred principal');
+        $check($tx['gross_fee'] === 0.00, 'Legacy transaction has zero gross fee');
+    }
+}
+$check($legacyFound, 'Legacy transaction found in history');
+
+// Other cashier history cannot see cashier 4 rows
+$hOther = $service->history($newUserId, 1);
+foreach ($hOther['transactions'] as $tx) {
+    $check((int)$tx['cashier_id'] === $newUserId, 'Other cashier history only sees own rows');
+}
+
+// Close session 10 cleanly
+$exp10 = $service->calculateSessionExpected($sess10);
+$service->closeSession(4, (float)$exp10['expected_service_cash'], (float)$exp10['expected_wallet_balance'], 'Session 10 test close', 1);
+
 echo "GCash MySQL integration: passed\n";
 

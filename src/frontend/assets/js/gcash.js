@@ -398,10 +398,12 @@
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
+                await loadOverview();
             } catch (error) {
                 notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
                 await loadHistory();
                 await loadSessionStatus();
+                await loadOverview();
             } finally {
                 saving = false;
                 if (!currentSession || currentSession.is_controlling_cashier) {
@@ -459,10 +461,12 @@
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
+                await loadOverview();
             } catch (error) {
                 notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
                 await loadHistory();
                 await loadSessionStatus();
+                await loadOverview();
             } finally {
                 saving = false;
                 if (!currentSession || currentSession.is_controlling_cashier) {
@@ -567,10 +571,12 @@
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
+                await loadOverview();
             } catch (error) {
                 notify(error.message + ' Refresh history before retrying.', 'error');
                 await loadHistory();
                 await loadSessionStatus();
+                await loadOverview();
             } finally {
                 submitBtn.disabled = false;
             }
@@ -602,6 +608,7 @@
             page = 1;
             await loadHistory();
             await loadSessionStatus();
+            await loadOverview();
         } catch (error) {
             notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
         } finally {
@@ -614,6 +621,156 @@
         }
     });
     const cell = (row, value) => { const td = row.insertCell(); td.textContent = value; return td; };
+
+    const tabOverview = document.getElementById('tab-overview');
+    const tabNewTx = document.getElementById('tab-new-transaction');
+    const tabHistory = document.getElementById('tab-history');
+    const panelOverview = document.getElementById('panel-overview');
+    const panelNewTx = document.getElementById('panel-new-transaction');
+    const panelHistory = document.getElementById('panel-history');
+    const tabs = [
+        { id: 'overview', btn: tabOverview, panel: panelOverview },
+        { id: 'new-transaction', btn: tabNewTx, panel: panelNewTx },
+        { id: 'history', btn: tabHistory, panel: panelHistory }
+    ];
+
+    function switchTab(targetId, focusTarget = false) {
+        tabs.forEach(t => {
+            if (!t.btn || !t.panel) return;
+            const isTarget = t.id === targetId;
+            t.btn.classList.toggle('active', isTarget);
+            t.btn.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+            t.btn.setAttribute('tabindex', isTarget ? '0' : '-1');
+            t.panel.hidden = !isTarget;
+            if (isTarget && focusTarget) t.btn.focus();
+        });
+        if (targetId === 'overview') loadOverview();
+        if (targetId === 'history') loadHistory();
+    }
+
+    tabs.forEach((t, idx) => {
+        if (!t.btn) return;
+        t.btn.addEventListener('click', () => switchTab(t.id));
+        t.btn.addEventListener('keydown', e => {
+            let nextIdx = -1;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                nextIdx = (idx + 1) % tabs.length;
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                nextIdx = (idx - 1 + tabs.length) % tabs.length;
+            } else if (e.key === 'Home') {
+                nextIdx = 0;
+            } else if (e.key === 'End') {
+                nextIdx = tabs.length - 1;
+            }
+            if (nextIdx !== -1) {
+                e.preventDefault();
+                switchTab(tabs[nextIdx].id, true);
+            }
+        });
+    });
+
+    function selectAndStart(type) {
+        switchTab('new-transaction');
+        const typeSelect = el('type');
+        if (typeSelect) {
+            typeSelect.value = type;
+            updatePreview();
+        }
+        el('amount')?.focus();
+    }
+
+    ['quick-cash-in', 'overview-action-cash-in', 'history-action-cash-in'].forEach(id => {
+        const btn = document.getElementById('gcash-' + id) || document.getElementById(id);
+        if (btn) btn.addEventListener('click', () => selectAndStart('Cash-In'));
+    });
+    ['quick-cash-out', 'overview-action-cash-out', 'history-action-cash-out'].forEach(id => {
+        const btn = document.getElementById('gcash-' + id) || document.getElementById(id);
+        if (btn) btn.addEventListener('click', () => selectAndStart('Cash-Out'));
+    });
+
+    async function loadOverview() {
+        try {
+            const data = await request({action: 'overview'});
+            const expCash = document.getElementById('gcash-overview-expected-cash');
+            const expWallet = document.getElementById('gcash-overview-expected-wallet');
+            const cashChecked = document.getElementById('gcash-overview-cash-checked');
+            const walletChecked = document.getElementById('gcash-overview-wallet-checked');
+
+            if (expCash) expCash.textContent = formatPhp(data.expected_service_cash || 0);
+            if (expWallet) expWallet.textContent = formatPhp(data.expected_wallet_balance || 0);
+
+            const lastCheckedStr = data.last_checked_formatted ? ('Last actual check: ' + data.last_checked_formatted) : 'Last actual check: Not checked yet';
+            if (cashChecked) cashChecked.textContent = lastCheckedStr;
+            if (walletChecked) walletChecked.textContent = lastCheckedStr;
+
+            const ciPrin = document.getElementById('gcash-metric-cash-in-principal');
+            const coPrin = document.getElementById('gcash-metric-cash-out-principal');
+            const feesCash = document.getElementById('gcash-metric-fees-cash');
+            const feesWallet = document.getElementById('gcash-metric-fees-wallet');
+
+            if (ciPrin) ciPrin.textContent = formatPhp(data.cash_in_principal || 0);
+            if (coPrin) coPrin.textContent = formatPhp(data.cash_out_principal || 0);
+            if (feesCash) feesCash.textContent = formatPhp(data.gross_fees_cash || 0);
+            if (feesWallet) feesWallet.textContent = formatPhp(data.gross_fees_wallet || 0);
+
+            const ncCount = document.getElementById('gcash-overview-nc-count');
+            const ncList = document.getElementById('gcash-overview-nc-list');
+
+            if (ncCount) ncCount.textContent = (data.needs_checking_count || 0) + ' open';
+
+            if (ncList) {
+                ncList.replaceChildren();
+                const items = data.needs_checking || [];
+                if (items.length === 0) {
+                    const empty = document.createElement('p');
+                    empty.className = 'gcash-empty-msg';
+                    empty.textContent = 'No unresolved Needs checking transactions.';
+                    ncList.append(empty);
+                } else {
+                    for (const item of items) {
+                        const card = document.createElement('div');
+                        card.className = 'gcash-nc-card';
+                        const details = document.createElement('div');
+                        details.className = 'gcash-nc-details';
+
+                        const title = document.createElement('div');
+                        title.className = 'gcash-nc-title';
+                        title.innerHTML = `<strong>#${item.transaction_id}</strong> · <span>${item.transaction_type}</span> <span class="gcash-status gcash-status-needs-checking">Needs checking</span>`;
+
+                        const meta = document.createElement('div');
+                        meta.className = 'gcash-nc-meta';
+                        const prinAmt = formatPhp(item.principal_amount || item.amount || 0);
+                        const feeAmt = formatPhp(item.gross_fee || item.fee_amount || 0);
+                        const ref = item.reference_number || 'No reference';
+                        const time = item.time_formatted || item.created_at;
+                        const shift = item.shift_id ? ('Shift #' + item.shift_id) : 'No shift';
+                        const cashier = item.cashier_name || ('Cashier #' + item.cashier_id);
+                        meta.textContent = `Principal: ${prinAmt} · Fee: ${feeAmt} (${item.fee_method || 'cash'}) · Ref: ${ref} · ${cashier} · ${shift} · ${time}`;
+
+                        details.append(title, meta);
+                        if (item.notes) {
+                            const notesEl = document.createElement('small');
+                            notesEl.style.color = 'var(--muted)';
+                            notesEl.textContent = item.notes;
+                            details.append(notesEl);
+                        }
+
+                        const resolveBtn = document.createElement('button');
+                        resolveBtn.type = 'button';
+                        resolveBtn.className = 'btn btn-secondary';
+                        resolveBtn.textContent = 'Resolve';
+                        resolveBtn.addEventListener('click', () => openResolveDialog(item));
+
+                        card.append(details, resolveBtn);
+                        ncList.append(card);
+                    }
+                }
+            }
+        } catch (_) {
+            // Non-blocking overview update
+        }
+    }
+
     async function loadHistory() {
         const version = ++historyRequest;
         const requestedPage = page;
@@ -628,25 +785,38 @@
                 const row = document.createElement('tr');
                 const id = cell(row, '#' + transaction.transaction_id);
                 const date = document.createElement('small');
-                date.textContent = transaction.created_at;
+                date.textContent = transaction.time_formatted || transaction.created_at;
                 id.append(date);
+
+                const shiftCashierCell = cell(row, transaction.shift_id ? ('Shift #' + transaction.shift_id) : '—');
+                const cashierInfo = document.createElement('small');
+                cashierInfo.textContent = transaction.cashier_name || ('Cashier #' + transaction.cashier_id);
+                shiftCashierCell.append(cashierInfo);
+
                 cell(row, transaction.reference_number || '—');
                 cell(row, transaction.transaction_type);
 
-                const amountCell = cell(row, '₱' + Number(transaction.amount).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
-                if (transaction.principal_amount !== null && transaction.principal_amount !== undefined) {
+                const amountCell = cell(row, '');
+                if (transaction.is_legacy) {
+                    amountCell.textContent = formatPhp(transaction.amount);
+                    const legInfo = document.createElement('small');
+                    legInfo.textContent = 'Legacy reference record';
+                    amountCell.append(legInfo);
+                } else {
+                    amountCell.textContent = formatPhp(transaction.principal_amount || transaction.amount);
                     const feeInfo = document.createElement('small');
-                    const fee = Number(transaction.fee_amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
+                    const fee = formatPhp(transaction.gross_fee || transaction.fee_amount || 0);
                     const feeMethod = transaction.fee_method || 'cash';
-                    feeInfo.textContent = `Fee: ₱${fee} (${feeMethod})`;
+                    feeInfo.textContent = `Fee: ${fee} (${feeMethod})`;
                     amountCell.append(feeInfo);
-                }
-                if (Number(transaction.service_cash_delta || 0) !== 0 || Number(transaction.wallet_delta || 0) !== 0) {
-                    const deltas = document.createElement('small');
-                    const cashDelta = formatPhp(Number(transaction.service_cash_delta || 0), true);
-                    const walletDelta = formatPhp(Number(transaction.wallet_delta || 0), true);
-                    deltas.textContent = `Cash: ${cashDelta} · Wallet: ${walletDelta}`;
-                    amountCell.append(deltas);
+
+                    if (Number(transaction.service_cash_delta || 0) !== 0 || Number(transaction.wallet_delta || 0) !== 0) {
+                        const deltas = document.createElement('small');
+                        const cashDelta = formatPhp(Number(transaction.service_cash_delta || 0), true);
+                        const walletDelta = formatPhp(Number(transaction.wallet_delta || 0), true);
+                        deltas.textContent = `Cash: ${cashDelta} · Wallet: ${walletDelta}`;
+                        amountCell.append(deltas);
+                    }
                 }
                 if (transaction.adjustments && transaction.adjustments.length > 0) {
                     for (const adj of transaction.adjustments) {
@@ -663,9 +833,10 @@
                 status.className = 'gcash-status gcash-status-' + statusKey;
                 status.textContent = transaction.verification_status;
                 statusCell.append(status);
-                if (transaction.session_id === null || transaction.session_id === undefined) {
-                    const legacy = document.createElement('small');
-                    legacy.textContent = 'Legacy reference';
+                if (transaction.is_legacy || transaction.session_id === null || transaction.session_id === undefined) {
+                    const legacy = document.createElement('span');
+                    legacy.className = 'gcash-badge gcash-badge-legacy';
+                    legacy.textContent = 'Legacy Reference';
                     statusCell.append(legacy);
                 }
                 if (transaction.notes) {
@@ -675,7 +846,7 @@
                 }
                 if (transaction.verification_note) {
                     const note = document.createElement('small');
-                    note.textContent = transaction.verification_note + ' · ' + transaction.reviewed_at;
+                    note.textContent = transaction.verification_note + ' · ' + (transaction.reviewed_at_formatted || transaction.reviewed_at);
                     statusCell.append(note);
                 }
                 const actions = cell(row, '');
@@ -738,6 +909,7 @@
             notify('Transaction marked ' + status + '.', 'success');
             await loadHistory();
             await loadSessionStatus();
+            await loadOverview();
         } catch (error) { notify(error.message + ' Refresh history before retrying.', 'error'); }
         finally { reviewing = false; for (const input of el('review-form').elements) input.disabled = false; }
     }
@@ -855,6 +1027,7 @@
             el('open-dialog').close();
             notify('GCash responsibility opened.', 'success');
             await loadSessionStatus();
+            await loadOverview();
         } catch (error) {
             notify(error.message, 'error');
         } finally {
@@ -930,6 +1103,7 @@
             el('close-dialog').close();
             notify('GCash responsibility closed.', 'success');
             await loadSessionStatus();
+            await loadOverview();
         } catch (error) {
             notify(error.message, 'error');
         } finally {
@@ -970,6 +1144,7 @@
                 el('handover-dialog').close();
                 notify('GCash responsibility handed over.', 'success');
                 await loadSessionStatus();
+                await loadOverview();
             } catch (error) {
                 notify(error.message, 'error');
             } finally {
@@ -1006,6 +1181,7 @@
                 notify('Funding movement #' + res.movement_id + ' recorded.', 'success');
                 await loadSessionStatus();
                 await loadHistory();
+                await loadOverview();
             } catch (err) {
                 notify(err.message, 'error');
             } finally {
@@ -1054,6 +1230,7 @@
             notify('Transaction #' + resolveTx.transaction_id + ' resolved.', 'success');
             await loadSessionStatus();
             await loadHistory();
+            await loadOverview();
         } catch (err) {
             notify(err.message, 'error');
         } finally {
@@ -1091,6 +1268,7 @@
             notify('Linked correction #' + res.adjustment_id + ' recorded.', 'success');
             await loadSessionStatus();
             await loadHistory();
+            await loadOverview();
         } catch (err) {
             notify(err.message, 'error');
         } finally {
@@ -1126,6 +1304,7 @@
             el('waiver-dialog').close();
             notify('Discrepancy for session #' + waiverSession.session_id + ' approved/waived.', 'success');
             await loadSessionStatus();
+            await loadOverview();
         } catch (err) {
             notify(err.message, 'error');
         } finally {
@@ -1134,6 +1313,6 @@
     });
 
     window.addEventListener('pagehide', () => { leaving = true; clearTimeout(debounce); lookup?.abort(); closeCamera(); });
-    updateSave(); updatePreview(); loadHistory(); loadSessionStatus();
+    updateSave(); updatePreview(); loadOverview(); loadHistory(); loadSessionStatus();
 })();
 

@@ -50,9 +50,48 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         };
         await login(page, 'cashier');
         await page.goto(origin + '/components/cashier/gcash.php');
-        await page.getByText('No transactions on this page.', {exact: true}).waitFor();
         const nav = await page.locator('.sidebar-nav a').allTextContents();
         assert.equal(nav.findIndex(label => label.trim() === 'GCash'), nav.findIndex(label => label.trim() === 'Point of Sale') + 1);
+
+        // Ticket #243: Accessible tab navigation across 3 tabs
+        const tablist = page.locator('.gcash-tablist[role="tablist"]');
+        await tablist.waitFor();
+        const tabOverview = page.locator('#tab-overview');
+        const tabNewTx = page.locator('#tab-new-transaction');
+        const tabHistory = page.locator('#tab-history');
+
+        assert.equal(await tabOverview.getAttribute('aria-selected'), 'true');
+        assert.equal(await tabNewTx.getAttribute('aria-selected'), 'false');
+        assert.equal(await tabHistory.getAttribute('aria-selected'), 'false');
+        assert.equal(await page.locator('#panel-overview').isVisible(), true);
+        assert.equal(await page.locator('#panel-new-transaction').isVisible(), false);
+        assert.equal(await page.locator('#panel-history').isVisible(), false);
+
+        // Expected balance cards & labels
+        const expectedBadges = await page.locator('.gcash-badge-expected').allTextContents();
+        assert.equal(expectedBadges.length >= 2, true);
+        assert.equal(expectedBadges.every(b => b.trim() === 'Expected'), true);
+        assert.equal(await page.locator('#gcash-overview-expected-cash').textContent(), '₱0.00');
+        assert.equal(await page.locator('#gcash-overview-expected-wallet').textContent(), '₱0.00');
+        assert.equal(await page.locator('#gcash-overview-nc-count').textContent(), '0 open');
+
+        // Keyboard tab switching
+        await tabOverview.focus();
+        await page.keyboard.press('ArrowRight');
+        assert.equal(await tabNewTx.getAttribute('aria-selected'), 'true');
+        assert.equal(await page.locator('#panel-new-transaction').isVisible(), true);
+        await page.keyboard.press('ArrowRight');
+        assert.equal(await tabHistory.getAttribute('aria-selected'), 'true');
+        assert.equal(await page.locator('#panel-history').isVisible(), true);
+        await page.getByText('No transactions on this page.', {exact: true}).waitFor();
+        await page.keyboard.press('Home');
+        assert.equal(await tabOverview.getAttribute('aria-selected'), 'true');
+
+        // Quick action: New Cash-In switches to New Transaction tab
+        await page.locator('#gcash-quick-cash-in').click();
+        assert.equal(await tabNewTx.getAttribute('aria-selected'), 'true');
+        assert.equal(await page.locator('#panel-new-transaction').isVisible(), true);
+        assert.equal(await page.locator('#gcash-type').inputValue(), 'Cash-In');
         const types = await page.locator('#gcash-type option').allTextContents();
         assert.deepEqual(types.map(t => t.trim()), ['Cash-In', 'Cash-Out']);
 
@@ -65,6 +104,14 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-open-submit').click();
         await page.locator('#gcash-session-status').filter({hasText: 'Active (You)'}).waitFor();
         assert.equal(await page.locator('#gcash-close-session-btn').isVisible(), true);
+
+        // Ticket #243: Verify Overview expected balances update after opening session
+        await tabOverview.click();
+        await page.locator('#gcash-overview-expected-cash').filter({hasText: '₱1,000.00'}).waitFor();
+        assert.equal(await page.locator('#gcash-overview-expected-cash').textContent(), '₱1,000.00');
+        assert.equal(await page.locator('#gcash-overview-expected-wallet').textContent(), '₱5,000.00');
+        assert.equal((await page.locator('#gcash-overview-cash-checked').textContent()).includes('Last actual check:'), true);
+        await tabNewTx.click();
 
         const reference = page.locator('#gcash-reference');
         await reference.fill('Reference No.: 0012 345 678901');
@@ -122,10 +169,13 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-type').selectOption('Cash-In');
         await page.locator('#gcash-amount').fill('1000');
         await page.getByRole('button', {name: 'Save as Pending', exact: true}).click();
+        await tabHistory.click();
         await page.locator('#gcash-history-body .gcash-status').filter({hasText: 'Pending'}).waitFor();
+        await tabNewTx.click();
         await reference.fill('0012345678901'); await reference.press('Enter');
         await page.locator('#gcash-duplicate').waitFor();
         assert.equal(await page.locator('#gcash-save').isDisabled(), true);
+        await tabHistory.click();
         await page.getByRole('button', {name: 'Verify / Reject', exact: true}).click();
         await page.locator('#gcash-review-note').fill('Matched authorized receiving account records');
         await page.getByRole('button', {name: 'Verify transaction', exact: true}).click();
@@ -133,6 +183,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-confirmed').check();
         await page.getByRole('button', {name: 'Verify transaction', exact: true}).click();
         await page.locator('#gcash-history-body .gcash-status-verified').waitFor();
+        await tabNewTx.click();
         const token = await page.locator('#gcash-workspace').getAttribute('data-csrf');
         const api = origin + '/components/cashier/gcash_api.php';
         const post = (body, csrf = token) => context.request.post(api, {headers: {'X-CSRF-Token': csrf}, data: body});
@@ -196,6 +247,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         }
 
         // Ticket #240: Complete Cash-In with accountable movements
+        await tabNewTx.click();
         await page.locator('#gcash-type').selectOption('Cash-In');
         await page.locator('#gcash-amount').fill('1000');
         await reference.fill('0012345678910');
@@ -213,13 +265,20 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await completeBtn.isDisabled(), false, 'Both confirmations enable Complete Cash-In');
 
         await completeBtn.click();
+        await tabHistory.click();
         await page.locator('#gcash-history-body .gcash-status-completed').waitFor();
 
         const firstRow = page.locator('#gcash-history-body tr').first();
         assert.equal(await firstRow.locator('.gcash-status-completed').textContent(), 'Completed');
         assert.equal(await firstRow.getByRole('button', {name: 'Correct', exact: true}).isDisabled(), false, 'Completed record correction enabled');
 
+        // Ticket #243: Verify Overview metrics after Cash-In
+        await tabOverview.click();
+        await page.locator('#gcash-metric-cash-in-principal').filter({hasText: '₱1,000.00'}).waitFor();
+        assert.equal(await page.locator('#gcash-metric-fees-cash').textContent(), '₱10.00');
+
         // Ticket #240: Hold as Needs checking with partial movements
+        await tabNewTx.click();
         await page.locator('#gcash-type').selectOption('Cash-In');
         await page.locator('#gcash-amount').fill('500');
         await page.locator('#gcash-needs-checking-btn').click();
@@ -228,7 +287,18 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-nc-cash-collected').check();
         await page.locator('#gcash-nc-wallet-sent').uncheck();
         await page.locator('#gcash-nc-submit').click();
+        await tabHistory.click();
         await page.locator('#gcash-history-body .gcash-status-needs-checking').waitFor();
+
+        // Ticket #243: Verify Needs checking displayed in Overview
+        await tabOverview.click();
+        await page.locator('#gcash-overview-nc-count').filter({hasText: '1 open'}).waitFor();
+        const ncCard = page.locator('#gcash-overview-nc-list .gcash-nc-card').first();
+        await ncCard.waitFor();
+        assert.equal((await ncCard.textContent()).includes('Cash-In'), true);
+        assert.equal((await ncCard.textContent()).includes('₱500.00'), true);
+        assert.equal((await ncCard.textContent()).includes('₱10.00 (cash)'), true);
+        assert.equal(await ncCard.getByRole('button', {name: 'Resolve', exact: true}).isVisible(), true);
 
         // Ticket #240: API tests for record_cash_in
         const staleApi = await post({
@@ -263,6 +333,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(dupRefApi.status(), 409, 'Duplicate reference rejected');
 
         // Ticket #241: Cash-Out Fee via GCash in browser
+        await tabNewTx.click();
         await page.locator('#gcash-type').selectOption('Cash-Out');
         await page.locator('#gcash-fee-method').selectOption('Fee via GCash');
         await page.locator('#gcash-amount').fill('1000');
@@ -280,12 +351,19 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await completeOutBtn.isDisabled(), false);
 
         await completeOutBtn.click();
+        await tabHistory.click();
         const coGkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678920'});
         await coGkRow.waitFor();
         assert.equal((await coGkRow.textContent()).includes('Fee: ₱10.00 (wallet)'), true);
         assert.equal((await coGkRow.textContent()).includes('Cash: -₱1,000.00 · Wallet: +₱1,010.00'), true);
 
+        // Ticket #243: Overview metrics check after Fee via GCash Cash-Out
+        await tabOverview.click();
+        await page.locator('#gcash-metric-cash-out-principal').filter({hasText: '₱1,000.00'}).waitFor();
+        assert.equal(await page.locator('#gcash-metric-fees-wallet').textContent(), '₱10.00');
+
         // Ticket #241: Cash-Out Fee in cash in browser
+        await tabNewTx.click();
         await page.locator('#gcash-type').selectOption('Cash-Out');
         await page.locator('#gcash-fee-method').selectOption('Fee in cash');
         await page.locator('#gcash-amount').fill('1000');
@@ -296,12 +374,19 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-confirm-wallet').check();
         await page.locator('#gcash-confirm-cash').check();
         await completeOutBtn.click();
+        await tabHistory.click();
         const coCkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678921'});
         await coCkRow.waitFor();
         assert.equal((await coCkRow.textContent()).includes('Fee: ₱10.00 (cash)'), true);
         assert.equal((await coCkRow.textContent()).includes('Cash: -₱990.00 · Wallet: +₱1,000.00'), true);
 
+        // Ticket #243: Overview metrics check after Fee in cash Cash-Out
+        await tabOverview.click();
+        await page.locator('#gcash-metric-cash-out-principal').filter({hasText: '₱2,000.00'}).waitFor();
+        assert.equal(await page.locator('#gcash-metric-fees-cash').textContent(), '₱20.00');
+
         // Ticket #241: Cash-Out Needs checking in browser
+        await tabNewTx.click();
         await page.locator('#gcash-type').selectOption('Cash-Out');
         await page.locator('#gcash-fee-method').selectOption('Fee via GCash');
         await page.locator('#gcash-amount').fill('500');
@@ -311,8 +396,13 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-nc-wallet-sent').check();
         await page.locator('#gcash-nc-cash-collected').uncheck();
         await page.locator('#gcash-nc-submit').click();
+        await tabHistory.click();
         const ncRow = page.locator('#gcash-history-body tr', {hasText: 'Customer sent 510 wallet transfer'});
         await ncRow.waitFor();
+
+        // Ticket #243: Overview Needs checking count updated
+        await tabOverview.click();
+        await page.locator('#gcash-overview-nc-count').filter({hasText: '2 open'}).waitFor();
 
         // Ticket #241: API tests for record_cash_out
         const staleCoApi = await post({
@@ -417,6 +507,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(excessFunding.status(), 422, 'Insufficient balance rejected');
 
         // 2. Needs checking: Cash-In 300, cash collected, wallet pending
+        await tabNewTx.click();
         await page.locator('#gcash-type').selectOption('Cash-In');
         await page.locator('#gcash-amount').fill('300');
         await page.locator('#gcash-needs-checking-btn').click();
@@ -426,6 +517,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-nc-wallet-sent').uncheck();
         await page.locator('#gcash-nc-submit').click();
         await page.locator('#gcash-needs-checking-dialog').waitFor({state: 'hidden'});
+        await tabHistory.click();
         await page.locator('#gcash-history-body .gcash-status-needs-checking').first().waitFor();
 
         const s2NcRow = page.locator('#gcash-history-body tr').first();
@@ -487,6 +579,24 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-waiver-submit').click();
         await page.locator('#gcash-waiver-dialog').waitFor({state: 'hidden'});
         await page.locator('#gcash-waive-btn').waitFor({state: 'hidden'});
+
+        // Ticket #243: Legacy reference-only record distinction
+        fixture('gcash_legacy');
+        await tabHistory.click();
+        await page.locator('#gcash-refresh').click();
+        const legacyRow = page.locator('#gcash-history-body tr', {hasText: '0012345678990'});
+        await legacyRow.waitFor();
+        assert.equal(await legacyRow.locator('.gcash-badge-legacy').textContent(), 'Legacy Reference');
+        assert.equal((await legacyRow.textContent()).includes('Legacy reference record'), true);
+
+        // Ticket #243: Responsive viewport tests across 3 tabs
+        for (const width of [375, 768, 1440]) {
+            await page.setViewportSize({width, height: 900});
+            for (const t of [tabOverview, tabNewTx, tabHistory]) {
+                await t.click();
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'No page overflow at ' + width + ' on active tab');
+            }
+        }
 
         await page.screenshot({path: path.join(output, 'gcash.png'), fullPage: true});
         const adminContext = await browser.newContext();
