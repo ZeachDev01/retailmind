@@ -130,7 +130,7 @@ class HeldSaleService
                 $total += (float)$line['price'] * (int)$line['qty'];
             }
 
-            $reference = 'H' . date('ymdHis') . str_pad((string)random_int(0, 999), 3, '0', STR_PAD_LEFT);
+            $reference = 'H' . date('ymdHis') . str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             $this->pdo->prepare(
                 'INSERT INTO held_sales
                     (cashier_id, shift_id, reference_no, customer_label, cart_json, item_count, total_amount, expires_at)
@@ -448,6 +448,27 @@ class HeldSaleService
         }
     }
 
+    private function getTableColumns(string $table): array
+    {
+        $cols = [];
+        try {
+            if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+                $rawCols = $this->pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($rawCols as $col) {
+                    $cols[$col['Field']] = true;
+                }
+            } else {
+                $rawCols = $this->pdo->query("PRAGMA table_info(`{$table}`)")->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($rawCols as $col) {
+                    $cols[$col['name']] = true;
+                }
+            }
+        } catch (\Throwable) {
+            $cols = [];
+        }
+        return $cols;
+    }
+
     /** Revalidate without altering requested lines or reserving products. */
     public function reviewCart(array $cart): array
     {
@@ -455,34 +476,130 @@ class HeldSaleService
         $requested = [];
         $proposal = [];
         $changes = [];
-        $stmt = $this->pdo->prepare("SELECT p.product_name, p.sku, p.barcode, p.unit_price,
-            p.status, p.reorder_level, p.safety_stock, i.quantity_on_hand
+
+        $prodCols = $this->getTableColumns('products');
+        $batchCols = $this->getTableColumns('product_batches');
+
+        $selectCols = ['p.product_name', 'p.unit_price'];
+        foreach (['sku', 'barcode', 'case_barcode', 'pack_barcode', 'pack_size', 'pack_price', 'status', 'reorder_level', 'safety_stock'] as $col) {
+            $selectCols[] = isset($prodCols[$col]) ? "p.{$col}" : "NULL AS {$col}";
+        }
+        $selectCols[] = 'i.quantity_on_hand';
+        $stmt = $this->pdo->prepare("SELECT " . implode(', ', $selectCols) . "
             FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id WHERE p.product_id = ?");
+
+        $hasBatches = !empty($batchCols);
+        $hasSealed = isset($batchCols['sealed_quantity']);
+        $batchPacksStmt = ($hasBatches && $hasSealed) ? $this->pdo->prepare(
+            "SELECT COALESCE(SUM(pb.sealed_quantity), 0)
+             FROM product_batches pb
+             WHERE pb.product_id = ?
+               AND pb.remaining_quantity > 0
+               AND (pb.expiration_date IS NULL OR pb.expiration_date >= ?)"
+        ) : null;
+        $todayManila = (new \DateTimeImmutable('now', new \DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d');
+
         foreach ($cart as $id => $line) {
-            if (!ctype_digit((string)$id) || (int)$id < 1 || !is_array($line)
+            if (!is_array($line)) {
+                throw new DomainException('Check the requested cart quantities.');
+            }
+            $sellingForm = (string)($line['selling_form'] ?? (str_contains((string)$id, ':') ? explode(':', (string)$id)[1] : 'piece'));
+            if ($sellingForm === '') {
+                $sellingForm = 'piece';
+            }
+            if ($sellingForm !== 'piece' && $sellingForm !== 'pack') {
+                throw new DomainException('Check the requested cart selling form.');
+            }
+            $rawId = $line['product_id'] ?? (str_contains((string)$id, ':') ? explode(':', (string)$id)[0] : $id);
+            if (!ctype_digit((string)$rawId) || (int)$rawId < 1
                 || filter_var($line['qty'] ?? null, FILTER_VALIDATE_INT) === false || (int)$line['qty'] < 1) {
                 throw new DomainException('Check the requested cart quantities.');
             }
-            $stmt->execute([(int)$id]);
-            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            $productId = (int)$rawId;
             $qty = (int)$line['qty'];
-            $name = (string)($line['name'] ?? ($product['product_name'] ?? 'Unavailable product'));
-            $price = (float)($line['price'] ?? ($product['unit_price'] ?? 0));
-            if (!is_finite($price) || $price < 0) throw new DomainException('Check the requested cart prices.');
-            $requested[$id] = array_merge($line, ['name' => $name, 'qty' => $qty, 'price' => $price]);
-            if (!$product || $product['status'] !== 'active' || (int)$product['quantity_on_hand'] < 1) {
+
+            $stmt->execute([$productId]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $packSize = isset($product['pack_size']) && $product['pack_size'] !== null ? (int)$product['pack_size'] : null;
+            $packPrice = isset($product['pack_price']) && $product['pack_price'] !== null ? (float)$product['pack_price'] : null;
+            $hasPackConfig = $packSize !== null && $packSize > 1 && $packPrice !== null && $packPrice > 0;
+
+            $defaultName = $product ? (string)$product['product_name'] : 'Unavailable product';
+            if ($sellingForm === 'pack' && $hasPackConfig && !str_contains($defaultName, 'Pack')) {
+                $defaultName .= " (Pack of {$packSize})";
+            }
+            $name = (string)($line['name'] ?? $defaultName);
+
+            $currentPrice = ($sellingForm === 'pack')
+                ? ($hasPackConfig ? $packPrice : 0.0)
+                : ($product ? (float)$product['unit_price'] : 0.0);
+
+            $price = (float)($line['price'] ?? $currentPrice);
+            if (!is_finite($price) || $price < 0) {
+                throw new DomainException('Check the requested cart prices.');
+            }
+
+            $requestedLine = array_merge($line, [
+                'product_id' => $productId,
+                'selling_form' => $sellingForm,
+                'pack_size' => $sellingForm === 'pack' ? $packSize : ($hasPackConfig ? $packSize : null),
+                'name' => $name,
+                'qty' => $qty,
+                'price' => $price,
+            ]);
+            $requested[$id] = $requestedLine;
+
+            if (!$product || $product['status'] !== 'active') {
                 $changes[] = $name . ': unavailable; proposed removal of ' . $qty . ' unit(s).';
                 continue;
             }
-            $stock = (int)$product['quantity_on_hand'];
-            $currentPrice = (float)$product['unit_price'];
+
+            if ($sellingForm === 'pack' && !$hasPackConfig) {
+                $changes[] = $name . ': pack configuration unavailable; proposed removal of ' . $qty . ' unit(s).';
+                continue;
+            }
+
+            if ($sellingForm === 'pack') {
+                if ($batchPacksStmt !== null) {
+                    $batchPacksStmt->execute([$productId, $todayManila]);
+                    $stock = (int)$batchPacksStmt->fetchColumn();
+                } else {
+                    $stock = 0;
+                }
+            } else {
+                $stock = (int)$product['quantity_on_hand'];
+            }
+
+            if ($stock < 1) {
+                $changes[] = $name . ': unavailable; proposed removal of ' . $qty . ' unit(s).';
+                continue;
+            }
+
             $currentQty = min($qty, $stock);
-            $proposal[$id] = ['name' => (string)$product['product_name'], 'qty' => $currentQty,
-                'price' => $currentPrice, 'stock' => $stock, 'sku' => $product['sku'], 'barcode' => $product['barcode'],
-                'reorder_level' => (int)$product['reorder_level'], 'safety_stock' => (int)$product['safety_stock']];
-            if ($currentQty !== $qty) $changes[] = $name . ': requested quantity ' . $qty . ', available ' . $currentQty . '.';
-            if (round($price, 2) !== round($currentPrice, 2)) $changes[] = $name . ': price changed from PHP ' . number_format($price, 2) . ' to PHP ' . number_format($currentPrice, 2) . '.';
-            if ($name !== $product['product_name']) $changes[] = $name . ': now named ' . $product['product_name'] . '.';
+            $proposal[$id] = [
+                'product_id' => $productId,
+                'selling_form' => $sellingForm,
+                'pack_size' => $sellingForm === 'pack' ? $packSize : ($hasPackConfig ? $packSize : null),
+                'name' => (string)$product['product_name'],
+                'qty' => $currentQty,
+                'price' => $currentPrice,
+                'stock' => $stock,
+                'sku' => $product['sku'],
+                'barcode' => $sellingForm === 'pack' ? ($product['pack_barcode'] ?? $product['barcode']) : $product['barcode'],
+                'reorder_level' => (int)$product['reorder_level'],
+                'safety_stock' => (int)$product['safety_stock'],
+            ];
+
+            if ($currentQty !== $qty) {
+                $changes[] = $name . ': requested quantity ' . $qty . ', available ' . $currentQty . '.';
+            }
+            if (round($price, 2) !== round($currentPrice, 2)) {
+                $changes[] = $name . ': price changed from PHP ' . number_format($price, 2) . ' to PHP ' . number_format($currentPrice, 2) . '.';
+            }
+            if ($name !== $product['product_name'] && $name !== ($product['product_name'] . " (Pack of {$packSize})") && $name !== ($product['product_name'] . " (Pack)")) {
+                $changes[] = $name . ': now named ' . $product['product_name'] . '.';
+            }
         }
         return ['requested_cart' => $requested, 'cart' => $proposal, 'changes' => $changes];
     }

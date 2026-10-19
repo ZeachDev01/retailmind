@@ -290,7 +290,8 @@ class SalesWorkflowService
     {
         $quantities = [];
         foreach ($cart as $item) {
-            $quantities[$item['product_id']] = ($quantities[$item['product_id']] ?? 0) + $item['qty'];
+            $key = $item['product_id'] . ':' . ($item['selling_form'] ?? 'piece');
+            $quantities[$key] = ($quantities[$key] ?? 0) + $item['qty'];
         }
         ksort($quantities);
         // Authorization passwords are never persisted or fingerprinted.
@@ -304,6 +305,11 @@ class SalesWorkflowService
             'held_sale_id' => (int)($details['held_sale_id'] ?? 0),
         ];
         return hash('sha256', json_encode([$quantities, $method, $payment], JSON_THROW_ON_ERROR));
+    }
+
+    public function attemptFingerprintForTest(array $cart, string $method, array $details): string
+    {
+        return $this->attemptFingerprint($this->sanitizeCart($cart), $method, $details);
     }
 
     public function getActiveProducts(): array
@@ -347,19 +353,32 @@ class SalesWorkflowService
             if ($productId <= 0) {
                 continue;
             }
+            $sellingForm = (string)($item['selling_form'] ?? 'piece');
+            if ($sellingForm === '') {
+                $sellingForm = 'piece';
+            }
+            if ($sellingForm !== 'piece' && $sellingForm !== 'pack') {
+                throw new DomainException('Cart item selling form must be piece or pack.');
+            }
             $rawQty = $item['qty'] ?? null;
             $isPositiveInt = (is_int($rawQty) && $rawQty > 0) || (is_string($rawQty) && preg_match('/^[1-9]\d*$/D', $rawQty));
             if (!$isPositiveInt) {
                 throw new DomainException('Cart item quantity must be a positive whole number.');
             }
             $qty = (int)$rawQty;
-            $quantities[$productId] = ($quantities[$productId] ?? 0) + $qty;
+            $key = $productId . ':' . $sellingForm;
+            if (!isset($quantities[$key])) {
+                $quantities[$key] = [
+                    'product_id' => $productId,
+                    'selling_form' => $sellingForm,
+                    'qty' => 0,
+                ];
+            }
+            $quantities[$key]['qty'] += $qty;
         }
 
         ksort($quantities);
-        $cleanCart = [];
-        foreach ($quantities as $productId => $qty) $cleanCart[] = ['product_id' => $productId, 'qty' => $qty];
-        return $cleanCart;
+        return array_values($quantities);
     }
 
     private function assertCheckoutFiscalPeriodsOpen(): void
@@ -373,83 +392,293 @@ class SalesWorkflowService
         $total = 0;
         $items = [];
         $conflicts = [];
+        $productPlans = [];
 
+        $itemsByProduct = [];
         foreach ($cleanCart as $item) {
-            $product = $this->lockProductForCheckout($item['product_id']);
+            $itemsByProduct[$item['product_id']][] = $item;
+        }
+
+        foreach ($itemsByProduct as $productId => $productItems) {
+            $product = $this->lockProductForCheckout($productId);
             if (!$product) {
+                foreach ($productItems as $item) {
+                    $conflicts[] = [
+                        'product_id' => $productId,
+                        'product_name' => "Product #{$productId}",
+                        'requested_qty' => $item['qty'],
+                        'available_stock' => 0,
+                    ];
+                }
+                continue;
+            }
+
+            $packSize = isset($product['pack_size']) && $product['pack_size'] !== null ? (int)$product['pack_size'] : null;
+            $packPrice = isset($product['pack_price']) && $product['pack_price'] !== null ? (float)$product['pack_price'] : null;
+            $hasPackConfig = $packSize !== null && $packSize > 1 && $packPrice !== null && $packPrice > 0;
+
+            $dPack = 0;
+            $dPiece = 0;
+            foreach ($productItems as $item) {
+                if ($item['selling_form'] === 'pack') {
+                    if (!$hasPackConfig) {
+                        $conflicts[] = [
+                            'product_id' => $productId,
+                            'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                            'requested_qty' => $item['qty'],
+                            'available_stock' => 0,
+                        ];
+                        continue 2;
+                    }
+                    $dPack += $item['qty'];
+                } else {
+                    $dPiece += $item['qty'];
+                }
+            }
+
+            $todayManila = $this->todayManila();
+            $pbCols = $this->getTableColumns('product_batches');
+            $hasBatches = !empty($pbCols);
+            $stateSealed = isset($pbCols['sealed_quantity']) ? 'sealed_quantity' : '0 AS sealed_quantity';
+            $stateLoose = isset($pbCols['loose_quantity']) ? 'loose_quantity' : 'remaining_quantity AS loose_quantity';
+            $batchStateStmt = $this->pdo->prepare(
+                "SELECT batch_id, remaining_quantity, {$stateSealed}, {$stateLoose}, expiration_date, date_received
+                 FROM product_batches
+                 WHERE product_id = ? AND remaining_quantity > 0
+                 ORDER BY batch_id" . $this->rowLock()
+            );
+            $batchStateStmt->execute([$productId]);
+            $batchStateRows = $batchStateStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $sealedSelect = isset($pbCols['sealed_quantity']) ? 'COALESCE(pb.sealed_quantity, 0)' : '0';
+            $looseSelect = isset($pbCols['loose_quantity']) ? 'COALESCE(pb.loose_quantity, pb.remaining_quantity)' : 'pb.remaining_quantity';
+            $eligibleBatchesStmt = $this->pdo->prepare(
+                "SELECT pb.batch_id, pb.remaining_quantity,
+                        {$sealedSelect} AS sealed_quantity,
+                        {$looseSelect} AS loose_quantity,
+                        pb.expiration_date, pb.date_received
+                 FROM product_batches pb
+                 WHERE pb.product_id = ?
+                   AND pb.remaining_quantity > 0
+                   AND (pb.expiration_date IS NULL OR pb.expiration_date >= ?)
+                 ORDER BY
+                   CASE WHEN pb.expiration_date IS NULL THEN 1 ELSE 0 END,
+                   pb.expiration_date ASC,
+                   pb.date_received ASC,
+                   pb.batch_id ASC" . $this->rowLock()
+            );
+            $eligibleBatchesStmt->execute([$productId, $todayManila]);
+            $eligibleBatches = $eligibleBatchesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $hasBatches = count($batchStateRows) > 0;
+
+            if ($dPack > 0 && !$hasBatches) {
                 $conflicts[] = [
-                    'product_id' => $item['product_id'],
-                    'product_name' => "Product #{$item['product_id']}",
-                    'requested_qty' => $item['qty'],
+                    'product_id' => $productId,
+                    'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                    'requested_qty' => $dPack,
                     'available_stock' => 0,
                 ];
                 continue;
             }
 
-            $availableStock = (int)$product['quantity_on_hand'];
-            $batchCountStmt = $this->pdo->prepare(
-                "SELECT COUNT(*) FROM product_batches WHERE product_id = ? AND remaining_quantity > 0"
-            );
-            $batchCountStmt->execute([$item['product_id']]);
-            if ((int)$batchCountStmt->fetchColumn() > 0) {
-                $todayManila = $this->todayManila();
-                $batchSellableStmt = $this->pdo->prepare(
-                    "SELECT COALESCE(SUM(remaining_quantity), 0)
-                     FROM product_batches
-                     WHERE product_id = ?
-                       AND remaining_quantity > 0
-                       AND (expiration_date IS NULL OR expiration_date >= ?)"
-                );
-                $batchSellableStmt->execute([$item['product_id'], $todayManila]);
-                $availableStock = min($availableStock, (int)$batchSellableStmt->fetchColumn());
-            }
-
-            if ($availableStock < $item['qty']) {
-                $conflicts[] = [
-                    'product_id' => $item['product_id'],
-                    'product_name' => (string)($product['product_name'] ?? "product #{$item['product_id']}"),
-                    'requested_qty' => $item['qty'],
-                    'available_stock' => max(0, $availableStock),
+            if (!$hasBatches) {
+                $availableStock = (int)$product['quantity_on_hand'];
+                if ($availableStock < $dPiece) {
+                    $conflicts[] = [
+                        'product_id' => $productId,
+                        'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                        'requested_qty' => $dPiece,
+                        'available_stock' => max(0, $availableStock),
+                    ];
+                    continue;
+                }
+                $productPlans[$productId] = [
+                    'product_id' => $productId,
+                    'pack_demand' => 0,
+                    'piece_demand' => $dPiece,
+                    'total_base_units' => $dPiece,
+                    'sealed_allocations' => [],
+                    'loose_allocations' => [],
+                    'pack_openings' => [],
                 ];
-                continue;
+            } else {
+                $availSealedPacks = (int)array_sum(array_column($eligibleBatches, 'sealed_quantity'));
+                $availTotalBaseUnits = (int)array_sum(array_column($eligibleBatches, 'remaining_quantity'));
+
+                if ($dPack > $availSealedPacks) {
+                    $conflicts[] = [
+                        'product_id' => $productId,
+                        'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                        'requested_qty' => $dPack,
+                        'available_stock' => max(0, $availSealedPacks),
+                    ];
+                    continue;
+                }
+
+                $totalBaseUnitsNeeded = ($dPack * ($packSize ?? 1)) + $dPiece;
+                if ($totalBaseUnitsNeeded > $availTotalBaseUnits) {
+                    $conflicts[] = [
+                        'product_id' => $productId,
+                        'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                        'requested_qty' => $totalBaseUnitsNeeded,
+                        'available_stock' => max(0, $availTotalBaseUnits),
+                    ];
+                    continue;
+                }
+
+                $batches = [];
+                foreach ($eligibleBatches as $b) {
+                    $batches[$b['batch_id']] = [
+                        'batch_id' => (int)$b['batch_id'],
+                        'sealed_quantity' => (int)$b['sealed_quantity'],
+                        'loose_quantity' => (int)$b['loose_quantity'],
+                        'remaining_quantity' => (int)$b['remaining_quantity'],
+                        'expiration_date' => $b['expiration_date'],
+                    ];
+                }
+
+                $remPacks = $dPack;
+                $sealedAllocations = [];
+                foreach ($batches as &$batch) {
+                    if ($remPacks <= 0) break;
+                    $take = min($remPacks, $batch['sealed_quantity']);
+                    if ($take > 0) {
+                        $sealedAllocations[] = ['batch_id' => $batch['batch_id'], 'packs' => $take];
+                        $batch['sealed_quantity'] -= $take;
+                        $remPacks -= $take;
+                    }
+                }
+                unset($batch);
+
+                if ($remPacks > 0) {
+                    $conflicts[] = [
+                        'product_id' => $productId,
+                        'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                        'requested_qty' => $dPack,
+                        'available_stock' => max(0, $availSealedPacks - $remPacks),
+                    ];
+                    continue;
+                }
+
+                $remPieces = $dPiece;
+                $looseAllocations = [];
+                foreach ($batches as &$batch) {
+                    if ($remPieces <= 0) break;
+                    $take = min($remPieces, $batch['loose_quantity']);
+                    if ($take > 0) {
+                        $looseAllocations[] = ['batch_id' => $batch['batch_id'], 'pieces' => $take];
+                        $batch['loose_quantity'] -= $take;
+                        $remPieces -= $take;
+                    }
+                }
+                unset($batch);
+
+                $packOpenings = [];
+                if ($remPieces > 0) {
+                    if (!$hasPackConfig) {
+                        $conflicts[] = [
+                            'product_id' => $productId,
+                            'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                            'requested_qty' => $dPiece,
+                            'available_stock' => $dPiece - $remPieces,
+                        ];
+                        continue;
+                    }
+
+                    $packsNeeded = (int)ceil($remPieces / $packSize);
+                    $remK = $packsNeeded;
+
+                    foreach ($batches as &$batch) {
+                        if ($remK <= 0) break;
+                        $takePacks = min($remK, $batch['sealed_quantity']);
+                        if ($takePacks > 0) {
+                            $piecesGenerated = $takePacks * $packSize;
+                            $piecesConsumed = min($remPieces, $piecesGenerated);
+                            $leftoverLoose = $piecesGenerated - $piecesConsumed;
+
+                            $packOpenings[] = [
+                                'batch_id' => $batch['batch_id'],
+                                'packs' => $takePacks,
+                                'pieces_opened' => $piecesGenerated,
+                                'pieces_consumed' => $piecesConsumed,
+                                'leftover_loose' => $leftoverLoose,
+                            ];
+
+                            $batch['sealed_quantity'] -= $takePacks;
+                            $batch['loose_quantity'] += $leftoverLoose;
+                            $remPieces -= $piecesConsumed;
+                            $remK -= $takePacks;
+                        }
+                    }
+                    unset($batch);
+
+                    if ($remPieces > 0) {
+                        $conflicts[] = [
+                            'product_id' => $productId,
+                            'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                            'requested_qty' => $dPiece,
+                            'available_stock' => max(0, $dPiece - $remPieces),
+                        ];
+                        continue;
+                    }
+                }
+
+                $productPlans[$productId] = [
+                    'product_id' => $productId,
+                    'pack_demand' => $dPack,
+                    'piece_demand' => $dPiece,
+                    'total_base_units' => ($dPack * ($packSize ?? 1)) + $dPiece,
+                    'sealed_allocations' => $sealedAllocations,
+                    'loose_allocations' => $looseAllocations,
+                    'pack_openings' => $packOpenings,
+                ];
             }
 
-            $productCost = isset($product['cost_price']) && $product['cost_price'] !== null && $product['cost_price'] !== ''
-                ? (float)$product['cost_price']
-                : null;
-            $batchPlan = $this->buildFefoBatchPlan($item['product_id'], $item['qty'], $productCost);
-            $batchState = $this->pdo->prepare('SELECT batch_id, remaining_quantity, expiration_date, date_received FROM product_batches WHERE product_id = ? AND remaining_quantity > 0 ORDER BY batch_id' . $this->rowLock());
-            $batchState->execute([$item['product_id']]);
-            $unitPrice = (float)$product['unit_price'];
-            $subtotal = $unitPrice * $item['qty'];
-            $total += $subtotal;
+            foreach ($productItems as $item) {
+                $isPack = $item['selling_form'] === 'pack';
+                $unitPrice = $isPack ? (float)$packPrice : (float)$product['unit_price'];
+                $subtotal = $unitPrice * $item['qty'];
+                $baseUnitQty = $isPack ? ($item['qty'] * $packSize) : $item['qty'];
+                $total += $subtotal;
 
-            $items[] = [
-                'product_id' => $item['product_id'],
-                'quantity' => $item['qty'],
-                'unit_price' => $unitPrice,
-                'subtotal' => $subtotal,
-                'batch_plan' => $batchPlan,
-                'category_id' => (int)($product['category_id'] ?? 0),
-                'product_name' => (string)($product['product_name'] ?? ''),
-                'available_stock' => (int)$product['quantity_on_hand'],
-                'batch_state' => $batchState->fetchAll(PDO::FETCH_ASSOC),
-            ];
+                $productCost = isset($product['cost_price']) && $product['cost_price'] !== null && $product['cost_price'] !== ''
+                    ? (float)$product['cost_price']
+                    : null;
+                $batchPlan = $this->buildFefoBatchPlan($productId, $baseUnitQty, $productCost);
+
+                $items[] = [
+                    'product_id' => $productId,
+                    'selling_form' => $item['selling_form'],
+                    'quantity' => $item['qty'],
+                    'unit_price' => $unitPrice,
+                    'subtotal' => $subtotal,
+                    'base_unit_quantity' => $baseUnitQty,
+                    'pack_size' => $isPack ? $packSize : ($hasPackConfig ? $packSize : null),
+                    'batch_plan' => $batchPlan,
+                    'product_plan' => $productPlans[$productId] ?? null,
+                    'category_id' => (int)($product['category_id'] ?? 0),
+                    'product_name' => (string)($product['product_name'] ?? ''),
+                    'available_stock' => (int)$product['quantity_on_hand'],
+                    'batch_state' => $batchStateRows,
+                ];
+            }
         }
 
         if (!empty($conflicts)) {
             throw new StockConflictException($conflicts);
         }
 
-        return ['total' => $total, 'items' => $items];
+        return ['total' => $total, 'items' => $items, 'plans' => $productPlans];
     }
 
     private function lockProductForCheckout(int $productId): ?array
     {
         $prodCols = $this->getTableColumns('products');
         $costSelect = isset($prodCols['cost_price']) ? ', p.cost_price' : '';
+        $packSelect = isset($prodCols['pack_size']) ? ', p.pack_size, p.pack_barcode, p.pack_price' : '';
         $stmt = $this->pdo->prepare(
-            "SELECT p.unit_price, p.category_id, p.status, p.product_name, i.quantity_on_hand{$costSelect}
+            "SELECT p.unit_price, p.category_id, p.status, p.product_name, i.quantity_on_hand{$costSelect}{$packSelect}
              FROM products p JOIN inventory i ON p.product_id = i.product_id
              WHERE p.product_id = ? AND p.status = 'active'" . $this->rowLock()
         );

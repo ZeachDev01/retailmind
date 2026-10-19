@@ -1081,45 +1081,89 @@ class ProductService
                 )->execute([$productId]);
             }
 
-            $updateStmt = $this->pdo->prepare(
-                "UPDATE products
-                 SET product_name = ?,
-                     variant_label = ?,
-                     brand = ?,
-                     category_id = ?,
-                     product_image = ?,
-                     unit_price = ?,
-                     cost_price = ?,
-                     status = ?,
-                     units_per_package = ?,
-                     minimum_order_quantity = ?,
-                     reorder_level = ?,
-                     safety_stock = ?,
-                     warning_lead_time_days = ?,
-                     pack_size = ?,
-                     pack_barcode = ?,
-                     pack_price = ?
-                 WHERE product_id = ?"
-            );
-            $updateStmt->execute([
-                $productName,
-                $variantLabel,
-                $brand,
-                $categoryId,
-                $productImage,
-                $sellingPrice,
-                $costPrice,
-                $status,
-                $unitsPerPackage,
-                $minimumOrderQuantity,
-                $reorderLevel,
-                $safetyStock,
-                $warningLeadTimeDays,
-                $newPackSize,
-                $newPackBarcode,
-                $newPackPrice,
-                $productId,
-            ]);
+            $hasPackCol = true;
+            try {
+                if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                    $cols = $this->pdo->query("PRAGMA table_info(products)")->fetchAll(PDO::FETCH_COLUMN, 1);
+                    $hasPackCol = in_array('pack_size', $cols, true);
+                }
+            } catch (\Throwable) {}
+
+            if ($hasPackCol) {
+                $updateStmt = $this->pdo->prepare(
+                    "UPDATE products
+                     SET product_name = ?,
+                         variant_label = ?,
+                         brand = ?,
+                         category_id = ?,
+                         product_image = ?,
+                         unit_price = ?,
+                         cost_price = ?,
+                         status = ?,
+                         units_per_package = ?,
+                         minimum_order_quantity = ?,
+                         reorder_level = ?,
+                         safety_stock = ?,
+                         warning_lead_time_days = ?,
+                         pack_size = ?,
+                         pack_barcode = ?,
+                         pack_price = ?
+                     WHERE product_id = ?"
+                );
+                $updateStmt->execute([
+                    $productName,
+                    $variantLabel,
+                    $brand,
+                    $categoryId,
+                    $productImage,
+                    $sellingPrice,
+                    $costPrice,
+                    $status,
+                    $unitsPerPackage,
+                    $minimumOrderQuantity,
+                    $reorderLevel,
+                    $safetyStock,
+                    $warningLeadTimeDays,
+                    $newPackSize,
+                    $newPackBarcode,
+                    $newPackPrice,
+                    $productId,
+                ]);
+            } else {
+                $updateStmt = $this->pdo->prepare(
+                    "UPDATE products
+                     SET product_name = ?,
+                         variant_label = ?,
+                         brand = ?,
+                         category_id = ?,
+                         product_image = ?,
+                         unit_price = ?,
+                         cost_price = ?,
+                         status = ?,
+                         units_per_package = ?,
+                         minimum_order_quantity = ?,
+                         reorder_level = ?,
+                         safety_stock = ?,
+                         warning_lead_time_days = ?
+                     WHERE product_id = ?"
+                );
+                $updateStmt->execute([
+                    $productName,
+                    $variantLabel,
+                    $brand,
+                    $categoryId,
+                    $productImage,
+                    $sellingPrice,
+                    $costPrice,
+                    $status,
+                    $unitsPerPackage,
+                    $minimumOrderQuantity,
+                    $reorderLevel,
+                    $safetyStock,
+                    $warningLeadTimeDays,
+                    $productId,
+                ]);
+            }
 
             $fetchStmt = $this->pdo->prepare(
                 "SELECT p.*, c.category_name, i.quantity_on_hand
