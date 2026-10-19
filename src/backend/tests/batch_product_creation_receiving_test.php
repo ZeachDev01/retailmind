@@ -121,6 +121,9 @@ try {
             units_per_package INTEGER NOT NULL DEFAULT 1,
             base_unit TEXT NOT NULL DEFAULT 'piece',
             receiving_unit TEXT NOT NULL DEFAULT 'package',
+            pack_size INTEGER DEFAULT NULL,
+            pack_barcode TEXT DEFAULT NULL,
+            pack_price REAL DEFAULT NULL,
             expiration_date TEXT DEFAULT NULL,
             warning_lead_time_days INTEGER DEFAULT NULL,
             product_image TEXT DEFAULT NULL,
@@ -177,6 +180,9 @@ try {
             batch_number TEXT,
             quantity INTEGER NOT NULL,
             remaining_quantity INTEGER NOT NULL,
+            sealed_quantity INTEGER NOT NULL DEFAULT 0,
+            loose_quantity INTEGER NOT NULL DEFAULT 0,
+            cost_price REAL NULL,
             expiration_date TEXT,
             date_received TEXT DEFAULT CURRENT_TIMESTAMP,
             supplier TEXT,
@@ -272,6 +278,7 @@ try {
             user_id INTEGER PRIMARY KEY,
             notify_low_stock INTEGER DEFAULT 1,
             notify_expiring_stock INTEGER DEFAULT 1,
+            notify_inapp INTEGER DEFAULT 1,
             low_stock_threshold INTEGER DEFAULT NULL
         );
     ");

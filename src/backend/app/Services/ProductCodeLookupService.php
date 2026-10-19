@@ -16,6 +16,7 @@ class ProductCodeLookupService
 
     public const KIND_SKU = 'sku';
     public const KIND_UNIT_BARCODE = 'unit_barcode';
+    public const KIND_PACK_BARCODE = 'pack_barcode';
     public const KIND_CASE_BARCODE = 'case_barcode';
 
     private PDO $pdo;
@@ -51,20 +52,21 @@ class ProductCodeLookupService
         // The match flags reuse the same comparison as the WHERE clause so the
         // reported kind always agrees with whatever the engine matched on.
         $statement = $this->pdo->prepare(
-            "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.product_name,
+            "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.pack_barcode, p.pack_size, p.pack_price, p.product_name,
                     COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
                     CASE WHEN p.sku = ? THEN 1 ELSE 0 END AS match_sku,
                     CASE WHEN p.barcode = ? THEN 1 ELSE 0 END AS match_unit_barcode,
-                    CASE WHEN p.case_barcode = ? THEN 1 ELSE 0 END AS match_case_barcode
+                    CASE WHEN p.case_barcode = ? THEN 1 ELSE 0 END AS match_case_barcode,
+                    CASE WHEN p.pack_barcode = ? THEN 1 ELSE 0 END AS match_pack_barcode
              FROM products p
              LEFT JOIN inventory i ON i.product_id = p.product_id
              WHERE p.status = 'active'{$scopeSql}
-               AND (p.sku = ? OR p.barcode = ? OR p.case_barcode = ?)"
+               AND (p.sku = ? OR p.barcode = ? OR p.case_barcode = ? OR p.pack_barcode = ?)"
         );
         $statement->execute(array_merge(
-            [$code, $code, $code],
+            [$code, $code, $code, $code],
             $scopeParams,
-            [$code, $code, $code]
+            [$code, $code, $code, $code]
         ));
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
 
@@ -80,6 +82,9 @@ class ProductCodeLookupService
                 'sku' => (string)$row['sku'],
                 'barcode' => (string)$row['barcode'],
                 'case_barcode' => $row['case_barcode'] === null ? null : (string)$row['case_barcode'],
+                'pack_barcode' => $row['pack_barcode'] === null ? null : (string)$row['pack_barcode'],
+                'pack_size' => isset($row['pack_size']) && $row['pack_size'] !== null ? (int)$row['pack_size'] : null,
+                'pack_price' => isset($row['pack_price']) && $row['pack_price'] !== null ? (float)$row['pack_price'] : null,
                 'product_name' => (string)$row['product_name'],
                 'quantity_on_hand' => (int)$row['quantity_on_hand'],
                 'kinds' => [],
@@ -131,6 +136,9 @@ class ProductCodeLookupService
         if ((int)($row['match_unit_barcode'] ?? 0) === 1) {
             $kinds[] = self::KIND_UNIT_BARCODE;
         }
+        if ((int)($row['match_pack_barcode'] ?? 0) === 1) {
+            $kinds[] = self::KIND_PACK_BARCODE;
+        }
         if ((int)($row['match_case_barcode'] ?? 0) === 1) {
             $kinds[] = self::KIND_CASE_BARCODE;
         }
@@ -145,7 +153,7 @@ class ProductCodeLookupService
      */
     private function primaryKind(array $kinds): ?string
     {
-        foreach ([self::KIND_SKU, self::KIND_UNIT_BARCODE, self::KIND_CASE_BARCODE] as $kind) {
+        foreach ([self::KIND_SKU, self::KIND_UNIT_BARCODE, self::KIND_PACK_BARCODE, self::KIND_CASE_BARCODE] as $kind) {
             if (in_array($kind, $kinds, true)) {
                 return $kind;
             }
