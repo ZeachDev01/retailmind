@@ -748,4 +748,190 @@ final class GCashTransactionService
             throw $e;
         }
     }
+
+    public function recordCashOut(int $cashierId, array $data): int
+    {
+        $outcome = (string)($data['outcome'] ?? $data['status'] ?? 'Completed');
+        if (!in_array($outcome, ['Completed', 'Needs checking'], true)) {
+            throw new DomainException('Outcome must be Completed or Needs checking.');
+        }
+
+        $principal = $this->validatePrincipal($data['principal'] ?? $data['amount'] ?? null);
+        $feeMethodNorm = $this->normalizeCashOutFeeMethod($data['fee_method'] ?? null);
+        $dbFeeMethod = $feeMethodNorm === 'Fee via GCash' ? 'wallet' : 'cash';
+
+        $preview = $this->calculatePreview('Cash-Out', $principal, $feeMethodNorm);
+        $authoritativeFee = (float)$preview['fee'];
+        $customerTransfer = (float)$preview['customer_transfer'];
+        $counterCollect = (float)$preview['counter_collect'];
+        $cashPayout = (float)$preview['cash_payout'];
+        $netCash = (float)$preview['net_service_cash'];
+        $netWallet = (float)$preview['net_wallet'];
+
+        $checks = [
+            'fee' => $authoritativeFee,
+            'preview_fee' => $authoritativeFee,
+            'fee_amount' => $authoritativeFee,
+            'customer_transfer' => $customerTransfer,
+            'preview_customer_transfer' => $customerTransfer,
+            'counter_collect' => $counterCollect,
+            'preview_counter_collect' => $counterCollect,
+            'cash_payout' => $cashPayout,
+            'preview_cash_payout' => $cashPayout,
+            'net_service_cash' => $netCash,
+            'net_wallet' => $netWallet,
+        ];
+        foreach ($checks as $key => $expectedVal) {
+            if (isset($data[$key]) && $data[$key] !== '') {
+                $val = filter_var($data[$key], FILTER_VALIDATE_FLOAT);
+                if ($val === false || abs($val - $expectedVal) > 0.009) {
+                    throw new DomainException('The preview totals are stale or inconsistent with current fee calculation. Refresh preview before recording.', 422);
+                }
+            }
+        }
+        if (isset($data['preview_fee_method']) && $data['preview_fee_method'] !== '' && $data['preview_fee_method'] !== $feeMethodNorm) {
+            throw new DomainException('The preview totals are stale or inconsistent with current fee calculation. Refresh preview before recording.', 422);
+        }
+
+        $confirmedWallet = !empty($data['confirmed_wallet']) || !empty($data['wallet_received']) || !empty($data['wallet_sent']) || !empty($data['wallet_transferred']);
+        $confirmedCash = !empty($data['confirmed_cash']) || !empty($data['cash_handed']) || !empty($data['cash_payout_done']) || !empty($data['cash_collected']);
+        $notes = isset($data['notes']) ? trim((string)$data['notes']) : (isset($data['note']) ? trim((string)$data['note']) : null);
+
+        if ($outcome === 'Completed') {
+            if (!$confirmedWallet || !$confirmedCash) {
+                throw new DomainException('Both wallet transfer and cash handover must be confirmed for completed Cash-Out.');
+            }
+            $refRaw = (string)($data['reference'] ?? $data['reference_number'] ?? '');
+            $reference = $this->reference($refRaw);
+            if ($feeMethodNorm === 'Fee via GCash') {
+                $serviceCashDelta = round(-$principal, 2);
+                $walletDelta = round($principal + $authoritativeFee, 2);
+            } else {
+                $serviceCashDelta = round(-($principal - $authoritativeFee), 2);
+                $walletDelta = (float)$principal;
+            }
+            $grossFee = $authoritativeFee;
+            $completedAt = date('Y-m-d H:i:s');
+        } else {
+            if ($notes === null || mb_strlen($notes) < 5) {
+                throw new DomainException('Enter an explanatory note of at least 5 characters for transactions held as Needs checking.');
+            }
+            $refRaw = trim((string)($data['reference'] ?? $data['reference_number'] ?? ''));
+            $reference = $refRaw !== '' ? $this->reference($refRaw) : null;
+            if ($feeMethodNorm === 'Fee via GCash') {
+                $serviceCashDelta = $confirmedCash ? round(-$principal, 2) : 0.00;
+                $walletDelta = $confirmedWallet ? round($principal + $authoritativeFee, 2) : 0.00;
+            } else {
+                $serviceCashDelta = $confirmedCash ? round(-($principal - $authoritativeFee), 2) : 0.00;
+                $walletDelta = $confirmedWallet ? (float)$principal : 0.00;
+            }
+            $grossFee = ($confirmedCash && $confirmedWallet) ? $authoritativeFee : 0.00;
+            $completedAt = null;
+        }
+
+        try {
+            StoreWriteGate::begin($this->pdo());
+            $shiftService = new CashierShiftService($this->pdo());
+            $shiftService->requireUnlockedRegister($cashierId);
+            $shift = $shiftService->getOpenShift($cashierId);
+            if (!$shift) {
+                throw new DomainException('Open your Cashier Shift before recording GCash transactions.');
+            }
+            $shiftId = (int)$shift['shift_id'];
+
+            $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $sessionStmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE status = 'open'" . $lock);
+            $sessionStmt->execute();
+            $session = $sessionStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$session) {
+                throw new DomainException('Open a GCash service session before recording transactions.');
+            }
+            if ((int)$session['cashier_id'] !== $cashierId) {
+                throw new DomainException('Another Cashier currently has responsibility for GCash services. Only one Cashier may control GCash at a time.', 409);
+            }
+            $sessionId = (int)$session['session_id'];
+
+            if ($confirmedCash) {
+                $expected = $this->calculateSessionExpected($sessionId);
+                $currentCash = (float)$expected['expected_service_cash'];
+                if ($currentCash < $cashPayout) {
+                    throw new DomainException(sprintf(
+                        'Insufficient service cash balance. Available: PHP %.2f, required: PHP %.2f.',
+                        $currentCash,
+                        $cashPayout
+                    ), 422);
+                }
+            }
+
+            $stmt = $this->pdo()->prepare(
+                "INSERT INTO gcash_transactions (
+                    session_id, shift_id, transaction_type, reference_number, amount,
+                    principal_amount, fee_amount, fee_method, service_cash_delta, wallet_delta,
+                    gross_fee, cashier_id, confirmed_wallet, confirmed_cash, notes,
+                    verification_status, completed_at
+                ) VALUES (
+                    ?, ?, 'Cash-Out', ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?
+                )"
+            );
+            $stmt->execute([
+                $sessionId,
+                $shiftId,
+                $reference,
+                $principal,
+                $principal,
+                $authoritativeFee,
+                $dbFeeMethod,
+                $serviceCashDelta,
+                $walletDelta,
+                $grossFee,
+                $cashierId,
+                $confirmedWallet ? 1 : 0,
+                $confirmedCash ? 1 : 0,
+                $notes,
+                $outcome,
+                $completedAt,
+            ]);
+            $id = (int)$this->pdo()->lastInsertId();
+
+            \log_activity(
+                $this->pdo(),
+                $cashierId,
+                'GCash Cash-Out ' . strtolower($outcome),
+                'GCash',
+                $id,
+                null,
+                [
+                    'session_id' => $sessionId,
+                    'shift_id' => $shiftId,
+                    'reference_number' => $reference,
+                    'principal_amount' => $principal,
+                    'fee_amount' => $authoritativeFee,
+                    'fee_method' => $dbFeeMethod,
+                    'service_cash_delta' => $serviceCashDelta,
+                    'wallet_delta' => $walletDelta,
+                    'gross_fee' => $grossFee,
+                    'verification_status' => $outcome,
+                    'confirmed_wallet' => $confirmedWallet ? 1 : 0,
+                    'confirmed_cash' => $confirmedCash ? 1 : 0,
+                    'notes' => $notes,
+                ],
+                null,
+                AuditRecordCategory::STORE_OPERATION
+            );
+
+            $this->pdo()->commit();
+            return $id;
+        } catch (Throwable $e) {
+            if ($this->pdo && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            if ($e instanceof PDOException && (int)($e->errorInfo[1] ?? 0) === 1062) {
+                throw new DomainException('This GCash reference has already been recorded.', 409, $e);
+            }
+            throw $e;
+        }
+    }
 }

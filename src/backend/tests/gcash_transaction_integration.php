@@ -16,7 +16,7 @@ $refuse = static function (callable $work) use ($check): void {
     $check(false, 'Expected request to be refused.');
 };
 $service = new GCashTransactionService($pdo, ['min_length' => 13, 'max_length' => 13]);
-if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--cash-in-race'], true)) {
+if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--cash-in-race', '--cash-out-race'], true)) {
     for ($attempt = 0; $attempt < 5; $attempt++) {
         try {
             if ($argv[2] === '--save-race') { $service->save(4, '0000000000004', '1', 'Payment'); }
@@ -25,6 +25,15 @@ if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--
                 $service->recordCashIn((int)$argv[3], [
                     'principal' => 100,
                     'reference' => '0000000000999',
+                    'confirmed_wallet' => true,
+                    'confirmed_cash' => true,
+                ]);
+            }
+            elseif ($argv[2] === '--cash-out-race') {
+                $service->recordCashOut((int)$argv[3], [
+                    'principal' => 100,
+                    'fee_method' => 'Fee via GCash',
+                    'reference' => '0000000000888',
                     'confirmed_wallet' => true,
                     'confirmed_cash' => true,
                 ]);
@@ -405,6 +414,282 @@ $legacyRow = $pdo->query("SELECT * FROM gcash_transactions WHERE reference_numbe
 $check($legacyRow['session_id'] === null && $legacyRow['verification_status'] === 'Verified', 'Legacy row preserved');
 
 $service->closeSession(4, 2520.00, 3900.00, 'Closing session 5', 1);
+
+// 12. Ticket #241: Accountable Cash-Out movements with either fee payment method
+$sess6 = $service->openSession(4, 3000.00, 5000.00);
+
+// Unlocked register check / wrong cashier
+$refuse(fn() => (new GCashTransactionService($pdo, ['min_length' => 13, 'max_length' => 13]))->recordCashOut(5, [
+    'principal' => 1000,
+    'fee_method' => 'Fee via GCash',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]));
+
+$pdo->exec("UPDATE cashier_shifts SET locked_at=NOW() WHERE cashier_id=4 AND status='open'");
+try {
+    $refuse(fn() => $service->recordCashOut(4, [
+        'principal' => 1000,
+        'fee_method' => 'Fee via GCash',
+        'reference' => '0000000000201',
+        'confirmed_wallet' => true,
+        'confirmed_cash' => true,
+    ]));
+} finally {
+    $pdo->exec("UPDATE cashier_shifts SET locked_at=NULL WHERE cashier_id=4 AND status='open'");
+}
+
+// Invalid fee method rejected
+$refuse(fn() => $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'invalid',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]));
+
+// Stale preview totals rejected
+$refuse(fn() => $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'Fee via GCash',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+    'preview_fee' => 5.00,
+]));
+
+$refuse(fn() => $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'Fee in cash',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+    'preview_counter_collect' => 0.00,
+]));
+
+// Incomplete confirmations rejected for Completed
+$refuse(fn() => $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'Fee via GCash',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => false,
+]));
+
+$refuse(fn() => $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'Fee via GCash',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => false,
+    'confirmed_cash' => true,
+]));
+
+// Insufficient service cash rejection (attempt payout of 3,500 when available service cash is 3,000)
+$refuse(fn() => $service->recordCashOut(4, [
+    'principal' => 3500,
+    'fee_method' => 'Fee via GCash',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]));
+
+// Completed PHP 1,000 Cash-Out Fee via GCash: service cash -1,000, wallet +1,010, fee 10 in wallet
+$posSnapshotBefore = $snapshot();
+$coGkId = $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'Fee via GCash',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+    'preview_fee' => 10.00,
+    'preview_customer_transfer' => 1010.00,
+    'preview_cash_payout' => 1000.00,
+    'net_service_cash' => -1000.00,
+    'net_wallet' => 1010.00,
+]);
+$check($coGkId > 0, 'Cash-Out Fee via GCash recorded successfully');
+
+$posSnapshotAfter = $snapshot();
+$check($posSnapshotBefore === $posSnapshotAfter, 'Product sales, inventory, and POS cash drawer totals must remain unchanged');
+
+$coGkRow = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id=' . $coGkId)->fetch(PDO::FETCH_ASSOC);
+$check((float)$coGkRow['principal_amount'] === 1000.00, 'Principal preserved');
+$check((float)$coGkRow['fee_amount'] === 10.00, 'Fee amount preserved');
+$check($coGkRow['fee_method'] === 'wallet', 'Fee method wallet preserved');
+$check((float)$coGkRow['service_cash_delta'] === -1000.00, 'Service cash delta -1000');
+$check((float)$coGkRow['wallet_delta'] === 1010.00, 'Wallet delta +1010');
+$check((float)$coGkRow['gross_fee'] === 10.00, 'Gross fee 10');
+$check((int)$coGkRow['shift_id'] === 1, 'Shift ID recorded');
+$check((int)$coGkRow['confirmed_wallet'] === 1 && (int)$coGkRow['confirmed_cash'] === 1, 'Confirmations recorded');
+$check($coGkRow['verification_status'] === 'Completed', 'Status is Completed');
+$check(!empty($coGkRow['completed_at']), 'completed_at timestamp recorded');
+
+// Completed record cannot be reviewed or modified
+$refuse(fn() => $service->review(4, $coGkId, 'Verified', true, 'Cannot re-review Completed'));
+
+// Expected balances reflect completed Cash-Out via GCash
+$expSess6AfterGk = $service->calculateSessionExpected($sess6);
+$check($expSess6AfterGk['expected_service_cash'] === 2000.00, 'Expected service cash after GCash fee: 2000.00');
+$check($expSess6AfterGk['expected_wallet_balance'] === 6010.00, 'Expected wallet balance after GCash fee: 6010.00');
+
+// Completed PHP 1,000 Cash-Out Fee in cash: service cash -990, wallet +1,000, fee 10 in cash
+$coCkId = $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'Fee in cash',
+    'reference' => '0000000000202',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+    'preview_fee' => 10.00,
+    'preview_customer_transfer' => 1000.00,
+    'preview_counter_collect' => 10.00,
+    'preview_cash_payout' => 1000.00,
+    'net_service_cash' => -990.00,
+    'net_wallet' => 1000.00,
+]);
+$check($coCkId > 0, 'Cash-Out Fee in cash recorded successfully');
+
+$coCkRow = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id=' . $coCkId)->fetch(PDO::FETCH_ASSOC);
+$check((float)$coCkRow['principal_amount'] === 1000.00, 'Principal preserved');
+$check((float)$coCkRow['fee_amount'] === 10.00, 'Fee amount preserved');
+$check($coCkRow['fee_method'] === 'cash', 'Fee method cash preserved');
+$check((float)$coCkRow['service_cash_delta'] === -990.00, 'Service cash delta -990');
+$check((float)$coCkRow['wallet_delta'] === 1000.00, 'Wallet delta +1000');
+$check((float)$coCkRow['gross_fee'] === 10.00, 'Gross fee 10');
+$check($coCkRow['verification_status'] === 'Completed', 'Status is Completed');
+
+// Expected balances reflect completed Cash-Out with cash fee
+$expSess6AfterCk = $service->calculateSessionExpected($sess6);
+$check($expSess6AfterCk['expected_service_cash'] === 1010.00, 'Expected service cash after cash fee: 1010.00');
+$check($expSess6AfterCk['expected_wallet_balance'] === 7010.00, 'Expected wallet balance after cash fee: 7010.00');
+
+// Duplicate reference rejection
+$refuse(fn() => $service->recordCashOut(4, [
+    'principal' => 500,
+    'fee_method' => 'Fee via GCash',
+    'reference' => '0000000000201',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]));
+
+$service->closeSession(4, 1010.00, 7010.00, 'Closing session 6');
+
+// Session 7 for Centavo fees and Needs checking
+$sess7 = $service->openSession(4, 20000.00, 10000.00);
+
+// Centavo fee: PHP 12,345 principal with PHP 123.45 fee in cash
+$co12kId = $service->recordCashOut(4, [
+    'principal' => 12345,
+    'fee_method' => 'Fee in cash',
+    'reference' => '0000000000203',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+    'preview_fee' => 123.45,
+    'preview_customer_transfer' => 12345.00,
+    'preview_counter_collect' => 123.45,
+    'preview_cash_payout' => 12345.00,
+    'net_service_cash' => -12221.55,
+    'net_wallet' => 12345.00,
+]);
+$co12kRow = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id=' . $co12kId)->fetch(PDO::FETCH_ASSOC);
+$check((float)$co12kRow['principal_amount'] === 12345.00, '12345 principal');
+$check((float)$co12kRow['fee_amount'] === 123.45, '123.45 centavo fee');
+$check((float)$co12kRow['service_cash_delta'] === -12221.55, 'Service cash delta -12221.55');
+$check((float)$co12kRow['wallet_delta'] === 12345.00, 'Wallet delta +12345.00');
+$check((float)$co12kRow['gross_fee'] === 123.45, 'Gross fee 123.45');
+
+$expSess7 = $service->calculateSessionExpected($sess7);
+$check($expSess7['expected_service_cash'] === 7778.45, 'Expected service cash: 7778.45');
+$check($expSess7['expected_wallet_balance'] === 22345.00, 'Expected wallet balance: 22345.00');
+
+// Partial / Needs checking Cash-Out test:
+// Case A: Customer transferred wallet funds, cashier could not pay out cash
+$refuse(fn() => $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'Fee via GCash',
+    'outcome' => 'Needs checking',
+    'notes' => 'bad',
+]));
+
+$ncTxId1 = $service->recordCashOut(4, [
+    'principal' => 1000,
+    'fee_method' => 'Fee via GCash',
+    'outcome' => 'Needs checking',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => false,
+    'notes' => 'Customer transferred 1010 wallet funds, cash payout delayed pending register change',
+]);
+$ncRow1 = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id=' . $ncTxId1)->fetch(PDO::FETCH_ASSOC);
+$check($ncRow1['reference_number'] === null, 'Needs checking preserves NULL reference when blank');
+$check($ncRow1['verification_status'] === 'Needs checking', 'Status is Needs checking');
+$check((float)$ncRow1['service_cash_delta'] === 0.00, 'Service cash delta 0 when cash not paid');
+$check((float)$ncRow1['wallet_delta'] === 1010.00, 'Wallet delta +1010 for received transfer');
+$check((float)$ncRow1['gross_fee'] === 0.00, 'Gross fee 0 for incomplete exchange');
+
+$expAfterNC1 = $service->calculateSessionExpected($sess7);
+$check($expAfterNC1['expected_service_cash'] === 7778.45, 'Expected service cash unchanged at 7778.45');
+$check($expAfterNC1['expected_wallet_balance'] === 23355.00, 'Expected wallet balance includes received funds (23355.00)');
+
+$refuse(fn() => $service->review(4, $ncTxId1, 'Verified', true, 'Cannot review Needs checking'));
+
+// Case B: Cash handed over and fee collected, wallet transfer not received
+$ncTxId2 = $service->recordCashOut(4, [
+    'principal' => 500,
+    'fee_method' => 'Fee in cash',
+    'outcome' => 'Needs checking',
+    'reference' => '0000000000204',
+    'confirmed_wallet' => false,
+    'confirmed_cash' => true,
+    'notes' => 'Cash payout 500 given less 10 fee collected, customer GCash transfer unconfirmed',
+]);
+$ncRow2 = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id=' . $ncTxId2)->fetch(PDO::FETCH_ASSOC);
+$check($ncRow2['reference_number'] === '0000000000204', 'Optional reference preserved');
+$check((float)$ncRow2['service_cash_delta'] === -490.00, 'Service cash delta -490 for cash side done');
+$check((float)$ncRow2['wallet_delta'] === 0.00, 'Wallet delta 0 when wallet not received');
+$check((float)$ncRow2['gross_fee'] === 0.00, 'Gross fee 0 for incomplete exchange');
+
+$expAfterNC2 = $service->calculateSessionExpected($sess7);
+$check($expAfterNC2['expected_service_cash'] === 7288.45, 'Expected service cash: 7288.45');
+$check($expAfterNC2['expected_wallet_balance'] === 23355.00, 'Expected wallet: 23355.00');
+
+// Audit failure rollback for Cash-Out
+$pdo->exec("CREATE TRIGGER gcash_cash_out_audit_fail BEFORE INSERT ON activity_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Audit injection fail'");
+try {
+    $auditFailThrew = false;
+    try {
+        $service->recordCashOut(4, [
+            'principal' => 200,
+            'fee_method' => 'Fee via GCash',
+            'reference' => '0000000000887',
+            'confirmed_wallet' => true,
+            'confirmed_cash' => true,
+        ]);
+    } catch (PDOException $e) { $auditFailThrew = true; }
+    $check($auditFailThrew, 'Cash-Out must throw on audit failure');
+    $check((int)$pdo->query("SELECT COUNT(*) FROM gcash_transactions WHERE reference_number='0000000000887'")->fetchColumn() === 0, 'Audit failure must roll back cash out record');
+} finally {
+    $pdo->exec('DROP TRIGGER gcash_cash_out_audit_fail');
+}
+
+// Concurrent Cash-Out race on same reference
+$cashOutRaceProcesses = [];
+foreach ([1, 2] as $worker) {
+    $pipes = [];
+    $proc = proc_open([PHP_BINARY, __FILE__, $database, '--cash-out-race', '4'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $check(is_resource($proc), 'Concurrent cash-out worker must start.');
+    $cashOutRaceProcesses[] = [$proc, $pipes];
+}
+$cashOutRaceOutcomes = [];
+foreach ($cashOutRaceProcesses as [$proc, $pipes]) {
+    $cashOutRaceOutcomes[] = stream_get_contents($pipes[1]);
+    $err = stream_get_contents($pipes[2]);
+    fclose($pipes[1]); fclose($pipes[2]);
+    $check(proc_close($proc) === 0, $err);
+}
+sort($cashOutRaceOutcomes);
+$check($cashOutRaceOutcomes === ['accepted', 'duplicate'], 'Concurrent cash out must accept exactly one reference');
+
+$service->closeSession(4, 7288.45, 23355.00, 'Closing session 7', 2);
 
 echo "GCash MySQL integration: passed\n";
 

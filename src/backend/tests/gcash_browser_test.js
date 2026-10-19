@@ -262,13 +262,111 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         });
         assert.equal(dupRefApi.status(), 409, 'Duplicate reference rejected');
 
+        // Ticket #241: Cash-Out Fee via GCash in browser
+        await page.locator('#gcash-type').selectOption('Cash-Out');
+        await page.locator('#gcash-fee-method').selectOption('Fee via GCash');
+        await page.locator('#gcash-amount').fill('1000');
+        await reference.fill('0012345678920');
+        await reference.press('Enter');
+        await page.getByText('Reference captured. Review the number and amount; payment remains unverified.', {exact: true}).waitFor();
+
+        const completeOutBtn = page.locator('#gcash-complete-cash-out');
+        assert.equal(await completeOutBtn.isVisible(), true);
+        assert.equal(await completeOutBtn.isDisabled(), true);
+
+        await page.locator('#gcash-confirm-wallet').check();
+        assert.equal(await completeOutBtn.isDisabled(), true);
+        await page.locator('#gcash-confirm-cash').check();
+        assert.equal(await completeOutBtn.isDisabled(), false);
+
+        await completeOutBtn.click();
+        const coGkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678920'});
+        await coGkRow.waitFor();
+        assert.equal((await coGkRow.textContent()).includes('Fee: ₱10.00 (wallet)'), true);
+        assert.equal((await coGkRow.textContent()).includes('Cash: -₱1,000.00 · Wallet: +₱1,010.00'), true);
+
+        // Ticket #241: Cash-Out Fee in cash in browser
+        await page.locator('#gcash-type').selectOption('Cash-Out');
+        await page.locator('#gcash-fee-method').selectOption('Fee in cash');
+        await page.locator('#gcash-amount').fill('1000');
+        await reference.fill('0012345678921');
+        await reference.press('Enter');
+        await page.getByText('Reference captured. Review the number and amount; payment remains unverified.', {exact: true}).waitFor();
+
+        await page.locator('#gcash-confirm-wallet').check();
+        await page.locator('#gcash-confirm-cash').check();
+        await completeOutBtn.click();
+        const coCkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678921'});
+        await coCkRow.waitFor();
+        assert.equal((await coCkRow.textContent()).includes('Fee: ₱10.00 (cash)'), true);
+        assert.equal((await coCkRow.textContent()).includes('Cash: -₱990.00 · Wallet: +₱1,000.00'), true);
+
+        // Ticket #241: Cash-Out Needs checking in browser
+        await page.locator('#gcash-type').selectOption('Cash-Out');
+        await page.locator('#gcash-fee-method').selectOption('Fee via GCash');
+        await page.locator('#gcash-amount').fill('500');
+        await page.locator('#gcash-needs-checking-btn').click();
+        await page.locator('#gcash-needs-checking-dialog').waitFor();
+        await page.locator('#gcash-nc-notes').fill('Customer sent 510 wallet transfer, cash drawer out of cash');
+        await page.locator('#gcash-nc-wallet-sent').check();
+        await page.locator('#gcash-nc-cash-collected').uncheck();
+        await page.locator('#gcash-nc-submit').click();
+        const ncRow = page.locator('#gcash-history-body tr', {hasText: 'Customer sent 510 wallet transfer'});
+        await ncRow.waitFor();
+
+        // Ticket #241: API tests for record_cash_out
+        const staleCoApi = await post({
+            action: 'record_cash_out',
+            outcome: 'Completed',
+            principal: 1000,
+            fee_method: 'Fee via GCash',
+            reference: '0012345678922',
+            confirmed_wallet: true,
+            confirmed_cash: true,
+            preview_fee: 5.00
+        });
+        assert.equal(staleCoApi.status(), 422, 'Stale preview fee rejected');
+
+        const unconfirmedCoApi = await post({
+            action: 'record_cash_out',
+            outcome: 'Completed',
+            principal: 1000,
+            fee_method: 'Fee via GCash',
+            reference: '0012345678923',
+            confirmed_wallet: false,
+            confirmed_cash: true
+        });
+        assert.equal(unconfirmedCoApi.status(), 422, 'Incomplete confirmation rejected');
+
+        const insufficientCashApi = await post({
+            action: 'record_cash_out',
+            outcome: 'Completed',
+            principal: 2000,
+            fee_method: 'Fee via GCash',
+            reference: '0012345678924',
+            confirmed_wallet: true,
+            confirmed_cash: true
+        });
+        assert.equal(insufficientCashApi.status(), 422, 'Insufficient service cash rejected');
+
+        const dupCoRefApi = await post({
+            action: 'record_cash_out',
+            outcome: 'Completed',
+            principal: 1000,
+            fee_method: 'Fee via GCash',
+            reference: '0012345678920',
+            confirmed_wallet: true,
+            confirmed_cash: true
+        });
+        assert.equal(dupCoRefApi.status(), 409, 'Duplicate reference rejected');
+
         // Ticket #239: Reconcile and close session
         await page.locator('#gcash-close-session-btn').click();
         await page.locator('#gcash-close-expected-cash').waitFor();
-        assert.equal(await page.locator('#gcash-close-expected-cash').textContent(), '₱3,530.00');
-        assert.equal(await page.locator('#gcash-close-expected-wallet').textContent(), '₱3,000.00');
-        await page.locator('#gcash-close-cash').fill('3530');
-        await page.locator('#gcash-close-wallet').fill('3000');
+        assert.equal(await page.locator('#gcash-close-expected-cash').textContent(), '₱1,540.00');
+        assert.equal(await page.locator('#gcash-close-expected-wallet').textContent(), '₱5,520.00');
+        await page.locator('#gcash-close-cash').fill('1540');
+        await page.locator('#gcash-close-wallet').fill('5520');
         await page.locator('#gcash-close-submit').click();
         await page.locator('#gcash-session-status').filter({hasText: 'Closed'}).waitFor();
 

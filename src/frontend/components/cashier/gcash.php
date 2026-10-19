@@ -135,6 +135,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
                 <div class="gcash-actions">
                     <button class="btn" type="button" id="gcash-complete-cash-in" hidden>Complete Cash-In</button>
+                    <button class="btn" type="button" id="gcash-complete-cash-out" hidden>Complete Cash-Out</button>
                     <button class="btn btn-secondary" type="button" id="gcash-needs-checking-btn" hidden>Hold as Needs checking</button>
                     <button class="btn btn-secondary" type="submit" id="gcash-save">Save as Pending</button>
                     <button class="btn btn-secondary" type="button" id="gcash-manual">Manual entry / USB scan</button>
@@ -292,11 +293,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <p style="margin-top: .75rem; margin-bottom: .25rem; font-weight: 600;">Accountable movements confirmed:</p>
                 <label class="gcash-confirm">
                     <input type="checkbox" id="gcash-nc-cash-collected" name="cash_collected">
-                    <span>Physical cash collected at counter (<span id="gcash-nc-cash-text">₱0.00</span>)</span>
+                    <span id="gcash-nc-cash-desc">Physical cash collected at counter (<span id="gcash-nc-cash-text">₱0.00</span>)</span>
                 </label>
                 <label class="gcash-confirm">
                     <input type="checkbox" id="gcash-nc-wallet-sent" name="wallet_sent">
-                    <span>Wallet funds sent to customer (<span id="gcash-nc-wallet-text">₱0.00</span>)</span>
+                    <span id="gcash-nc-wallet-desc">Wallet funds sent to customer (<span id="gcash-nc-wallet-text">₱0.00</span>)</span>
                 </label>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-nc-notes">Explanatory notes (minimum 5 characters, required)</label>

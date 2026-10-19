@@ -52,6 +52,9 @@ try {
         if (($input['action'] ?? '') === 'record_cash_in') {
             $id = $service->recordCashIn($cashierId, $input);
             $result = ['id' => $id, 'transaction_id' => $id];
+        } elseif (($input['action'] ?? '') === 'record_cash_out') {
+            $id = $service->recordCashOut($cashierId, $input);
+            $result = ['id' => $id, 'transaction_id' => $id];
         } elseif (($input['action'] ?? '') === 'preview') {
             $preview = $service->calculatePreview($input['type'] ?? '', $input['principal'] ?? '', $input['fee_method'] ?? null);
             $result = ['preview' => $preview] + $preview;
