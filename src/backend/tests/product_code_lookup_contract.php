@@ -43,6 +43,9 @@ $pdo->exec('CREATE TABLE products (
     sku VARCHAR(50) NOT NULL,
     barcode VARCHAR(50) NOT NULL DEFAULT \'\',
     case_barcode VARCHAR(80) NULL,
+    pack_size INTEGER NULL,
+    pack_barcode VARCHAR(80) NULL,
+    pack_price REAL NULL,
     product_name VARCHAR(150) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT \'active\'
 )');

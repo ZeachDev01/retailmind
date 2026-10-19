@@ -152,6 +152,7 @@ class InventoryService
 
         $batchStmt = $this->pdo->prepare(
             "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.quantity, pb.remaining_quantity,
+                    pb.sealed_quantity, pb.loose_quantity,
                     pb.expiration_date, pb.date_received, pb.supplier
              FROM product_batches pb
              WHERE pb.product_id IN ({$inPlaceholders})
@@ -178,6 +179,12 @@ class InventoryService
             $expiredQuantity = 0;
             $undatedQuantity = 0;
             $nextExpiration = null;
+            $physicalSealedPacks = 0;
+            $physicalLoosePieces = 0;
+            $saleableSealedPacks = 0;
+            $saleableLoosePieces = 0;
+            $expiredSealedPacks = 0;
+            $expiredLoosePieces = 0;
 
             foreach ($batches as $b) {
                 $rem = (int)$b['remaining_quantity'];
@@ -185,6 +192,14 @@ class InventoryService
                     continue;
                 }
                 $totalBatchRemaining += $rem;
+                $sealed = (int)($b['sealed_quantity'] ?? 0);
+                $loose = (int)($b['loose_quantity'] ?? 0);
+                if ($sealed === 0 && $loose === 0) {
+                    $loose = $rem;
+                }
+                $physicalSealedPacks += $sealed;
+                $physicalLoosePieces += $loose;
+
                 $expDate = !empty($b['expiration_date']) ? trim((string)$b['expiration_date']) : null;
                 if ($expDate === '') {
                     $expDate = null;
@@ -192,13 +207,25 @@ class InventoryService
 
                 if ($expDate === null) {
                     $undatedQuantity += $rem;
+                    $saleableSealedPacks += $sealed;
+                    $saleableLoosePieces += $loose;
                 } elseif ($expDate < $today) {
                     $expiredQuantity += $rem;
+                    $expiredSealedPacks += $sealed;
+                    $expiredLoosePieces += $loose;
                 } else {
+                    $saleableSealedPacks += $sealed;
+                    $saleableLoosePieces += $loose;
                     if ($nextExpiration === null || $expDate < $nextExpiration) {
                         $nextExpiration = $expDate;
                     }
                 }
+            }
+
+            if ($onHand > $totalBatchRemaining) {
+                $unbatched = $onHand - $totalBatchRemaining;
+                $physicalLoosePieces += $unbatched;
+                $saleableLoosePieces += $unbatched;
             }
 
             $product['quantity_on_hand'] = $onHand;
@@ -209,6 +236,12 @@ class InventoryService
             $product['has_unbatched_stock'] = ($onHand > 0 && $onHand > $totalBatchRemaining);
             $product['unbatched_quantity'] = max(0, $onHand - $totalBatchRemaining);
             $product['total_batch_remaining'] = $totalBatchRemaining;
+            $product['physical_sealed_packs'] = $physicalSealedPacks;
+            $product['physical_loose_pieces'] = $physicalLoosePieces;
+            $product['saleable_sealed_packs'] = $saleableSealedPacks;
+            $product['saleable_loose_pieces'] = $saleableLoosePieces;
+            $product['expired_sealed_packs'] = $expiredSealedPacks;
+            $product['expired_loose_pieces'] = $expiredLoosePieces;
         }
         unset($product);
 
@@ -361,6 +394,8 @@ class InventoryService
                 'batch_number' => !empty($row['batch_number']) ? (string)$row['batch_number'] : ('#' . $batchId),
                 'quantity' => $quantity,
                 'remaining_quantity' => $remaining,
+                'sealed_quantity' => (int)($row['sealed_quantity'] ?? 0),
+                'loose_quantity' => (int)($row['loose_quantity'] ?? $remaining),
                 'expiration_date' => $expDate,
                 'expiration_label' => $expDate ?? 'Not recorded',
                 'date_received' => $row['date_received'] ?? null,

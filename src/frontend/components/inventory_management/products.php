@@ -130,6 +130,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($_POST['warning_lead_time_days'])) {
                 $updateData['warning_lead_time_days'] = trim((string)$_POST['warning_lead_time_days']) === '' ? null : $_POST['warning_lead_time_days'];
             }
+            if (array_key_exists('pack_size', $_POST)) {
+                $updateData['pack_size'] = trim((string)$_POST['pack_size']) === '' ? null : $_POST['pack_size'];
+            }
+            if (array_key_exists('pack_barcode', $_POST)) {
+                $updateData['pack_barcode'] = trim((string)$_POST['pack_barcode']) === '' ? null : $_POST['pack_barcode'];
+            }
+            if (array_key_exists('pack_price', $_POST)) {
+                $updateData['pack_price'] = trim((string)$_POST['pack_price']) === '' ? null : $_POST['pack_price'];
+            }
             $uploadedPhoto = handle_product_photo_upload($_FILES['product_image'] ?? null);
             if ($uploadedPhoto !== null) {
                 $updateData['product_image'] = $uploadedPhoto;
@@ -215,6 +224,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => $_POST['status'] ?? 'active',
                 'initial_stock_quantity' => $initialQuantity,
                 'warning_lead_time_days' => trim((string)($_POST['warning_lead_time_days'] ?? '')) === '' ? null : $_POST['warning_lead_time_days'],
+                'pack_size' => !empty($_POST['pack_size']) ? $_POST['pack_size'] : null,
+                'pack_barcode' => !empty($_POST['pack_barcode']) ? $_POST['pack_barcode'] : null,
+                'pack_price' => !empty($_POST['pack_price']) ? $_POST['pack_price'] : null,
+                'starting_packs' => isset($_POST['starting_packs']) && trim((string)$_POST['starting_packs']) !== '' ? $_POST['starting_packs'] : null,
+                'starting_loose' => isset($_POST['starting_loose']) && trim((string)$_POST['starting_loose']) !== '' ? $_POST['starting_loose'] : null,
             ], (int)$_SESSION['user_id']);
 
             $newProductStmt = $pdo->prepare(
@@ -1200,7 +1214,7 @@ foreach ($products as $product) {
                                         </td>
                                         <td class="column-price mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
                                         <td class="column-cost mobile-hide">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
-                                        <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
+                                        <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small style="color:var(--text-muted);"><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">
                                             <div class="row-actions">
@@ -1340,6 +1354,25 @@ foreach ($products as $product) {
                                     <small class="field-error">Enter a custom receiving unit.</small>
                                 </div>
                             </div>
+                            <div class="form-group full" style="border-top:1px solid var(--border);padding-top:0.75rem;margin-top:0.5rem;">
+                                <strong style="font-size:0.9rem;display:block;margin-bottom:0.25rem;">Sales Pack Configuration (Optional)</strong>
+                                <small class="field-help" style="display:block;margin-bottom:0.5rem;">For products sold both individually and as a sealed multipack under a distinct barcode.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="create-pack-size">Pack Size (Pieces per Pack)</label>
+                                <input type="number" min="2" step="1" name="pack_size" id="create-pack-size" placeholder="e.g. 12">
+                                <small class="field-help">Whole number &gt; 1.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="create-pack-barcode">Pack Barcode</label>
+                                <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Distinct barcode for pack">
+                                <small class="field-help">Must differ from unit barcode, SKU, and case barcode.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="create-pack-price">Pack Selling Price (₱)</label>
+                                <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price" placeholder="Bundle price">
+                                <small class="field-help">Must be positive and &lt; Pack Size × Selling Price.</small>
+                            </div>
                         </div>
                     </section>
 
@@ -1351,6 +1384,7 @@ foreach ($products as $product) {
                                     <div class="stock-mode-selector" role="radiogroup" aria-label="Starting stock unit">
                                         <label><input type="radio" name="starting_stock_mode" value="pieces" checked> Pieces</label>
                                         <label><input type="radio" name="starting_stock_mode" value="packages"> Packages / boxes</label>
+                                        <label id="stock-mode-packs-label"><input type="radio" name="starting_stock_mode" value="packs"> Sales Packs</label>
                                     </div>
                                 </div>
                                 <div id="stock-pieces-wrapper">
@@ -1364,11 +1398,24 @@ foreach ($products as $product) {
                                             <input id="starting-packages-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
                                         </div>
                                         <div>
-                                            <label for="starting-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
-                                            <input id="starting-loose-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                            <label for="starting-package-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
+                                            <input id="starting-package-loose-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
                                         </div>
                                     </div>
                                     <small class="field-help" id="stock-package-calc-preview" style="display:block;margin-top:0.4rem;font-weight:600;color:var(--primary, #0d6efd);">0 packages × 1 + 0 pieces = 0 pieces total</small>
+                                </div>
+                                <div id="stock-sales-packs-wrapper" hidden>
+                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                                        <div>
+                                            <label for="starting-packs-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Sealed packs</label>
+                                            <input id="starting-packs-count" name="starting_packs" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                        </div>
+                                        <div>
+                                            <label for="starting-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
+                                            <input id="starting-loose-count" name="starting_loose" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                        </div>
+                                    </div>
+                                    <small class="field-help" id="stock-sales-pack-calc-preview" style="display:block;margin-top:0.4rem;font-weight:600;color:var(--primary, #0d6efd);">0 packs × 0 + 0 pieces = 0 pieces total</small>
                                 </div>
                                 <small class="field-error">Enter a whole number of zero or more.</small>
                             </div>
@@ -1486,7 +1533,7 @@ foreach ($products as $product) {
         const csrfToken = <?= json_encode(csrf_token()) ?>;
         const categoriesData = <?= json_encode(array_values($categories), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const productsById = Object.fromEntries(productData.map(product => [Number(product.product_id), product]));
-        const existingBarcodes = new Set(productData.map(product => String(product.barcode || '').trim().toLowerCase()).filter(Boolean));
+        const existingBarcodes = new Set(productData.flatMap(product => [product.barcode, product.sku, product.case_barcode, product.pack_barcode]).map(b => String(b || '').trim().toLowerCase()).filter(Boolean));
         const existingProductNames = new Set(productData.map(product => String(product.product_name || '').trim().toLowerCase()).filter(Boolean));
         const productRows = Array.from(document.querySelectorAll('#product-table-body tr'));
         const searchInput = document.getElementById('product-search');
@@ -1839,12 +1886,15 @@ foreach ($products as $product) {
             document.getElementById('product-drawer-subtitle').textContent = `${safe(product.sku)} · ${safe(product.category_name, 'Uncategorized')}`;
             const editBtn = document.getElementById('product-edit-btn');
             if (editBtn) editBtn.hidden = !canEditProduct || document.getElementById('product-panel-info').hidden;
+            const packItems = product.pack_size && Number(product.pack_size) > 1 ? `
+        <div class="detail-item"><span>Pack Size</span><strong>${Number(product.pack_size)} pcs</strong></div><div class="detail-item"><span>Pack Barcode</span><strong>${escapeHtml(safe(product.pack_barcode, 'None'))}</strong></div>
+        <div class="detail-item"><span>Pack Price</span><strong>${product.pack_price ? formatMoney(product.pack_price) : '—'}</strong></div><div class="detail-item"><span>Sealed / Loose</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} pcs</strong></div>` : '';
             document.getElementById('product-panel-info').innerHTML = `<div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
-        <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div><div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
+        <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
     </div>`;
             renderProductDrawerQuantity(product);
         }
@@ -1953,6 +2003,23 @@ foreach ($products as $product) {
                         <label class="form-field" for="edit-warning-lead-time">
                             <span>Expiry Warning Lead Time (Days) <small>(Blank uses default 30 days)</small></span>
                             <input type="number" step="1" min="1" max="2147483647" name="warning_lead_time_days" id="edit-warning-lead-time" value="${product.warning_lead_time_days !== null && product.warning_lead_time_days !== undefined && product.warning_lead_time_days !== '' ? Number(product.warning_lead_time_days) : ''}" placeholder="Default (30)" class="form-input">
+                        </label>
+                    </fieldset>
+                    <fieldset class="settings-fieldset product-edit-section"><legend>Sales Pack Configuration</legend>
+                        <div class="form-grid">
+                            <label class="form-field" for="edit-pack-size">
+                                <span>Pack Size (Pieces per Pack)</span>
+                                <input type="number" step="1" min="2" max="2147483647" name="pack_size" id="edit-pack-size" value="${product.pack_size ? Number(product.pack_size) : ''}" placeholder="None" class="form-input" ${Number(product.physical_sealed_packs || 0) > 0 ? 'readonly title="Cannot change pack size while sealed pack inventory exists"' : ''}>
+                                ${Number(product.physical_sealed_packs || 0) > 0 ? `<small style="color:var(--warning-text, #b45309);">Cannot change pack size while ${product.physical_sealed_packs} sealed pack(s) exist. Reconcile stock first.</small>` : ''}
+                            </label>
+                            <label class="form-field" for="edit-pack-price">
+                                <span>Pack Selling Price (₱)</span>
+                                <input type="number" step="0.01" min="0.01" max="999999999.99" name="pack_price" id="edit-pack-price" value="${product.pack_price ? (Number(product.pack_price) || 0).toFixed(2) : ''}" placeholder="None" class="form-input">
+                            </label>
+                        </div>
+                        <label class="form-field" for="edit-pack-barcode">
+                            <span>Pack Barcode</span>
+                            <input type="text" name="pack_barcode" id="edit-pack-barcode" maxlength="50" value="${escapeHtml(product.pack_barcode || '')}" placeholder="None" class="form-input">
                         </label>
                     </fieldset>
                     <div class="product-edit-actions">
@@ -2180,7 +2247,11 @@ foreach ($products as $product) {
                         }
                         const stockCell = row.querySelector('.stock-cell');
                         if (stockCell) {
-                            stockCell.innerHTML = `<span class="stock-value">${Number(product.quantity_on_hand || 0).toLocaleString()}</span><br><small>Reorder at ${Number(product.reorder_level || 0).toLocaleString()}</small>`;
+                            let packBreakdown = '';
+                            if (product.pack_size && Number(product.pack_size) > 1) {
+                                packBreakdown = `<br><small style="color:var(--text-muted);">${Number(product.physical_sealed_packs || 0)} packs, ${Number(product.physical_loose_pieces || 0)} loose</small>`;
+                            }
+                            stockCell.innerHTML = `<span class="stock-value">${Number(product.quantity_on_hand || 0).toLocaleString()}</span>${packBreakdown}<br><small>Reorder at ${Number(product.reorder_level || 0).toLocaleString()}</small>`;
                         }
                         const statusCell = row.querySelector('.status-cell');
                         if (statusCell) {
@@ -2501,6 +2572,27 @@ foreach ($products as $product) {
                     selling.closest('.form-group').classList.add('invalid');
                     valid = false;
                 }
+                const packSize = document.getElementById('create-pack-size');
+                const packBarcode = document.getElementById('create-pack-barcode');
+                const packPrice = document.getElementById('create-pack-price');
+                const hasPack = (packSize && packSize.value.trim() !== '') || (packBarcode && packBarcode.value.trim() !== '') || (packPrice && packPrice.value.trim() !== '');
+                if (hasPack) {
+                    const pSizeVal = parseInt(packSize.value, 10);
+                    const pPriceVal = parseFloat(packPrice.value);
+                    const sellingVal = parseFloat(selling.value);
+                    if (isNaN(pSizeVal) || pSizeVal < 2) {
+                        packSize.closest('.form-group').classList.add('invalid');
+                        valid = false;
+                    }
+                    if (!packBarcode.value.trim() || existingBarcodes.has(packBarcode.value.trim().toLowerCase())) {
+                        packBarcode.closest('.form-group').classList.add('invalid');
+                        valid = false;
+                    }
+                    if (isNaN(pPriceVal) || pPriceVal <= 0 || (!isNaN(sellingVal) && !isNaN(pSizeVal) && pPriceVal >= (pSizeVal * sellingVal))) {
+                        packPrice.closest('.form-group').classList.add('invalid');
+                        valid = false;
+                    }
+                }
             }
             return valid;
         }
@@ -2533,13 +2625,18 @@ foreach ($products as $product) {
         // Package and piece starting stock calculation
         const stockPiecesWrapper = document.getElementById('stock-pieces-wrapper');
         const stockPackagesWrapper = document.getElementById('stock-packages-wrapper');
+        const stockSalesPacksWrapper = document.getElementById('stock-sales-packs-wrapper');
         const initialStockInput = document.getElementById('initial-stock-quantity');
         const startingStockExpGroup = document.getElementById('starting-stock-expiration-group');
         const startingStockExpInput = document.getElementById('starting-stock-expiration');
         const startingPackagesCount = document.getElementById('starting-packages-count');
+        const startingPackageLooseCount = document.getElementById('starting-package-loose-count');
+        const startingPacksCount = document.getElementById('starting-packs-count');
         const startingLooseCount = document.getElementById('starting-loose-count');
+        const packSizeInput = document.getElementById('create-pack-size');
         const unitsPerPkgInput = document.getElementById('units-per-package');
         const stockCalcPreview = document.getElementById('stock-package-calc-preview');
+        const salesPackCalcPreview = document.getElementById('stock-sales-pack-calc-preview');
 
         function updateStartingStockExpirationVisibility() {
             const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
@@ -2554,7 +2651,7 @@ foreach ($products as $product) {
 
         function updatePackageStockCalc() {
             const pkgs = Math.max(0, parseInt(startingPackagesCount?.value, 10) || 0);
-            const loose = Math.max(0, parseInt(startingLooseCount?.value, 10) || 0);
+            const loose = Math.max(0, parseInt(startingPackageLooseCount?.value, 10) || 0);
             const units = Math.max(1, parseInt(unitsPerPkgInput?.value, 10) || 1);
             const total = (pkgs * units) + loose;
             if (initialStockInput) {
@@ -2568,18 +2665,43 @@ foreach ($products as $product) {
             }
         }
 
+        function updateSalesPackStockCalc() {
+            const psize = Math.max(1, parseInt(packSizeInput?.value, 10) || 1);
+            const pks = Math.max(0, parseInt(startingPacksCount?.value, 10) || 0);
+            const loose = Math.max(0, parseInt(startingLooseCount?.value, 10) || 0);
+            const total = (pks * psize) + loose;
+            if (initialStockInput) {
+                initialStockInput.value = total;
+            }
+            updateStartingStockExpirationVisibility();
+            if (salesPackCalcPreview) {
+                const base = addProductForm?.elements['base_unit']?.value?.trim() || 'piece';
+                salesPackCalcPreview.textContent = `${pks} pack(s) × ${psize} + ${loose} ${base}(s) = ${total} ${base}(s) total`;
+            }
+        }
+
         function setStartingStockMode(mode) {
             const isPackages = mode === 'packages';
-            if (stockPiecesWrapper) stockPiecesWrapper.hidden = isPackages;
+            const isPacks = mode === 'packs';
+            if (stockPiecesWrapper) stockPiecesWrapper.hidden = isPackages || isPacks;
             if (stockPackagesWrapper) stockPackagesWrapper.hidden = !isPackages;
+            if (stockSalesPacksWrapper) stockSalesPacksWrapper.hidden = !isPacks;
+
+            const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
             if (isPackages) {
-                const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
                 const units = Math.max(1, parseInt(unitsPerPkgInput?.value, 10) || 1);
-                if (startingPackagesCount && startingLooseCount) {
+                if (startingPackagesCount && startingPackageLooseCount) {
                     startingPackagesCount.value = Math.floor(currentTotal / units);
-                    startingLooseCount.value = currentTotal % units;
+                    startingPackageLooseCount.value = currentTotal % units;
                 }
                 updatePackageStockCalc();
+            } else if (isPacks) {
+                const psize = Math.max(1, parseInt(packSizeInput?.value, 10) || 1);
+                if (startingPacksCount && startingLooseCount) {
+                    startingPacksCount.value = Math.floor(currentTotal / psize);
+                    startingLooseCount.value = currentTotal % psize;
+                }
+                updateSalesPackStockCalc();
             } else {
                 updateStartingStockExpirationVisibility();
             }
@@ -2591,10 +2713,16 @@ foreach ($products as $product) {
         initialStockInput?.addEventListener('input', updateStartingStockExpirationVisibility);
         initialStockInput?.addEventListener('change', updateStartingStockExpirationVisibility);
         startingPackagesCount?.addEventListener('input', updatePackageStockCalc);
-        startingLooseCount?.addEventListener('input', updatePackageStockCalc);
+        startingPackageLooseCount?.addEventListener('input', updatePackageStockCalc);
+        startingPacksCount?.addEventListener('input', updateSalesPackStockCalc);
+        startingLooseCount?.addEventListener('input', updateSalesPackStockCalc);
         unitsPerPkgInput?.addEventListener('input', () => {
             const checkedMode = addProductForm?.querySelector('input[name="starting_stock_mode"]:checked')?.value;
             if (checkedMode === 'packages') updatePackageStockCalc();
+        });
+        packSizeInput?.addEventListener('input', () => {
+            const checkedMode = addProductForm?.querySelector('input[name="starting_stock_mode"]:checked')?.value;
+            if (checkedMode === 'packs') updateSalesPackStockCalc();
         });
 
         function renderReview() {
@@ -2612,6 +2740,11 @@ foreach ($products as $product) {
                 ['Supplier', data.get('preferred_supplier') || '—']
             ];
             const initialQty = parseInt(data.get('initial_stock_quantity'), 10) || 0;
+            if (data.get('pack_size') && parseInt(data.get('pack_size'), 10) > 1) {
+                items.push(['Sales Pack Size', `${data.get('pack_size')} pcs / pack`]);
+                items.push(['Pack Barcode', data.get('pack_barcode') || '—']);
+                items.push(['Pack Price', formatMoney(data.get('pack_price'))]);
+            }
             if (initialQty > 0 && data.get('expiration_date')) {
                 items.push(['Starting Stock Expiration', data.get('expiration_date')]);
             }

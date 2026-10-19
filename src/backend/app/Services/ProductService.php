@@ -67,7 +67,7 @@ class ProductService
         $brand = trim((string)($data['brand'] ?? ''));
         $categoryId = (($data['category_id'] ?? '') !== '') ? (int)$data['category_id'] : null;
         $costPrice = (float)($data['cost_price'] ?? 0);
-        $sellingPrice = (float)($data['selling_price'] ?? 0);
+        $sellingPrice = (float)($data['selling_price'] ?? ($data['unit_price'] ?? 0));
         $reorderLevel = (int)($data['reorder_level'] ?? 10);
         $preferredSupplier = trim((string)($data['preferred_supplier'] ?? ($data['supplier'] ?? '')));
         $supplierLeadTimeDays = max(0, (int)($data['supplier_lead_time_days'] ?? 7));
@@ -110,10 +110,68 @@ class ProductService
         $this->assertBarcodeAvailable($barcode);
         if ($caseBarcode !== '') {
             if (strlen($caseBarcode) > 80) throw new RuntimeException('Case barcode must not exceed 80 characters.');
-            $caseStmt = $this->pdo->prepare('SELECT product_id FROM products WHERE barcode=? OR sku=? OR case_barcode=? LIMIT 1');
-            $caseStmt->execute([$caseBarcode,$caseBarcode,$caseBarcode]);
-            if ($caseStmt->fetch()) throw new RuntimeException('That case barcode is already assigned.');
+            if ($caseBarcode === $barcode) throw new RuntimeException('Case barcode must be distinct from piece barcode.');
+            $this->assertBarcodeAvailable($caseBarcode);
         }
+
+        $packConfig = $this->validatePackConfiguration(
+            $data,
+            $sellingPrice,
+            $barcode,
+            $barcode,
+            $caseBarcode
+        );
+        $packSize = $packConfig !== null ? $packConfig['pack_size'] : null;
+        $packBarcode = $packConfig !== null ? $packConfig['pack_barcode'] : null;
+        $packPrice = $packConfig !== null ? $packConfig['pack_price'] : null;
+
+        $hasStartingPacks = array_key_exists('starting_packs', $data) && $data['starting_packs'] !== null && $data['starting_packs'] !== '';
+        $hasStartingLoose = array_key_exists('starting_loose', $data) && $data['starting_loose'] !== null && $data['starting_loose'] !== '';
+
+        if ($hasStartingPacks) {
+            $rawPacks = $data['starting_packs'];
+            if ((!is_int($rawPacks) && (!is_string($rawPacks) || !ctype_digit(trim($rawPacks)))) || (int)$rawPacks < 0) {
+                throw new RuntimeException('Starting packs must be a whole non-negative number.');
+            }
+            $startingPacks = (int)$rawPacks;
+        } else {
+            $startingPacks = 0;
+        }
+
+        if ($startingPacks > 0 && $packConfig === null) {
+            throw new RuntimeException('Cannot specify starting packs for a product without a Sales Pack configuration.');
+        }
+
+        if ($hasStartingLoose) {
+            $rawLoose = $data['starting_loose'];
+            if ((!is_int($rawLoose) && (!is_string($rawLoose) || !ctype_digit(trim($rawLoose)))) || (int)$rawLoose < 0) {
+                throw new RuntimeException('Starting loose pieces must be a whole non-negative number.');
+            }
+            $startingLoose = (int)$rawLoose;
+        } elseif (array_key_exists('initial_stock_quantity', $data) && $data['initial_stock_quantity'] !== null && $data['initial_stock_quantity'] !== '') {
+            $startingLoose = $this->validateStockSetting($data['initial_stock_quantity'], 'Starting quantity', 0);
+        } else {
+            $startingLoose = 0;
+        }
+
+        $multiplier = $packSize ?? 1;
+        if ($startingPacks > 0 && ($startingPacks > 2147483647 / $multiplier)) {
+            throw new RuntimeException('Starting stock exceeds the supported stock total.');
+        }
+        $initialStock = ($startingPacks * $multiplier) + $startingLoose;
+        if ($initialStock < 0 || $initialStock > 2147483647) {
+            throw new RuntimeException('Starting stock exceeds the supported stock total.');
+        }
+
+        $productExpirationDate = ($initialStock > 0) ? $expirationDate : null;
+        $warningLeadTimeDays = $this->validateWarningLeadTime($data['warning_lead_time_days'] ?? null);
+        if ($warningLeadTimeDays !== null || $initialStock > 0) {
+            $role = function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? null);
+            if ($role !== null && $role !== 'inventory_manager') {
+                throw new RuntimeException('Only the active Inventory Manager workspace can mutate stock or warning overrides.');
+            }
+        }
+
         if ($parentProductId > 0) {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
             $parentStmt = $this->pdo->prepare("SELECT product_id FROM products WHERE product_id=? AND status='active'{$scopeSql}");
@@ -129,6 +187,11 @@ class ProductService
             $variantLabel = '';
         }
 
+        $sku = trim((string)($data['sku'] ?? '')) ?: $barcode;
+        if ($sku !== $barcode) {
+            $this->assertBarcodeAvailable($sku);
+        }
+
         if ($initialStock > 0) {
             $this->fiscalPeriodGuard->assertOpenNow('purchase_history', 'purchase history');
             $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
@@ -141,16 +204,20 @@ class ProductService
         try {
             $stmt = $this->pdo->prepare(
                 "INSERT INTO products (
-                    sku, barcode, case_barcode, parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
+                    sku, barcode, case_barcode, pack_size, pack_barcode, pack_price,
+                    parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
                     quantity_purchased, quantity_sold, reorder_level, supplier, preferred_supplier,
                     supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, base_unit, receiving_unit, expiration_date,
                     warning_lead_time_days, product_image, status, created_by, branch_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
-                $barcode,
+                $sku,
                 $barcode,
                 $caseBarcode !== '' ? $caseBarcode : null,
+                $packSize,
+                $packBarcode,
+                $packPrice,
                 $parentProductId > 0 ? $parentProductId : null,
                 $variantLabel !== '' ? $variantLabel : null,
                 $productName,
@@ -179,8 +246,6 @@ class ProductService
             $productId = (int)$this->pdo->lastInsertId();
             $this->pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)")
                 ->execute([$productId, $initialStock]);
-            
-
 
             if ($initialStock > 0) {
                 $purchaseDate = date('Y-m-d H:i:s');
@@ -191,7 +256,10 @@ class ProductService
                     $initialStock,
                     $expirationDate,
                     $purchaseDate,
-                    $preferredSupplier !== '' ? $preferredSupplier : null
+                    $preferredSupplier !== '' ? $preferredSupplier : null,
+                    $startingPacks,
+                    $startingLoose,
+                    $costPrice > 0 ? $costPrice : null
                 );
                 $this->pdo->prepare(
                     "INSERT INTO purchase_history (product_id, quantity_purchased, cost_price, purchase_date, total_cost, recorded_by)
@@ -616,12 +684,17 @@ class ProductService
         return $stmt->fetch() ?: null;
     }
 
-    private function assertBarcodeAvailable(string $barcode): void
+    private function assertBarcodeAvailable(string $barcode, ?int $excludeProductId = null): void
     {
+        $excludeSql = $excludeProductId !== null ? ' AND product_id != ?' : '';
+        $params = [$barcode, $barcode, $barcode, $barcode];
+        if ($excludeProductId !== null) {
+            $params[] = $excludeProductId;
+        }
         $stmt = $this->pdo->prepare(
-            'SELECT product_id FROM products WHERE barcode = ? OR sku = ? OR case_barcode = ? LIMIT 1'
+            "SELECT product_id FROM products WHERE (barcode = ? OR sku = ? OR case_barcode = ? OR pack_barcode = ?){$excludeSql} LIMIT 1"
         );
-        $stmt->execute([$barcode, $barcode, $barcode]);
+        $stmt->execute($params);
         if ($stmt->fetch()) {
             throw new RuntimeException('That barcode is already assigned to another product.');
         }
@@ -632,15 +705,85 @@ class ProductService
         for ($attempt = 0; $attempt < 30; $attempt++) {
             $barcode = 'RM' . date('ymd') . str_pad((string)random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
             $stmt = $this->pdo->prepare(
-                'SELECT product_id FROM products WHERE barcode = ? OR sku = ? OR case_barcode = ? LIMIT 1'
+                'SELECT product_id FROM products WHERE barcode = ? OR sku = ? OR case_barcode = ? OR pack_barcode = ? LIMIT 1'
             );
-            $stmt->execute([$barcode, $barcode, $barcode]);
+            $stmt->execute([$barcode, $barcode, $barcode, $barcode]);
             if (!$stmt->fetch()) {
                 return $barcode;
             }
         }
 
         throw new RuntimeException('Unable to generate a unique barcode. Please try again.');
+    }
+
+    private function validatePackConfiguration(
+        array $data,
+        float $sellingPrice,
+        ?string $pieceBarcode = null,
+        ?string $sku = null,
+        ?string $caseBarcode = null,
+        ?int $excludeProductId = null
+    ): ?array {
+        $hasPackSize = array_key_exists('pack_size', $data) && $data['pack_size'] !== null && $data['pack_size'] !== '';
+        $hasPackBarcode = array_key_exists('pack_barcode', $data) && $data['pack_barcode'] !== null && trim((string)$data['pack_barcode']) !== '';
+        $hasPackPrice = array_key_exists('pack_price', $data) && $data['pack_price'] !== null && $data['pack_price'] !== '';
+
+        if (!$hasPackSize && !$hasPackBarcode && !$hasPackPrice) {
+            return null;
+        }
+
+        if (!$hasPackSize || !$hasPackBarcode || !$hasPackPrice) {
+            throw new RuntimeException('Complete Sales Pack configuration requires pack contents count, pack barcode, and pack price.');
+        }
+
+        $rawSize = $data['pack_size'];
+        if ((!is_int($rawSize) && (!is_string($rawSize) || !ctype_digit(trim($rawSize)))) || (int)$rawSize <= 1) {
+            throw new RuntimeException('Pack contents count must be a whole number greater than 1.');
+        }
+        $packSize = (int)$rawSize;
+        if ($packSize > 2147483647) {
+            throw new RuntimeException('Pack contents count is out of range.');
+        }
+
+        $packBarcode = trim((string)$data['pack_barcode']);
+        if (strlen($packBarcode) > 80) {
+            throw new RuntimeException('Pack barcode must not exceed 80 characters.');
+        }
+        if ($pieceBarcode !== null && $pieceBarcode !== '' && $packBarcode === $pieceBarcode) {
+            throw new RuntimeException('Pack barcode must be distinct from piece barcode.');
+        }
+        if ($sku !== null && $sku !== '' && $packBarcode === $sku) {
+            throw new RuntimeException('Pack barcode must be distinct from SKU.');
+        }
+        if ($caseBarcode !== null && $caseBarcode !== '' && $packBarcode === $caseBarcode) {
+            throw new RuntimeException('Pack barcode must be distinct from case barcode.');
+        }
+        $this->assertBarcodeAvailable($packBarcode, $excludeProductId);
+
+        $rawPrice = $data['pack_price'];
+        if ((!is_string($rawPrice) && !is_int($rawPrice) && !is_float($rawPrice)) || !is_numeric($rawPrice)) {
+            throw new RuntimeException('Pack price must be a valid positive amount.');
+        }
+        $packPrice = round((float)$rawPrice, 2);
+        if (!is_finite($packPrice) || $packPrice <= 0) {
+            throw new RuntimeException('Pack price must be greater than PHP 0.');
+        }
+        $maxAllowed = round($packSize * $sellingPrice, 2);
+        if ($packPrice >= $maxAllowed) {
+            throw new RuntimeException(sprintf(
+                'Pack price (₱%s) must be lower than contents count times piece price (%d × ₱%s = ₱%s).',
+                number_format($packPrice, 2),
+                $packSize,
+                number_format($sellingPrice, 2),
+                number_format($maxAllowed, 2)
+            ));
+        }
+
+        return [
+            'pack_size' => $packSize,
+            'pack_barcode' => $packBarcode,
+            'pack_price' => $packPrice,
+        ];
     }
 
     public function getProductsForManagement(): array
@@ -650,22 +793,34 @@ class ProductService
         $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand, c.category_name,
                     CASE WHEN i.quantity_on_hand > 0 THEN b.next_expiration_date ELSE NULL END AS next_expiration_date,
-                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_quantity, 0) ELSE 0 END AS expired_quantity
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_quantity, 0) ELSE 0 END AS expired_quantity,
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.physical_sealed_packs, 0) ELSE 0 END AS physical_sealed_packs,
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.physical_loose_pieces, i.quantity_on_hand) ELSE 0 END AS physical_loose_pieces,
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.saleable_sealed_packs, 0) ELSE 0 END AS saleable_sealed_packs,
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.saleable_loose_pieces, i.quantity_on_hand) ELSE 0 END AS saleable_loose_pieces,
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_sealed_packs, 0) ELSE 0 END AS expired_sealed_packs,
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_loose_pieces, 0) ELSE 0 END AS expired_loose_pieces
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
              LEFT JOIN categories c ON p.category_id = c.category_id
              LEFT JOIN (
                  SELECT product_id,
                         MIN(CASE WHEN expiration_date >= ? THEN expiration_date END) AS next_expiration_date,
-                        SUM(CASE WHEN expiration_date < ? THEN remaining_quantity ELSE 0 END) AS expired_quantity
+                        SUM(CASE WHEN expiration_date < ? THEN remaining_quantity ELSE 0 END) AS expired_quantity,
+                        SUM(sealed_quantity) AS physical_sealed_packs,
+                        SUM(loose_quantity) AS physical_loose_pieces,
+                        SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ? THEN sealed_quantity ELSE 0 END) AS saleable_sealed_packs,
+                        SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ? THEN loose_quantity ELSE 0 END) AS saleable_loose_pieces,
+                        SUM(CASE WHEN expiration_date < ? THEN sealed_quantity ELSE 0 END) AS expired_sealed_packs,
+                        SUM(CASE WHEN expiration_date < ? THEN loose_quantity ELSE 0 END) AS expired_loose_pieces
                  FROM product_batches
-                 WHERE remaining_quantity > 0 AND expiration_date IS NOT NULL
+                 WHERE remaining_quantity > 0
                  GROUP BY product_id
              ) b ON b.product_id = p.product_id
              WHERE 1 = 1{$scopeSql}
              ORDER BY p.product_name"
         );
-        $stmt->execute(array_merge([$todayManila, $todayManila], $scopeParams));
+        $stmt->execute(array_merge([$todayManila, $todayManila, $todayManila, $todayManila, $todayManila, $todayManila], $scopeParams));
         return $stmt->fetchAll();
     }
 
@@ -843,11 +998,60 @@ class ProductService
             ? $this->validateWarningLeadTime($data['warning_lead_time_days'])
             : (isset($existing['warning_lead_time_days']) && $existing['warning_lead_time_days'] !== null && $existing['warning_lead_time_days'] !== '' ? (int)$existing['warning_lead_time_days'] : null);
 
+        $existingPackSize = isset($existing['pack_size']) && $existing['pack_size'] !== null ? (int)$existing['pack_size'] : null;
+        $existingPackBarcode = $existing['pack_barcode'] !== null && $existing['pack_barcode'] !== '' ? (string)$existing['pack_barcode'] : null;
+        $existingPackPrice = isset($existing['pack_price']) && $existing['pack_price'] !== null ? (float)$existing['pack_price'] : null;
+
+        $hasPackInput = array_key_exists('pack_size', $data) || array_key_exists('pack_barcode', $data) || array_key_exists('pack_price', $data);
+        if ($hasPackInput) {
+            $packConfig = $this->validatePackConfiguration(
+                $data,
+                $sellingPrice,
+                $existing['barcode'],
+                $existing['sku'],
+                $existing['case_barcode'],
+                $productId
+            );
+
+            // Check if product currently has sealed packs
+            $sealedStmt = $this->pdo->prepare(
+                "SELECT COALESCE(SUM(sealed_quantity), 0) FROM product_batches WHERE product_id = ? AND remaining_quantity > 0"
+            );
+            $sealedStmt->execute([$productId]);
+            $sealedPacks = (int)$sealedStmt->fetchColumn();
+
+            if ($sealedPacks > 0) {
+                if ($packConfig === null) {
+                    throw new RuntimeException("Cannot remove Sales Pack configuration while {$sealedPacks} sealed pack(s) exist in stock. Reconcile sealed stock to zero first.");
+                }
+                if ($packConfig['pack_size'] !== $existingPackSize) {
+                    throw new RuntimeException("Cannot modify pack contents count while {$sealedPacks} sealed pack(s) exist in stock. Reconcile sealed stock to zero first.");
+                }
+            }
+
+            $newPackSize = $packConfig !== null ? $packConfig['pack_size'] : null;
+            $newPackBarcode = $packConfig !== null ? $packConfig['pack_barcode'] : null;
+            $newPackPrice = $packConfig !== null ? $packConfig['pack_price'] : null;
+        } else {
+            $newPackSize = $existingPackSize;
+            $newPackBarcode = $existingPackBarcode;
+            $newPackPrice = $existingPackPrice;
+        }
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             StoreWriteGate::begin($this->pdo);
         }
         try {
+            if ($newPackSize !== null) {
+                // Existing batches without explicit forms preserve loose stock evidence (never infer packs)
+                $this->pdo->prepare(
+                    "UPDATE product_batches
+                     SET loose_quantity = remaining_quantity, sealed_quantity = 0
+                     WHERE product_id = ? AND loose_quantity = 0 AND sealed_quantity = 0 AND remaining_quantity > 0"
+                )->execute([$productId]);
+            }
+
             $updateStmt = $this->pdo->prepare(
                 "UPDATE products
                  SET product_name = ?,
@@ -862,7 +1066,10 @@ class ProductService
                      minimum_order_quantity = ?,
                      reorder_level = ?,
                      safety_stock = ?,
-                     warning_lead_time_days = ?
+                     warning_lead_time_days = ?,
+                     pack_size = ?,
+                     pack_barcode = ?,
+                     pack_price = ?
                  WHERE product_id = ?"
             );
             $updateStmt->execute([
@@ -879,6 +1086,9 @@ class ProductService
                 $reorderLevel,
                 $safetyStock,
                 $warningLeadTimeDays,
+                $newPackSize,
+                $newPackBarcode,
+                $newPackPrice,
                 $productId,
             ]);
 
@@ -902,6 +1112,9 @@ class ProductService
                 $updated['warning_lead_time_days'] = ($updated['warning_lead_time_days'] !== null && $updated['warning_lead_time_days'] !== '')
                     ? (int)$updated['warning_lead_time_days']
                     : null;
+                $updated['pack_size'] = isset($updated['pack_size']) && $updated['pack_size'] !== null ? (int)$updated['pack_size'] : null;
+                $updated['pack_barcode'] = $updated['pack_barcode'] !== null && $updated['pack_barcode'] !== '' ? (string)$updated['pack_barcode'] : null;
+                $updated['pack_price'] = isset($updated['pack_price']) && $updated['pack_price'] !== null ? (float)$updated['pack_price'] : null;
                 if ($warning !== null) {
                     $updated['warning'] = $warning;
                 }
@@ -987,20 +1200,29 @@ class ProductService
         int $quantity,
         ?string $expirationDate,
         string $dateReceived,
-        ?string $supplier
+        ?string $supplier,
+        int $sealedQuantity = 0,
+        int $looseQuantity = 0,
+        ?float $costPrice = null
     ): void {
+        if ($sealedQuantity === 0 && $looseQuantity === 0 && $quantity > 0) {
+            $looseQuantity = $quantity;
+        }
         $this->pdo->prepare(
             "INSERT INTO product_batches
-                (product_id, batch_number, quantity, remaining_quantity, expiration_date, date_received, supplier)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+                (product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date, date_received, supplier, cost_price)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )->execute([
             $productId,
             $batchNumber,
             $quantity,
             $quantity,
+            $sealedQuantity,
+            $looseQuantity,
             $expirationDate,
             $dateReceived,
             $supplier,
+            $costPrice,
         ]);
     }
 
