@@ -1,5 +1,5 @@
 <?php
-// components/inventory_management/supplier_pullouts.php — Record batch-specific Supplier Pullouts (ticket #224)
+// components/inventory_management/supplier_pullouts.php — Record batch-specific Supplier Pullouts (ticket #224 / #249)
 
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
@@ -32,7 +32,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $result = $pulloutService->recordPullout($_POST, (int)$_SESSION['user_id']);
-        $message = "Supplier pullout #{$result['pullout_id']} recorded. Deducted {$result['quantity']} units from batch #{$result['batch_id']}. Remaining batch quantity: {$result['remaining_batch_qty']}.";
+        $formDetail = ((int)($result['pulled_packs'] ?? 0) > 0)
+            ? " ({$result['pulled_packs']} pack(s)" . ((int)($result['pulled_loose'] ?? 0) > 0 ? " + {$result['pulled_loose']} loose" : "") . ")"
+            : "";
+        $message = "Supplier pullout #{$result['pullout_id']} recorded. Deducted {$result['quantity']} units{$formDetail} from batch #{$result['batch_id']}. Remaining batch quantity: {$result['remaining_batch_qty']}.";
         log_activity(
             $pdo,
             (int)$_SESSION['user_id'],
@@ -60,7 +63,7 @@ if ($prefillBatchId > 0) {
 
 [$scopeSql, $scopeParams] = store_product_scope('p');
 $prodStmt = $pdo->prepare(
-    "SELECT p.product_id, p.product_name, p.sku, i.quantity_on_hand
+    "SELECT p.product_id, p.product_name, p.sku, p.pack_size, i.quantity_on_hand
      FROM products p
      LEFT JOIN inventory i ON p.product_id = i.product_id
      WHERE p.status = 'active'{$scopeSql}
@@ -122,7 +125,9 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                             <select name="product_id" id="product_id" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
                                 <option value=""></option>
                                 <?php foreach ($products as $p): ?>
-                                    <option value="<?= (int)$p['product_id'] ?>" <?= (int)$p['product_id'] === $prefillProductId ? 'selected' : '' ?>>
+                                    <option value="<?= (int)$p['product_id'] ?>"
+                                            data-pack-size="<?= (int)($p['pack_size'] ?? 1) ?>"
+                                            <?= (int)$p['product_id'] === $prefillProductId ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($p['product_name']) ?> (SKU: <?= htmlspecialchars($p['sku']) ?>, On Hand: <?= (int)($p['quantity_on_hand'] ?? 0) ?>)
                                     </option>
                                 <?php endforeach; ?>
@@ -136,6 +141,8 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                 <?php if ($prefillBatch): ?>
                                     <option value="<?= (int)$prefillBatch['batch_id'] ?>"
                                             data-remaining="<?= (int)$prefillBatch['remaining_quantity'] ?>"
+                                            data-sealed="<?= (int)($prefillBatch['sealed_quantity'] ?? 0) ?>"
+                                            data-loose="<?= (int)($prefillBatch['loose_quantity'] ?? $prefillBatch['remaining_quantity']) ?>"
                                             data-supplier="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>"
                                             selected>
                                         <?= htmlspecialchars($prefillBatch['batch_number'] ?? ('#' . $prefillBatch['batch_id'])) ?>
@@ -157,15 +164,40 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                         </div>
 
                         <div class="min-w-0">
-                            <label for="quantity"><strong>Quantity (base units) *</strong></label>
-                            <input type="number"
-                                   name="quantity"
-                                   id="quantity"
-                                   class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
-                                   min="1"
-                                   step="1"
-                                   max="<?= $prefillBatch ? (int)$prefillBatch['remaining_quantity'] : '' ?>"
-                                   required>
+                            <div id="pullout-piece-group">
+                                <label for="quantity"><strong>Quantity (base units) *</strong></label>
+                                <input type="number"
+                                       name="quantity"
+                                       id="quantity"
+                                       class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
+                                       min="1"
+                                       step="1"
+                                       max="<?= $prefillBatch ? (int)$prefillBatch['remaining_quantity'] : '' ?>"
+                                       required>
+                            </div>
+                            <div id="pullout-pack-group" class="mt-3 grid grid-cols-2 gap-3" hidden>
+                                <div>
+                                    <label for="pulled_packs"><strong>Sealed Packs</strong></label>
+                                    <input type="number"
+                                           name="pulled_packs"
+                                           id="pulled_packs"
+                                           class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
+                                           min="0"
+                                           step="1"
+                                           disabled>
+                                </div>
+                                <div>
+                                    <label for="pulled_loose"><strong>Loose Pieces</strong></label>
+                                    <input type="number"
+                                           name="pulled_loose"
+                                           id="pulled_loose"
+                                           class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
+                                           min="0"
+                                           step="1"
+                                           disabled>
+                                </div>
+                                <small id="pullout-form-summary" class="col-span-2 text-muted"></small>
+                            </div>
                         </div>
 
                         <div class="min-w-0">
@@ -196,7 +228,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
 
         <section id="pullout-history-panel" class="card min-w-0" role="tabpanel" aria-labelledby="pullout-history-tab" tabindex="0" hidden>
             <div class="card-body">
-                <div class="table-wrap max-w-full overflow-x-auto" role="region" aria-label="Supplier pullout history table" tabindex="0">
+                <div class="table-wrap max-w-full overflow-x-auto" role="region" aria-label="Supplier Pullout History table" tabindex="0">
                     <table class="table" data-search-label="Search pullouts">
                         <thead class="[&_th]:bg-[var(--surface-soft)]">
                             <tr>
@@ -225,7 +257,16 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                         <td><strong><?= htmlspecialchars($row['product_name']) ?></strong><br><small class="text-muted"><?= htmlspecialchars($row['sku']) ?></small></td>
                                         <td><?= htmlspecialchars($row['batch_number'] ?? ('#' . $row['batch_id'])) ?></td>
                                         <td><?= htmlspecialchars($row['expiration_date'] ?? 'Not recorded') ?></td>
-                                        <td class="text-right [font-variant-numeric:tabular-nums]"><strong class="text-danger">-<?= number_format((int)$row['quantity']) ?></strong></td>
+                                        <td class="text-right [font-variant-numeric:tabular-nums]">
+                                            <strong class="text-danger">-<?= number_format((int)$row['quantity']) ?></strong>
+                                            <?php
+                                            $pulledPacks = (int)($row['pulled_packs'] ?? 0);
+                                            $pulledLoose = (int)($row['pulled_loose'] ?? 0);
+                                            ?>
+                                            <?php if ($pulledPacks > 0): ?>
+                                                <br><small class="text-muted"><?= $pulledPacks ?> pack<?= $pulledPacks === 1 ? '' : 's' ?><?= $pulledLoose > 0 ? ' + ' . $pulledLoose . ' pc' : '' ?></small>
+                                            <?php endif; ?>
+                                        </td>
                                         <td><?= htmlspecialchars($row['supplier'] ?? '—') ?></td>
                                         <td><?= htmlspecialchars($row['reason']) ?></td>
                                         <td><?= htmlspecialchars($row['pulled_by_name']) ?></td>
@@ -233,10 +274,15 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                         <td>
                                             <?php
                                             $totalReplaced = (int)($row['total_replaced_qty'] ?? 0);
+                                            $replacedPacks = (int)($row['total_replaced_packs'] ?? 0);
+                                            $replacedLoose = (int)($row['total_replaced_loose'] ?? 0);
                                             $repCount = (int)($row['replacement_count'] ?? 0);
                                             ?>
                                             <?php if ($totalReplaced > 0): ?>
                                                 <span class="badge badge-success">Replaced: <?= number_format($totalReplaced) ?> units</span>
+                                                <?php if ($replacedPacks > 0): ?>
+                                                    <small class="text-muted d-block">(<?= $replacedPacks ?> pack<?= $replacedPacks === 1 ? '' : 's' ?><?= $replacedLoose > 0 ? ' + ' . $replacedLoose . ' pc' : '' ?>)</small>
+                                                <?php endif; ?>
                                                 <?php if ($repCount > 1): ?>
                                                     <small class="text-muted d-block">(<?= $repCount ?> receipts)</small>
                                                 <?php endif; ?>
@@ -275,14 +321,43 @@ document.addEventListener('DOMContentLoaded', function () {
     const batchSelect = document.getElementById('batch_id');
     const supplierInput = document.getElementById('supplier');
     const quantityInput = document.getElementById('quantity');
+    const packGroup = document.getElementById('pullout-pack-group');
+    const pulledPacksInput = document.getElementById('pulled_packs');
+    const pulledLooseInput = document.getElementById('pulled_loose');
+    const formSummary = document.getElementById('pullout-form-summary');
 
     if (!productSelect || !batchSelect) return;
+
+    function getSelectedPackSize() {
+        const prodOpt = productSelect.options[productSelect.selectedIndex];
+        const ps = prodOpt && prodOpt.dataset.packSize ? parseInt(prodOpt.dataset.packSize, 10) : 1;
+        return ps > 1 ? ps : 1;
+    }
+
+    function syncPackQuantities() {
+        const packSize = getSelectedPackSize();
+        if (packSize <= 1 || !pulledPacksInput || !pulledLooseInput || pulledPacksInput.disabled) {
+            return;
+        }
+        const packs = parseInt(pulledPacksInput.value || '0', 10) || 0;
+        const loose = parseInt(pulledLooseInput.value || '0', 10) || 0;
+        const total = (packs * packSize) + loose;
+        if (quantityInput) {
+            quantityInput.value = total > 0 ? String(total) : '';
+        }
+        if (formSummary) {
+            formSummary.textContent = `1 pack = ${packSize} base units. Total deduction: ${total} base units.`;
+        }
+    }
 
     function loadBatchesForProduct(productId, preselectedBatchId) {
         if (!productId) {
             batchSelect.innerHTML = '<option value=""></option>';
+            updateBatchDetails();
             return;
         }
+
+        const packSize = getSelectedPackSize();
 
         fetch('supplier_pullouts.php?action=get_batches&product_id=' + encodeURIComponent(productId))
             .then(res => res.json())
@@ -290,15 +365,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 batchSelect.innerHTML = '<option value=""></option>';
                 if (!batches || batches.length === 0) {
                     batchSelect.innerHTML = '<option value="">No eligible batches with remaining stock</option>';
+                    updateBatchDetails();
                     return;
                 }
                 batches.forEach(b => {
                     const opt = document.createElement('option');
                     opt.value = b.batch_id;
                     opt.dataset.remaining = b.remaining_quantity;
+                    const sealed = parseInt(b.sealed_quantity || 0, 10);
+                    const loose = parseInt(b.loose_quantity ?? b.remaining_quantity, 10);
+                    opt.dataset.sealed = String(sealed);
+                    opt.dataset.loose = String(loose);
                     opt.dataset.supplier = b.supplier || '';
                     const expLabel = b.expiration_date ? ('Exp: ' + b.expiration_date) : 'No date';
-                    opt.textContent = (b.batch_number || ('#' + b.batch_id)) + ' (Remaining: ' + b.remaining_quantity + ', ' + expLabel + ')';
+                    const formLabel = packSize > 1 ? ` [${sealed} pack(s), ${loose} loose]` : '';
+                    opt.textContent = (b.batch_number || ('#' + b.batch_id)) + ' (Remaining: ' + b.remaining_quantity + formLabel + ', ' + expLabel + ')';
                     if (preselectedBatchId && String(b.batch_id) === String(preselectedBatchId)) {
                         opt.selected = true;
                     }
@@ -313,12 +394,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateBatchDetails() {
         const selectedOpt = batchSelect.options[batchSelect.selectedIndex];
+        const packSize = getSelectedPackSize();
+        const isPackMode = packSize > 1;
+
+        if (packGroup && pulledPacksInput && pulledLooseInput) {
+            packGroup.hidden = !isPackMode;
+            pulledPacksInput.disabled = !isPackMode;
+            pulledLooseInput.disabled = !isPackMode;
+            if (quantityInput) {
+                quantityInput.readOnly = isPackMode;
+            }
+        }
+
         if (selectedOpt && selectedOpt.dataset.remaining) {
             const maxRemaining = parseInt(selectedOpt.dataset.remaining, 10);
             quantityInput.max = maxRemaining;
+            if (pulledPacksInput && selectedOpt.dataset.sealed !== undefined) {
+                pulledPacksInput.max = selectedOpt.dataset.sealed;
+            }
+            if (pulledLooseInput && selectedOpt.dataset.loose !== undefined) {
+                pulledLooseInput.max = selectedOpt.dataset.loose;
+            }
             if (supplierInput && !supplierInput.value && selectedOpt.dataset.supplier) {
                 supplierInput.value = selectedOpt.dataset.supplier;
             }
+        }
+
+        if (isPackMode) {
+            syncPackQuantities();
         }
     }
 
@@ -327,6 +430,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     batchSelect.addEventListener('change', updateBatchDetails);
+    if (pulledPacksInput) pulledPacksInput.addEventListener('input', syncPackQuantities);
+    if (pulledLooseInput) pulledLooseInput.addEventListener('input', syncPackQuantities);
 
     // Initial load if product is selected
     if (productSelect.value) {

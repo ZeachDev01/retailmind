@@ -174,8 +174,15 @@ $categoryIcon = static function (string $categoryName): string {
         <?php if ($linkedPullout): ?>
             <div class="message info pullout-link-notice" role="status">
                 <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                <?php
+                $linkedPulledPacks = (int)($linkedPullout['pulled_packs'] ?? 0);
+                $linkedPulledLoose = (int)($linkedPullout['pulled_loose'] ?? 0);
+                $linkedFormSummary = $linkedPulledPacks > 0
+                    ? ' [' . $linkedPulledPacks . ' pack' . ($linkedPulledPacks === 1 ? '' : 's') . ($linkedPulledLoose > 0 ? ' + ' . $linkedPulledLoose . ' loose' : '') . ']'
+                    : '';
+                ?>
                 <strong>Replacement Receiving:</strong> Linked to Supplier Pullout #<?= (int)$linkedPullout['pullout_id'] ?>
-                (<?= htmlspecialchars($linkedPullout['product_name']) ?>, <?= (int)$linkedPullout['quantity'] ?> units pulled on <?= htmlspecialchars(substr((string)$linkedPullout['pulled_at'], 0, 10)) ?><?= !empty($linkedPullout['supplier']) ? ' from ' . htmlspecialchars($linkedPullout['supplier']) : '' ?>).
+                (<?= htmlspecialchars($linkedPullout['product_name']) ?>, <?= (int)$linkedPullout['quantity'] ?> units<?= htmlspecialchars($linkedFormSummary) ?> pulled on <?= htmlspecialchars(substr((string)$linkedPullout['pulled_at'], 0, 10)) ?><?= !empty($linkedPullout['supplier']) ? ' from ' . htmlspecialchars($linkedPullout['supplier']) : '' ?>).
                 Fresh goods will be saved in a new batch.
             </div>
         <?php endif; ?>

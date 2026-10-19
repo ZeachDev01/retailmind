@@ -291,6 +291,7 @@ class InventoryService
                     sr.notes AS receiving_notes,
                     sr.discrepancy_type,
                     sr.discrepancy_notes,
+                    sr.cost_price AS receiving_cost_price,
                     {$pulloutExpr}
                  FROM product_batches pb
                  LEFT JOIN stock_receiving sr ON pb.receiving_id = sr.receiving_id
@@ -298,7 +299,7 @@ class InventoryService
             );
         } else {
             $stmt = $this->pdo->prepare(
-                "SELECT pb.*, NULL AS receiving_notes, NULL AS discrepancy_type, NULL AS discrepancy_notes, NULL AS pullout_id
+                "SELECT pb.*, NULL AS receiving_notes, NULL AS discrepancy_type, NULL AS discrepancy_notes, NULL AS receiving_cost_price, NULL AS pullout_id
                  FROM product_batches pb
                  WHERE pb.product_id = ?" . $orderBySql
             );
@@ -395,7 +396,8 @@ class InventoryService
                 'quantity' => $quantity,
                 'remaining_quantity' => $remaining,
                 'sealed_quantity' => (int)($row['sealed_quantity'] ?? 0),
-                'loose_quantity' => (int)($row['loose_quantity'] ?? $remaining),
+                'loose_quantity' => ((int)($row['sealed_quantity'] ?? 0) === 0 && (int)($row['loose_quantity'] ?? 0) === 0 && $remaining > 0) ? $remaining : (int)($row['loose_quantity'] ?? $remaining),
+                'cost_price' => isset($row['cost_price']) && $row['cost_price'] !== null ? (float)$row['cost_price'] : (isset($row['receiving_cost_price']) && $row['receiving_cost_price'] !== null ? (float)$row['receiving_cost_price'] : null),
                 'expiration_date' => $expDate,
                 'expiration_label' => $expDate ?? 'Not recorded',
                 'date_received' => $row['date_received'] ?? null,

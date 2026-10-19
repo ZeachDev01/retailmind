@@ -18,7 +18,7 @@ function render(canMutate) {
         $message = $error = '';
         $prefillProductId = $prefillBatchId = 0;
         $prefillBatch = null;
-        $products = [['product_id' => 1, 'product_name' => 'Test product', 'sku' => 'SKU-1', 'quantity_on_hand' => 40]];
+        $products = [['product_id' => 1, 'product_name' => 'Test product', 'sku' => 'SKU-1', 'pack_size' => 1, 'quantity_on_hand' => 40], ['product_id' => 2, 'product_name' => 'Pack product', 'sku' => 'SKU-2', 'pack_size' => 6, 'quantity_on_hand' => 27]];
         $pulloutHistory = array_fill(0, 30, [
             'pullout_id' => 1, 'product_id' => 1, 'batch_id' => 1,
             'pulled_at' => '2026-10-19 10:00:00', 'product_name' => 'Test product',
@@ -49,6 +49,7 @@ function render(canMutate) {
                 await page.route('http://retailmind.test/**', route => {
                     const url = new URL(route.request().url());
                     if (url.pathname === '/') return route.fulfill({contentType: 'text/html', body: render(canMutate)});
+                    if (url.searchParams.get('action') === 'get_batches') return route.fulfill({contentType: 'application/json', body: JSON.stringify([{batch_id: 20, batch_number: 'BATCH-PACK-20', remaining_quantity: 27, sealed_quantity: 4, loose_quantity: 3, expiration_date: '2026-12-01', supplier: 'PackCo'}])});
                     const asset = path.join(frontend, url.pathname);
                     return route.fulfill({path: asset});
                 });
@@ -119,6 +120,13 @@ function render(canMutate) {
                 if (canMutate) {
                     await page.screenshot({path: path.join(screenshots, `${width}-history.png`)});
                     await history.press('Home');
+                    await page.locator('#product_id').selectOption('2');
+                    await page.waitForFunction(() => document.querySelectorAll('#batch_id option').length > 1);
+                    await page.locator('#batch_id').selectOption('20');
+                    assert.equal(await page.locator('#pullout-pack-group').isVisible(), true, 'Pack form controls become visible for pack-enabled product');
+                    await page.locator('#pulled_packs').fill('2');
+                    await page.locator('#pulled_loose').fill('3');
+                    assert.equal(await page.locator('#quantity').inputValue(), '15', 'Total base units syncs to 2*6 + 3 = 15');
                     await page.screenshot({path: path.join(screenshots, `${width}-record.png`)});
                 }
                 assert.deepEqual(errors, []);
