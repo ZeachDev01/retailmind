@@ -193,6 +193,44 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ensure_table_column($pdo, 'sale_item_batches', 'cost_source', 'VARCHAR(50) NULL AFTER cost_status');
     ensure_table_column($pdo, 'sale_item_batches', 'cost_provenance', 'VARCHAR(50) NULL AFTER cost_source');
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_service_sessions (
+        session_id INT AUTO_INCREMENT PRIMARY KEY,
+        shift_id INT NOT NULL,
+        cashier_id INT NOT NULL,
+        opening_service_cash DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        opening_wallet_balance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status ENUM('open','closed') NOT NULL DEFAULT 'open',
+        expected_service_cash DECIMAL(12,2) NULL,
+        expected_wallet_balance DECIMAL(12,2) NULL,
+        closing_service_cash DECIMAL(12,2) NULL,
+        closing_wallet_balance DECIMAL(12,2) NULL,
+        cash_variance DECIMAL(12,2) NULL,
+        wallet_variance DECIMAL(12,2) NULL,
+        closing_notes TEXT NULL,
+        closed_at TIMESTAMP NULL,
+        closed_by INT NULL,
+        unresolved_carryover_count INT NOT NULL DEFAULT 0,
+        is_open INT GENERATED ALWAYS AS (IF(status = 'open', 1, NULL)) STORED,
+        UNIQUE KEY uq_gcash_open_session (is_open),
+        INDEX idx_gcash_sessions_shift (shift_id),
+        INDEX idx_gcash_sessions_cashier (cashier_id),
+        INDEX idx_gcash_sessions_closed_by (closed_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $gcashTableExists = false;
+    try {
+        $driver = (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'sqlite') {
+            $gcashTableExists = (bool)$pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='gcash_transactions'")->fetchColumn();
+        } else {
+            $gcashTableExists = (bool)$pdo->query("SHOW TABLES LIKE 'gcash_transactions'")->fetchColumn();
+        }
+    } catch (Throwable $e) {}
+    if ($gcashTableExists) {
+        ensure_table_column($pdo, 'gcash_transactions', 'session_id', 'INT NULL AFTER transaction_id');
+    }
+
     $stmt = $pdo->prepare(
         "INSERT INTO schema_migrations (migration_key, description) VALUES (?, ?)
          ON DUPLICATE KEY UPDATE description = VALUES(description)"

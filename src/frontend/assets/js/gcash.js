@@ -10,9 +10,83 @@
     let saving = false, reviewing = false, checking = false, duplicate = false;
     let debounce, lookup, historyRequest = 0, page = 1, rows = [], reviewRow;
     let stream, worker, cameraVersion = 0, ocrBusy = false, leaving = false;
+    let currentSession = null;
     const notify = (message, type = 'info') => window.RetailMindUI.toast(message, type);
     const scanStatus = message => { el('scan-status').textContent = message; };
-    const updateSave = () => { save.disabled = saving || checking || duplicate || !parser.valid(reference.value, rules); };
+    const updateSave = () => {
+        const canSave = !currentSession || currentSession.is_controlling_cashier;
+        save.disabled = !canSave || saving || checking || duplicate || !parser.valid(reference.value, rules);
+    };
+
+    function disableTransactionForm(disabled) {
+        reference.disabled = disabled;
+        el('amount').disabled = disabled;
+        el('type').disabled = disabled;
+        if (el('fee-method')) el('fee-method').disabled = disabled;
+        el('manual').disabled = disabled;
+        el('camera-open').disabled = disabled;
+        updateSave();
+    }
+
+    function renderSessionStatus() {
+        const banner = el('session-banner');
+        const statusPill = el('session-status');
+        const msg = el('session-message');
+        const openBtn = el('open-session-btn');
+        const closeBtn = el('close-session-btn');
+        const handoverBtn = el('handover-session-btn');
+
+        if (!currentSession) {
+            statusPill.textContent = 'Closed';
+            statusPill.className = 'gcash-status';
+            banner.className = 'gcash-session-banner closed';
+            msg.textContent = 'GCash services are currently closed. Count physical service cash and check the Store GCash wallet balance to open responsibility.';
+            openBtn.hidden = false;
+            closeBtn.hidden = true;
+            handoverBtn.hidden = true;
+            disableTransactionForm(true);
+            scanStatus('Open GCash responsibility before recording transactions.');
+            return;
+        }
+
+        if (currentSession.is_controlling_cashier) {
+            statusPill.textContent = 'Active (You)';
+            statusPill.className = 'gcash-status gcash-status-verified';
+            banner.className = 'gcash-session-banner active';
+            const expCash = Number(currentSession.expected_service_cash || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
+            const expWallet = Number(currentSession.expected_wallet_balance || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
+            msg.textContent = `Opened at ${currentSession.opened_at} · Expected Service Cash: ₱${expCash} · Expected Wallet: ₱${expWallet}`;
+            openBtn.hidden = true;
+            closeBtn.hidden = false;
+            handoverBtn.hidden = false;
+            disableTransactionForm(false);
+            scanStatus(duplicate ? 'Duplicate reference. Save blocked.' : 'Ready for manual entry or USB scanner.');
+            return;
+        }
+
+        const cashierName = currentSession.cashier_name || ('Cashier #' + currentSession.cashier_id);
+        statusPill.textContent = `Under control of ${cashierName}`;
+        statusPill.className = 'gcash-status gcash-status-rejected';
+        banner.className = 'gcash-session-banner locked';
+        msg.textContent = `Controlled by ${cashierName} (@${currentSession.cashier_username || ''}) since ${currentSession.opened_at}. Only one Cashier may control GCash at a time. Product checkout remains available in POS.`;
+        openBtn.hidden = true;
+        closeBtn.hidden = true;
+        handoverBtn.hidden = true;
+        disableTransactionForm(true);
+        scanStatus(`Controlled by ${cashierName}. Transactions disabled.`);
+    }
+
+    async function loadSessionStatus() {
+        try {
+            const result = await request({action: 'session_status'});
+            currentSession = result.session;
+            renderSessionStatus();
+        } catch (e) {
+            el('session-status').textContent = 'Unavailable';
+            el('session-status').className = 'gcash-status gcash-status-rejected';
+            el('session-message').textContent = e.message || 'Could not verify GCash session status.';
+        }
+    }
     async function request(params, body, signal) {
         const url = new URL(workspace.dataset.api, location.href);
         for (const [key, value] of Object.entries(params || {})) url.searchParams.set(key, value);
@@ -224,11 +298,14 @@
             notify('GCash transaction #' + data.id + ' saved as Pending.', 'success');
             page = 1;
             await loadHistory();
+            await loadSessionStatus();
         } catch (error) {
             notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
         } finally {
             saving = false;
-            for (const input of el('form').elements) input.disabled = false;
+            if (!currentSession || currentSession.is_controlling_cashier) {
+                for (const input of el('form').elements) input.disabled = false;
+            }
             updateSave();
             updatePreview();
         }
@@ -258,6 +335,11 @@
                 status.className = 'gcash-status gcash-status-' + transaction.verification_status.toLowerCase();
                 status.textContent = transaction.verification_status;
                 statusCell.append(status);
+                if (transaction.session_id === null || transaction.session_id === undefined) {
+                    const legacy = document.createElement('small');
+                    legacy.textContent = 'Legacy reference';
+                    statusCell.append(legacy);
+                }
                 if (transaction.verification_note) {
                     const note = document.createElement('small');
                     note.textContent = transaction.verification_note + ' · ' + transaction.reviewed_at;
@@ -304,6 +386,7 @@
             el('review-dialog').close();
             notify('Transaction marked ' + status + '.', 'success');
             await loadHistory();
+            await loadSessionStatus();
         } catch (error) { notify(error.message + ' Refresh history before retrying.', 'error'); }
         finally { reviewing = false; for (const input of el('review-form').elements) input.disabled = false; }
     }
@@ -399,6 +482,152 @@
         reference.value = candidate;
         closeCamera(); reference.focus(); await checkReference();
     });
+    // Session dialogs
+    el('open-session-btn').addEventListener('click', () => {
+        el('open-cash').value = '';
+        el('open-wallet').value = '';
+        el('open-dialog').showModal();
+        el('open-cash').focus();
+    });
+    el('open-cancel').addEventListener('click', () => el('open-dialog').close());
+    el('open-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const cash = Number(el('open-cash').value);
+        const wallet = Number(el('open-wallet').value);
+        if (isNaN(cash) || cash < 0 || isNaN(wallet) || wallet < 0) {
+            notify('Enter opening service cash and wallet balance (0 or greater).', 'warning');
+            return;
+        }
+        el('open-submit').disabled = true;
+        try {
+            await request(null, {action: 'open_session', opening_cash: cash, opening_wallet: wallet});
+            el('open-dialog').close();
+            notify('GCash responsibility opened.', 'success');
+            await loadSessionStatus();
+        } catch (error) {
+            notify(error.message, 'error');
+        } finally {
+            el('open-submit').disabled = false;
+        }
+    });
+
+    function updateCloseVariances() {
+        const expCash = Number(currentSession?.expected_service_cash || 0);
+        const expWallet = Number(currentSession?.expected_wallet_balance || 0);
+        const actCash = Number(el('close-cash').value || 0);
+        const actWallet = Number(el('close-wallet').value || 0);
+        const cashVar = Math.round((actCash - expCash) * 100) / 100;
+        const walletVar = Math.round((actWallet - expWallet) * 100) / 100;
+
+        const cashEl = el('close-cash-variance');
+        if (cashVar > 0) {
+            cashEl.textContent = `+₱${cashVar.toFixed(2)} (Excess)`;
+            cashEl.className = 'gcash-variance-positive';
+        } else if (cashVar < 0) {
+            cashEl.textContent = `-₱${Math.abs(cashVar).toFixed(2)} (Shortage)`;
+            cashEl.className = 'gcash-variance-negative';
+        } else {
+            cashEl.textContent = '₱0.00 (Balanced)';
+            cashEl.className = 'gcash-variance-zero';
+        }
+
+        const walletEl = el('close-wallet-variance');
+        if (walletVar > 0) {
+            walletEl.textContent = `+₱${walletVar.toFixed(2)} (Excess)`;
+            walletEl.className = 'gcash-variance-positive';
+        } else if (walletVar < 0) {
+            walletEl.textContent = `-₱${Math.abs(walletVar).toFixed(2)} (Shortage)`;
+            walletEl.className = 'gcash-variance-negative';
+        } else {
+            walletEl.textContent = '₱0.00 (Balanced)';
+            walletEl.className = 'gcash-variance-zero';
+        }
+    }
+
+    el('close-session-btn').addEventListener('click', () => {
+        if (!currentSession) return;
+        el('close-expected-cash').textContent = '₱' + Number(currentSession.expected_service_cash || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
+        el('close-expected-wallet').textContent = '₱' + Number(currentSession.expected_wallet_balance || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
+        el('close-cash').value = '';
+        el('close-wallet').value = '';
+        el('close-carryover').value = '0';
+        el('close-notes').value = '';
+        updateCloseVariances();
+        el('close-dialog').showModal();
+        el('close-cash').focus();
+    });
+    el('close-cancel').addEventListener('click', () => el('close-dialog').close());
+    el('close-cash').addEventListener('input', updateCloseVariances);
+    el('close-wallet').addEventListener('input', updateCloseVariances);
+    el('close-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const cash = Number(el('close-cash').value);
+        const wallet = Number(el('close-wallet').value);
+        if (isNaN(cash) || cash < 0 || isNaN(wallet) || wallet < 0) {
+            notify('Enter closing service cash and wallet balance (0 or greater).', 'warning');
+            return;
+        }
+        el('close-submit').disabled = true;
+        try {
+            await request(null, {
+                action: 'close_session',
+                closing_cash: cash,
+                closing_wallet: wallet,
+                carryover: Number(el('close-carryover').value || 0),
+                notes: el('close-notes').value
+            });
+            el('close-dialog').close();
+            notify('GCash responsibility closed.', 'success');
+            await loadSessionStatus();
+        } catch (error) {
+            notify(error.message, 'error');
+        } finally {
+            el('close-submit').disabled = false;
+        }
+    });
+
+    if (el('handover-session-btn')) {
+        el('handover-session-btn').addEventListener('click', () => {
+            el('handover-cash').value = '';
+            el('handover-wallet').value = '';
+            el('handover-notes').value = '';
+            el('handover-dialog').showModal();
+        });
+        el('handover-cancel').addEventListener('click', () => el('handover-dialog').close());
+        el('handover-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const incomingId = Number(el('handover-incoming').value);
+            const cash = Number(el('handover-cash').value);
+            const wallet = Number(el('handover-wallet').value);
+            if (!incomingId) {
+                notify('Select an incoming Cashier.', 'warning');
+                return;
+            }
+            if (isNaN(cash) || cash < 0 || isNaN(wallet) || wallet < 0) {
+                notify('Enter counted cash and checked wallet balance (0 or greater).', 'warning');
+                return;
+            }
+            el('handover-submit').disabled = true;
+            try {
+                await request(null, {
+                    action: 'handover_session',
+                    incoming_cashier_id: incomingId,
+                    counted_cash: cash,
+                    checked_wallet: wallet,
+                    notes: el('handover-notes').value
+                });
+                el('handover-dialog').close();
+                notify('GCash responsibility handed over.', 'success');
+                await loadSessionStatus();
+            } catch (error) {
+                notify(error.message, 'error');
+            } finally {
+                el('handover-submit').disabled = false;
+            }
+        });
+    }
+
     window.addEventListener('pagehide', () => { leaving = true; clearTimeout(debounce); lookup?.abort(); closeCamera(); });
-    updateSave(); updatePreview(); loadHistory();
+    updateSave(); updatePreview(); loadHistory(); loadSessionStatus();
 })();
+

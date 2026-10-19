@@ -1984,8 +1984,38 @@ INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_dai
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_day','Sunday');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_time','01:00');
 
+CREATE TABLE `gcash_service_sessions` (
+  `session_id` int NOT NULL AUTO_INCREMENT,
+  `shift_id` int NOT NULL,
+  `cashier_id` int NOT NULL,
+  `opening_service_cash` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `opening_wallet_balance` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `opened_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `status` enum('open','closed') NOT NULL DEFAULT 'open',
+  `expected_service_cash` decimal(12,2) DEFAULT NULL,
+  `expected_wallet_balance` decimal(12,2) DEFAULT NULL,
+  `closing_service_cash` decimal(12,2) DEFAULT NULL,
+  `closing_wallet_balance` decimal(12,2) DEFAULT NULL,
+  `cash_variance` decimal(12,2) DEFAULT NULL,
+  `wallet_variance` decimal(12,2) DEFAULT NULL,
+  `closing_notes` text DEFAULT NULL,
+  `closed_at` timestamp NULL DEFAULT NULL,
+  `closed_by` int DEFAULT NULL,
+  `unresolved_carryover_count` int NOT NULL DEFAULT '0',
+  `is_open` int GENERATED ALWAYS AS (if(`status` = 'open',1,NULL)) STORED,
+  PRIMARY KEY (`session_id`),
+  UNIQUE KEY `uq_gcash_open_session` (`is_open`),
+  KEY `idx_gcash_sessions_shift` (`shift_id`),
+  KEY `idx_gcash_sessions_cashier` (`cashier_id`),
+  KEY `idx_gcash_sessions_closed_by` (`closed_by`),
+  CONSTRAINT `fk_gcash_session_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`),
+  CONSTRAINT `fk_gcash_session_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_session_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `gcash_transactions` (
   `transaction_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` int DEFAULT NULL,
   `transaction_type` enum('Cash-In','Cash-Out','Payment') NOT NULL,
   `reference_number` varchar(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `amount` decimal(10,2) NOT NULL,
@@ -1998,9 +2028,11 @@ CREATE TABLE `gcash_transactions` (
   PRIMARY KEY (`transaction_id`),
   UNIQUE KEY `uq_gcash_reference` (`reference_number`),
   KEY `idx_gcash_cashier_history` (`cashier_id`,`transaction_id`),
+  KEY `idx_gcash_transaction_session` (`session_id`),
   KEY `fk_gcash_reviewer` (`verified_by`),
   CONSTRAINT `fk_gcash_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `fk_gcash_reviewer` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `fk_gcash_reviewer` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_transaction_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE ml_jobs (

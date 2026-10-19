@@ -31,5 +31,16 @@
 .gcash-preview-item { display: flex; flex-direction: column; padding: .5rem .75rem; background: var(--surface-bg, #fff); border: 1px solid var(--border); border-radius: 6px; }
 .gcash-preview-label { font-size: .75rem; color: var(--muted); margin-bottom: .25rem; }
 .gcash-preview-value { font-size: 1rem; font-weight: 600; }
+.gcash-session-panel { margin-bottom: 1rem; }
+.gcash-session-header-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.gcash-session-banner { margin-top: .75rem; padding: .75rem; border-radius: 8px; font-size: .9rem; line-height: 1.5; background: var(--cashier-surface); border: 1px solid var(--border); }
+.gcash-session-banner.active { border-left: 4px solid var(--theme-success, #16a34a); background: var(--theme-success-surface, #f0fdf4); }
+.gcash-session-banner.closed { border-left: 4px solid var(--muted); }
+.gcash-session-banner.locked { border-left: 4px solid var(--theme-danger, #dc2626); background: var(--theme-danger-surface, #fef2f2); }
+#gcash-open-dialog, #gcash-close-dialog, #gcash-handover-dialog { width: min(540px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
+#gcash-open-dialog::backdrop, #gcash-close-dialog::backdrop, #gcash-handover-dialog::backdrop { background: rgb(0 0 0 / .55); }
+.gcash-variance-positive { color: var(--theme-success-text, #15803d); font-weight: 600; }
+.gcash-variance-negative { color: var(--theme-danger-text, #b91c1c); font-weight: 600; }
+.gcash-variance-zero { color: var(--muted); font-weight: 600; }
 #gcash-workspace [hidden] { display: none !important; }
 @media (max-width: 600px) { .gcash-form { grid-template-columns: minmax(0, 1fr); } .gcash-actions .btn { flex: 1 1 auto; white-space: normal; } .gcash-preview-grid { grid-template-columns: 1fr; } }

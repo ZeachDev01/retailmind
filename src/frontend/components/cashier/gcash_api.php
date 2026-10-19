@@ -11,7 +11,16 @@ try {
     $service = new GCashTransactionService($pdo, require __DIR__ . '/../../../backend/config/gcash.php');
     $method = $_SERVER['REQUEST_METHOD'];
     if ($method === 'GET') {
-        if (($_GET['action'] ?? '') === 'preview' || (isset($_GET['principal']) && !isset($_GET['reference']) && !isset($_GET['page']))) {
+        if (($_GET['action'] ?? '') === 'session_status') {
+            $session = $service->getCurrentSession();
+            if ($session) {
+                $expected = $service->calculateSessionExpected((int)$session['session_id']);
+                $session['expected_service_cash'] = $expected['expected_service_cash'];
+                $session['expected_wallet_balance'] = $expected['expected_wallet_balance'];
+                $session['is_controlling_cashier'] = (int)$session['cashier_id'] === (int)$_SESSION['user_id'];
+            }
+            $result = ['session' => $session];
+        } elseif (($_GET['action'] ?? '') === 'preview' || (isset($_GET['principal']) && !isset($_GET['reference']) && !isset($_GET['page']))) {
             $type = (string)($_GET['type'] ?? '');
             $principal = (string)($_GET['principal'] ?? '');
             $feeMethod = isset($_GET['fee_method']) ? (string)$_GET['fee_method'] : null;
@@ -33,7 +42,7 @@ try {
         if (strlen($raw) > 4096) { throw new DomainException('Request too large.'); }
         $input = json_decode($raw, true);
         if (!is_array($input)) { throw new DomainException('Invalid request.'); }
-        foreach (['action', 'reference', 'amount', 'type', 'status', 'note', 'fee_method'] as $key) {
+        foreach (['action', 'reference', 'amount', 'type', 'status', 'note', 'notes', 'fee_method', 'reason'] as $key) {
             if (isset($input[$key]) && !is_string($input[$key])) { throw new DomainException('Invalid field: ' . $key); }
         }
         if (isset($input['principal']) && !is_string($input['principal']) && !is_int($input['principal'])) {
@@ -43,6 +52,36 @@ try {
         if (($input['action'] ?? '') === 'preview') {
             $preview = $service->calculatePreview($input['type'] ?? '', $input['principal'] ?? '', $input['fee_method'] ?? null);
             $result = ['preview' => $preview] + $preview;
+        } elseif (($input['action'] ?? '') === 'open_session') {
+            $openingCash = filter_var($input['opening_cash'] ?? $input['opening_service_cash'] ?? null, FILTER_VALIDATE_FLOAT);
+            $openingWallet = filter_var($input['opening_wallet'] ?? $input['opening_wallet_balance'] ?? null, FILTER_VALIDATE_FLOAT);
+            if ($openingCash === false || $openingCash < 0 || $openingWallet === false || $openingWallet < 0) {
+                throw new DomainException('Enter opening service cash and wallet balance (0 or greater).');
+            }
+            $sessionId = $service->openSession($cashierId, (float)$openingCash, (float)$openingWallet);
+            $result = ['session_id' => $sessionId];
+        } elseif (($input['action'] ?? '') === 'close_session') {
+            $closingCash = filter_var($input['closing_cash'] ?? $input['closing_service_cash'] ?? null, FILTER_VALIDATE_FLOAT);
+            $closingWallet = filter_var($input['closing_wallet'] ?? $input['closing_wallet_balance'] ?? null, FILTER_VALIDATE_FLOAT);
+            if ($closingCash === false || $closingCash < 0 || $closingWallet === false || $closingWallet < 0) {
+                throw new DomainException('Enter closing service cash and wallet balance (0 or greater).');
+            }
+            $notes = (string)($input['notes'] ?? $input['note'] ?? '');
+            $carryover = filter_var($input['carryover'] ?? $input['unresolved_carryover'] ?? 0, FILTER_VALIDATE_INT);
+            if ($carryover === false || $carryover < 0) { $carryover = 0; }
+            $result = $service->closeSession($cashierId, (float)$closingCash, (float)$closingWallet, $notes, (int)$carryover);
+        } elseif (($input['action'] ?? '') === 'handover_session') {
+            $incomingId = filter_var($input['incoming_cashier_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!$incomingId) {
+                throw new DomainException('Select a valid incoming Cashier.');
+            }
+            $countedCash = filter_var($input['counted_cash'] ?? null, FILTER_VALIDATE_FLOAT);
+            $checkedWallet = filter_var($input['checked_wallet'] ?? null, FILTER_VALIDATE_FLOAT);
+            if ($countedCash === false || $countedCash < 0 || $checkedWallet === false || $checkedWallet < 0) {
+                throw new DomainException('Enter counted cash and checked wallet balance (0 or greater).');
+            }
+            $notes = (string)($input['notes'] ?? $input['note'] ?? '');
+            $result = $service->handoverSession($cashierId, (int)$incomingId, (float)$countedCash, (float)$checkedWallet, $notes);
         } elseif (($input['action'] ?? '') === 'save') {
             $result = ['id' => $service->save($cashierId, $input['reference'] ?? '', $input['amount'] ?? '', $input['type'] ?? '')];
         } elseif (($input['action'] ?? '') === 'review') {

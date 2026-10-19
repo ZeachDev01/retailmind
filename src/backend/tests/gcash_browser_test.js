@@ -55,6 +55,17 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(nav.findIndex(label => label.trim() === 'GCash'), nav.findIndex(label => label.trim() === 'Point of Sale') + 1);
         const types = await page.locator('#gcash-type option').allTextContents();
         assert.deepEqual(types.map(t => t.trim()), ['Cash-In', 'Cash-Out']);
+
+        // Ticket #239: Verify closed status, open responsibility session
+        await page.locator('#gcash-session-status').filter({hasText: 'Closed'}).waitFor();
+        assert.equal(await page.locator('#gcash-open-session-btn').isVisible(), true);
+        await page.locator('#gcash-open-session-btn').click();
+        await page.locator('#gcash-open-cash').fill('1000');
+        await page.locator('#gcash-open-wallet').fill('5000');
+        await page.locator('#gcash-open-submit').click();
+        await page.locator('#gcash-session-status').filter({hasText: 'Active (You)'}).waitFor();
+        assert.equal(await page.locator('#gcash-close-session-btn').isVisible(), true);
+
         const reference = page.locator('#gcash-reference');
         await reference.fill('Reference No.: 0012 345 678901');
         await reference.press('Enter');
@@ -183,6 +194,17 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await page.setViewportSize({width, height: 900});
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'No page overflow at ' + width);
         }
+
+        // Ticket #239: Reconcile and close session
+        await page.locator('#gcash-close-session-btn').click();
+        await page.locator('#gcash-close-expected-cash').waitFor();
+        assert.equal(await page.locator('#gcash-close-expected-cash').textContent(), '₱2,010.00');
+        assert.equal(await page.locator('#gcash-close-expected-wallet').textContent(), '₱4,000.00');
+        await page.locator('#gcash-close-cash').fill('2010');
+        await page.locator('#gcash-close-wallet').fill('4000');
+        await page.locator('#gcash-close-submit').click();
+        await page.locator('#gcash-session-status').filter({hasText: 'Closed'}).waitFor();
+
         await page.screenshot({path: path.join(output, 'gcash.png'), fullPage: true});
         const adminContext = await browser.newContext();
         await adminContext.route('https://**/*', route => route.fulfill({status: 200, body: ''}));

@@ -28,6 +28,26 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
             </a>
         </header>
         <p class="gcash-notice"><strong>A reference number is not proof of payment.</strong> Check the reference, amount, and transaction type in the authorized receiving GCash account or its transaction records. These records do not post sales or change cash drawer balances.</p>
+        <section id="gcash-session-panel" class="pos-panel gcash-session-panel" aria-labelledby="gcash-session-title">
+            <div class="pos-panel-header">
+                <div class="pos-panel-title">
+                    <div class="pos-panel-icon"><i class="bi bi-shield-lock" aria-hidden="true"></i></div>
+                    <div>
+                        <h2 id="gcash-session-title">GCash Responsibility</h2>
+                        <p id="gcash-session-desc">One Cashier controls Store GCash services at a time.</p>
+                    </div>
+                </div>
+                <div class="gcash-session-header-actions">
+                    <span id="gcash-session-status" class="gcash-status">Checking…</span>
+                    <button class="btn btn-secondary" type="button" id="gcash-open-session-btn" hidden>Open GCash</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-close-session-btn" hidden>Reconcile &amp; Close</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-handover-session-btn" hidden>Hand Over</button>
+                </div>
+            </div>
+            <div id="gcash-session-banner" class="gcash-session-banner">
+                <p id="gcash-session-message">Loading responsibility status…</p>
+            </div>
+        </section>
         <section class="pos-panel" aria-labelledby="gcash-entry-title">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
@@ -146,6 +166,97 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <label class="pos-field-label" for="gcash-review-note">Review note (5–500 characters; required for verification or rejection)</label>
                 <textarea class="pos-input" id="gcash-review-note" minlength="5" maxlength="500" required rows="3" placeholder="Record how the transaction was checked, or why it was rejected."></textarea>
                 <div class="gcash-actions"><button class="btn" type="submit" id="gcash-verify">Verify transaction</button><button class="btn btn-secondary" type="button" id="gcash-reject">Reject</button><button class="btn btn-secondary" type="button" id="gcash-review-cancel">Cancel</button></div>
+            </form>
+        </dialog>
+        <dialog id="gcash-open-dialog" aria-labelledby="gcash-open-title">
+            <form id="gcash-open-form">
+                <h2 id="gcash-open-title">Open GCash responsibility</h2>
+                <p>Count actual physical service cash and check the Store GCash wallet balance before opening.</p>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-open-cash">Counted service cash (PHP)</label>
+                    <input class="pos-input" id="gcash-open-cash" name="opening_cash" type="number" step="0.01" min="0" required placeholder="0.00">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-open-wallet">Checked wallet balance (PHP)</label>
+                    <input class="pos-input" id="gcash-open-wallet" name="opening_wallet" type="number" step="0.01" min="0" required placeholder="0.00">
+                </div>
+                <div class="gcash-actions">
+                    <button class="btn" type="submit" id="gcash-open-submit">Open session</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-open-cancel">Cancel</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog id="gcash-close-dialog" aria-labelledby="gcash-close-title">
+            <form id="gcash-close-form">
+                <h2 id="gcash-close-title">Reconcile &amp; Close GCash responsibility</h2>
+                <p>Count service cash and check the Store wallet balance to compare against expected figures.</p>
+                <div class="gcash-preview-grid" style="margin-bottom: 1rem;">
+                    <div class="gcash-preview-item">
+                        <span class="gcash-preview-label">Expected service cash</span>
+                        <span class="gcash-preview-value" id="gcash-close-expected-cash">₱0.00</span>
+                    </div>
+                    <div class="gcash-preview-item">
+                        <span class="gcash-preview-label">Expected wallet balance</span>
+                        <span class="gcash-preview-value" id="gcash-close-expected-wallet">₱0.00</span>
+                    </div>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-close-cash">Actual counted service cash (PHP)</label>
+                    <input class="pos-input" id="gcash-close-cash" name="closing_cash" type="number" step="0.01" min="0" required placeholder="0.00">
+                    <small id="gcash-close-cash-variance" role="status" aria-live="polite"></small>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-close-wallet">Actual checked wallet balance (PHP)</label>
+                    <input class="pos-input" id="gcash-close-wallet" name="closing_wallet" type="number" step="0.01" min="0" required placeholder="0.00">
+                    <small id="gcash-close-wallet-variance" role="status" aria-live="polite"></small>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-close-carryover">Unresolved carryover count</label>
+                    <input class="pos-input" id="gcash-close-carryover" name="carryover" type="number" min="0" step="1" value="0">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-close-notes">Closing notes (optional, or explain any variance)</label>
+                    <textarea class="pos-input" id="gcash-close-notes" name="notes" rows="2" maxlength="500"></textarea>
+                </div>
+                <div class="gcash-actions">
+                    <button class="btn" type="submit" id="gcash-close-submit">Confirm &amp; Close</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-close-cancel">Cancel</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog id="gcash-handover-dialog" aria-labelledby="gcash-handover-title">
+            <form id="gcash-handover-form">
+                <h2 id="gcash-handover-title">Hand over GCash responsibility</h2>
+                <p>Transfer service responsibility to another Cashier with an active unlocked Cashier Shift.</p>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-handover-incoming">Incoming Cashier</label>
+                    <select class="pos-input" id="gcash-handover-incoming" name="incoming_cashier_id" required>
+                        <option value="">Select Cashier…</option>
+                        <?php
+                        $cashiersStmt = $pdo->prepare("SELECT u.user_id, u.full_name, u.username FROM users u JOIN roles r ON u.role_id = r.role_id WHERE r.role_name = 'cashier' AND u.status = 'active' AND u.user_id <> ? ORDER BY u.full_name");
+                        $cashiersStmt->execute([(int)$_SESSION['user_id']]);
+                        foreach ($cashiersStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                            echo '<option value="' . (int)$c['user_id'] . '">' . htmlspecialchars($c['full_name'] . ' (' . $c['username'] . ')') . '</option>';
+                        }
+                        ?>
+                    </select>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-handover-cash">Counted service cash handed over (PHP)</label>
+                    <input class="pos-input" id="gcash-handover-cash" name="counted_cash" type="number" step="0.01" min="0" required placeholder="0.00">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-handover-wallet">Checked wallet balance handed over (PHP)</label>
+                    <input class="pos-input" id="gcash-handover-wallet" name="checked_wallet" type="number" step="0.01" min="0" required placeholder="0.00">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-handover-notes">Handover notes (optional)</label>
+                    <textarea class="pos-input" id="gcash-handover-notes" name="notes" rows="2" maxlength="500"></textarea>
+                </div>
+                <div class="gcash-actions">
+                    <button class="btn" type="submit" id="gcash-handover-submit">Confirm Handover</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-handover-cancel">Cancel</button>
+                </div>
             </form>
         </dialog>
     </main>
