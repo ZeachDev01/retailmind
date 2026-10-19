@@ -915,6 +915,13 @@
         '<span class="auto-page-summary"></span><label>Rows <select aria-label="Rows per page"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label><div class="pagination-buttons"></div>';
       wrap.insertAdjacentElement("afterend", footer);
       const search = qs("input", toolbar);
+      if (table.dataset.searchLabel) {
+        search.removeAttribute("placeholder");
+        search.setAttribute("aria-label", table.dataset.searchLabel);
+        const label = document.createElement("span");
+        label.textContent = table.dataset.searchLabel;
+        search.before(label);
+      }
       const count = qs(".toolbar-count", toolbar);
       const pageSize = qs("select", footer);
       const summary = qs(".auto-page-summary", footer);

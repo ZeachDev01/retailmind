@@ -109,12 +109,13 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
         <?php if (!$canMutate): ?>
             <div class="alert alert-info u-mb-3">
                 <i class="bi bi-info-circle-fill" aria-hidden="true"></i>
-                <strong>Read-Only Oversight:</strong> Only an authorized active Inventory Manager workspace may record stock pullouts. Administrators retain complete oversight over pullout records and movement history.
+                <strong>Read-only access.</strong> Only active Inventory Managers can record supplier pullouts. Select Pullout History to review records.
             </div>
         <?php else: ?>
             <section class="card">
                 <header class="card-header">
                     <h2>Record Supplier Pullout</h2>
+                    <p>Recording a pullout deducts stock from the selected batch. * Required fields.</p>
                 </header>
                 <div class="card-body">
                     <form method="POST" id="pullout-form" class="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -123,7 +124,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                         <div class="min-w-0">
                             <label for="product_id"><strong>Product *</strong></label>
                             <select name="product_id" id="product_id" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
-                                <option value="">-- Select Product --</option>
+                                <option value=""></option>
                                 <?php foreach ($products as $p): ?>
                                     <option value="<?= (int)$p['product_id'] ?>" <?= (int)$p['product_id'] === $prefillProductId ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($p['product_name']) ?> (SKU: <?= htmlspecialchars($p['sku']) ?>, On Hand: <?= (int)($p['quantity_on_hand'] ?? 0) ?>)
@@ -135,7 +136,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                         <div class="min-w-0">
                             <label for="batch_id"><strong>Batch *</strong></label>
                             <select name="batch_id" id="batch_id" aria-describedby="batch-help" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
-                                <option value="">-- Select Batch --</option>
+                                <option value=""></option>
                                 <?php if ($prefillBatch): ?>
                                     <option value="<?= (int)$prefillBatch['batch_id'] ?>"
                                             data-remaining="<?= (int)$prefillBatch['remaining_quantity'] ?>"
@@ -147,11 +148,11 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                     </option>
                                 <?php endif; ?>
                             </select>
-                            <small id="batch-help" class="form-text text-muted">Eligible and expired batches with remaining stock.</small>
+                            <small id="batch-help" class="form-text text-muted">Select a product first. Batches must have remaining stock; expired batches are included.</small>
                         </div>
 
                         <div class="min-w-0">
-                            <label for="quantity"><strong>Pullout Quantity (Base Units) *</strong></label>
+                            <label for="quantity"><strong>Quantity (base units) *</strong></label>
                             <input type="number"
                                    name="quantity"
                                    id="quantity"
@@ -159,7 +160,6 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                    min="1"
                                    step="1"
                                    max="<?= $prefillBatch ? (int)$prefillBatch['remaining_quantity'] : '' ?>"
-                                   placeholder="e.g. 10"
                                    required>
                         </div>
 
@@ -169,28 +169,26 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                    name="reason"
                                    id="reason"
                                    class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
-                                   placeholder="e.g. Expired stock, Damaged in transit, Supplier recall"
                                    required>
                         </div>
 
                         <div class="min-w-0">
-                            <label for="supplier"><strong>Supplier (Optional)</strong></label>
+                            <label for="supplier"><strong>Supplier (optional)</strong></label>
                             <input type="text"
                                    name="supplier"
                                    id="supplier"
                                    class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
-                                   value="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>"
-                                   placeholder="Supplier name or code">
+                                   value="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>">
                         </div>
 
                         <div class="min-w-0 md:col-span-2">
-                            <label for="notes">Notes (Optional)</label>
-                            <textarea name="notes" id="notes" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" rows="2" placeholder="Reference numbers, pickup staff details, or replacement expectations..."></textarea>
+                            <label for="notes"><strong>Notes (optional)</strong></label>
+                            <textarea name="notes" id="notes" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" rows="2"></textarea>
                         </div>
 
                         <div class="form-actions md:col-span-2">
                             <button type="submit" class="btn btn-primary" id="btn-submit-pullout">
-                                <i class="bi bi-arrow-return-left" aria-hidden="true"></i> Record Supplier Pullout
+                                <i class="bi bi-arrow-return-left" aria-hidden="true"></i> Record Pullout
                             </button>
                         </div>
                     </form>
@@ -206,7 +204,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
             </header>
             <div class="card-body">
                 <div class="table-wrap max-w-full overflow-x-auto" role="region" aria-label="Supplier pullout history table" tabindex="0">
-                    <table class="table">
+                    <table class="table" data-search-label="Search pullouts">
                         <thead class="[&_th]:bg-[var(--surface-soft)]">
                             <tr>
                                 <th scope="col">Pullout #</th>
@@ -289,14 +287,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function loadBatchesForProduct(productId, preselectedBatchId) {
         if (!productId) {
-            batchSelect.innerHTML = '<option value="">-- Select Product First --</option>';
+            batchSelect.innerHTML = '<option value=""></option>';
             return;
         }
 
         fetch('supplier_pullouts.php?action=get_batches&product_id=' + encodeURIComponent(productId))
             .then(res => res.json())
             .then(batches => {
-                batchSelect.innerHTML = '<option value="">-- Select Batch --</option>';
+                batchSelect.innerHTML = '<option value=""></option>';
                 if (!batches || batches.length === 0) {
                     batchSelect.innerHTML = '<option value="">No eligible batches with remaining stock</option>';
                     return;
@@ -316,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 updateBatchDetails();
             })
             .catch(() => {
-                batchSelect.innerHTML = '<option value="">Error loading batches</option>';
+                batchSelect.innerHTML = '<option value="">Could not load batches. Select the product again to retry.</option>';
             });
     }
 
