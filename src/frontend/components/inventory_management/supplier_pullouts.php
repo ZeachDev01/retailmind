@@ -112,16 +112,12 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                 <strong>Read-only access.</strong> Only active Inventory Managers can record supplier pullouts. Select Pullout History to review records.
             </div>
         <?php else: ?>
-            <section class="card">
-                <header class="card-header">
-                    <h2>Record Supplier Pullout</h2>
-                    <p>Recording a pullout deducts stock from the selected batch. * Required fields.</p>
-                </header>
+            <section class="card pullout-form-card">
                 <div class="card-body">
                     <form method="POST" id="pullout-form" class="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
 
-                        <div class="min-w-0">
+                        <div class="min-w-0 md:col-span-2">
                             <label for="product_id"><strong>Product *</strong></label>
                             <select name="product_id" id="product_id" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
                                 <option value=""></option>
@@ -152,6 +148,15 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                         </div>
 
                         <div class="min-w-0">
+                            <label for="supplier"><strong>Supplier <span class="pullout-optional">(optional)</span></strong></label>
+                            <input type="text"
+                                   name="supplier"
+                                   id="supplier"
+                                   class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
+                                   value="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>">
+                        </div>
+
+                        <div class="min-w-0">
                             <label for="quantity"><strong>Quantity (base units) *</strong></label>
                             <input type="number"
                                    name="quantity"
@@ -172,17 +177,8 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                    required>
                         </div>
 
-                        <div class="min-w-0">
-                            <label for="supplier"><strong>Supplier (optional)</strong></label>
-                            <input type="text"
-                                   name="supplier"
-                                   id="supplier"
-                                   class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
-                                   value="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>">
-                        </div>
-
                         <div class="min-w-0 md:col-span-2">
-                            <label for="notes"><strong>Notes (optional)</strong></label>
+                            <label for="notes"><strong>Notes <span class="pullout-optional">(optional)</span></strong></label>
                             <textarea name="notes" id="notes" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" rows="2"></textarea>
                         </div>
 
@@ -199,9 +195,6 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
         </div>
 
         <section id="pullout-history-panel" class="card min-w-0" role="tabpanel" aria-labelledby="pullout-history-tab" tabindex="0" hidden>
-            <header class="card-header">
-                <h2>Supplier Pullout History</h2>
-            </header>
             <div class="card-body">
                 <div class="table-wrap max-w-full overflow-x-auto" role="region" aria-label="Supplier pullout history table" tabindex="0">
                     <table class="table" data-search-label="Search pullouts">
