@@ -3,6 +3,7 @@
 namespace App\Receipts;
 
 require_once __DIR__ . '/../Services/PhilippineTime.php';
+require_once __DIR__ . '/../Services/SalesWorkflowService.php';
 
 use App\Services\PhilippineTime;
 use PDO;
@@ -123,9 +124,12 @@ final class ReceiptDetailsService
 
     private function fetchLiveItems(int $saleId): array
     {
-        $statement = $this->pdo->prepare('SELECT si.quantity, si.unit_price, si.subtotal, p.sku, p.product_name
+        $cols = $this->saleItemColumns();
+        $formSelect = isset($cols['selling_form']) ? ', si.selling_form' : ", 'piece' AS selling_form";
+        $packSelect = isset($cols['pack_size']) ? ', si.pack_size' : ', NULL AS pack_size';
+        $statement = $this->pdo->prepare("SELECT si.quantity, si.unit_price, si.subtotal, p.sku, p.product_name{$formSelect}{$packSelect}
             FROM sale_items si JOIN products p ON p.product_id = si.product_id
-            WHERE si.sale_id = ? ORDER BY si.sale_item_id');
+            WHERE si.sale_id = ? ORDER BY si.sale_item_id");
         $statement->execute([$saleId]);
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -188,14 +192,11 @@ final class ReceiptDetailsService
 
     private function saleColumns(): array
     {
-        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-        $rows = $driver === 'sqlite'
-            ? $this->pdo->query('PRAGMA table_info(sales)')->fetchAll(PDO::FETCH_ASSOC)
-            : $this->pdo->query('SHOW COLUMNS FROM sales')->fetchAll(PDO::FETCH_ASSOC);
-        $columns = [];
-        foreach ($rows as $row) {
-            $columns[$driver === 'sqlite' ? $row['name'] : $row['Field']] = true;
-        }
-        return $columns;
+        return \SalesWorkflowService::getTableColumns($this->pdo, 'sales');
+    }
+
+    private function saleItemColumns(): array
+    {
+        return \SalesWorkflowService::getTableColumns($this->pdo, 'sale_items');
     }
 }

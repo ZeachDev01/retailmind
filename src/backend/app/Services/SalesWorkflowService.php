@@ -144,6 +144,8 @@ class SalesWorkflowService
                     ], JSON_THROW_ON_ERROR)]);
             }
 
+            $this->applyPackOpenings($sale['plans'] ?? [], $saleId, $userId);
+
             foreach ($sale['items'] as $item) {
                 $this->recordSaleItem($saleId, $item, $userId);
             }
@@ -1126,50 +1128,159 @@ class SalesWorkflowService
         $values[] = $value;
     }
 
+    private function applyPackOpenings(array $productPlans, int $saleId, int $userId): void
+    {
+        $pbCols = self::getTableColumns($this->pdo, 'product_batches');
+        $hasBatchForms = isset($pbCols['sealed_quantity']) && isset($pbCols['loose_quantity']);
+        $hasActivityLog = !empty(self::getTableColumns($this->pdo, 'activity_log'));
+
+        foreach ($productPlans as $productId => $plan) {
+            if (empty($plan['pack_openings'])) {
+                continue;
+            }
+
+            foreach ($plan['pack_openings'] as $opening) {
+                if ($hasBatchForms) {
+                    $stmt = $this->pdo->prepare(
+                        "UPDATE product_batches
+                         SET sealed_quantity = sealed_quantity - ?,
+                             loose_quantity = loose_quantity + ?
+                         WHERE batch_id = ? AND sealed_quantity >= ?"
+                    );
+                    $stmt->execute([
+                        $opening['packs'],
+                        $opening['pieces_opened'],
+                        $opening['batch_id'],
+                        $opening['packs'],
+                    ]);
+
+                    if ($stmt->rowCount() === 0) {
+                        $productStmt = $this->pdo->prepare('SELECT product_name FROM products WHERE product_id = ?');
+                        $productStmt->execute([$productId]);
+                        $productName = $productStmt->fetchColumn() ?: "product #{$productId}";
+                        throw new StockConflictException([[
+                            'product_id' => (int)$productId,
+                            'product_name' => (string)$productName,
+                            'selling_form' => 'pack',
+                            'requested_qty' => (int)$opening['packs'],
+                            'available_stock' => 0,
+                        ]]);
+                    }
+                }
+
+                if ($hasActivityLog) {
+                    $this->pdo->prepare(
+                        "INSERT INTO activity_log (user_id, action, category, module, record_id, metadata)
+                         VALUES (?, 'Automatic pack opening at checkout', 'store_operation', 'sales', ?, ?)"
+                    )->execute([
+                        $userId,
+                        $saleId,
+                        json_encode([
+                            'sale_id' => $saleId,
+                            'cashier_id' => $userId,
+                            'product_id' => (int)$productId,
+                            'batch_id' => (int)$opening['batch_id'],
+                            'packs_opened' => (int)$opening['packs'],
+                            'pieces_opened' => (int)$opening['pieces_opened'],
+                            'pieces_consumed' => (int)$opening['pieces_consumed'],
+                            'leftover_loose' => (int)$opening['leftover_loose'],
+                        ], JSON_THROW_ON_ERROR),
+                    ]);
+                }
+            }
+        }
+    }
+
     private function recordSaleItem(int $saleId, array $item, int $userId): void
     {
-        $this->pdo->prepare(
-            "INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)"
-        )->execute([
+        $saleItemCols = self::getTableColumns($this->pdo, 'sale_items');
+        $columns = ['sale_id', 'product_id', 'quantity', 'unit_price', 'subtotal'];
+        $placeholders = ['?', '?', '?', '?', '?'];
+        $values = [
             $saleId,
             $item['product_id'],
             $item['quantity'],
             $item['unit_price'],
             $item['subtotal'],
-        ]);
+        ];
+
+        $sellingForm = $item['selling_form'] ?? 'piece';
+        $packSize = isset($item['pack_size']) && (int)$item['pack_size'] > 0 ? (int)$item['pack_size'] : null;
+
+        if (isset($saleItemCols['selling_form'])) {
+            $columns[] = 'selling_form';
+            $placeholders[] = '?';
+            $values[] = $sellingForm;
+        }
+        if (isset($saleItemCols['pack_size'])) {
+            $columns[] = 'pack_size';
+            $placeholders[] = '?';
+            $values[] = $packSize;
+        }
+
+        $this->pdo->prepare(
+            "INSERT INTO sale_items (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")"
+        )->execute($values);
         $saleItemId = (int)$this->pdo->lastInsertId();
 
+        $baseUnitQty = $item['base_unit_quantity'] ?? $item['quantity'];
+
         foreach ($item['batch_plan'] as $batchAllocation) {
-            $this->depleteBatchAllocation($batchAllocation, $item['product_id']);
+            $this->depleteBatchAllocation($batchAllocation, $item['product_id'], $sellingForm, $packSize);
             $this->recordSaleItemBatch($saleItemId, $batchAllocation);
         }
 
-        $this->decrementInventory($item['product_id'], $item['quantity']);
+        $this->decrementInventory($item['product_id'], $baseUnitQty);
 
         $this->pdo->prepare(
             "UPDATE products SET quantity_sold = quantity_sold + ? WHERE product_id = ?"
-        )->execute([$item['quantity'], $item['product_id']]);
+        )->execute([$baseUnitQty, $item['product_id']]);
 
         $this->pdo->prepare(
             "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, 'sale', ?)"
-        )->execute([$item['product_id'], -$item['quantity'], $userId]);
+        )->execute([$item['product_id'], -$baseUnitQty, $userId]);
     }
 
-    private function depleteBatchAllocation(array $batchAllocation, int $productId): void
+    private function depleteBatchAllocation(array $batchAllocation, int $productId, string $sellingForm = 'piece', ?int $packSize = null): void
     {
-        $batchUpdate = $this->pdo->prepare(
-            "UPDATE product_batches
-             SET remaining_quantity = remaining_quantity - ?
-             WHERE batch_id = ? AND remaining_quantity >= ?"
-        );
-        $batchUpdate->execute([
-            $batchAllocation['quantity'],
-            $batchAllocation['batch_id'],
-            $batchAllocation['quantity'],
-        ]);
+        $pbCols = self::getTableColumns($this->pdo, 'product_batches');
+        $hasBatchForms = isset($pbCols['sealed_quantity'], $pbCols['loose_quantity']);
+        $qty = (int)$batchAllocation['quantity'];
+        $batchId = (int)$batchAllocation['batch_id'];
+
+        if ($hasBatchForms && in_array($sellingForm, ['pack', 'piece'], true)) {
+            $isPack = $sellingForm === 'pack';
+            $formCol = $isPack ? 'sealed_quantity' : 'loose_quantity';
+            $effectivePackSize = ($packSize !== null && $packSize > 0) ? $packSize : 1;
+            $formDeduct = $isPack ? (int)ceil($qty / $effectivePackSize) : $qty;
+
+            $batchUpdate = $this->pdo->prepare(
+                "UPDATE product_batches
+                 SET {$formCol} = {$formCol} - ?,
+                     remaining_quantity = remaining_quantity - ?
+                 WHERE batch_id = ? AND {$formCol} >= ? AND remaining_quantity >= ?"
+            );
+            $batchUpdate->execute([$formDeduct, $qty, $batchId, $formDeduct, $qty]);
+        } else {
+            $batchUpdate = $this->pdo->prepare(
+                "UPDATE product_batches
+                 SET remaining_quantity = remaining_quantity - ?
+                 WHERE batch_id = ? AND remaining_quantity >= ?"
+            );
+            $batchUpdate->execute([$qty, $batchId, $qty]);
+        }
 
         if ($batchUpdate->rowCount() === 0) {
-            throw new RuntimeException("Batch stock changed for product #{$productId} - please retry checkout.");
+            $productStmt = $this->pdo->prepare('SELECT product_name FROM products WHERE product_id = ?');
+            $productStmt->execute([$productId]);
+            $productName = $productStmt->fetchColumn() ?: "product #{$productId}";
+            throw new StockConflictException([[
+                'product_id' => $productId,
+                'product_name' => (string)$productName,
+                'selling_form' => $sellingForm,
+                'requested_qty' => $qty,
+                'available_stock' => 0,
+            ]]);
         }
     }
 
