@@ -211,11 +211,50 @@ function ensure_operational_updates_schema(PDO $pdo): void
         closed_at TIMESTAMP NULL,
         closed_by INT NULL,
         unresolved_carryover_count INT NOT NULL DEFAULT 0,
+        waiver_notes TEXT NULL,
+        waived_by INT NULL,
+        waived_at TIMESTAMP NULL,
         is_open INT GENERATED ALWAYS AS (IF(status = 'open', 1, NULL)) STORED,
         UNIQUE KEY uq_gcash_open_session (is_open),
         INDEX idx_gcash_sessions_shift (shift_id),
         INDEX idx_gcash_sessions_cashier (cashier_id),
-        INDEX idx_gcash_sessions_closed_by (closed_by)
+        INDEX idx_gcash_sessions_closed_by (closed_by),
+        INDEX idx_gcash_sessions_waived_by (waived_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    ensure_table_column($pdo, 'gcash_service_sessions', 'waiver_notes', 'TEXT NULL AFTER unresolved_carryover_count');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'waived_by', 'INT NULL AFTER waiver_notes');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'waived_at', 'TIMESTAMP NULL AFTER waived_by');
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_funding_movements (
+        movement_id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id INT NOT NULL,
+        movement_type ENUM('replenishment','withdrawal','product_drawer_transfer','owner_capital') NOT NULL,
+        fund_type ENUM('cash','wallet') NOT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        direction ENUM('in','out') NOT NULL,
+        evidence_reference VARCHAR(120) NULL,
+        reason VARCHAR(255) NOT NULL,
+        authorized_by INT NOT NULL,
+        recorded_by INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_gcash_funding_session (session_id),
+        INDEX idx_gcash_funding_auth (authorized_by),
+        INDEX idx_gcash_funding_rec (recorded_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_adjustments (
+        adjustment_id INT AUTO_INCREMENT PRIMARY KEY,
+        transaction_id BIGINT UNSIGNED NOT NULL,
+        session_id INT NOT NULL,
+        service_cash_delta DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        wallet_delta DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        reason VARCHAR(255) NOT NULL,
+        authorized_by INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_gcash_adj_tx (transaction_id),
+        INDEX idx_gcash_adj_session (session_id),
+        INDEX idx_gcash_adj_auth (authorized_by)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     $gcashTableExists = false;

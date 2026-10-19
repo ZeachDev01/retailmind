@@ -16,7 +16,7 @@ $refuse = static function (callable $work) use ($check): void {
     $check(false, 'Expected request to be refused.');
 };
 $service = new GCashTransactionService($pdo, ['min_length' => 13, 'max_length' => 13]);
-if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--cash-in-race', '--cash-out-race'], true)) {
+if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--cash-in-race', '--cash-out-race', '--funding-race'], true)) {
     for ($attempt = 0; $attempt < 5; $attempt++) {
         try {
             if ($argv[2] === '--save-race') { $service->save(4, '0000000000004', '1', 'Payment'); }
@@ -36,6 +36,15 @@ if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--
                     'reference' => '0000000000888',
                     'confirmed_wallet' => true,
                     'confirmed_cash' => true,
+                ]);
+            }
+            elseif ($argv[2] === '--funding-race') {
+                $service->recordFundingMovement(1, 'admin', [
+                    'movement_type' => 'replenishment',
+                    'fund_type' => 'cash',
+                    'direction' => 'in',
+                    'amount' => 100.0,
+                    'reason' => 'Concurrent funding worker replenishment',
                 ]);
             }
             else { $service->review(4, (int)$argv[3], 'Verified', true, 'Matched authorized records during concurrent review'); }
@@ -690,6 +699,320 @@ sort($cashOutRaceOutcomes);
 $check($cashOutRaceOutcomes === ['accepted', 'duplicate'], 'Concurrent cash out must accept exactly one reference');
 
 $service->closeSession(4, 7288.45, 23355.00, 'Closing session 7', 2);
+
+// Ticket #242: Session 8 - Funding movements, linked corrections, resolving needs checking, discrepancy waivers, emergency handover
+$sess8 = $service->openSession(4, 2000.00, 5000.00);
+
+// Funding movements: permissions, evidence, validation, balance updates
+$refuse(fn() => $service->recordFundingMovement(4, 'cashier', [
+    'movement_type' => 'replenishment',
+    'fund_type' => 'cash',
+    'direction' => 'in',
+    'amount' => 1000,
+    'reason' => 'Unauthorized cashier replenishment without admin credentials',
+]));
+$refuse(fn() => $service->recordFundingMovement(4, 'cashier', [
+    'movement_type' => 'replenishment',
+    'fund_type' => 'cash',
+    'direction' => 'in',
+    'amount' => 1000,
+    'reason' => 'Bad admin password',
+    'approver_username' => 'theme_admin',
+    'approver_password' => 'WrongPass',
+]));
+$refuse(fn() => $service->recordFundingMovement(1, 'admin', [
+    'movement_type' => 'invalid_type',
+    'fund_type' => 'cash',
+    'direction' => 'in',
+    'amount' => 1000,
+    'reason' => 'Invalid movement type',
+]));
+$refuse(fn() => $service->recordFundingMovement(1, 'admin', [
+    'movement_type' => 'replenishment',
+    'fund_type' => 'cash',
+    'direction' => 'in',
+    'amount' => -50,
+    'reason' => 'Negative amount refused',
+]));
+$refuse(fn() => $service->recordFundingMovement(1, 'admin', [
+    'movement_type' => 'withdrawal',
+    'fund_type' => 'cash',
+    'direction' => 'out',
+    'amount' => 999999,
+    'reason' => 'Withdraw more cash than exists',
+]));
+$refuse(fn() => $service->recordFundingMovement(1, 'admin', [
+    'movement_type' => 'owner_capital',
+    'fund_type' => 'wallet',
+    'direction' => 'in',
+    'amount' => 5000,
+    'reason' => 'Missing evidence on owner capital',
+    'evidence' => '',
+]));
+
+// Valid funding movement: Replenishment (Cash in 1000)
+$fundId1 = $service->recordFundingMovement(4, 'cashier', [
+    'movement_type' => 'replenishment',
+    'fund_type' => 'cash',
+    'direction' => 'in',
+    'amount' => 1000,
+    'reason' => 'Replenish change fund for morning rush',
+    'approver_username' => 'theme_admin',
+    'approver_password' => 'ThemeTest@2026',
+]);
+$check($fundId1 > 0, 'Funding replenishment recorded');
+$fRow1 = $pdo->query('SELECT * FROM gcash_funding_movements WHERE movement_id = ' . $fundId1)->fetch(PDO::FETCH_ASSOC);
+$check((int)$fRow1['authorized_by'] === 1 && (int)$fRow1['recorded_by'] === 4, 'Authorized by admin 1, recorded by cashier 4');
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 3000.00, 'Expected service cash: 3000.00');
+$check($exp8['expected_wallet_balance'] === 5000.00, 'Expected wallet: 5000.00');
+
+// Product drawer transfer: Cash 500 into GCash cash fund
+$drawerMovementsBefore = (int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn();
+$fundId2 = $service->recordFundingMovement(4, 'cashier', [
+    'movement_type' => 'product_drawer_transfer',
+    'fund_type' => 'cash',
+    'direction' => 'in',
+    'amount' => 500,
+    'evidence' => 'Slip-PD-01',
+    'reason' => 'Transfer from main product drawer',
+    'approver_username' => 'theme_admin',
+    'approver_password' => 'ThemeTest@2026',
+]);
+$drawerMovementsAfter = (int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn();
+$check($drawerMovementsAfter === $drawerMovementsBefore + 1, 'Product drawer movement logged for cash drawer transfer');
+$lastDrawerMove = $pdo->query('SELECT * FROM cash_drawer_movements ORDER BY drawer_movement_id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+$check($lastDrawerMove['movement_type'] === 'cash_out' && (float)$lastDrawerMove['amount'] === 500.00, 'Drawer movement is cash_out of 500');
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 3500.00, 'Expected service cash: 3500.00');
+
+// Owner capital: Wallet in 10000
+$fundId3 = $service->recordFundingMovement(1, 'admin', [
+    'movement_type' => 'owner_capital',
+    'fund_type' => 'wallet',
+    'direction' => 'in',
+    'amount' => 10000,
+    'evidence' => 'BankRef-99201',
+    'reason' => 'Owner capital infusion to wallet',
+]);
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_wallet_balance'] === 15000.00, 'Expected wallet: 15000.00');
+
+// Withdrawal: Cash out 200 to store safe
+$fundId4 = $service->recordFundingMovement(1, 'admin', [
+    'movement_type' => 'withdrawal',
+    'fund_type' => 'cash',
+    'direction' => 'out',
+    'amount' => 200,
+    'reason' => 'Transfer excess cash to store safe',
+]);
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 3300.00, 'Expected service cash: 3300.00');
+
+// Concurrent funding race
+$fundingRaceProcesses = [];
+foreach ([1, 2] as $worker) {
+    $pipes = [];
+    $proc = proc_open([PHP_BINARY, __FILE__, $database, '--funding-race', '1'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $check(is_resource($proc), 'Concurrent funding worker must start.');
+    $fundingRaceProcesses[] = [$proc, $pipes];
+}
+$fundingRaceOutcomes = [];
+foreach ($fundingRaceProcesses as [$proc, $pipes]) {
+    $fundingRaceOutcomes[] = stream_get_contents($pipes[1]);
+    $err = stream_get_contents($pipes[2]);
+    fclose($pipes[1]); fclose($pipes[2]);
+    $check(proc_close($proc) === 0, $err);
+}
+$check(count(array_filter($fundingRaceOutcomes, fn($o) => $o === 'accepted')) === 2, 'Concurrent funding accepted');
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 3500.00, 'Expected service cash after concurrent funding (+200): 3500.00');
+
+// Linked corrections on immutable Completed exchanges
+$ciTxId = $service->recordCashIn(4, [
+    'principal' => 1000,
+    'reference' => '0000000000301',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => true,
+]);
+// After Cash-In 1000: fee is 10 (cash), counter_collect 1010, wallet 1000
+// Expected cash = 3500 + 1010 = 4510.00, wallet = 15000 - 1000 = 14000.00
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 4510.00, 'Expected cash before correction: 4510.00');
+$check($exp8['expected_wallet_balance'] === 14000.00, 'Expected wallet before correction: 14000.00');
+
+// Correction refusals
+$refuse(fn() => $service->recordLinkedCorrection(4, 'cashier', $ciTxId, -10.00, 0.00, 'Non-admin correction refused'));
+$refuse(fn() => $service->recordLinkedCorrection(1, 'admin', $ciTxId, 0.00, 0.00, 'Zero delta correction refused'));
+$refuse(fn() => $service->recordLinkedCorrection(1, 'admin', $ciTxId, -10.00, 0.00, 'Tiny'));
+
+// Valid linked correction: -10 cash delta (fee refund)
+$adjId1 = $service->recordLinkedCorrection(1, 'admin', $ciTxId, -10.00, 0.00, 'Customer refunded 10 pesos fee overcharge');
+$check($adjId1 > 0, 'Linked correction recorded');
+
+// Verify original transaction row is strictly immutable
+$ciRow = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id = ' . $ciTxId)->fetch(PDO::FETCH_ASSOC);
+$check($ciRow['verification_status'] === 'Completed', 'Original transaction remains Completed');
+$check($ciRow['reference_number'] === '0000000000301', 'Reference unchanged');
+$check((float)$ciRow['service_cash_delta'] === 1010.00, 'Original service_cash_delta unchanged');
+$check((float)$ciRow['wallet_delta'] === -1000.00, 'Original wallet_delta unchanged');
+
+// Verify expected totals incorporate adjustment
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 4500.00, 'Expected cash after -10 correction: 4500.00');
+$check($exp8['expected_wallet_balance'] === 14000.00, 'Expected wallet unchanged: 14000.00');
+
+// Verify history includes adjustments attached to transaction
+$cashierHist = $service->history(4, 1);
+$foundTx = null;
+foreach ($cashierHist['transactions'] as $t) {
+    if ((int)$t['transaction_id'] === $ciTxId) { $foundTx = $t; break; }
+}
+$check($foundTx !== null && count($foundTx['adjustments']) === 1, 'History attaches linked adjustments');
+$check((float)$foundTx['adjustments'][0]['service_cash_delta'] === -10.00, 'Adjustment cash delta matches');
+
+// Resolving Needs checking: Case A - Complete remaining movements
+$ncCoTxId = $service->recordCashOut(4, [
+    'principal' => 500,
+    'fee_method' => 'Fee via GCash',
+    'outcome' => 'Needs checking',
+    'reference' => '0000000000302',
+    'confirmed_wallet' => true,
+    'confirmed_cash' => false,
+    'notes' => 'Customer sent 510 wallet, cash payout delayed',
+]);
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 4500.00, 'Expected cash unchanged while payout pending');
+$check($exp8['expected_wallet_balance'] === 14510.00, 'Expected wallet includes received 510');
+
+// Correction cannot be recorded on Needs checking transaction
+$refuse(fn() => $service->recordLinkedCorrection(1, 'admin', $ncCoTxId, -5.00, 0.00, 'Correction on Needs checking refused'));
+
+// Complete the transaction
+$resA = $service->resolveNeedsChecking(4, $ncCoTxId, 'complete', ['notes' => 'Cash handed over 500 pesos']);
+$check($resA['verification_status'] === 'Completed', 'Resolved to Completed');
+$resRowA = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id = ' . $ncCoTxId)->fetch(PDO::FETCH_ASSOC);
+$check($resRowA['verification_status'] === 'Completed' && (int)$resRowA['confirmed_cash'] === 1, 'Transaction updated to Completed with confirmed_cash = 1');
+$check((float)$resRowA['service_cash_delta'] === -500.00 && (float)$resRowA['gross_fee'] === 10.00, 'Cash delta -500 and gross fee 10 set');
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 4000.00, 'Expected cash reflects completed payout: 4000.00');
+$check($exp8['expected_wallet_balance'] === 14510.00, 'Expected wallet: 14510.00');
+
+// Cannot resolve again once completed
+$refuse(fn() => $service->resolveNeedsChecking(4, $ncCoTxId, 'complete', ['notes' => 'Duplicate completion']));
+
+// Resolving Needs checking: Case B - Cancel with linked offsetting adjustments
+$ncCiTxId = $service->recordCashIn(4, [
+    'principal' => 400,
+    'outcome' => 'Needs checking',
+    'confirmed_cash' => true,
+    'confirmed_wallet' => false,
+    'notes' => 'Customer paid 405 cash, wallet transfer delayed',
+]);
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 4405.00, 'Expected cash includes 405 collected: 4405.00');
+
+// Cashier cannot cancel without admin authorization credentials
+$refuse(fn() => $service->resolveNeedsChecking(4, $ncCiTxId, 'cancel', [
+    'reason' => 'Customer refunded, network offline',
+]));
+$refuse(fn() => $service->resolveNeedsChecking(4, $ncCiTxId, 'cancel', [
+    'reason' => 'Customer refunded, network offline',
+    'approver_username' => 'theme_admin',
+    'approver_password' => 'WrongPass',
+]));
+
+// Cancel with admin credentials
+$resB = $service->resolveNeedsChecking(4, $ncCiTxId, 'cancel', [
+    'reason' => 'Customer refunded, network offline',
+    'approver_username' => 'theme_admin',
+    'approver_password' => 'ThemeTest@2026',
+]);
+$check($resB['verification_status'] === 'Rejected', 'Resolved to Rejected');
+$resRowB = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id = ' . $ncCiTxId)->fetch(PDO::FETCH_ASSOC);
+$check($resRowB['verification_status'] === 'Rejected', 'Status updated to Rejected');
+
+// Verify linked offsetting adjustment created
+$adjB = $pdo->query('SELECT * FROM gcash_adjustments WHERE transaction_id = ' . $ncCiTxId)->fetch(PDO::FETCH_ASSOC);
+$check($adjB && (float)$adjB['service_cash_delta'] === -405.00, 'Offsetting adjustment of -405 created');
+
+// Verify expected cash has returned to 4000.00
+$exp8 = $service->calculateSessionExpected($sess8);
+$check($exp8['expected_service_cash'] === 4000.00, 'Expected cash offset back to 4000.00');
+$check($exp8['expected_wallet_balance'] === 14510.00, 'Expected wallet: 14510.00');
+
+// Cannot resolve again once rejected
+$refuse(fn() => $service->resolveNeedsChecking(4, $ncCiTxId, 'cancel', ['reason' => 'Duplicate cancel', 'approver_username' => 'theme_admin', 'approver_password' => 'ThemeTest@2026']));
+
+// Audit failure rollback for funding movements
+$pdo->exec("CREATE TRIGGER gcash_funding_audit_fail BEFORE INSERT ON activity_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Funding audit injection fail'");
+try {
+    $auditFailThrew = false;
+    try {
+        $service->recordFundingMovement(1, 'admin', [
+            'movement_type' => 'replenishment',
+            'fund_type' => 'cash',
+            'direction' => 'in',
+            'amount' => 100,
+            'reason' => 'Test audit failure rollback',
+        ]);
+    } catch (PDOException $e) { $auditFailThrew = true; }
+    $check($auditFailThrew, 'Funding movement must throw on audit failure');
+    $check((int)$pdo->query("SELECT COUNT(*) FROM gcash_funding_movements WHERE reason='Test audit failure rollback'")->fetchColumn() === 0, 'Audit failure must roll back funding movement');
+} finally {
+    $pdo->exec('DROP TRIGGER gcash_funding_audit_fail');
+}
+
+// Close session 8 with discrepancy: Counted cash 3950 (-50 variance)
+$service->closeSession(4, 3950.00, 14510.00, 'Session 8 closing with 50 pesos variance', 0);
+$s8Row = $pdo->query('SELECT * FROM gcash_service_sessions WHERE session_id = ' . $sess8)->fetch(PDO::FETCH_ASSOC);
+$check($s8Row['status'] === 'closed' && (float)$s8Row['cash_variance'] === -50.00, 'Session closed with -50 cash variance');
+$check($s8Row['waived_at'] === null, 'Discrepancy not yet waived');
+
+// Discrepancy waiver
+$refuse(fn() => $service->waiveDiscrepancy(4, 'cashier', $sess8, 'Cashier cannot waive discrepancy'));
+$refuse(fn() => $service->waiveDiscrepancy(1, 'admin', $sess8, 'Tiny'));
+
+// Valid discrepancy waiver by admin
+$service->waiveDiscrepancy(1, 'admin', $sess8, 'Shortage acknowledged and waived due to counterfeit 50 peso note surrendered');
+$s8Waived = $pdo->query('SELECT * FROM gcash_service_sessions WHERE session_id = ' . $sess8)->fetch(PDO::FETCH_ASSOC);
+$check((int)$s8Waived['waived_by'] === 1 && $s8Waived['waived_at'] !== null, 'Waiver recorded with admin attribution');
+$check((float)$s8Waived['cash_variance'] === -50.00, 'Permanent counted variance preserved');
+$check(strpos($s8Waived['waiver_notes'], 'counterfeit 50 peso note') !== false, 'Waiver notes recorded');
+
+// Duplicate waiver refused
+$refuse(fn() => $service->waiveDiscrepancy(1, 'admin', $sess8, 'Duplicate waiver rejected'));
+
+// Emergency Handover by Administrator
+// Create incoming cashier with open shift
+$newUserId = (int)$pdo->query('SELECT MAX(user_id) FROM users')->fetchColumn() + 1;
+$newRegisterId = (int)$pdo->query('SELECT MAX(register_id) FROM registers')->fetchColumn() + 1;
+$newShiftId = (int)$pdo->query('SELECT MAX(shift_id) FROM cashier_shifts')->fetchColumn() + 1;
+$pdo->exec("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id, must_change_password) VALUES ({$newUserId}, 'Theme Cashier Two', 'theme_cashier2', '" . password_hash('ThemeTest@2026', PASSWORD_DEFAULT) . "', 4, 1, 0)");
+$pdo->exec("INSERT INTO user_roles (user_id, role_id, is_primary) VALUES ({$newUserId}, 4, 1)");
+$pdo->exec("INSERT INTO registers (register_id, name) VALUES ({$newRegisterId}, 'Theme Register 2')");
+$pdo->exec("INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash, status) VALUES ({$newShiftId}, {$newUserId}, {$newRegisterId}, 100, 'open')");
+
+// Cashier 4 opens Session 9
+$sess9 = $service->openSession(4, 1000.00, 2000.00);
+
+// Non-admin emergency handover refused
+$refuse(fn() => $service->emergencyHandover(4, $newUserId, 1000.00, 2000.00, 'Cashier cannot do emergency handover'));
+
+// Admin executes emergency handover to Cashier
+$handover = $service->emergencyHandover(1, $newUserId, 1000.00, 2000.00, 'Cashier 4 medical emergency during shift');
+$check($handover['outgoing_session_id'] === $sess9, 'Outgoing session is 9');
+$check($handover['incoming_session_id'] > $sess9, 'Incoming session created');
+
+$s9Row = $pdo->query('SELECT * FROM gcash_service_sessions WHERE session_id = ' . $sess9)->fetch(PDO::FETCH_ASSOC);
+$check($s9Row['status'] === 'closed' && (int)$s9Row['closed_by'] === 1, 'Outgoing session closed by admin');
+$check(strpos($s9Row['closing_notes'], 'medical emergency') !== false, 'Emergency reason recorded');
+
+$newSessRow = $pdo->query('SELECT * FROM gcash_service_sessions WHERE session_id = ' . $handover['incoming_session_id'])->fetch(PDO::FETCH_ASSOC);
+$check($newSessRow['status'] === 'open' && (int)$newSessRow['cashier_id'] === $newUserId, 'New session opened for incoming cashier');
+
+// Close new session cleanly
+$service->closeSession($newUserId, 1000.00, 2000.00, 'Closing handed-over session', 0);
 
 echo "GCash MySQL integration: passed\n";
 

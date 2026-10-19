@@ -217,7 +217,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
 
         const firstRow = page.locator('#gcash-history-body tr').first();
         assert.equal(await firstRow.locator('.gcash-status-completed').textContent(), 'Completed');
-        assert.equal(await firstRow.getByRole('button', {name: 'Correct', exact: true}).isDisabled(), true, 'Completed record correction disabled');
+        assert.equal(await firstRow.getByRole('button', {name: 'Correct', exact: true}).isDisabled(), false, 'Completed record correction enabled');
 
         // Ticket #240: Hold as Needs checking with partial movements
         await page.locator('#gcash-type').selectOption('Cash-In');
@@ -369,6 +369,124 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-close-wallet').fill('5520');
         await page.locator('#gcash-close-submit').click();
         await page.locator('#gcash-session-status').filter({hasText: 'Closed'}).waitFor();
+
+        // Ticket #242: Session 2 - Funding movements, linked corrections, resolving needs checking, discrepancy waiver
+        await page.locator('#gcash-open-session-btn').click();
+        await page.locator('#gcash-open-cash').fill('1000');
+        await page.locator('#gcash-open-wallet').fill('2000');
+        await page.locator('#gcash-open-submit').click();
+        await page.locator('#gcash-session-status').filter({hasText: 'Active (You)'}).waitFor();
+
+        // 1. Funding Movement: Replenishment (Cash in 500)
+        assert.equal(await page.locator('#gcash-funding-btn').isVisible(), true);
+        await page.locator('#gcash-funding-btn').click();
+        await page.locator('#gcash-funding-dialog').waitFor();
+        await page.locator('#gcash-funding-type').selectOption('replenishment');
+        await page.locator('#gcash-funding-fund-type').selectOption('cash');
+        await page.locator('#gcash-funding-direction').selectOption('in');
+        await page.locator('#gcash-funding-amount').fill('500');
+        await page.locator('#gcash-funding-reason').fill('Replenish service cash drawer');
+        await page.locator('#gcash-funding-approver').fill('theme_admin');
+        await page.locator('#gcash-funding-password').fill(data.password);
+        await page.locator('#gcash-funding-submit').click();
+        await page.locator('#gcash-funding-dialog').waitFor({state: 'hidden'});
+
+        // API tests for funding movement refusals
+        const badAuthFunding = await post({
+            action: 'funding_movement',
+            movement_type: 'replenishment',
+            fund_type: 'cash',
+            direction: 'in',
+            amount: 100,
+            reason: 'Test refusal with bad pass',
+            approver_username: 'theme_admin',
+            approver_password: 'wrong_password'
+        });
+        assert.equal(badAuthFunding.status(), 403, 'Invalid admin password rejected');
+
+        const excessFunding = await post({
+            action: 'funding_movement',
+            movement_type: 'withdrawal',
+            fund_type: 'cash',
+            direction: 'out',
+            amount: 999999,
+            reason: 'Withdraw more than available cash',
+            approver_username: 'theme_admin',
+            approver_password: data.password
+        });
+        assert.equal(excessFunding.status(), 422, 'Insufficient balance rejected');
+
+        // 2. Needs checking: Cash-In 300, cash collected, wallet pending
+        await page.locator('#gcash-type').selectOption('Cash-In');
+        await page.locator('#gcash-amount').fill('300');
+        await page.locator('#gcash-needs-checking-btn').click();
+        await page.locator('#gcash-needs-checking-dialog').waitFor();
+        await page.locator('#gcash-nc-notes').fill('Cash received at counter, wallet pending transfer');
+        await page.locator('#gcash-nc-cash-collected').check();
+        await page.locator('#gcash-nc-wallet-sent').uncheck();
+        await page.locator('#gcash-nc-submit').click();
+        await page.locator('#gcash-needs-checking-dialog').waitFor({state: 'hidden'});
+        await page.locator('#gcash-history-body .gcash-status-needs-checking').first().waitFor();
+
+        const s2NcRow = page.locator('#gcash-history-body tr').first();
+        assert.equal(await s2NcRow.locator('.gcash-status-needs-checking').textContent(), 'Needs checking');
+
+        // Resolve Needs checking via dialog -> complete
+        await s2NcRow.getByRole('button', {name: 'Resolve', exact: true}).click();
+        await page.locator('#gcash-resolve-dialog').waitFor();
+        await page.locator('#gcash-resolve-action').selectOption('complete');
+        await page.locator('#gcash-resolve-reference').fill('0012345678999');
+        await page.locator('#gcash-resolve-notes').fill('Wallet transfer confirmed in terminal');
+        await page.locator('#gcash-resolve-submit').click();
+        await page.locator('#gcash-resolve-dialog').waitFor({state: 'hidden'});
+        await s2NcRow.locator('.gcash-status-completed').waitFor();
+
+        // 3. Linked Correction on completed transaction (-5 cash delta)
+        await s2NcRow.getByRole('button', {name: 'Correct', exact: true}).click();
+        await page.locator('#gcash-correction-dialog').waitFor();
+        await page.locator('#gcash-correction-cash-delta').fill('-5.00');
+        await page.locator('#gcash-correction-wallet-delta').fill('0.00');
+        await page.locator('#gcash-correction-reason').fill('Refund 5 pesos fee overcharge');
+        await page.locator('#gcash-correction-approver').fill('theme_admin');
+        await page.locator('#gcash-correction-password').fill(data.password);
+        await page.locator('#gcash-correction-submit').click();
+        await page.locator('#gcash-correction-dialog').waitFor({state: 'hidden'});
+
+        // API tests for correction refusal (zero delta)
+        const zeroCorrection = await post({
+            action: 'linked_correction',
+            transaction_id: 1,
+            service_cash_delta: 0,
+            wallet_delta: 0,
+            reason: 'Zero delta correction',
+            approver_username: 'theme_admin',
+            approver_password: data.password
+        });
+        assert.equal(zeroCorrection.status(), 422, 'Zero delta correction rejected');
+
+        // 4. Close Session 2 with discrepancy
+        // Expected: cash = 1000 + 500 (funding) + 305 (cash-in: 300+5) - 5 (correction) = 1800.00
+        // Expected wallet = 2000 - 300 = 1700.00
+        await page.locator('#gcash-close-session-btn').click();
+        await page.locator('#gcash-close-expected-cash').waitFor();
+        assert.equal(await page.locator('#gcash-close-expected-cash').textContent(), '₱1,800.00');
+        assert.equal(await page.locator('#gcash-close-expected-wallet').textContent(), '₱1,700.00');
+        await page.locator('#gcash-close-cash').fill('1790');
+        await page.locator('#gcash-close-wallet').fill('1700');
+        await page.locator('#gcash-close-notes').fill('Missing 10 pesos coin');
+        await page.locator('#gcash-close-submit').click();
+        await page.locator('#gcash-session-status').filter({hasText: 'Closed'}).waitFor();
+
+        // 5. Discrepancy Waiver button is visible on closed session with variance
+        assert.equal(await page.locator('#gcash-waive-btn').isVisible(), true, 'Waive button visible on closed session with variance');
+        await page.locator('#gcash-waive-btn').click();
+        await page.locator('#gcash-waiver-dialog').waitFor();
+        await page.locator('#gcash-waiver-notes').fill('Cash variance approved by store manager');
+        await page.locator('#gcash-waiver-approver').fill('theme_admin');
+        await page.locator('#gcash-waiver-password').fill(data.password);
+        await page.locator('#gcash-waiver-submit').click();
+        await page.locator('#gcash-waiver-dialog').waitFor({state: 'hidden'});
+        await page.locator('#gcash-waive-btn').waitFor({state: 'hidden'});
 
         await page.screenshot({path: path.join(output, 'gcash.png'), fullPage: true});
         const adminContext = await browser.newContext();

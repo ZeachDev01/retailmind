@@ -19,7 +19,12 @@ try {
                 $session['expected_wallet_balance'] = $expected['expected_wallet_balance'];
                 $session['is_controlling_cashier'] = (int)$session['cashier_id'] === (int)$_SESSION['user_id'];
             }
-            $result = ['session' => $session];
+            $lastClosed = null;
+            $closedStmt = $pdo->query("SELECT * FROM gcash_service_sessions WHERE status = 'closed' ORDER BY session_id DESC LIMIT 1");
+            if ($row = $closedStmt->fetch(PDO::FETCH_ASSOC)) {
+                $lastClosed = $row;
+            }
+            $result = ['session' => $session, 'last_closed_session' => $lastClosed];
         } elseif (($_GET['action'] ?? '') === 'preview' || (isset($_GET['principal']) && !isset($_GET['reference']) && !isset($_GET['page']))) {
             $type = (string)($_GET['type'] ?? '');
             $principal = (string)($_GET['principal'] ?? '');
@@ -42,8 +47,11 @@ try {
         if (strlen($raw) > 4096) { throw new DomainException('Request too large.'); }
         $input = json_decode($raw, true);
         if (!is_array($input)) { throw new DomainException('Invalid request.'); }
-        foreach (['action', 'reference', 'amount', 'type', 'status', 'note', 'notes', 'fee_method', 'reason', 'outcome'] as $key) {
+        foreach (['action', 'reference', 'type', 'status', 'note', 'notes', 'fee_method', 'reason', 'outcome', 'movement_type', 'fund_type', 'direction', 'evidence_reference', 'evidence', 'approver_username', 'approver_password', 'resolve_action', 'waiver_notes'] as $key) {
             if (isset($input[$key]) && !is_string($input[$key]) && !($key === 'reference' && $input[$key] === null)) { throw new DomainException('Invalid field: ' . $key); }
+        }
+        if (isset($input['amount']) && !is_string($input['amount']) && !is_int($input['amount']) && !is_float($input['amount'])) {
+            throw new DomainException('Invalid field: amount');
         }
         if (isset($input['principal']) && !is_string($input['principal']) && !is_int($input['principal'])) {
             throw new DomainException('Invalid field: principal');
@@ -55,6 +63,31 @@ try {
         } elseif (($input['action'] ?? '') === 'record_cash_out') {
             $id = $service->recordCashOut($cashierId, $input);
             $result = ['id' => $id, 'transaction_id' => $id];
+        } elseif (($input['action'] ?? '') === 'funding_movement') {
+            $id = $service->recordFundingMovement($cashierId, 'cashier', $input);
+            $result = ['id' => $id, 'movement_id' => $id];
+        } elseif (($input['action'] ?? '') === 'linked_correction') {
+            $adminId = $service->authorizeAdmin((string)($input['approver_username'] ?? ''), (string)($input['approver_password'] ?? ''));
+            $txId = filter_var($input['transaction_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!$txId) { throw new DomainException('Invalid transaction ID.'); }
+            $cashDelta = filter_var($input['service_cash_delta'] ?? 0, FILTER_VALIDATE_FLOAT);
+            $walletDelta = filter_var($input['wallet_delta'] ?? 0, FILTER_VALIDATE_FLOAT);
+            $reason = (string)($input['reason'] ?? '');
+            $sessionId = filter_var($input['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
+            $adjId = $service->recordLinkedCorrection($adminId, 'admin', (int)$txId, (float)$cashDelta, (float)$walletDelta, $reason, $sessionId);
+            $result = ['id' => $adjId, 'adjustment_id' => $adjId];
+        } elseif (($input['action'] ?? '') === 'resolve_needs_checking') {
+            $txId = filter_var($input['transaction_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!$txId) { throw new DomainException('Invalid transaction ID.'); }
+            $resAction = (string)($input['resolve_action'] ?? $input['outcome'] ?? $input['status'] ?? 'complete');
+            $result = $service->resolveNeedsChecking($cashierId, (int)$txId, $resAction, $input);
+        } elseif (($input['action'] ?? '') === 'waive_discrepancy') {
+            $adminId = $service->authorizeAdmin((string)($input['approver_username'] ?? ''), (string)($input['approver_password'] ?? ''));
+            $sessId = filter_var($input['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!$sessId) { throw new DomainException('Invalid session ID.'); }
+            $waiverNotes = (string)($input['waiver_notes'] ?? $input['notes'] ?? '');
+            $service->waiveDiscrepancy($adminId, 'admin', (int)$sessId, $waiverNotes);
+            $result = ['session_id' => $sessId, 'waived' => true];
         } elseif (($input['action'] ?? '') === 'preview') {
             $preview = $service->calculatePreview($input['type'] ?? '', $input['principal'] ?? '', $input['fee_method'] ?? null);
             $result = ['preview' => $preview] + $preview;

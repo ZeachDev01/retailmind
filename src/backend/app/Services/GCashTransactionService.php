@@ -150,7 +150,21 @@ final class GCashTransactionService
         $stmt = $this->pdo()->prepare('SELECT * FROM gcash_transactions WHERE cashier_id = ? ORDER BY transaction_id DESC LIMIT 26 OFFSET ' . $offset);
         $stmt->execute([$cashierId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return ['transactions' => array_slice($rows, 0, 25), 'has_next' => count($rows) > 25];
+        $txs = array_slice($rows, 0, 25);
+        if ($txs !== []) {
+            $ids = array_map(static fn($r) => (int)$r['transaction_id'], $txs);
+            $inClause = implode(',', $ids);
+            $adjStmt = $this->pdo()->query("SELECT * FROM gcash_adjustments WHERE transaction_id IN ({$inClause}) ORDER BY adjustment_id ASC");
+            $adjsByTx = [];
+            foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $adj) {
+                $adjsByTx[$adj['transaction_id']][] = $adj;
+            }
+            foreach ($txs as &$tx) {
+                $tx['adjustments'] = $adjsByTx[$tx['transaction_id']] ?? [];
+            }
+            unset($tx);
+        }
+        return ['transactions' => $txs, 'has_next' => count($rows) > 25];
     }
 
     public function getCurrentSession(): ?array
@@ -191,7 +205,7 @@ final class GCashTransactionService
 
         foreach ($txs as $tx) {
             $status = $tx['verification_status'];
-            if ($status === 'Completed' || $status === 'Needs checking') {
+            if ($status === 'Completed' || $status === 'Needs checking' || $status === 'Rejected') {
                 $expectedCash += (float)$tx['service_cash_delta'];
                 $expectedWallet += (float)$tx['wallet_delta'];
             } elseif ($status === 'Verified') {
@@ -207,6 +221,29 @@ final class GCashTransactionService
                     $expectedWallet += (float)$preview['net_wallet'];
                 }
             }
+        }
+
+        $fundStmt = $this->pdo()->prepare(
+            "SELECT fund_type, direction, amount FROM gcash_funding_movements WHERE session_id = ?"
+        );
+        $fundStmt->execute([$sessionId]);
+        foreach ($fundStmt->fetchAll(PDO::FETCH_ASSOC) as $mv) {
+            $amt = (float)$mv['amount'];
+            $sign = $mv['direction'] === 'in' ? 1.0 : -1.0;
+            if ($mv['fund_type'] === 'cash') {
+                $expectedCash += $sign * $amt;
+            } elseif ($mv['fund_type'] === 'wallet') {
+                $expectedWallet += $sign * $amt;
+            }
+        }
+
+        $adjStmt = $this->pdo()->prepare(
+            "SELECT service_cash_delta, wallet_delta FROM gcash_adjustments WHERE session_id = ?"
+        );
+        $adjStmt->execute([$sessionId]);
+        foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $adj) {
+            $expectedCash += (float)$adj['service_cash_delta'];
+            $expectedWallet += (float)$adj['wallet_delta'];
         }
 
         return [
@@ -355,7 +392,12 @@ final class GCashTransactionService
                 throw new DomainException('No open GCash service session found to hand over.', 404);
             }
             if ((int)$session['cashier_id'] !== $outgoingCashierId) {
-                throw new DomainException('Only the responsible Cashier may hand over GCash responsibility.', 403);
+                $userStmt = $this->pdo()->prepare('SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?');
+                $userStmt->execute([$outgoingCashierId]);
+                $roleName = $userStmt->fetchColumn();
+                if (!in_array($roleName, ['admin', 'super_admin'], true)) {
+                    throw new DomainException('Only the responsible Cashier or an Administrator can hand over GCash responsibility.', 403);
+                }
             }
 
             $shiftService = new CashierShiftService($this->pdo());
@@ -934,4 +976,476 @@ final class GCashTransactionService
             throw $e;
         }
     }
+
+    public function authorizeAdmin(string $username, string $password): int
+    {
+        $username = trim($username);
+        if ($username === '' || $password === '') {
+            throw new DomainException('Administrator username and password are required.', 403);
+        }
+        $locking = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+        $stmt = $this->pdo()->prepare(
+            "SELECT u.user_id, u.password_hash, r.role_name
+             FROM users u
+             JOIN roles r ON r.role_id = u.role_id
+             WHERE u.username = ? AND u.status = 'active' AND u.must_change_password = 0 AND r.role_name IN ('admin', 'super_admin')" . $locking
+        );
+        $stmt->execute([$username]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$user || !password_verify($password, (string)$user['password_hash'])) {
+            throw new DomainException('Administrator authorization failed: invalid credentials.', 403);
+        }
+        return (int)$user['user_id'];
+    }
+
+    public function recordFundingMovement(int $actorId, string $actorRole, array $data): int
+    {
+        $type = (string)($data['movement_type'] ?? '');
+        if (!in_array($type, ['replenishment', 'withdrawal', 'product_drawer_transfer', 'owner_capital'], true)) {
+            throw new DomainException('Select a valid funding movement type.');
+        }
+        $fundType = (string)($data['fund_type'] ?? '');
+        if (!in_array($fundType, ['cash', 'wallet'], true)) {
+            throw new DomainException('Select cash or wallet.');
+        }
+        $direction = (string)($data['direction'] ?? '');
+        if (!in_array($direction, ['in', 'out'], true)) {
+            throw new DomainException('Select in or out direction.');
+        }
+        $amount = filter_var($data['amount'] ?? null, FILTER_VALIDATE_FLOAT);
+        if ($amount === false || $amount <= 0 || !is_finite($amount) || round($amount, 2) !== round($amount, 4)) {
+            throw new DomainException('Enter a positive funding amount in pesos and centavos.');
+        }
+        $amount = round($amount, 2);
+
+        $reason = trim((string)($data['reason'] ?? ''));
+        if (mb_strlen($reason) < 5 || mb_strlen($reason) > 255) {
+            throw new DomainException('Enter a reason between 5 and 255 characters.');
+        }
+
+        $evidence = trim((string)($data['evidence_reference'] ?? $data['evidence'] ?? ''));
+        if ($fundType === 'wallet' || in_array($type, ['owner_capital', 'product_drawer_transfer'], true)) {
+            if ($evidence === '') {
+                throw new DomainException('Evidence reference (transaction reference, transfer slip, or receipt) is required.');
+            }
+        }
+        if (strlen($evidence) > 120) {
+            throw new DomainException('Evidence reference must be 120 characters or fewer.');
+        }
+
+        try {
+            StoreWriteGate::begin($this->pdo());
+            $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $sessionStmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE status = 'open'" . $lock);
+            $sessionStmt->execute();
+            $session = $sessionStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$session) {
+                throw new DomainException('Open a GCash service session before recording funding movements.');
+            }
+            $sessionId = (int)$session['session_id'];
+
+            $isAdmin = in_array($actorRole, ['admin', 'super_admin'], true);
+            if ($isAdmin) {
+                $authorizedBy = $actorId;
+            } elseif ($actorRole === 'cashier') {
+                if ((int)$session['cashier_id'] !== $actorId) {
+                    throw new DomainException('Another Cashier currently has responsibility for GCash services.', 409);
+                }
+                $authorizedBy = $this->authorizeAdmin((string)($data['approver_username'] ?? ''), (string)($data['approver_password'] ?? ''));
+            } else {
+                throw new DomainException('Unauthorized role for funding movement.', 403);
+            }
+
+            if ($direction === 'out') {
+                $expected = $this->calculateSessionExpected($sessionId);
+                if ($fundType === 'cash' && $expected['expected_service_cash'] < $amount) {
+                    throw new DomainException(sprintf('Insufficient service cash balance. Available: PHP %.2f, required: PHP %.2f.', $expected['expected_service_cash'], $amount), 422);
+                }
+                if ($fundType === 'wallet' && $expected['expected_wallet_balance'] < $amount) {
+                    throw new DomainException(sprintf('Insufficient service wallet balance. Available: PHP %.2f, required: PHP %.2f.', $expected['expected_wallet_balance'], $amount), 422);
+                }
+            }
+
+            if ($type === 'product_drawer_transfer' && $fundType === 'cash') {
+                $openShift = (new CashierShiftService($this->pdo()))->getOpenShift($actorId);
+                if ($openShift) {
+                    $drawerType = $direction === 'in' ? 'cash_out' : 'cash_in';
+                    $drawerReason = 'other';
+                    $drawerNote = 'GCash funding transfer (Session #' . $sessionId . '): ' . substr($reason, 0, 180);
+                    $this->pdo()->prepare(
+                        'INSERT INTO cash_drawer_movements (shift_id, cashier_id, movement_type, amount, reason, note, recorded_by)
+                         VALUES (?, ?, ?, ?, ?, ?, ?)'
+                    )->execute([$openShift['shift_id'], $actorId, $drawerType, $amount, $drawerReason, $drawerNote, $actorId]);
+                }
+            }
+
+            $stmt = $this->pdo()->prepare(
+                'INSERT INTO gcash_funding_movements (session_id, movement_type, fund_type, amount, direction, evidence_reference, reason, authorized_by, recorded_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([
+                $sessionId,
+                $type,
+                $fundType,
+                $amount,
+                $direction,
+                $evidence !== '' ? $evidence : null,
+                $reason,
+                $authorizedBy,
+                $actorId,
+            ]);
+            $movementId = (int)$this->pdo()->lastInsertId();
+
+            \log_activity(
+                $this->pdo(),
+                $actorId,
+                'GCash funding movement recorded',
+                'GCash',
+                $movementId,
+                null,
+                [
+                    'movement_id' => $movementId,
+                    'session_id' => $sessionId,
+                    'movement_type' => $type,
+                    'fund_type' => $fundType,
+                    'amount' => $amount,
+                    'direction' => $direction,
+                    'evidence_reference' => $evidence,
+                    'reason' => $reason,
+                    'authorized_by' => $authorizedBy,
+                    'recorded_by' => $actorId,
+                ],
+                null,
+                AuditRecordCategory::STORE_OPERATION
+            );
+
+            $this->pdo()->commit();
+            return $movementId;
+        } catch (Throwable $e) {
+            if ($this->pdo && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function recordLinkedCorrection(int $adminId, string $adminRole, int $transactionId, float $cashDelta, float $walletDelta, string $reason, ?int $sessionId = null): int
+    {
+        if (!in_array($adminRole, ['admin', 'super_admin'], true)) {
+            throw new DomainException('Only an Administrator can record linked corrections.', 403);
+        }
+        $reason = trim($reason);
+        if (mb_strlen($reason) < 5 || mb_strlen($reason) > 255) {
+            throw new DomainException('Enter an adjustment reason between 5 and 255 characters.');
+        }
+        if (!is_finite($cashDelta) || !is_finite($walletDelta) || (round($cashDelta, 2) === 0.0 && round($walletDelta, 2) === 0.0)) {
+            throw new DomainException('Enter at least one non-zero cash or wallet adjustment.');
+        }
+        $cashDelta = round($cashDelta, 2);
+        $walletDelta = round($walletDelta, 2);
+
+        try {
+            StoreWriteGate::begin($this->pdo());
+            $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $txStmt = $this->pdo()->prepare("SELECT * FROM gcash_transactions WHERE transaction_id = ?" . $lock);
+            $txStmt->execute([$transactionId]);
+            $tx = $txStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$tx) {
+                throw new DomainException('Transaction not found.', 404);
+            }
+            if ($tx['verification_status'] !== 'Completed') {
+                throw new DomainException('Linked corrections may only be recorded against Completed transactions.', 422);
+            }
+
+            if ($sessionId === null) {
+                $openSession = $this->pdo()->query("SELECT session_id FROM gcash_service_sessions WHERE status = 'open' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                $sessionId = $openSession ? (int)$openSession['session_id'] : (int)($tx['session_id'] ?? 0);
+            }
+            if ($sessionId <= 0) {
+                throw new DomainException('A valid session is required for linked adjustments.');
+            }
+
+            $stmt = $this->pdo()->prepare(
+                'INSERT INTO gcash_adjustments (transaction_id, session_id, service_cash_delta, wallet_delta, reason, authorized_by)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([
+                $transactionId,
+                $sessionId,
+                $cashDelta,
+                $walletDelta,
+                $reason,
+                $adminId,
+            ]);
+            $adjId = (int)$this->pdo()->lastInsertId();
+
+            \log_activity(
+                $this->pdo(),
+                $adminId,
+                'GCash linked correction recorded',
+                'GCash',
+                $adjId,
+                null,
+                [
+                    'adjustment_id' => $adjId,
+                    'transaction_id' => $transactionId,
+                    'session_id' => $sessionId,
+                    'service_cash_delta' => $cashDelta,
+                    'wallet_delta' => $walletDelta,
+                    'reason' => $reason,
+                    'authorized_by' => $adminId,
+                ],
+                null,
+                AuditRecordCategory::STORE_OPERATION
+            );
+
+            $this->pdo()->commit();
+            return $adjId;
+        } catch (Throwable $e) {
+            if ($this->pdo && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function resolveNeedsChecking(int $actorId, int $transactionId, string $action, array $data = []): array
+    {
+        $action = strtolower(trim($action));
+        if (!in_array($action, ['complete', 'cancel', 'reject'], true)) {
+            throw new DomainException('Action must be complete or cancel.');
+        }
+
+        try {
+            StoreWriteGate::begin($this->pdo());
+            $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $txStmt = $this->pdo()->prepare("SELECT * FROM gcash_transactions WHERE transaction_id = ?" . $lock);
+            $txStmt->execute([$transactionId]);
+            $tx = $txStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$tx) {
+                throw new DomainException('Transaction not found.', 404);
+            }
+            if ($tx['verification_status'] !== 'Needs checking') {
+                throw new DomainException('This transaction is no longer in Needs checking status.', 409);
+            }
+
+            $type = $tx['transaction_type'];
+            $principal = (int)round((float)$tx['amount']);
+            $feeMethodStr = $tx['fee_method'] === 'wallet' ? 'Fee via GCash' : 'Fee in cash';
+            $preview = $this->calculatePreview($type, $principal, $feeMethodStr);
+            $targetFee = (float)$preview['fee'];
+            $targetCashDelta = (float)$preview['net_service_cash'];
+            $targetWalletDelta = (float)$preview['net_wallet'];
+
+            $priorConfirmedWallet = (bool)$tx['confirmed_wallet'];
+            $priorConfirmedCash = (bool)$tx['confirmed_cash'];
+
+            if ($action === 'complete') {
+                $refRaw = trim((string)($data['reference'] ?? $data['reference_number'] ?? ''));
+                if (!$priorConfirmedWallet) {
+                    if ($refRaw === '') {
+                        throw new DomainException('A valid reference number is required to complete wallet transfer.');
+                    }
+                    $reference = $this->reference($refRaw);
+                } else {
+                    $reference = $tx['reference_number'] !== null ? $tx['reference_number'] : ($refRaw !== '' ? $this->reference($refRaw) : null);
+                    if ($reference === null) {
+                        throw new DomainException('A valid reference number is required to complete this transaction.');
+                    }
+                }
+
+                if (!$priorConfirmedCash && $targetCashDelta < 0) {
+                    $openSession = $this->pdo()->query("SELECT session_id FROM gcash_service_sessions WHERE status = 'open' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                    if ($openSession) {
+                        $expected = $this->calculateSessionExpected((int)$openSession['session_id']);
+                        $cashPayout = (float)$preview['cash_payout'];
+                        if ($expected['expected_service_cash'] < $cashPayout) {
+                            throw new DomainException(sprintf('Insufficient service cash balance. Available: PHP %.2f, required: PHP %.2f.', $expected['expected_service_cash'], $cashPayout), 422);
+                        }
+                    }
+                }
+
+                $existingNotes = (string)($tx['notes'] ?? '');
+                $extraNote = trim((string)($data['notes'] ?? $data['note'] ?? ''));
+                $resolvedNotes = $existingNotes . ($extraNote !== '' ? ' [Resolved Completed: ' . $extraNote . ']' : ' [Resolved Completed]');
+
+                $updateStmt = $this->pdo()->prepare(
+                    "UPDATE gcash_transactions
+                     SET verification_status = 'Completed',
+                         reference_number = ?,
+                         confirmed_wallet = 1,
+                         confirmed_cash = 1,
+                         service_cash_delta = ?,
+                         wallet_delta = ?,
+                         gross_fee = ?,
+                         completed_at = CURRENT_TIMESTAMP,
+                         notes = ?
+                     WHERE transaction_id = ? AND verification_status = 'Needs checking'"
+                );
+                $updateStmt->execute([
+                    $reference,
+                    $targetCashDelta,
+                    $targetWalletDelta,
+                    $targetFee,
+                    $resolvedNotes,
+                    $transactionId,
+                ]);
+
+                \log_activity(
+                    $this->pdo(),
+                    $actorId,
+                    'GCash Needs checking resolved completed',
+                    'GCash',
+                    $transactionId,
+                    ['verification_status' => 'Needs checking', 'confirmed_cash' => $tx['confirmed_cash'], 'confirmed_wallet' => $tx['confirmed_wallet']],
+                    ['verification_status' => 'Completed', 'reference_number' => $reference, 'service_cash_delta' => $targetCashDelta, 'wallet_delta' => $targetWalletDelta, 'gross_fee' => $targetFee],
+                    null,
+                    AuditRecordCategory::STORE_OPERATION
+                );
+
+                $this->pdo()->commit();
+                return [
+                    'transaction_id' => $transactionId,
+                    'status' => 'Completed',
+                    'verification_status' => 'Completed',
+                ];
+            } else {
+                $reason = trim((string)($data['reason'] ?? $data['notes'] ?? $data['note'] ?? ''));
+                if (mb_strlen($reason) < 5) {
+                    throw new DomainException('Enter a cancellation reason of at least 5 characters.');
+                }
+
+                $hadCash = (float)$tx['service_cash_delta'] != 0.0;
+                $hadWallet = (float)$tx['wallet_delta'] != 0.0;
+
+                if ($hadCash || $hadWallet) {
+                    $userStmt = $this->pdo()->prepare('SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?');
+                    $userStmt->execute([$actorId]);
+                    $roleName = (string)$userStmt->fetchColumn();
+                    if (in_array($roleName, ['admin', 'super_admin'], true)) {
+                        $authorizedBy = $actorId;
+                    } else {
+                        $authorizedBy = $this->authorizeAdmin((string)($data['approver_username'] ?? ''), (string)($data['approver_password'] ?? ''));
+                    }
+
+                    $offsetCash = - (float)$tx['service_cash_delta'];
+                    $offsetWallet = - (float)$tx['wallet_delta'];
+                    $sessionId = (int)($tx['session_id'] ?? 0);
+                    if ($sessionId <= 0) {
+                        $openSession = $this->pdo()->query("SELECT session_id FROM gcash_service_sessions WHERE status = 'open' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                        $sessionId = $openSession ? (int)$openSession['session_id'] : 0;
+                    }
+
+                    $adjStmt = $this->pdo()->prepare(
+                        'INSERT INTO gcash_adjustments (transaction_id, session_id, service_cash_delta, wallet_delta, reason, authorized_by)
+                         VALUES (?, ?, ?, ?, ?, ?)'
+                    );
+                    $adjStmt->execute([
+                        $transactionId,
+                        $sessionId,
+                        $offsetCash,
+                        $offsetWallet,
+                        'Cancellation offset for #' . $transactionId . ': ' . $reason,
+                        $authorizedBy,
+                    ]);
+                }
+
+                $existingNotes = (string)($tx['notes'] ?? '');
+                $resolvedNotes = $existingNotes . ' [Cancelled: ' . $reason . ']';
+
+                $updateStmt = $this->pdo()->prepare(
+                    "UPDATE gcash_transactions
+                     SET verification_status = 'Rejected',
+                         notes = ?
+                     WHERE transaction_id = ? AND verification_status = 'Needs checking'"
+                );
+                $updateStmt->execute([$resolvedNotes, $transactionId]);
+
+                \log_activity(
+                    $this->pdo(),
+                    $actorId,
+                    'GCash Needs checking cancelled',
+                    'GCash',
+                    $transactionId,
+                    ['verification_status' => 'Needs checking'],
+                    ['verification_status' => 'Rejected', 'cancellation_reason' => $reason],
+                    null,
+                    AuditRecordCategory::STORE_OPERATION
+                );
+
+                $this->pdo()->commit();
+                return [
+                    'transaction_id' => $transactionId,
+                    'status' => 'Rejected',
+                    'verification_status' => 'Rejected',
+                ];
+            }
+        } catch (Throwable $e) {
+            if ($this->pdo && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function waiveDiscrepancy(int $adminId, string $adminRole, int $sessionId, string $waiverNotes): void
+    {
+        if (!in_array($adminRole, ['admin', 'super_admin'], true)) {
+            throw new DomainException('Only an Administrator can waive closing discrepancies.', 403);
+        }
+        $waiverNotes = trim($waiverNotes);
+        if (mb_strlen($waiverNotes) < 5 || mb_strlen($waiverNotes) > 500) {
+            throw new DomainException('Enter discrepancy waiver notes between 5 and 500 characters.');
+        }
+
+        try {
+            StoreWriteGate::begin($this->pdo());
+            $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $stmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE session_id = ?" . $lock);
+            $stmt->execute([$sessionId]);
+            $session = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$session) {
+                throw new DomainException('GCash service session not found.', 404);
+            }
+            if ($session['status'] !== 'closed') {
+                throw new DomainException('Only closed sessions with discrepancies can be waived.', 422);
+            }
+            if ($session['waived_at'] !== null) {
+                throw new DomainException('This session discrepancy has already been approved/waived.', 409);
+            }
+
+            $update = $this->pdo()->prepare(
+                'UPDATE gcash_service_sessions
+                 SET waiver_notes = ?, waived_by = ?, waived_at = CURRENT_TIMESTAMP
+                 WHERE session_id = ?'
+            );
+            $update->execute([$waiverNotes, $adminId, $sessionId]);
+
+            \log_activity(
+                $this->pdo(),
+                $adminId,
+                'GCash discrepancy waived',
+                'GCash',
+                $sessionId,
+                null,
+                [
+                    'session_id' => $sessionId,
+                    'waiver_notes' => $waiverNotes,
+                    'waived_by' => $adminId,
+                    'cash_variance' => $session['cash_variance'],
+                    'wallet_variance' => $session['wallet_variance'],
+                ],
+                null,
+                AuditRecordCategory::STORE_OPERATION
+            );
+
+            $this->pdo()->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
 }
+

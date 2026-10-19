@@ -1963,6 +1963,7 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202610170001_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010003_safe_refund_exceptions','Preserve external settlement and specific Cash Refund exception attribution (#113)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610040001_user_theme','Personal display theme for every Staff account') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180003_product_warning_lead_time','Optional warning_lead_time_days on products (ticket #223)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610190004_gcash_funding_and_corrections','GCash service funding movements, linked corrections, and discrepancy waiver') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- Forecast defaults; retain any configured values.
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_history_days','30');
@@ -2002,15 +2003,59 @@ CREATE TABLE `gcash_service_sessions` (
   `closed_at` timestamp NULL DEFAULT NULL,
   `closed_by` int DEFAULT NULL,
   `unresolved_carryover_count` int NOT NULL DEFAULT '0',
+  `waiver_notes` text DEFAULT NULL,
+  `waived_by` int DEFAULT NULL,
+  `waived_at` timestamp NULL DEFAULT NULL,
   `is_open` int GENERATED ALWAYS AS (if(`status` = 'open',1,NULL)) STORED,
   PRIMARY KEY (`session_id`),
   UNIQUE KEY `uq_gcash_open_session` (`is_open`),
   KEY `idx_gcash_sessions_shift` (`shift_id`),
   KEY `idx_gcash_sessions_cashier` (`cashier_id`),
   KEY `idx_gcash_sessions_closed_by` (`closed_by`),
+  KEY `idx_gcash_sessions_waived_by` (`waived_by`),
   CONSTRAINT `fk_gcash_session_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`),
   CONSTRAINT `fk_gcash_session_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `fk_gcash_session_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `fk_gcash_session_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_session_waived_by` FOREIGN KEY (`waived_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `gcash_funding_movements` (
+  `movement_id` int NOT NULL AUTO_INCREMENT,
+  `session_id` int NOT NULL,
+  `movement_type` enum('replenishment','withdrawal','product_drawer_transfer','owner_capital') NOT NULL,
+  `fund_type` enum('cash','wallet') NOT NULL,
+  `amount` decimal(12,2) NOT NULL,
+  `direction` enum('in','out') NOT NULL,
+  `evidence_reference` varchar(120) DEFAULT NULL,
+  `reason` varchar(255) NOT NULL,
+  `authorized_by` int NOT NULL,
+  `recorded_by` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`movement_id`),
+  KEY `idx_gcash_funding_session` (`session_id`),
+  KEY `idx_gcash_funding_auth` (`authorized_by`),
+  KEY `idx_gcash_funding_rec` (`recorded_by`),
+  CONSTRAINT `fk_gcash_funding_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`),
+  CONSTRAINT `fk_gcash_funding_auth` FOREIGN KEY (`authorized_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_funding_rec` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `gcash_adjustments` (
+  `adjustment_id` int NOT NULL AUTO_INCREMENT,
+  `transaction_id` bigint unsigned NOT NULL,
+  `session_id` int NOT NULL,
+  `service_cash_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `wallet_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `reason` varchar(255) NOT NULL,
+  `authorized_by` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`adjustment_id`),
+  KEY `idx_gcash_adj_tx` (`transaction_id`),
+  KEY `idx_gcash_adj_session` (`session_id`),
+  KEY `idx_gcash_adj_auth` (`authorized_by`),
+  CONSTRAINT `fk_gcash_adj_tx` FOREIGN KEY (`transaction_id`) REFERENCES `gcash_transactions` (`transaction_id`),
+  CONSTRAINT `fk_gcash_adj_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`),
+  CONSTRAINT `fk_gcash_adj_auth` FOREIGN KEY (`authorized_by`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `gcash_transactions` (

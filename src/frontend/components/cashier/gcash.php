@@ -40,8 +40,10 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="gcash-session-header-actions">
                     <span id="gcash-session-status" class="gcash-status">Checking…</span>
                     <button class="btn btn-secondary" type="button" id="gcash-open-session-btn" hidden>Open GCash</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-funding-btn" hidden>Funding Movement</button>
                     <button class="btn btn-secondary" type="button" id="gcash-close-session-btn" hidden>Reconcile &amp; Close</button>
                     <button class="btn btn-secondary" type="button" id="gcash-handover-session-btn" hidden>Hand Over</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-waive-btn" hidden>Waive Variance</button>
                 </div>
             </div>
             <div id="gcash-session-banner" class="gcash-session-banner">
@@ -306,6 +308,151 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="gcash-actions">
                     <button class="btn" type="submit" id="gcash-nc-submit">Save as Needs checking</button>
                     <button class="btn btn-secondary" type="button" id="gcash-nc-cancel">Cancel</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog id="gcash-funding-dialog" aria-labelledby="gcash-funding-title">
+            <form id="gcash-funding-form">
+                <h2 id="gcash-funding-title">Record Funding Movement</h2>
+                <p>Replenishment, withdrawal, product drawer transfer, or owner capital.</p>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-type">Movement Type</label>
+                    <select class="pos-input" id="gcash-funding-type" name="movement_type" required>
+                        <option value="replenishment">Replenishment</option>
+                        <option value="withdrawal">Withdrawal</option>
+                        <option value="product_drawer_transfer">Product Drawer Transfer</option>
+                        <option value="owner_capital">Owner Capital</option>
+                    </select>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-fund-type">Fund Type</label>
+                    <select class="pos-input" id="gcash-funding-fund-type" name="fund_type" required>
+                        <option value="cash">Service Cash</option>
+                        <option value="wallet">Service Wallet</option>
+                    </select>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-direction">Direction</label>
+                    <select class="pos-input" id="gcash-funding-direction" name="direction" required>
+                        <option value="in">In (Adding to service funds)</option>
+                        <option value="out">Out (Deducting from service funds)</option>
+                    </select>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-amount">Amount (PHP)</label>
+                    <input class="pos-input" id="gcash-funding-amount" name="amount" type="number" step="0.01" min="0.01" required placeholder="0.00">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-evidence">Evidence Reference</label>
+                    <input class="pos-input" id="gcash-funding-evidence" name="evidence_reference" type="text" maxlength="120" placeholder="Required for wallet, transfer, or owner capital">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-reason">Reason (min 5 characters)</label>
+                    <input class="pos-input" id="gcash-funding-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="Reason for fund movement">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-approver">Authorizing Administrator username</label>
+                    <input class="pos-input" id="gcash-funding-approver" name="approver_username" type="text" required autocomplete="off">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-password">Administrator password</label>
+                    <input class="pos-input" id="gcash-funding-password" name="approver_password" type="password" required autocomplete="new-password">
+                </div>
+                <div class="gcash-actions">
+                    <button class="btn" type="submit" id="gcash-funding-submit">Record Movement</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-funding-cancel">Cancel</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog id="gcash-resolve-dialog" aria-labelledby="gcash-resolve-title">
+            <form id="gcash-resolve-form">
+                <h2 id="gcash-resolve-title">Resolve Needs Checking</h2>
+                <p id="gcash-resolve-summary" style="font-weight: 600;"></p>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-resolve-action">Resolution Action</label>
+                    <select class="pos-input" id="gcash-resolve-action" name="resolve_action" required>
+                        <option value="complete">Complete transaction (confirm remaining movement)</option>
+                        <option value="cancel">Cancel transaction (record offsetting reversal if money moved)</option>
+                    </select>
+                </div>
+                <div class="gcash-field" id="gcash-resolve-ref-group">
+                    <label class="pos-field-label" for="gcash-resolve-reference">Reference number</label>
+                    <input class="pos-input" id="gcash-resolve-reference" name="reference" type="text" maxlength="32" placeholder="Required if wallet was unconfirmed">
+                </div>
+                <div class="gcash-field" id="gcash-resolve-notes-group">
+                    <label class="pos-field-label" for="gcash-resolve-notes">Resolution notes / cancellation reason</label>
+                    <input class="pos-input" id="gcash-resolve-notes" name="notes" type="text" minlength="5" maxlength="255" placeholder="Minimum 5 characters">
+                </div>
+                <div id="gcash-resolve-auth-group" hidden>
+                    <p style="font-size: 0.85rem; color: var(--color-warning, #d97706); margin-bottom: 0.5rem;">
+                        <strong>Administrator authorization required:</strong> Prior money movement will be offset by a linked adjustment.
+                    </p>
+                    <div class="gcash-field">
+                        <label class="pos-field-label" for="gcash-resolve-approver">Authorizing Administrator username</label>
+                        <input class="pos-input" id="gcash-resolve-approver" name="approver_username" type="text" autocomplete="off">
+                    </div>
+                    <div class="gcash-field">
+                        <label class="pos-field-label" for="gcash-resolve-password">Administrator password</label>
+                        <input class="pos-input" id="gcash-resolve-password" name="approver_password" type="password" autocomplete="new-password">
+                    </div>
+                </div>
+                <div class="gcash-actions">
+                    <button class="btn" type="submit" id="gcash-resolve-submit">Confirm Resolution</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-resolve-cancel">Cancel</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog id="gcash-correction-dialog" aria-labelledby="gcash-correction-title">
+            <form id="gcash-correction-form">
+                <h2 id="gcash-correction-title">Record Linked Correction</h2>
+                <p>Completed transactions are immutable. This records an audited adjusting record linked to the original exchange.</p>
+                <p id="gcash-correction-summary" style="font-weight: 600;"></p>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-correction-cash-delta">Service Cash Delta (PHP, e.g. -10.00 or 10.00)</label>
+                    <input class="pos-input" id="gcash-correction-cash-delta" name="service_cash_delta" type="number" step="0.01" value="0.00">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-correction-wallet-delta">Wallet Delta (PHP, e.g. -10.00 or 10.00)</label>
+                    <input class="pos-input" id="gcash-correction-wallet-delta" name="wallet_delta" type="number" step="0.01" value="0.00">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-correction-reason">Correction Reason (min 5 characters)</label>
+                    <input class="pos-input" id="gcash-correction-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="Reason for adjustment">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-correction-approver">Authorizing Administrator username</label>
+                    <input class="pos-input" id="gcash-correction-approver" name="approver_username" type="text" required autocomplete="off">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-correction-password">Administrator password</label>
+                    <input class="pos-input" id="gcash-correction-password" name="approver_password" type="password" required autocomplete="new-password">
+                </div>
+                <div class="gcash-actions">
+                    <button class="btn" type="submit" id="gcash-correction-submit">Record Adjustment</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-correction-cancel">Cancel</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog id="gcash-waiver-dialog" aria-labelledby="gcash-waiver-title">
+            <form id="gcash-waiver-form">
+                <h2 id="gcash-waiver-title">Waive Closing Discrepancy</h2>
+                <p>Approve or waive closing variance notes. The counted variance remains permanently on record.</p>
+                <p id="gcash-waiver-summary" style="font-weight: 600;"></p>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-waiver-notes">Waiver Notes (min 5 characters)</label>
+                    <textarea class="pos-input" id="gcash-waiver-notes" name="waiver_notes" minlength="5" maxlength="500" required rows="3" placeholder="Reason for approving/waiving the discrepancy."></textarea>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-waiver-approver">Authorizing Administrator username</label>
+                    <input class="pos-input" id="gcash-waiver-approver" name="approver_username" type="text" required autocomplete="off">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-waiver-password">Administrator password</label>
+                    <input class="pos-input" id="gcash-waiver-password" name="approver_password" type="password" required autocomplete="new-password">
+                </div>
+                <div class="gcash-actions">
+                    <button class="btn" type="submit" id="gcash-waiver-submit">Approve Waiver</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-waiver-cancel">Cancel</button>
                 </div>
             </form>
         </dialog>

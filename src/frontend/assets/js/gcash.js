@@ -10,7 +10,7 @@
     let saving = false, reviewing = false, checking = false, duplicate = false;
     let debounce, lookup, historyRequest = 0, page = 1, rows = [], reviewRow;
     let stream, worker, cameraVersion = 0, ocrBusy = false, leaving = false;
-    let currentSession = null;
+    let currentSession = null, lastClosedSession = null, resolveTx = null, correctionTx = null, waiverSession = null;
     const notify = (message, type = 'info') => window.RetailMindUI.toast(message, type);
     const scanStatus = message => { el('scan-status').textContent = message; };
     const updateSave = () => {
@@ -70,6 +70,8 @@
         const openBtn = el('open-session-btn');
         const closeBtn = el('close-session-btn');
         const handoverBtn = el('handover-session-btn');
+        const fundingBtn = el('funding-btn');
+        const waiveBtn = el('waive-btn');
 
         if (!currentSession) {
             statusPill.textContent = 'Closed';
@@ -79,10 +81,17 @@
             openBtn.hidden = false;
             closeBtn.hidden = true;
             handoverBtn.hidden = true;
+            if (fundingBtn) fundingBtn.hidden = true;
+            if (waiveBtn) {
+                const hasVariance = lastClosedSession && (!lastClosedSession.waived_at) && (Number(lastClosedSession.cash_variance || 0) !== 0 || Number(lastClosedSession.wallet_variance || 0) !== 0);
+                waiveBtn.hidden = !hasVariance;
+            }
             disableTransactionForm(true);
             scanStatus('Open GCash responsibility before recording transactions.');
             return;
         }
+
+        if (waiveBtn) waiveBtn.hidden = true;
 
         if (currentSession.is_controlling_cashier) {
             statusPill.textContent = 'Active (You)';
@@ -94,6 +103,7 @@
             openBtn.hidden = true;
             closeBtn.hidden = false;
             handoverBtn.hidden = false;
+            if (fundingBtn) fundingBtn.hidden = false;
             disableTransactionForm(false);
             scanStatus(duplicate ? 'Duplicate reference. Save blocked.' : 'Ready for manual entry or USB scanner.');
             return;
@@ -107,6 +117,7 @@
         openBtn.hidden = true;
         closeBtn.hidden = true;
         handoverBtn.hidden = true;
+        if (fundingBtn) fundingBtn.hidden = true;
         disableTransactionForm(true);
         scanStatus(`Controlled by ${cashierName}. Transactions disabled.`);
     }
@@ -115,6 +126,7 @@
         try {
             const result = await request({action: 'session_status'});
             currentSession = result.session;
+            lastClosedSession = result.last_closed_session || null;
             renderSessionStatus();
         } catch (e) {
             el('session-status').textContent = 'Unavailable';
@@ -636,6 +648,14 @@
                     deltas.textContent = `Cash: ${cashDelta} · Wallet: ${walletDelta}`;
                     amountCell.append(deltas);
                 }
+                if (transaction.adjustments && transaction.adjustments.length > 0) {
+                    for (const adj of transaction.adjustments) {
+                        const adjInfo = document.createElement('small');
+                        adjInfo.style.color = 'var(--color-warning, #d97706)';
+                        adjInfo.textContent = `Adj #${adj.adjustment_id}: Cash ${formatPhp(adj.service_cash_delta, true)} · Wallet ${formatPhp(adj.wallet_delta, true)} (${adj.reason})`;
+                        amountCell.append(adjInfo);
+                    }
+                }
 
                 const statusCell = cell(row, '');
                 const status = document.createElement('span');
@@ -669,13 +689,23 @@
                         el('review-dialog').showModal();
                     });
                     actions.append(button);
-                } else if (transaction.verification_status === 'Completed' || transaction.verification_status === 'Needs checking') {
+                } else if (transaction.verification_status === 'Needs checking') {
                     const button = document.createElement('button');
                     button.type = 'button';
                     button.className = 'btn btn-secondary';
-                    button.disabled = true;
-                    button.title = 'Correction workflow is not yet available';
+                    button.textContent = 'Resolve';
+                    button.addEventListener('click', () => {
+                        openResolveDialog(transaction);
+                    });
+                    actions.append(button);
+                } else if (transaction.verification_status === 'Completed') {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn btn-secondary';
                     button.textContent = 'Correct';
+                    button.addEventListener('click', () => {
+                        openCorrectionDialog(transaction);
+                    });
                     actions.append(button);
                 } else { actions.textContent = 'Reviewed'; }
                 el('history-body').append(row);
@@ -947,6 +977,161 @@
             }
         });
     }
+
+    if (el('funding-btn')) {
+        el('funding-btn').addEventListener('click', () => {
+            el('funding-form').reset();
+            el('funding-dialog').showModal();
+        });
+        el('funding-cancel')?.addEventListener('click', () => el('funding-dialog').close());
+        el('funding-form')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const form = el('funding-form');
+            const submitBtn = el('funding-submit');
+            submitBtn.disabled = true;
+            try {
+                const body = {
+                    action: 'funding_movement',
+                    movement_type: form.movement_type.value,
+                    fund_type: form.fund_type.value,
+                    direction: form.direction.value,
+                    amount: form.amount.value,
+                    evidence_reference: form.evidence_reference.value,
+                    reason: form.reason.value,
+                    approver_username: form.approver_username.value,
+                    approver_password: form.approver_password.value,
+                };
+                const res = await request(null, body);
+                el('funding-dialog').close();
+                notify('Funding movement #' + res.movement_id + ' recorded.', 'success');
+                await loadSessionStatus();
+                await loadHistory();
+            } catch (err) {
+                notify(err.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    }
+
+    function openResolveDialog(tx) {
+        resolveTx = tx;
+        el('resolve-form').reset();
+        el('resolve-summary').textContent = `#${tx.transaction_id} · ${tx.transaction_type} · PHP ${tx.amount} (Cash delta: ${tx.service_cash_delta}, Wallet delta: ${tx.wallet_delta})`;
+        el('resolve-ref-group').hidden = false;
+        el('resolve-auth-group').hidden = true;
+        el('resolve-action').value = 'complete';
+        el('resolve-reference').value = tx.reference_number || '';
+        el('resolve-dialog').showModal();
+    }
+    el('resolve-action')?.addEventListener('change', () => {
+        const isCancel = el('resolve-action').value === 'cancel';
+        const hadMoney = resolveTx && (Number(resolveTx.service_cash_delta || 0) !== 0 || Number(resolveTx.wallet_delta || 0) !== 0);
+        el('resolve-ref-group').hidden = isCancel;
+        el('resolve-auth-group').hidden = !isCancel || !hadMoney;
+        el('resolve-approver').required = isCancel && hadMoney;
+        el('resolve-password').required = isCancel && hadMoney;
+    });
+    el('resolve-cancel')?.addEventListener('click', () => el('resolve-dialog').close());
+    el('resolve-form')?.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!resolveTx) return;
+        const form = el('resolve-form');
+        const submitBtn = el('resolve-submit');
+        submitBtn.disabled = true;
+        try {
+            const body = {
+                action: 'resolve_needs_checking',
+                transaction_id: resolveTx.transaction_id,
+                resolve_action: form.resolve_action.value,
+                reference: form.reference.value,
+                notes: form.notes.value,
+                approver_username: form.approver_username.value,
+                approver_password: form.approver_password.value,
+            };
+            await request(null, body);
+            el('resolve-dialog').close();
+            notify('Transaction #' + resolveTx.transaction_id + ' resolved.', 'success');
+            await loadSessionStatus();
+            await loadHistory();
+        } catch (err) {
+            notify(err.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+
+    function openCorrectionDialog(tx) {
+        correctionTx = tx;
+        el('correction-form').reset();
+        el('correction-summary').textContent = `#${tx.transaction_id} · Ref: ${tx.reference_number || 'N/A'} · ${tx.transaction_type} · PHP ${tx.amount}`;
+        el('correction-cash-delta').value = '0.00';
+        el('correction-wallet-delta').value = '0.00';
+        el('correction-dialog').showModal();
+    }
+    el('correction-cancel')?.addEventListener('click', () => el('correction-dialog').close());
+    el('correction-form')?.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!correctionTx) return;
+        const form = el('correction-form');
+        const submitBtn = el('correction-submit');
+        submitBtn.disabled = true;
+        try {
+            const body = {
+                action: 'linked_correction',
+                transaction_id: correctionTx.transaction_id,
+                service_cash_delta: form.service_cash_delta.value,
+                wallet_delta: form.wallet_delta.value,
+                reason: form.reason.value,
+                approver_username: form.approver_username.value,
+                approver_password: form.approver_password.value,
+            };
+            const res = await request(null, body);
+            el('correction-dialog').close();
+            notify('Linked correction #' + res.adjustment_id + ' recorded.', 'success');
+            await loadSessionStatus();
+            await loadHistory();
+        } catch (err) {
+            notify(err.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+
+    function openWaiveDialog(session) {
+        waiverSession = session;
+        el('waiver-form').reset();
+        el('waiver-summary').textContent = `Session #${session.session_id} · Cash variance: PHP ${session.cash_variance} · Wallet variance: PHP ${session.wallet_variance}`;
+        el('waiver-dialog').showModal();
+    }
+    el('waive-btn')?.addEventListener('click', () => {
+        if (lastClosedSession) openWaiveDialog(lastClosedSession);
+    });
+    el('waiver-cancel')?.addEventListener('click', () => el('waiver-dialog').close());
+    el('waiver-form')?.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!waiverSession) return;
+        const form = el('waiver-form');
+        const submitBtn = el('waiver-submit');
+        submitBtn.disabled = true;
+        try {
+            const body = {
+                action: 'waive_discrepancy',
+                session_id: waiverSession.session_id,
+                waiver_notes: form.waiver_notes.value,
+                approver_username: form.approver_username.value,
+                approver_password: form.approver_password.value,
+            };
+            await request(null, body);
+            el('waiver-dialog').close();
+            notify('Discrepancy for session #' + waiverSession.session_id + ' approved/waived.', 'success');
+            await loadSessionStatus();
+        } catch (err) {
+            notify(err.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
 
     window.addEventListener('pagehide', () => { leaving = true; clearTimeout(debounce); lookup?.abort(); closeCamera(); });
     updateSave(); updatePreview(); loadHistory(); loadSessionStatus();
