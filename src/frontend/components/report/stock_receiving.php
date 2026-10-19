@@ -64,6 +64,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'received_qty' => $_POST['received_qty'] ?? 0,
             'received_packages' => $_POST['received_packages'] ?? 0,
             'damaged_qty' => $_POST['damaged_qty'] ?? 0,
+            'received_packs' => $_POST['received_packs'] ?? 0,
+            'accepted_packs' => $_POST['accepted_packs'] ?? null,
+            'damaged_packs' => $_POST['damaged_packs'] ?? 0,
+            'rejected_packs' => $_POST['rejected_packs'] ?? 0,
+            'received_loose' => $_POST['received_loose'] ?? 0,
+            'accepted_loose' => $_POST['accepted_loose'] ?? null,
+            'damaged_loose' => $_POST['damaged_loose'] ?? 0,
+            'rejected_loose' => $_POST['rejected_loose'] ?? 0,
             'cost_price' => $_POST['cost_price'] ?? '',
             'supplier' => $_POST['supplier'] ?? '',
             'invoice_number' => $_POST['invoice_number'] ?? '',
@@ -257,7 +265,11 @@ $categoryIcon = static function (string $categoryName): string {
                         <div class="form-grid">
                             <div class="form-group receiving-quantity">
                                 <label for="quantity_mode">Receiving quantity type</label>
-                                <select name="quantity_mode" id="quantity_mode" data-field="quantity_mode"><option value="units">Base units</option><option value="packages">Packages / cases</option></select>
+                                <select name="quantity_mode" id="quantity_mode" data-field="quantity_mode">
+                                    <option value="units">Base units</option>
+                                    <option value="packages">Packages / cases</option>
+                                    <option value="packs">Sealed packs & loose pieces</option>
+                                </select>
                             </div>
                             <div class="form-group receiving-quantity" id="units_qty_group" data-field="units_qty_group">
                                 <label for="received_qty">Base units received</label>
@@ -267,9 +279,33 @@ $categoryIcon = static function (string $categoryName): string {
                                 <label for="received_packages">Packages received</label>
                                 <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_packages" id="received_packages" data-field="received_packages" value="">
                             </div>
-                            <div class="form-group receiving-quantity">
+                            <div class="form-group receiving-quantity" id="single_damaged_group" data-field="single_damaged_group">
                                 <label for="damaged_qty">Damaged base units on delivery</label>
                                 <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_qty" id="damaged_qty" data-field="damaged_qty" value="0">
+                            </div>
+                            <div class="form-group receiving-quantity" id="packs_qty_group" data-field="packs_qty_group" style="display:none">
+                                <label for="received_packs">Sealed packs received</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_packs" id="received_packs" data-field="received_packs" value="">
+                            </div>
+                            <div class="form-group receiving-quantity" id="damaged_packs_group" data-field="damaged_packs_group" style="display:none">
+                                <label for="damaged_packs">Damaged packs</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_packs" id="damaged_packs" data-field="damaged_packs" value="0">
+                            </div>
+                            <div class="form-group receiving-quantity" id="rejected_packs_group" data-field="rejected_packs_group" style="display:none">
+                                <label for="rejected_packs">Rejected packs</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="rejected_packs" id="rejected_packs" data-field="rejected_packs" value="0">
+                            </div>
+                            <div class="form-group receiving-quantity" id="loose_qty_group" data-field="loose_qty_group" style="display:none">
+                                <label for="received_loose">Loose pieces received</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_loose" id="received_loose" data-field="received_loose" value="0">
+                            </div>
+                            <div class="form-group receiving-quantity" id="damaged_loose_group" data-field="damaged_loose_group" style="display:none">
+                                <label for="damaged_loose">Damaged loose pieces</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_loose" id="damaged_loose" data-field="damaged_loose" value="0">
+                            </div>
+                            <div class="form-group receiving-quantity" id="rejected_loose_group" data-field="rejected_loose_group" style="display:none">
+                                <label for="rejected_loose">Rejected loose pieces</label>
+                                <input type="text" inputmode="numeric" pattern="[0-9]+" name="rejected_loose" id="rejected_loose" data-field="rejected_loose" value="0">
                             </div>
                         </div>
                         <small class="receiving-quantity" id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
@@ -424,25 +460,63 @@ async function identifyReceivingProduct(code) {
             return;
         }
         const product = result.product;
-        if (Array.from(lineContainer.children).some(row => row.querySelector('[data-field="product_id"]').value === String(product.product_id))) {
-            scanStatus.textContent = `${product.product_name} is already added to delivery lines. Edit its existing line or choose another product.`;
+        const matchedPack = result.matched_code_kind === 'pack_barcode';
+        const matchedCase = result.matched_code_kind === 'case_barcode';
+        const hasPackConfig = Number(product.pack_size || 0) > 1;
+        let targetMode = 'units';
+        if (matchedCase) {
+            targetMode = 'packages';
+        } else if (matchedPack || (hasPackConfig && result.matched_code_kind === 'unit_barcode')) {
+            targetMode = 'packs';
+        }
+
+        const existingRow = Array.from(lineContainer.children).find(row => row.querySelector('[data-field="product_id"]').value === String(product.product_id));
+        if (existingRow) {
+            if (targetMode === 'packs' || targetMode === 'packages') {
+                const modeSelect = existingRow.querySelector('[data-field="quantity_mode"]');
+                if (modeSelect) {
+                    modeSelect.value = targetMode;
+                    updateQuantityMode(existingRow);
+                }
+            }
+            const focusField = matchedPack
+                ? existingRow.querySelector('[data-field="received_packs"]')
+                : (matchedCase
+                    ? existingRow.querySelector('[data-field="received_packages"]')
+                    : (targetMode === 'packs'
+                        ? existingRow.querySelector('[data-field="received_loose"]')
+                        : existingRow.querySelector('[data-field="received_qty"]')));
+            focusField?.focus();
+            scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedPack ? 'pack barcode' : (matchedCase ? 'case barcode' : 'unit barcode')}. Focused entry field.`;
             return;
         }
+
         if (!productMap.has(String(product.product_id))) {
             productMap.set(String(product.product_id), product);
         }
-        const matchedCase = result.matched_code_kind === 'case_barcode';
+
         const line = addReceivingLine({
             product_id: product.product_id,
-            quantity_mode: matchedCase ? 'packages' : 'units'
+            quantity_mode: targetMode
         });
         if (!line) return;
+        const targetField = matchedPack
+            ? line.querySelector('[data-field="received_packs"]')
+            : (matchedCase
+                ? line.querySelector('[data-field="received_packages"]')
+                : (targetMode === 'packs'
+                    ? line.querySelector('[data-field="received_loose"]')
+                    : line.querySelector('[data-field="received_qty"]')));
+        targetField?.focus();
         RetailMindUI.toast(`${product.product_name} added to delivery lines.`, 'success');
         productSearchScan.value = '';
         const matchedBy = result.matched_code_kind === 'sku'
             ? 'SKU'
-            : (matchedCase ? 'case barcode' : 'unit barcode');
-        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Enter actual delivered ${matchedCase ? 'packages / cases' : 'Base units'}.`;
+            : (matchedPack ? 'pack barcode' : (matchedCase ? 'case barcode' : 'unit barcode'));
+        const formPrompt = matchedPack
+            ? 'Sales Packs'
+            : (matchedCase ? 'packages / cases' : (targetMode === 'packs' ? 'sealed packs and loose pieces' : 'Base units'));
+        scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Enter actual delivered ${formPrompt}.`;
     } catch (error) {
         if (error.name === 'AbortError' || lookupId !== activeScanLookup) return;
         scanStatus.textContent = 'The product code could not be checked right now. Try again or choose the product manually.';
@@ -510,12 +584,31 @@ function updatePackageConversion(row = activeLine) {
     const units = Number(prod.units_per_package || 1);
     const receiving = prod.receiving_unit || 'package';
     const base = prod.base_unit || 'piece';
-    const packages = Number(field('received_packages')?.value || 0);
-    const damaged = Number(field('damaged_qty')?.value || 0);
-    const packageMode = field('quantity_mode')?.value === 'packages';
-    const total = packageMode ? packages * units : Number(field('received_qty')?.value || 0);
+    const mode = field('quantity_mode')?.value || 'units';
+
     const convEl = field('package_conversion');
-    if (convEl) {
+    if (!convEl) return;
+
+    if (mode === 'packs') {
+        const packSize = Number(prod.pack_size || 1);
+        const receivedPacksInput = Number(field('received_packs')?.value || 0);
+        const damagedPacksInput = Number(field('damaged_packs')?.value || 0);
+        const rejectedPacksInput = Number(field('rejected_packs')?.value || 0);
+        const receivedLooseInput = Number(field('received_loose')?.value || 0);
+        const damagedLooseInput = Number(field('damaged_loose')?.value || 0);
+        const rejectedLooseInput = Number(field('rejected_loose')?.value || 0);
+        const acceptedPacks = Math.max(0, receivedPacksInput - damagedPacksInput - rejectedPacksInput);
+        const acceptedLoose = Math.max(0, receivedLooseInput - damagedLooseInput - rejectedLooseInput);
+        const total = (receivedPacksInput * packSize) + receivedLooseInput;
+        const damagedTotal = (damagedPacksInput * packSize) + damagedLooseInput;
+        const rejectedTotal = (rejectedPacksInput * packSize) + rejectedLooseInput;
+        const acceptedTotal = (acceptedPacks * packSize) + acceptedLoose;
+        convEl.textContent = `1 Sales Pack = ${packSize} ${base}(s). ${receivedPacksInput} pack(s) × ${packSize} + ${receivedLooseInput} loose = ${total} units received; ${damagedTotal} damaged; ${rejectedTotal} rejected; ${acceptedTotal} accepted (${acceptedPacks} sealed packs, ${acceptedLoose} loose pieces).`;
+    } else {
+        const packages = Number(field('received_packages')?.value || 0);
+        const damaged = Number(field('damaged_qty')?.value || 0);
+        const packageMode = mode === 'packages';
+        const total = packageMode ? packages * units : Number(field('received_qty')?.value || 0);
         convEl.textContent = `1 ${receiving} = ${units} ${base}(s). ${packageMode ? `${packages} × ${units} = ` : ''}${total} units received; ${damaged} damaged units; ${Math.max(0, total - damaged)} accepted units.`;
     }
     refreshDelivery();
@@ -524,21 +617,52 @@ function updatePackageConversion(row = activeLine) {
 function updateQuantityMode(row = activeLine) {
     if (!row) return;
     const field = name => row.querySelector('[data-field="' + name + '"]');
-    const packages = field('quantity_mode')?.value === 'packages';
+    const mode = field('quantity_mode')?.value || 'units';
+    const isPacks = mode === 'packs';
+    const isPackages = mode === 'packages';
+    const isUnits = mode === 'units';
+
     const unitsGroup = field('units_qty_group');
     const packagesGroup = field('packages_qty_group');
-    if (unitsGroup) unitsGroup.style.display = packages ? 'none' : 'flex';
-    if (packagesGroup) packagesGroup.style.display = packages ? 'flex' : 'none';
+    const singleDamagedGroup = field('single_damaged_group');
+    const packsGroup = field('packs_qty_group');
+    const damagedPacksGroup = field('damaged_packs_group');
+    const rejectedPacksGroup = field('rejected_packs_group');
+    const looseGroup = field('loose_qty_group');
+    const damagedLooseGroup = field('damaged_loose_group');
+    const rejectedLooseGroup = field('rejected_loose_group');
+
+    if (unitsGroup) unitsGroup.style.display = isUnits ? 'flex' : 'none';
+    if (packagesGroup) packagesGroup.style.display = isPackages ? 'flex' : 'none';
+    if (singleDamagedGroup) singleDamagedGroup.style.display = (isUnits || isPackages) ? 'flex' : 'none';
+
+    if (packsGroup) packsGroup.style.display = isPacks ? 'flex' : 'none';
+    if (damagedPacksGroup) damagedPacksGroup.style.display = isPacks ? 'flex' : 'none';
+    if (rejectedPacksGroup) rejectedPacksGroup.style.display = isPacks ? 'flex' : 'none';
+    if (looseGroup) looseGroup.style.display = isPacks ? 'flex' : 'none';
+    if (damagedLooseGroup) damagedLooseGroup.style.display = isPacks ? 'flex' : 'none';
+    if (rejectedLooseGroup) rejectedLooseGroup.style.display = isPacks ? 'flex' : 'none';
+
     const receivedQty = field('received_qty');
     const receivedPackages = field('received_packages');
+    const receivedPacks = field('received_packs');
+    const rejectedPacks = field('rejected_packs');
+    const receivedLoose = field('received_loose');
+    const rejectedLoose = field('rejected_loose');
+
     if (receivedQty) {
-        receivedQty.required = !packages;
-        receivedQty.disabled = packages;
+        receivedQty.required = isUnits;
+        receivedQty.disabled = !isUnits;
     }
     if (receivedPackages) {
-        receivedPackages.required = packages;
-        receivedPackages.disabled = !packages;
+        receivedPackages.required = isPackages;
+        receivedPackages.disabled = !isPackages;
     }
+    if (receivedPacks) receivedPacks.disabled = !isPacks;
+    if (rejectedPacks) rejectedPacks.disabled = !isPacks;
+    if (receivedLoose) receivedLoose.disabled = !isPacks;
+    if (rejectedLoose) rejectedLoose.disabled = !isPacks;
+
     for (const name of ['received_qty', 'received_packages']) {
         const input = field(name);
         if (input) {
@@ -560,12 +684,29 @@ function refreshDelivery() {
         const prod = productMap.get(String(prodId));
         if (!prodId || !prod) continue;
         products++;
-        const packages = field('quantity_mode').value === 'packages';
-        const quantity = field(packages ? 'received_packages' : 'received_qty').value;
-        const unitsPerPkg = Number(prod.units_per_package || 1);
-        const total = /^\d+$/.test(quantity) ? Number(quantity) * (packages ? unitsPerPkg : 1) : 0;
-        const damage = /^\d+$/.test(field('damaged_qty').value) ? Number(field('damaged_qty').value) : 0;
-        const usable = Math.max(0, total - damage);
+        const mode = field('quantity_mode')?.value || 'units';
+        let total = 0, damage = 0, usable = 0;
+        if (mode === 'packs') {
+            const packSize = Number(prod.pack_size || 1);
+            const receivedPacksInput = /^\d+$/.test(field('received_packs')?.value) ? Number(field('received_packs').value) : 0;
+            const receivedLooseInput = /^\d+$/.test(field('received_loose')?.value) ? Number(field('received_loose').value) : 0;
+            const damagedPacksInput = /^\d+$/.test(field('damaged_packs')?.value) ? Number(field('damaged_packs').value) : 0;
+            const damagedLooseInput = /^\d+$/.test(field('damaged_loose')?.value) ? Number(field('damaged_loose').value) : 0;
+            const rejectedPacksInput = /^\d+$/.test(field('rejected_packs')?.value) ? Number(field('rejected_packs').value) : 0;
+            const rejectedLooseInput = /^\d+$/.test(field('rejected_loose')?.value) ? Number(field('rejected_loose').value) : 0;
+            total = (receivedPacksInput * packSize) + receivedLooseInput;
+            damage = (damagedPacksInput * packSize) + damagedLooseInput;
+            const acceptedPacksCount = Math.max(0, receivedPacksInput - damagedPacksInput - rejectedPacksInput);
+            const acceptedLooseCount = Math.max(0, receivedLooseInput - damagedLooseInput - rejectedLooseInput);
+            usable = (acceptedPacksCount * packSize) + acceptedLooseCount;
+        } else {
+            const packages = mode === 'packages';
+            const quantity = field(packages ? 'received_packages' : 'received_qty').value;
+            const unitsPerPkg = Number(prod.units_per_package || 1);
+            total = /^\d+$/.test(quantity) ? Number(quantity) * (packages ? unitsPerPkg : 1) : 0;
+            damage = /^\d+$/.test(field('damaged_qty').value) ? Number(field('damaged_qty').value) : 0;
+            usable = Math.max(0, total - damage);
+        }
         received += total;
         damaged += damage;
         accepted += usable;
@@ -878,7 +1019,7 @@ function connectLine(row) {
         updateQuantityMode(row);
     });
 
-    for (const name of ['received_qty', 'received_packages', 'damaged_qty']) {
+    for (const name of ['received_qty', 'received_packages', 'damaged_qty', 'received_packs', 'damaged_packs', 'rejected_packs', 'received_loose', 'damaged_loose', 'rejected_loose']) {
         row.querySelector('[data-field="' + name + '"]')?.addEventListener('input', () => {
             activateLine(row);
             updatePackageConversion(row);
@@ -954,16 +1095,29 @@ function addReceivingLine(values = {}) {
     row.dataset.productId = productId;
     row.querySelector('[data-field="product_id"]').value = productId;
 
+    const hasSalesPack = Number(product.pack_size || 0) > 1;
     const unitsPerPkg = Number(product.units_per_package || 1);
     const receivingUnit = product.receiving_unit || 'package';
     const baseUnit = product.base_unit || 'piece';
     const baseLabel = unitsPerPkg === 1 ? baseUnit : (baseUnit.endsWith('s') ? baseUnit : baseUnit + 's');
-    const packText = `1 ${receivingUnit} = ${unitsPerPkg} ${baseLabel}`;
+    const packText = hasSalesPack
+        ? `1 Sales Pack = ${product.pack_size} ${baseLabel} · 1 ${receivingUnit} = ${unitsPerPkg} ${baseLabel}`
+        : `1 ${receivingUnit} = ${unitsPerPkg} ${baseLabel}`;
 
     row.querySelector('.receiving-product-name').textContent = product.product_name;
     row.querySelector('.receiving-product-sku').textContent = product.sku ? `(${product.sku})` : '';
     row.querySelector('.receiving-product-pack').textContent = packText;
     row.querySelector('.remove-receiving-line').setAttribute('aria-label', `Remove ${product.product_name}`);
+
+    const qtyModeSelect = row.querySelector('[data-field="quantity_mode"]');
+    if (qtyModeSelect) {
+        if (!hasSalesPack) {
+            const packOpt = qtyModeSelect.querySelector('option[value="packs"]');
+            if (packOpt) packOpt.remove();
+        } else if (!values.quantity_mode) {
+            qtyModeSelect.value = 'packs';
+        }
+    }
 
     lineContainer.appendChild(row);
     connectLine(row);
@@ -1066,20 +1220,69 @@ function validateQuantities() {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const prodId = field('product_id')?.value;
         const prod = productMap.get(String(prodId));
-        const packages = field('quantity_mode').value === 'packages';
-        const quantity = field(packages ? 'received_packages' : 'received_qty');
-        const pack = packages ? Number(prod?.units_per_package || 1) : 1;
-        const total = Number(quantity.value) * pack;
-        const damage = field('damaged_qty');
+        const mode = field('quantity_mode')?.value || 'units';
         let invalid = null;
         let message = '';
-        if (!/^\d+$/.test(quantity.value) || Number(quantity.value) <= 0 || !Number.isInteger(pack) || pack <= 0 || total > 2147483647) {
-            invalid = quantity;
-            message = 'Enter a positive whole-number bought quantity within range and use a valid saved pack size.';
-        } else if (!/^\d+$/.test(damage.value) || Number(damage.value) > total) {
-            invalid = damage;
-            message = 'Damaged units must be a whole number from zero to the received units.';
+        if (mode === 'packs') {
+            const packSize = Number(prod?.pack_size || 1);
+            const receivedPacksField = field('received_packs');
+            const receivedLooseField = field('received_loose');
+            const damagedPacksField = field('damaged_packs');
+            const damagedLooseField = field('damaged_loose');
+            const rejectedPacksField = field('rejected_packs');
+            const rejectedLooseField = field('rejected_loose');
+            const receivedPacksValue = receivedPacksField ? receivedPacksField.value.trim() : '';
+            const receivedLooseValue = receivedLooseField ? receivedLooseField.value.trim() : '';
+            const damagedPacksValue = damagedPacksField ? damagedPacksField.value.trim() : '0';
+            const damagedLooseValue = damagedLooseField ? damagedLooseField.value.trim() : '0';
+            const rejectedPacksValue = rejectedPacksField ? rejectedPacksField.value.trim() : '0';
+            const rejectedLooseValue = rejectedLooseField ? rejectedLooseField.value.trim() : '0';
+            if (!/^\d+$/.test(receivedPacksValue)) {
+                invalid = receivedPacksField;
+                message = 'Enter received packs as a whole number from zero upward.';
+            } else if (!/^\d+$/.test(receivedLooseValue)) {
+                invalid = receivedLooseField;
+                message = 'Enter received loose pieces as a whole number from zero upward.';
+            } else if (Number(receivedPacksValue) === 0 && Number(receivedLooseValue) === 0) {
+                invalid = receivedPacksField;
+                message = 'Enter at least one received pack or loose piece.';
+            } else if (!/^\d+$/.test(damagedPacksValue) || Number(damagedPacksValue) > Number(receivedPacksValue)) {
+                invalid = damagedPacksField;
+                message = 'Damaged packs must be a whole number from zero to received packs.';
+            } else if (!/^\d+$/.test(rejectedPacksValue) || Number(rejectedPacksValue) > Number(receivedPacksValue)) {
+                invalid = rejectedPacksField;
+                message = 'Rejected packs must be a whole number from zero to received packs.';
+            } else if (Number(damagedPacksValue) + Number(rejectedPacksValue) > Number(receivedPacksValue)) {
+                invalid = rejectedPacksField;
+                message = 'Damaged and rejected packs cannot exceed received packs.';
+            } else if (!/^\d+$/.test(damagedLooseValue) || Number(damagedLooseValue) > Number(receivedLooseValue)) {
+                invalid = damagedLooseField;
+                message = 'Damaged loose pieces must be a whole number from zero to received loose pieces.';
+            } else if (!/^\d+$/.test(rejectedLooseValue) || Number(rejectedLooseValue) > Number(receivedLooseValue)) {
+                invalid = rejectedLooseField;
+                message = 'Rejected loose pieces must be a whole number from zero to received loose pieces.';
+            } else if (Number(damagedLooseValue) + Number(rejectedLooseValue) > Number(receivedLooseValue)) {
+                invalid = rejectedLooseField;
+                message = 'Damaged and rejected loose pieces cannot exceed received loose pieces.';
+            } else if (((Number(receivedPacksValue) * packSize) + Number(receivedLooseValue)) > 2147483647) {
+                invalid = receivedPacksField;
+                message = 'Resulting unit quantity is too large.';
+            }
         } else {
+            const packages = mode === 'packages';
+            const quantity = field(packages ? 'received_packages' : 'received_qty');
+            const pack = packages ? Number(prod?.units_per_package || 1) : 1;
+            const total = Number(quantity.value) * pack;
+            const damage = field('damaged_qty');
+            if (!/^\d+$/.test(quantity.value) || Number(quantity.value) <= 0 || !Number.isInteger(pack) || pack <= 0 || total > 2147483647) {
+                invalid = quantity;
+                message = 'Enter a positive whole-number bought quantity within range and use a valid saved pack size.';
+            } else if (!/^\d+$/.test(damage.value) || Number(damage.value) > total) {
+                invalid = damage;
+                message = 'Damaged units must be a whole number from zero to the received units.';
+            }
+        }
+        if (!invalid) {
             invalid = Array.from(row.querySelectorAll('input, select, textarea')).find(input => !input.checkValidity());
             message = invalid?.validationMessage || '';
             const cost = field('cost_price');
