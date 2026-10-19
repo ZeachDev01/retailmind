@@ -64,6 +64,18 @@ _Avoid_: Selling unit, retail unit, loose unit
 The bulk commercial container or package used when purchasing goods from suppliers or supermarkets (e.g. case, box, ream, carton, pack).
 _Avoid_: Bulk unit, supplier unit, container
 
+**Sales Pack**:
+A sealed package containing a fixed number of a Product's Base Units, sold at a dedicated price cheaper than buying that number individually. It may have a barcode distinct from the individual piece barcode; unopened Sales Packs and loose pieces are counted separately within the same Product's stock.
+_Avoid_: Receiving Unit (when referring to a customer purchase)
+
+**Pack Opening**:
+The conversion of an unopened Sales Pack into its fixed number of loose Base Units for individual sale. It changes the form of the stock without changing the total quantity of goods.
+_Avoid_: Sale, Stock Receiving (when referring to opening existing stock)
+
+**Prepared Oil Pouch**:
+Oil portioned and packaged before sale, counted as individual pouches of a specified volume. The Store sells 250 mL (1/4 litre) pouches for PHP 20 and 500 mL (1/2 litre) pouches for PHP 40.
+_Avoid_: Bulk oil, peso amount (when referring to the pouch size)
+
 **Units per Package**:
 The fixed multiplier representing the exact number of Base Units contained within one Receiving Unit.
 _Avoid_: Pack size, multiplier, conversion rate
