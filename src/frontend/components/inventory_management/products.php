@@ -789,6 +789,37 @@ foreach ($products as $product) {
             background: #f8fafc;
         }
 
+        #stock-adjust-modal .catalog-search {
+            flex: none;
+            min-width: 0;
+        }
+
+        #adjust-product-search {
+            min-height: 48px;
+            padding-left: 2.5rem;
+            border-radius: 10px;
+            background: var(--theme-surface, #fff);
+        }
+
+        #adjust-product-search:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: -2px;
+            box-shadow: none;
+        }
+
+        #adjust-product-search::-webkit-search-cancel-button {
+            display: none;
+        }
+
+        #adjust-product-status {
+            display: block;
+            margin-top: .5rem;
+            color: var(--muted);
+            font-size: .875rem;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
         .catalog-field {
             display: grid;
             gap: .3rem;
@@ -1514,7 +1545,10 @@ foreach ($products as $product) {
                     <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="adjust">
                         <div class="form-group">
                             <label for="adjust-product-search">Scan barcode or search products</label>
-                            <input type="search" id="adjust-product-search" list="adjust-product-options" required autocomplete="off" placeholder="Scan barcode or type a name or SKU" aria-describedby="adjust-product-status">
+                            <div class="catalog-search">
+                                <i class="bi bi-upc-scan" aria-hidden="true"></i>
+                                <input type="search" id="adjust-product-search" list="adjust-product-options" required autocomplete="off" placeholder="Barcode, product name or SKU" aria-describedby="adjust-product-status">
+                            </div>
                             <input type="hidden" name="product_id" id="adjust-product-id">
                             <datalist id="adjust-product-options">
                                 <?php foreach ($activeProducts as $product): ?><option value="<?= htmlspecialchars($product['sku'] . ' — ' . $product['product_name'] . ' (' . (int)$product['quantity_on_hand'] . ' on hand)', ENT_QUOTES) ?>" data-product-id="<?= (int)$product['product_id'] ?>" data-sku="<?= htmlspecialchars($product['sku'], ENT_QUOTES) ?>" data-barcode="<?= htmlspecialchars($product['barcode'] ?? '', ENT_QUOTES) ?>" label="<?= htmlspecialchars($product['barcode'] ?? '', ENT_QUOTES) ?>"></option><?php endforeach; ?>
