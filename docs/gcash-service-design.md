@@ -2,6 +2,8 @@
 
 Design discussion in progress. This document records intended behavior, not implemented functionality. Current behavior remains documented in [gcash.md](gcash.md).
 
+The consolidated specification is [gcash-service-spec.md](gcash-service-spec.md), published as [issue #236](https://github.com/ZeachDev01/retailmind/issues/236). It includes later agreements on overviews and recording, and explicitly lists unresolved policies.
+
 ## Agreed boundaries
 
 Confirmed on 2026-10-19:
@@ -14,6 +16,8 @@ Confirmed on 2026-10-19:
 - Staff perform transfers in the GCash app. RetailMind records completion only after both the wallet transfer and physical cash exchange occur.
 - Fees should calculate automatically from the Store's rate schedule, replacing the earlier manual-entry proposal.
 - Transaction principal amounts accept whole pesos only. Every amount from 1 through 499 has the same 5 fee; fees follow the posted brackets rather than a percentage within each bracket.
+- At opening, the responsible cashier counts the service cash box and enters the actual wallet balance. At closing, both are checked again against expected balances, showing shortages or excesses separately.
+- Above 10,000, calculate the 1% fee rounded to the nearest centavo.
 
 ## Agreed cash-out fee options
 
@@ -56,11 +60,11 @@ The Store supplied photographs of its Cash In & Cash Out rate signs. Both servic
 | 9,501–10,000 | 100 |
 | Above 10,000 | 1% of amount |
 
-The sign says 10,000 and above is 1%; at exactly 10,000 this also gives 100. The Store confirmed that 1–499 costs 5 and 500–1,000 costs 10, including exactly 500. Principal amounts are whole pesos only; rounding of percentage fees remains undecided.
+The sign says 10,000 and above is 1%; at exactly 10,000 this also gives 100. The Store confirmed that 1–499 costs 5 and 500–1,000 costs 10, including exactly 500. Principal amounts are whole pesos only; percentage fees round to the nearest centavo.
 
 ## Decisions still open
 
-- Percentage fee rounding and any provider costs.
+- Any provider costs.
 - Opening balances and shift handover details.
 - Confirmation, unresolved exchanges, corrections, and shift-closing rules.
 - Wallet replenishment, cash transfers, oversight, and reconciliation.
