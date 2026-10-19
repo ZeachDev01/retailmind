@@ -160,6 +160,9 @@ try {
                                                     <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['damaged_packs'] > 0 || (int)$line['damaged_loose'] > 0)): ?>
                                                         <br><small class="rh-text-xs rh-text-[var(--muted)]"><?= (int)$line['damaged_packs'] ?> pack(s), <?= (int)$line['damaged_loose'] ?> loose</small>
                                                     <?php endif; ?>
+                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['rejected_packs'] > 0 || (int)$line['rejected_loose'] > 0)): ?>
+                                                        <br><small class="rh-text-xs rh-text-[var(--muted)]">Rejected: <?= (int)$line['rejected_packs'] ?> pack(s), <?= (int)$line['rejected_loose'] ?> loose</small>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td>
                                                     <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>

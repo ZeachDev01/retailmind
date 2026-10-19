@@ -46,7 +46,10 @@ $receivingHistorySrc = (string)file_get_contents(dirname(__DIR__, 2) . '/fronten
 
 $assert(str_contains($stockReceivingSrc, 'data-field="received_packs"') || str_contains($stockReceivingSrc, 'name="received_packs"'), 'stock_receiving.php includes received_packs field');
 $assert(str_contains($stockReceivingSrc, 'data-field="received_loose"') || str_contains($stockReceivingSrc, 'name="received_loose"'), 'stock_receiving.php includes received_loose field');
+$assert(str_contains($stockReceivingSrc, 'data-field="rejected_packs"') || str_contains($stockReceivingSrc, 'name="rejected_packs"'), 'stock_receiving.php includes rejected_packs field');
+$assert(str_contains($stockReceivingSrc, 'data-field="rejected_loose"') || str_contains($stockReceivingSrc, 'name="rejected_loose"'), 'stock_receiving.php includes rejected_loose field');
 $assert(str_contains($receivingHistorySrc, 'received_packs'), 'receiving_history.php references received_packs');
+$assert(str_contains($receivingHistorySrc, 'rejected_packs'), 'receiving_history.php references rejected_packs');
 
 // 2. Database setup with SQLite in-memory
 class SqliteSalesPackReceivingTestPdo extends PDO {
@@ -424,6 +427,47 @@ $adj = $adjStmt->fetch();
 $assert((int)$adj['adjustment_qty'] === -13, 'Inventory adjustment excluded -13 damaged units');
 $assert($adj['status'] === 'cancelled', 'Damaged goods on receiving are excluded before stock was added');
 
+// Test rejected quantities explicitly by form
+$rejectedReceipt = $receivingService->receiveStock([
+    'product_id' => $productId,
+    'received_packs' => 3,
+    'damaged_packs' => 1,
+    'rejected_packs' => 1,
+    'received_loose' => 5,
+    'damaged_loose' => 1,
+    'rejected_loose' => 1,
+    'batch_number' => 'BATCH-RCV-003',
+    'expiration_date' => '2027-02-28',
+], 1);
+
+$assert($rejectedReceipt['received_packs'] === 3, 'Rejected receipt received 3 packs');
+$assert($rejectedReceipt['accepted_packs'] === 1, 'Only 1 complete pack accepted (3 - 1 damaged - 1 rejected)');
+$assert($rejectedReceipt['damaged_packs'] === 1, '1 pack reported damaged');
+$assert($rejectedReceipt['rejected_packs'] === 1, '1 pack reported rejected');
+$assert($rejectedReceipt['received_loose'] === 5, 'Rejected receipt received 5 loose');
+$assert($rejectedReceipt['accepted_loose'] === 3, '3 loose accepted (5 - 1 damaged - 1 rejected)');
+$assert($rejectedReceipt['damaged_loose'] === 1, '1 loose reported damaged');
+$assert($rejectedReceipt['rejected_loose'] === 1, '1 loose reported rejected');
+$assert($rejectedReceipt['received_qty'] === 41, 'Delivered base units is 41');
+$assert($rejectedReceipt['accepted_qty'] === 15, 'Accepted base units is (1*12)+3 = 15');
+$assert($rejectedReceipt['damaged_qty'] === 13, 'Damaged base units is (1*12)+1 = 13');
+$assert($rejectedReceipt['rejected_qty'] === 13, 'Rejected base units is (1*12)+1 = 13');
+$assert($rejectedReceipt['discrepancy_type'] === 'damaged', 'Discrepancy type is damaged when damaged > 0');
+$assert($rejectedReceipt['discrepancy_qty'] === 26, 'Discrepancy qty accounts for damaged + rejected = 13 + 13 = 26');
+
+// Pure rejected delivery (damaged = 0, rejected > 0)
+$pureRejectedReceipt = $receivingService->receiveStock([
+    'product_id' => $productId,
+    'received_packs' => 2,
+    'rejected_packs' => 1,
+    'received_loose' => 2,
+    'rejected_loose' => 1,
+    'batch_number' => 'BATCH-RCV-004',
+    'expiration_date' => '2027-03-31',
+], 1);
+$assert($pureRejectedReceipt['discrepancy_type'] === 'other', 'Discrepancy type is other when rejected > 0 and damaged = 0');
+$assert($pureRejectedReceipt['discrepancy_qty'] === 13, 'Discrepancy qty equals rejected qty 13');
+
 echo "AC 2 passed.\n";
 
 // Test AC 3: Barcode lookup and unknown conversion protection
@@ -618,6 +662,25 @@ $rejects(function () use ($receivingService, $productId) {
         'received_loose' => 0,
     ], 1);
 }, 'At least one delivered unit');
+
+$rejects(function () use ($receivingService, $productId) {
+    $receivingService->receiveStock([
+        'product_id' => $productId,
+        'received_packs' => 2,
+        'damaged_packs' => 1,
+        'rejected_packs' => 2,
+    ], 1);
+}, 'Damaged and rejected packs cannot exceed quantity received.');
+
+$rejects(function () use ($receivingService, $productId) {
+    $receivingService->receiveStock([
+        'product_id' => $productId,
+        'received_packs' => 2,
+        'received_loose' => 2,
+        'damaged_loose' => 1,
+        'rejected_loose' => 2,
+    ], 1);
+}, 'Damaged and rejected loose pieces cannot exceed quantity received.');
 
 // Overflow
 $rejects(function () use ($receivingService, $productId) {

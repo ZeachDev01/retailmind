@@ -24,56 +24,20 @@ class ReceivingService
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
     }
 
-    private function hasPulloutColumn(): bool
-    {
-        if ($this->hasPulloutColumn === null) {
-            try {
-                $this->pdo->query("SELECT pullout_id FROM stock_receiving LIMIT 1");
-                $this->hasPulloutColumn = true;
-            } catch (Throwable) {
-                $this->hasPulloutColumn = false;
-            }
-        }
-        return $this->hasPulloutColumn;
-    }
+    private array $columnCache = [];
 
-    private function hasPackColumns(): bool
+    private function hasColumn(string $table, string $column): bool
     {
-        if ($this->hasPackColumns === null) {
+        $key = "{$table}.{$column}";
+        if (!isset($this->columnCache[$key])) {
             try {
-                $this->pdo->query("SELECT received_packs FROM stock_receiving LIMIT 1");
-                $this->hasPackColumns = true;
+                $this->pdo->query("SELECT {$column} FROM {$table} LIMIT 1");
+                $this->columnCache[$key] = true;
             } catch (Throwable) {
-                $this->hasPackColumns = false;
+                $this->columnCache[$key] = false;
             }
         }
-        return $this->hasPackColumns;
-    }
-
-    private function hasBatchPackColumns(): bool
-    {
-        if ($this->hasBatchPackColumns === null) {
-            try {
-                $this->pdo->query("SELECT sealed_quantity FROM product_batches LIMIT 1");
-                $this->hasBatchPackColumns = true;
-            } catch (Throwable) {
-                $this->hasBatchPackColumns = false;
-            }
-        }
-        return $this->hasBatchPackColumns;
-    }
-
-    private function hasBatchCostColumn(): bool
-    {
-        if ($this->hasBatchCostColumn === null) {
-            try {
-                $this->pdo->query("SELECT cost_price FROM product_batches LIMIT 1");
-                $this->hasBatchCostColumn = true;
-            } catch (Throwable) {
-                $this->hasBatchCostColumn = false;
-            }
-        }
-        return $this->hasBatchCostColumn;
+        return $this->columnCache[$key];
     }
 
     public function receiveStock(array $data, int $userId): array
@@ -208,7 +172,7 @@ class ReceivingService
         }
 
         [$scopeSql, $scopeParams] = $this->productScope();
-        $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, pack_size, pack_barcode, pack_price, quantity_purchased FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
+        $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, pack_size, pack_barcode, quantity_purchased FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
         $productStmt->execute(array_merge([$productId], $scopeParams));
         $product = $productStmt->fetch(PDO::FETCH_ASSOC);
         if (!$product) {
@@ -352,9 +316,19 @@ class ReceivingService
             $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
         }
 
-        if ($damagedQty > 0 && $discrepancyType === 'none') {
-            $discrepancyType = 'damaged';
-            $discrepancyQty = $damagedQty;
+        if ($discrepancyType === 'none') {
+            if ($damagedQty > 0) {
+                $discrepancyType = 'damaged';
+                $discrepancyQty = $damagedQty + $rejectedQty;
+            } elseif ($rejectedQty > 0) {
+                $discrepancyType = 'other';
+                $discrepancyQty = $rejectedQty;
+                if ($discrepancyNotes === '') {
+                    $discrepancyNotes = 'Rejected goods excluded on receipt';
+                }
+            }
+        } elseif ($rejectedQty > 0 && $discrepancyQty === 0) {
+            $discrepancyQty = $rejectedQty;
         }
 
         $totalCost = $costPrice !== null ? $costPrice * $acceptedQty : 0;
@@ -364,14 +338,15 @@ class ReceivingService
 
         $groupId = isset($data['group_id']) && (int)$data['group_id'] > 0 ? (int)$data['group_id'] : null;
 
-        if ($pulloutId !== null && !$this->hasPulloutColumn()) {
+        $hasPullout = $this->hasColumn('stock_receiving', 'pullout_id');
+        if ($pulloutId !== null && !$hasPullout) {
             throw new RuntimeException('Linked supplier pullouts require the latest database schema.');
         }
 
-        $pulloutCol = $this->hasPulloutColumn() ? 'pullout_id, ' : '';
-        $pulloutPlaceholder = $this->hasPulloutColumn() ? '?, ' : '';
+        $pulloutCol = $hasPullout ? 'pullout_id, ' : '';
+        $pulloutPlaceholder = $hasPullout ? '?, ' : '';
 
-        $hasPacks = $this->hasPackColumns();
+        $hasPacks = $this->hasColumn('stock_receiving', 'received_packs');
         $packCols = $hasPacks ? ', received_packs, accepted_packs, damaged_packs, rejected_packs, received_loose, accepted_loose, damaged_loose, rejected_loose, pack_size_used' : '';
         $packPlaceholders = $hasPacks ? ', ?, ?, ?, ?, ?, ?, ?, ?, ?' : '';
 
@@ -383,7 +358,7 @@ class ReceivingService
                                ) VALUES (?, {$pulloutPlaceholder}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{$packPlaceholders})");
 
         $params = [$groupId];
-        if ($this->hasPulloutColumn()) {
+        if ($hasPullout) {
             $params[] = $pulloutId;
         }
         $params = array_merge($params, [
@@ -404,8 +379,7 @@ class ReceivingService
 
         $receivingId = (int)$this->pdo->lastInsertId();
         if ($acceptedQty > 0) {
-            $hasBatchPacks = $this->hasBatchPackColumns();
-            $hasBatchCost = $this->hasBatchCostColumn();
+            $hasBatchPacks = $this->hasColumn('product_batches', 'sealed_quantity');
 
             $batchCols = ['product_id', 'receiving_id', 'batch_number', 'quantity', 'remaining_quantity'];
             $batchParams = [$productId, $receivingId, $batchNumber !== '' ? $batchNumber : null, $acceptedQty, $acceptedQty];
@@ -423,11 +397,6 @@ class ReceivingService
 
             $batchCols[] = 'supplier';
             $batchParams[] = $supplier !== '' ? $supplier : null;
-
-            if ($hasBatchCost) {
-                $batchCols[] = 'cost_price';
-                $batchParams[] = $costPrice;
-            }
 
             $placeholders = [];
             foreach ($batchCols as $col) {
@@ -491,6 +460,9 @@ class ReceivingService
             'received_qty' => $receivedQty,
             'accepted_qty' => $acceptedQty,
             'damaged_qty' => $damagedQty,
+            'rejected_qty' => $rejectedQty,
+            'discrepancy_type' => $discrepancyType,
+            'discrepancy_qty' => $discrepancyQty,
             'received_packages' => $receivedPackages,
             'units_per_package_used' => $unitsPerPackageUsed,
             'received_packs' => $receivedPacks,
@@ -508,15 +480,15 @@ class ReceivingService
     public function getActiveProducts(): array
     {
         [$scopeSql, $scopeParams] = $this->productScope();
-        $stmt = $this->pdo->prepare("SELECT p.product_id, p.sku, p.product_name, p.cost_price, p.units_per_package, p.pack_size, p.pack_barcode, p.pack_price, p.base_unit, p.receiving_unit, p.category_id, c.category_name, p.barcode, p.case_barcode, p.variant_label, p.product_image, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, p.reorder_level, p.safety_stock FROM products p LEFT JOIN categories c ON p.category_id = c.category_id LEFT JOIN inventory i ON p.product_id = i.product_id WHERE p.status = 'active'{$scopeSql} ORDER BY p.product_name");
+        $stmt = $this->pdo->prepare("SELECT p.product_id, p.sku, p.product_name, p.cost_price, p.units_per_package, p.pack_size, p.pack_barcode, p.base_unit, p.receiving_unit, p.category_id, c.category_name, p.barcode, p.case_barcode, p.variant_label, p.product_image, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, p.reorder_level, p.safety_stock FROM products p LEFT JOIN categories c ON p.category_id = c.category_id LEFT JOIN inventory i ON p.product_id = i.product_id WHERE p.status = 'active'{$scopeSql} ORDER BY p.product_name");
         $stmt->execute($scopeParams);
         return $stmt->fetchAll();
     }
 
     public function getReceivingHistory(?int $userId): array
     {
-        $pulloutSelect = $this->hasPulloutColumn() ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
-        $packSelect = $this->hasPackColumns()
+        $pulloutSelect = $this->hasColumn('stock_receiving', 'pullout_id') ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
+        $packSelect = $this->hasColumn('stock_receiving', 'received_packs')
             ? 'sr.received_packs, sr.accepted_packs, sr.damaged_packs, sr.rejected_packs, sr.received_loose, sr.accepted_loose, sr.damaged_loose, sr.rejected_loose, sr.pack_size_used,'
             : '0 AS received_packs, 0 AS accepted_packs, 0 AS damaged_packs, 0 AS rejected_packs, sr.received_qty AS received_loose, sr.accepted_qty AS accepted_loose, sr.damaged_qty AS damaged_loose, 0 AS rejected_loose, NULL AS pack_size_used,';
         $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.group_id, {$pulloutSelect} {$packSelect} sr.received_qty, sr.accepted_qty, sr.damaged_qty,
@@ -542,8 +514,8 @@ class ReceivingService
             JOIN products p ON sr.product_id = p.product_id
             JOIN users u ON sr.received_by = u.user_id';
         $key = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
-        $pulloutSelect = $this->hasPulloutColumn() ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
-        $packSelect = $this->hasPackColumns()
+        $pulloutSelect = $this->hasColumn('stock_receiving', 'pullout_id') ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
+        $packSelect = $this->hasColumn('stock_receiving', 'received_packs')
             ? 'sr.received_packs, sr.accepted_packs, sr.damaged_packs, sr.rejected_packs, sr.received_loose, sr.accepted_loose, sr.damaged_loose, sr.rejected_loose, sr.pack_size_used,'
             : '0 AS received_packs, 0 AS accepted_packs, 0 AS damaged_packs, 0 AS rejected_packs, sr.received_qty AS received_loose, sr.accepted_qty AS accepted_loose, sr.damaged_loose AS damaged_loose, 0 AS rejected_loose, NULL AS pack_size_used,';
         $stmt = $this->pdo->prepare("SELECT
