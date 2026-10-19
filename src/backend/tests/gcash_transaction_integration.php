@@ -58,6 +58,30 @@ $pdo->exec("UPDATE cashier_shifts SET locked_at=NOW() WHERE cashier_id=4 AND sta
 try { $refuse(fn() => $service->save(4, '0000000000003', '10', 'Cash-Out')); }
 finally { $pdo->exec("UPDATE cashier_shifts SET locked_at=NULL WHERE cashier_id=4 AND status='open'"); }
 $check($before === $snapshot(), 'Saving and verification must not change sales or cash balances.');
+
+// Ticket #238: Verify preview calculations and ensure preview creates no DB records
+$prePreviewSnapshot = $pdo->query('SELECT (SELECT COUNT(*) FROM gcash_transactions), (SELECT COUNT(*) FROM activity_log)')->fetch(PDO::FETCH_NUM);
+$bCheck = [1 => 5.0, 350 => 5.0, 499 => 5.0, 500 => 10.0, 1000 => 10.0, 1001 => 15.0, 10000 => 100.0, 10001 => 100.01, 12345 => 123.45];
+foreach ($bCheck as $p => $f) {
+    $preview = $service->calculatePreview('Cash-In', $p);
+    $check($preview['fee'] === $f, "Preview fee mismatch at {$p}");
+}
+// Three PHP 1,000 examples
+$ci1k = $service->calculatePreview('Cash-In', 1000);
+$check($ci1k['counter_collect'] === 1010.0 && $ci1k['wallet_transfer'] === 1000.0 && $ci1k['net_service_cash'] === 1010.0 && $ci1k['net_wallet'] === -1000.0 && $ci1k['fee_location'] === 'cash', 'Cash-In 1000 mismatch');
+$coGk = $service->calculatePreview('Cash-Out', 1000, 'Fee via GCash');
+$check($coGk['customer_transfer'] === 1010.0 && $coGk['cash_payout'] === 1000.0 && $coGk['net_service_cash'] === -1000.0 && $coGk['net_wallet'] === 1010.0 && $coGk['fee_location'] === 'wallet', 'Cash-Out GCash 1000 mismatch');
+$coCk = $service->calculatePreview('Cash-Out', 1000, 'Fee in cash');
+$check($coCk['customer_transfer'] === 1000.0 && $coCk['counter_collect'] === 10.0 && $coCk['cash_payout'] === 1000.0 && $coCk['net_service_cash'] === -990.0 && $coCk['net_wallet'] === 1000.0 && $coCk['fee_location'] === 'cash', 'Cash-Out Cash 1000 mismatch');
+// 12345
+$co12k = $service->calculatePreview('Cash-Out', 12345, 'Fee in cash');
+$check($co12k['fee'] === 123.45 && $co12k['counter_collect'] === 123.45 && $co12k['net_service_cash'] === -12221.55, 'Cash-Out 12345 mismatch');
+// Invalid inputs refused
+foreach ([0, -1, '1.5', '10.50', 'NaN', '50001'] as $bad) {
+    $refuse(fn() => $service->calculatePreview('Cash-In', $bad));
+}
+$refuse(fn() => $service->calculatePreview('Payment', 1000));
+$check($prePreviewSnapshot === $pdo->query('SELECT (SELECT COUNT(*) FROM gcash_transactions), (SELECT COUNT(*) FROM activity_log)')->fetch(PDO::FETCH_NUM), 'Previewing must create no database records.');
 $audit = $pdo->prepare("SELECT COUNT(*) FROM activity_log WHERE module='GCash' AND record_id IN (?,?)");
 $audit->execute([$id, $id2]);
 $check((int)$audit->fetchColumn() === 4, 'Each creation and review must be audited exactly once.');

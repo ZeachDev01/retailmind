@@ -53,13 +53,63 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.getByText('No transactions on this page.', {exact: true}).waitFor();
         const nav = await page.locator('.sidebar-nav a').allTextContents();
         assert.equal(nav.findIndex(label => label.trim() === 'GCash'), nav.findIndex(label => label.trim() === 'Point of Sale') + 1);
+        const types = await page.locator('#gcash-type option').allTextContents();
+        assert.deepEqual(types.map(t => t.trim()), ['Cash-In', 'Cash-Out']);
         const reference = page.locator('#gcash-reference');
         await reference.fill('Reference No.: 0012 345 678901');
         await reference.press('Enter');
         await page.getByText('Reference captured. Review the number and amount; payment remains unverified.', {exact: true}).waitFor();
         assert.equal(await reference.inputValue(), '0012345678901');
         assert.equal(await page.locator('#gcash-history-body tr').count(), 0, 'Enter must never save');
+
+        // Fractional-peso rejected, preview hidden
         await page.locator('#gcash-amount').fill('125.50');
+        await page.getByText('Enter a whole-peso principal amount from 1 to 50,000. Principal excludes the fee.').waitFor();
+        assert.equal(await page.locator('#gcash-preview-content').isVisible(), false);
+        await page.getByRole('button', {name: 'Save as Pending', exact: true}).click();
+        assert.equal(await page.locator('#gcash-history-body tr').count(), 0, 'Invalid principal must not save');
+
+        // Cash-In 1,000 preview
+        await page.locator('#gcash-amount').fill('1000');
+        await page.locator('#gcash-preview-content').waitFor();
+        assert.equal(await page.locator('#preview-fee').textContent(), '₱10.00');
+        assert.equal(await page.locator('#preview-counter-collect').textContent(), '₱1,010.00');
+        assert.equal(await page.locator('#preview-wallet-transfer').textContent(), '₱1,000.00');
+        assert.equal(await page.locator('#preview-customer-transfer').textContent(), '₱0.00');
+        assert.equal(await page.locator('#preview-cash-payout').textContent(), '₱0.00');
+        assert.equal(await page.locator('#preview-net-cash').textContent(), '+₱1,010.00');
+        assert.equal(await page.locator('#preview-net-wallet').textContent(), '-₱1,000.00');
+        assert.equal(await page.locator('#gcash-fee-method-group').isVisible(), false);
+
+        // Cash-Out: Fee via GCash preview
+        await page.locator('#gcash-type').selectOption('Cash-Out');
+        assert.equal(await page.locator('#gcash-fee-method-group').isVisible(), true);
+        assert.equal(await page.locator('#preview-fee').textContent(), '₱10.00');
+        assert.equal(await page.locator('#preview-customer-transfer').textContent(), '₱1,010.00');
+        assert.equal(await page.locator('#preview-counter-collect').textContent(), '₱0.00');
+        assert.equal(await page.locator('#preview-cash-payout').textContent(), '₱1,000.00');
+        assert.equal(await page.locator('#preview-net-cash').textContent(), '-₱1,000.00');
+        assert.equal(await page.locator('#preview-net-wallet').textContent(), '+₱1,010.00');
+
+        // Cash-Out: Fee in cash preview
+        await page.locator('#gcash-fee-method').selectOption('Fee in cash');
+        assert.equal(await page.locator('#preview-fee').textContent(), '₱10.00');
+        assert.equal(await page.locator('#preview-customer-transfer').textContent(), '₱1,000.00');
+        assert.equal(await page.locator('#preview-counter-collect').textContent(), '₱10.00');
+        assert.equal(await page.locator('#preview-cash-payout').textContent(), '₱1,000.00');
+        assert.equal(await page.locator('#preview-net-cash').textContent(), '-₱990.00');
+        assert.equal(await page.locator('#preview-net-wallet').textContent(), '+₱1,000.00');
+
+        // 12,345 preview with 123.45 fee
+        await page.locator('#gcash-amount').fill('12345');
+        assert.equal(await page.locator('#preview-fee').textContent(), '₱123.45');
+        assert.equal(await page.locator('#preview-counter-collect').textContent(), '₱123.45');
+        assert.equal(await page.locator('#preview-net-cash').textContent(), '-₱12,221.55');
+        assert.equal(await page.locator('#preview-net-wallet').textContent(), '+₱12,345.00');
+
+        // Save valid Cash-In transaction
+        await page.locator('#gcash-type').selectOption('Cash-In');
+        await page.locator('#gcash-amount').fill('1000');
         await page.getByRole('button', {name: 'Save as Pending', exact: true}).click();
         await page.locator('#gcash-history-body .gcash-status').filter({hasText: 'Pending'}).waitFor();
         await reference.fill('0012345678901'); await reference.press('Enter');
@@ -75,6 +125,28 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const token = await page.locator('#gcash-workspace').getAttribute('data-csrf');
         const api = origin + '/components/cashier/gcash_api.php';
         const post = (body, csrf = token) => context.request.post(api, {headers: {'X-CSRF-Token': csrf}, data: body});
+
+        // API preview checks (GET and POST)
+        const getPreview1k = await (await context.request.get(api + '?action=preview&type=Cash-In&principal=1000')).json();
+        assert.equal(getPreview1k.success, true);
+        assert.equal(getPreview1k.fee, 10);
+        assert.equal(getPreview1k.counter_collect, 1010);
+        assert.equal(getPreview1k.net_service_cash, 1010);
+
+        const getPreview12k = await (await context.request.get(api + '?action=preview&type=Cash-Out&principal=12345&fee_method=Fee+in+cash')).json();
+        assert.equal(getPreview12k.success, true);
+        assert.equal(getPreview12k.fee, 123.45);
+        assert.equal(getPreview12k.net_service_cash, -12221.55);
+
+        const postPreview = await (await post({action: 'preview', type: 'Cash-Out', principal: '1000', fee_method: 'Fee via GCash'})).json();
+        assert.equal(postPreview.success, true);
+        assert.equal(postPreview.customer_transfer, 1010);
+
+        assert.equal((await post({action: 'preview', type: 'Cash-In', principal: '10.50'})).status(), 422);
+        assert.equal((await post({action: 'preview', type: 'Payment', principal: '1000'})).status(), 422);
+        assert.equal((await post({action: 'preview', type: 'Cash-In', principal: '50001'})).status(), 422);
+        assert.equal((await post({action: 'preview', type: 'Cash-In', principal: '0'})).status(), 422);
+
         assert.equal((await post({action: 'save', reference: '0012345678902', amount: '1', type: 'Payment'}, 'bad')).status(), 403);
         assert.equal((await post({action: 'save', reference: [], amount: '1', type: 'Payment'})).status(), 422);
         const results = await Promise.all([post({action: 'save', reference: '0012345678902', amount: '1', type: 'Cash-Out'}), post({action: 'save', reference: '0012345678902', amount: '1', type: 'Cash-Out'})]);

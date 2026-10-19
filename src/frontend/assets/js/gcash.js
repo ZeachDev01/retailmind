@@ -77,10 +77,139 @@
     reference.addEventListener('keydown', event => {
         if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); checkReference(); }
     });
+    function validatePrincipal(val) {
+        if (typeof val !== 'string' && typeof val !== 'number') return null;
+        const str = String(val).trim();
+        if (!/^[1-9]\d{0,6}$/.test(str)) return null;
+        const n = Number(str);
+        if (!Number.isInteger(n) || n < 1 || n > 50000) return null;
+        return n;
+    }
+
+    function calculateFee(principal) {
+        if (principal < 500) return 5;
+        if (principal <= 1000) return 10;
+        if (principal <= 10000) return Math.ceil(principal / 500) * 5;
+        return Math.round(principal * 0.01 * 100) / 100;
+    }
+
+    function calculatePreview(type, principal, feeMethod) {
+        const fee = calculateFee(principal);
+        if (type === 'Cash-In') {
+            return {
+                type: 'Cash-In',
+                principal,
+                fee,
+                feeMethod: 'Fee in cash',
+                feeLocation: 'cash',
+                customerTransfer: 0,
+                counterCollect: principal + fee,
+                cashPayout: 0,
+                walletTransfer: principal,
+                netServiceCash: principal + fee,
+                netWallet: -principal,
+                instructions: `Customer pays ₱${(principal + fee).toLocaleString('en-PH', {minimumFractionDigits: 2})} cash at counter. Send ₱${principal.toLocaleString('en-PH', {minimumFractionDigits: 2})} from Store wallet to customer.`
+            };
+        }
+        const isCashFee = feeMethod === 'Fee in cash';
+        if (isCashFee) {
+            return {
+                type: 'Cash-Out',
+                principal,
+                fee,
+                feeMethod: 'Fee in cash',
+                feeLocation: 'cash',
+                customerTransfer: principal,
+                counterCollect: fee,
+                cashPayout: principal,
+                walletTransfer: 0,
+                netServiceCash: -(principal - fee),
+                netWallet: principal,
+                instructions: `Customer transfers ₱${principal.toLocaleString('en-PH', {minimumFractionDigits: 2})} to Store wallet. Collect ₱${fee.toLocaleString('en-PH', {minimumFractionDigits: 2})} cash fee at counter. Hand over ₱${principal.toLocaleString('en-PH', {minimumFractionDigits: 2})} cash to customer.`
+            };
+        }
+        return {
+            type: 'Cash-Out',
+            principal,
+            fee,
+            feeMethod: 'Fee via GCash',
+            feeLocation: 'wallet',
+            customerTransfer: principal + fee,
+            counterCollect: 0,
+            cashPayout: principal,
+            walletTransfer: 0,
+            netServiceCash: -principal,
+            netWallet: principal + fee,
+            instructions: `Customer transfers ₱${(principal + fee).toLocaleString('en-PH', {minimumFractionDigits: 2})} to Store wallet. Hand over ₱${principal.toLocaleString('en-PH', {minimumFractionDigits: 2})} cash to customer.`
+        };
+    }
+
+    const formatPhp = (val, sign = false) => {
+        const prefix = sign ? (val > 0 ? '+₱' : (val < 0 ? '-₱' : '₱')) : '₱';
+        return prefix + Math.abs(val).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+
+    function updatePreview() {
+        const type = el('type')?.value || 'Cash-In';
+        const feeMethodGroup = el('fee-method-group');
+        const isCashOut = type === 'Cash-Out';
+        if (feeMethodGroup) feeMethodGroup.hidden = !isCashOut;
+
+        const amountInput = el('amount');
+        if (!amountInput) return;
+        const raw = amountInput.value.trim();
+        const principal = validatePrincipal(raw);
+
+        const statusEl = el('preview-status');
+        const contentEl = el('preview-content');
+        if (!statusEl || !contentEl) return;
+
+        if (!principal) {
+            contentEl.hidden = true;
+            statusEl.hidden = false;
+            if (raw === '') {
+                statusEl.textContent = 'Enter a whole-peso principal amount from 1 to 50,000 to preview fees and instructions.';
+                amountInput.setCustomValidity('');
+            } else {
+                statusEl.textContent = 'Enter a whole-peso principal amount from 1 to 50,000. Principal excludes the fee.';
+                amountInput.setCustomValidity('Enter a whole-peso principal amount from 1 to 50,000.');
+            }
+            return;
+        }
+
+        amountInput.setCustomValidity('');
+        const feeMethod = isCashOut ? (el('fee-method')?.value || 'Fee via GCash') : 'Fee in cash';
+        const preview = calculatePreview(type, principal, feeMethod);
+
+        statusEl.hidden = true;
+        contentEl.hidden = false;
+        el('preview-instructions').textContent = preview.instructions;
+        document.getElementById('preview-fee').textContent = formatPhp(preview.fee);
+        document.getElementById('preview-customer-transfer').textContent = formatPhp(preview.customerTransfer);
+        document.getElementById('preview-counter-collect').textContent = formatPhp(preview.counterCollect);
+        document.getElementById('preview-cash-payout').textContent = formatPhp(preview.cashPayout);
+        document.getElementById('preview-wallet-transfer').textContent = formatPhp(preview.walletTransfer);
+        document.getElementById('preview-net-cash').textContent = formatPhp(preview.netServiceCash, true);
+        document.getElementById('preview-net-wallet').textContent = formatPhp(preview.netWallet, true);
+    }
+
+    window.GCashPreview = { calculateFee, calculatePreview, validatePrincipal };
+
+    el('amount').addEventListener('input', updatePreview);
+    el('type').addEventListener('change', updatePreview);
+    el('fee-method')?.addEventListener('change', updatePreview);
+
     el('manual').addEventListener('click', () => { reference.focus(); reference.select(); if (reference.value.trim()) checkReference(); });
     el('form').addEventListener('submit', async event => {
         event.preventDefault();
         if (saving) return;
+        updatePreview();
+        const validPrincipal = validatePrincipal(el('amount').value);
+        if (!validPrincipal) {
+            notify('Enter a whole-peso principal amount from 1 to 50,000.', 'warning');
+            el('amount').focus();
+            return;
+        }
         saving = true;
         updateSave();
         try {
@@ -89,6 +218,7 @@
             for (const input of el('form').elements) input.disabled = true;
             const data = await request(null, body);
             el('form').reset();
+            updatePreview();
             duplicate = false;
             scanStatus('Saved as Pending. Open Verify in history after checking the actual GCash records.');
             notify('GCash transaction #' + data.id + ' saved as Pending.', 'success');
@@ -100,6 +230,7 @@
             saving = false;
             for (const input of el('form').elements) input.disabled = false;
             updateSave();
+            updatePreview();
         }
     });
     const cell = (row, value) => { const td = row.insertCell(); td.textContent = value; return td; };
@@ -269,5 +400,5 @@
         closeCamera(); reference.focus(); await checkReference();
     });
     window.addEventListener('pagehide', () => { leaving = true; clearTimeout(debounce); lookup?.abort(); closeCamera(); });
-    updateSave(); loadHistory();
+    updateSave(); updatePreview(); loadHistory();
 })();

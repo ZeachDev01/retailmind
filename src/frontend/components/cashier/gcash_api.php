@@ -11,7 +11,13 @@ try {
     $service = new GCashTransactionService($pdo, require __DIR__ . '/../../../backend/config/gcash.php');
     $method = $_SERVER['REQUEST_METHOD'];
     if ($method === 'GET') {
-        if (isset($_GET['reference'])) {
+        if (($_GET['action'] ?? '') === 'preview' || (isset($_GET['principal']) && !isset($_GET['reference']) && !isset($_GET['page']))) {
+            $type = (string)($_GET['type'] ?? '');
+            $principal = (string)($_GET['principal'] ?? '');
+            $feeMethod = isset($_GET['fee_method']) ? (string)$_GET['fee_method'] : null;
+            $preview = $service->calculatePreview($type, $principal, $feeMethod);
+            $result = ['preview' => $preview] + $preview;
+        } elseif (isset($_GET['reference'])) {
             if (!is_string($_GET['reference']) || strlen($_GET['reference']) > 128) { throw new DomainException('Invalid reference.'); }
             $result = ['duplicate' => $service->exists($_GET['reference'])];
         } else {
@@ -27,11 +33,17 @@ try {
         if (strlen($raw) > 4096) { throw new DomainException('Request too large.'); }
         $input = json_decode($raw, true);
         if (!is_array($input)) { throw new DomainException('Invalid request.'); }
-        foreach (['action', 'reference', 'amount', 'type', 'status', 'note'] as $key) {
+        foreach (['action', 'reference', 'amount', 'type', 'status', 'note', 'fee_method'] as $key) {
             if (isset($input[$key]) && !is_string($input[$key])) { throw new DomainException('Invalid field: ' . $key); }
         }
+        if (isset($input['principal']) && !is_string($input['principal']) && !is_int($input['principal'])) {
+            throw new DomainException('Invalid field: principal');
+        }
         $cashierId = (int)$_SESSION['user_id'];
-        if (($input['action'] ?? '') === 'save') {
+        if (($input['action'] ?? '') === 'preview') {
+            $preview = $service->calculatePreview($input['type'] ?? '', $input['principal'] ?? '', $input['fee_method'] ?? null);
+            $result = ['preview' => $preview] + $preview;
+        } elseif (($input['action'] ?? '') === 'save') {
             $result = ['id' => $service->save($cashierId, $input['reference'] ?? '', $input['amount'] ?? '', $input['type'] ?? '')];
         } elseif (($input['action'] ?? '') === 'review') {
             $id = filter_var($input['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);

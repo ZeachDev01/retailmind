@@ -47,17 +47,62 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <span id="gcash-duplicate" role="alert" hidden>This reference has already been recorded. Check transaction history before proceeding.</span>
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-amount">Amount (PHP)</label>
-                    <input class="pos-input" id="gcash-amount" name="amount" type="number" inputmode="decimal" min="0.01" max="99999999.99" step="0.01" required>
+                    <label class="pos-field-label" for="gcash-amount">Principal amount (PHP)</label>
+                    <input class="pos-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000" aria-describedby="gcash-amount-help">
+                    <small id="gcash-amount-help">Whole pesos only from 1 to 50,000. Principal excludes the fee.</small>
                 </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-type">Transaction type</label>
                     <select class="pos-input" id="gcash-type" name="type" required>
-                        <option value="Payment">Payment</option>
                         <option value="Cash-In">Cash-In</option>
                         <option value="Cash-Out">Cash-Out</option>
                     </select>
                 </div>
+                <div class="gcash-field" id="gcash-fee-method-group" hidden>
+                    <label class="pos-field-label" for="gcash-fee-method">Fee payment method</label>
+                    <select class="pos-input" id="gcash-fee-method" name="fee_method">
+                        <option value="Fee via GCash">Fee via GCash</option>
+                        <option value="Fee in cash">Fee in cash</option>
+                    </select>
+                    <small id="gcash-fee-method-help">Choose whether the customer transfers fee via GCash or pays fee in cash at the counter.</small>
+                </div>
+                <section id="gcash-preview" class="gcash-preview-panel" aria-labelledby="gcash-preview-title">
+                    <h3 id="gcash-preview-title" class="gcash-preview-heading">Fee &amp; exchange instructions preview</h3>
+                    <div id="gcash-preview-status" class="gcash-preview-status" role="status" aria-live="polite">Enter a whole-peso principal amount from 1 to 50,000 to preview fees and instructions.</div>
+                    <div id="gcash-preview-content" class="gcash-preview-content" hidden>
+                        <div id="gcash-preview-instructions" class="gcash-preview-instructions"></div>
+                        <div class="gcash-preview-grid">
+                            <div class="gcash-preview-item">
+                                <span class="gcash-preview-label">Service fee</span>
+                                <span class="gcash-preview-value" id="preview-fee">₱0.00</span>
+                            </div>
+                            <div class="gcash-preview-item">
+                                <span class="gcash-preview-label">Customer transfers to Store wallet</span>
+                                <span class="gcash-preview-value" id="preview-customer-transfer">₱0.00</span>
+                            </div>
+                            <div class="gcash-preview-item">
+                                <span class="gcash-preview-label">Cash collected at counter</span>
+                                <span class="gcash-preview-value" id="preview-counter-collect">₱0.00</span>
+                            </div>
+                            <div class="gcash-preview-item">
+                                <span class="gcash-preview-label">Cash handed over</span>
+                                <span class="gcash-preview-value" id="preview-cash-payout">₱0.00</span>
+                            </div>
+                            <div class="gcash-preview-item">
+                                <span class="gcash-preview-label">Store wallet sent</span>
+                                <span class="gcash-preview-value" id="preview-wallet-transfer">₱0.00</span>
+                            </div>
+                            <div class="gcash-preview-item">
+                                <span class="gcash-preview-label">Net service cash</span>
+                                <span class="gcash-preview-value" id="preview-net-cash">₱0.00</span>
+                            </div>
+                            <div class="gcash-preview-item">
+                                <span class="gcash-preview-label">Net wallet</span>
+                                <span class="gcash-preview-value" id="preview-net-wallet">₱0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
                 <div class="gcash-actions">
                     <button class="btn" type="submit" id="gcash-save">Save as Pending</button>
                     <button class="btn btn-secondary" type="button" id="gcash-manual">Manual entry / USB scan</button>
