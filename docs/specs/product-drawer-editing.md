@@ -2,6 +2,8 @@
 
 Status: Expanded design agreed on 2026-10-17 and published as implementation tickets. Not implemented.
 
+Stock-planning update agreed on 2026-10-20: [Stock-based Replenishment Recommendations](stock-based-replenishment-recommendations.md) is authoritative for Target Stock, trigger semantics, purchase quantities, rounding, the selected table, and current stock-only guidance. Its rules supersede the earlier formula-preservation requirements below.
+
 ## Implementation tickets
 
 - [#212: Edit product catalog details](https://github.com/ZeachDev01/retailmind/issues/212) - no blockers.
@@ -25,12 +27,39 @@ Allow routine catalog corrections without leaving the Products drawer. Opening a
 
 ## Stock settings
 
+### Definition update agreed on 2026-10-20
+
+Reorder Level includes expected demand while waiting for replenishment plus Safety Stock. For example, demand of 15 bottles while waiting plus 5 backup bottles gives a Reorder Level of 20. Safety Stock remains saleable; editing either setting does not move stock.
+
+Safety Stock must not exceed Reorder Level. This cross-field validation is agreed but not yet implemented. The Inventory Manager chooses the actual purchase quantity; system recommendations remain guidance and do not require buying the suggested quantity.
+
+Add an Inventory Manager-editable Target Stock setting per product, expressed as a whole-number count of Base Units strictly greater than Reorder Level. Validate this relationship when either setting changes. At or below Reorder Level, the suggested purchase starts from Target Stock minus current stock; above Reorder Level, no stock-rule purchase is suggested. Safety Stock is already included in the trigger and is not added again to the purchase quantity.
+
+Suggest individual Base Units without forcing whole-case rounding. Show a case-and-loose-unit breakdown as guidance, such as 45 bottles = 3 cases of 12 plus 9 bottles. When replenishment is needed, suggest the larger of the stock deficit and Minimum Order Quantity; do not round to a multiple of the minimum. For example, a deficit of 45 with a minimum of 50 suggests 50. A minimum of 1 represents no additional purchase minimum. Explain when the minimum causes the suggestion to exceed Target Stock. Above Reorder Level, the minimum does not create a purchase suggestion.
+
+For a product without Target Stock, show "Set target stock" instead of inventing a suggested purchase quantity. Preserve its actual stock status so missing configuration does not hide an out-of-stock or low-stock condition.
+
+Use stock-based suggestions for current operations, with direct explanations showing current stock, reorder level, target, and suggested purchase. Forecast-based suggestions remain a future option; do not build a new forecasting selector or automatically switch the current buying guidance to forecasts as part of this design.
+
+These decisions supersede preservation of the existing threshold formulas below. Implementation is pending: stock displays currently use differing triggers, and stock-rule replenishment adds Safety Stock to Reorder Level. The application does not yet implement Target Stock.
+
 - Units per Package/Case is a positive whole-number count of Base Units in one Receiving Unit.
 - Changing Units per Package/Case affects future receiving conversions and replenishment rounding. Preserve current stock in Base Units and the conversion snapshots on recorded receiving history. For example, changing 12 to 24 leaves 120 cans on hand unchanged; the next received case adds 24 cans.
 - Minimum Order Quantity is a positive whole-number count of Base Units, not cases. Existing replenishment rounding still rounds the minimum up to a package multiple.
 - Reorder Level and Safety Stock are whole-number counts of Base Units, each at least zero.
 - Validate these four settings on the server; reject fractions, malformed values, out-of-range values, and values below their minimum instead of silently truncating or clamping them.
 - Keep existing stock-status and replenishment formulas. Saved settings apply when those views next load; edits do not move stock, generate forecasts, or retrain models. In the existing forecast-backed path, Reorder Level and Safety Stock do not replace the forecast-derived quantity target.
+
+## Selected replenishment table layout
+
+The user selected the full table below over the compact shopping-guide alternatives. Preserve these columns and show out-of-stock, low-stock, and in-stock products, including products with an unset target. Values are illustrative; package examples use 12 bottles per case.
+
+| Priority | Product | On hand | Reorder at | Target | Suggested purchase | Why |
+| --- | --- | --- | --- | --- | --- | --- |
+| Out of stock | Sparkling Water 330 mL | 0 | 12 | 48 | **48 bottles** · 4 cases | Buy 48 to reach target |
+| Out of stock | Orange Soda 500 mL | 0 | 12 | Not set | **Set target stock** | Target needed |
+| Low stock | Bottled Water 500 mL | 15 | 20 | 60 | **45 bottles** · 3 cases + 9 loose | Buy 45 to reach 60 |
+| In stock | Cola 330 mL | 36 | 20 | 60 | **No purchase needed** | Above reorder level |
 
 ## Price and status rules
 

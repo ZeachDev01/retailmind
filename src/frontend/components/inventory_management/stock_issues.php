@@ -103,32 +103,38 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
     <title>Stock Issue Reviews</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/stock-issues.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/stock-issues.css')) ?>">
 </head>
 
-<body>
+<body class="stock-issues-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
             <div class="topbar">
                 <div>
                     <h1>Stock Issue Reviews</h1>
-                    <p class="page-subtitle">Approve deductions, reject with a reason, or return for correction. Only approvals change inventory.</p>
                 </div>
-                <span class="badge-role"><?= (int)$pendingCount ?> Pending Review</span>
             </div>
 
             <?php if ($message): ?>
-                <div class="message success"><?= htmlspecialchars($message) ?></div>
+                <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
 
             <?php if ($error): ?>
-                <div class="message error"><?= htmlspecialchars($error) ?></div>
+                <div class="message error" role="alert"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
             <div class="history-section">
-                <h3>Pending Reports</h3>
+                <h2>Pending review <span class="issue-count"><?= (int)$pendingCount ?></span></h2>
                 <?php if (empty($pending)): ?>
-                    <p>No pending stock issue reports. Cashier submissions will appear here.</p>
+                    <div class="issue-empty">
+                        <svg class="issue-empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M9 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3" />
+                            <rect x="9" y="2" width="6" height="5" rx="1" />
+                            <path d="m8 14 3 3 5-6" />
+                        </svg>
+                        <h3>No reports to review</h3>
+                    </div>
                 <?php else: ?>
                     <?php foreach ($pending as $report): ?>
                         <?php $short = (int)$report['quantity_on_hand'] < abs((int)$report['adjustment_qty']); ?>
@@ -142,18 +148,20 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$report['adjustment_qty']) ?></div>
-                                    <span class="adjustment-status pending">Pending</span>
+                                    <span class="issue-quantity-label">To deduct</span>
+                                    <div class="adjustment-qty"><?= abs((int)$report['adjustment_qty']) ?></div>
                                 </div>
                             </div>
                             <div class="adjustment-details">
-                                <strong>Report ID:</strong> #<?= (int)$report['adjustment_id'] ?> |
-                                <strong>Cashier:</strong> <?= htmlspecialchars($report['cashier_name']) ?> |
-                                <strong>Shift:</strong> #<?= (int)$report['shift_id'] ?> |
-                                <strong>Reported:</strong> <?= htmlspecialchars($report['reported_at']) ?>
-                                <br><strong>Available stock:</strong> <?= (int)$report['quantity_on_hand'] ?>
+                                <span>Report #<?= (int)$report['adjustment_id'] ?></span>
+                                <span><strong>Cashier:</strong> <?= htmlspecialchars($report['cashier_name']) ?></span>
+                                <span><strong>Shift:</strong> #<?= (int)$report['shift_id'] ?></span>
+                                <span><strong>Reported:</strong> <?= htmlspecialchars(format_display_datetime($report['reported_at'])) ?></span>
+                            </div>
+                            <div class="issue-stock">
+                                <span><strong>Available stock:</strong> <?= (int)$report['quantity_on_hand'] ?></span>
                                 <?php if ($short): ?>
-                                    <strong class="adjustment-status rejected">Insufficient stock — approval will be refused</strong>
+                                    <strong class="issue-warning">Not enough stock to approve. Reject or return this report.</strong>
                                 <?php endif; ?>
                             </div>
                             <?php if ($report['reason']): ?>
@@ -165,19 +173,20 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                 <input type="hidden" name="adjustment_id" value="<?= (int)$report['adjustment_id'] ?>">
                                 <div class="form-group">
-                                    <label for="review-notes-<?= (int)$report['adjustment_id'] ?>">Reviewer note (required to reject or return)</label>
-                                    <textarea name="review_notes" id="review-notes-<?= (int)$report['adjustment_id'] ?>" placeholder="Reason for rejection/return, or an optional approval note..."></textarea>
+                                    <label for="review-notes-<?= (int)$report['adjustment_id'] ?>">Review note</label>
+                                    <small id="note-help-<?= (int)$report['adjustment_id'] ?>">Required to reject or return. Optional when approving.</small>
+                                    <textarea name="review_notes" id="review-notes-<?= (int)$report['adjustment_id'] ?>" rows="2" aria-describedby="note-help-<?= (int)$report['adjustment_id'] ?>"></textarea>
                                 </div>
                                 <?php if ($report['adjustment_type'] === 'other'): ?>
                                     <div class="form-group">
-                                        <label for="recat-<?= (int)$report['adjustment_id'] ?>">Recategorize Other (optional, applies when returning)</label>
-                                        <select name="new_category" id="recat-<?= (int)$report['adjustment_id'] ?>">
+                                        <label for="recat-<?= (int)$report['adjustment_id'] ?>">Category when returning (optional)</label>
+                                        <select name="new_category" id="recat-<?= (int)$report['adjustment_id'] ?>" aria-describedby="category-help-<?= (int)$report['adjustment_id'] ?>">
                                             <option value="">Keep as Other</option>
                                             <option value="damaged">Damaged</option>
                                             <option value="missing">Missing / Lost</option>
                                             <option value="expired">Expired</option>
                                         </select>
-                                        <small>Only Other reports can be recategorized. Quantity and explanation are never rewritten here.</small>
+                                        <small id="category-help-<?= (int)$report['adjustment_id'] ?>">Changes the category only when you return this report.</small>
                                     </div>
                                 <?php endif; ?>
                                 <?php
@@ -185,16 +194,17 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                 if (!empty($productBatches)):
                                     $fefoAllocations = $stockIssueService->recommendBatchAllocation((int)$report['product_id'], abs((int)$report['adjustment_qty']));
                                 ?>
-                                    <div class="form-group">
-                                        <label><strong>Batch Allocation</strong> (prefilled via FEFO)</label>
+                                    <details class="issue-batches">
+                                        <summary>Review batch deductions</summary>
+                                        <p>Earliest expiry first. Quantities must total <?= abs((int)$report['adjustment_qty']) ?> to approve.</p>
                                         <div class="table-wrap u-mt-1">
                                             <table>
                                                 <thead>
                                                     <tr>
-                                                        <th>Batch</th>
-                                                        <th>Expiration</th>
-                                                        <th>Remaining</th>
-                                                        <th>Deduct</th>
+                                                        <th scope="col">Batch</th>
+                                                        <th scope="col">Expiry date</th>
+                                                        <th scope="col">Available</th>
+                                                        <th scope="col">Deduct</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -209,7 +219,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                                                        value="<?= (int)($fefoAllocations[$pb['batch_id']] ?? 0) ?>"
                                                                        min="0"
                                                                        max="<?= (int)$pb['remaining_quantity'] ?>"
-                                                                       style="width: 80px;"
+                                                                       aria-label="<?= htmlspecialchars('Deduct from batch ' . ($pb['batch_number'] ?? ('#' . $pb['batch_id']))) ?>"
                                                                        class="form-control">
                                                             </td>
                                                         </tr>
@@ -217,12 +227,12 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                                 </tbody>
                                             </table>
                                         </div>
-                                    </div>
+                                    </details>
                                 <?php endif; ?>
                                 <div class="review-actions">
-                                    <button type="submit" name="action" value="approve" class="btn-submit" <?= $short ? 'disabled title="Insufficient available stock"' : '' ?>>Approve &amp; Deduct</button>
+                                    <button type="submit" name="action" value="approve" class="btn-submit" <?= $short ? 'disabled title="Insufficient available stock"' : '' ?>>Approve &amp; deduct <?= abs((int)$report['adjustment_qty']) ?></button>
                                     <button type="submit" name="action" value="reject" class="btn btn-secondary">Reject</button>
-                                    <button type="submit" name="action" value="return" class="btn btn-secondary">Return for Correction</button>
+                                    <button type="submit" name="action" value="return" class="btn btn-secondary">Return for correction</button>
                                 </div>
                             </form>
                             <?php $pendingRevisions = $revisionsFor((int)$report['adjustment_id']); ?>
@@ -240,8 +250,8 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
             </div>
 
             <?php if (!empty($returned)): ?>
-                <div class="history-section u-mt-2">
-                    <h3>Returned for Correction (<?= count($returned) ?>)</h3>
+                <details class="history-section issue-history u-mt-2">
+                    <summary><h2>Returned for correction <span class="issue-count"><?= count($returned) ?></span></h2></summary>
                     <?php foreach ($returned as $report): ?>
                         <div class="adjustment-card returned">
                             <div class="adjustment-header">
@@ -253,14 +263,14 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$report['adjustment_qty']) ?></div>
-                                    <span class="adjustment-status returned">Returned</span>
+                                    <span class="issue-quantity-label">Reported</span>
+                                    <div class="adjustment-qty"><?= abs((int)$report['adjustment_qty']) ?></div>
                                 </div>
                             </div>
                             <div class="adjustment-details">
-                                <strong>Report ID:</strong> #<?= (int)$report['adjustment_id'] ?> |
-                                <strong>Cashier:</strong> <?= htmlspecialchars($report['cashier_name']) ?> |
-                                <strong>Returned by:</strong> <?= htmlspecialchars($report['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($report['approved_at'])) ?>
+                                <span>Report #<?= (int)$report['adjustment_id'] ?></span>
+                                <span><strong>Cashier:</strong> <?= htmlspecialchars($report['cashier_name']) ?></span>
+                                <span><strong>Returned by:</strong> <?= htmlspecialchars($report['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($report['approved_at'])) ?></span>
                             </div>
                             <?php if (!empty($report['review_notes'])): ?>
                                 <div class="adjustment-reason">
@@ -278,12 +288,12 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
-                </div>
+                </details>
             <?php endif; ?>
 
             <?php if (!empty($reviews)): ?>
-                <div class="history-section u-mt-2">
-                    <h3>Recent Decisions</h3>
+                <details class="history-section issue-history u-mt-2">
+                    <summary><h2>Recent decisions <span class="issue-count"><?= count($reviews) ?></span></h2></summary>
                     <?php foreach ($reviews as $review): ?>
                         <div class="adjustment-card <?= htmlspecialchars($review['status']) ?>">
                             <div class="adjustment-header">
@@ -295,16 +305,17 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$review['adjustment_qty']) ?></div>
+                                    <span class="issue-quantity-label"><?= $review['status'] === 'approved' ? 'Deducted' : 'Reported' ?></span>
+                                    <div class="adjustment-qty"><?= abs((int)$review['adjustment_qty']) ?></div>
                                     <span class="adjustment-status <?= htmlspecialchars($review['status']) ?>">
                                         <?= htmlspecialchars(ucfirst($review['status'])) ?>
                                     </span>
                                 </div>
                             </div>
                             <div class="adjustment-details">
-                                <strong>Report ID:</strong> #<?= (int)$review['adjustment_id'] ?> |
-                                <strong>Cashier:</strong> <?= htmlspecialchars($review['cashier_name']) ?> |
-                                <strong>Reviewed by:</strong> <?= htmlspecialchars($review['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($review['approved_at'])) ?>
+                                <span>Report #<?= (int)$review['adjustment_id'] ?></span>
+                                <span><strong>Cashier:</strong> <?= htmlspecialchars($review['cashier_name']) ?></span>
+                                <span><strong>Reviewed by:</strong> <?= htmlspecialchars($review['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($review['approved_at'])) ?></span>
                             </div>
                             <?php if ($review['status'] === 'approved'): ?>
                                 <?php $reviewBatches = $stockIssueService->getReportBatches((int)$review['adjustment_id']); ?>
@@ -319,7 +330,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </div>
                                 <?php endif; ?>
                                 <div class="adjustment-reason">
-                                    <strong>This report is locked.</strong> If the approval was wrong, do not reopen it — record a separate linked inventory count:
+                                    <strong>Approved reports are locked.</strong> Correct mistakes with a linked inventory count.
                                     <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php?correct=' . (int)$review['adjustment_id'])) ?>">Correct via inventory count</a>
                                 </div>
                             <?php endif; ?>
@@ -339,7 +350,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
-                </div>
+                </details>
             <?php endif; ?>
         </main>
     </div>

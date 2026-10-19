@@ -68,8 +68,8 @@
 .receiving-form:not([data-step="1"]) .delivery-editor { grid-column: 1; grid-row: 2; }
 .receiving-form:not([data-step="1"]) .receiving-summary { grid-column: 2; grid-row: 2; }
 .receiving-summary-body { display: grid; gap: 1rem; padding: 1rem 1.25rem; }
-.receiving-accepted { display: grid; gap: .25rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
-.receiving-accepted strong { font-size: 3rem; line-height: 1.1; color: var(--theme-success-text, #166534); font-variant-numeric: tabular-nums; }
+.receiving-accepted { display: flex; align-items: baseline; gap: .5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.receiving-accepted strong { font-size: 1.25rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .receiving-accepted span { font-weight: 600; }
 .receiving-totals { margin: 0; display: grid; gap: .75rem; font-size: .875rem; }
 .receiving-totals > div { display: flex; justify-content: space-between; gap: 1rem; }
@@ -231,7 +231,7 @@
 .receiving-extras .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .receiving-form .receiving-extras [aria-invalid="true"] { border-color: var(--theme-danger-text, var(--danger, #dc2626)); }
 .receiving-form[data-readonly="true"] .playlist-drag-handle { display: none; }
-.receiving-form #package_conversion, .receiving-form [data-field="package_conversion"] { display: block; padding: .75rem; background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); border-radius: 8px; }
+.receiving-form #package_conversion, .receiving-form [data-field="package_conversion"] { display: block; margin-top: .5rem; color: var(--muted); }
 #entry_status:not(:empty) { margin: 1rem 1.25rem; color: var(--theme-danger-text, #991b1b); }
 #entry_status:empty { margin: 0; }
 #receiving_review > p { margin: 0; padding: 1.25rem; background: var(--theme-surface-soft, #f8fafc); }
@@ -251,7 +251,7 @@
     .stock-receiving-page .receiving-form { grid-template-columns: minmax(0, 1fr); }
     #receiving_selection { grid-row: auto; }
     .delivery-editor, .receiving-summary { grid-row: auto; }
-    .receiving-form:not([data-step="1"]) .delivery-editor, .receiving-form:not([data-step="1"]) .receiving-summary { grid-row: auto; }
+    .receiving-form:not([data-step="1"]) .delivery-editor, .receiving-form:not([data-step="1"]) .receiving-summary { grid-column: 1; grid-row: auto; }
     #receiving_selection, .delivery-editor, .receiving-summary { grid-column: 1; }
     .receiving-summary { position: static; }
     .receiving-panel-heading { flex-wrap: wrap; padding: 1rem; }

@@ -88,10 +88,9 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
         <div class="topbar">
             <div>
                 <h1><?= htmlspecialchars($pageTitle) ?></h1>
-                <p class="page-subtitle">Know what needs buying. Receive it when it arrives.</p>
             </div>
             <div class="u-flex-wrap u-flex-gap-sm no-print">
-                <a class="btn btn-secondary queue-recalculate" id="queue-recalculate" href="replenishment_queue.php?recalculate=1" aria-label="Recalculate recommendations"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recalculate Recommendations</a>
+                <a class="btn btn-secondary queue-recalculate" id="queue-recalculate" href="replenishment_queue.php?recalculate=1" aria-label="Recalculate recommendations"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recalculate</a>
                 <?php if ($queue): ?>
                     <button class="btn btn-secondary queue-print" id="queue-download-pdf" type="button" aria-label="Download all recommendations as PDF"><i class="bi bi-download" aria-hidden="true"></i> Download PDF</button>
                 <?php endif; ?>
@@ -106,10 +105,10 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
             <?php endif; ?>
 
             <section class="queue-summary" aria-label="Recommendation summary">
-                <?php foreach (['Out of stock' => 'Needs restocking', 'Low stock' => 'At or below reorder level', 'In stock' => 'Above reorder level'] as $stockStatus => $description): ?>
+                <?php foreach (['Out of stock', 'Low stock', 'In stock'] as $stockStatus): ?>
                     <a class="queue-stat queue-<?= str_replace(' ', '-', strtolower($stockStatus)) ?>" href="#queue-products" data-queue-stock="<?= $stockStatus ?>" aria-label="Show <?= $stockStatus ?> products">
                         <strong class="queue-stat-number"><?= $queueUnavailable ? '-' : ($stockCounts[$stockStatus] ?? 0) ?></strong>
-                        <div><strong class="queue-stat-label"><?= $stockStatus ?></strong><span><?= $description ?></span></div>
+                        <div><strong class="queue-stat-label"><?= $stockStatus ?></strong></div>
                     </a>
                 <?php endforeach; ?>
                 <div class="queue-stat queue-forecast">
@@ -122,12 +121,14 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
             <aside class="queue-guidance" aria-label="Buying guidance">
                 <i class="bi bi-info-circle" aria-hidden="true"></i>
                 <details>
-                    <summary><strong>Buying guidance, not a purchase order.</strong> <span>Recommendations are guidance only.</span></summary>
-                    <p>No supplier configuration is required. Reviewing these suggestions does not create purchase requests, place orders, or change stock. The owner buys outside RetailMind and may choose different products, stores, or quantities.</p>
+                    <summary><strong>Buying guidance, not a purchase order</strong></summary>
+                    <p>Review suggested quantities before buying outside RetailMind. No supplier setup is needed. Reviewing recommendations does not place orders or change stock.</p>
+                    <p>Quantities use base units. Set cases during receiving; stock updates only when goods are received.</p>
+                    <p>Low stock is at or below the reorder level. In stock is above it.</p>
                 </details>
             </aside>
             <section class="queue-panel" id="queue-products" tabindex="-1" aria-labelledby="queue-title">
-                <header class="queue-panel-heading"><div><h2 id="queue-title">Purchase queue</h2><span class="queue-count"><?= $replenishCount ?> to replenish</span></div><span class="muted">Priority comes first</span></header>
+                <header class="queue-panel-heading"><div><h2 id="queue-title">Recommendations</h2><span class="queue-count"><?= $replenishCount ?> to replenish</span></div></header>
                     <?php if ($queueUnavailable): ?>
                         <p>Recommendations could not be loaded. Reload to try again.</p>
                     <?php elseif (empty($queue)): ?>
@@ -138,10 +139,10 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                     <?php else: ?>
                         <div class="queue-filters no-print" role="search" aria-label="Filter recommendations">
                             <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU"></div></label>
-                            <label>Stock status<select id="queue-stock"><option value="">All stock</option><option>Out of stock</option><option>Low stock</option><option>In stock</option></select></label>
-                            <label>Sort by<select id="queue-sort"><option value="priority">Stock priority first</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Suggested quantity</option></select></label>
+                            <label>Stock status<select id="queue-stock"><option value="">All statuses</option><option>Out of stock</option><option>Low stock</option><option>In stock</option></select></label>
+                            <label>Sort by<select id="queue-sort"><option value="priority">Stock priority</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Suggested quantity</option></select></label>
                         </div>
-                        <p class="queue-help muted" id="queue-help">Priority follows stock level: out of stock, low stock, then in stock. <span class="no-print">Scroll sideways on smaller screens for quantities and actions.</span></p>
+                        <p class="queue-help muted no-print" id="queue-help">Scroll sideways for quantities and actions.</p>
                         <div class="queue-list table-wrap" tabindex="0" role="region" aria-label="Replenishment recommendations" aria-describedby="queue-help">
                             <table class="table" data-no-smart-table>
                                 <thead><tr>
@@ -189,11 +190,9 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                             <label>Rows <select id="queue-page-size" aria-label="Rows per page"><option>10</option><option>25</option><option>50</option><option>100</option></select></label>
                             <span id="queue-page-status" aria-live="polite"></span>
                             <nav class="queue-pagination" id="queue-pagination" aria-label="Recommendation pages"></nav>
-                            <span>Review quantities before you buy</span>
                         </footer>
                     <?php endif; ?>
             </section>
-            <footer class="queue-page-footer muted"><span>Suggestions use base units. Set cases during receiving.</span><span>Stock updates when bought goods are received.</span></footer>
         </main>
     </div>
 </body>

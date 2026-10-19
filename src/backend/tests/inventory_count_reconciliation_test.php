@@ -34,7 +34,7 @@ try {
     $assert(str_contains($countPageSource, 'id="batch_detail_modal"'), 'inventory_counts.php has batch_detail_modal');
     $assert(str_contains($countPageSource, 'action=batch_coverage'), 'inventory_counts.php supports batch_coverage action');
     $assert(str_contains($countPageSource, 'action=count_batches'), 'inventory_counts.php supports count_batches action');
-    $assert(str_contains($countPageSource, 'Expiration date (leave blank if not recorded)'), 'inventory_counts.php labels expiration date as optional leave blank if not recorded');
+    $assert(str_contains($countPageSource, 'Expiration date (optional)') && str_contains($countPageSource, 'Leave unknown expiration dates blank.'), 'inventory_counts.php explains optional, unknown expiration dates');
 
     // 2. Database Integration Setup with in-memory SQLite
     echo "Setting up SQLite test database...\n";
@@ -247,6 +247,7 @@ try {
 
         CREATE TABLE notification_preferences (
             user_id INTEGER PRIMARY KEY,
+            notify_inapp INTEGER DEFAULT 1,
             notify_low_stock INTEGER DEFAULT 1,
             notify_expiring_stock INTEGER DEFAULT 1,
             low_stock_threshold INTEGER DEFAULT NULL

@@ -141,9 +141,8 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             <div class="topbar">
                 <div>
                     <h1>Inventory Counts</h1>
-                    <p class="page-subtitle">Record physical counts and reconcile approved differences.</p>
                 </div>
-                <span class="badge-role"><?= (int)$pendingTotal ?> Pending Approval</span>
+                <span class="badge-role"><?= (int)$pendingTotal ?> pending approval</span>
             </div>
 
             <?php if ($message): ?>
@@ -155,20 +154,20 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
 
             <div class="count-layout">
                 <div class="count-panel">
-                    <h3>New Physical Count</h3>
-                    <p class="section-description">The system quantity is captured when you submit the count.</p>
+                    <h3>New count</h3>
+                    <p class="section-description">System stock is captured on submission. Stock changes only after approval.</p>
 
                     <?php if ($correctionFormActive): ?>
                         <div class="message success">
                             Correcting approved stock issue report #<?= (int)$correctReport['adjustment_id'] ?>
                             (<?= htmlspecialchars($correctReport['product_name']) ?>, <?= htmlspecialchars($correctReport['adjustment_type']) ?>).
-                            The original report stays immutable; this count is a separate linked record.
+                            This count creates a linked record. The original report stays unchanged.
                             <a href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php')) ?>">Clear correction link</a>
                         </div>
                     <?php elseif ($correctReport !== null): ?>
                         <div class="message">
-                            Stock issue report #<?= (int)$correctReport['adjustment_id'] ?> is approved and immutable.
-                            Corrections are recorded only through a separate Inventory Manager inventory count; Administrator access to this page is read-only.
+                            Stock issue report #<?= (int)$correctReport['adjustment_id'] ?> is approved and cannot be edited.
+                            An Inventory Manager can submit a linked count to correct it. Administrator access is read-only.
                             <a href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php?detail=' . (int)$correctReport['adjustment_id'])) ?>">Back to oversight</a>
                         </div>
                     <?php endif; ?>
@@ -182,14 +181,14 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <?php endif; ?>
                     <?php else: ?>
                         <div class="count-form">
-                            <p class="section-description">Administrator access is read-only. Inventory Managers record and decide Inventory Counts.</p>
+                            <p class="section-description">Read-only access. Inventory Managers record, approve, or reject counts.</p>
                     <?php endif; ?>
 
                         <div class="form-group">
                             <label for="product_id">Product</label>
                             <div class="count-product-control">
                                 <input type="text" id="product_search" hidden
-                                    placeholder="Scan barcode or search SKU / product name" autocomplete="off"
+                                    placeholder="Scan barcode, search name or SKU" autocomplete="off"
                                     autocapitalize="off" autocorrect="off" spellcheck="false"
                                     role="combobox" aria-autocomplete="list" aria-expanded="false"
                                     aria-controls="product_results" aria-describedby="product_search_status scan_status" disabled>
@@ -221,8 +220,8 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <div id="batch_mismatch_alert" class="alert-error" style="margin-bottom: 12px; padding: 10px; border-radius: 4px;" hidden></div>
                             <div id="unbatched_stock_alert" class="alert" style="margin-bottom: 12px; padding: 10px; border-radius: 4px; background: #fff3cd; color: #856404; border: 1px solid #ffeeba;" hidden></div>
 
-                            <label>Physical Count by Batch</label>
-                            <p class="section-description">Count quantities present for each batch. Added stock without a confirmed date remains explicitly undated.</p>
+                            <label>Count by batch</label>
+                            <p class="section-description">Count each batch. Leave unknown expiration dates blank.</p>
                             <div class="table-wrap" style="margin-bottom: 12px;">
                                 <table id="batch_counts_table">
                                     <thead>
@@ -241,13 +240,13 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <div id="extra_batches_container" style="margin-bottom: 12px;">
                                 <div id="extra_batches_list"></div>
                                 <?php if ($canMutateInventory): ?>
-                                    <button type="button" id="add_extra_batch_btn" class="btn btn-small btn-secondary">+ Add Extra / Found Batch</button>
+                                    <button type="button" id="add_extra_batch_btn" class="btn btn-small btn-secondary">+ Add found batch</button>
                                 <?php endif; ?>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label for="physical_quantity">Physically Counted Quantity</label>
+                            <label for="physical_quantity">Counted quantity</label>
                             <input type="number" name="physical_quantity" id="physical_quantity" min="0" required <?= $canMutateInventory ? '' : 'readonly' ?>>
                             <button type="button" id="use_system_quantity" class="btn btn-small btn-secondary" disabled>Use system quantity</button>
                         </div>
@@ -258,7 +257,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                 <strong id="systemQty">-</strong>
                             </div>
                             <div>
-                                <span>Physical</span>
+                                <span>Counted</span>
                                 <strong id="physicalQty">-</strong>
                             </div>
                             <div>
@@ -268,15 +267,15 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         </div>
 
                         <div class="form-group">
-                            <label for="discrepancy_reason">Reason for Discrepancy</label>
+                            <label for="discrepancy_reason">Count reason</label>
                             <textarea
                                 name="discrepancy_reason"
                                 id="discrepancy_reason"
                                 required
                                 <?= $canMutateInventory ? '' : 'readonly' ?>
                                 placeholder="<?= $correctionFormActive
-                                    ? htmlspecialchars('Correction for approved stock issue report #' . (int)$correctReport['adjustment_id'] . ': describe what the recount found.')
-                                    : 'Damaged, missing, expired, incorrect receiving, counting correction, or other details.' ?>"></textarea>
+                                    ? htmlspecialchars('Describe the recount for stock issue #' . (int)$correctReport['adjustment_id'] . '.')
+                                    : 'Explain the count or difference.' ?>"></textarea>
                         </div>
 
                         <?php if ($canMutateInventory): ?>
@@ -290,8 +289,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 <div class="count-panel">
                     <div class="section-header">
                         <div>
-                            <h3>Recent Counts</h3>
-                            <p class="section-description">Approved counts update live inventory and add an adjustment movement.</p>
+                            <h3>Recent counts</h3>
                         </div>
                     </div>
 
@@ -503,7 +501,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 const desc = coverage.on_hand > coverage.batch_sum
                     ? 'Unbatched stock: ' + diff
                     : 'Batches exceed on-hand by ' + diff;
-                batchMismatchAlert.textContent = 'Reconciliation Exception: System on hand (' + coverage.on_hand + ') does not match total batches (' + coverage.batch_sum + '). ' + desc + '. Count physical batches to reconcile.';
+                batchMismatchAlert.textContent = 'Stock mismatch: ' + coverage.on_hand + ' on hand, ' + coverage.batch_sum + ' in batches. ' + desc + '. Count each batch to reconcile.';
             } else {
                 batchMismatchAlert.hidden = true;
             }
@@ -512,7 +510,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             batchTbody.replaceChildren();
             if (!coverage.batches || coverage.batches.length === 0) {
                 const tr = document.createElement('tr');
-                tr.innerHTML = '<td colspan="5" class="muted" style="text-align:center; padding:12px;">No active batches recorded. Enter unbatched or found stock using "+ Add Extra / Found Batch" below.</td>';
+                tr.innerHTML = '<td colspan="5" class="muted" style="text-align:center; padding:12px;">No active batches. Use "Add found batch" for unbatched stock.</td>';
                 batchTbody.appendChild(tr);
             } else {
                 coverage.batches.forEach(function (b, idx) {
@@ -577,16 +575,16 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 div.style.cssText = 'border:1px dashed #ccc; padding:10px; margin-bottom:8px; border-radius:4px; background:rgba(0,0,0,0.02);';
                 div.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <strong>Extra / Found Stock Batch</strong>
+                        <strong>Found batch</strong>
                         <button type="button" class="btn btn-small btn-secondary remove-batch-btn" style="padding:1px 6px;">&times; Remove</button>
                     </div>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
                         <div class="form-group" style="margin-bottom:4px;">
-                            <label style="font-size:12px;">Counted Quantity *</label>
+                            <label style="font-size:12px;">Counted quantity *</label>
                             <input type="number" class="batch-count-input" name="batches[${key}][physical_quantity]" min="1" required style="width:100%;">
                         </div>
                         <div class="form-group" style="margin-bottom:4px;">
-                            <label style="font-size:12px;">Expiration date (leave blank if not recorded)</label>
+                            <label style="font-size:12px;">Expiration date (optional)</label>
                             <input type="date" name="batches[${key}][expiration_date]" style="width:100%;">
                         </div>
                         <div class="form-group" style="margin-bottom:4px;">

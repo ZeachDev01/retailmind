@@ -56,6 +56,18 @@ _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
 _Avoid_: Automatic order, required purchase quantity
 
+**Reorder Level**:
+The stock quantity, measured in Base Units, at or below which the Store should buy more. It includes expected demand while waiting for new stock plus Safety Stock.
+_Avoid_: Order quantity, backup stock
+
+**Safety Stock**:
+The extra quantity of a Product kept as a buffer against unexpected demand or delayed replenishment, measured in Base Units. It is included in the Reorder Level and remains available for sale.
+_Avoid_: Reserved stock, additional reorder trigger
+
+**Target Stock**:
+The desired quantity of a Product to have after replenishment, measured in Base Units. It is distinct from the Reorder Level, which determines when more stock is needed.
+_Avoid_: Reorder level, required purchase quantity
+
 **Base Unit**:
 The atomic, single physical item sold to retail customers and tracked in inventory counts (e.g. piece, sachet, can, bottle, stick).
 _Avoid_: Selling unit, retail unit, loose unit
