@@ -20,6 +20,9 @@
                 <div class="sale-receipt-item">
                     <strong class="sale-receipt-item-name"><?= $escape($item['product_name']) ?></strong>
                     <div class="sale-receipt-sku">SKU: <?= $escape($item['sku']) ?></div>
+                    <?php if (($item['selling_form'] ?? 'piece') === 'pack'): ?>
+                    <div class="sale-receipt-pack-info">Pack<?php if (!empty($item['pack_size'])): ?> (<?= (int)$item['pack_size'] ?> pcs)<?php endif; ?></div>
+                    <?php endif; ?>
                     <div class="sale-receipt-line"><span><?= (int)$item['quantity'] ?> × <?= $money($item['unit_price']) ?></span><strong class="sale-receipt-money"><?= $money($item['subtotal']) ?></strong></div>
                 </div>
                 <?php endforeach; ?>
