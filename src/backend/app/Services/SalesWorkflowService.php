@@ -1155,7 +1155,16 @@ class SalesWorkflowService
                     ]);
 
                     if ($stmt->rowCount() === 0) {
-                        throw new RuntimeException("Sealed pack stock changed for product #{$productId} — please retry checkout.");
+                        $productStmt = $this->pdo->prepare('SELECT product_name FROM products WHERE product_id = ?');
+                        $productStmt->execute([$productId]);
+                        $productName = $productStmt->fetchColumn() ?: "product #{$productId}";
+                        throw new StockConflictException([[
+                            'product_id' => (int)$productId,
+                            'product_name' => (string)$productName,
+                            'selling_form' => 'pack',
+                            'requested_qty' => (int)$opening['packs'],
+                            'available_stock' => 0,
+                        ]]);
                     }
                 }
 
@@ -1196,7 +1205,7 @@ class SalesWorkflowService
         ];
 
         $sellingForm = $item['selling_form'] ?? 'piece';
-        $packSize = $sellingForm === 'pack' ? (int)($item['pack_size'] ?? 1) : null;
+        $packSize = isset($item['pack_size']) && (int)$item['pack_size'] > 0 ? (int)$item['pack_size'] : null;
 
         if (isset($saleItemCols['selling_form'])) {
             $columns[] = 'selling_form';
@@ -1235,53 +1244,43 @@ class SalesWorkflowService
     private function depleteBatchAllocation(array $batchAllocation, int $productId, string $sellingForm = 'piece', ?int $packSize = null): void
     {
         $pbCols = self::getTableColumns($this->pdo, 'product_batches');
-        $hasBatchForms = isset($pbCols['sealed_quantity']) && isset($pbCols['loose_quantity']);
+        $hasBatchForms = isset($pbCols['sealed_quantity'], $pbCols['loose_quantity']);
+        $qty = (int)$batchAllocation['quantity'];
+        $batchId = (int)$batchAllocation['batch_id'];
 
-        if ($hasBatchForms && $sellingForm === 'pack') {
+        if ($hasBatchForms && in_array($sellingForm, ['pack', 'piece'], true)) {
+            $isPack = $sellingForm === 'pack';
+            $formCol = $isPack ? 'sealed_quantity' : 'loose_quantity';
             $effectivePackSize = ($packSize !== null && $packSize > 0) ? $packSize : 1;
-            $packsToDeduct = (int)ceil($batchAllocation['quantity'] / $effectivePackSize);
+            $formDeduct = $isPack ? (int)ceil($qty / $effectivePackSize) : $qty;
+
             $batchUpdate = $this->pdo->prepare(
                 "UPDATE product_batches
-                 SET sealed_quantity = sealed_quantity - ?,
+                 SET {$formCol} = {$formCol} - ?,
                      remaining_quantity = remaining_quantity - ?
-                 WHERE batch_id = ? AND sealed_quantity >= ? AND remaining_quantity >= ?"
+                 WHERE batch_id = ? AND {$formCol} >= ? AND remaining_quantity >= ?"
             );
-            $batchUpdate->execute([
-                $packsToDeduct,
-                $batchAllocation['quantity'],
-                $batchAllocation['batch_id'],
-                $packsToDeduct,
-                $batchAllocation['quantity'],
-            ]);
-        } elseif ($hasBatchForms && $sellingForm === 'piece') {
-            $batchUpdate = $this->pdo->prepare(
-                "UPDATE product_batches
-                 SET loose_quantity = loose_quantity - ?,
-                     remaining_quantity = remaining_quantity - ?
-                 WHERE batch_id = ? AND loose_quantity >= ? AND remaining_quantity >= ?"
-            );
-            $batchUpdate->execute([
-                $batchAllocation['quantity'],
-                $batchAllocation['quantity'],
-                $batchAllocation['batch_id'],
-                $batchAllocation['quantity'],
-                $batchAllocation['quantity'],
-            ]);
+            $batchUpdate->execute([$formDeduct, $qty, $batchId, $formDeduct, $qty]);
         } else {
             $batchUpdate = $this->pdo->prepare(
                 "UPDATE product_batches
                  SET remaining_quantity = remaining_quantity - ?
                  WHERE batch_id = ? AND remaining_quantity >= ?"
             );
-            $batchUpdate->execute([
-                $batchAllocation['quantity'],
-                $batchAllocation['batch_id'],
-                $batchAllocation['quantity'],
-            ]);
+            $batchUpdate->execute([$qty, $batchId, $qty]);
         }
 
         if ($batchUpdate->rowCount() === 0) {
-            throw new RuntimeException("Batch stock changed for product #{$productId} - please retry checkout.");
+            $productStmt = $this->pdo->prepare('SELECT product_name FROM products WHERE product_id = ?');
+            $productStmt->execute([$productId]);
+            $productName = $productStmt->fetchColumn() ?: "product #{$productId}";
+            throw new StockConflictException([[
+                'product_id' => $productId,
+                'product_name' => (string)$productName,
+                'selling_form' => $sellingForm,
+                'requested_qty' => $qty,
+                'available_stock' => 0,
+            ]]);
         }
     }
 

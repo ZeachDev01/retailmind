@@ -282,7 +282,7 @@ $assert($meta['cashier_id'] === 1, 'Activity log attributes cashier');
 // Check sale_items persistence
 $saleItem1 = $pdo->query("SELECT * FROM sale_items WHERE sale_id = {$checkoutResult['sale_id']}")->fetch();
 $assert($saleItem1['selling_form'] === 'piece', 'sale_items recorded selling_form piece');
-$assert($saleItem1['pack_size'] === null, 'sale_items pack_size is null for piece line');
+$assert((int)$saleItem1['pack_size'] === 12, 'sale_items pack_size preserved on piece line for pack-enabled product');
 $assert((int)$saleItem1['quantity'] === 5, 'sale_items quantity is 5');
 $assert((float)$saleItem1['unit_price'] === 10.00, 'sale_items unit_price is 10.00');
 $assert((float)$saleItem1['subtotal'] === 50.00, 'sale_items subtotal is 50.00');
@@ -608,9 +608,45 @@ ob_start();
 SaleReceiptPresentation::render($packReceiptAfterEdit, $packItemsAfter, $packReceiptAfterEdit['receipt_store'] ?? $receiptService->storeInfo(), 'https://example.test/receipt');
 $renderedHtml = ob_get_clean();
 
-$assert(str_contains($renderedHtml, 'Pack (12 pcs)') || str_contains($renderedHtml, 'Pack') && str_contains($renderedHtml, '12 pcs'),
-    'Receipt display renders Pack form and pack contents count');
+$assert(str_contains($renderedHtml, 'Selling Form: Pack (12 pcs)'),
+    'Receipt display renders Selling Form: Pack (12 pcs)');
 $assert(str_contains($renderedHtml, '100.00'), 'Receipt displays charged pack price');
+
+// Check piece line receipt rendering
+$pieceReceipt = $receiptService->fetchSale($resultReplay1['sale_id']);
+ob_start();
+SaleReceiptPresentation::render($pieceReceipt, $pieceReceipt['receipt_items'], $pieceReceipt['receipt_store'] ?? $receiptService->storeInfo(), 'https://example.test/receipt');
+$pieceHtml = ob_get_clean();
+$assert(str_contains($pieceHtml, 'Selling Form: Piece'), 'Receipt display renders Selling Form: Piece');
+
+// =========================================================================
+// SECTION 10: Structured Concurrency Exception
+// =========================================================================
+echo "\n--- Section 10: Structured Concurrency Exception ---\n";
+// Product 7
+$pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barcode, pack_price, product_name, unit_price, cost_price)
+            VALUES (7, 'RACE-01', 'RACE-PC', 12, 'RACE-PK', 100.00, 'Race Biscuit', 10.00, 6.00)");
+$pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (7, 24)");
+$pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
+            VALUES (7, 7, 'BATCH-07', 24, 24, 2, 0, date('now', '+30 days'))");
+
+// Trigger a race collision: Simulate that another transaction depleted the batch right before applyPackOpenings
+$pdo->exec("CREATE TRIGGER race_collision_deplete BEFORE UPDATE ON product_batches FOR EACH ROW
+            WHEN NEW.sealed_quantity < OLD.sealed_quantity AND OLD.batch_id = 7
+            BEGIN
+                SELECT RAISE(IGNORE);
+            END;");
+
+try {
+    $service->checkout([['product_id' => 7, 'selling_form' => 'piece', 'qty' => 5]], 1, 'cashier', 'cash', ['cash_received' => 100.00]);
+    $assert(false, 'Expected StockConflictException on concurrency race collision');
+} catch (StockConflictException $e) {
+    $assert(true, 'Concurrency collision throws structured StockConflictException: ' . $e->getMessage());
+    $conflicts = $e->getConflicts();
+    $assert($conflicts[0]['product_id'] === 7, 'StockConflictException contains product_id');
+} finally {
+    $pdo->exec("DROP TRIGGER IF EXISTS race_collision_deplete");
+}
 
 // Check summary
 if (!empty($failures)) {

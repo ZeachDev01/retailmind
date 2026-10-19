@@ -3,6 +3,7 @@
 namespace App\Receipts;
 
 require_once __DIR__ . '/../Services/PhilippineTime.php';
+require_once __DIR__ . '/../Services/SalesWorkflowService.php';
 
 use App\Services\PhilippineTime;
 use PDO;
@@ -191,24 +192,11 @@ final class ReceiptDetailsService
 
     private function saleColumns(): array
     {
-        return $this->tableColumns('sales');
+        return \SalesWorkflowService::getTableColumns($this->pdo, 'sales');
     }
 
     private function saleItemColumns(): array
     {
-        return $this->tableColumns('sale_items');
-    }
-
-    private function tableColumns(string $table): array
-    {
-        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-        $rows = $driver === 'sqlite'
-            ? $this->pdo->query("PRAGMA table_info(`{$table}`)")->fetchAll(PDO::FETCH_ASSOC)
-            : $this->pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
-        $columns = [];
-        foreach ($rows as $row) {
-            $columns[$driver === 'sqlite' ? $row['name'] : $row['Field']] = true;
-        }
-        return $columns;
+        return \SalesWorkflowService::getTableColumns($this->pdo, 'sale_items');
     }
 }
