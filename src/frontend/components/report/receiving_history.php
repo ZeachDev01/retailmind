@@ -143,11 +143,28 @@ try {
                                             <tr>
                                                 <td><?= htmlspecialchars($line['product_name']) ?></td>
                                                 <td><code><?= htmlspecialchars($line['sku']) ?></code></td>
-                                                <td><?= $line['received_qty'] ?></td>
-                                                <td><?= $line['accepted_qty'] ?></td>
-                                                <td><?= $line['damaged_qty'] ?></td>
                                                 <td>
-                                                    <?php if ($line['received_packages'] > 0): ?>
+                                                    <?= $line['received_qty'] ?>
+                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
+                                                        <br><small class="rh-text-xs rh-text-[var(--muted)]"><?= (int)$line['received_packs'] ?> pack(s), <?= (int)$line['received_loose'] ?> loose</small>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <?= $line['accepted_qty'] ?>
+                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
+                                                        <br><small class="rh-text-xs rh-text-[var(--muted)]"><?= (int)$line['accepted_packs'] ?> pack(s), <?= (int)$line['accepted_loose'] ?> loose</small>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <?= $line['damaged_qty'] ?>
+                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['damaged_packs'] > 0 || (int)$line['damaged_loose'] > 0)): ?>
+                                                        <br><small class="rh-text-xs rh-text-[var(--muted)]"><?= (int)$line['damaged_packs'] ?> pack(s), <?= (int)$line['damaged_loose'] ?> loose</small>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
+                                                        Sales packs (<?= (int)$line['received_packs'] ?> pack(s) × <?= (int)$line['pack_size_used'] ?> + <?= (int)$line['received_loose'] ?> loose = <?= $line['received_qty'] ?> units)
+                                                    <?php elseif ($line['received_packages'] > 0): ?>
                                                         Packages / cases (<?= $line['received_packages'] ?> package(s) × <?= $line['units_per_package_used'] ?> = <?= $line['received_qty'] ?> units)
                                                     <?php else: ?>
                                                         Base units (<?= $line['received_qty'] ?> unit(s))
