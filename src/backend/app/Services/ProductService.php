@@ -2,6 +2,7 @@
 // app/Services/ProductService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/SalesWorkflowService.php';
 require_once __DIR__ . '/PhilippineTime.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
@@ -558,16 +559,28 @@ class ProductService
                 throw new RuntimeException('Adjustment would take stock below zero.');
             }
 
+            $hasFormCols = $this->batchHasFormColumns();
+
             if ($qtyChange > 0) {
                 $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
-                $this->pdo->prepare(
-                    "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
-                     VALUES (?, ?, ?, NULL, ?)"
-                )->execute([$productId, $qtyChange, $qtyChange, $nowManila]);
+                if ($hasFormCols) {
+                    // An adjustment cannot assert that unopened packs exist, so
+                    // the added stock is recorded entirely as loose pieces.
+                    $this->pdo->prepare(
+                        "INSERT INTO product_batches (product_id, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date, date_received)
+                         VALUES (?, ?, ?, 0, ?, NULL, ?)"
+                    )->execute([$productId, $qtyChange, $qtyChange, $qtyChange, $nowManila]);
+                } else {
+                    $this->pdo->prepare(
+                        "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
+                         VALUES (?, ?, ?, NULL, ?)"
+                    )->execute([$productId, $qtyChange, $qtyChange, $nowManila]);
+                }
             } elseif ($qtyChange < 0) {
                 $deductRemaining = abs($qtyChange);
+                $looseSelect = $hasFormCols ? ', loose_quantity' : '';
                 $batchStmt = $this->pdo->prepare(
-                    "SELECT batch_id, remaining_quantity
+                    "SELECT batch_id, remaining_quantity{$looseSelect}
                      FROM product_batches
                      WHERE product_id = ? AND remaining_quantity > 0
                      ORDER BY
@@ -579,9 +592,38 @@ class ProductService
                 $batchStmt->execute([$productId]);
                 $batches = $batchStmt->fetchAll(PDO::FETCH_ASSOC);
 
+                if ($hasFormCols) {
+                    $availableLoose = 0;
+                    foreach ($batches as $batch) {
+                        $availableLoose += max(0, (int)$batch['loose_quantity']);
+                    }
+                    if ($availableLoose < $deductRemaining) {
+                        throw new RuntimeException(
+                            'This deduction needs ' . $deductRemaining . ' loose pieces but only ' . $availableLoose
+                            . ' are counted as loose. Sealed packs are never opened automatically; record a physical count or a Stock Issue instead.'
+                        );
+                    }
+                }
+
                 foreach ($batches as $batch) {
                     if ($deductRemaining <= 0) {
                         break;
+                    }
+                    if ($hasFormCols) {
+                        $take = min($deductRemaining, max(0, (int)$batch['loose_quantity']));
+                        if ($take > 0) {
+                            $batchUpd = $this->pdo->prepare(
+                                "UPDATE product_batches
+                                 SET remaining_quantity = remaining_quantity - ?, loose_quantity = loose_quantity - ?
+                                 WHERE batch_id = ? AND remaining_quantity >= ? AND loose_quantity >= ?"
+                            );
+                            $batchUpd->execute([$take, $take, (int)$batch['batch_id'], $take, $take]);
+                            if ($batchUpd->rowCount() === 0) {
+                                throw new RuntimeException("Concurrent change detected while adjusting batch #{$batch['batch_id']}.");
+                            }
+                            $deductRemaining -= $take;
+                        }
+                        continue;
                     }
                     $take = min($deductRemaining, (int)$batch['remaining_quantity']);
                     if ($take > 0) {
@@ -1525,5 +1567,10 @@ class ProductService
     private function rowLock(): string
     {
         return $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+    }
+
+    private function batchHasFormColumns(): bool
+    {
+        return isset(SalesWorkflowService::getTableColumns($this->pdo, 'product_batches')['loose_quantity']);
     }
 }

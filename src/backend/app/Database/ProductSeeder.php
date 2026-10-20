@@ -118,8 +118,14 @@ final class ProductSeeder
         $guard->assertOpenNow('purchase_history', 'sample opening stock');
         $guard->assertOpenNow('stock_movements', 'sample opening stock');
         $batch = 'RM-SEED-OPENING-V1-' . $row['sku'];
-        $pdo->prepare('INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity, supplier) VALUES (?, ?, ?, ?, ?)')
-            ->execute([$productId, $batch, $quantity, $quantity, 'RetailMind development seed']);
+        if (Schema::columnExists($pdo, 'product_batches', 'loose_quantity')) {
+            // Opening stock is an unverified total, so it is recorded as loose.
+            $pdo->prepare('INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, supplier) VALUES (?, ?, ?, ?, 0, ?, ?)')
+                ->execute([$productId, $batch, $quantity, $quantity, $quantity, 'RetailMind development seed']);
+        } else {
+            $pdo->prepare('INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity, supplier) VALUES (?, ?, ?, ?, ?)')
+                ->execute([$productId, $batch, $quantity, $quantity, 'RetailMind development seed']);
+        }
         $pdo->prepare('INSERT INTO purchase_history (product_id, supplier, quantity_purchased, cost_price, total_cost) VALUES (?, ?, ?, ?, ? * ?)')
             ->execute([$productId, 'RetailMind development seed', $quantity, $current['cost_price'], $current['cost_price'], $quantity]);
         $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason) VALUES (?, ?, 'purchase')")

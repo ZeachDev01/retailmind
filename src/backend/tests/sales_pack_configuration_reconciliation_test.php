@@ -805,6 +805,65 @@ $assert(
 );
 $assert($allocated[0]['expiration_date'] === '2027-01-01' && $allocated[1]['expiration_date'] === '2027-06-01', 'Reconciliation keeps each batch expiration date');
 
+// 20. Emergency stock adjustments never reinterpret sealed packs as loose pieces.
+echo "Testing form-aware stock adjustments...\n";
+$adjustProdId = $productService->createProduct([
+    'barcode' => 'ADJUST-FORM-PC',
+    'product_name' => 'Adjustable Pack Biscuit',
+    'unit_price' => 10.00,
+    'pack_size' => 6,
+    'pack_barcode' => 'ADJUST-FORM-PK',
+    'pack_price' => 50.00,
+    'starting_packs' => 2,
+    'starting_loose' => 3,
+], 1);
+$formBefore = $pdo->query("SELECT sealed_quantity, loose_quantity, remaining_quantity FROM product_batches WHERE product_id = {$adjustProdId}")->fetch(PDO::FETCH_ASSOC);
+$assert((int)$formBefore['sealed_quantity'] === 2 && (int)$formBefore['loose_quantity'] === 3 && (int)$formBefore['remaining_quantity'] === 15,
+    'Adjustment fixture starts at 2 sealed packs + 3 loose pieces (15 Base Units)');
+
+$productService->adjustStock([
+    'product_id' => $adjustProdId,
+    'qty_change' => 5,
+    'adjustment_reason' => 'Found extra loose pieces during aisle inspection',
+], 1);
+$adjustInv = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$adjustProdId}")->fetchColumn();
+$adjustNewBatch = $pdo->query("SELECT sealed_quantity, loose_quantity, remaining_quantity FROM product_batches WHERE product_id = {$adjustProdId} AND batch_number IS NULL ORDER BY batch_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$adjustSealed = (int)$pdo->query("SELECT SUM(sealed_quantity) FROM product_batches WHERE product_id = {$adjustProdId}")->fetchColumn();
+$adjustLoose = (int)$pdo->query("SELECT SUM(loose_quantity) FROM product_batches WHERE product_id = {$adjustProdId}")->fetchColumn();
+$assert($adjustInv === 20 && (int)$adjustNewBatch['sealed_quantity'] === 0 && (int)$adjustNewBatch['loose_quantity'] === 5,
+    'Positive adjustment adds 5 Base Units as loose pieces only (sealed 0)');
+$assert($adjustSealed === 2 && $adjustLoose === 8 && $adjustSealed * 6 + $adjustLoose === $adjustInv,
+    'Positive adjustment preserves sealed packs and the sealed/loose invariant (2 x 6 + 8 = 20)');
+
+$productService->adjustStock([
+    'product_id' => $adjustProdId,
+    'qty_change' => -4,
+    'adjustment_reason' => 'Loose pieces damaged while restocking the shelf',
+], 1);
+$adjustInv = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$adjustProdId}")->fetchColumn();
+$adjustSealed = (int)$pdo->query("SELECT SUM(sealed_quantity) FROM product_batches WHERE product_id = {$adjustProdId}")->fetchColumn();
+$adjustLoose = (int)$pdo->query("SELECT SUM(loose_quantity) FROM product_batches WHERE product_id = {$adjustProdId}")->fetchColumn();
+$assert($adjustInv === 16 && $adjustSealed === 2 && $adjustLoose === 4 && $adjustSealed * 6 + $adjustLoose === $adjustInv,
+    'Negative adjustment removes 4 loose pieces, leaves 2 sealed packs untouched, and keeps the invariant');
+
+$beforeRefusal = $pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$adjustProdId}")->fetchColumn();
+$beforeRefusalBatches = $pdo->query("SELECT batch_id, remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE product_id = {$adjustProdId} ORDER BY batch_id")->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $productService->adjustStock([
+        'product_id' => $adjustProdId,
+        'qty_change' => -5,
+        'adjustment_reason' => 'Attempt to consume an unopened sealed pack',
+    ], 1);
+    $assert(false, 'Adjustment beyond available loose stock should be refused instead of opening sealed packs');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), 'loose') && (str_contains($e->getMessage(), 'Stock Issue') || str_contains($e->getMessage(), 'physical count')),
+        'Adjustment beyond loose stock is refused with operator guidance: ' . $e->getMessage());
+}
+$afterRefusalBatches = $pdo->query("SELECT batch_id, remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE product_id = {$adjustProdId} ORDER BY batch_id")->fetchAll(PDO::FETCH_ASSOC);
+$assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$adjustProdId}")->fetchColumn() === (int)$beforeRefusal
+    && $afterRefusalBatches === $beforeRefusalBatches,
+    'Refused adjustment writes nothing to inventory or batches');
+
 if (!empty($failures)) {
     echo "\nFailed with " . count($failures) . " failure(s):\n";
     foreach ($failures as $f) {

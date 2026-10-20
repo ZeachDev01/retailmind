@@ -76,14 +76,14 @@ Every row above reported `fail - 0`. Rows the runner labels "CHECK" merely conta
 
 ## Schema and upgrade evidence
 
-`sales_pack_schema_parity_contract.php` builds two disposable MySQL databases and compares them column by column, index by index, and constraint by constraint:
+`sales_pack_schema_parity_contract.php` builds two disposable MySQL databases and compares selected column types, nullability and defaults, plus the pack-barcode index. It does not compare every index or constraint:
 
 1. Fresh `database/sql/schema.sql` plus all six pack migrations.
 2. A legacy-shaped database with the pack columns dropped, ledger keys deleted, then re-migrated.
 
 Both converge on the canonical pack columns (`product_batches.sealed_quantity`, `loose_quantity`, `sale_items.selling_form`, `pack_size`, `base_unit_quantity`, and related ledger/audit keys). The test also proves legacy rows survive: legacy stock reads as loose/unknown, legacy sale and refund lines read as piece-form, and receiving, pullout, count, and issue records are backfilled. `database/sql/update.sql` contains no pack columns, so upgrade paths rely on migrations rather than a parallel schema copy.
 
-`sales_pack_carry_records_contract.php` proves carry records keep their stock form through receiving, counts, Stock Issues, supplier pullouts/replacements, sales, and refunds, including cost and batch provenance for opened packs.
+`sales_pack_carry_records_contract.php` is a static source-contract check for record and workflow references. It does not execute backup/restore, seeding, or every stock writer; the separate service tests supply behavioral evidence for the covered workflows.
 
 This parity test exists because `consolidated_sql_integration.php` is already broken on MySQL 8.4 for an unrelated reason (see below); it directly re-asserts the schema convergence that test would otherwise cover.
 
@@ -119,7 +119,7 @@ Spec-caused regressions found and fixed during verification:
 
 ## Store data safety
 
-Verification never ran fixtures, migrations, or browser suites against the Store database `inventory_system`. All DB tests used disposable databases they create themselves.
+Store safety is not independently certified. An accidental earlier fixture run touched `inventory_system`, as detailed below. Subsequent financial verification used disposable databases; no further Store fixtures are authorized.
 
 An earlier `sales_trend_integration.php` run used the configured connection and touched Store data. The contamination was reversed and verified: 35 seed openings (1,155 units) rolled back to zero seed batches/purchases/movements, and temporary product `SKU-PACK-CHEAP` plus the added `sale_items.base_unit_quantity` column removed. Store fingerprint before and after the final suite is identical: products/batches/`sale_items`/stock rows `61/247/17/489/489`.
 
@@ -140,4 +140,12 @@ An earlier `sales_trend_integration.php` run used the configured connection and 
 5. Manually check one Product's setup, a mixed receiving, a pack sale, a pack refund, and an oil-pouch sale on the target.
 6. Enable pack sales only after steps 2 and 5 pass.
 
-**Verdict: ready on tests and schema.** Application behavior, schema convergence, carry-record parity, legacy fallbacks, and all specification examples are covered by passing tests. Rollout is gated on the Store's physical count and the browser/manual checks listed above, which this environment could not perform against Store data.
+**Verdict: rollout blocked pending manual browser checks and the physical sealed/loose count.** Passing service, source-contract and selected-schema checks do not prove all browser acceptance criteria. Store cleanup was reported by the verification agent, not independently certified; residual effects on sequences, audit logs and caches require operator review.
+
+## Final stock-writer review fixes
+
+- Emergency adjustments and CSV imports now record added stock as loose, never inferred sealed packs. Emergency deductions consume loose stock only and reject insufficient loose stock atomically.
+- Product and sales-trend seeders preserve loose balances alongside batch totals.
+- Legacy reversals restore piece returns as loose; Sales Pack lines must use the authorized Cash Refund workflow.
+- Count approval reads its persisted form differences instead of undefined variables. Pack multi-batch counts require batch details; piece-only counts retain their existing workflow.
+- Final regression runs: configuration/reconciliation, stock forms/counts/issues, inventory-count reconciliation, carry-record source contract, mixed-form checkout, and Cash Refund contract all exited 0.

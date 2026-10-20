@@ -909,6 +909,32 @@ $assert(
     'Same-total form correction writes a zero-change audit movement attributed to the approver'
 );
 
+$beforeExact = (int)$pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = 6')->fetchColumn();
+$exactCountId = $countService->recordCount([
+    'product_id' => 6,
+    'physical_sealed_quantity' => 1,
+    'physical_loose_quantity' => 6,
+    'discrepancy_reason' => 'Exact recount confirms shelf quantities',
+], 1);
+$countService->approveCount($exactCountId, 1);
+$assert((int)$pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = 6')->fetchColumn() === $beforeExact,
+    'Exact count approval creates no stock adjustment movement');
+
+$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, status)
+    VALUES (7, 'COUNT-PIECE', 'COUNT-PIECE', 'Piece-only count', 10, 5, 'active');
+    INSERT INTO inventory (product_id, quantity_on_hand) VALUES (7, 10);
+    INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity)
+    VALUES (7, 'PIECE-A', 5, 5, 0, 5), (7, 'PIECE-B', 5, 5, 0, 5)");
+$pieceCountId = $countService->recordCount([
+    'product_id' => 7,
+    'physical_quantity' => 9,
+    'discrepancy_reason' => 'One loose item missing from shelf',
+], 1);
+$countService->approveCount($pieceCountId, 1);
+$assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 7')->fetchColumn() === 9
+    && (int)$pdo->query('SELECT SUM(loose_quantity) FROM product_batches WHERE product_id = 7')->fetchColumn() === 9,
+    'Piece-only multi-batch product-level count retains its existing workflow and loose invariant');
+
 // 8.8: Run migration 202610200004_stock_counts_and_issues_forms idempotently
 $mig = require __DIR__ . '/../database/migrations/202610200004_stock_counts_and_issues_forms.php';
 $assert($mig['key'] === '202610200004_stock_counts_and_issues_forms', 'Migration key is 202610200004_stock_counts_and_issues_forms');

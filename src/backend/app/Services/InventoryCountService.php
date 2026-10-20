@@ -493,6 +493,15 @@ class InventoryCountService
 
             $productId = (int)$count['product_id'];
             $differenceQty = (int)$count['difference_qty'];
+            $diffSealedTotal = (int)($count['difference_sealed_qty'] ?? 0);
+            $diffLooseTotal = (int)($count['difference_loose_qty'] ?? 0);
+
+            $hasPack = false;
+            if ($this->hasColumn('products', 'pack_size')) {
+                $packStmt = $this->pdo->prepare('SELECT pack_size FROM products WHERE product_id = ?');
+                $packStmt->execute([$productId]);
+                $hasPack = (int)$packStmt->fetchColumn() > 1;
+            }
 
             $inventoryStmt = $this->pdo->prepare(
                 "SELECT quantity_on_hand
@@ -677,12 +686,22 @@ class InventoryCountService
                     } else {
                         $batchUpdateStmt->execute([$physicalQty, $targetBatchId]);
                     }
-                } elseif (count($activeBatches) > 1) {
-                    // Merging several dated batches into one undated COUNT batch
-                    // would discard their expiration and supplier provenance.
+                } elseif (count($activeBatches) > 1 && $hasPack) {
+                    // For packs, merging several dated batches into one undated
+                    // COUNT batch would discard their expiration and supplier
+                    // provenance while also losing the sealed/loose placement.
                     // Require the operator to count each batch instead.
                     throw new RuntimeException('This product has multiple active batches. Record the count against each batch so its expiration and supplier details are preserved.');
                 } else {
+                    // Piece-only products keep the previous behaviour: merge the
+                    // product-level count into one undated COUNT batch.
+                    foreach ($activeBatches as $ab) {
+                        if ($hasBatchFormCols) {
+                            $batchUpdateStmt->execute([0, 0, 0, (int)$ab['batch_id']]);
+                        } else {
+                            $batchUpdateStmt->execute([0, (int)$ab['batch_id']]);
+                        }
+                    }
                     if ($physicalQty > 0) {
                         if ($hasBatchFormCols) {
                             $batchInsertStmt->execute([
