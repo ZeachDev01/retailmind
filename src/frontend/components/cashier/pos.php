@@ -1085,7 +1085,7 @@ function updateQuickProductAvailability() {
                     <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" aria-label="Add piece" ${remainingBase <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
                 </div>`;
             } else {
-                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remainingBase <= 0 ? 'disabled' : ''} style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-plus-lg" aria-hidden="true"></i>Piece</button>`;
+                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remainingBase <= 0 ? 'disabled' : ''} style="flex:1;min-height:36px;padding:0.25rem 0.5rem;"><i class="bi bi-plus-lg" aria-hidden="true"></i>Piece</button>`;
             }
 
             let packHtml = '';
@@ -1097,7 +1097,7 @@ function updateQuickProductAvailability() {
                 </div>`;
             } else {
                 const packDisabled = (sealedStock <= 0 || remainingBase < Number(product.pack_size));
-                packHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" ${packDisabled ? 'disabled' : ''} style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-box-seam" aria-hidden="true"></i>Pack of ${product.pack_size}</button>`;
+                packHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" ${packDisabled ? 'disabled' : ''} style="flex:1;min-height:36px;padding:0.25rem 0.5rem;"><i class="bi bi-box-seam" aria-hidden="true"></i>Pack of ${product.pack_size}</button>`;
             }
 
             action.innerHTML = `<div style="display:flex;gap:0.35rem;width:100%;align-items:center;">${pieceHtml}${packHtml}</div>`;

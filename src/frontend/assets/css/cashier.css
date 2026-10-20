@@ -2797,6 +2797,61 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     .cashier-page :is(input, select, textarea) { font-size: 1rem; }
 }
 
+/* POS type roles stay readable in both the catalog and the narrow sale pane. */
+.cashier-pos-page :is(button, input, select, textarea) { font-family: inherit; }
+
+.cashier-pos-page :is(.pos-panel-title h2, .cart-heading h2, .pos-lock-card h2, .checkout-dialog-header h3) {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+}
+
+.cashier-pos-page :is(.held-sales-header h3, .quick-product-meta > strong, .payment-breakdown strong) {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.cashier-pos-page :is(.quick-product-name, .pos-input, .pos-select, .payment-field input, .payment-field select, .checkout-summary-card, .void-reason) {
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.cashier-pos-page .quick-product-name { min-height: 3em; font-weight: 600; }
+
+.cashier-pos-page :is(.scan-label, .pos-field-label, .quick-category-filter strong, .quick-category-filter small, .quick-product-sku, .quick-product-stock, .quick-product-add, .quick-product-stepper strong, .cart-table td, .cart-item-meta, .stock-warning, .checkout-total-label, .payment-breakdown span, .pos-lock-note, .pos-lock-lede, .checkout-dialog-header p, .hold-item strong, .hold-item small, .quick-products-empty, .u-pos-hint) {
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.cashier-pos-page :is(.scan-label, .pos-field-label, .quick-category-filter strong, .quick-product-stock, .quick-product-add, .quick-product-stepper strong, .stock-warning, .hold-item strong) { font-weight: 600; }
+
+.cashier-pos-page :is(.pos-lock-note, .pos-lock-lede, .checkout-dialog-header p, .u-pos-hint) { max-width: 65ch; }
+
+.cashier-pos-page .quick-product-meta { flex-wrap: wrap; }
+.cashier-pos-page .quick-product-meta > strong { white-space: normal; overflow-wrap: anywhere; }
+.cashier-pos-page .pos-panel-title { min-width: 0; flex-shrink: 0; }
+
+.cashier-pos-page .cart-table { min-width: 35rem; }
+.cashier-pos-page .cart-table th { font-size: 0.875rem; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.cashier-pos-page .cart-table td:first-child { min-width: 12rem; }
+.cashier-pos-page .cart-item-name { font-size: 1rem; font-weight: 600; line-height: 1.4; }
+.cashier-pos-page .cart-table :is(th, td):nth-child(3) { text-align: right; white-space: nowrap; }
+.cashier-pos-page .qty-field { font-size: 1rem; font-weight: 600; }
+
+.cashier-pos-page :is(.checkout-total-value, .payment-breakdown strong, .quick-product-meta > strong, .cart-table, .qty-field, .payment-field input, .review-total, .review-change, .cash-quick, .quick-product-stepper strong) { font-variant-numeric: lining-nums tabular-nums; }
+
+.cashier-pos-page .checkout-total { gap: 1rem; flex-wrap: wrap; }
+.cashier-pos-page .checkout-total-value { font-size: 1.8rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.cashier-pos-page .checkout-total-label strong { font-size: 1rem; }
+.cashier-pos-page .checkout-total-label span { font-size: 0.875rem; }
+.cashier-pos-page .checkout-total-label span span { display: inline; }
+.cashier-pos-page .payment-breakdown strong { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+.cashier-pos-page .payment-breakdown strong span { display: inline; font: inherit; color: inherit; }
+.cashier-pos-page .cash-quick button { font-size: 0.875rem; font-weight: 600; }
+
 /* Independent POS panes on desktop */
 @media (min-width: 1181px) {
     body.cashier-pos-page {
