@@ -29,9 +29,18 @@ final class RefundReceiptService
             throw new RuntimeException('Refund receipt could not be preserved.');
         }
         $refund['reason'] = CashRefundService::REFUND_REASONS[$refund['reason']];
-        $statement = $this->pdo->prepare('SELECT p.product_name, p.sku, cri.quantity, cri.subtotal
+        $criCols = \SalesWorkflowService::getTableColumns($this->pdo, 'cash_refund_items');
+        $siCols = \SalesWorkflowService::getTableColumns($this->pdo, 'sale_items');
+        $formSelect = isset($criCols['selling_form'])
+            ? ', cri.selling_form'
+            : (isset($siCols['selling_form']) ? ', si.selling_form' : ", 'piece' AS selling_form");
+        $packSelect = isset($criCols['pack_size'])
+            ? ', cri.pack_size'
+            : (isset($siCols['pack_size']) ? ', si.pack_size' : ', NULL AS pack_size');
+        $statement = $this->pdo->prepare("SELECT p.product_name, p.sku, cri.quantity, cri.subtotal{$formSelect}{$packSelect}
             FROM cash_refund_items cri JOIN products p ON p.product_id = cri.product_id
-            WHERE cri.refund_id = ? ORDER BY cri.refund_item_id');
+            LEFT JOIN sale_items si ON si.sale_item_id = cri.sale_item_id
+            WHERE cri.refund_id = ? ORDER BY cri.refund_item_id");
         $statement->execute([$refundId]);
         $details = ['refund' => $refund, 'items' => $statement->fetchAll(PDO::FETCH_ASSOC),
             'store' => (new ReceiptDetailsService($this->pdo))->storeInfo()];

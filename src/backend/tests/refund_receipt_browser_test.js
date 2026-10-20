@@ -29,7 +29,7 @@ const { chromium } = require('playwright');
                 assert.equal(await page.evaluate(() => window.printCalls), 0, 'successful refund never auto-prints');
                 assert.equal(await page.locator('.receipt-print-area').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(21, 34, 56)', 'Receipt preview follows dark appearance');
                 const text = await page.locator('.receipt-print-area').innerText();
-                for (const content of ['Refund #105', 'Original Sale Receipt #103', 'Other', 'Total refunded', 'Original payment method']) assert.ok(text.includes(content));
+                for (const content of ['Refund #105', 'Original Sale Receipt #103', 'Other', 'Total refunded', 'Original payment method', 'Selling Form: Pack (6 pcs)', 'Selling Form: Piece']) assert.ok(text.includes(content));
                 for (const secret of ['PRIVATE-REFUND-NOTE', 'damaged', 'restockable']) assert.ok(!text.includes(secret));
                 for (const viewport of [1440, 390]) {
                     await page.setViewportSize({ width: viewport, height: 900 });

@@ -22,6 +22,7 @@
         <div class="sale-receipt-item">
             <strong class="sale-receipt-item-name"><?= $escape($item['product_name']) ?></strong>
             <div class="sale-receipt-sku">SKU: <?= $escape($item['sku']) ?></div>
+            <div class="sale-receipt-pack-info">Selling Form: <?= $escape(\App\Services\CashRefundService::formatSellingForm((string)($item['selling_form'] ?? 'piece'), !empty($item['pack_size']) ? (int)$item['pack_size'] : null)) ?></div>
             <div class="sale-receipt-line"><span>Quantity: <?= (int)$item['quantity'] ?></span><strong class="sale-receipt-money"><?= $money($item['subtotal']) ?></strong></div>
         </div>
         <?php endforeach; ?>

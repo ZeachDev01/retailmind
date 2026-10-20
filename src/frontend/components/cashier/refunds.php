@@ -64,11 +64,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dispositions = (array)($_POST['disposition'] ?? []);
         $items = [];
         foreach ($quantities as $lineId => $quantity) {
-            if ((int)$quantity <= 0) {
+            $rawQty = trim((string)$quantity);
+            if ($rawQty === '' || $rawQty === '0') {
                 continue;
             }
             $items[(int)$lineId] = [
-                'quantity' => (int)$quantity,
+                'quantity' => $rawQty,
                 'disposition' => (string)($dispositions[$lineId] ?? ''),
             ];
         }
@@ -213,27 +214,44 @@ if ($receiptId > 0 && $receipt === null) {
                                 <table class="refund-items-table">
                                     <thead><tr>
                                         <th>Product</th>
+                                        <th>Form</th>
                                         <th>Sold</th>
                                         <th>Still refundable</th>
                                         <th>Returning</th>
                                         <th>Condition</th>
                                     </tr></thead><tbody>
                                     <?php foreach ($sale['items'] as $line): ?>
-                                        <?php $remaining = (int)$line['refundable_quantity']; ?>
-                                        <tr>
-                                            <td><strong><?= htmlspecialchars($line['product_name']) ?></strong><br><small><?= htmlspecialchars($line['sku']) ?> &middot; &#8369;<?= number_format((float)$line['unit_price'], 2) ?> each</small></td>
-                                            <td><?= (int)$line['quantity'] ?></td>
-                                            <td><?= $remaining ?></td>
+                                        <?php
+                                        $remaining = (int)$line['refundable_quantity'];
+                                        $isPack = ($line['selling_form'] ?? 'piece') === 'pack';
+                                        $packSize = isset($line['pack_size']) ? (int)$line['pack_size'] : null;
+                                        $formLabel = CashRefundService::formatSellingForm($isPack ? 'pack' : 'piece', $packSize);
+                                        $unitLabel = $isPack ? 'per pack' : 'each';
+                                        $qtyUnit = $isPack ? ($line['quantity'] === 1 ? 'pack' : 'packs') : ($line['quantity'] === 1 ? 'pc' : 'pcs');
+                                        $remUnit = $isPack ? ($remaining === 1 ? 'pack' : 'packs') : ($remaining === 1 ? 'pc' : 'pcs');
+                                        ?>
+                                        <tr data-selling-form="<?= htmlspecialchars($isPack ? 'pack' : 'piece') ?>">
                                             <td>
-                                                <label class="refund-sr-only" for="return-quantity-<?= (int)$line['sale_item_id'] ?>">Returning quantity for <?= htmlspecialchars($line['product_name']) ?></label>
-                                                <input id="return-quantity-<?= (int)$line['sale_item_id'] ?>" type="number" name="quantity[<?= (int)$line['sale_item_id'] ?>]" min="0" max="<?= $remaining ?>" value="0" <?= $remaining <= 0 ? 'disabled' : '' ?>>
+                                                <strong><?= htmlspecialchars($line['product_name']) ?></strong><br>
+                                                <small><?= htmlspecialchars($line['sku']) ?> &middot; &#8369;<?= number_format((float)$line['unit_price'], 2) ?> <?= htmlspecialchars($unitLabel) ?></small>
+                                                <?php if ($isPack): ?>
+                                                    <br><small class="refund-pack-eligibility">Restockable requires whole sealed, complete pack<?= $packSize ? " ({$packSize} pcs)" : '' ?>; opened or incomplete returns cannot be restocked as sealed packs.</small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?= htmlspecialchars($formLabel) ?></td>
+                                            <td><?= (int)$line['quantity'] ?> <?= htmlspecialchars($qtyUnit) ?></td>
+                                            <td><?= $remaining ?> <?= htmlspecialchars($remUnit) ?></td>
+                                            <td>
+                                                <label class="refund-sr-only" for="return-quantity-<?= (int)$line['sale_item_id'] ?>">Returning quantity for <?= htmlspecialchars($line['product_name']) ?> (<?= htmlspecialchars($formLabel) ?>)</label>
+                                                <input id="return-quantity-<?= (int)$line['sale_item_id'] ?>" type="number" name="quantity[<?= (int)$line['sale_item_id'] ?>]" min="0" max="<?= $remaining ?>" step="1" value="0" <?= $remaining <= 0 ? 'disabled' : '' ?>>
                                             </td>
                                             <td>
-                                                <label class="refund-sr-only" for="return-condition-<?= (int)$line['sale_item_id'] ?>">Condition for <?= htmlspecialchars($line['product_name']) ?></label>
+                                                <label class="refund-sr-only" for="return-condition-<?= (int)$line['sale_item_id'] ?>">Condition for <?= htmlspecialchars($line['product_name']) ?> (<?= htmlspecialchars($formLabel) ?>)</label>
                                                 <select id="return-condition-<?= (int)$line['sale_item_id'] ?>" name="disposition[<?= (int)$line['sale_item_id'] ?>]" <?= $remaining <= 0 ? 'disabled' : '' ?>>
                                                     <option value="">Choose condition</option>
                                                     <?php foreach (CashRefundService::DISPOSITIONS as $value => $label): ?>
-                                                        <option value="<?= htmlspecialchars($value) ?>"><?= htmlspecialchars($label) ?></option>
+                                                        <?php $optionLabel = ($isPack && $value === CashRefundService::RESTOCKABLE) ? 'Restockable (Whole sealed pack)' : $label; ?>
+                                                        <option value="<?= htmlspecialchars($value) ?>"><?= htmlspecialchars($optionLabel) ?></option>
                                                     <?php endforeach; ?>
                                                 </select>
                                             </td>
@@ -259,7 +277,7 @@ if ($receiptId > 0 && $receipt === null) {
                                 </div>
                             </div>
 
-                            <p class="refund-help refund-policy">Refund on the original <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?> payment method. Only <strong>Restockable</strong> units return to available inventory. A <strong>Damaged</strong> unit stays off the shelf. Only cash refunds reduce expected drawer cash.</p>
+                            <p class="refund-help refund-policy">Refund on the original <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?> payment method. Only <strong>Restockable</strong> units return to available inventory (Sales Packs must be whole, sealed, and complete). A <strong>Damaged</strong> unit stays off the shelf. Only cash refunds reduce expected drawer cash.</p>
                             <p class="refund-help">Do not report these Damaged returned units as a Stock Issue: they were already removed from available inventory at sale. An exchange needs this refund and a separate paid new sale.</p>
                             <?php if ($sale['payment_method'] !== 'cash'): ?>
                             <fieldset><legend>External refund settlement</legend>
