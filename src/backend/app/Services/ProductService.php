@@ -160,9 +160,10 @@ class ProductService
                     throw new RuntimeException('Starting loose pieces must be a whole non-negative number.');
                 }
                 $startingLoose = (int)$rawLoose;
-            } elseif (array_key_exists('initial_stock_quantity', $data) && $data['initial_stock_quantity'] !== null && $data['initial_stock_quantity'] !== '') {
-                $startingLoose = $this->validateStockSetting($data['initial_stock_quantity'], 'Starting quantity', 0);
             } else {
+                // A blank loose field on a pack product means no loose pieces.
+                // The auto-computed total is packs * pack_size here, so falling
+                // back to it would count the packs twice.
                 $startingLoose = 0;
             }
         }
@@ -1367,18 +1368,65 @@ class ProductService
             $batches = $batchStmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (!empty($batches)) {
-                $remSealed = $sealedPacks;
+                // The asserted sealed count has to be fully representable by the
+                // batches that hold the stock: a pack may only be recorded where a
+                // whole pack's Base Units are present. Fragmenting it across
+                // batches would invent stock the shelf does not have, so refuse
+                // instead of silently dropping the operator's count.
+                if ($multiplier > 1) {
+                    $capacity = 0;
+                    foreach ($batches as $b) {
+                        $capacity += intdiv((int)$b['remaining_quantity'], $multiplier);
+                    }
+                    if ($sealedPacks > $capacity) {
+                        throw new RuntimeException('The physical sealed count cannot be allocated across the existing batches without splitting packed stock. Count each batch separately or adjust loose stock first.');
+                    }
+                }
+
+                // Keep sealed packs in the batches that already hold them, then
+                // add or remove packs earliest-expiry-first so provenance and
+                // base-unit totals are preserved.
+                $allocatedSealed = [];
+                $preservedSealed = 0;
                 foreach ($batches as $b) {
+                    $batchId = (int)$b['batch_id'];
+                    $cap = $multiplier > 1 ? intdiv((int)$b['remaining_quantity'], $multiplier) : 0;
+                    $sealed = min(max((int)$b['sealed_quantity'], 0), $cap);
+                    $allocatedSealed[$batchId] = $sealed;
+                    $preservedSealed += $sealed;
+                }
+
+                if ($preservedSealed < $sealedPacks) {
+                    $needed = $sealedPacks - $preservedSealed;
+                    foreach ($batches as $b) {
+                        $batchId = (int)$b['batch_id'];
+                        $cap = $multiplier > 1 ? intdiv((int)$b['remaining_quantity'], $multiplier) : 0;
+                        $add = min($needed, $cap - $allocatedSealed[$batchId]);
+                        $allocatedSealed[$batchId] += $add;
+                        $needed -= $add;
+                        if ($needed <= 0) {
+                            break;
+                        }
+                    }
+                } elseif ($preservedSealed > $sealedPacks) {
+                    $excess = $preservedSealed - $sealedPacks;
+                    for ($i = count($batches) - 1; $i >= 0 && $excess > 0; $i--) {
+                        $batchId = (int)$batches[$i]['batch_id'];
+                        $remove = min($excess, $allocatedSealed[$batchId]);
+                        $allocatedSealed[$batchId] -= $remove;
+                        $excess -= $remove;
+                    }
+                }
+
+                $updateForms = $this->pdo->prepare(
+                    "UPDATE product_batches SET sealed_quantity = ?, loose_quantity = ? WHERE batch_id = ?"
+                );
+                foreach ($batches as $b) {
+                    $batchId = (int)$b['batch_id'];
                     $bRem = (int)$b['remaining_quantity'];
-                    $bCapPacks = $multiplier > 1 ? (int)floor($bRem / $multiplier) : 0;
-                    $allocSealed = min($remSealed, $bCapPacks);
-                    $allocLoose = $bRem - ($allocSealed * $multiplier);
-
-                    $this->pdo->prepare(
-                        "UPDATE product_batches SET sealed_quantity = ?, loose_quantity = ? WHERE batch_id = ?"
-                    )->execute([$allocSealed, $allocLoose, (int)$b['batch_id']]);
-
-                    $remSealed -= $allocSealed;
+                    $allocSealed = $allocatedSealed[$batchId];
+                    $allocLoose = $bRem - ($allocSealed * ($multiplier > 1 ? $multiplier : 1));
+                    $updateForms->execute([$allocSealed, $allocLoose, $batchId]);
                 }
             } elseif ($newTotal > 0) {
                 $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');

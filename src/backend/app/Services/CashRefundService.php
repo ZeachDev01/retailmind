@@ -204,6 +204,12 @@ class CashRefundService
                 throw new DomainException('This sale has a pending or approved reversal. Resolve it through the original return record.');
             }
             $lines = $this->settleLines($sale, $requested);
+            // A historical sealed pack may only go back on the shelf if it still
+            // means the same thing: the Product's configured pack size has to
+            // match the size the pack was sold as. A legal catalog edit after all
+            // sealed stock was sold would otherwise restock a pack whose contents
+            // no longer fit remaining_quantity.
+            $this->assertRestockPackSizeMatchesCatalog($lines);
             $amount = $this->settleAmount($sale, $lines);
             $paymentReference = trim($paymentReference ?? '');
             if ($sale['payment_method'] !== self::CASH && (!$externalCompleted || $paymentReference === '' || mb_strlen($paymentReference) > 100)) {
@@ -789,6 +795,42 @@ class CashRefundService
         $this->pdo->prepare(
             "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, 'return', ?)"
         )->execute([(int)$line['product_id'], $baseUnitQty, $cashierId]);
+    }
+
+    /**
+     * Refuses to restock a Sales Pack the catalog can no longer describe.
+     *
+     * Money is settled from the sale's historical pack size, but the batch
+     * counts a restocked sealed pack under the Product's current configuration.
+     * If the two disagree, putting the pack back would claim sealed stock whose
+     * contents do not match the sellable pack, so it is directed to a recorded
+     * physical reconciliation instead.
+     *
+     * @param array<int, array<string, mixed>> $lines
+     */
+    private function assertRestockPackSizeMatchesCatalog(array $lines): void
+    {
+        foreach ($lines as $line) {
+            if (($line['disposition'] ?? '') !== self::RESTOCKABLE || ($line['selling_form'] ?? 'piece') !== 'pack') {
+                continue;
+            }
+
+            $historical = isset($line['pack_size']) ? (int)$line['pack_size'] : 0;
+            $prodCols = \SalesWorkflowService::getTableColumns($this->pdo, 'products');
+            if (!isset($prodCols['pack_size'])) {
+                throw new DomainException('This returned Sales Pack cannot be restocked because the Product no longer has a pack configuration. Record a physical reconciliation instead.');
+            }
+
+            $stmt = $this->pdo->prepare('SELECT pack_size FROM products WHERE product_id = ?');
+            $stmt->execute([(int)$line['product_id']]);
+            $currentRaw = $stmt->fetchColumn();
+            $current = $currentRaw !== false && $currentRaw !== null ? (int)$currentRaw : 0;
+
+            if ($historical < 2 || $current !== $historical) {
+                $now = $current > 1 ? "{$current} pieces per pack" : 'no Sales Pack configuration';
+                throw new DomainException("This Sales Pack was sold as {$historical} pieces, but the Product now uses {$now}. Record a physical reconciliation instead of restocking it here.");
+            }
+        }
     }
 
     /**

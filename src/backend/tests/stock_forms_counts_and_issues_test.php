@@ -830,6 +830,85 @@ $assert(StockIssueService::formatIssueQuantity(['form' => 'pack', 'reported_qty'
 $assert(StockIssueService::formatIssueQuantity(['form' => 'piece', 'reported_qty' => 3, 'adjustment_qty' => -3]) === '-3 pieces', 'formatIssueQuantity formats plural pieces');
 $assert(StockIssueService::formatIssueQuantity(['form' => 'piece', 'reported_qty' => 1, 'adjustment_qty' => -1]) === '-1 piece', 'formatIssueQuantity formats singular piece');
 
+// 8.7d: A pack product cannot be counted from a total alone, because that would assert "all loose".
+$pdo->exec("
+    INSERT INTO products (product_id, sku, barcode, pack_size, pack_barcode, pack_price, product_name, unit_price, cost_price, status)
+    VALUES (4, 'SKU-PACK-FORMLESS', '480444444445', 6, '480555555556', 50.0, 'Formless Juice 6pk', 10.0, 6.0, 'active');
+    INSERT INTO inventory (product_id, quantity_on_hand) VALUES (4, 12);
+    INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
+    VALUES (401, 4, 'B-FORMLESS', 12, 12, 2, 0, '2027-01-01');
+");
+$formlessRejected = false;
+try {
+    $countService->recordCount([
+        'product_id' => 4,
+        'physical_quantity' => 12,
+        'discrepancy_reason' => 'Total only shelf count',
+    ], 1);
+} catch (RuntimeException $e) {
+    $formlessRejected = str_contains($e->getMessage(), 'sealed packs and loose pieces');
+}
+$assert($formlessRejected, 'A total-only count for a pack product is refused with a sealed/loose instruction');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM inventory_counts WHERE product_id = 4')->fetchColumn() === 0, 'Refused form-less pack count records nothing');
+
+// 8.7e: A top-level count that would merge several dated batches is refused instead of losing provenance.
+$pdo->exec("
+    INSERT INTO products (product_id, sku, barcode, pack_size, pack_barcode, pack_price, product_name, unit_price, cost_price, status)
+    VALUES (5, 'SKU-PACK-MULTI', '480444444446', 6, '480555555557', 50.0, 'Multi Batch Juice 6pk', 10.0, 6.0, 'active');
+    INSERT INTO inventory (product_id, quantity_on_hand) VALUES (5, 12);
+    INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
+    VALUES (501, 5, 'B-MULTI-A', 6, 6, 1, 0, '2027-01-01'),
+           (502, 5, 'B-MULTI-B', 6, 6, 1, 0, '2027-06-01');
+");
+$multiCountId = $countService->recordCount([
+    'product_id' => 5,
+    'physical_sealed_quantity' => 2,
+    'physical_loose_quantity' => 0,
+    'discrepancy_reason' => 'Top-level count across two dated batches',
+], 1);
+$multiRejected = false;
+try {
+    $countService->approveCount($multiCountId, 1);
+} catch (RuntimeException $e) {
+    $multiRejected = str_contains($e->getMessage(), 'multiple active batches');
+}
+$assert($multiRejected, 'Approving a top-level count with multiple active batches is refused');
+$multiBatches = $pdo->query("SELECT * FROM product_batches WHERE product_id = 5 ORDER BY batch_id")->fetchAll(PDO::FETCH_ASSOC);
+$assert(
+    count($multiBatches) === 2
+        && (int)$multiBatches[0]['remaining_quantity'] === 6 && (int)$multiBatches[0]['sealed_quantity'] === 1
+        && (int)$multiBatches[1]['remaining_quantity'] === 6 && (int)$multiBatches[1]['sealed_quantity'] === 1
+        && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 5')->fetchColumn() === 12
+        && $pdo->query("SELECT status FROM inventory_counts WHERE count_id = {$multiCountId}")->fetchColumn() === 'pending',
+    'Refused multi-batch count preserves batches, expirations, inventory, and pending status'
+);
+
+// 8.7f: A same-total form correction writes an attributable audit movement with zero change.
+$pdo->exec("
+    INSERT INTO products (product_id, sku, barcode, pack_size, pack_barcode, pack_price, product_name, unit_price, cost_price, status)
+    VALUES (6, 'SKU-PACK-RESHAPE', '480444444447', 6, '480555555558', 50.0, 'Reshaped Juice 6pk', 10.0, 6.0, 'active');
+    INSERT INTO inventory (product_id, quantity_on_hand) VALUES (6, 12);
+    INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
+    VALUES (601, 6, 'B-RESHAPE', 12, 12, 2, 0, '2027-01-01');
+");
+$reshapeCountId = $countService->recordCount([
+    'product_id' => 6,
+    'physical_sealed_quantity' => 1,
+    'physical_loose_quantity' => 6,
+    'discrepancy_reason' => 'Shelf has one sealed pack and six loose pieces',
+], 1);
+$countService->approveCount($reshapeCountId, 1);
+$reshaped = $pdo->query('SELECT remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_id = 601')->fetch(PDO::FETCH_ASSOC);
+$formMove = $pdo->query("SELECT change_qty, reason, moved_by FROM stock_movements WHERE product_id = 6 ORDER BY movement_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$assert(
+    (int)$reshaped['remaining_quantity'] === 12 && (int)$reshaped['sealed_quantity'] === 1 && (int)$reshaped['loose_quantity'] === 6,
+    'Same-total form correction updates sealed and loose counts'
+);
+$assert(
+    $formMove !== false && (int)$formMove['change_qty'] === 0 && $formMove['reason'] === 'adjustment' && (int)$formMove['moved_by'] === 1,
+    'Same-total form correction writes a zero-change audit movement attributed to the approver'
+);
+
 // 8.8: Run migration 202610200004_stock_counts_and_issues_forms idempotently
 $mig = require __DIR__ . '/../database/migrations/202610200004_stock_counts_and_issues_forms.php';
 $assert($mig['key'] === '202610200004_stock_counts_and_issues_forms', 'Migration key is 202610200004_stock_counts_and_issues_forms');

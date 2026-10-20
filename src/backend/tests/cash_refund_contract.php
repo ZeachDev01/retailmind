@@ -1162,8 +1162,9 @@ try {
     $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 16, 'mixed-form checkout deducts 20 Base Units');
     $assert((int)$pdo->query('SELECT quantity_sold FROM products WHERE product_id = 3')->fetchColumn() === 20, 'mixed-form checkout increments quantity_sold by 20 Base Units');
 
-    // Mutate catalog price and pack_size after the sale: historical returns must not reprice or reinterpret pack contents.
-    $pdo->exec("UPDATE products SET unit_price = 25.00, pack_price = 140.00, pack_size = 12 WHERE product_id = 3");
+    // Mutate catalog price after the sale: historical returns must not reprice.
+    // The pack-size change case is covered separately below, where it must be refused.
+    $pdo->exec("UPDATE products SET unit_price = 25.00, pack_price = 140.00 WHERE product_id = 3");
 
     $loadedMixed = $refundService->refundableSaleForCashier($casey, $mixedSaleId);
     $assert($loadedMixed !== null && count($loadedMixed['items']) === 2, 'refundableSaleForCashier exposes both mixed-form lines distinctly');
@@ -1301,6 +1302,45 @@ try {
     $expectRefusal(
         static fn() => $refundService->refund($casey, 'cashier', $mixedSaleId, [$packLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE]], 'customer_return'),
         'exhausted pack line cannot be refunded again'
+    );
+
+    // 4b) A legal pack-size change after the sale cannot reinterpret a historical sealed pack.
+    // Selling the last pack leaves zero sealed stock, so the 12 -> 24 edit is allowed by the catalog guard.
+    $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, pack_size, pack_barcode, pack_price, status, quantity_purchased, quantity_sold, branch_id)
+        VALUES (6, 'SKU-RESIZE', '66000000', 'Resized Biscuit', 10.00, 12, '66000001', 100.00, 'active', 12, 0, 1)");
+    $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (6, 12)');
+    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, expiration_date, remaining_quantity, sealed_quantity, loose_quantity)
+        VALUES (601, 6, 'B-RESIZE', '2027-03-01', 12, 1, 0)");
+    $resizeSale = $sales->checkout(
+        [['product_id' => 6, 'qty' => 1, 'selling_form' => 'pack']],
+        $casey,
+        'cashier',
+        'cash',
+        ['cash_received' => 100]
+    );
+    $resizeSaleId = (int)$resizeSale['sale_id'];
+    $resizeLineId = (int)$pdo->query("SELECT sale_item_id FROM sale_items WHERE sale_id = {$resizeSaleId}")->fetchColumn();
+    $pdo->exec("UPDATE products SET pack_size = 24 WHERE product_id = 6");
+    $expectRefusal(
+        static fn() => $refundService->refund($casey, 'cashier', $resizeSaleId, [$resizeLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE]], 'customer_return'),
+        'restockable pack refund is refused when the current pack size differs from the sold pack size'
+    );
+    $assert(
+        (int)$pdo->query("SELECT COUNT(*) FROM cash_refunds WHERE sale_id = {$resizeSaleId}")->fetchColumn() === 0
+            && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 6')->fetchColumn() === 0
+            && (int)$pdo->query('SELECT remaining_quantity FROM product_batches WHERE batch_id = 601')->fetchColumn() === 0
+            && (int)$pdo->query('SELECT sealed_quantity FROM product_batches WHERE batch_id = 601')->fetchColumn() === 0
+            && $refundService->refundableQuantity($resizeLineId) === 1,
+        'refused pack-size-change refund leaves money, inventory, batch forms, and refundable balance untouched'
+    );
+    $pdo->exec("UPDATE products SET pack_size = 12 WHERE product_id = 6");
+    $resizeRefund = $refundService->refund($casey, 'cashier', $resizeSaleId, [$resizeLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE]], 'customer_return');
+    $resizeBatch = $pdo->query('SELECT remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_id = 601')->fetch(PDO::FETCH_ASSOC);
+    $assert(
+        (float)$refundRow($pdo, $resizeRefund)['refund_amount'] === 100.00
+            && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 6')->fetchColumn() === 12
+            && (int)$resizeBatch['sealed_quantity'] === 1 && (int)$resizeBatch['loose_quantity'] === 0 && (int)$resizeBatch['remaining_quantity'] === 12,
+        'unchanged pack configuration still restores exactly one 12-piece sealed pack'
     );
 
     // 5) Discounted mixed-form sale allocates actual paid cents accurately across pack and piece lines.
