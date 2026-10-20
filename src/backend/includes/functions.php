@@ -408,12 +408,23 @@ function get_forecasting_readiness(PDO $pdo): array
     return $rows;
 }
 
-function forecast_daily_sales_sql(?PDO $pdo = null): string
+/**
+ * Sale quantities in Base Units for a sale_items alias. Falls back to the raw
+ * quantity when the schema predates the Sales Pack columns.
+ */
+function sales_units_sql(?PDO $pdo = null, string $alias = 'si'): string
 {
-    $unitsExpr = 'si.quantity';
-    if ($pdo !== null) {
+    static $cache = null;
+    $cache ??= new WeakMap();
+    $alias = preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias) === 1 ? $alias : 'si';
+
+    if ($pdo === null) {
+        return "{$alias}.quantity";
+    }
+
+    if (!isset($cache[$pdo])) {
+        $columns = [];
         try {
-            $columns = [];
             if ((string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
                 foreach ($pdo->query('PRAGMA table_info(sale_items)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
                     $columns[(string)$column['name']] = true;
@@ -423,13 +434,22 @@ function forecast_daily_sales_sql(?PDO $pdo = null): string
                     $columns[(string)$column['Field']] = true;
                 }
             }
-            if (isset($columns['selling_form'], $columns['pack_size'])) {
-                $unitsExpr = "(CASE WHEN si.selling_form = 'pack' AND si.pack_size IS NOT NULL"
-                    . ' THEN si.quantity * si.pack_size ELSE si.quantity END)';
-            }
         } catch (Throwable) {
         }
+        $cache[$pdo] = $columns;
     }
+
+    if (!isset($cache[$pdo]['selling_form'], $cache[$pdo]['pack_size'])) {
+        return "{$alias}.quantity";
+    }
+
+    return "(CASE WHEN {$alias}.selling_form = 'pack' AND {$alias}.pack_size IS NOT NULL"
+        . " THEN {$alias}.quantity * {$alias}.pack_size ELSE {$alias}.quantity END)";
+}
+
+function forecast_daily_sales_sql(?PDO $pdo = null): string
+{
+    $unitsExpr = sales_units_sql($pdo, 'si');
 
     return "SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM({$unitsExpr}) AS qty_sold,
                    COUNT(*) AS sales_records, MAX(s.sale_date) AS changed_at

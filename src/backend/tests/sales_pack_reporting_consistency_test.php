@@ -424,16 +424,17 @@ $assert($recommendations[1]['current_stock'] === 13, 'Replenishment reads the pr
 // 2. Historical catalog edits never rewrite the sold pack
 // -------------------------------------------------------------------------
 echo "\n--- Historical price and cost edits ---\n";
-$pdo->exec('UPDATE products SET pack_price = 200.00, unit_price = 25.00, cost_price = 99.00 WHERE product_id = 1');
+$pdo->exec('UPDATE products SET pack_price = 200.00, unit_price = 25.00, cost_price = 99.00, pack_size = 24 WHERE product_id = 1');
 $afterEdit = $profit->calculate(['from' => $saleDay, 'to' => $saleDay, 'store_id' => 1]);
 $assert($afterEdit['summary']['total_net_sales'] === 120.00, 'Today\'s pack and piece prices do not reprice the recorded sale');
 $assert($afterEdit['summary']['total_net_cost'] === 98.00, 'Today\'s catalog cost does not replace preserved source-batch costs');
+$assert($afterEdit['summary']['total_units'] === 14, 'Today\'s catalog pack size does not rewrite the sold pack contents');
 
 $receiptItems = (new App\Receipts\ReceiptDetailsService($pdo))->fetchItems($saleId);
 $packReceiptLine = array_values(array_filter($receiptItems, static fn(array $item): bool => ($item['selling_form'] ?? 'piece') === 'pack'))[0];
 $assert((float)$packReceiptLine['unit_price'] === 100.00 && (int)$packReceiptLine['pack_size'] === 12,
     'Receipt keeps the original pack price and contents after catalog edits');
-$pdo->exec('UPDATE products SET pack_price = 100.00, unit_price = 10.00, cost_price = 7.00 WHERE product_id = 1');
+$pdo->exec('UPDATE products SET pack_price = 100.00, unit_price = 10.00, cost_price = 7.00, pack_size = 12 WHERE product_id = 1');
 
 // -------------------------------------------------------------------------
 // 3. Sealed-pack refund uses actual money and converted quantities
@@ -604,6 +605,62 @@ $assert($oilProfit['rows'][0]['refunds'] === 20.00, 'Oil gross profit subtracts 
 
 $oilEvidence = $demand->getDailyEvidence($pdo, 2, $saleDay, $saleDay, $saleDay . ' 23:59:59')[0];
 $assert($oilEvidence['valid_sales_units'] === 2, 'Oil demand leaves two whole pouches after the refund');
+
+// -------------------------------------------------------------------------
+// 8. Legacy schema without pack columns keeps raw quantities
+// -------------------------------------------------------------------------
+echo "\n--- Legacy schema fallback ---\n";
+require_once __DIR__ . '/../includes/functions.php';
+
+// The modern PDO above already primed every column probe in this process.
+$legacyPdo = createReportingPdo();
+$legacyPdo->exec('ALTER TABLE sale_items DROP COLUMN selling_form');
+$legacyPdo->exec('ALTER TABLE sale_items DROP COLUMN pack_size');
+$legacyPdo->exec("INSERT INTO sales (sale_id, cashier_id, branch_id, total_amount, gross_amount, payment_method, sale_date)
+                  VALUES (9001, 1, 1, 30.00, 30.00, 'cash', '{$saleDay} 09:00:00')");
+$legacyPdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, unit_price, subtotal)
+                  VALUES (9001, 9001, 1, 3, 10.00, 30.00)");
+
+$legacyProfit = new GrossProfitService($legacyPdo);
+$legacyReport = $legacyProfit->calculate(['from' => $saleDay, 'to' => $saleDay, 'store_id' => 1, 'product_id' => 1]);
+$assert($legacyReport['rows'][0]['units_sold'] === 3, 'Legacy schema reports raw sale quantities without throwing');
+$legacyRecovery = $legacyProfit->establishHistoricalCosts([9001]);
+$legacyAllocated = (int)$legacyPdo->query('SELECT COALESCE(SUM(quantity), 0) FROM sale_item_batches WHERE sale_item_id = 9001')->fetchColumn();
+$assert($legacyRecovery['recovered_allocations'] === 1 && $legacyAllocated === 3,
+    'Legacy schema recovery allocates the raw sale quantity');
+$assert(sales_units_sql($legacyPdo, 'si') === 'si.quantity', 'Shared helper falls back to the raw quantity on a legacy schema');
+$assert(str_contains(sales_units_sql($pdo, 'si'), "si.selling_form = 'pack'"),
+    'Shared helper converts pack lines on a pack-aware schema');
+
+// -------------------------------------------------------------------------
+// 9. Pack cost recovery uses the historical pack contents
+// -------------------------------------------------------------------------
+echo "\n--- Pack cost recovery ---\n";
+$recoveryDay = date('Y-m-d', strtotime('-3 days'));
+$pdo->exec("INSERT INTO sales (sale_id, cashier_id, branch_id, total_amount, gross_amount, payment_method, sale_date)
+            VALUES (9002, 1, 1, 100.00, 100.00, 'cash', '{$recoveryDay} 10:00:00'),
+                   (9003, 1, 1, 100.00, 100.00, 'cash', '{$recoveryDay} 11:00:00')");
+$pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, selling_form, pack_size, quantity, unit_price, subtotal)
+            VALUES (9002, 9002, 1, 'pack', 12, 1, 100.00, 100.00),
+                   (9003, 9003, 1, 'pack', 12, 1, 100.00, 100.00)");
+// 9003 is only half allocated, so the recovery predicate must compare Base Units.
+$pdo->exec("INSERT INTO sale_item_batches (sale_item_id, batch_id, quantity, unit_cost, cost_status)
+            VALUES (9003, NULL, 6, NULL, 'missing')");
+
+$profit->establishHistoricalCosts(null, ['store_id' => 1]);
+$recovered = $pdo->query('SELECT COALESCE(SUM(quantity), 0) AS units, MIN(unit_cost) AS unit_cost, MAX(cost_status) AS cost_status
+                          FROM sale_item_batches WHERE sale_item_id = 9002')->fetch();
+$assert((int)$recovered['units'] === 12, 'Pack cost recovery allocates the historical 12 contents for a missing batch link');
+$assert((float)$recovered['unit_cost'] === 7.00 && $recovered['cost_status'] === 'estimated',
+    'Pack cost recovery uses the catalog cost as an explicit estimate');
+$partial = $pdo->query('SELECT COALESCE(SUM(quantity), 0) AS units, SUM(CASE WHEN unit_cost IS NULL THEN 1 ELSE 0 END) AS uncosted
+                        FROM sale_item_batches WHERE sale_item_id = 9003')->fetch();
+$assert((int)$partial['units'] === 12 && (int)$partial['uncosted'] === 0,
+    'Pack cost recovery tops up a partially allocated pack line in Base Units');
+
+$recoveredReport = $profit->calculate(['from' => $recoveryDay, 'to' => $recoveryDay, 'store_id' => 1, 'product_id' => 1]);
+$assert($recoveredReport['summary']['total_units'] === 24 && $recoveredReport['summary']['total_net_cost'] === 168.00,
+    'Each recovered pack line costs 12 Base Units at 7.00');
 
 if ($failures !== []) {
     fwrite(STDERR, "\n" . count($failures) . " reporting consistency check(s) failed:\n");

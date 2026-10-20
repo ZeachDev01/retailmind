@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
+require_once __DIR__ . '/../includes/functions.php';
 
 use App\Forecasting\DemandForecastService;
 
@@ -92,8 +93,8 @@ try {
         if (!preg_match('/"\s*(SELECT[^"]*FROM demand_forecasts df[^"]*)"/s', $source, $match)) {
             throw new RuntimeException("Missing forecast report query in $reportFile");
         }
-        $sql = str_replace(['DATE_ADD(df.forecast_origin, INTERVAL 28 DAY)', '{$productSql}'],
-                           ["DATE(df.forecast_origin, '+28 days')", ''], $match[1]);
+        $sql = str_replace(['DATE_ADD(df.forecast_origin, INTERVAL 28 DAY)', '{$productSql}', '{$saleUnitsSql}'],
+                           ["DATE(df.forecast_origin, '+28 days')", '', sales_units_sql($pdo, 'si')], $match[1]);
         $query = $pdo->prepare($sql);
         $query->execute($reportFile === 'report_generation.php' ? ['2026-01-01', '2026-12-31'] : []);
         $rows = $query->fetchAll(PDO::FETCH_ASSOC);

@@ -21,6 +21,9 @@ class GrossProfitService
     public const STATUS_ESTIMATED = 'estimated';
     public const STATUS_INCOMPLETE = 'incomplete';
 
+    /** @var array<string, array<string, true>> */
+    private array $columnCache = [];
+
     public function __construct(private PDO $pdo)
     {
     }
@@ -774,9 +777,9 @@ class GrossProfitService
 
     private function getTableColumns(string $table): array
     {
-        static $cache = [];
-        if (isset($cache[$table])) {
-            return $cache[$table];
+        $key = spl_object_id($this->pdo) . ':' . $table;
+        if (isset($this->columnCache[$key])) {
+            return $this->columnCache[$key];
         }
 
         $cols = [];
@@ -796,7 +799,7 @@ class GrossProfitService
             }
         }
 
-        return $cache[$table] = $cols;
+        return $this->columnCache[$key] = $cols;
     }
 
     /**
@@ -821,6 +824,9 @@ class GrossProfitService
         $force = !empty($options['force']);
         $fallbackToProductCost = $options['fallback_to_product_cost'] ?? true;
 
+        $saleItemCols = $this->getTableColumns('sale_items');
+        $lineUnitsExpr = $this->unitsExpression('si', $saleItemCols);
+
         if ($saleIds !== null) {
             $targetSaleIds = array_values(array_filter(array_map('intval', $saleIds)));
         } else {
@@ -843,7 +849,7 @@ class GrossProfitService
                           AND (sib2.unit_cost IS NULL AND (sib2.cost_source IS NULL OR sib2.cost_source = ''))
                     )
                     OR (
-                        (SELECT COALESCE(SUM(sib3.quantity), 0) FROM sale_item_batches sib3 WHERE sib3.sale_item_id = si.sale_item_id) < si.quantity
+                        (SELECT COALESCE(SUM(sib3.quantity), 0) FROM sale_item_batches sib3 WHERE sib3.sale_item_id = si.sale_item_id) < {$lineUnitsExpr}
                     )
                 )";
             }
@@ -882,7 +888,8 @@ class GrossProfitService
             $branchCol = isset($prodCols['branch_id']) ? 'p.branch_id' : '1 AS branch_id';
 
             $itemStmt = $this->pdo->prepare(
-                "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity, si.unit_price, si.subtotal,
+                "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity, {$lineUnitsExpr} AS base_unit_quantity,
+                        si.unit_price, si.subtotal,
                         {$costCol} AS product_cost_price, {$branchCol} AS branch_id
                  FROM sale_items si
                  JOIN products p ON p.product_id = si.product_id
@@ -898,7 +905,7 @@ class GrossProfitService
                 }
 
                 $siId = (int)$si['sale_item_id'];
-                $lineQty = (int)$si['quantity'];
+                $lineQty = (int)$si['base_unit_quantity'];
                 $prodCost = $si['product_cost_price'] !== null && $si['product_cost_price'] !== ''
                     ? (float)$si['product_cost_price'] : null;
 
