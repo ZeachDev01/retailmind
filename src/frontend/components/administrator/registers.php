@@ -62,7 +62,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $allRegisters = $registers->all();
-$availableCount = count($registers->available());
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -79,7 +78,6 @@ $availableCount = count($registers->available());
         <header class="page-heading">
             <div>
                 <h1>Registers</h1>
-                <p class="page-subtitle">Create and manage the Store's physical tills. Renaming or disabling a Register preserves its earlier records.</p>
             </div>
         </header>
 
@@ -87,7 +85,6 @@ $availableCount = count($registers->available());
 
         <section class="dashboard-section">
             <h2>Add a Register</h2>
-            <p class="section-description">Each Register has a permanent ID and a display name Cashiers see.</p>
             <form method="post" class="form-grid">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create">
@@ -110,10 +107,6 @@ $availableCount = count($registers->available());
 
         <section class="dashboard-section">
             <h2>Store Registers (<?= count($allRegisters) ?>)</h2>
-            <p class="section-description">
-                <?= $availableCount ?> of <?= count($allRegisters) ?> <?= count($allRegisters) === 1 ? 'Register is' : 'Registers are' ?> available for new Cashier Shifts.
-                Disabled Registers stay listed so their history remains readable.
-            </p>
 
             <?php if ($allRegisters === []): ?>
                 <p>No Registers yet. Create one above so Cashier Shifts have a till to anchor to.</p>
@@ -186,7 +179,6 @@ $availableCount = count($registers->available());
                         </table>
                     </div>
                 </div>
-                <p class="section-description">You cannot delete a Register linked to an operational record. Disable it to keep its history.</p>
             <?php endif; ?>
         </section>
     </main>

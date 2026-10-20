@@ -246,7 +246,6 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         <header class="page-heading">
             <div>
                 <h1>Store Calendar</h1>
-                <p class="page-subtitle">Set monthly trading status for holidays and exceptional closures.</p>
             </div>
             <button type="button" class="btn" id="record-date-btn">Record date status</button>
         </header>
@@ -265,7 +264,6 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <h2><?= htmlspecialchars($monthTitle) ?></h2>
             </div>
 
-            <p>Select a date to set or change its trading status.</p>
             <div class="calendar-legend" aria-label="Calendar status legend">
                 <span class="calendar-status-badge status-open">Open</span>
                 <span class="calendar-status-badge status-closed">Closed</span>
@@ -327,7 +325,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
 <div class="rm-modal-overlay" id="calendar-editor" aria-hidden="true">
         <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-editor-title">
             <header class="rm-modal-header">
-                <div><h2 id="calendar-editor-title">Record date status</h2><p>Set the trading status for one date or a date range.</p></div>
+                <h2 id="calendar-editor-title">Record date status</h2>
                 <button type="button" class="rm-close" aria-label="Close date editor"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </header>
             <form method="post" id="calendar-form">

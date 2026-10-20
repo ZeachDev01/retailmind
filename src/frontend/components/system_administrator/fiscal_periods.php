@@ -137,7 +137,6 @@ foreach ($periods as $period) {
             <div class="topbar">
                 <div>
                     <h1>Fiscal Periods</h1>
-                    <p class="page-subtitle">Manage accounting windows for Store transactions.</p>
                 </div>
             </div>
 
@@ -154,19 +153,16 @@ foreach ($periods as $period) {
                     <span class="stat-icon"><i class="bi bi-calendar2-check" aria-hidden="true"></i></span>
                     <div class="value"><?= $statusCounts['open'] ?></div>
                     <div class="label">Open Periods</div>
-                    <div class="hint">Accepting operational entries</div>
                 </div>
                 <div class="stat-card with-icon warning">
                     <span class="stat-icon"><i class="bi bi-calendar2-minus" aria-hidden="true"></i></span>
                     <div class="value"><?= $statusCounts['closed'] ?></div>
                     <div class="label">Closed Periods</div>
-                    <div class="hint">Available for final review</div>
                 </div>
                 <div class="stat-card with-icon fiscal-stat-locked">
                     <span class="stat-icon"><i class="bi bi-lock" aria-hidden="true"></i></span>
                     <div class="value"><?= $statusCounts['locked'] ?></div>
                     <div class="label">Locked Periods</div>
-                    <div class="hint">Read-only for compliance</div>
                 </div>
             </div>
 
@@ -174,7 +170,6 @@ foreach ($periods as $period) {
                 <div class="section-header">
                     <div>
                         <h2 id="create-period-title">Create a fiscal period</h2>
-                        <p class="section-description">Transactions can be recorded only within this date range.</p>
                     </div>
                 </div>
                 <form method="POST" class="fiscal-period-form">
@@ -202,7 +197,6 @@ foreach ($periods as $period) {
                 <div class="fiscal-period-list-heading">
                     <div>
                         <h2 id="period-list-title">Period history</h2>
-                        <p>Review each period's status and controls.</p>
                     </div>
                     <span class="fiscal-period-count"><?= count($periods) ?> total</span>
                 </div>

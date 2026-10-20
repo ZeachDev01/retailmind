@@ -160,9 +160,6 @@ $activeUserCount = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status = '
 $modules = $protectedAuditRecords->modules($actorRole);
 $canViewPlatformAudit = has_capability(\App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT);
 $pageTitle = $canViewPlatformAudit ? 'Protected Audit Records' : 'Operational Audit';
-$pageSubtitle = $canViewPlatformAudit
-    ? 'Review immutable account, platform, recovery, and Store-operational records.'
-    : 'Review immutable Store-operational activity across inventory, sales, settings, and delegated staff.';
 $emptyTableCopy = $canViewPlatformAudit
     ? 'No Protected Audit Records match the selected filters.'
     : 'No Operational Audit records match the selected filters.';
@@ -189,7 +186,6 @@ $emptyTableCopy = $canViewPlatformAudit
             <div class="topbar">
                 <div>
                     <h1><?= htmlspecialchars($pageTitle) ?></h1>
-                    <p class="page-subtitle"><?= htmlspecialchars($pageSubtitle) ?></p>
                 </div>
                 <form method="POST" class="audit-log-export-form" id="auditLogExportForm">
                     <?= csrf_field() ?>
@@ -285,7 +281,6 @@ $emptyTableCopy = $canViewPlatformAudit
                 <div class="section-header">
                     <div>
                         <h2 id="audit-table-title">Record history</h2>
-                        <p class="section-description">Search the filtered records.</p>
                     </div>
                 </div>
                 <div class="table-wrap audit-log-table-wrap">
