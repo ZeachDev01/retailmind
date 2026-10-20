@@ -12,6 +12,8 @@ C:/xampp/php/php.exe src/backend/scripts/migrate.php
 
 Migration `202610180001_gcash_transactions` creates an InnoDB table with a unique reference across all cashiers and statuses. Fresh installations include the same table in `src/backend/database/sql/schema.sql`. Existing records are preserved. The normal migration runner has no automatic down command; retain the table when rolling back application code so reference history is not lost. Database Backup captures it using existing table discovery.
 
+For Hostinger phpMyAdmin, select the existing application database, open **Import**, and upload `src/backend/database/sql/migrations/202610180001_gcash_transactions.sql`. Import the `.sql` file, not the `.php` migration: phpMyAdmin executes SQL and cannot run PHP. The SQL file creates the GCash table and records the migration as applied. It can be imported again without deleting existing records. The application's `users` table must already exist.
+
 Optional `.env` configuration (restart PHP workers after changes):
 
 ```dotenv
