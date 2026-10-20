@@ -276,7 +276,7 @@ function get_store_settings(PDO $pdo): array
 
 function get_forecasting_readiness(PDO $pdo): array
 {
-    $dailySalesSql = forecast_daily_sales_sql();
+    $dailySalesSql = forecast_daily_sales_sql($pdo);
     $storeId = store_scope_id($pdo);
     $settings = get_ml_settings($pdo);
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
@@ -408,9 +408,50 @@ function get_forecasting_readiness(PDO $pdo): array
     return $rows;
 }
 
-function forecast_daily_sales_sql(): string
+/**
+ * Sale quantities in Base Units for a sale_items alias. Falls back to the raw
+ * quantity when the schema predates the Sales Pack columns.
+ */
+function sales_units_sql(?PDO $pdo = null, string $alias = 'si'): string
 {
-    return "SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM(si.quantity) AS qty_sold,
+    static $cache = null;
+    $cache ??= new WeakMap();
+    $alias = preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias) === 1 ? $alias : 'si';
+
+    if ($pdo === null) {
+        return "{$alias}.quantity";
+    }
+
+    if (!isset($cache[$pdo])) {
+        $columns = [];
+        try {
+            if ((string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                foreach ($pdo->query('PRAGMA table_info(sale_items)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                    $columns[(string)$column['name']] = true;
+                }
+            } else {
+                foreach ($pdo->query('SHOW COLUMNS FROM `sale_items`')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                    $columns[(string)$column['Field']] = true;
+                }
+            }
+        } catch (Throwable) {
+        }
+        $cache[$pdo] = $columns;
+    }
+
+    if (!isset($cache[$pdo]['selling_form'], $cache[$pdo]['pack_size'])) {
+        return "{$alias}.quantity";
+    }
+
+    return "(CASE WHEN {$alias}.selling_form = 'pack' AND {$alias}.pack_size IS NOT NULL"
+        . " THEN {$alias}.quantity * {$alias}.pack_size ELSE {$alias}.quantity END)";
+}
+
+function forecast_daily_sales_sql(?PDO $pdo = null): string
+{
+    $unitsExpr = sales_units_sql($pdo, 'si');
+
+    return "SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM({$unitsExpr}) AS qty_sold,
                    COUNT(*) AS sales_records, MAX(s.sale_date) AS changed_at
             FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
             GROUP BY si.product_id, DATE(s.sale_date)

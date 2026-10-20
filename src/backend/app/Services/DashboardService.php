@@ -8,6 +8,8 @@ class DashboardService
     private PDO $pdo;
     private App\Store\StoreScope $storeScope;
     private App\Audit\ProtectedAuditRecordService $protectedAuditRecords;
+    /** @var array<string, true>|null */
+    private ?array $saleItemColumns = null;
 
     public function __construct(PDO $pdo)
     {
@@ -92,8 +94,9 @@ class DashboardService
     public function getFastMovingProducts(int $limit = 5, int $days = 28): array
     {
         $days = max(1, min(365, $days));
+        $unitsExpr = $this->salesUnitsExpression('si');
         $stmt = $this->pdo->prepare(
-            "SELECT p.sku, p.product_name, SUM(si.quantity) AS units_sold
+            "SELECT p.sku, p.product_name, SUM({$unitsExpr}) AS units_sold
              FROM sale_items si
              JOIN sales s ON s.sale_id = si.sale_id
              JOIN products p ON p.product_id = si.product_id
@@ -110,9 +113,10 @@ class DashboardService
     public function getSlowMovingProducts(int $limit = 5, int $days = 28): array
     {
         $days = max(1, min(365, $days));
+        $unitsExpr = $this->salesUnitsExpression('si');
         $stmt = $this->pdo->prepare(
             "SELECT p.sku, p.product_name,
-                    COALESCE(SUM(CASE WHEN s.sale_id IS NULL THEN 0 ELSE si.quantity END), 0) AS units_sold,
+                    COALESCE(SUM(CASE WHEN s.sale_id IS NULL THEN 0 ELSE {$unitsExpr} END), 0) AS units_sold,
                     i.quantity_on_hand
              FROM products p
              JOIN inventory i ON i.product_id = p.product_id
@@ -228,6 +232,7 @@ class DashboardService
 
     public function getForecastVsActual(int $limit = 8): array
     {
+        $unitsExpr = $this->salesUnitsExpression('si');
         $stmt = $this->pdo->prepare(
             "SELECT p.sku, p.product_name,
                     COALESCE(df_agg.forecast_demand, 0) AS forecast_demand,
@@ -242,7 +247,7 @@ class DashboardService
                 GROUP BY product_id
              ) df_agg ON df_agg.product_id = p.product_id
              LEFT JOIN (
-                SELECT si.product_id, SUM(si.quantity) AS units_sold
+                SELECT si.product_id, SUM({$unitsExpr}) AS units_sold
                 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
                 WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 28 DAY)
                 GROUP BY si.product_id
@@ -319,5 +324,33 @@ class DashboardService
         $stmt->bindValue(2, $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    /** Sale quantities in Base Units; a Sales Pack line contributes its contents. */
+    private function salesUnitsExpression(string $alias): string
+    {
+        $columns = $this->saleItemColumns ?? [];
+        if ($this->saleItemColumns === null) {
+            try {
+                if ((string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                    foreach ($this->pdo->query('PRAGMA table_info(sale_items)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                        $columns[(string)$column['name']] = true;
+                    }
+                } else {
+                    foreach ($this->pdo->query('SHOW COLUMNS FROM `sale_items`')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                        $columns[(string)$column['Field']] = true;
+                    }
+                }
+            } catch (Throwable) {
+            }
+            $this->saleItemColumns = $columns;
+        }
+
+        if (!isset($columns['selling_form'], $columns['pack_size'])) {
+            return "{$alias}.quantity";
+        }
+
+        return "(CASE WHEN {$alias}.selling_form = 'pack' AND {$alias}.pack_size IS NOT NULL"
+            . " THEN {$alias}.quantity * {$alias}.pack_size ELSE {$alias}.quantity END)";
     }
 }

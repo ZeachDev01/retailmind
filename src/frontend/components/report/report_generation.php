@@ -96,6 +96,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
     $toEnd = $filters['to'] . ' 23:59:59';
     [$productWhere, $productParams] = product_filters($filters);
     $productSql = $productWhere ? ' AND ' . implode(' AND ', $productWhere) : '';
+    $saleUnitsSql = sales_units_sql($pdo, 'si');
     // Aggregate by sale line first so multiple partial refunds do not multiply
     // the original sold quantity or sales value in grouped sales reports.
     $refundJoin = 'LEFT JOIN (SELECT sale_item_id, SUM(subtotal) AS refunded_amount
@@ -143,7 +144,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ][$granularity];
             $stmt = $pdo->prepare(
                 "SELECT {$periodExpr} AS period_label, COUNT(DISTINCT s.sale_id) AS receipts,
-                        COALESCE(SUM(si.quantity), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
                         COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
                  FROM sales s
                  JOIN sale_items si ON si.sale_id = s.sale_id
@@ -171,7 +172,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             $limit = $report === 'sales_product' ? '' : ' LIMIT 25';
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name, COALESCE(c.category_name, 'Uncategorized') AS category_name,
-                        COALESCE(SUM(si.quantity), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
                         COALESCE(SUM(refunds.refunded_amount), 0) AS refunds,
                         COUNT(DISTINCT s.sale_id) AS receipts
                  FROM sale_items si
@@ -200,7 +201,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
         case 'slow_moving':
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name, COALESCE(c.category_name, 'Uncategorized') AS category_name,
-                        COALESCE(SUM(CASE WHEN s.sale_id IS NOT NULL THEN si.quantity ELSE 0 END), 0) AS units_sold,
+                        COALESCE(SUM(CASE WHEN s.sale_id IS NOT NULL THEN {$saleUnitsSql} ELSE 0 END), 0) AS units_sold,
                         COALESCE(SUM(CASE WHEN s.sale_id IS NOT NULL THEN si.subtotal ELSE 0 END), 0) AS total_sales,
                         COALESCE(SUM(CASE WHEN s.sale_id IS NOT NULL THEN refunds.refunded_amount ELSE 0 END), 0) AS refunds,
                         COUNT(DISTINCT s.sale_id) AS receipts
@@ -231,7 +232,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
         case 'sales_category':
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(c.category_name, 'Uncategorized') AS category_name, COUNT(DISTINCT p.product_id) AS products_sold,
-                        COUNT(DISTINCT s.sale_id) AS receipts, COALESCE(SUM(si.quantity), 0) AS units_sold,
+                        COUNT(DISTINCT s.sale_id) AS receipts, COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold,
                         COALESCE(SUM(si.subtotal), 0) AS total_sales,
                         COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
                  FROM sale_items si
@@ -259,7 +260,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
         case 'sales_cashier':
             $stmt = $pdo->prepare(
                 "SELECT u.full_name AS cashier, COUNT(DISTINCT s.sale_id) AS receipts,
-                        COALESCE(SUM(si.quantity), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
                         COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
                  FROM sales s
                  JOIN users u ON u.user_id = s.cashier_id
@@ -391,7 +392,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                         DATE_ADD(df.forecast_origin, INTERVAL 28 DAY) AS forecast_completed_at,
                         SUM(df.predicted_units) AS forecast_quantity,
                         (
-                            SELECT COALESCE(SUM(si.quantity), 0)
+                            SELECT COALESCE(SUM({$saleUnitsSql}), 0)
                             FROM sale_items si
                             JOIN sales s ON s.sale_id = si.sale_id
                             WHERE si.product_id = df.product_id

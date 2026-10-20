@@ -7,6 +7,7 @@ use App\Forecasting\CandidateEvaluationService;
 
 require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
 $storeId = store_scope_id($pdo);
+$saleUnitsSql = sales_units_sql($pdo, 'si');
 
 // 1. Determine currently displayed forecast and model version
 $demandService = new DemandForecastService($pdo);
@@ -56,7 +57,7 @@ try {
             df.horizon_day,
             df.predicted_units,
             (
-                SELECT SUM(si.quantity)
+                SELECT SUM({$saleUnitsSql})
                 FROM sale_items si
                 JOIN sales s ON si.sale_id = s.sale_id
                 WHERE si.product_id = df.product_id

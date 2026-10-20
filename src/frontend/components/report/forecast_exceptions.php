@@ -6,6 +6,7 @@ use App\Authorization\RoleCapabilityPolicy;
 
 require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
 $storeId = store_scope_id($pdo);
+$saleUnitsSql = sales_units_sql($pdo, 'si');
 
 $metrics = get_ml_model_metrics();
 $settings = get_ml_settings($pdo);
@@ -22,7 +23,7 @@ $predictionStatement = $pdo->prepare("SELECT df.forecast_id, SUM(df.predicted_un
     JOIN inventory i ON i.product_id=df.product_id
     LEFT JOIN (
       SELECT si.product_id,
-        SUM(CASE WHEN sa.sale_date >= DATE_SUB(NOW(),INTERVAL 30 DAY) THEN si.quantity ELSE 0 END) units_30,
+        SUM(CASE WHEN sa.sale_date >= DATE_SUB(NOW(),INTERVAL 30 DAY) THEN {$saleUnitsSql} ELSE 0 END) units_30,
         COUNT(DISTINCT CASE WHEN sa.sale_date >= DATE_SUB(NOW(),INTERVAL 90 DAY) THEN DATE(sa.sale_date) END) nonzero_days,
         MIN(sa.sale_date) first_sale_date
       FROM sale_items si JOIN sales sa ON sa.sale_id=si.sale_id GROUP BY si.product_id

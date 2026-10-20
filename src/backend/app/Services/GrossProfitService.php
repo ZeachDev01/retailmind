@@ -21,6 +21,9 @@ class GrossProfitService
     public const STATUS_ESTIMATED = 'estimated';
     public const STATUS_INCOMPLETE = 'incomplete';
 
+    /** @var array<string, array<string, true>> */
+    private array $columnCache = [];
+
     public function __construct(private PDO $pdo)
     {
     }
@@ -162,12 +165,15 @@ class GrossProfitService
         }
 
         // Fetch all lines for these sales to calculate sale-level discount allocations
+        $saleItemColumns = $this->getTableColumns('sale_items');
+        $lineUnitsExpr = $this->unitsExpression('si', $saleItemColumns);
         $saleLinesBySale = [];
         $saleItemsMap = [];
         if (!empty($saleIds)) {
             $placeholders = implode(',', array_fill(0, count($saleIds), '?'));
             $linesStmt = $this->pdo->prepare(
-                "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity, si.unit_price, si.subtotal,
+                "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity,
+                        {$lineUnitsExpr} AS base_unit_quantity, si.unit_price, si.subtotal,
                         p.sku, COALESCE(p.barcode, p.sku) AS barcode_or_sku, p.product_name, p.category_id, p.branch_id,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name
                  FROM sale_items si
@@ -252,6 +258,19 @@ class GrossProfitService
         }
 
         // 3. Fetch cash refunds issued in period
+        $refundItemColumns = $this->getTableColumns('cash_refund_items');
+        $refundFormExpr = isset($refundItemColumns['selling_form'])
+            ? 'cri.selling_form'
+            : (isset($saleItemColumns['selling_form']) ? 'si_r.selling_form' : "'piece'");
+        $refundPackExpr = isset($refundItemColumns['pack_size'])
+            ? 'cri.pack_size'
+            : (isset($saleItemColumns['pack_size']) ? 'si_r.pack_size' : 'NULL');
+        $refundUnitsExpr = $this->unitsExpressionFrom(
+            'cri.quantity',
+            $refundFormExpr,
+            $refundPackExpr
+        );
+
         $refundWhere = ['cr.created_at >= ?', 'cr.created_at <= ?', 'p.branch_id = ?'];
         $refundParams = [$range['from_start'], $range['to_end'], $storeId];
         if ($productId > 0) {
@@ -266,11 +285,13 @@ class GrossProfitService
         $refundStmt = $this->pdo->prepare(
             'SELECT cr.refund_id, cr.sale_id, cr.created_at,
                     cri.refund_item_id, cri.sale_item_id, cri.product_id, cri.quantity,
+                    ' . $refundUnitsExpr . ' AS base_unit_quantity,
                     cri.unit_price, cri.subtotal, cri.disposition,
                     p.sku, COALESCE(p.barcode, p.sku) AS barcode_or_sku, p.product_name, p.category_id, p.branch_id,
                     COALESCE(c.category_name, ' . "'Uncategorized'" . ') AS category_name
              FROM cash_refunds cr
              JOIN cash_refund_items cri ON cri.refund_id = cr.refund_id
+             LEFT JOIN sale_items si_r ON si_r.sale_item_id = cri.sale_item_id
              JOIN products p ON p.product_id = cri.product_id
              LEFT JOIN categories c ON c.category_id = p.category_id
              WHERE ' . implode(' AND ', $refundWhere) . '
@@ -292,9 +313,11 @@ class GrossProfitService
 
             // Fetch all-time refunds for these sale_items
             $allRefundsStmt = $this->pdo->prepare(
-                "SELECT cr.refund_id, cr.created_at, cri.refund_item_id, cri.sale_item_id, cri.quantity, cri.disposition
+                "SELECT cr.refund_id, cr.created_at, cri.refund_item_id, cri.sale_item_id,
+                        cri.quantity, " . $refundUnitsExpr . " AS base_unit_quantity, cri.disposition
                  FROM cash_refunds cr
                  JOIN cash_refund_items cri ON cri.refund_id = cr.refund_id
+                 LEFT JOIN sale_items si_r ON si_r.sale_item_id = cri.sale_item_id
                  WHERE cri.sale_item_id IN ({$placeholders})
                  ORDER BY cr.created_at ASC, cr.refund_id ASC, cri.refund_item_id ASC"
             );
@@ -349,7 +372,7 @@ class GrossProfitService
             $consumedUnits = 0;
             foreach ($refunds as $rf) {
                 $rfId = (int)$rf['refund_item_id'];
-                $rfQty = (int)$rf['quantity'];
+                $rfQty = (int)($rf['base_unit_quantity'] ?? $rf['quantity']);
                 $isRestockable = ($rf['disposition'] ?? '') === 'restockable';
                 $isInPeriod = isset($periodRefundItemIds[$rfId]);
 
@@ -425,7 +448,7 @@ class GrossProfitService
                 ];
             }
 
-            $productsMap[$pId]['units_sold'] += (int)$line['quantity'];
+            $productsMap[$pId]['units_sold'] += (int)($line['base_unit_quantity'] ?? $line['quantity']);
             $productsMap[$pId]['gross_sales'] += (float)$line['subtotal'];
             $productsMap[$pId]['discounts'] += (float)$line['discount_amount'];
 
@@ -489,7 +512,7 @@ class GrossProfitService
                 ];
             }
 
-            $productsMap[$pId]['units_refunded'] += (int)$rf['quantity'];
+            $productsMap[$pId]['units_refunded'] += (int)($rf['base_unit_quantity'] ?? $rf['quantity']);
             $productsMap[$pId]['refunds'] += (float)$rf['subtotal'];
 
             $rev = $periodRefundReversals[$rfId] ?? [
@@ -728,11 +751,35 @@ class GrossProfitService
         ];
     }
 
+    /**
+     * Sale quantities in Base Units: a Sales Pack line is its historical contents.
+     *
+     * @param array<string, true> $columns
+     */
+    private function unitsExpression(string $alias, array $columns): string
+    {
+        if (!isset($columns['selling_form'], $columns['pack_size'])) {
+            return "{$alias}.quantity";
+        }
+
+        return $this->unitsExpressionFrom(
+            "{$alias}.quantity",
+            "{$alias}.selling_form",
+            "{$alias}.pack_size"
+        );
+    }
+
+    private function unitsExpressionFrom(string $quantityExpr, string $formExpr, string $packSizeExpr): string
+    {
+        return "(CASE WHEN {$formExpr} = 'pack' AND {$packSizeExpr} IS NOT NULL"
+            . " THEN {$quantityExpr} * {$packSizeExpr} ELSE {$quantityExpr} END)";
+    }
+
     private function getTableColumns(string $table): array
     {
-        static $cache = [];
-        if (isset($cache[$table])) {
-            return $cache[$table];
+        $key = spl_object_id($this->pdo) . ':' . $table;
+        if (isset($this->columnCache[$key])) {
+            return $this->columnCache[$key];
         }
 
         $cols = [];
@@ -752,7 +799,7 @@ class GrossProfitService
             }
         }
 
-        return $cache[$table] = $cols;
+        return $this->columnCache[$key] = $cols;
     }
 
     /**
@@ -777,6 +824,9 @@ class GrossProfitService
         $force = !empty($options['force']);
         $fallbackToProductCost = $options['fallback_to_product_cost'] ?? true;
 
+        $saleItemCols = $this->getTableColumns('sale_items');
+        $lineUnitsExpr = $this->unitsExpression('si', $saleItemCols);
+
         if ($saleIds !== null) {
             $targetSaleIds = array_values(array_filter(array_map('intval', $saleIds)));
         } else {
@@ -799,7 +849,7 @@ class GrossProfitService
                           AND (sib2.unit_cost IS NULL AND (sib2.cost_source IS NULL OR sib2.cost_source = ''))
                     )
                     OR (
-                        (SELECT COALESCE(SUM(sib3.quantity), 0) FROM sale_item_batches sib3 WHERE sib3.sale_item_id = si.sale_item_id) < si.quantity
+                        (SELECT COALESCE(SUM(sib3.quantity), 0) FROM sale_item_batches sib3 WHERE sib3.sale_item_id = si.sale_item_id) < {$lineUnitsExpr}
                     )
                 )";
             }
@@ -838,7 +888,8 @@ class GrossProfitService
             $branchCol = isset($prodCols['branch_id']) ? 'p.branch_id' : '1 AS branch_id';
 
             $itemStmt = $this->pdo->prepare(
-                "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity, si.unit_price, si.subtotal,
+                "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity, {$lineUnitsExpr} AS base_unit_quantity,
+                        si.unit_price, si.subtotal,
                         {$costCol} AS product_cost_price, {$branchCol} AS branch_id
                  FROM sale_items si
                  JOIN products p ON p.product_id = si.product_id
@@ -854,7 +905,7 @@ class GrossProfitService
                 }
 
                 $siId = (int)$si['sale_item_id'];
-                $lineQty = (int)$si['quantity'];
+                $lineQty = (int)$si['base_unit_quantity'];
                 $prodCost = $si['product_cost_price'] !== null && $si['product_cost_price'] !== ''
                     ? (float)$si['product_cost_price'] : null;
 
