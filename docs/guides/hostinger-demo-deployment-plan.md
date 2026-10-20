@@ -65,11 +65,18 @@ protection after deployment. It never imports SQL or runs migrations.
 
 The FTPS certificate hostname was verified before configuring the workflow.
 The previous workflow failed because its server IP did not match the certificate.
-Creating the additional FTP account and entering its new credentials require
-the user: the connector lacks FTP account management and no browser is connected.
-An optional private guide is at
-`.scratch/hostinger-demo-private/setup-autodeploy.sh`; it stores credentials in
-an ignored local file and GitHub secrets without printing the password.
+The user created a Demo-only FTP account and saved both repository secrets.
+A read-only FTPS login confirmed that account's root contains this Demo's
+`index.php`, `.env`, `src` and `vendor`.
+
+The runner's initial TCP connection timed out during Node address selection;
+the FTP action now allows ten seconds per address attempt through `NODE_OPTIONS`.
+After that fix, the first-deployment check for a nonexistent sync-state file
+reset the data socket and closed the FTP client. Initializing an empty
+`.ftp-deploy-sync-state.json` with the action's own version and empty file list
+avoids that missing-file path without declaring existing files managed or
+deleting them. Read-back verification passed and the hosted `.env` was unchanged.
+Keep the sync-state file: subsequent deployments update it automatically.
 
 Staff login, inventory and the saved forecast report still require an
 authenticated check. Do not upload SQL exports, the private import bundle or
