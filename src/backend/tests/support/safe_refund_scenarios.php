@@ -132,5 +132,42 @@ $pdo->exec("UPDATE fiscal_periods SET status='open' WHERE period_id=2");
 $expired=$exceptions->openSale(1,'cashier',12,'refund-admin','fixture-password','Original Cashier absent');
 $pdo->exec('UPDATE cash_refund_exception_access SET expires_at=1 WHERE sale_id=12');
 $refused(fn()=>$service->refundableSaleForCashier(1,12,$expired));
+$packFormMigration = require __DIR__.'/../../database/migrations/202610200006_cash_refund_sales_pack_forms.php';
+$pdo->exec('ALTER TABLE cash_refund_items DROP COLUMN selling_form, DROP COLUMN pack_size');
+$packFormMigration['up']($pdo); $packFormMigration['up']($pdo);
+$criTypes = array_column($pdo->query('SHOW COLUMNS FROM cash_refund_items')->fetchAll(PDO::FETCH_ASSOC), 'Type', 'Field');
+$assert($criTypes['selling_form'] === "enum('piece','pack')" && str_starts_with($criTypes['pack_size'], 'int'), 'Repeatable Sales Pack refund item migration preserves column shapes');
+
+$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, pack_size, pack_barcode, pack_price, cost_price, quantity_sold, branch_id)
+    VALUES (20, 'PACK-TEST-20', 'PACK-TEST-20', 'Pack Soda', 15, 6, 'PACK-BAR-20', 80, 8, 8, 1)");
+$pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (20, 10)');
+$pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity)
+    VALUES (201, 20, 'B-PACK-201', 18, 10, 1, 4)");
+$pdo->exec("INSERT INTO sales (sale_id, cashier_id, total_amount, payment_method) VALUES (20, 1, 110, 'card'), (22, 1, 190, 'card')");
+$pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, selling_form, pack_size, quantity, unit_price, subtotal)
+    VALUES (20, 20, 20, 'pack', 6, 1, 80, 80), (21, 20, 20, 'piece', 6, 2, 15, 30),
+           (22, 22, 20, 'pack', 6, 2, 80, 160), (23, 22, 20, 'piece', 6, 2, 15, 30)");
+$pdo->exec('INSERT INTO sale_item_batches (sale_item_id, batch_id, quantity) VALUES (20, 201, 6), (21, 201, 2), (22, 201, 12), (23, 201, 2)');
+$pdo->exec('UPDATE products SET unit_price = 25, pack_price = 140, pack_size = 12 WHERE product_id = 20');
+
+$pdo->beginTransaction(); $pdo->query('SELECT sale_id FROM sales WHERE sale_id=20 FOR UPDATE')->fetch();
+for ($i = 0; $i < 2; $i++) {
+    $process = proc_open([PHP_BINARY, __DIR__.'/../cash_refund_concurrency_integration.php', '--worker', $database, 'pack'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $assert(is_resource($process), 'Pack refund worker starts'); $workers[] = [$process, $pipes];
+    $assert(trim((string)fgets($pipes[1])) === 'ready', 'Pack refund worker ready');
+}
+foreach ($workers as [$process, $pipes]) { fwrite($pipes[0], "go\n"); fflush($pipes[0]); }
+usleep(300000); $pdo->commit(); $results = [];
+foreach ($workers as [$process, $pipes]) {
+    fclose($pipes[0]); $results[] = trim(stream_get_contents($pipes[1])); $error = stream_get_contents($pipes[2]);
+    fclose($pipes[1]); fclose($pipes[2]); $assert(proc_close($process) === 0, 'Pack worker: ' . $error);
+}
+$workers = []; sort($results); $assert($results === ['refunded', 'refused'], 'Only one competing sealed Sales Pack refund succeeds');
+$b201 = $pdo->query('SELECT remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_id = 201')->fetch(PDO::FETCH_ASSOC);
+$assert((int)$b201['sealed_quantity'] === 2 && (int)$b201['remaining_quantity'] === 16 && (int)$b201['loose_quantity'] === 4, 'Concurrent sealed pack refund restores 1 sealed pack and 6 Base Units exactly once');
+$assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 20')->fetchColumn() === 16, 'Concurrent sealed pack refund restores 6 Base Units to inventory once');
+$assert((int)$pdo->query('SELECT quantity_sold FROM products WHERE product_id = 20')->fetchColumn() === 2, 'Concurrent sealed pack refund decrements quantity_sold by 6 Base Units once');
+$assert($service->refundableQuantity(20) === 0 && $service->refundableQuantity(21) === 2 && $service->refundableAmount(20) === 30.0, 'Pack refund leaves sibling piece line of same Product intact');
+
 require __DIR__.'/safe_refund_http_scenarios.php';
 echo "Safe refund current periods, external evidence and one-sale exception: passed\n";

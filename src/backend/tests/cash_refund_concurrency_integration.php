@@ -41,6 +41,8 @@ if (($argv[1] ?? '') === '--worker') {
             (new CashierShiftService($pdo))->addDrawerMovement(1, 'cashier', 'cash_out', 25, 'other', 'Cash collected');
         } elseif (($argv[3] ?? '') === 'discount') {
             $service->refund(1,'cashier',14,[14=>['quantity'=>2,'disposition'=>'damaged']],'customer_return',null,'EXTERNAL-RACE',true);
+        } elseif (($argv[3] ?? '') === 'pack') {
+            $service->refund(1,'cashier',20,[20=>['quantity'=>1,'disposition'=>'restockable']],'customer_return',null,'PACK-RACE',true);
         } else {
             $service->refund(1, 'cashier', (int)($argv[3] ?? 1), (isset($argv[3]) ? [2 => ['quantity'=>1,'disposition'=>'damaged']] : $items), 'customer_return');
         }

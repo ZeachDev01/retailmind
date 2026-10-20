@@ -257,6 +257,14 @@ try {
         status TEXT NOT NULL DEFAULT 'active'
     )");
     $pdo->exec("INSERT INTO branches (branch_id, branch_name, branch_code, status) VALUES (1, 'RetailMind Store', 'RETAILMIND-STORE', 'active')");
+    foreach ([
+        '202610200001_sales_packs_and_stock_forms.php',
+        '202610200003_sale_items_sales_pack_forms.php',
+        '202610200006_cash_refund_sales_pack_forms.php',
+    ] as $migrationFile) {
+        $m = require __DIR__ . '/../database/migrations/' . $migrationFile;
+        $m['up']($pdo);
+    }
 
     // Every fixture account stores the Cashier role, including the one that will
     // attempt an administrative workspace, so every refusal below is
@@ -281,7 +289,7 @@ try {
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50), (2, 30)');
     // A batch to restock into, so a Restockable refund is proved at the batch the
     // unit was sold from and not merely at the inventory total.
-    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, remaining_quantity) VALUES (1, 1, 'B-1', 50)");
+    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, remaining_quantity, loose_quantity) VALUES (1, 1, 'B-1', 50, 50)");
 
     $shifts = new CashierShiftService($pdo);
     $refunds = new CashRefundService($pdo, $shifts);
@@ -1048,13 +1056,13 @@ try {
     // its own: the caps and the classification live in the service, where a
     // hand-crafted request cannot skip them.
     $root = dirname(__DIR__, 3);
-    $page = (string)@file_get_contents($root . '/src/frontend/components/cashier/refunds.php');
-    $assert($page !== '', 'the Cash Refund page source must be readable');
+    $pageSource = (string)@file_get_contents($root . '/src/frontend/components/cashier/refunds.php');
+    $assert($pageSource !== '', 'the Cash Refund page source must be readable');
     // Execute the production GET controller against the same fixture, including
     // a handcrafted other-Cashier request; only bootstrap and shell are excluded.
-    $getStart = strpos($page, '// Scoped to this Cashier');
-    $getEnd = strpos($page, '?>', $getStart);
-    $getController = substr($page, $getStart, $getEnd - $getStart);
+    $getStart = strpos($pageSource, '// Scoped to this Cashier');
+    $getEnd = strpos($pageSource, '?>', $getStart);
+    $getController = substr($pageSource, $getStart, $getEnd - $getStart);
     $pdo->exec('ALTER TABLE registers ADD COLUMN paper_width_mm INTEGER NOT NULL DEFAULT 80');
     $refundService = $refunds;
     $actorRole = 'cashier';
@@ -1074,10 +1082,10 @@ try {
     $assert($receipt === null && http_response_code() === 404, 'direct GET refuses another Store');
     $storeId = 1;
     $actorId = $casey;
-    preg_match('/<section\b[^>]*\bid="refund-history"[^>]*>/', $page, $historyMatch, PREG_OFFSET_CAPTURE);
+    preg_match('/<section\b[^>]*\bid="refund-history"[^>]*>/', $pageSource, $historyMatch, PREG_OFFSET_CAPTURE);
     $historyStart = $historyMatch[0][1] ?? throw new RuntimeException('Refund history section is missing.');
-    $historyEnd = strpos($page, '</section>', $historyStart) + strlen('</section>');
-    $historyTemplate = substr($page, $historyStart, $historyEnd - $historyStart);
+    $historyEnd = strpos($pageSource, '</section>', $historyStart) + strlen('</section>');
+    $historyTemplate = substr($pageSource, $historyStart, $historyEnd - $historyStart);
     if (!function_exists('app_url')) {
         function app_url(string $path): string { return '/' . $path; }
     }
@@ -1092,7 +1100,7 @@ try {
         $assert($paperWidthMm === $width && $receipt === $reprintSaved,
             'reopened receipt retains all recorded content with the current Register width');
         ob_start();
-        eval('?>' . str_replace('CashRefundService::', '\\App\\Services\\CashRefundService::', $historyTemplate));
+        eval('?>' . str_replace(['CashRefundService::', '__DIR__ . \'/../../../backend/'], ['\\App\\Services\\CashRefundService::', '__DIR__ . \'/../'], $historyTemplate));
         $historyHtml = ob_get_clean();
         foreach ($refunds as $entry) {
             $assert(str_contains($historyHtml, 'href="/components/cashier/refunds.php?refund_id=' . (int)$entry['refund_id'] . '"'),
@@ -1109,23 +1117,227 @@ try {
         file_put_contents($fixturePath, json_encode($browserFixtures, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
     $assert(
-        str_contains($page, 'new CashRefundService($pdo'),
+        str_contains($pageSource, 'new CashRefundService($pdo'),
         'the Cash Refund page delegates to CashRefundService rather than holding the rules in the page'
     );
     $assert(
-        !str_contains($page, 'INSERT INTO cash_refunds')
-            && !str_contains($page, 'INSERT INTO activity_log')
-            && !str_contains($page, 'UPDATE inventory'),
+        !str_contains($pageSource, 'INSERT INTO cash_refunds')
+            && !str_contains($pageSource, 'INSERT INTO activity_log')
+            && !str_contains($pageSource, 'UPDATE inventory'),
         'the Cash Refund page writes neither the refund, its Protected Audit Record, nor its inventory effects itself'
     );
     $assert(
-        !str_contains($page, 'UPDATE sales'),
+        !str_contains($pageSource, 'UPDATE sales'),
         'the Cash Refund page never writes to the original completed sale'
     );
     $assert(
-        str_contains($page, '->refund('),
+        str_contains($pageSource, '->refund('),
         'the Cash Refund page issues the refund through the service'
     );
+    // --- Sales Pack refunds (#252): distinct forms, historical pricing/pack_size, sealed vs damaged restock ---
+    foreach ([
+        '202610200001_sales_packs_and_stock_forms.php',
+        '202610200003_sale_items_sales_pack_forms.php',
+        '202610200006_cash_refund_sales_pack_forms.php',
+    ] as $migrationFile) {
+        $m = require __DIR__ . '/../database/migrations/' . $migrationFile;
+        $m['up']($pdo);
+    }
+
+    $pdo->prepare(
+        "INSERT INTO products (product_id, sku, barcode, product_name, unit_price, pack_size, pack_barcode, pack_price, status, quantity_purchased, quantity_sold, branch_id)
+         VALUES (3, 'SKU-PACK-1', '11111111', 'Canned Soda', 15.00, 6, '22222222', 80.00, 'active', 36, 0, 1)"
+    )->execute();
+    $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (3, 36)');
+    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, expiration_date, remaining_quantity, sealed_quantity, loose_quantity)
+        VALUES (301, 3, 'B-PACK-1', '2027-01-01', 12, 2, 0),
+               (302, 3, 'B-PACK-2', '2027-06-01', 24, 4, 0)");
+
+    // Mixed-form sale: 3 packs (2 from B-PACK-1, 1 from B-PACK-2) + 2 pieces (opens 1 pack in B-PACK-2 -> 2 sealed, 4 loose).
+    $mixedSale = $sales->checkout(
+        [
+            ['product_id' => 3, 'qty' => 3, 'selling_form' => 'pack'],
+            ['product_id' => 3, 'qty' => 2, 'selling_form' => 'piece'],
+        ],
+        $casey,
+        'cashier',
+        'cash',
+        ['cash_received' => 500]
+    );
+    $mixedSaleId = (int)$mixedSale['sale_id'];
+    $packLineId = (int)$pdo->query("SELECT sale_item_id FROM sale_items WHERE sale_id = {$mixedSaleId} AND product_id = 3 AND selling_form = 'pack'")->fetchColumn();
+    $pieceLineId = (int)$pdo->query("SELECT sale_item_id FROM sale_items WHERE sale_id = {$mixedSaleId} AND product_id = 3 AND selling_form = 'piece'")->fetchColumn();
+    $assert($packLineId > 0 && $pieceLineId > 0 && $packLineId !== $pieceLineId, 'mixed-form checkout records distinct pack and piece sale lines');
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 16, 'mixed-form checkout deducts 20 Base Units');
+    $assert((int)$pdo->query('SELECT quantity_sold FROM products WHERE product_id = 3')->fetchColumn() === 20, 'mixed-form checkout increments quantity_sold by 20 Base Units');
+
+    // Mutate catalog price and pack_size after the sale: historical returns must not reprice or reinterpret pack contents.
+    $pdo->exec("UPDATE products SET unit_price = 25.00, pack_price = 140.00, pack_size = 12 WHERE product_id = 3");
+
+    $loadedMixed = $refundService->refundableSaleForCashier($casey, $mixedSaleId);
+    $assert($loadedMixed !== null && count($loadedMixed['items']) === 2, 'refundableSaleForCashier exposes both mixed-form lines distinctly');
+    $loadedByLine = array_column($loadedMixed['items'], null, 'sale_item_id');
+    $assert(
+        $loadedByLine[$packLineId]['selling_form'] === 'pack'
+            && (int)$loadedByLine[$packLineId]['pack_size'] === 6
+            && (int)$loadedByLine[$packLineId]['quantity'] === 3
+            && (int)$loadedByLine[$packLineId]['refundable_quantity'] === 3
+            && (float)$loadedByLine[$packLineId]['unit_price'] === 80.0,
+        'pack line preserves historical selling_form, pack_size (6), quantity (3), and unit_price (80.00)'
+    );
+    $assert(
+        $loadedByLine[$pieceLineId]['selling_form'] === 'piece'
+            && (int)$loadedByLine[$pieceLineId]['pack_size'] === 6
+            && (int)$loadedByLine[$pieceLineId]['quantity'] === 2
+            && (int)$loadedByLine[$pieceLineId]['refundable_quantity'] === 2
+            && (float)$loadedByLine[$pieceLineId]['unit_price'] === 15.0,
+        'piece line preserves historical selling_form, quantity (2), and unit_price (15.00)'
+    );
+
+    // Invalid, fractional, negative, or over-limit pack quantities are refused without writes.
+    foreach ([0, -1, 1.5, '0.5', '1.5', 'abc', 4] as $badQty) {
+        $expectRefusal(
+            static fn() => $refundService->refund($casey, 'cashier', $mixedSaleId, [$packLineId => ['quantity' => $badQty, 'disposition' => CashRefundService::RESTOCKABLE]], 'customer_return'),
+            'pack refund refuses non-whole or over-limit quantity ' . json_encode($badQty)
+        );
+    }
+    $expectRefusal(
+        static fn() => $refundService->refund($casey, 'cashier', $mixedSaleId, [$packLineId => ['quantity' => 1, 'disposition' => 'opened_pack']], 'customer_return'),
+        'pack refund refuses unsupported disposition'
+    );
+
+    // 1) Restockable refund of 1 sealed pack restores 1 sealed pack (6 Base Units) to B-PACK-1 and refunds historical 80.00.
+    $packRefund1 = $refundService->refund(
+        $casey,
+        'cashier',
+        $mixedSaleId,
+        [$packLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE]],
+        'customer_return'
+    );
+    $assert((float)$refundRow($pdo, $packRefund1)['refund_amount'] === 80.00, 'sealed pack refund uses historical pack price (80.00), ignoring catalog edit');
+    $packRefund1Lines = $linesOf($pdo, $packRefund1);
+    $assert(
+        count($packRefund1Lines) === 1
+            && $packRefund1Lines[0]['selling_form'] === 'pack'
+            && (int)$packRefund1Lines[0]['pack_size'] === 6
+            && (int)$packRefund1Lines[0]['quantity'] === 1
+            && (float)$packRefund1Lines[0]['subtotal'] === 80.00,
+        'cash_refund_items records historical selling_form and pack_size'
+    );
+    $b301 = $pdo->query('SELECT remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_id = 301')->fetch(PDO::FETCH_ASSOC);
+    $assert(
+        (int)$b301['sealed_quantity'] === 1 && (int)$b301['remaining_quantity'] === 6 && (int)$b301['loose_quantity'] === 0,
+        'restockable pack return restores 1 sealed pack and 6 Base Units to the first source batch'
+    );
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 22, 'restockable pack return adds 6 Base Units to inventory');
+    $assert((int)$pdo->query('SELECT quantity_sold FROM products WHERE product_id = 3')->fetchColumn() === 14, 'restockable pack return subtracts 6 Base Units from quantity_sold');
+    $lastMove = $pdo->query('SELECT product_id, change_qty, reason FROM stock_movements ORDER BY stock_movement_id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+    $assert((int)$lastMove['product_id'] === 3 && (int)$lastMove['change_qty'] === 6 && $lastMove['reason'] === 'return', 'stock_movements records Base Unit return quantity (6)');
+    $assert($refundService->refundableQuantity($packLineId) === 2 && $refundService->refundableQuantity($pieceLineId) === 2, 'pack refund reduces only the pack line refundable balance');
+
+    $packAudit = json_decode((string)$pdo->query("SELECT new_value FROM activity_log WHERE module = 'Cash Refunds' AND record_id = {$packRefund1}")->fetchColumn(), true);
+    $assert(
+        ($packAudit['lines'][0]['selling_form'] ?? null) === 'pack'
+            && ($packAudit['lines'][0]['pack_size'] ?? null) === 6
+            && ($packAudit['lines'][0]['base_unit_quantity'] ?? null) === 6,
+        'Protected Audit Record captures selling_form, pack_size, and base_unit_quantity'
+    );
+    $packReceipt = $receiptService->forCashier($packRefund1, $casey, 1);
+    ob_start();
+    \App\Receipts\RefundReceiptPresentation::render($packReceipt, 80);
+    $packReceiptHtml = ob_get_clean();
+    $assert(str_contains($packReceiptHtml, 'Selling Form: Pack (6 pcs)'), 'Refund Receipt renders historical Pack selling form and pack size');
+
+    // 2) Damaged (or opened/incomplete) pack return refunds 80.00 and consumes refundable pack count without creating saleable stock.
+    $packRefund2 = $refundService->refund(
+        $casey,
+        'cashier',
+        $mixedSaleId,
+        [$packLineId => ['quantity' => 1, 'disposition' => CashRefundService::DAMAGED]],
+        'damaged_item'
+    );
+    $assert((float)$refundRow($pdo, $packRefund2)['refund_amount'] === 80.00, 'damaged pack return refunds historical pack price');
+    $b301AfterDamaged = $pdo->query('SELECT remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_id = 301')->fetch(PDO::FETCH_ASSOC);
+    $b302AfterDamaged = $pdo->query('SELECT remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_id = 302')->fetch(PDO::FETCH_ASSOC);
+    $assert(
+        $b301AfterDamaged === $b301
+            && (int)$b302AfterDamaged['sealed_quantity'] === 2
+            && (int)$b302AfterDamaged['loose_quantity'] === 4
+            && (int)$b302AfterDamaged['remaining_quantity'] === 16
+            && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 22
+            && (int)$pdo->query('SELECT quantity_sold FROM products WHERE product_id = 3')->fetchColumn() === 14,
+        'damaged/opened pack return never creates sealed or loose saleable stock'
+    );
+    $assert($refundService->refundableQuantity($packLineId) === 1, 'damaged pack return consumes 1 refundable pack');
+
+    // 3) Rollback on receipt failure leaves batch sealed/loose/remaining quantities and inventory untouched.
+    $pdo->exec("CREATE TRIGGER fail_pack_refund_receipt BEFORE INSERT ON refund_receipt_details
+        BEGIN SELECT RAISE(ABORT, 'pack receipt unavailable'); END");
+    $expectRefusal(
+        static fn() => $refundService->refund($casey, 'cashier', $mixedSaleId, [$packLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE]], 'customer_return'),
+        'pack refund rolls back when receipt persistence fails'
+    );
+    $pdo->exec('DROP TRIGGER fail_pack_refund_receipt');
+    $assert(
+        (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 22
+            && (int)$pdo->query('SELECT sealed_quantity FROM product_batches WHERE batch_id = 302')->fetchColumn() === 2
+            && $refundService->refundableQuantity($packLineId) === 1,
+        'failed pack refund leaves inventory, batch sealed_quantity, and refundable balance unchanged'
+    );
+
+    // 4) Restockable refund of the final 1 pack + 1 piece restores 1 sealed pack (6 Base Units) and 1 loose piece (1 Base Unit) to B-PACK-2.
+    $packRefund3 = $refundService->refund(
+        $casey,
+        'cashier',
+        $mixedSaleId,
+        [
+            $packLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE],
+            $pieceLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE],
+        ],
+        'customer_return'
+    );
+    $assert((float)$refundRow($pdo, $packRefund3)['refund_amount'] === 95.00, 'combined pack + piece refund totals historical 80.00 + 15.00');
+    $b302Final = $pdo->query('SELECT remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_id = 302')->fetch(PDO::FETCH_ASSOC);
+    $assert(
+        (int)$b302Final['sealed_quantity'] === 3
+            && (int)$b302Final['loose_quantity'] === 5
+            && (int)$b302Final['remaining_quantity'] === 23,
+        'third pack restores sealed_quantity (+1 pack, +6 Base Units) on B-PACK-2 while piece restores loose_quantity (+1, +1 Base Unit)'
+    );
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 29, 'combined pack + piece return adds 7 Base Units to inventory');
+    $assert((int)$pdo->query('SELECT quantity_sold FROM products WHERE product_id = 3')->fetchColumn() === 7, 'combined pack + piece return subtracts 7 Base Units from quantity_sold');
+    $assert($refundService->refundableQuantity($packLineId) === 0 && $refundService->refundableQuantity($pieceLineId) === 1, 'pack line is exhausted while 1 piece remains refundable');
+    $expectRefusal(
+        static fn() => $refundService->refund($casey, 'cashier', $mixedSaleId, [$packLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE]], 'customer_return'),
+        'exhausted pack line cannot be refunded again'
+    );
+
+    // 5) Discounted mixed-form sale allocates actual paid cents accurately across pack and piece lines.
+    $pdo->exec("UPDATE products SET unit_price = 15.00, pack_price = 80.00, pack_size = 6 WHERE product_id = 3");
+    $discMixedSale = $sales->checkout(
+        [
+            ['product_id' => 3, 'qty' => 2, 'selling_form' => 'pack'],
+            ['product_id' => 3, 'qty' => 1, 'selling_form' => 'piece'],
+        ],
+        $casey,
+        'cashier',
+        'cash',
+        ['cash_received' => 200, 'discount_type' => 'fixed', 'discount_value' => 15.00, 'discount_reason' => 'Bundle promo']
+    );
+    // Gross = 160 + 15 = 175.00, Discount = 15.00, Paid = 160.00.
+    $discMixedSaleId = (int)$discMixedSale['sale_id'];
+    $discPackLineId = (int)$pdo->query("SELECT sale_item_id FROM sale_items WHERE sale_id = {$discMixedSaleId} AND selling_form = 'pack'")->fetchColumn();
+    $discPieceLineId = (int)$pdo->query("SELECT sale_item_id FROM sale_items WHERE sale_id = {$discMixedSaleId} AND selling_form = 'piece'")->fetchColumn();
+    $r1 = $refundService->refund($casey, 'cashier', $discMixedSaleId, [$discPackLineId => ['quantity' => 1, 'disposition' => CashRefundService::DAMAGED]], 'customer_return');
+    $r2 = $refundService->refund($casey, 'cashier', $discMixedSaleId, [$discPackLineId => ['quantity' => 1, 'disposition' => CashRefundService::DAMAGED]], 'customer_return');
+    $r3 = $refundService->refund($casey, 'cashier', $discMixedSaleId, [$discPieceLineId => ['quantity' => 1, 'disposition' => CashRefundService::DAMAGED]], 'customer_return');
+    $totalDiscRefunded = round(
+        (float)$refundRow($pdo, $r1)['refund_amount']
+        + (float)$refundRow($pdo, $r2)['refund_amount']
+        + (float)$refundRow($pdo, $r3)['refund_amount'],
+        2
+    );
+    $assert($totalDiscRefunded === 160.00 && $refundService->refundableAmount($discMixedSaleId) === 0.0, 'discounted mixed-form partial refunds sum to exact paid amount (160.00)');
 } catch (Throwable $exception) {
     $failures[] = 'Append-only Cash Refund contract threw: ' . $exception->getMessage();
 }

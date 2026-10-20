@@ -222,6 +222,8 @@ CREATE TABLE `cash_refund_items` (
   `refund_id` int(11) NOT NULL,
   `sale_item_id` int(11) NOT NULL,
   `product_id` int(11) NOT NULL,
+  `selling_form` enum('piece','pack') NOT NULL DEFAULT 'piece',
+  `pack_size` int(11) DEFAULT NULL,
   `quantity` int(11) NOT NULL,
   `unit_price` decimal(10,2) NOT NULL,
   `subtotal` decimal(10,2) NOT NULL DEFAULT 0.00,

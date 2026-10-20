@@ -32,7 +32,7 @@ try {
     $assert(str_contains($status,'200') && str_contains($body,'Refund sale #11'),'Credentialed HTTP exception loads just nominated sale: '.$status.' '.substr(strip_tags($body),0,120));
     preg_match('/name="exception_token" value="([a-f0-9]{64})"/',$body,$matches);
     $httpToken=$matches[1]??'';$assert($httpToken!=='','HTTP exception renders a one-use token');
-    if($fixturePath=getenv('SAFE_REFUND_BROWSER_FIXTURE')) file_put_contents($fixturePath,json_encode(['exception'=>$body,'noncash'=>$request(['sale_id'=>13],1,'cashier',false)[1]],JSON_THROW_ON_ERROR));
+    if($fixturePath=getenv('SAFE_REFUND_BROWSER_FIXTURE')) file_put_contents($fixturePath,json_encode(['exception'=>$body,'noncash'=>$request(['sale_id'=>13],1,'cashier',false)[1],'pack'=>$request(['sale_id'=>22],1,'cashier',false)[1]],JSON_THROW_ON_ERROR));
     $post+=['exception_token'=>$httpToken,'approver_username'=>'refund-admin','approver_password'=>'fixture-password'];
     $before=$snapshot();$request($post,5);$request($post,2,'admin');
     $assert($snapshot()===$before,'Other issuer and non-Cashier workspace cannot use the exception');
@@ -53,6 +53,17 @@ try {
     $row=$pdo->query('SELECT * FROM cash_refunds ORDER BY refund_id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
     [$status,$body]=$request(['refund_id'=>$row['refund_id']],1,'cashier',false);
     $assert(str_contains($body,'HTTP-CARD-SETTLEMENT') && str_contains($body,'Refund completed externally and recorded in RetailMind.'),'Saved customer receipt describes external settlement');
+    [$status,$packFormBody]=$request(['sale_id'=>22],1,'cashier',false);
+    $assert(str_contains($status,'200') && str_contains($packFormBody,'Pack (6 pcs)') && str_contains($packFormBody,'Piece') && str_contains($packFormBody,'Restockable (Whole sealed pack)') && str_contains($packFormBody,'Restockable requires whole sealed, complete pack (6 pcs)'),'HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility');
+    $fractionalPackPost=['csrf_token'=>'fixture-csrf','sale_id'=>22,'quantity'=>[22=>'1.5'],'disposition'=>[22=>'restockable'],'reason'=>'customer_return','external_completed'=>'1','payment_reference'=>'HTTP-PACK-FRAC'];
+    $before=$snapshot();$request($fractionalPackPost);
+    $assert($snapshot()===$before,'HTTP fractional pack quantity is refused without partial writes');
+    $wholePackPost=['csrf_token'=>'fixture-csrf','sale_id'=>22,'quantity'=>[22=>'1'],'disposition'=>[22=>'restockable'],'reason'=>'customer_return','external_completed'=>'1','payment_reference'=>'HTTP-PACK-RESTOCK'];
+    [$status]=$request($wholePackPost);$assert(str_contains($status,'303'),'HTTP whole sealed pack refund redirects to saved receipt');
+    $packRefundRow=$pdo->query('SELECT * FROM cash_refunds ORDER BY refund_id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+    $assert((float)$packRefundRow['refund_amount']===80.0 && (int)$pdo->query('SELECT sealed_quantity FROM product_batches WHERE batch_id=201')->fetchColumn()===3 && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=20')->fetchColumn()===22,'HTTP sealed pack refund restores 1 sealed pack and 6 Base Units');
+    [$status,$packReceiptBody]=$request(['refund_id'=>$packRefundRow['refund_id']],1,'cashier',false);
+    $assert(str_contains($packReceiptBody,'Selling Form: Pack (6 pcs)'),'HTTP saved Refund Receipt renders Pack selling form');
     echo "Cash Refund real HTTP narrow authorization and settlement: passed\n";
 } finally {
     if(is_resource($httpServer)){proc_terminate($httpServer);proc_close($httpServer);}

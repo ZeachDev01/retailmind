@@ -1,10 +1,11 @@
 <?php
-// Cash Refund schema parity contract (ticket #92).
+// Cash Refund schema parity contract (ticket #92, extended in #252).
 //
 // A fresh install (src/backend/database/sql/schema.sql) and an upgraded install (the
-// 202609290006_append_only_cash_refunds migration) must produce the same refund
-// relationships. The two declarations are compared directly so the check is
-// deterministic and never depends on the state of a developer's database.
+// 202609290006_append_only_cash_refunds and 202610200006_cash_refund_sales_pack_forms
+// migrations) must produce the same refund relationships and Sales Pack form columns.
+// The declarations are compared directly so the check is deterministic and never
+// depends on the state of a developer's database.
 // Deployed-table assertions live in database_integration.php, the documented
 // RUN_DB_TESTS seam.
 require_once __DIR__ . '/../bootstrap/app.php';
@@ -22,7 +23,8 @@ $assertMatches = static function (string $haystack, string $pattern, string $mes
 $root = dirname(__DIR__, 3);
 $schema = (string)@file_get_contents($root . '/src/backend/database/sql/schema.sql');
 $migration = (string)@file_get_contents($root . '/src/backend/database/migrations/202609290006_append_only_cash_refunds.php');
-$assert($schema !== '' && $migration !== '', 'Cash Refund schema sources must be readable');
+$packMigration = (string)@file_get_contents($root . '/src/backend/database/migrations/202610200006_cash_refund_sales_pack_forms.php');
+$assert($schema !== '' && $migration !== '' && $packMigration !== '', 'Cash Refund schema sources must be readable');
 
 // Both lineages must name the same relationships. The fresh install writes
 // literal DDL; the migration reaches the same shape through the Schema helpers,
@@ -45,6 +47,20 @@ foreach ($requiredTokens as $label => $pattern) {
         $assertMatches($text, $pattern, "{$source} is missing {$label}");
     }
 }
+
+foreach ([
+    'the refund line selling_form column' => "/selling_form(?:'|`|\")[\s,\\\\'\"]*enum\\('piece',\\s*'pack'\\)\\s+NOT NULL DEFAULT 'piece'/is",
+    'the refund line pack_size column' => "/pack_size(?:'|`|\")[\\s,\\\\'\"]*int(?:\\(\\d+\\))?\\s+(?:NULL\\s+)?DEFAULT NULL/is",
+] as $label => $pattern) {
+    foreach (['schema.sql' => $schema, 'the 202610200006 migration' => $packMigration] as $source => $text) {
+        $assertMatches($text, $pattern, "{$source} is missing {$label}");
+    }
+}
+$assert(
+    str_contains($packMigration, 'Schema::addColumnIfMissing(')
+        && preg_match("/'key'\s*=>\s*'202610200006_cash_refund_sales_pack_forms'/", $packMigration) === 1,
+    'the 202610200006 migration uses Schema::addColumnIfMissing() and keeps its versioned key'
+);
 
 // The fresh install states the relationships literally, so assert their exact
 // shape there: a refund is retained history, and a sale, a sold line, a Cashier

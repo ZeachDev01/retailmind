@@ -30,8 +30,8 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('input[type=password]').evaluateAll(inputs => inputs.every(input => input.value === '')), true,
                 'Administrator passwords are never retained in rendered forms');
             const form = page.locator('.refund-sale .refund-form');
-            await form.locator('input[name^=quantity]').fill('1');
-            await form.locator('select[name^=disposition]').selectOption('damaged');
+            await form.locator('input[name^=quantity]').first().fill('1');
+            await form.locator('select[name^=disposition]').first().selectOption('damaged');
             await form.locator('#reason').selectOption('customer_return');
             if (variant === 'exception') {
                 assert.equal(await form.locator('input[name=exception_token]').count(), 1);
@@ -44,6 +44,19 @@ const { chromium } = require('playwright');
                 await form.locator('#refund-reference').fill('EXTERNAL-REFERENCE');
                 assert.equal(await form.evaluate(el => el.checkValidity()), false, 'Reference alone does not assert external completion');
                 await form.locator('input[name=external_completed]').check();
+                if (variant === 'pack') {
+                    const packRow = form.locator('tr[data-selling-form="pack"]');
+                    const pieceRow = form.locator('tr[data-selling-form="piece"]');
+                    assert.equal(await packRow.count(), 1, 'Pack row rendered');
+                    assert.equal(await pieceRow.count(), 1, 'Piece row rendered distinctly');
+                    assert.ok((await packRow.innerText()).includes('Pack (6 pcs)'));
+                    assert.ok((await packRow.innerText()).includes('Restockable requires whole sealed, complete pack (6 pcs)'));
+                    assert.ok((await pieceRow.innerText()).includes('Piece'));
+                    await packRow.locator('input[name^=quantity]').fill('1.5');
+                    assert.equal(await form.evaluate(el => el.checkValidity()), false, 'Fractional pack quantity rejected by step=1');
+                    await packRow.locator('input[name^=quantity]').fill('1');
+                    await packRow.locator('select[name^=disposition]').selectOption({ label: 'Restockable (Whole sealed pack)' });
+                }
             }
             assert.equal(await form.evaluate(el => el.checkValidity()), true, 'Complete specific refund can be submitted');
             assert.ok((await form.innerText()).includes('Stock Issue'));

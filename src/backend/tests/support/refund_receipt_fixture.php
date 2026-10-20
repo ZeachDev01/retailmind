@@ -6,7 +6,7 @@ $items = [];
 for ($i = 1; $i <= ($long ? 35 : 2); $i++) {
     $items[] = ['product_name' => $long ? str_repeat('Long grocery product name ', 5) . $i : 'Example item ' . $i,
         'sku' => $long ? str_repeat('SKU0123456789', 8) . $i : 'TEST-' . $i,
-        'quantity' => 2, 'subtotal' => 2469];
+        'quantity' => 2, 'subtotal' => 2469, 'selling_form' => $i === 1 ? 'pack' : 'piece', 'pack_size' => $i === 1 ? 6 : null];
 }
 $details = ['refund' => ['refund_id' => 105, 'sale_id' => 103, 'created_at' => '2026-09-30 10:11:12',
     'cashier_name' => $long ? str_repeat('Example Cashier ', 5) : 'Example Cashier',
