@@ -112,7 +112,7 @@ const fixture = action => {
                 await page.evaluate(theme => { document.documentElement.dataset.theme = theme; document.documentElement.style.colorScheme = theme; }, theme);
                 for (const [width, height] of sizes) {
                     await page.setViewportSize({width, height});
-                    await page.evaluate(() => Promise.all(document.getAnimations().filter(animation => animation.effect.getTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {}))));
+                    await page.evaluate(() => Promise.all(document.getAnimations().filter(animation => animation.effect.getTiming().iterations !== Infinity && animation.effect.target.checkVisibility()).map(animation => animation.finished.catch(() => {}))));
                     const issues = await page.evaluate(() => {
                         const width = document.documentElement.clientWidth;
                         const main = document.querySelector('.main-content, main');

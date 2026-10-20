@@ -42,6 +42,26 @@ const fixture = action => {
         };
         await login('super_admin');
         await page.goto(origin + '/components/system_administrator/ml_settings.php');
+        const tuning = page.locator('details.ml-tuning');
+        assert.equal(await tuning.getAttribute('open'), null, 'Advanced tuning starts collapsed');
+        const values = await page.locator('main form').evaluate(form => Object.fromEntries(new FormData(form)));
+        const settingsUrl = page.url();
+        const invalid = await context.request.post(settingsUrl, { form: { ...values, n_estimators: '49' } });
+        assert.match(await invalid.text(), /Settings were not saved/);
+        await page.reload();
+        await page.getByText('Advanced: Random Forest tuning', { exact: true }).click();
+        await page.locator('#n_estimators').fill('49');
+        await Promise.all([page.waitForNavigation(), page.getByRole('button', { name: 'Save ML settings', exact: true }).click()]);
+        assert.notEqual(await tuning.getAttribute('open'), null, 'Validation opens advanced fields');
+        assert.equal(await page.locator('#n_estimators').getAttribute('aria-invalid'), 'true');
+        assert.match(await page.locator('#n_estimators_error').innerText(), /between 50 and 1,000/);
+        const saved = await context.request.post(settingsUrl, { form: values });
+        assert.match(await saved.text(), /Random Forest settings saved/);
+        await page.reload();
+        for (const [key, value] of Object.entries(values).filter(([key]) => key !== 'csrf_token')) {
+            const field = page.locator(`main input[name="${key}"]`);
+            if (await field.getAttribute('type') !== 'hidden') assert.equal(await field.inputValue(), value, key + ' survives saving collapsed tuning');
+        }
         await page.getByRole('link', { name: 'Import sales history', exact: true }).click();
         await page.waitForURL('**/system_administrator/forecast_import.php');
         const importUrl = origin + '/components/system_administrator/forecast_import.php';
