@@ -43,9 +43,9 @@ if ($isHosted) {
         'driver' => env('DB_CONNECTION', 'mysql'),
         'host' => env('DB_HOST', 'localhost'),
         'port' => env('DB_PORT', '3306'),
-        'database' => env('DB_NAME', 'u845277124_shalom'),
-        'username' => env('DB_USER', 'u845277124_shalom'),
-        'password' => env('DB_PASSWORD', 'Shalom3185'),
+        'database' => env('DB_NAME', ''),
+        'username' => env('DB_USER', ''),
+        'password' => env('DB_PASSWORD', ''),
         'charset' => env('DB_CHARSET', 'utf8mb4'),
     ];
 

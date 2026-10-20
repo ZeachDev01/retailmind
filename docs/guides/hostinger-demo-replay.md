@@ -51,8 +51,9 @@ before packaging. Keep its access-denial `.htaccess` files and create writable
 backend log/session directories as required by the normal app setup.
 
 Use an existing supported PHP version for this app with PDO MySQL, Fileinfo
-and GD enabled. Configure HTTPS. Do not run the repository's existing automatic
-InfinityFree deployment workflow to deploy this separate Hostinger Demo.
+and GD enabled. Configure HTTPS. Do not use the repository's automatic Hostinger
+deployment workflow for this separate Demo without configuring its target and
+the Demo environment, including `FORECAST_REPLAY_DATABASE`.
 
 Create a private `.env` beside root `index.php`, replacing every placeholder:
 
