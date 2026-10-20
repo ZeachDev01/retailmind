@@ -37,6 +37,26 @@ $throws = static function (callable $operation, string $message) use ($assert): 
     }
 };
 
+$assertThrows = static function (callable $operation, string $expectedClass, string $message, ?string $expectedMessage = null) use ($assert): void {
+    try {
+        $operation();
+        $assert(false, $message . ' (expected ' . $expectedClass . ', none thrown)');
+    } catch (Throwable $e) {
+        $matchesType = $e instanceof $expectedClass;
+        $matchesMsg = $expectedMessage === null || str_contains($e->getMessage(), $expectedMessage);
+        $assert(
+            $matchesType && $matchesMsg,
+            $message . ' (threw ' . $e::class . ': ' . $e->getMessage() . ')'
+        );
+    }
+};
+
+// The bootstrap handler only logs CLI exceptions; a fatal must still fail CI.
+set_exception_handler(static function (Throwable $e): void {
+    fwrite(STDERR, 'Unhandled application exception: ' . $e->getMessage() . PHP_EOL);
+    exit(1);
+});
+
 echo "Starting Ticket #224 supplier pullout tests...\n";
 
 // --- Database Setup (SQLite in-memory) ---
@@ -559,8 +579,8 @@ $assertThrows(
         'reason' => 'Attempt silent pack open',
     ], $managerId),
     RuntimeException::class,
-    'exceeds batch loose piece balance',
-    'Rejects loose pullout exceeding batch loose_quantity without silently opening sealed packs'
+    'Rejects loose pullout exceeding batch loose_quantity without silently opening sealed packs',
+    'exceeds batch loose piece balance'
 );
 
 $assertThrows(
@@ -572,8 +592,8 @@ $assertThrows(
         'reason' => 'Too many packs',
     ], $managerId),
     RuntimeException::class,
-    'exceeds batch remaining balance',
-    'Rejects sealed pack pullout exceeding batch balance'
+    'Rejects sealed pack pullout exceeding batch balance',
+    'exceeds batch remaining balance'
 );
 
 $pdo->exec("UPDATE product_batches SET sealed_quantity = 1, loose_quantity = 9, remaining_quantity = 15 WHERE batch_id = 11");
@@ -586,8 +606,8 @@ $assertThrows(
         'reason' => 'More packs than sealed_quantity',
     ], $managerId),
     RuntimeException::class,
-    'exceeds batch sealed pack balance',
-    'Rejects sealed pack pullout when base units fit remaining_quantity but sealed_quantity is insufficient'
+    'Rejects sealed pack pullout when base units fit remaining_quantity but sealed_quantity is insufficient',
+    'exceeds batch sealed pack balance'
 );
 
 $packRes2 = $packPulloutService->recordPullout([
@@ -612,8 +632,8 @@ $assertThrows(
         'reason' => 'Mismatched explicit quantity',
     ], $managerId),
     InvalidArgumentException::class,
-    'does not match pulled packs and loose pieces',
-    'Rejects conflicting explicit quantity vs pulled_packs and pulled_loose'
+    'Rejects conflicting explicit quantity vs pulled_packs and pulled_loose',
+    'does not match pulled packs and loose pieces'
 );
 
 // Repeated submission check: second identical pullout of 3 packs from Batch 10 (which now has 3 packs) succeeds once then rejects repeat
@@ -629,8 +649,8 @@ $assert($firstSub['remaining_batch_packs'] === 0 && $firstSub['remaining_batch_l
 $assertThrows(
     fn() => $packPulloutService->recordPullout($repeatPayload, $managerId),
     RuntimeException::class,
-    'exceeds batch remaining balance',
-    'Repeated identical submission is rejected once batch packs are already deducted'
+    'Repeated identical submission is rejected once batch packs are already deducted',
+    'exceeds batch remaining balance'
 );
 
 // formatFormBreakdown helper check (including 0 packs + N loose on pack-enabled products)
