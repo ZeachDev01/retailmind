@@ -115,7 +115,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $firstName = trim((string)($_POST['first_name'] ?? ''));
             $lastName = trim((string)($_POST['last_name'] ?? ''));
             $selectedRoles = role_names_for_ids($pdo, (array)($_POST['role_ids'] ?? []));
-            if ($selectedRoles === []) {
+            if ($selectedRoles === [] && !($before['role_name'] === 'super_admin'
+                && $actorRole === 'super_admin' && $userId === $actorId
+                && ($_POST['role_access_present'] ?? '') === '1')) {
                 $selectedRoles = (array)($before['roles'] ?? [$before['role_name']]);
             }
             $account = [
@@ -415,9 +417,10 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('userDrawerMeta').textContent = '@' + (button.dataset.username || '');
         const isSelf = button.dataset.isSelf === '1';
         const isSuper = button.dataset.isSuperAdmin === '1';
-        document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => { input.disabled = isSelf || isSuper; });
+        const canEditOwnSuperRoles = isSelf && isSuper && <?= json_encode($actorRole === 'super_admin') ?>;
+        document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => { input.disabled = (isSelf || isSuper) && !canEditOwnSuperRoles; });
         document.getElementById('drawerStatus').disabled = isSelf || isSuper;
-        document.getElementById('drawerStatusButton').disabled = isSelf || isSuper;
+        document.getElementById('drawerStatusButton').disabled = (isSelf || isSuper) && !canEditOwnSuperRoles;
         document.getElementById('drawerRevokeButton').disabled = isSelf || isSuper;
         const remove = document.getElementById('drawerRemoveProfileImage');
         remove.disabled = button.dataset.hasProfileImage !== '1';

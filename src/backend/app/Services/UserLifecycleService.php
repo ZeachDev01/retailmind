@@ -122,13 +122,18 @@ final class UserLifecycleService
             $before = $this->get($userId);
             $this->requireManageable($actorId, $actorRole, $before, true);
 
-            $targetRoles = $account['roles'] ?? ($account['role'] ?? [$before['role_name']]);
+            $targetRoles = $account['roles'] ?? ($account['role'] ?? $before['roles']);
             if ($before['role_name'] === 'super_admin') {
                 $targetRole = 'super_admin';
-                $targetRoles = ['super_admin'];
+                $optionalRoles = array_values(array_diff((array)$targetRoles, ['super_admin']));
+                $targetRoles = array_merge(['super_admin'], $optionalRoles === []
+                    ? [] : $this->requireAssignableRoles($actorRole, $optionalRoles));
             } else {
                 $targetRoles = $this->requireAssignableRoles($actorRole, $targetRoles);
                 $targetRole = $targetRoles[0];
+                if ($actorId === $userId && $targetRoles !== $before['roles']) {
+                    throw new DomainException('You cannot change your own role access.');
+                }
             }
             $fullName = trim((string)($account['full_name'] ?? ''));
             $username = trim((string)($account['username'] ?? ''));

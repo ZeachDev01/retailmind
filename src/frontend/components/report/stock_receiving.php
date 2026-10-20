@@ -196,7 +196,7 @@ $categoryIcon = static function (string $categoryName): string {
                     <label for="product_search_scan">Scan barcode or search by name or SKU</label>
                     <div class="receiving-search-group">
                         <input type="search" id="product_search_scan" autocomplete="off" aria-describedby="scan_status product_search_status" placeholder="Scan barcode or search by name, SKU or barcode">
-                        <button type="button" class="btn btn-secondary" id="add_scanned_item">Add to delivery</button>
+                        <button type="button" class="btn btn-secondary" id="add_scanned_item">Add to stock</button>
                     </div>
                     <small id="scan_status" role="status" aria-live="polite"></small>
                     <small id="product_search_status" role="status"></small>
@@ -223,7 +223,7 @@ $categoryIcon = static function (string $categoryName): string {
                 <input type="hidden" name="receiving_nonce" value="<?= htmlspecialchars($receivingNonce) ?>">
                 <input type="hidden" name="entry_mode" value="shopping_trip">
                 <div class="delivery-editor">
-                <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2></div><div class="receiving-delivery-actions"><span id="delivery_count" class="receiving-count">0 products</span><button type="button" class="btn btn-primary" id="receiving_next">Continue to quantities</button></div></div>
+                <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2></div><div class="receiving-delivery-actions" id="receiving_delivery_actions"><span id="delivery_count" class="receiving-count">0 products</span></div></div>
                 <div id="delivery_empty_state" class="delivery-empty-state">
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
                     <p>No products added yet. Scan a barcode or add a product from the catalog.</p>
@@ -373,9 +373,10 @@ $categoryIcon = static function (string $categoryName): string {
                 </div>
                 </fieldset>
 
-                <div class="u-flex-wrap receiving-actions">
+                <div class="u-flex-wrap receiving-actions" id="receiving_actions">
+                    <button type="button" class="btn btn-primary" id="receiving_next">Continue</button>
                     <button type="button" class="btn btn-secondary" id="receiving_return_products" hidden>Add products</button>
-                    <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Edit quantities</button>
+                    <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Edit</button>
                     <button type="submit" class="btn-submit" <?= !$canReceive ? 'disabled' : '' ?> hidden>Save receiving entry & update stock</button>
                 </div>
                 </div>
@@ -867,7 +868,7 @@ function renderCatalog() {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'btn btn-secondary receiving-card-add';
-        button.textContent = isAdded ? 'Added' : '+ Add to Delivery';
+        button.textContent = isAdded ? 'Added' : 'Add To Stock';
         button.setAttribute('aria-label', 'Add ' + p.product_name);
         button.disabled = isAdded;
         button.addEventListener('click', () => {
@@ -1167,7 +1168,8 @@ function showStep(next, focus = true) {
     document.getElementById('receiving_back').hidden = step === 1;
     document.getElementById('receiving_return_products').hidden = step !== 2;
     document.getElementById('receiving_next').hidden = step === 3;
-    document.getElementById('receiving_next').textContent = step === 1 ? 'Continue to quantities' : 'Review entry';
+    document.getElementById('receiving_next').textContent = step === 1 ? 'Continue' : 'Review entry';
+    (step === 1 ? document.getElementById('receiving_delivery_actions') : document.getElementById('receiving_actions')).append(document.getElementById('receiving_next'));
     form.querySelector('.btn-submit').hidden = step !== 3;
     if (focus) document.getElementById('receiving_step_title').focus();
 }

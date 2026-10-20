@@ -44,11 +44,16 @@ if (switch_current_workspace('super_admin') || current_role() !== 'cashier') {
     $failures[] = 'an unassigned workspace must be rejected without changing the active workspace';
 }
 
-$_SESSION = ['role' => 'super_admin', 'roles' => ['super_admin']];
+$_SESSION = ['role' => 'super_admin', 'roles' => ['super_admin', 'admin', 'inventory_manager', 'cashier']];
 foreach (['admin', 'inventory_manager', 'cashier'] as $workspace) {
     if (!switch_current_workspace($workspace) || current_role() !== $workspace) {
         $failures[] = "Super Administrator must be able to enter the {$workspace} workspace";
     }
+}
+
+$_SESSION = ['role' => 'admin', 'roles' => ['super_admin', 'admin']];
+if (switch_current_workspace('cashier') || current_role() !== 'admin') {
+    $failures[] = 'a removed Super Administrator workspace must be rejected without changing the active workspace';
 }
 
 if ($failures !== []) {

@@ -64,6 +64,7 @@ try {
         timestamp TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     $pdo->exec("INSERT INTO roles (role_name) VALUES ('super_admin'), ('admin'), ('inventory_manager'), ('cashier')");
+    $pdo->exec('CREATE TABLE user_roles (user_id INTEGER NOT NULL, role_id INTEGER NOT NULL, is_primary INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, role_id))');
     (new StoreScope($pdo))->migrate();
     $storeId = (new StoreScope($pdo))->id();
 
@@ -81,6 +82,8 @@ try {
 
     $superId = $insertActor('Super Owner', 'super_admin');
     $adminId = $insertActor('Store Admin', 'admin');
+    $pdo->prepare('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, 1)')->execute([$superId, $roleId('super_admin')]);
+    $pdo->prepare('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, 1)')->execute([$adminId, $roleId('admin')]);
     $notifier = new class extends UserAccountNotifier {
         /** @var array<int, array{email: string, subject: string, message: string}> */
         public array $delivered = [];
@@ -91,6 +94,22 @@ try {
         }
     };
     $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo), $notifier);
+
+    $service->update($superId, 'super_admin', $superId, [
+        'full_name' => 'Super Owner',
+        'username' => 'super_owner',
+        'email' => 'super_owner@example.test',
+        'roles' => ['admin', 'inventory_manager', 'cashier'],
+    ]);
+    $superRoles = $service->get($superId)['roles'];
+    $assert($superRoles === ['super_admin', 'admin', 'inventory_manager', 'cashier'], 'Super Administrator retains identity and saves optional workspaces');
+    $service->update($superId, 'super_admin', $superId, [
+        'full_name' => 'Super Owner',
+        'username' => 'super_owner',
+        'email' => 'super_owner@example.test',
+        'roles' => [],
+    ]);
+    $assert($service->get($superId)['roles'] === ['super_admin'], 'Super Administrator can remove all optional workspaces');
 
     $cashierId = $service->create($adminId, 'admin', [
         'full_name' => 'New Cashier',

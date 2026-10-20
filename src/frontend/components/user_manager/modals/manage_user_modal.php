@@ -16,6 +16,7 @@
             <form method="POST" enctype="multipart/form-data" class="user-form user-drawer-form" id="userDrawerForm">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="update">
+                <input type="hidden" name="role_access_present" value="1">
                 <input type="hidden" name="user_id" id="drawerUserId">
                 <div class="user-drawer-panel is-active" id="drawerPanelUser" role="tabpanel" aria-labelledby="drawerTabUser" tabindex="0" data-user-drawer-panel="user">
                     <div class="form-group"><label for="drawerUsername">Username</label><input id="drawerUsername" name="username" required aria-describedby="drawerUsernameHelp"><small class="field-help" id="drawerUsernameHelp">Usernames cannot contain @ or spaces. Use letters, numbers, dots, underscores, and hyphens.</small></div>
@@ -36,7 +37,7 @@
                                 <label class="role-check"><input type="checkbox" name="role_ids[]" value="<?= (int)$role['role_id'] ?>"> <span><?= htmlspecialchars(display_label((string)$role['role_name'])) ?></span></label>
                             <?php endforeach; ?>
                         </div>
-                        <small class="field-help" id="drawerRolesHelp">Selected role templates grant access across those workspaces.</small>
+                        <small class="field-help" id="drawerRolesHelp">Selected roles appear in the workspace switcher. Switch workspaces to use their permissions.</small>
                     </div>
                 </div>
                 <div class="user-drawer-panel" id="drawerPanelStatus" role="tabpanel" aria-labelledby="drawerTabStatus" tabindex="0" data-user-drawer-panel="status" hidden>

@@ -65,7 +65,7 @@ function current_workspace_roles(?string $primaryRole = null): array
     $roles = current_roles();
     $primaryRole ??= in_array('super_admin', $roles, true) ? 'super_admin' : null;
     if ($primaryRole === 'super_admin') {
-        return ['super_admin', 'admin', 'inventory_manager', 'cashier'];
+        return array_values(array_unique(array_merge(['super_admin'], $roles)));
     }
 
     return $roles;

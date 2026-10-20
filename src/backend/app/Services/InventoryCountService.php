@@ -14,7 +14,7 @@ class InventoryCountService
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
 
-    public function __construct(PDO $pdo)
+    public function __construct(PDO $pdo, private ?string $activeWorkspace = null)
     {
         $this->pdo = $pdo;
         $this->notificationService = new NotificationService($pdo);
@@ -886,6 +886,19 @@ class InventoryCountService
         );
         $stmt->execute([$userId]);
         $role = (string)$stmt->fetchColumn();
+        if ($this->activeWorkspace !== null) {
+            if ($this->activeWorkspace !== $expectedRole) {
+                throw new RuntimeException('Switch to the assigned Inventory workspace to link a correction count.');
+            }
+            if ($role !== $expectedRole) {
+                $assigned = $this->pdo->prepare(
+                    'SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+                     WHERE ur.user_id = ? AND r.role_name = ?'
+                );
+                $assigned->execute([$userId, $expectedRole]);
+                $role = $assigned->fetchColumn() ? $expectedRole : $role;
+            }
+        }
         if ($role !== $expectedRole) {
             throw new RuntimeException('Only Inventory Managers can link a correction count to a stock issue report.');
         }

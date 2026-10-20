@@ -180,6 +180,7 @@ foreach ($roles as $index => $role) {
     }
     $pdo->prepare('INSERT INTO user_roles (user_id,role_id,is_primary) VALUES (?,?,1)')->execute([$id,$id]);
 }
+$pdo->exec("INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (2, 1, 0), (2, 3, 0), (2, 4, 0)");
 $pdo->exec('ALTER TABLE users DROP COLUMN theme_preference');
 $migration = require __DIR__ . '/../../database/migrations/202610040001_user_theme.php';
 $migration['up']($pdo); $migration['up']($pdo);

@@ -2577,7 +2577,7 @@ foreach ($products as $product) {
             setProductDrawerTab('info');
             RetailMindUI.openOverlay(document.getElementById('product-drawer'));
         }
-        document.querySelectorAll('.manage-product').forEach(button => button.addEventListener('click', async () => {
+        async function handleManageProduct(button) {
             if (isEditingProduct && isDrawerDirty) {
                 const discard = await RetailMindUI.confirm({
                     title: 'Discard unsaved changes?',
@@ -2589,7 +2589,11 @@ foreach ($products as $product) {
                 isDrawerDirty = false;
             }
             openProductDrawer(button.dataset.productId);
-        }));
+        }
+        document.getElementById('product-table-body')?.addEventListener('click', event => {
+            const button = event.target.closest('.manage-product');
+            if (button) handleManageProduct(button);
+        });
 
         const drawerEditBtn = document.getElementById('product-edit-btn');
         if (drawerEditBtn) {
@@ -3260,12 +3264,12 @@ foreach ($products as $product) {
         updateBulkBar();
 
         // Product image preview
-        const imageInput = document.getElementById('product-image-input');
+        const productImageInput = document.getElementById('product-image-input');
         const imagePreviewContainer = document.getElementById('image-preview-container');
         const imagePreview = document.getElementById('image-preview');
         const clearImageBtn = document.getElementById('clear-image-btn');
 
-        imageInput.addEventListener('change', function() {
+        productImageInput.addEventListener('change', function() {
             const file = this.files[0];
             if (file) {
                 if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
@@ -3291,9 +3295,10 @@ foreach ($products as $product) {
 
         clearImageBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            imageInput.value = '';
+            productImageInput.value = '';
             imagePreviewContainer.hidden = true;
         });
+    }
     </script>
 </body>
 
