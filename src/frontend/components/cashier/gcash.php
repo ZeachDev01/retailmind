@@ -84,8 +84,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </div>
                     <div class="gcash-field gcash-reference-field">
                         <label class="pos-field-label" for="gcash-reference">GCash reference number</label>
-                        <input class="pos-input" id="gcash-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="2048" inputmode="numeric" required aria-describedby="gcash-reference-help gcash-scan-status gcash-duplicate">
-                        <small id="gcash-reference-help"><?= $gcashRules['min_length'] === $gcashRules['max_length'] ? $gcashRules['min_length'] : $gcashRules['min_length'] . '–' . $gcashRules['max_length'] ?> digits. Press Enter to check the reference.</small>
+                        <input class="pos-input" id="gcash-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="2048" inputmode="numeric" required aria-describedby="gcash-scan-status gcash-duplicate">
                         <span id="gcash-scan-status" role="status" aria-live="polite">Ready for manual entry or USB scanner.</span>
                         <span id="gcash-duplicate" role="alert" hidden>This reference has already been recorded. Check transaction history before proceeding.</span>
                         <div class="gcash-reference-tools">
@@ -96,7 +95,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </div>
                 <section id="gcash-camera" class="gcash-camera" aria-labelledby="gcash-camera-title" hidden>
                     <h3 id="gcash-camera-title">Scan receipt reference</h3>
-                    <p>Keep the reference number and its label in view. Check the suggested number before using it.</p>
                     <video id="gcash-video" autoplay playsinline muted aria-label="Receipt camera preview"></video>
                     <div class="gcash-actions">
                         <button class="btn" type="button" id="gcash-capture">Capture and read</button>
@@ -235,7 +233,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         <dialog id="gcash-open-dialog" aria-labelledby="gcash-open-title">
             <form id="gcash-open-form">
                 <h2 id="gcash-open-title">Open GCash responsibility</h2>
-                <p>Count actual physical service cash and check the Store GCash wallet balance before opening.</p>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-open-cash">Counted service cash (PHP)</label>
                     <input class="pos-input" id="gcash-open-cash" name="opening_cash" type="number" step="0.01" min="0" required placeholder="0.00">
@@ -253,7 +250,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         <dialog id="gcash-close-dialog" aria-labelledby="gcash-close-title">
             <form id="gcash-close-form">
                 <h2 id="gcash-close-title">Reconcile &amp; Close GCash responsibility</h2>
-                <p>Count service cash and check the Store wallet balance to compare against expected figures.</p>
                 <div class="gcash-preview-grid" style="margin-bottom: 1rem;">
                     <div class="gcash-preview-item">
                         <span class="gcash-preview-label">Expected service cash</span>
@@ -291,7 +287,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         <dialog id="gcash-handover-dialog" aria-labelledby="gcash-handover-title">
             <form id="gcash-handover-form">
                 <h2 id="gcash-handover-title">Hand over GCash responsibility</h2>
-                <p>Transfer service responsibility to another Cashier with an active unlocked Cashier Shift.</p>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-handover-incoming">Incoming Cashier</label>
                     <select class="pos-input" id="gcash-handover-incoming" name="incoming_cashier_id" required>
@@ -363,7 +358,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         <dialog id="gcash-funding-dialog" aria-labelledby="gcash-funding-title">
             <form id="gcash-funding-form">
                 <h2 id="gcash-funding-title">Record Funding Movement</h2>
-                <p>Replenishment, withdrawal, product drawer transfer, or owner capital.</p>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-funding-type">Movement Type</label>
                     <select class="pos-input" id="gcash-funding-type" name="movement_type" required>
