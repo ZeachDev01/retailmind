@@ -148,7 +148,10 @@ $pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, selling_f
     VALUES (20, 20, 20, 'pack', 6, 1, 80, 80), (21, 20, 20, 'piece', 6, 2, 15, 30),
            (22, 22, 20, 'pack', 6, 2, 80, 160), (23, 22, 20, 'piece', 6, 2, 15, 30)");
 $pdo->exec('INSERT INTO sale_item_batches (sale_item_id, batch_id, quantity) VALUES (20, 201, 6), (21, 201, 2), (22, 201, 12), (23, 201, 2)');
-$pdo->exec('UPDATE products SET unit_price = 25, pack_price = 140, pack_size = 12 WHERE product_id = 20');
+// Prices may change after the sale (historical amounts must hold), but the pack
+// size must still match the sold pack: a legal reseize now refuses a restockable
+// pack refund (covered by cash_refund_contract.php), so it cannot be exercised here.
+$pdo->exec('UPDATE products SET unit_price = 25, pack_price = 140 WHERE product_id = 20');
 
 $pdo->beginTransaction(); $pdo->query('SELECT sale_id FROM sales WHERE sale_id=20 FOR UPDATE')->fetch();
 for ($i = 0; $i < 2; $i++) {

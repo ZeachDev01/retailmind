@@ -152,6 +152,8 @@ $pdo->exec("CREATE TABLE sale_items (
     sale_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
     sale_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
+    selling_form TEXT NOT NULL DEFAULT 'piece',
+    pack_size INTEGER NULL,
     quantity INTEGER NOT NULL,
     unit_price REAL NOT NULL,
     subtotal REAL NOT NULL
@@ -541,6 +543,7 @@ $throws(static fn() => GrossProfitService::enforceAdministratorWorkspace($_SESSI
     DomainException::class, 'Assigned admin role in non-admin active workspace is denied');
 
 // Ordinary reports remain accessible to other roles
+$sqlitePdo = $pdo; // includes/auth.php rebinds $pdo to the configured Store connection.
 require_once __DIR__ . '/../includes/auth.php';
 $policy = new App\Authorization\RoleCapabilityPolicy();
 $assert($policy->allows('inventory_manager', App\Authorization\RoleCapabilityPolicy::VIEW_STORE_REPORTS),
@@ -552,17 +555,20 @@ $assert($policy->allows('super_admin', App\Authorization\RoleCapabilityPolicy::V
 // Test 9: Partially allocated pack line is flagged as missing cost
 // =========================================================================
 echo "\n--- Test 9: Partially allocated pack line ---\n";
-$pdo->exec('ALTER TABLE sale_items ADD COLUMN base_unit_quantity INTEGER');
+// Fixtures for this case belong on the disposable SQLite schema, never the Store.
+$pdo = $sqlitePdo;
 $pdo->exec("INSERT INTO products (product_id, branch_id, sku, barcode, product_name, category_id, unit_price, cost_price)
-            VALUES (108, 1, 'SKU-PACK-CHEAP', 'BC-PACK-CHEAP', 'Partly Allocated Pack', 1, 100.00, 10.00)");
+            VALUES (109, 1, 'SKU-PACK-CHEAP', 'BC-PACK-CHEAP', 'Partly Allocated Pack', 1, 100.00, 10.00)");
+$pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, cost_price, date_received)
+            VALUES (1009, 109, 'BATCH-1009', 12, 0, 10.00, '2026-10-01')");
 $pdo->exec("INSERT INTO sales (sale_id, shift_id, cashier_id, gross_amount, total_amount, discount_amount, sale_date)
-            VALUES (6, 1, {$cashierId}, 100.00, 100.00, 0.00, '2026-10-15 09:00:00')");
+            VALUES (9, 1, {$cashierId}, 100.00, 100.00, 0.00, '2026-10-15 09:00:00')");
 // One pack line of 12 Base Units but only 6 Base Units have a batch allocation with cost.
-$pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, base_unit_quantity, unit_price, subtotal)
-            VALUES (8, 6, 108, 1, 12, 100.00, 100.00)");
+$pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, selling_form, pack_size, quantity, unit_price, subtotal)
+            VALUES (11, 9, 109, 'pack', 12, 1, 100.00, 100.00)");
 $pdo->exec("INSERT INTO sale_item_batches (sale_item_batch_id, sale_item_id, batch_id, quantity, unit_cost, cost_price, cost_status)
-            VALUES (9, 8, 1008, 6, 10.00, 10.00, 'recorded')");
-$partialPack = $service->calculate(['from' => '2026-10-15', 'to' => '2026-10-15', 'product_id' => 108, 'store_id' => 1]);
+            VALUES (12, 11, 1009, 6, 10.00, 10.00, 'recorded')");
+$partialPack = $service->calculate(['from' => '2026-10-15', 'to' => '2026-10-15', 'product_id' => 109, 'store_id' => 1]);
 $assert($partialPack['summary']['status'] === 'incomplete', 'A partially allocated pack line is reported incomplete, not recorded');
 $assert($partialPack['summary']['affected_lines_count'] === 1, 'The partially allocated pack line is counted as affected');
 $assert($partialPack['summary']['total_units'] === 12, 'Pack demand contributes its 12 Base Units once');

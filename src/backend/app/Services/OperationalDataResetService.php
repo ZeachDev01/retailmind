@@ -20,7 +20,7 @@ final class OperationalDataResetService
         'cash_refund_items', 'cash_refunds', 'sale_reversal_items', 'sale_reversals',
         'sale_receipt_details', 'sale_item_batches', 'held_sales', 'checkout_attempts',
         'sale_items', 'sales', 'inventory_adjustment_revisions', 'inventory_counts',
-        'stock_movements', 'inventory_adjustments', 'product_batches', 'stock_receiving', 'stock_receiving_groups',
+        'stock_movements', 'inventory_adjustments', 'supplier_pullouts', 'product_batches', 'stock_receiving', 'stock_receiving_groups',
         'purchase_history',
         'cash_drawer_movements', 'cashier_shifts', 'cycle_count_schedules', 'barcode_scans',
         'stock_predictions', 'forecast_evaluations', 'forecast_runs', 'model_training_runs',
