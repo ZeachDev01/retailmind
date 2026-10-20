@@ -50,6 +50,9 @@ jobs:
 
       - name: Deploy to Hostinger
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        env:
+          # Give remote IPv4 connections time before trying unavailable IPv6.
+          NODE_OPTIONS: --network-family-autoselection-attempt-timeout=10000
         with:
           server: ${{ env.FTP_SERVER }}
           username: ${{ env.FTP_USERNAME }}
