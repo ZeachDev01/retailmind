@@ -13,6 +13,16 @@ $assert = function (bool $condition, string $message) use (&$failures) {
 };
 
 try {
+    $savedReplay = $_ENV['FORECAST_REPLAY_DATABASE'] ?? null;
+    $savedAppEnv = $_ENV['APP_ENV'] ?? null;
+    $_ENV['APP_ENV'] = 'production';
+    $_ENV['FORECAST_REPLAY_DATABASE'] = '';
+    $assert(!ReplenishmentQueueService::replayDatabaseAllowed('u123_demo'), 'Production replay must be disabled by default');
+    $_ENV['FORECAST_REPLAY_DATABASE'] = 'u123_demo';
+    $assert(ReplenishmentQueueService::replayDatabaseAllowed('u123_demo'), 'Explicit hosted replay database must be allowed');
+    $assert(!ReplenishmentQueueService::replayDatabaseAllowed('u123_store'), 'Hosted replay must not enable a different database');
+    if ($savedReplay === null) { unset($_ENV['FORECAST_REPLAY_DATABASE']); } else { $_ENV['FORECAST_REPLAY_DATABASE'] = $savedReplay; }
+    if ($savedAppEnv === null) { unset($_ENV['APP_ENV']); } else { $_ENV['APP_ENV'] = $savedAppEnv; }
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 

@@ -78,6 +78,33 @@ class ReplenishmentQueueService
             return [];
         }
 
+        return $this->buildQueue($jobId);
+    }
+
+    public static function replayDatabaseAllowed(string $database): bool
+    {
+        $hostedReplay = (string)\env('FORECAST_REPLAY_DATABASE', '');
+        return ($hostedReplay !== '' && $database === $hostedReplay)
+            || (preg_match('/^retailmind_demo_[a-z0-9_]+$/D', $database)
+                && in_array(strtolower((string)\env('APP_ENV')), ['development', 'test'], true));
+    }
+
+    public function getReplayPreview(int $jobId): array
+    {
+        $database = (string)$this->pdo->query('SELECT DATABASE()')->fetchColumn();
+        $replay = json_decode((string)$this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_replay_result'")->fetchColumn(), true);
+        if (!self::replayDatabaseAllowed($database)
+            || (int)($replay['preview_job'] ?? 0) !== $jobId) {
+            return [];
+        }
+        $job = $this->pdo->prepare("SELECT 1 FROM ml_jobs WHERE job_id=? AND trigger_type='forecast_observation' AND status='succeeded'");
+        $job->execute([$jobId]);
+        return $job->fetchColumn() ? $this->buildQueue($jobId) : [];
+    }
+
+    private function buildQueue(int $jobId): array
+    {
+
         // Check observation mode and recommendation suspension status
         $isObservationMode = false;
         $isSuspended = false;

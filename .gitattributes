@@ -1,0 +1,2 @@
+# Keep the Demo SQL byte-for-byte stable for its published SHA-256 checksum.
+work/hostinger-demo/*.sql -text

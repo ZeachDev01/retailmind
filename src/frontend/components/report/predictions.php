@@ -72,9 +72,11 @@ if ($searchQuery !== '') {
 
 // Check if demo metadata exists
 $isDemoMode = false;
+$demoSource = 'S001';
 $metaStmt = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'demo_import_metadata'");
-if ($metaStmt && $metaStmt->fetchColumn()) {
+if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
     $isDemoMode = true;
+    $demoSource = (json_decode($demoJson, true)['source_label'] ?? 'S001');
 }
 ?>
 <!DOCTYPE html>
@@ -122,7 +124,7 @@ if ($metaStmt && $metaStmt->fetchColumn()) {
     <main class="main-content">
         <div class="topbar">
             <div>
-                <h1>Demand Forecast <?php if ($isDemoMode): ?><span class="demo-badge">Demo Mode (S001)</span><?php endif; ?></h1>
+                <h1>Demand Forecast <?php if ($isDemoMode): ?><span class="demo-badge">Demo Mode (<?= htmlspecialchars($demoSource) ?>)</span><?php endif; ?></h1>
                 <p class="page-subtitle">Expected demand, inventory exposure, and model readiness across the Store.</p>
             </div>
             
@@ -135,6 +137,12 @@ if ($metaStmt && $metaStmt->fetchColumn()) {
                 </form>
             <?php endif; ?>
         </div>
+
+        <?php if ($isDemoMode): ?>
+            <p class="muted">Historical external data. The origin below stays on the dataset's final date; these results do not measure this Store's accuracy.</p>
+        <?php endif; ?>
+        <p><a class="btn btn-secondary" href="forecast_analytics.php">Forecast Analytics</a>
+            <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a></p>
 
         <?php if ($message): ?>
             <div class="alert <?= htmlspecialchars($messageClass) ?>">
@@ -223,5 +231,6 @@ if ($metaStmt && $metaStmt->fetchColumn()) {
         <?php endif; ?>
     </main>
 </div>
+<?php if ($isGenerating): ?><script>setTimeout(() => window.location.replace(window.location.href), 5000);</script><?php endif; ?>
 </body>
 </html>

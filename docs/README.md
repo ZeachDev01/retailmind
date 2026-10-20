@@ -13,6 +13,10 @@ repository root unless stated otherwise.
 
 ## Interface guides
 
+- [Real public-data forecasting and replenishment demo](guides/public-forecasting-demo.md)
+- [Recent-date train/test sales replay and stock preview](guides/train-test-sales-replay.md)
+- [Hostinger Demo database import and saved replay](guides/hostinger-demo-replay.md)
+
 - [Stock monitoring, recommendations, and direct receiving](guides/direct-stock-receiving.md)
 - [Mobile and tablet home-screen installation](guides/HOME_SCREEN_APP.md)
 - [Persistent dashboard navigation](guides/page-navigation.md)

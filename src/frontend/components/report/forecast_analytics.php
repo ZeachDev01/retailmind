@@ -41,9 +41,11 @@ foreach ($evaluations as $e) {
 
 // 3. Demo status indicator
 $isDemoMode = false;
+$demoSource = 'S001';
 $metaStmt = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'demo_import_metadata'");
-if ($metaStmt && $metaStmt->fetchColumn()) {
+if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
     $isDemoMode = true;
+    $demoSource = (json_decode($demoJson, true)['source_label'] ?? 'S001');
 }
 
 // 4. Actual vs Forecast (for past completed target dates)
@@ -156,7 +158,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
     <main class="main-content">
         <div class="topbar">
             <div>
-                <h1>Forecast Analytics <?php if ($isDemoMode): ?><span class="demo-badge">Demo Evidence (S001)</span><?php endif; ?></h1>
+                <h1>Forecast Analytics <?php if ($isDemoMode): ?><span class="demo-badge">Demo Evidence (<?= htmlspecialchars($demoSource) ?>)</span><?php endif; ?></h1>
                 <p class="page-subtitle">Evaluation metrics for the active model.</p>
             </div>
             <div>
@@ -165,6 +167,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
         </div>
 
         <div class="model-context-card">
+            <?php if ($pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_replay_result'")->fetchColumn()): ?><p><a class="btn btn-secondary" href="forecast_replay.php">Open train/test replay: actual sales and stock preview</a></p><?php endif; ?>
             <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
                 <div>
                     <strong>Bound Model Version:</strong> 
@@ -176,7 +179,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 </div>
                 <div>
                     <strong>Evaluation Context:</strong>
-                    <?= $isDemoMode ? 'Isolated Demo Dataset (S001, 20 Products)' : 'Store Operational Sales' ?>
+                    <?= $isDemoMode ? 'Isolated Demo Dataset (' . htmlspecialchars($demoSource) . ', 20 Products)' : 'Store Operational Sales' ?>
                 </div>
             </div>
         </div>

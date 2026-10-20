@@ -100,6 +100,28 @@ class Connection:
 
 
 class WorkerEvidenceTests(unittest.TestCase):
+    def test_uci_demo_reads_daily_imports_instead_of_fabricated_pos_sales(self):
+        conn = Connection()
+        self.addCleanup(conn.db.close)
+        conn.seed()
+        conn.db.execute('CREATE TABLE forecast_sales_imports (product_id INTEGER, sale_date TEXT, quantity INTEGER)')
+        conn.db.execute('''INSERT INTO forecast_sales_imports
+            SELECT si.product_id, s.sale_date, 2 FROM sales s JOIN sale_items si ON si.sale_id=s.sale_id''')
+        source = {'source_kind': 'uci_online_retail', 'source_label': 'UCI Online Retail',
+                  'store_id': 'UCI_ONLINE_RETAIL', 'products_mapped': 20, 'total_records': 2800,
+                  'date_window': ['2023-01-01', '2023-05-20']}
+        conn.db.execute("UPDATE platform_settings SET setting_value=? WHERE setting_key='demo_import_metadata'",
+                        (json.dumps(source),))
+        conn.commit()
+        context = ml_worker.dataset_context(conn.cursor())
+        data = ml_worker.load_history(conn.cursor(), context)
+        self.assertEqual(len(data), 2800)
+        self.assertEqual(set(data.units_sold), {2})
+        self.assertEqual(context['dataset_kind'], 'demo')
+        conn.db.execute('DELETE FROM forecast_sales_imports WHERE product_id=20')
+        with self.assertRaisesRegex(ValueError, 'coverage'):
+            ml_worker.load_history(conn.cursor(), context)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -25,6 +25,7 @@ $pageTitle = 'Replenishment Recommendations';
 $error = '';
 $activeModelVersion = '';
 $isDemo = false;
+$demoSource = '';
 $isProduction = false;
 $queueUnavailable = false;
 $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
@@ -39,6 +40,7 @@ try {
         $jobMeta = $forecastService->getJobMetadata($jobId);
         $activeModelVersion = $jobMeta['model_version'] ?? '';
         $isDemo = $jobMeta['is_demo'] ?? false;
+        $demoSource = $jobMeta['source_label'] ?? '';
         $isProduction = ($jobMeta['dataset_kind'] ?? null) === 'store';
 
     }
@@ -127,6 +129,12 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                     <p>Low stock is at or below the reorder level. In stock is above it.</p>
                 </details>
             </aside>
+            <?php if ($isDemo): ?>
+                <p class="muted">Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
+            <?php endif; ?>
+            <?php if ($pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_replay_result'")->fetchColumn()): ?>
+                <p class="tag-warning">The train-only replay model is not approved. This page retains normal stock-rule guidance. <a href="../report/forecast_replay.php">Compare test predictions and view experimental buying quantities</a>.</p>
+            <?php endif; ?>
             <section class="queue-panel" id="queue-products" tabindex="-1" aria-labelledby="queue-title">
                 <header class="queue-panel-heading"><div><h2 id="queue-title">Recommendations</h2><span class="queue-count"><?= $replenishCount ?> to replenish</span></div></header>
                     <?php if ($queueUnavailable): ?>
@@ -168,7 +176,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                                     <p><?= htmlspecialchars($item['explanation']) ?></p>
                                                     <p><?= htmlspecialchars($item['forecast_status']) ?></p>
                                                     <?php if ($item['forecast_origin'] && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
-                                                        <span class="tag-warning">Stale forecast: <?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
+                                                        <span class="<?= $isDemo ? 'muted' : 'tag-warning' ?>"><?= $isDemo ? 'Demo origin: ' : 'Stale forecast: ' ?><?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
                                                     <?php endif; ?>
                                                 </details>
                                             </td>

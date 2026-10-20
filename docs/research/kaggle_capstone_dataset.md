@@ -2,6 +2,11 @@
 
 ## Source and verification status
 
+Update 2026-10-20: the publisher's API now confirms a synthetic dataset labeled
+CC0. Local-file identity remains unverified against a publisher download.
+Use it for software tests; the capstone's real-sales experiment uses
+[UCI Online Retail](public-sales-capstone.md). The dated checks below are historical.
+
 Setup, explicit approval, browser review, and Store transition:
 [Demo workflow](../DEMO_FORECASTING.md).
 
