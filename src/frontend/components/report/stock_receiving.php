@@ -174,8 +174,12 @@ $categoryIcon = static function (string $categoryName): string {
         <?php if ($linkedPullout): ?>
             <div class="message info pullout-link-notice" role="status">
                 <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                <?php
+                $linkedBreakdown = SupplierPulloutService::formatFormBreakdown((int)($linkedPullout['pulled_packs'] ?? 0), (int)($linkedPullout['pulled_loose'] ?? 0), (int)($linkedPullout['pack_size_used'] ?? ($linkedPullout['pack_size'] ?? 1)));
+                $linkedFormSummary = $linkedBreakdown !== '' ? " [{$linkedBreakdown}]" : '';
+                ?>
                 <strong>Replacement Receiving:</strong> Linked to Supplier Pullout #<?= (int)$linkedPullout['pullout_id'] ?>
-                (<?= htmlspecialchars($linkedPullout['product_name']) ?>, <?= (int)$linkedPullout['quantity'] ?> units pulled on <?= htmlspecialchars(substr((string)$linkedPullout['pulled_at'], 0, 10)) ?><?= !empty($linkedPullout['supplier']) ? ' from ' . htmlspecialchars($linkedPullout['supplier']) : '' ?>).
+                (<?= htmlspecialchars($linkedPullout['product_name']) ?>, <?= (int)$linkedPullout['quantity'] ?> units<?= htmlspecialchars($linkedFormSummary) ?> pulled on <?= htmlspecialchars(substr((string)$linkedPullout['pulled_at'], 0, 10)) ?><?= !empty($linkedPullout['supplier']) ? ' from ' . htmlspecialchars($linkedPullout['supplier']) : '' ?>).
                 Fresh goods will be saved in a new batch.
             </div>
         <?php endif; ?>

@@ -172,7 +172,11 @@ class ReceivingService
         }
 
         [$scopeSql, $scopeParams] = $this->productScope();
-        $productStmt = $this->pdo->prepare("SELECT product_id, product_name, units_per_package, pack_size, pack_barcode, quantity_purchased FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
+        $hasProductPackCols = $this->hasColumn('products', 'pack_size');
+        $productCols = $hasProductPackCols
+            ? 'product_id, product_name, units_per_package, pack_size, pack_barcode, quantity_purchased'
+            : 'product_id, product_name, units_per_package, quantity_purchased';
+        $productStmt = $this->pdo->prepare("SELECT {$productCols} FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
         $productStmt->execute(array_merge([$productId], $scopeParams));
         $product = $productStmt->fetch(PDO::FETCH_ASSOC);
         if (!$product) {
@@ -390,6 +394,10 @@ class ReceivingService
                 $batchParams[] = $acceptedPacks;
                 $batchParams[] = $acceptedLoose;
             }
+            if ($this->hasColumn('product_batches', 'cost_price')) {
+                $batchCols[] = 'cost_price';
+                $batchParams[] = $costPrice;
+            }
             $batchCols[] = 'expiration_date';
             $batchParams[] = $expirationDate;
 
@@ -517,7 +525,7 @@ class ReceivingService
         $pulloutSelect = $this->hasColumn('stock_receiving', 'pullout_id') ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
         $packSelect = $this->hasColumn('stock_receiving', 'received_packs')
             ? 'sr.received_packs, sr.accepted_packs, sr.damaged_packs, sr.rejected_packs, sr.received_loose, sr.accepted_loose, sr.damaged_loose, sr.rejected_loose, sr.pack_size_used,'
-            : '0 AS received_packs, 0 AS accepted_packs, 0 AS damaged_packs, 0 AS rejected_packs, sr.received_qty AS received_loose, sr.accepted_qty AS accepted_loose, sr.damaged_loose AS damaged_loose, 0 AS rejected_loose, NULL AS pack_size_used,';
+            : '0 AS received_packs, 0 AS accepted_packs, 0 AS damaged_packs, 0 AS rejected_packs, sr.received_qty AS received_loose, sr.accepted_qty AS accepted_loose, sr.damaged_qty AS damaged_loose, 0 AS rejected_loose, NULL AS pack_size_used,';
         $stmt = $this->pdo->prepare("SELECT
                 sr.receiving_id, sr.group_id, {$pulloutSelect} {$packSelect} sr.product_id, sr.received_qty, sr.received_packages,
                 sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,

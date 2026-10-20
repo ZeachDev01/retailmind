@@ -5,6 +5,7 @@ require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/PhilippineTime.php';
+require_once __DIR__ . '/SalesWorkflowService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 use App\Store\StoreWriteGate;
@@ -23,6 +24,21 @@ class SupplierPulloutService
         $this->fiscalPeriodGuard = $fiscalPeriodGuard ?? new FiscalPeriodGuardService($pdo);
         $this->notificationService = new NotificationService($pdo);
         $this->actorRole = $actorRole;
+    }
+
+    public static function formatFormBreakdown(int $packs, int $loose, int $packSize = 1): string
+    {
+        if ($packs <= 0 && ($packSize <= 1 || $loose <= 0)) {
+            return '';
+        }
+        if ($packs > 0) {
+            $parts = [$packs . ' pack' . ($packs === 1 ? '' : 's')];
+            if ($loose > 0) {
+                $parts[] = $loose . ' loose';
+            }
+            return implode(' + ', $parts);
+        }
+        return '0 packs + ' . $loose . ' loose';
     }
 
     private function isSqlite(): bool
@@ -65,6 +81,30 @@ class SupplierPulloutService
         }
     }
 
+    private function parseWholeCount($rawValue, string $label, bool $required = false): int
+    {
+        if ($rawValue === null || $rawValue === '') {
+            if ($required) {
+                throw new InvalidArgumentException("{$label} is required.");
+            }
+            return 0;
+        }
+        if (!is_numeric($rawValue) || is_bool($rawValue)) {
+            throw new InvalidArgumentException("{$label} must be a positive whole number.");
+        }
+        if (is_float($rawValue) || (is_string($rawValue) && str_contains($rawValue, '.'))) {
+            throw new InvalidArgumentException('Fractional quantities are not allowed. Provide a positive whole number.');
+        }
+        if (!preg_match('/^-?\d+$/D', trim((string)$rawValue))) {
+            throw new InvalidArgumentException("{$label} must be a positive whole number.");
+        }
+        $val = (int)$rawValue;
+        if (($required ? $val <= 0 : $val < 0) || (float)$rawValue > 2147483647) {
+            throw new InvalidArgumentException("{$label} must be greater than zero.");
+        }
+        return $val;
+    }
+
     public function recordPullout(array $data, int $userId): array
     {
         $this->assertManagerRole($userId);
@@ -79,19 +119,29 @@ class SupplierPulloutService
             throw new InvalidArgumentException('Valid batch is required.');
         }
 
-        if (!isset($data['quantity']) || $data['quantity'] === '') {
-            throw new InvalidArgumentException('Pullout quantity is required.');
-        }
-        $rawQty = $data['quantity'];
-        if (!is_numeric($rawQty)) {
-            throw new InvalidArgumentException('Pullout quantity must be a positive whole number.');
-        }
-        if (is_float($rawQty) || (is_string($rawQty) && str_contains($rawQty, '.'))) {
-            throw new InvalidArgumentException('Fractional quantities are not allowed. Provide a positive whole number.');
-        }
-        $quantity = (int)$rawQty;
-        if ($quantity <= 0) {
-            throw new InvalidArgumentException('Pullout quantity must be greater than zero.');
+        $hasPacksInput = array_key_exists('pulled_packs', $data) && $data['pulled_packs'] !== '' && $data['pulled_packs'] !== null;
+        $hasLooseInput = array_key_exists('pulled_loose', $data) && $data['pulled_loose'] !== '' && $data['pulled_loose'] !== null;
+        $hasFormInput = $hasPacksInput || $hasLooseInput;
+        $hasQtyInput = array_key_exists('quantity', $data) && $data['quantity'] !== '' && $data['quantity'] !== null;
+
+        $pulledPacks = 0;
+        $pulledLoose = 0;
+        $quantity = 0;
+        $explicitQty = null;
+
+        if ($hasFormInput) {
+            $pulledPacks = $this->parseWholeCount($data['pulled_packs'] ?? null, 'Pulled packs');
+            $pulledLoose = $this->parseWholeCount($data['pulled_loose'] ?? null, 'Pulled loose pieces');
+            if ($pulledPacks <= 0 && $pulledLoose <= 0) {
+                throw new InvalidArgumentException('Pullout quantity must be greater than zero.');
+            }
+            if ($hasQtyInput) {
+                $explicitQty = $this->parseWholeCount($data['quantity'], 'Pullout quantity', true);
+            }
+        } else {
+            $quantity = $this->parseWholeCount($data['quantity'] ?? null, 'Pullout quantity', true);
+            $pulledPacks = 0;
+            $pulledLoose = $quantity;
         }
 
         $reason = trim((string)($data['reason'] ?? ''));
@@ -111,11 +161,16 @@ class SupplierPulloutService
 
         try {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
-            $scopeStmt = $this->pdo->prepare("SELECT product_id FROM products p WHERE p.product_id = ?{$scopeSql}");
+            $productTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'products');
+            $productCols = isset($productTableCols['pack_size']) ? 'product_id, pack_size' : 'product_id';
+            $scopeStmt = $this->pdo->prepare("SELECT {$productCols} FROM products p WHERE p.product_id = ?{$scopeSql}");
             $scopeStmt->execute(array_merge([$productId], $scopeParams));
-            if (!$scopeStmt->fetch()) {
+            $productRow = $scopeStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$productRow) {
                 throw new RuntimeException("Product #{$productId} not found or inaccessible in current store scope.");
             }
+
+            $productPackSize = isset($productRow['pack_size']) && (int)$productRow['pack_size'] > 1 ? (int)$productRow['pack_size'] : 1;
 
             $batchStmt = $this->pdo->prepare(
                 "SELECT * FROM product_batches WHERE batch_id = ?" . $this->rowLock()
@@ -131,9 +186,36 @@ class SupplierPulloutService
                 throw new RuntimeException("Batch #{$batchId} does not belong to the selected product (#{$productId}).");
             }
 
-            $remainingQty = (int)$batch['remaining_quantity'];
+            $normalizedBatch = $this->normalizeBatchFormRow($batch);
+            $remainingQty = (int)$normalizedBatch['remaining_quantity'];
+            $batchSealed = (int)$normalizedBatch['sealed_quantity'];
+            $batchLoose = (int)$normalizedBatch['loose_quantity'];
+
+            $pbTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'product_batches');
+            $hasBatchFormCols = isset($pbTableCols['sealed_quantity']) && isset($pbTableCols['loose_quantity']);
+
+            if ($pulledPacks > 0 && $productPackSize <= 1) {
+                throw new RuntimeException('Cannot pull out sealed packs: product has no Sales Pack configured.');
+            }
+
+            $packSizeUsed = $productPackSize > 1 ? $productPackSize : 1;
+            if ($hasFormInput) {
+                $quantity = ($pulledPacks * $packSizeUsed) + $pulledLoose;
+                if ($explicitQty !== null && $explicitQty !== $quantity) {
+                    throw new InvalidArgumentException("Pullout quantity ({$explicitQty}) does not match pulled packs and loose pieces ({$quantity} base units).");
+                }
+            }
+
             if ($quantity > $remainingQty) {
                 throw new RuntimeException("Requested pullout quantity ({$quantity}) exceeds batch remaining balance ({$remainingQty}).");
+            }
+
+            if ($pulledPacks > $batchSealed) {
+                throw new RuntimeException("Requested sealed packs ({$pulledPacks}) exceeds batch sealed pack balance ({$batchSealed}).");
+            }
+
+            if ($pulledLoose > $batchLoose) {
+                throw new RuntimeException("Requested loose pieces ({$pulledLoose}) exceeds batch loose piece balance ({$batchLoose}).");
             }
 
             $invStmt = $this->pdo->prepare(
@@ -155,21 +237,41 @@ class SupplierPulloutService
                 $supplier = (string)$batch['supplier'];
             }
 
-            $updateBatch = $this->pdo->prepare(
-                "UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ?"
-            );
-            $updateBatch->execute([$quantity, $batchId]);
+            $newRemainingQty = $remainingQty - $quantity;
+            $newBatchSealed = $batchSealed - $pulledPacks;
+            $newBatchLoose = $batchLoose - $pulledLoose;
+
+            if ($hasBatchFormCols) {
+                $updateBatch = $this->pdo->prepare(
+                    "UPDATE product_batches SET remaining_quantity = ?, sealed_quantity = ?, loose_quantity = ? WHERE batch_id = ?"
+                );
+                $updateBatch->execute([$newRemainingQty, $newBatchSealed, $newBatchLoose, $batchId]);
+            } else {
+                $updateBatch = $this->pdo->prepare(
+                    "UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ?"
+                );
+                $updateBatch->execute([$quantity, $batchId]);
+            }
 
             $updateInv = $this->pdo->prepare(
                 "UPDATE inventory SET quantity_on_hand = quantity_on_hand - ? WHERE product_id = ?"
             );
             $updateInv->execute([$quantity, $productId]);
 
-            $pulloutStmt = $this->pdo->prepare(
-                "INSERT INTO supplier_pullouts (product_id, batch_id, quantity, reason, supplier, pulled_by, pulled_at, notes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-            );
-            $pulloutStmt->execute([$productId, $batchId, $quantity, $reason, $supplier, $userId, $pulledAt, $notes]);
+            $spTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'supplier_pullouts');
+            if (isset($spTableCols['pulled_packs'])) {
+                $pulloutStmt = $this->pdo->prepare(
+                    "INSERT INTO supplier_pullouts (product_id, batch_id, quantity, pulled_packs, pulled_loose, pack_size_used, reason, supplier, pulled_by, pulled_at, notes)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+                $pulloutStmt->execute([$productId, $batchId, $quantity, $pulledPacks, $pulledLoose, $packSizeUsed, $reason, $supplier, $userId, $pulledAt, $notes]);
+            } else {
+                $pulloutStmt = $this->pdo->prepare(
+                    "INSERT INTO supplier_pullouts (product_id, batch_id, quantity, reason, supplier, pulled_by, pulled_at, notes)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+                $pulloutStmt->execute([$productId, $batchId, $quantity, $reason, $supplier, $userId, $pulledAt, $notes]);
+            }
             $pulloutId = (int)$this->pdo->lastInsertId();
 
             $movementStmt = $this->pdo->prepare(
@@ -193,7 +295,12 @@ class SupplierPulloutService
                 'product_id' => $productId,
                 'batch_id' => $batchId,
                 'quantity' => $quantity,
-                'remaining_batch_qty' => $remainingQty - $quantity,
+                'pulled_packs' => $pulledPacks,
+                'pulled_loose' => $pulledLoose,
+                'pack_size_used' => $packSizeUsed,
+                'remaining_batch_qty' => $newRemainingQty,
+                'remaining_batch_packs' => $newBatchSealed,
+                'remaining_batch_loose' => $newBatchLoose,
                 'new_on_hand' => $currentOnHand - $quantity,
                 'reason' => $reason,
                 'supplier' => $supplier,
@@ -212,11 +319,28 @@ class SupplierPulloutService
     public function getPullouts(array $filters = []): array
     {
         [$scopeSql, $scopeParams] = $this->storeProductScope();
-        $sql = "SELECT sp.pullout_id, sp.product_id, sp.batch_id, sp.quantity, sp.reason,
+        $spCols = SalesWorkflowService::getTableColumns($this->pdo, 'supplier_pullouts');
+        $srCols = SalesWorkflowService::getTableColumns($this->pdo, 'stock_receiving');
+        $pCols = SalesWorkflowService::getTableColumns($this->pdo, 'products');
+
+        $hasPulloutForms = isset($spCols['pulled_packs']);
+        $hasReceivingForms = isset($srCols['accepted_packs']);
+        $hasProductPackSize = isset($pCols['pack_size']);
+
+        $pulloutFormSelect = $hasPulloutForms
+            ? 'sp.pulled_packs, sp.pulled_loose, sp.pack_size_used,'
+            : '0 AS pulled_packs, sp.quantity AS pulled_loose, 1 AS pack_size_used,';
+        $receivingFormSelect = $hasReceivingForms
+            ? 'COALESCE(SUM(sr.accepted_packs), 0) AS total_replaced_packs, COALESCE(SUM(sr.accepted_loose), 0) AS total_replaced_loose,'
+            : '0 AS total_replaced_packs, COALESCE(SUM(sr.accepted_qty), 0) AS total_replaced_loose,';
+        $productPackSelect = $hasProductPackSize ? 'p.pack_size,' : 'NULL AS pack_size,';
+
+        $sql = "SELECT sp.pullout_id, sp.product_id, sp.batch_id, sp.quantity, {$pulloutFormSelect} sp.reason,
                        sp.supplier, sp.pulled_by, sp.pulled_at, sp.notes,
-                       p.product_name, p.sku,
+                       p.product_name, p.sku, {$productPackSelect}
                        pb.batch_number, pb.expiration_date,
                        COALESCE(SUM(sr.accepted_qty), 0) AS total_replaced_qty,
+                       {$receivingFormSelect}
                        COUNT(sr.receiving_id) AS replacement_count,
                        u.full_name AS pulled_by_name
                 FROM supplier_pullouts sp
@@ -249,9 +373,17 @@ class SupplierPulloutService
             $params[] = $searchTerm;
         }
 
-        $sql .= " GROUP BY sp.pullout_id, sp.product_id, sp.batch_id, sp.quantity, sp.reason,
-                           sp.supplier, sp.pulled_by, sp.pulled_at, sp.notes,
-                           p.product_name, p.sku, pb.batch_number, pb.expiration_date, u.full_name";
+        $groupCols = "sp.pullout_id, sp.product_id, sp.batch_id, sp.quantity";
+        if ($hasPulloutForms) {
+            $groupCols .= ", sp.pulled_packs, sp.pulled_loose, sp.pack_size_used";
+        }
+        $groupCols .= ", sp.reason, sp.supplier, sp.pulled_by, sp.pulled_at, sp.notes, p.product_name, p.sku";
+        if ($hasProductPackSize) {
+            $groupCols .= ", p.pack_size";
+        }
+        $groupCols .= ", pb.batch_number, pb.expiration_date, u.full_name";
+
+        $sql .= " GROUP BY {$groupCols}";
         $sql .= " ORDER BY sp.pulled_at DESC, sp.pullout_id DESC";
 
         if (!empty($filters['limit'])) {
@@ -269,10 +401,25 @@ class SupplierPulloutService
         return $rows[0] ?? null;
     }
 
+    private function normalizeBatchFormRow(array $row): array
+    {
+        $rem = (int)($row['remaining_quantity'] ?? 0);
+        $sealed = (int)($row['sealed_quantity'] ?? 0);
+        $loose = (int)($row['loose_quantity'] ?? 0);
+        if ($sealed === 0 && $loose === 0 && $rem > 0) {
+            $loose = $rem;
+        }
+        $row['sealed_quantity'] = $sealed;
+        $row['loose_quantity'] = $loose;
+        return $row;
+    }
+
     public function getBatchForPullout(int $batchId): ?array
     {
+        $pCols = SalesWorkflowService::getTableColumns($this->pdo, 'products');
+        $packSelect = isset($pCols['pack_size']) ? ', p.pack_size' : '';
         $stmt = $this->pdo->prepare(
-            "SELECT pb.*, p.product_name, p.sku, i.quantity_on_hand
+            "SELECT pb.*, p.product_name, p.sku{$packSelect}, i.quantity_on_hand
              FROM product_batches pb
              JOIN products p ON pb.product_id = p.product_id
              LEFT JOIN inventory i ON p.product_id = i.product_id
@@ -280,7 +427,7 @@ class SupplierPulloutService
         );
         $stmt->execute([$batchId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        return $row ? $this->normalizeBatchFormRow($row) : null;
     }
 
     public function getEligibleBatches(int $productId): array
@@ -295,6 +442,7 @@ class SupplierPulloutService
                 pb.batch_id ASC"
         );
         $stmt->execute([$productId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return array_map(fn(array $row) => $this->normalizeBatchFormRow($row), $rows);
     }
 }

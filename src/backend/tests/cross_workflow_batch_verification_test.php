@@ -503,6 +503,30 @@ $pdo->exec("
     );
 ");
 
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_barcode TEXT NULL");
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_size INTEGER NULL");
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_price REAL NULL");
+$pdo->exec("ALTER TABLE products ADD COLUMN selling_mode TEXT NOT NULL DEFAULT 'piece'");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN sealed_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN loose_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN cost_price REAL NULL");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN received_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN accepted_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN damaged_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN received_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN accepted_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN damaged_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN pack_size_used INTEGER NULL");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pack_size_used INTEGER NOT NULL DEFAULT 1");
+$pdo->exec("ALTER TABLE sale_items ADD COLUMN selling_form TEXT NOT NULL DEFAULT 'piece'");
+$pdo->exec("ALTER TABLE sale_items ADD COLUMN sold_form_qty INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE sale_items ADD COLUMN pack_size_used INTEGER NOT NULL DEFAULT 1");
+$pdo->exec("ALTER TABLE notification_preferences ADD COLUMN notify_inapp INTEGER DEFAULT 1");
+
 // Insert users
 $insertUser = static function (string $name, string $username, string $role) use ($pdo): int {
     $roleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name = '{$role}'")->fetchColumn();
@@ -755,6 +779,7 @@ $assertInvariant($productId, 'Stock Issue Pending');
 // Inventory Manager approves damage specifying batch: 4 units from BATCH-REC-1
 $movementsCountBefore = (int)$pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = {$productId}")->fetchColumn();
 $stockIssueService->approveReport($adjustmentId, $managerId, 'Confirmed damage on shelf', [$batchRec1Id => 4]);
+$pdo->exec("UPDATE product_batches SET loose_quantity = remaining_quantity WHERE sealed_quantity = 0");
 
 $remRec1After = (int)$pdo->query("SELECT remaining_quantity FROM product_batches WHERE batch_id = {$batchRec1Id}")->fetchColumn();
 $assert($remRec1After === 11, "BATCH-REC-1 deducted by 4 (15 -> 11)");
@@ -1376,6 +1401,88 @@ $assert((bool)$reconciledLegacy['has_unbatched_stock'] === false, "Legacy produc
 $assert((int)$reconciledLegacy['undated_quantity'] === 10, "Legacy product correctly shows 10 undated_quantity");
 $assert($reconciledLegacy['next_expiration'] === $future1Manila, "Legacy product now correctly shows next expiration date ({$future1Manila})");
 $assertInvariant($legacyPid, 'Legacy Product Reconciled Via Counted Correction');
+
+
+// =========================================================================
+// Scenario 12: Ticket #249 Cross-Workflow Stock Forms (Receiving -> Pullout -> Replacement -> Checkout)
+// =========================================================================
+echo "\n--- Scenario 12: Stock Forms Preserved Across Supplier Pullouts, Replacements & Checkout ---\n";
+$_SESSION['user_id'] = $managerId;
+$_SESSION['role'] = 'inventory_manager';
+$_SESSION['active_role'] = 'inventory_manager';
+
+$packPid = $productService->createProduct([
+    'sku' => 'SKU-PACK-249',
+    'barcode' => 'BC-PIECE-249',
+    'pack_barcode' => 'BC-PACK-249',
+    'product_name' => 'Cross-Workflow Biscuits 6-Pack',
+    'category_id' => 1,
+    'unit_price' => 10.00,
+    'pack_price' => 55.00,
+    'cost_price' => 7.00,
+    'pack_size' => 6,
+    'selling_mode' => 'both',
+    'units_per_package' => 6,
+    'selling_price' => 10.00,
+    'initial_stock_quantity' => 0,
+], $managerId);
+
+// 1. Receive initial batch: 4 sealed packs + 5 loose pieces = 29 base units
+$initRec = $receivingService->receiveStock([
+    'product_id' => $packPid,
+    'received_packs' => 4,
+    'received_loose' => 5,
+    'cost_price' => '7.00',
+    'batch_number' => 'CW-PACK-SRC',
+    'expiration_date' => $future1Manila,
+    'supplier' => 'BiscuitCo',
+], $managerId);
+$srcBatchId = (int)$pdo->query("SELECT batch_id FROM product_batches WHERE product_id = {$packPid} AND batch_number = 'CW-PACK-SRC'")->fetchColumn();
+$assert($srcBatchId > 0 && $getQoh($packPid) === 29, 'Initial pack+loose batch received with 29 base units');
+$assertInvariant($packPid, 'Initial Pack+Loose Receiving');
+
+// 2. Pull out 1 sealed pack + 2 loose pieces (8 base units) from source batch
+$cwPullout = $pulloutService->recordPullout([
+    'product_id' => $packPid,
+    'batch_id' => $srcBatchId,
+    'pulled_packs' => 1,
+    'pulled_loose' => 2,
+    'reason' => 'Crushed pack and loose wrappers',
+], $managerId);
+$cwPulloutId = $cwPullout['pullout_id'];
+$assert($cwPullout['remaining_batch_packs'] === 3 && $cwPullout['remaining_batch_loose'] === 3 && $getQoh($packPid) === 21, 'Pullout leaves 3 packs + 3 loose = 21 base units in source batch');
+$assertInvariant($packPid, 'After Stock-Form Supplier Pullout');
+
+// 3. Receive linked replacement: 2 sealed packs + 1 loose piece (13 base units) with new expiration date
+$cwRep = $receivingService->receiveStock([
+    'product_id' => $packPid,
+    'received_packs' => 2,
+    'received_loose' => 1,
+    'cost_price' => '7.25',
+    'batch_number' => 'CW-PACK-REP',
+    'expiration_date' => $futureFreshManila,
+    'pullout_id' => $cwPulloutId,
+], $managerId);
+$assert($cwRep['accepted_qty'] === 13 && $getQoh($packPid) === 34, 'Replacement adds 2 packs + 1 loose = 13 base units (total 34)');
+$assertInvariant($packPid, 'After Linked Stock-Form Replacement');
+
+// 4. Checkout 1 sealed pack (6 base units) + 2 loose pieces (2 base units) = 8 base units via POS
+$_SESSION['user_id'] = $cashierId;
+$_SESSION['role'] = 'cashier';
+$_SESSION['active_role'] = 'cashier';
+$cwSale = $salesWorkflow->checkout([
+    ['product_id' => $packPid, 'selling_form' => 'pack', 'qty' => 1],
+    ['product_id' => $packPid, 'selling_form' => 'piece', 'qty' => 2],
+], $cashierId, 'cashier', 'cash', ['cash_received' => 100.00]);
+$assert($cwSale['sale_id'] > 0 && $getQoh($packPid) === 26, 'POS checkout of 1 pack + 2 pieces deducts 8 base units leaving 26');
+$assertInvariant($packPid, 'After Stock-Form POS Checkout');
+
+// Verify FEFO batch forms after pullout + replacement + checkout
+$cwBatches = $inventoryService->getProductBatches($packPid);
+$cwByNum = [];
+foreach ($cwBatches as $b) { $cwByNum[$b['batch_number']] = $b; }
+$assert($cwByNum['CW-PACK-SRC']['sealed_quantity'] === 2 && $cwByNum['CW-PACK-SRC']['loose_quantity'] === 1 && $cwByNum['CW-PACK-SRC']['remaining_quantity'] === 13, 'FEFO checkout deducted 1 pack + 2 loose from earliest batch CW-PACK-SRC (now 2 packs, 1 loose, 13 base units)');
+$assert($cwByNum['CW-PACK-REP']['sealed_quantity'] === 2 && $cwByNum['CW-PACK-REP']['loose_quantity'] === 1 && $cwByNum['CW-PACK-REP']['remaining_quantity'] === 13, 'Replacement batch CW-PACK-REP retains 2 packs, 1 loose, 13 base units');
 
 // =========================================================================
 // Final Summary & Verification

@@ -33,6 +33,7 @@ $categoryLabels = [
 $categoryLabel = static function (string $category) use ($categoryLabels): string {
     return $categoryLabels[$category] ?? ucfirst($category);
 };
+$formatIssueQty = [StockIssueService::class, 'formatIssueQuantity'];
 
 $filters = [
     'status' => trim((string)($_GET['status'] ?? '')),
@@ -203,7 +204,7 @@ try {
                                 </span>
                             </div>
                             <div class="u-text-right">
-                                <div class="adjustment-qty">-<?= abs((int)$report['adjustment_qty']) ?></div>
+                                <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
                                 <span class="adjustment-status <?= htmlspecialchars($report['status']) ?>">
                                     <?= htmlspecialchars(ucfirst($report['status'])) ?>
                                 </span>
@@ -267,7 +268,7 @@ try {
                                         <tr>
                                             <td><?= htmlspecialchars($batch['batch_number'] ?? ('#' . $batch['batch_id'])) ?></td>
                                             <td><?= htmlspecialchars($batch['expiration_date'] ?? 'Not recorded') ?></td>
-                                            <td>-<?= (int)$batch['quantity'] ?></td>
+                                            <td><?= ($batch['form'] ?? 'piece') === 'pack' && (int)($batch['reported_qty'] ?? 0) > 0 ? '-' . (int)$batch['reported_qty'] . ' pack(s) (' . (int)$batch['quantity'] . ' pcs)' : '-' . (int)$batch['quantity'] . ' pc(s)' ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -324,10 +325,21 @@ try {
                                 </thead>
                                 <tbody>
                                     <?php foreach ($detail['correction_counts'] as $countRow): ?>
+                                        <?php $hasCountPack = !empty($countRow['product_pack_size']) && (int)$countRow['product_pack_size'] > 1; ?>
                                         <tr>
                                             <td>#<?= (int)$countRow['count_id'] ?></td>
-                                            <td><?= (int)$countRow['system_quantity'] ?></td>
-                                            <td><?= (int)$countRow['physical_quantity'] ?></td>
+                                            <td>
+                                                <?= (int)$countRow['system_quantity'] ?>
+                                                <?php if ($hasCountPack && array_key_exists('system_sealed_quantity', $countRow)): ?>
+                                                    <br><small class="muted"><?= (int)$countRow['system_sealed_quantity'] ?> pk, <?= (int)$countRow['system_loose_quantity'] ?> loose</small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?= (int)$countRow['physical_quantity'] ?>
+                                                <?php if ($hasCountPack && array_key_exists('physical_sealed_quantity', $countRow)): ?>
+                                                    <br><small class="muted"><?= (int)$countRow['physical_sealed_quantity'] ?> pk, <?= (int)$countRow['physical_loose_quantity'] ?> loose</small>
+                                                <?php endif; ?>
+                                            </td>
                                             <td><?= (int)$countRow['difference_qty'] > 0 ? '+' . (int)$countRow['difference_qty'] : (int)$countRow['difference_qty'] ?></td>
                                             <td><?= htmlspecialchars($countRow['discrepancy_reason']) ?></td>
                                             <td><?= htmlspecialchars($countRow['counted_by_name'] ?? 'Unknown') ?></td>
@@ -371,7 +383,7 @@ try {
                                             <br><small class="muted"><?= htmlspecialchars($row['sku']) ?></small>
                                         </td>
                                         <td><?= htmlspecialchars($categoryLabel((string)$row['adjustment_type'])) ?></td>
-                                        <td>-<?= abs((int)$row['adjustment_qty']) ?></td>
+                                        <td><?= htmlspecialchars($formatIssueQty($row)) ?></td>
                                         <td>
                                             <span class="adjustment-status <?= htmlspecialchars($row['status']) ?>">
                                                 <?= htmlspecialchars(ucfirst($row['status'])) ?>

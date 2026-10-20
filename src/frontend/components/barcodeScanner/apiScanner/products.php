@@ -16,6 +16,7 @@ $managementSearch = (($_GET['scope'] ?? '') === 'all') && in_array(current_role(
 $todayManila = PhilippineTime::today();
 
 $select = "SELECT p.product_id,p.sku,p.barcode,p.case_barcode,p.parent_product_id,p.variant_label,p.product_name,p.unit_price,
+                  p.pack_size, p.pack_barcode, p.pack_price,
                   COALESCE(p.reorder_level,0) reorder_level,COALESCE(p.safety_stock,0) safety_stock,
                   LEAST(i.quantity_on_hand,COALESCE(b.sellable_quantity,i.quantity_on_hand)) quantity_on_hand,
                   CASE WHEN i.quantity_on_hand > 0 THEN b.next_expiration_date ELSE NULL END AS next_expiration_date
@@ -36,22 +37,22 @@ if ($id > 0) {
     $select .= ' AND p.product_id=?';
     $params[] = $id;
 } elseif ($code !== '') {
-    $select .= ' AND (p.barcode=? OR p.sku=? OR p.case_barcode=?)';
-    array_push($params, $code, $code, $code);
+    $select .= ' AND (p.barcode=? OR p.sku=? OR p.case_barcode=? OR p.pack_barcode=?)';
+    array_push($params, $code, $code, $code, $code);
 } elseif ($category > 0) {
     $select .= ' AND p.category_id=?';
     $params[] = $category;
 } elseif ($q !== '') {
-    $select .= ' AND (p.product_name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ? OR p.case_barcode LIKE ?)';
+    $select .= ' AND (p.product_name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ? OR p.case_barcode LIKE ? OR p.pack_barcode LIKE ?)';
     $like = '%' . $q . '%';
-    array_push($params, $like, $like, $like, $like);
+    array_push($params, $like, $like, $like, $like, $like);
 } else {
     echo json_encode(['success'=>true,'products'=>[]]);
     exit;
 }
-$select .= " ORDER BY CASE WHEN p.barcode=? OR p.sku=? OR p.case_barcode=? THEN 0 ELSE 1 END,p.product_name LIMIT {$limit}";
+$select .= " ORDER BY CASE WHEN p.barcode=? OR p.sku=? OR p.case_barcode=? OR p.pack_barcode=? THEN 0 ELSE 1 END,p.product_name LIMIT {$limit}";
 $rank = $code !== '' ? $code : $q;
-array_push($params, $rank, $rank, $rank);
+array_push($params, $rank, $rank, $rank, $rank);
 $stmt = $pdo->prepare($select);
 $stmt->execute($params);
 $products = array_map(static function(array $p): array {
@@ -60,6 +61,9 @@ $products = array_map(static function(array $p): array {
         'name'=>$p['product_name'] . (!empty($p['variant_label']) ? ' - ' . $p['variant_label'] : ''),'product_name'=>$p['product_name'],'variant_label'=>$p['variant_label'],'price'=>(float)$p['unit_price'],'unit_price'=>(float)$p['unit_price'],
         'quantity_on_hand'=>(int)$p['quantity_on_hand'],'reorder_level'=>(int)$p['reorder_level'],
         'safety_stock'=>(int)$p['safety_stock'],'next_expiration_date'=>$p['next_expiration_date'],
+        'pack_size'=>!empty($p['pack_size']) ? (int)$p['pack_size'] : null,
+        'pack_barcode'=>$p['pack_barcode'] ?? null,
+        'pack_price'=>!empty($p['pack_price']) ? (float)$p['pack_price'] : null,
     ];
 }, $stmt->fetchAll(PDO::FETCH_ASSOC));
 echo json_encode(['success'=>true,'products'=>$products,'product'=>$products[0]??null]);

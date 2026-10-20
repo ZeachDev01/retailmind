@@ -141,6 +141,12 @@ $pdo->exec("CREATE TABLE supplier_pullouts (
     pulled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT NULL
 )");
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_size INTEGER NULL");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN sealed_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN loose_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN cost_price REAL NULL");
+$mig249 = require __DIR__ . '/../database/migrations/202610200005_supplier_movements_stock_forms.php';
+$mig249['up']($pdo);
 
 $pdo->exec("CREATE TABLE store_write_gate (
     gate_key TEXT PRIMARY KEY,
@@ -512,6 +518,131 @@ $laterNotifications->checkAndNotifyExpiringStock();
 $laterNotifications->checkAndNotifyExpiringStock();
 $expiredBatchAlerts = array_filter(get_unread_notifications($pdo, $managerId), static fn(array $alert): bool => (int)$alert['reference_id'] === 5 && $alert['type'] === 'expired_stock');
 $assert(count($expiredBatchAlerts) === 1 && $laterNotifications->getBatchReminders($managerId)[5]['active'], 'Repeated expired checks retain one active condition and one expired alert');
+
+
+echo "\n--- Test 9: Ticket #249 Stock Forms in Supplier Pullouts ---\n";
+// Columns already migrated via 202610200005_supplier_movements_stock_forms.php
+
+$packPulloutService = new SupplierPulloutService($pdo, null, "inventory_manager");
+
+$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, pack_size, status) VALUES (10, 'PACK-PROD-10', '90010', 'Instant Noodles 6-Pack', 6, 'active')");
+$pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (10, 44)");
+$pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, cost_price, expiration_date, supplier) VALUES (10, 10, 'NOODLE-ACT', 29, 29, 4, 5, 14.50, '2026-12-01', 'NoodleCorp')");
+$pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, cost_price, expiration_date, supplier) VALUES (11, 10, 'NOODLE-EXP', 15, 15, 2, 3, 13.75, '2026-10-01', 'NoodleCorp')");
+
+$packRes1 = $packPulloutService->recordPullout([
+    'product_id' => 10,
+    'batch_id' => 10,
+    'pulled_packs' => 1,
+    'pulled_loose' => 2,
+    'reason' => 'Damaged outer wrapper',
+], $managerId);
+
+$assert($packRes1['quantity'] === 8, 'Pack pullout total quantity is 8 (1*6 + 2)');
+$assert($packRes1['pulled_packs'] === 1 && $packRes1['pulled_loose'] === 2, 'Pack pullout returns pulled_packs=1, pulled_loose=2');
+$assert($packRes1['pack_size_used'] === 6, 'Pack pullout records pack_size_used=6');
+$assert($packRes1['remaining_batch_packs'] === 3 && $packRes1['remaining_batch_loose'] === 3 && $packRes1['remaining_batch_qty'] === 21, 'Active batch remaining forms updated to 3 packs, 3 loose, 21 base units');
+
+$b10 = $pdo->query("SELECT remaining_quantity, sealed_quantity, loose_quantity, cost_price, expiration_date FROM product_batches WHERE batch_id = 10")->fetch(PDO::FETCH_ASSOC);
+$assert((int)$b10['sealed_quantity'] === 3 && (int)$b10['loose_quantity'] === 3 && (int)$b10['remaining_quantity'] === 21, 'DB Batch 10 preserves exact remaining sealed_quantity=3, loose_quantity=3, remaining_quantity=21');
+$assert((float)$b10['cost_price'] === 14.50 && $b10['expiration_date'] === '2026-12-01', 'DB Batch 10 preserves cost_price and expiration_date');
+
+$b11Before = $pdo->query("SELECT remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_id = 11")->fetch(PDO::FETCH_ASSOC);
+$assert((int)$b11Before['sealed_quantity'] === 2 && (int)$b11Before['loose_quantity'] === 3 && (int)$b11Before['remaining_quantity'] === 15, 'Unrelated batch 11 untouched by batch 10 pullout');
+
+$assertThrows(
+    fn() => $packPulloutService->recordPullout([
+        'product_id' => 10,
+        'batch_id' => 10,
+        'pulled_packs' => 0,
+        'pulled_loose' => 5,
+        'reason' => 'Attempt silent pack open',
+    ], $managerId),
+    RuntimeException::class,
+    'exceeds batch loose piece balance',
+    'Rejects loose pullout exceeding batch loose_quantity without silently opening sealed packs'
+);
+
+$assertThrows(
+    fn() => $packPulloutService->recordPullout([
+        'product_id' => 10,
+        'batch_id' => 11,
+        'pulled_packs' => 3,
+        'pulled_loose' => 0,
+        'reason' => 'Too many packs',
+    ], $managerId),
+    RuntimeException::class,
+    'exceeds batch remaining balance',
+    'Rejects sealed pack pullout exceeding batch balance'
+);
+
+$pdo->exec("UPDATE product_batches SET sealed_quantity = 1, loose_quantity = 9, remaining_quantity = 15 WHERE batch_id = 11");
+$assertThrows(
+    fn() => $packPulloutService->recordPullout([
+        'product_id' => 10,
+        'batch_id' => 11,
+        'pulled_packs' => 2,
+        'pulled_loose' => 0,
+        'reason' => 'More packs than sealed_quantity',
+    ], $managerId),
+    RuntimeException::class,
+    'exceeds batch sealed pack balance',
+    'Rejects sealed pack pullout when base units fit remaining_quantity but sealed_quantity is insufficient'
+);
+
+$packRes2 = $packPulloutService->recordPullout([
+    'product_id' => 10,
+    'batch_id' => 11,
+    'pulled_packs' => 1,
+    'pulled_loose' => 4,
+    'reason' => 'Expired stock return',
+], $managerId);
+$assert($packRes2['quantity'] === 10 && $packRes2['remaining_batch_packs'] === 0 && $packRes2['remaining_batch_loose'] === 5 && $packRes2['remaining_batch_qty'] === 5, 'Expired batch form pullout deducts sealed and loose quantities accurately');
+$inv10 = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = 10")->fetchColumn();
+$assert($inv10 === 26, 'Inventory on hand matches sum of remaining batch base units (21 + 5 = 26)');
+
+// Conflicting quantity vs pulled_packs/pulled_loose rejected
+$assertThrows(
+    fn() => $packPulloutService->recordPullout([
+        'product_id' => 10,
+        'batch_id' => 10,
+        'pulled_packs' => 1,
+        'pulled_loose' => 1,
+        'quantity' => 99,
+        'reason' => 'Mismatched explicit quantity',
+    ], $managerId),
+    InvalidArgumentException::class,
+    'does not match pulled packs and loose pieces',
+    'Rejects conflicting explicit quantity vs pulled_packs and pulled_loose'
+);
+
+// Repeated submission check: second identical pullout of 3 packs from Batch 10 (which now has 3 packs) succeeds once then rejects repeat
+$repeatPayload = [
+    'product_id' => 10,
+    'batch_id' => 10,
+    'pulled_packs' => 3,
+    'pulled_loose' => 0,
+    'reason' => 'Pull remaining 3 packs',
+];
+$firstSub = $packPulloutService->recordPullout($repeatPayload, $managerId);
+$assert($firstSub['remaining_batch_packs'] === 0 && $firstSub['remaining_batch_loose'] === 3 && $firstSub['remaining_batch_qty'] === 3, 'First submission deducts 3 packs leaving 0 packs and 3 loose');
+$assertThrows(
+    fn() => $packPulloutService->recordPullout($repeatPayload, $managerId),
+    RuntimeException::class,
+    'exceeds batch remaining balance',
+    'Repeated identical submission is rejected once batch packs are already deducted'
+);
+
+// formatFormBreakdown helper check (including 0 packs + N loose on pack-enabled products)
+$assert(SupplierPulloutService::formatFormBreakdown(2, 3, 6) === '2 packs + 3 loose', 'formatFormBreakdown formats packs + loose');
+$assert(SupplierPulloutService::formatFormBreakdown(0, 4, 6) === '0 packs + 4 loose', 'formatFormBreakdown shows 0 packs + N loose when packSize > 1');
+$assert(SupplierPulloutService::formatFormBreakdown(0, 4, 1) === '', 'formatFormBreakdown returns empty string for piece-only products');
+
+$stockFormMigFile = __DIR__ . '/../database/migrations/202610200005_supplier_movements_stock_forms.php';
+$assert(file_exists($stockFormMigFile), '202610200005_supplier_movements_stock_forms.php migration exists');
+$stockFormMig = require $stockFormMigFile;
+$assert($stockFormMig['key'] === '202610200005_supplier_movements_stock_forms', 'Migration key matches 202610200005_supplier_movements_stock_forms');
+$assert(str_contains($schemaSql, 'pulled_packs') && str_contains($schemaSql, 'pulled_loose') && str_contains($schemaSql, 'pack_size_used'), 'schema.sql defines pulled_packs, pulled_loose, and pack_size_used on supplier_pullouts');
 
 // Summary
 if (!empty($failures)) {
