@@ -1135,15 +1135,6 @@ try {
         'the Cash Refund page issues the refund through the service'
     );
     // --- Sales Pack refunds (#252): distinct forms, historical pricing/pack_size, sealed vs damaged restock ---
-    foreach ([
-        '202610200001_sales_packs_and_stock_forms.php',
-        '202610200003_sale_items_sales_pack_forms.php',
-        '202610200006_cash_refund_sales_pack_forms.php',
-    ] as $migrationFile) {
-        $m = require __DIR__ . '/../database/migrations/' . $migrationFile;
-        $m['up']($pdo);
-    }
-
     $pdo->prepare(
         "INSERT INTO products (product_id, sku, barcode, product_name, unit_price, pack_size, pack_barcode, pack_price, status, quantity_purchased, quantity_sold, branch_id)
          VALUES (3, 'SKU-PACK-1', '11111111', 'Canned Soda', 15.00, 6, '22222222', 80.00, 'active', 36, 0, 1)"
@@ -1338,6 +1329,60 @@ try {
         2
     );
     $assert($totalDiscRefunded === 160.00 && $refundService->refundableAmount($discMixedSaleId) === 0.0, 'discounted mixed-form partial refunds sum to exact paid amount (160.00)');
+
+    // 6) Incomplete batch allocation on a restockable pack return is refused atomically so sealed_quantity and inventory never drift.
+    $incompleteSale = $sales->checkout(
+        [['product_id' => 3, 'qty' => 1, 'selling_form' => 'pack']],
+        $casey,
+        'cashier',
+        'cash',
+        ['cash_received' => 100]
+    );
+    $incompleteSaleId = (int)$incompleteSale['sale_id'];
+    $incompletePackLineId = (int)$pdo->query("SELECT sale_item_id FROM sale_items WHERE sale_id = {$incompleteSaleId}")->fetchColumn();
+    $pdo->exec("DELETE FROM sale_item_batches WHERE sale_item_id = {$incompletePackLineId}");
+    $invBeforeIncomplete = (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn();
+    $expectRefusal(
+        static fn() => $refundService->refund($casey, 'cashier', $incompleteSaleId, [$incompletePackLineId => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE]], 'customer_return'),
+        'restockable pack return with missing batch allocation is refused atomically'
+    );
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === $invBeforeIncomplete, 'refused incomplete pack batch restock leaves inventory untouched');
+
+    // 7) Prepared Oil Pouches (250 mL and 500 mL whole-pouch SKUs) preserve whole-pouch piece refund and batch restock behavior.
+    $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, status, quantity_purchased, quantity_sold, branch_id)
+        VALUES (4, 'OIL-250ML', '8800250', 'Cooking Oil Pouch 250 mL', 22.00, 'active', 20, 0, 1),
+               (5, 'OIL-500ML', '8800500', 'Cooking Oil Pouch 500 mL', 42.00, 'active', 20, 0, 1)");
+    $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (4, 20), (5, 20)');
+    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, remaining_quantity, sealed_quantity, loose_quantity)
+        VALUES (401, 4, 'B-OIL-250', 20, 0, 20), (501, 5, 'B-OIL-500', 20, 0, 20)");
+    $oilSale = $sales->checkout(
+        [['product_id' => 4, 'qty' => 2], ['product_id' => 5, 'qty' => 2]],
+        $casey,
+        'cashier',
+        'cash',
+        ['cash_received' => 200]
+    );
+    $oilSaleId = (int)$oilSale['sale_id'];
+    $oil250Line = $lineIdOf($oilSaleId, 4);
+    $oil500Line = $lineIdOf($oilSaleId, 5);
+    $oilRefundId = $refundService->refund(
+        $casey,
+        'cashier',
+        $oilSaleId,
+        [
+            $oil250Line => ['quantity' => 1, 'disposition' => CashRefundService::RESTOCKABLE],
+            $oil500Line => ['quantity' => 1, 'disposition' => CashRefundService::DAMAGED],
+        ],
+        'customer_return'
+    );
+    $assert((float)$refundRow($pdo, $oilRefundId)['refund_amount'] === 64.00, 'Prepared Oil 250 mL and 500 mL whole-pouch refunds settle exact pouch prices (22.00 + 42.00)');
+    $assert(
+        (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 4')->fetchColumn() === 19
+            && (int)$pdo->query('SELECT loose_quantity FROM product_batches WHERE batch_id = 401')->fetchColumn() === 19
+            && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 5')->fetchColumn() === 18
+            && (int)$pdo->query('SELECT loose_quantity FROM product_batches WHERE batch_id = 501')->fetchColumn() === 18,
+        'Prepared Oil 250 mL restockable return restores 1 whole pouch while 500 mL damaged return stays off the shelf'
+    );
 } catch (Throwable $exception) {
     $failures[] = 'Append-only Cash Refund contract threw: ' . $exception->getMessage();
 }

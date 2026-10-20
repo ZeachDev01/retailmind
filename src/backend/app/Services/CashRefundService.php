@@ -25,6 +25,7 @@ require_once __DIR__ . '/CashierShiftService.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../Receipts/RefundReceiptService.php';
 require_once __DIR__ . '/RefundExceptionService.php';
+require_once __DIR__ . '/SalesWorkflowService.php';
 
 /**
  * Cash Refunds (ticket #92).
@@ -100,6 +101,11 @@ class CashRefundService
         self::RESTOCKABLE => 'Restockable',
         self::DAMAGED => 'Damaged',
     ];
+
+    public static function formatSellingForm(string $form, ?int $packSize = null): string
+    {
+        return $form === 'pack' ? 'Pack' . ($packSize !== null && $packSize > 0 ? " ({$packSize} pcs)" : '') : 'Piece';
+    }
 
     /**
      * The fixed initial set of reasons a sale can be refunded for.
@@ -355,11 +361,8 @@ class CashRefundService
             return null;
         }
 
-        $siCols = $this->tableColumns('sale_items');
-        $formSelect = isset($siCols['selling_form']) ? ', si.selling_form' : ", 'piece' AS selling_form";
-        $packSelect = isset($siCols['pack_size']) ? ', si.pack_size' : ', NULL AS pack_size';
         $linesStmt = $this->pdo->prepare(
-            "SELECT si.sale_item_id, si.product_id, si.quantity, si.unit_price, si.subtotal{$formSelect}{$packSelect},
+            "SELECT si.sale_item_id, si.product_id, si.quantity, si.unit_price, si.subtotal{$this->saleItemFormSelect()},
                     p.sku, p.product_name
              FROM sale_items si
              JOIN products p ON p.product_id = si.product_id
@@ -374,8 +377,7 @@ class CashRefundService
             $line['quantity'] = (int)$line['quantity'];
             $line['unit_price'] = (float)$line['unit_price'];
             $line['subtotal'] = (float)$line['subtotal'];
-            $line['selling_form'] = ($line['selling_form'] ?? 'piece') === 'pack' ? 'pack' : 'piece';
-            $line['pack_size'] = isset($line['pack_size']) && (int)$line['pack_size'] > 0 ? (int)$line['pack_size'] : null;
+            [$line['selling_form'], $line['pack_size']] = $this->normalizeSellingForm($line);
             $lines[] = $line;
         }
 
@@ -593,12 +595,9 @@ class CashRefundService
         // Allocate the amount actually paid across all sold lines in cents.
         // Cumulative rounding assigns the final cent deterministically, regardless
         // of the order in which items are returned.
-        $siCols = $this->tableColumns('sale_items');
-        $formSelect = isset($siCols['selling_form']) ? ', si.selling_form' : ", 'piece' AS selling_form";
-        $packSelect = isset($siCols['pack_size']) ? ', si.pack_size' : ', NULL AS pack_size';
         $stmt = $this->pdo->prepare(
             "SELECT si.sale_item_id, si.product_id, si.quantity AS sold_quantity,
-                    si.unit_price, si.subtotal{$formSelect}{$packSelect},
+                    si.unit_price, si.subtotal{$this->saleItemFormSelect()},
                     COALESCE((SELECT SUM(cri.quantity) FROM cash_refund_items cri
                               WHERE cri.sale_item_id = si.sale_item_id), 0) AS refunded_quantity,
                     COALESCE((SELECT SUM(cri.subtotal) FROM cash_refund_items cri
@@ -639,8 +638,7 @@ class CashRefundService
                 );
             }
 
-            $sellingForm = ($sold['selling_form'] ?? 'piece') === 'pack' ? 'pack' : 'piece';
-            $packSize = isset($sold['pack_size']) && (int)$sold['pack_size'] > 0 ? (int)$sold['pack_size'] : null;
+            [$sellingForm, $packSize] = $this->normalizeSellingForm($sold);
             if ($sellingForm === 'pack' && ($packSize === null || $packSize <= 1)) {
                 throw new DomainException('Sales Pack return is missing historical pack contents.');
             }
@@ -710,7 +708,7 @@ class CashRefundService
     private function insertRefundLine(int $refundId, array $line): void
     {
         try {
-            $criCols = $this->tableColumns('cash_refund_items');
+            $criCols = \SalesWorkflowService::getTableColumns($this->pdo, 'cash_refund_items');
             $columns = ['refund_id', 'sale_item_id', 'product_id', 'quantity', 'unit_price', 'subtotal', 'disposition'];
             $placeholders = ['?', '?', '?', '?', '?', '?', '?'];
             $values = [
@@ -812,7 +810,7 @@ class CashRefundService
         $stmt->execute([$saleItemId]);
         $allocations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $pbCols = $this->tableColumns('product_batches');
+        $pbCols = \SalesWorkflowService::getTableColumns($this->pdo, 'product_batches');
         $hasBatchForms = isset($pbCols['sealed_quantity'], $pbCols['loose_quantity']);
 
         $remainingToSkip = $alreadyRefunded;
@@ -851,6 +849,10 @@ class CashRefundService
             }
 
             $remainingToRestore -= $restore;
+        }
+
+        if ($hasBatchForms && $sellingForm === 'pack' && $remainingToRestore > 0) {
+            throw new DomainException('Sales Pack batch allocation is incomplete and cannot be restocked.');
         }
     }
 
@@ -937,24 +939,20 @@ class CashRefundService
         return $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
     }
 
-    /** @return array<string, bool> */
-    private function tableColumns(string $table): array
+    private function saleItemFormSelect(string $alias = 'si'): string
     {
-        $cols = [];
-        try {
-            if ($this->isMysql()) {
-                foreach ($this->pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC) as $col) {
-                    $cols[$col['Field']] = true;
-                }
-            } else {
-                foreach ($this->pdo->query("PRAGMA table_info(`{$table}`)")->fetchAll(PDO::FETCH_ASSOC) as $col) {
-                    $cols[$col['name']] = true;
-                }
-            }
-        } catch (Throwable) {
-            $cols = [];
-        }
+        $cols = \SalesWorkflowService::getTableColumns($this->pdo, 'sale_items');
+        $form = isset($cols['selling_form']) ? ", {$alias}.selling_form" : ", 'piece' AS selling_form";
+        $pack = isset($cols['pack_size']) ? ", {$alias}.pack_size" : ', NULL AS pack_size';
+        return $form . $pack;
+    }
 
-        return $cols;
+    /** @return array{0: string, 1: ?int} */
+    private function normalizeSellingForm(array $row): array
+    {
+        return [
+            ($row['selling_form'] ?? 'piece') === 'pack' ? 'pack' : 'piece',
+            isset($row['pack_size']) && (int)$row['pack_size'] > 0 ? (int)$row['pack_size'] : null,
+        ];
     }
 }

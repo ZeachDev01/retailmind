@@ -3,6 +3,7 @@
 namespace App\Receipts;
 
 require_once __DIR__ . '/../Services/PhilippineTime.php';
+require_once __DIR__ . '/../Services/CashRefundService.php';
 
 final class RefundReceiptPresentation
 {

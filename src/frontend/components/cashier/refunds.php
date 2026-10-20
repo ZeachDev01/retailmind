@@ -225,7 +225,7 @@ if ($receiptId > 0 && $receipt === null) {
                                         $remaining = (int)$line['refundable_quantity'];
                                         $isPack = ($line['selling_form'] ?? 'piece') === 'pack';
                                         $packSize = isset($line['pack_size']) ? (int)$line['pack_size'] : null;
-                                        $formLabel = $isPack ? 'Pack' . ($packSize ? " ({$packSize} pcs)" : '') : 'Piece';
+                                        $formLabel = CashRefundService::formatSellingForm($isPack ? 'pack' : 'piece', $packSize);
                                         $unitLabel = $isPack ? 'per pack' : 'each';
                                         $qtyUnit = $isPack ? ($line['quantity'] === 1 ? 'pack' : 'packs') : ($line['quantity'] === 1 ? 'pc' : 'pcs');
                                         $remUnit = $isPack ? ($remaining === 1 ? 'pack' : 'packs') : ($remaining === 1 ? 'pc' : 'pcs');

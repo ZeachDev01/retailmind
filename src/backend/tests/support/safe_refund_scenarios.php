@@ -169,5 +169,18 @@ $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_i
 $assert((int)$pdo->query('SELECT quantity_sold FROM products WHERE product_id = 20')->fetchColumn() === 2, 'Concurrent sealed pack refund decrements quantity_sold by 6 Base Units once');
 $assert($service->refundableQuantity(20) === 0 && $service->refundableQuantity(21) === 2 && $service->refundableAmount(20) === 30.0, 'Pack refund leaves sibling piece line of same Product intact');
 
+$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, quantity_sold, branch_id)
+    VALUES (25, 'OIL-250ML', 'OIL-250ML', 'Cooking Oil Pouch 250 mL', 22, 14, 1, 1),
+           (26, 'OIL-500ML', 'OIL-500ML', 'Cooking Oil Pouch 500 mL', 42, 28, 1, 1)");
+$pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (25, 9), (26, 9)');
+$pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity)
+    VALUES (251, 25, 'B-OIL-250', 10, 9, 0, 9), (261, 26, 'B-OIL-500', 10, 9, 0, 9)");
+$pdo->exec("INSERT INTO sales (sale_id, cashier_id, total_amount, payment_method) VALUES (25, 1, 64, 'card')");
+$pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, selling_form, quantity, unit_price, subtotal)
+    VALUES (25, 25, 25, 'piece', 1, 22, 22), (26, 25, 26, 'piece', 1, 42, 42)");
+$pdo->exec('INSERT INTO sale_item_batches (sale_item_id, batch_id, quantity) VALUES (25, 251, 1), (26, 261, 1)');
+$oilRefundId = $service->refund(1, 'cashier', 25, [25 => ['quantity' => 1, 'disposition' => 'restockable'], 26 => ['quantity' => 1, 'disposition' => 'damaged']], 'customer_return', null, 'OIL-POUCH-REF', true);
+$assert((float)$pdo->query('SELECT refund_amount FROM cash_refunds WHERE refund_id=' . $oilRefundId)->fetchColumn() === 64.0 && (int)$pdo->query('SELECT loose_quantity FROM product_batches WHERE batch_id=251')->fetchColumn() === 10 && (int)$pdo->query('SELECT loose_quantity FROM product_batches WHERE batch_id=261')->fetchColumn() === 9, 'Prepared Oil 250 mL and 500 mL whole-pouch refunds preserve piece restock and damaged rules');
+
 require __DIR__.'/safe_refund_http_scenarios.php';
 echo "Safe refund current periods, external evidence and one-sale exception: passed\n";
