@@ -229,6 +229,15 @@ try {
     $pdo->exec("UPDATE ml_jobs SET trigger_type = 'forecast_observation' WHERE job_id = 10");
     $assert($service->getQueue(10, $asOfDate) === [], 'Observation job must not expose purchasing recommendations even with explicit job ID');
 
+    $pdo->sqliteCreateFunction('DATABASE', static fn(): string => 'u123_demo');
+    $_ENV['FORECAST_REPLAY_DATABASE'] = 'u123_demo';
+    $pdo->exec("CREATE TABLE platform_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
+        INSERT INTO platform_settings VALUES ('demo_replay_result', '{\"preview_job\":10}')");
+    $previewIds = array_column($service->getReplayPreview(10), 'product_id');
+    $assert(!in_array(5, $previewIds, true), 'Replay must exclude catalog products without saved forecasts');
+    $assert(in_array(6, $previewIds, true), 'A saved zero-demand forecast must remain in the replay');
+    if ($savedReplay === null) { unset($_ENV['FORECAST_REPLAY_DATABASE']); } else { $_ENV['FORECAST_REPLAY_DATABASE'] = $savedReplay; }
+
     if (empty($failures)) {
         echo "PASS: replenishment_queue_contract\n";
     } else {

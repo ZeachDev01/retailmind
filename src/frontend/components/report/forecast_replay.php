@@ -14,7 +14,8 @@ if (!ReplenishmentQueueService::replayDatabaseAllowed($database)
     http_response_code(404);
     exit('A prepared, explicitly enabled train/test replay is required.');
 }
-$products = $pdo->query("SELECT product_id,sku,product_name FROM products WHERE status='active' ORDER BY product_id")->fetchAll(PDO::FETCH_ASSOC);
+$preview = (new ReplenishmentQueueService($pdo))->getReplayPreview((int)$result['preview_job']);
+$products = $preview;
 $productId = filter_input(INPUT_GET, 'product_id', FILTER_VALIDATE_INT) ?: (int)($products[0]['product_id'] ?? 0);
 if (!in_array($productId, array_map('intval', array_column($products, 'product_id')), true)) {
     http_response_code(400);
@@ -31,7 +32,6 @@ $comparison = $pdo->prepare("SELECT df.target_date,df.forecast_origin,df.predict
     ORDER BY df.target_date DESC LIMIT 28");
 $comparison->execute([...$jobs, $productId, $result['model_version']]);
 $daily = $comparison->fetchAll(PDO::FETCH_ASSOC);
-$preview = (new ReplenishmentQueueService($pdo))->getReplayPreview((int)$result['preview_job']);
 $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
 ?>
 <!DOCTYPE html>

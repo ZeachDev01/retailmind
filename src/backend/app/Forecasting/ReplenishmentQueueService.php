@@ -99,7 +99,8 @@ class ReplenishmentQueueService
         }
         $job = $this->pdo->prepare("SELECT 1 FROM ml_jobs WHERE job_id=? AND trigger_type='forecast_observation' AND status='succeeded'");
         $job->execute([$jobId]);
-        return $job->fetchColumn() ? $this->buildQueue($jobId) : [];
+        return $job->fetchColumn() ? array_values(array_filter($this->buildQueue($jobId),
+            static fn(array $product): bool => $product['forecast_7_day'] !== null)) : [];
     }
 
     private function buildQueue(int $jobId): array

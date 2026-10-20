@@ -81,3 +81,29 @@ Keep the sync-state file: subsequent deployments update it automatically.
 Staff login, inventory and the saved forecast report still require an
 authenticated check. Do not upload SQL exports, the private import bundle or
 the repository into `public_html`.
+
+## Current local catalog and accounts
+
+The user approved copying the current local catalog and accounts while retaining
+the original UCI experiment as a separate, accurately labelled forecast example.
+The private replacement was restored into a fresh local database and checked:
+
+- 61 local products plus the 20 UCI products; 1,430 local units in 17 opening
+  batches, retaining expiry, cost and sealed/loose quantities.
+- Seven local accounts with their existing password hashes and statuses:
+  five active and two disabled. Four old UCI accounts are disabled and retained
+  under new IDs for historical attribution. New session versions prevent old
+  hosted sessions from inheriting copied account identities.
+- All 2,240 forecast rows and replay sale items remain unchanged. The local
+  database's sales and receiving history are not imported. Local stock is
+  represented as opening balances with matching stock movements.
+- Foreign keys, account passwords/statuses, inventory/batch/movement balances
+  and a complete SQL export/import round-trip passed. The replay service returns
+  exactly the 20 forecasted UCI products from the combined catalog.
+
+The user reports importing the private snapshot into the fresh hosted database
+`u125532033_rmcurrent26`. The SQL and two profile images remain under ignored
+`.scratch/hostinger-current-private/`; never commit them. The original hosted
+database remains intact for rollback. Cutover uses a new session cookie name,
+the new database credentials and replay opt-in, and separate private recovery
+storage. Autodeployment continues to preserve the hosted `.env`.
