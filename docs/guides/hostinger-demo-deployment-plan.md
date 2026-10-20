@@ -107,3 +107,10 @@ The user reports importing the private snapshot into the fresh hosted database
 database remains intact for rollback. Cutover uses a new session cookie name,
 the new database credentials and replay opt-in, and separate private recovery
 storage. Autodeployment continues to preserve the hosted `.env`.
+
+Cutover to `u125532033_rmcurrent26` completed. A temporary CLI check on Hostinger
+verified all catalog/account/stock counts, account password/status fingerprints,
+unchanged forecast fingerprints, the 20-product replay scope and both profile
+images. The verification script and its cron job were removed afterward. The
+old environment is saved privately for rollback; authenticated browser workflows
+have not been retested after cutover.
