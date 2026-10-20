@@ -803,7 +803,6 @@
             notify(error.message, 'error');
         }
     }
-    el('refresh').addEventListener('click', loadHistory);
     el('prev').addEventListener('click', () => { page--; loadHistory(); });
     el('next').addEventListener('click', () => { page++; loadHistory(); });
     el('review-cancel').addEventListener('click', () => el('review-dialog').close());

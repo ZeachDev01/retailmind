@@ -588,7 +588,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
             </section>
         <?php else: ?>
         <?php if ($posShiftOpen): ?>
-            <script>RetailMindUI.toast(<?= json_encode('Register: ' . ($openShift['register_name'] ?? 'Unassigned') . ' · Shift #' . (int)$openShift['shift_id'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'info', 'Register ready', 4300);</script>
+            <script>RetailMindUI.toast(<?= json_encode('Register: ' . ($openShift['register_name'] ?? 'Unassigned') . ' · Shift #' . (int)$openShift['shift_id'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'info', 'Register ready', 3000);</script>
         <?php endif; ?>
         <?php if (!$posShiftOpen): ?>
             <div class="pos-alert error" role="note" data-rm-alert-processed="1"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a Cashier Shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
@@ -1690,7 +1690,7 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
     if (Number.isFinite(availableStock) && remaining <= getLowStockThreshold(cart[lineKey])) {
         showCartMessage(`Product added to cart. Low stock: ${remaining} left.`, 'warning');
     } else {
-        RetailMindUI.toast('Product added to cart.', 'success', undefined, 2500);
+        RetailMindUI.toast('Product added to cart.', 'success', undefined, 1000);
     }
     return true;
 }

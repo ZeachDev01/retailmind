@@ -71,6 +71,7 @@
         page.abort.abort();
         page.listeners.forEach(item => nativeRemove.call(item.target, item.type, item.wrapped, item.options));
         page.timers.forEach(cancel => cancel());
+        document.querySelector('#rm-toast-stack')?.replaceChildren();
         Object.values(window.Chart?.instances || {}).forEach(chart => chart.destroy());
         if (window.DataTable?.tables) window.DataTable.tables({api: true}).destroy();
         document.querySelectorAll('video').forEach(video => video.srcObject?.getTracks().forEach(track => track.stop()));

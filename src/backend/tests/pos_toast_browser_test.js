@@ -13,6 +13,17 @@ const source = fs.readFileSync('src/frontend/components/cashier/pos.php', 'utf8'
             await page.addStyleTag({ path: `src/frontend/assets/css/${file}` });
         }
         await page.addScriptTag({ path: 'src/frontend/assets/js/ui.js' });
+        const registerToast = source.match(/<script>(RetailMindUI\.toast\(<\?= json_encode\([^\r\n]*?\?>, 'info', 'Register ready', \d+\);)<\/script>/)[1];
+        await page.clock.install();
+        await page.clock.pauseAt(new Date());
+        await page.addScriptTag({ content: registerToast.replace(/<\?=[\s\S]*?\?>/, JSON.stringify('Register: 2nd Register · Shift #3243')) });
+        await page.clock.runFor(2999);
+        assert.equal(await page.locator('.rm-toast.show').count(), 1, 'Register ready remains visible before three seconds');
+        await page.clock.runFor(1);
+        assert.equal(await page.locator('.rm-toast.show').count(), 0, 'Register ready dismisses at three seconds');
+        await page.clock.runFor(250);
+        assert.equal(await page.locator('.rm-toast').count(), 0, 'Register ready is removed after its exit transition');
+        await page.clock.resume();
         await page.addScriptTag({ content: source.slice(source.indexOf('function showCartMessage('), source.indexOf('function playScanTone(')) });
         const originalTop = await page.locator('#products').evaluate(node => node.getBoundingClientRect().top);
         await page.focus('#scan');

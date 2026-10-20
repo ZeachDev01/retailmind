@@ -38,21 +38,14 @@
                 waiverError.textContent = '';
             }
 
-            if (typeof waiverDialog.showModal === 'function') {
-                waiverDialog.showModal();
-            } else {
-                waiverDialog.setAttribute('open', '');
-            }
+            waiverDialog.showModal();
+            waiverNotes.focus();
         });
     });
 
     if (waiverCancelBtn && waiverDialog) {
         waiverCancelBtn.addEventListener('click', () => {
-            if (typeof waiverDialog.close === 'function') {
-                waiverDialog.close();
-            } else {
-                waiverDialog.removeAttribute('open');
-            }
+            waiverDialog.close();
         });
     }
 
@@ -92,11 +85,7 @@
                     throw new Error(data.error || 'Failed to record discrepancy waiver.');
                 }
 
-                if (typeof waiverDialog.close === 'function') {
-                    waiverDialog.close();
-                } else {
-                    waiverDialog.removeAttribute('open');
-                }
+                waiverDialog.close();
 
                 // Reload to refresh the tables and audit records
                 window.location.reload();

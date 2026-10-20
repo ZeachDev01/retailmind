@@ -77,7 +77,7 @@ function gcash_admin_money(mixed $val): string {
         </header>
 
         <?php if ($filterError): ?>
-            <div class="alert alert-danger" role="alert" style="margin-bottom: 1rem;">
+            <div class="alert alert-danger gcash-filter-error" role="alert">
                 <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> <?= gcash_admin_e($filterError) ?>
             </div>
         <?php endif; ?>
@@ -139,17 +139,17 @@ function gcash_admin_money(mixed $val): string {
                     </div>
                 </div>
             </div>
-            <form method="GET" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form" class="gcash-filter-bar" style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-end;">
-                <div class="gcash-field" style="flex:1 1 180px;">
-                    <label for="filter-start-date" style="font-size:.85rem; font-weight:600;">Start Date</label>
+            <form method="GET" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form" class="gcash-filter-bar">
+                <div class="gcash-field gcash-filter-date">
+                    <label for="filter-start-date" class="gcash-filter-label">Start Date</label>
                     <input type="date" id="filter-start-date" name="start_date" class="form-control" value="<?= gcash_admin_e($startDate) ?>">
                 </div>
-                <div class="gcash-field" style="flex:1 1 180px;">
-                    <label for="filter-end-date" style="font-size:.85rem; font-weight:600;">End Date</label>
+                <div class="gcash-field gcash-filter-date">
+                    <label for="filter-end-date" class="gcash-filter-label">End Date</label>
                     <input type="date" id="filter-end-date" name="end_date" class="form-control" value="<?= gcash_admin_e($endDate) ?>">
                 </div>
-                <div class="gcash-field" style="flex:1 1 200px;">
-                    <label for="filter-cashier-id" style="font-size:.85rem; font-weight:600;">Cashier</label>
+                <div class="gcash-field gcash-filter-cashier">
+                    <label for="filter-cashier-id" class="gcash-filter-label">Cashier</label>
                     <select id="filter-cashier-id" name="cashier_id" class="form-control">
                         <option value="">All Cashiers (Store-wide)</option>
                         <?php foreach ($overview['cashiers'] ?? [] as $c): ?>
@@ -159,7 +159,7 @@ function gcash_admin_money(mixed $val): string {
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="gcash-actions" style="display:flex; gap:.5rem;">
+                <div class="gcash-actions gcash-filter-actions">
                     <button type="submit" class="btn btn-primary" id="btn-apply-filters">
                         <i class="bi bi-filter" aria-hidden="true"></i>Filter
                     </button>
@@ -181,7 +181,7 @@ function gcash_admin_money(mixed $val): string {
                     </div>
                 </div>
                 <div>
-                    <span class="gcash-badge" style="background:var(--cashier-surface); border:1px solid var(--border);" id="admin-total-tx-badge">
+                    <span class="gcash-badge gcash-total-badge" id="admin-total-tx-badge">
                         Total Transactions: <strong id="admin-metric-total-tx"><?= (int)($overview['total_transactions'] ?? 0) ?></strong>
                     </span>
                 </div>
@@ -221,7 +221,7 @@ function gcash_admin_money(mixed $val): string {
                     </div>
                 </div>
             </div>
-            <div class="gcash-table-wrap">
+            <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Reconciliation differences">
                 <table class="table" id="gcash-admin-diff-table">
                     <thead>
                         <tr>
@@ -242,7 +242,7 @@ function gcash_admin_money(mixed $val): string {
                     <tbody id="gcash-admin-diff-body">
                         <?php if (empty($overview['reconciliation_differences'])): ?>
                             <tr>
-                                <td colspan="12" class="gcash-empty-msg" style="text-align:center; padding:1.5rem;">No reconciliation differences recorded.</td>
+                                <td colspan="12" class="gcash-empty-msg gcash-empty-cell">No reconciliation differences recorded.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($overview['reconciliation_differences'] as $diff): ?>
@@ -279,7 +279,7 @@ function gcash_admin_money(mixed $val): string {
                                                 Waive Discrepancy
                                             </button>
                                         <?php else: ?>
-                                            <span class="text-muted" style="font-size:.85rem;">—</span>
+                                            <span class="text-muted gcash-muted-placeholder">—</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -306,7 +306,7 @@ function gcash_admin_money(mixed $val): string {
                     </span>
                 </div>
             </div>
-            <div class="gcash-table-wrap">
+            <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Unresolved activity">
                 <table class="table" id="gcash-admin-nc-table">
                     <thead>
                         <tr>
@@ -324,7 +324,7 @@ function gcash_admin_money(mixed $val): string {
                     <tbody id="gcash-admin-nc-body">
                         <?php if (empty($overview['unresolved_activity'])): ?>
                             <tr>
-                                <td colspan="9" class="gcash-empty-msg" style="text-align:center; padding:1.5rem;">No unresolved exchanges pending.</td>
+                                <td colspan="9" class="gcash-empty-msg gcash-empty-cell">No unresolved exchanges pending.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($overview['unresolved_activity'] as $nc): ?>
@@ -370,7 +370,7 @@ function gcash_admin_money(mixed $val): string {
                     </div>
                 </div>
             </div>
-            <div class="gcash-table-wrap">
+            <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Store-wide transaction history">
                 <table class="table" id="gcash-admin-history-table">
                     <thead>
                         <tr>
@@ -389,7 +389,7 @@ function gcash_admin_money(mixed $val): string {
                     <tbody id="gcash-admin-history-body">
                         <?php if (empty($overview['transactions'])): ?>
                             <tr>
-                                <td colspan="10" class="gcash-empty-msg" style="text-align:center; padding:1.5rem;">No transactions found for the selected filter criteria.</td>
+                                <td colspan="10" class="gcash-empty-msg gcash-empty-cell">No transactions found for the selected filter criteria.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($overview['transactions'] as $tx): ?>
@@ -440,11 +440,11 @@ function gcash_admin_money(mixed $val): string {
                 </table>
             </div>
             <!-- Pagination Controls -->
-            <div class="gcash-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; padding:.5rem 0;">
+            <div class="gcash-pagination">
                 <div>
                     Page <strong id="admin-current-page"><?= $page ?></strong>
                 </div>
-                <div style="display:flex; gap:.5rem;">
+                <div class="gcash-pagination-actions">
                     <?php if ($page > 1): ?>
                         <a href="?<?= http_build_query(array_merge($_GET, ['page' => $page - 1])) ?>" class="btn btn-secondary btn-sm" id="admin-prev-page">Previous</a>
                     <?php endif; ?>
@@ -457,21 +457,21 @@ function gcash_admin_money(mixed $val): string {
 
         <!-- Discrepancy Waiver Dialog -->
         <dialog id="gcash-admin-waiver-dialog" aria-labelledby="waiver-dialog-title">
-            <h2 id="waiver-dialog-title" style="margin-top:0;">Waive Closing Discrepancy</h2>
+            <h2 id="waiver-dialog-title" class="gcash-dialog-title">Waive Closing Discrepancy</h2>
             <p>The counted variance stays on record. This waiver records your approval and reason.</p>
-            <div id="admin-waiver-summary" style="margin:1rem 0; padding:.75rem; background:var(--surface-bg, #fff); border:1px solid var(--border); border-radius:8px;">
-                <p style="margin:0 0 .5rem;"><strong>Session:</strong> #<span id="waiver-target-session"></span> (<span id="waiver-target-cashier"></span>)</p>
-                <p style="margin:0 0 .25rem;"><strong>Cash Variance:</strong> <span id="waiver-target-cash-var"></span></p>
-                <p style="margin:0;"><strong>Wallet Variance:</strong> <span id="waiver-target-wallet-var"></span></p>
+            <div id="admin-waiver-summary" class="gcash-waiver-summary">
+                <p class="gcash-waiver-session"><strong>Session:</strong> #<span id="waiver-target-session"></span> (<span id="waiver-target-cashier"></span>)</p>
+                <p class="gcash-waiver-cash"><strong>Cash Variance:</strong> <span id="waiver-target-cash-var"></span></p>
+                <p><strong>Wallet Variance:</strong> <span id="waiver-target-wallet-var"></span></p>
             </div>
-            <div id="admin-waiver-error" class="alert alert-danger" hidden style="margin-bottom:.75rem;"></div>
+            <div id="admin-waiver-error" class="alert alert-danger gcash-waiver-error" hidden></div>
             <form id="admin-waiver-form">
                 <input type="hidden" id="waiver-session-id" name="session_id" value="">
                 <div class="gcash-field">
-                    <label for="admin-waiver-notes" style="font-weight:600;">Reason for waiver (5–500 characters)</label>
+                    <label for="admin-waiver-notes" class="gcash-waiver-label">Reason for waiver (5–500 characters)</label>
                     <textarea id="admin-waiver-notes" name="waiver_notes" class="form-control" rows="3" required minlength="5" maxlength="500" placeholder="Explain why this closing discrepancy was approved or resolved without modifying recorded cash."></textarea>
                 </div>
-                <div class="gcash-actions" style="margin-top:1rem; justify-content:flex-end;">
+                <div class="gcash-actions gcash-waiver-actions">
                     <button type="button" class="btn btn-secondary" id="admin-waiver-cancel-btn">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="admin-waiver-confirm-btn">Confirm Waiver</button>
                 </div>

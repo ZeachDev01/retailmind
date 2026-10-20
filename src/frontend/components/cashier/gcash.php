@@ -190,9 +190,8 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         </div>
                     </div>
                     <div class="gcash-history-header-actions">
-                        <button type="button" class="btn btn-secondary" id="gcash-history-action-cash-in">New Cash-In</button>
-                        <button type="button" class="btn btn-secondary" id="gcash-history-action-cash-out">New Cash-Out</button>
-                        <button type="button" class="btn btn-secondary" id="gcash-refresh">Refresh</button>
+                        <button type="button" class="btn btn-primary" id="gcash-history-action-cash-in"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>New Cash-In</button>
+                        <button type="button" class="btn btn-secondary" id="gcash-history-action-cash-out"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>New Cash-Out</button>
                     </div>
                 </div>
                 <p id="gcash-history-status" role="status" aria-live="polite">Loading transactions…</p>

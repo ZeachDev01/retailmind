@@ -89,12 +89,16 @@ const render = (html, partial) => {
                         }).observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: ['aria-busy']});
                     });
                     for (const id of ['second', 'first', 'second']) {
+                        await page.evaluate(() => RetailMindNavigation.initializePage(() => RetailMindUI.toast('Register: 2nd Register · Shift #3243', 'info', 'Register ready', 3000)));
+                        assert.equal(await page.locator('.rm-toast').count(), 1);
                         await page.evaluate(() => RetailMindUI.openOverlay(document.querySelector('#page-modal')));
                         await page.evaluate(() => { RetailMindUI.confirm({message: 'Pending page action'}); });
                         assert(await page.locator('body').evaluate(node => node.classList.contains('no-scroll')));
                         await page.evaluate(() => { navigationFrames.length = 0; });
                         await page.locator('#' + id).click();
                         await waitPage('/' + id + '.php');
+                        await page.waitForTimeout(3300);
+                        assert.equal(await page.locator('.rm-toast').count(), 0, 'Navigation removes outgoing toasts whose timers and dismiss handlers were cancelled');
                         assert(await page.evaluate(() => navigationFrames.length > 0 && navigationFrames.every(frame => frame.opacity === '1' && frame.transform === 'none')), 'Sidebar navigation keeps outgoing and incoming content opaque and stationary');
                         assert.equal(await page.locator('html').getAttribute('data-theme'), theme, 'Sidebar navigation preserves the active theme');
                         assert.equal(await page.locator('.main-content').getAttribute('id'), id === 'first' ? 'first-content' : 'page-content', 'Page switching preserves authored IDs and supplies a fallback');

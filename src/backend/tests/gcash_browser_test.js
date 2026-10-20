@@ -660,7 +660,14 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         // Ticket #243: Legacy reference-only record distinction
         fixture('gcash_legacy');
         await tabHistory.click();
-        await page.locator('#gcash-refresh').click();
+        assert.equal(await page.locator('#gcash-refresh').count(), 0, 'History omits only the Refresh button');
+        assert.equal(await page.locator('#gcash-history-title').textContent(), 'Your transaction history');
+        await page.locator('#gcash-history-action-cash-out').click();
+        assert.equal(await page.locator('#gcash-type').inputValue(), 'Cash-Out');
+        await tabHistory.click();
+        await page.locator('#gcash-history-action-cash-in').click();
+        assert.equal(await page.locator('#gcash-type').inputValue(), 'Cash-In');
+        await tabHistory.click();
         const legacyRow = page.locator('#gcash-history-body tr', {hasText: '0012345678990'});
         await legacyRow.waitFor();
         assert.equal(await legacyRow.locator('.gcash-badge-legacy').textContent(), 'Legacy Reference');
