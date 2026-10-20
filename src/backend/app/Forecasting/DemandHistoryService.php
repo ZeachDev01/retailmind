@@ -15,6 +15,8 @@ class DemandHistoryService
     private DateTimeZone $timezone;
     private StoreCalendar $calendar;
     private ScheduledDemandDriverService $driverService;
+    /** @var array<int, array<string, true>> */
+    private array $columnCache = [];
 
     public function __construct()
     {
@@ -74,9 +76,9 @@ class DemandHistoryService
             $endOfDayStock = (int)($stockRow['total_qty'] ?? 0);
             
             // 3. Observed Sales & Historical Attribution
-            // Sold units within the day up to the effective cutoff
+            // Sold units within the day up to the effective cutoff, in Base Units.
             $soldStmt = $pdo->prepare("
-                SELECT COUNT(*) AS records, COALESCE(SUM(si.quantity), 0) AS units
+                SELECT COUNT(*) AS records, COALESCE(SUM(" . $this->saleUnitsExpression($pdo, 'si') . "), 0) AS units
                 FROM sale_items si
                 JOIN sales s ON si.sale_id = s.sale_id
                 WHERE si.product_id = ?
@@ -96,9 +98,9 @@ class DemandHistoryService
                 if ($imported !== false) $sold = (int)$imported;
             }
             
-            // Approved sale reversals known by the cutoff
+            // Approved sale reversals known by the cutoff, in Base Units
             $reversedStmt = $pdo->prepare("
-                SELECT COALESCE(SUM(sri.quantity), 0)
+                SELECT COALESCE(SUM(" . $this->reversalUnitsExpression($pdo, 'sri', 'si') . "), 0)
                 FROM sale_reversal_items sri
                 JOIN sale_reversals sr ON sri.reversal_id = sr.reversal_id
                 JOIN sale_items si ON sri.sale_item_id = si.sale_item_id
@@ -111,9 +113,9 @@ class DemandHistoryService
             $reversedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
             $reversed = (int)$reversedStmt->fetchColumn();
             
-            // Cash refunds created before the cutoff
+            // Cash refunds created before the cutoff, in Base Units
             $refundedStmt = $pdo->prepare("
-                SELECT COALESCE(SUM(cri.quantity), 0)
+                SELECT COALESCE(SUM(" . $this->refundUnitsExpression($pdo, 'cri', 'si') . "), 0)
                 FROM cash_refund_items cri
                 JOIN cash_refunds cr ON cri.refund_id = cr.refund_id
                 JOIN sale_items si ON cri.sale_item_id = si.sale_item_id
@@ -285,5 +287,71 @@ class DemandHistoryService
         }
         
         return $summary;
+    }
+
+    /** Sale quantities in Base Units; a Sales Pack line contributes its contents. */
+    private function saleUnitsExpression(PDO $pdo, string $alias): string
+    {
+        $columns = $this->columns($pdo, 'sale_items');
+        if (!isset($columns['selling_form'], $columns['pack_size'])) {
+            return "{$alias}.quantity";
+        }
+
+        return "(CASE WHEN {$alias}.selling_form = 'pack' AND {$alias}.pack_size IS NOT NULL"
+            . " THEN {$alias}.quantity * {$alias}.pack_size ELSE {$alias}.quantity END)";
+    }
+
+    /** Reversal quantities in Base Units, read from the reversal line but converted by the sold item's form. */
+    private function reversalUnitsExpression(PDO $pdo, string $alias, string $saleAlias): string
+    {
+        $columns = $this->columns($pdo, 'sale_items');
+        if (!isset($columns['selling_form'], $columns['pack_size'])) {
+            return "{$alias}.quantity";
+        }
+
+        return "(CASE WHEN {$saleAlias}.selling_form = 'pack' AND {$saleAlias}.pack_size IS NOT NULL"
+            . " THEN {$alias}.quantity * {$saleAlias}.pack_size ELSE {$alias}.quantity END)";
+    }
+
+    /** Refund quantities in Base Units, preferring the refund line's historical form. */
+    private function refundUnitsExpression(PDO $pdo, string $alias, string $saleAlias): string
+    {
+        $refundColumns = $this->columns($pdo, 'cash_refund_items');
+        $saleColumns = $this->columns($pdo, 'sale_items');
+
+        $formExpr = isset($refundColumns['selling_form'])
+            ? "{$alias}.selling_form"
+            : (isset($saleColumns['selling_form']) ? "{$saleAlias}.selling_form" : "'piece'");
+        $packExpr = isset($refundColumns['pack_size'])
+            ? "{$alias}.pack_size"
+            : (isset($saleColumns['pack_size']) ? "{$saleAlias}.pack_size" : 'NULL');
+
+        return "(CASE WHEN {$formExpr} = 'pack' AND {$packExpr} IS NOT NULL"
+            . " THEN {$alias}.quantity * {$packExpr} ELSE {$alias}.quantity END)";
+    }
+
+    /** @return array<string, true> */
+    private function columns(PDO $pdo, string $table): array
+    {
+        $key = spl_object_id($pdo);
+        if (isset($this->columnCache[$key][$table])) {
+            return $this->columnCache[$key][$table];
+        }
+
+        $columns = [];
+        try {
+            if ((string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                foreach ($pdo->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                    $columns[(string)$column['name']] = true;
+                }
+            } else {
+                foreach ($pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                    $columns[(string)$column['Field']] = true;
+                }
+            }
+        } catch (Throwable) {
+        }
+
+        return $this->columnCache[$key][$table] = $columns;
     }
 }

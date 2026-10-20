@@ -56,7 +56,7 @@ try {
             df.horizon_day,
             df.predicted_units,
             (
-                SELECT SUM(si.quantity)
+                SELECT SUM(CASE WHEN si.selling_form = 'pack' AND si.pack_size IS NOT NULL THEN si.quantity * si.pack_size ELSE si.quantity END)
                 FROM sale_items si
                 JOIN sales s ON si.sale_id = s.sale_id
                 WHERE si.product_id = df.product_id

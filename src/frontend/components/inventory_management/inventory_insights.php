@@ -17,8 +17,8 @@ $sql = "SELECT p.product_id, p.sku, p.product_name, p.unit_price, p.cost_price, 
         JOIN inventory i ON i.product_id=p.product_id
         LEFT JOIN (
             SELECT si.product_id,
-                   SUM(CASE WHEN sa.sale_date >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN si.quantity ELSE 0 END) units_30,
-                   SUM(CASE WHEN sa.sale_date >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN si.quantity ELSE 0 END) units_90,
+                   SUM(CASE WHEN sa.sale_date >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN (CASE WHEN si.selling_form = 'pack' AND si.pack_size IS NOT NULL THEN si.quantity * si.pack_size ELSE si.quantity END) ELSE 0 END) units_30,
+                   SUM(CASE WHEN sa.sale_date >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN (CASE WHEN si.selling_form = 'pack' AND si.pack_size IS NOT NULL THEN si.quantity * si.pack_size ELSE si.quantity END) ELSE 0 END) units_90,
                    MAX(sa.sale_date) last_sale_date
             FROM sale_items si JOIN sales sa ON sa.sale_id=si.sale_id
             WHERE sa.sale_date >= DATE_SUB(NOW(), INTERVAL 365 DAY)

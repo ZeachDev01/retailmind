@@ -75,7 +75,8 @@ try {
         INSERT INTO products VALUES (1, 'Product', 'P1', NULL, 1);
         CREATE TABLE categories (category_id INTEGER, category_name TEXT);
         CREATE TABLE sales (sale_id INTEGER, sale_date TEXT);
-        CREATE TABLE sale_items (sale_id INTEGER, product_id INTEGER, quantity INTEGER);
+        CREATE TABLE sale_items (sale_id INTEGER, product_id INTEGER, quantity INTEGER,
+            selling_form TEXT NOT NULL DEFAULT 'piece', pack_size INTEGER NULL);
         INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at) VALUES (11, 'forecast_generation', 'succeeded', '2026-10-09');
         INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level)
         VALUES (11, 1, '2026-10-09', '2026-10-10', 1, 7, 'approved', 'High');

@@ -276,7 +276,7 @@ function get_store_settings(PDO $pdo): array
 
 function get_forecasting_readiness(PDO $pdo): array
 {
-    $dailySalesSql = forecast_daily_sales_sql();
+    $dailySalesSql = forecast_daily_sales_sql($pdo);
     $storeId = store_scope_id($pdo);
     $settings = get_ml_settings($pdo);
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
@@ -408,9 +408,30 @@ function get_forecasting_readiness(PDO $pdo): array
     return $rows;
 }
 
-function forecast_daily_sales_sql(): string
+function forecast_daily_sales_sql(?PDO $pdo = null): string
 {
-    return "SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM(si.quantity) AS qty_sold,
+    $unitsExpr = 'si.quantity';
+    if ($pdo !== null) {
+        try {
+            $columns = [];
+            if ((string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                foreach ($pdo->query('PRAGMA table_info(sale_items)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                    $columns[(string)$column['name']] = true;
+                }
+            } else {
+                foreach ($pdo->query('SHOW COLUMNS FROM `sale_items`')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+                    $columns[(string)$column['Field']] = true;
+                }
+            }
+            if (isset($columns['selling_form'], $columns['pack_size'])) {
+                $unitsExpr = "(CASE WHEN si.selling_form = 'pack' AND si.pack_size IS NOT NULL"
+                    . ' THEN si.quantity * si.pack_size ELSE si.quantity END)';
+            }
+        } catch (Throwable) {
+        }
+    }
+
+    return "SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM({$unitsExpr}) AS qty_sold,
                    COUNT(*) AS sales_records, MAX(s.sale_date) AS changed_at
             FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
             GROUP BY si.product_id, DATE(s.sale_date)
