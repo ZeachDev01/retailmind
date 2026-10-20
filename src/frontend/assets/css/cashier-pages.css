@@ -33,9 +33,9 @@
 
 .cashier-shifts-page .money-counter-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1rem; }
 .cashier-shifts-page .money-counter-group { min-width: 0; margin: 0; padding: .75rem; border: 1px solid var(--border); border-radius: 12px; }
-.cashier-shifts-page .money-counter-group legend { padding: 0 .4rem; font-weight: 700; }
+.cashier-shifts-page .money-counter-group legend { padding: 0 .4rem; font-size: 1rem; font-weight: 700; }
 .cashier-shifts-page :is(.money-counter-row, .money-counter-head) { display: grid; grid-template-columns: minmax(3.5rem, 1fr) 144px minmax(4.5rem, 1fr); align-items: center; gap: .4rem; }
-.cashier-shifts-page .money-counter-head { color: var(--muted); font-size: .75rem; padding-bottom: .5rem; }
+.cashier-shifts-page .money-counter-head { color: var(--muted); font-size: .875rem; line-height: 1.4; padding-bottom: .5rem; }
 .cashier-shifts-page .money-counter-row { padding: .5rem 0; border-top: 1px solid var(--border); transition: background .2s ease; }
 .cashier-shifts-page .money-counter-row.has-cash { background: var(--theme-info-surface, var(--card-bg)); }
 .cashier-shifts-page .money-counter-row label { margin: 0; font-size: .875rem; }
@@ -48,7 +48,7 @@
 .cashier-shifts-page .money-counter-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
 .cashier-shifts-page #cash-drawer-counter .money-counter-stepper input[aria-invalid="true"] { border-color: var(--danger); }
 .cashier-shifts-page .money-counter-stepper button:disabled { opacity: .4; cursor: default; }
-.cashier-shifts-page :is(.money-counter-subtotal, .money-counter-head > :last-child) { text-align: right; overflow-wrap: anywhere; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.cashier-shifts-page :is(.money-counter-subtotal, .money-counter-head > :last-child) { text-align: right; overflow-wrap: anywhere; font-size: .875rem; font-variant-numeric: tabular-nums; }
 .cashier-shifts-page .money-counter-totals { display: grid; gap: .75rem; padding: 1rem 0; }
 .cashier-shifts-page .money-counter-totals > div { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .cashier-shifts-page .money-counter-total { padding-top: 1rem; border-top: 1px solid var(--border); }
@@ -184,7 +184,8 @@
 .cashier-shifts-page .shift-topbar { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
 .cashier-shifts-page .shift-topbar > div { flex: 1 1 320px; min-width: 0; }
 .cashier-shifts-page .shift-topbar .btn { flex: 0 0 auto; white-space: nowrap; }
-.cashier-shifts-page .shift-topbar .page-subtitle { max-width: 65ch; line-height: 1.6; }
+.cashier-shifts-page .shift-topbar h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); line-height: 1.2; letter-spacing: -.02em; text-wrap: balance; }
+.cashier-shifts-page .shift-topbar .page-subtitle { max-width: 65ch; font-size: 1rem; line-height: 1.6; }
 .cashier-shifts-page .dashboard-section { border: 1px solid var(--border); border-radius: 16px; }
 .cashier-shifts-page .shift-overview { background: var(--theme-surface-soft, #f8fafc); }
 .cashier-shifts-page .shift-details { margin: 0; }
@@ -197,6 +198,10 @@
 .cashier-shifts-page .money-counter-total label { margin: 0; }
 .cashier-shifts-page .dashboard-section #actual-cash { margin-bottom: 0; }
 .cashier-shifts-page .shift-help { line-height: 1.6; }
+.cashier-shifts-page .main-content { line-height: 1.5; }
+.cashier-shifts-page .main-content :is(input, select, textarea, button) { font-family: inherit; }
+.cashier-shifts-page :is(input[type="number"], .money-counter-totals strong, .money-count-breakdown dd, .metric, .shift-details dd) { font-variant-numeric: tabular-nums; }
+.cashier-shifts-page .shift-help a { text-underline-offset: .2em; }
 
 .cashier-shifts-page .shift-overview {
     grid-column: 1 / -1;
@@ -207,6 +212,7 @@
     font-size: 1.05rem;
     line-height: 1.3;
     font-weight: 700;
+    text-wrap: balance;
 }
 
 .cashier-shifts-page .shift-section-heading {
@@ -239,7 +245,7 @@
 .cashier-shifts-page .shift-history-count,
 .cashier-shifts-page .shift-optional {
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     font-weight: 400;
 }
 
@@ -265,8 +271,11 @@
 
 .cashier-shifts-page .stat-card .value {
     font-size: 1.25rem;
+    line-height: 1.2;
     font-variant-numeric: tabular-nums;
 }
+
+.cashier-shifts-page .stat-card .label { font-size: .875rem; }
 
 .cashier-shifts-page .dashboard-section > .card-grid {
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -280,7 +289,7 @@
     color: var(--muted);
     max-width: 65ch;
     margin-bottom: 1.25rem;
-    font-size: 0.9rem;
+    font-size: 1rem;
 }
 
 .cashier-shifts-page .dashboard-section form {
@@ -299,6 +308,7 @@
     margin-bottom: 0.5rem;
     font-size: 0.875rem;
     font-weight: 600;
+    line-height: 1.4;
 }
 
 .cashier-shifts-page .dashboard-section :is(input:not([type="hidden"]), select, textarea) {
@@ -311,7 +321,7 @@
     background: var(--card-bg);
     color: var(--text);
     caret-color: var(--primary);
-    font-size: 0.95rem;
+    font-size: 1rem;
     line-height: 1.5;
 }
 
@@ -334,7 +344,7 @@
     align-self: flex-start;
     min-height: 44px;
     padding: 0.7rem 1.1rem;
-    font-size: 0.9rem;
+    font-size: 1rem;
 }
 
 .cashier-shifts-page .btn:disabled,
@@ -360,7 +370,7 @@
     align-items: center;
     padding: 0.2rem 0.6rem;
     border-radius: 6px;
-    font-size: 0.8rem;
+    font-size: 0.875rem;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -389,6 +399,8 @@
 
 .cashier-shifts-page .shift-history-table :is(th, td) {
     padding: .8rem .5rem;
+    font-size: .875rem;
+    line-height: 1.5;
     overflow-wrap: anywhere;
     vertical-align: middle;
 }
@@ -396,7 +408,7 @@
 .cashier-shifts-page .shift-history-table th {
     color: var(--muted);
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.875rem;
     white-space: normal;
 }
 
@@ -441,8 +453,12 @@
     .cashier-shifts-page :is(.shift-history-table, .shift-movement-table) tbody { display: block; min-width: 0; }
     .cashier-shifts-page :is(.shift-history-table, .shift-movement-table) tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; padding: 1rem; margin-bottom: .75rem; border: 1px solid var(--border); border-radius: 12px; }
     .cashier-shifts-page :is(.shift-history-table, .shift-movement-table) tbody td { display: block; min-width: 0; padding: 0; border: 0; white-space: normal; text-align: left; overflow-wrap: anywhere; }
-    .cashier-shifts-page td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: var(--muted); font-size: .75rem; font-weight: 500; }
+    .cashier-shifts-page td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: var(--muted); font-size: .875rem; font-weight: 600; }
     .cashier-shifts-page .table-wrap { border: 0; box-shadow: none; }
+}
+
+@media (max-width: 900px) {
+    .cashier-shifts-page .shift-topbar > div { flex-basis: auto; }
 }
 
 @media (max-width: 480px) {
