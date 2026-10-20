@@ -42,7 +42,7 @@ Runner: `src/backend/tests` invoked from the worktree with `php`; DB suites opt 
 | `inventory_count_reconciliation_test.php` | 0 | 88 ok |
 | `batch_product_creation_receiving_test.php` | 0 | 116 ok |
 | `batch_balance_preservation_test.php` | 0 | 89 ok |
-| `batch_expiration_readers_test.php` | 0 | pre-existing failure, see below |
+| `batch_expiration_readers_test.php` | 0 | 37 ok |
 | `gross_profit_reporting_test.php` | 0 | 70 ok (fixed in this ticket) |
 | `gross_profit_historical_costs_test.php` | 0 | 87 ok |
 | `demand_history_contract.php` | 0 | pass |
@@ -65,7 +65,7 @@ Every row above reported `fail - 0`. Rows the runner labels "CHECK" merely conta
 | `RUN_DB_TESTS=1 php src/backend/tests/sales_pack_schema_parity_contract.php` | 0, 19 ok (new) |
 | `RUN_CHECKOUT_DB_TESTS=1 php src/backend/tests/receipt_history_integration.php` | 0 |
 | `RUN_CHECKOUT_DB_TESTS=1 php src/backend/tests/checkout_attempt_integration.php` | 0 |
-| `RUN_CHECKOUT_DB_TESTS=1 php src/backend/tests/checkout_quote_integration.php` | 1, pre-existing |
+| `RUN_CHECKOUT_DB_TESTS=1 php src/backend/tests/checkout_quote_integration.php` | 0 |
 | `RUN_REFUND_DB_TESTS=1 php src/backend/tests/cash_refund_concurrency_integration.php` | 0 |
 | `RUN_DB_TESTS=1 php src/backend/tests/consolidated_sql_integration.php` | 255, pre-existing |
 | `RUN_DB_TESTS=1 php src/backend/tests/batch_receiving_mysql_test.php` | 0 |
@@ -100,11 +100,16 @@ This parity test exists because `consolidated_sql_integration.php` is already br
 
 ## Failures and disposition
 
-Three failures reproduce identically on the `integration-245` baseline, so they are pre-existing and were not fixed:
+One failure is genuinely pre-existing. It was reproduced on `main` (`eb57717`) as well as `integration-245`:
 
-1. **`checkout_quote_integration.php` (exit 1).** `Reviewed checkout integration failed: Not enough stock for Fixture Item (only 0 left).` Baseline reproduces.
-2. **`consolidated_sql_integration.php` (exit 255).** `schema.sql` creates `gcash_adjustments` before `gcash_transactions` while foreign-key checks are active (around lines 2082 and 2100), so the import fails on MySQL 8.4. Baseline reproduces.
-3. **`batch_expiration_readers_test.php` (exit 0, fatal hidden).** `no such column: sealed_quantity`. Baseline reproduces. The CLI exception handler does not always set a nonzero exit code, so output must be inspected; this test was judged on its message, not its exit code.
+1. **`consolidated_sql_integration.php` (exit 255).** `schema.sql` creates `gcash_adjustments` before `gcash_transactions` while foreign-key checks are active (around lines 2082 and 2100), so the import fails on MySQL 8.4. `RUN_DB_TESTS=1 php src/backend/tests/consolidated_sql_integration.php` exits 255 on both `main` and this branch. It is outside this feature.
+
+Regressions caused by the pack changes and fixed in this ticket:
+
+- **`checkout_quote_integration.php` (was exit 1, now 0).** The fixture imported fresh `schema.sql`, where `product_batches.sealed_quantity`/`loose_quantity` default to 0, but inserted batches with no stock form, so pack-aware availability saw zero loose units and refused with `Not enough stock for Fixture Item (only 0 left)`. The fixture now inserts `loose_quantity = remaining_quantity` and keeps it in step with `remaining_quantity` on later updates. Command: `RUN_CHECKOUT_DB_TESTS=1 php src/backend/tests/checkout_quote_integration.php` (exits 0 on this branch and on `main`).
+- **`batch_expiration_readers_test.php` (was exit 1, now 0).** Its SQLite fixture lacked the pack columns, so `ProductService::getProductsForManagement()` failed with `no such column: sealed_quantity` before any assertion ran. The fixture now declares `sealed_quantity`/`loose_quantity` on `product_batches` (backfilled `loose_quantity = remaining_quantity`, matching migration `202610200001`), declares `pack_size`/`pack_barcode`/`pack_price` on `products` for the scanner query, and supplies the `current_role()` accessor the evaled report source needs. All 37 assertions run, 0 fail; `php src/backend/tests/batch_expiration_readers_test.php` exits 0.
+
+The CLI exception handler in `bootstrap/app.php` now exits nonzero after logging an uncaught exception, so a fatal can no longer truncate a suite while reporting success. This is a test/CLI-only path; HTTP responses are unchanged. It surfaced a pre-existing truncation in `batch_expiration_readers_test.php`: the evaled report source called undefined `current_role()` on `main` too, which exited 0 only because the handler returned. That accessor is now provided by the test, so the later report, scanner, and POS assertions actually execute.
 
 Spec-caused regressions found and fixed during verification:
 
@@ -124,7 +129,7 @@ An earlier `sales_trend_integration.php` run used the configured connection and 
 - **Legacy stock is intentionally unclassified.** Existing totals cannot be split into sealed versus loose without a physical count; the upgrade marks legacy stock loose/unknown. Pack sales must only be enabled after the Store performs that count.
 - **No hosted deployment was exercised.** Migrations, package contents, and rollback were verified locally only.
 - **Physical cashier behavior.** Automatic opening reflects the recorded stock, not the shelf; staff must still take loose pieces first and open packs only as needed.
-- **Pre-existing failures remain.** The three baseline failures above are outside this feature and still fail.
+- **Pre-existing failure remains.** `consolidated_sql_integration.php` still fails on MySQL 8.4 for the unrelated foreign-key ordering reason above.
 
 ## Deployment procedure and readiness
 
