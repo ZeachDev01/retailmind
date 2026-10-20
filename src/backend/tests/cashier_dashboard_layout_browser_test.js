@@ -44,7 +44,6 @@ const {chromium} = require('playwright');
             }
             assert.equal(await page.locator('.cashier-quick-actions, .cashier-action-card').count(), 0);
             assert.equal(await page.locator('.cashier-stats article').count(), 4);
-            assert.equal(await page.locator('.cashier-stats .hint').first().evaluate(el => getComputedStyle(el).fontSize), '14px');
             assert.equal(await page.locator('.dashboard-panel-header h2').first().evaluate(el => getComputedStyle(el).fontSize), '20px');
             assert.match(await page.locator('.gcash-card-value').first().evaluate(el => getComputedStyle(el).fontVariantNumeric), /tabular-nums/);
             const screenshots = path.join(root, 'output/playwright/cashier-dashboard-typeset');

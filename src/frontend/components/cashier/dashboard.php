@@ -41,25 +41,21 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="stat-icon"><i class="bi bi-cash-stack" aria-hidden="true"></i></div>
                     <div class="value">&#8369;<?= number_format((float)$cashierMetrics['today_sales'], 2) ?></div>
                     <div class="label">Today's gross sales</div>
-                    <div class="hint">Before refunds, Philippine time</div>
                 </article>
                 <article class="stat-card with-icon">
                     <div class="stat-icon"><i class="bi bi-receipt-cutoff" aria-hidden="true"></i></div>
                     <div class="value"><?= (int)$cashierMetrics['transactions'] ?></div>
-                    <div class="label">Transactions</div>
-                    <div class="hint">Completed checkouts today</div>
+                    <div class="label">Today's transactions</div>
                 </article>
                 <article class="stat-card with-icon success">
                     <div class="stat-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
                     <div class="value">&#8369;<?= number_format((float)$cashierMetrics['average_transaction'], 2) ?></div>
-                    <div class="label">Average sale</div>
-                    <div class="hint">Average value per checkout</div>
+                    <div class="label">Today's average sale</div>
                 </article>
                 <article class="stat-card with-icon <?= $lowStockWarnings ? 'warning' : 'success' ?>">
                     <div class="stat-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
                     <div class="value"><?= count($lowStockWarnings) ?></div>
                     <div class="label">Low-stock alerts</div>
-                    <div class="hint">Products reduced to warning level</div>
                 </article>
             </section>
 
@@ -68,14 +64,12 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="dashboard-panel-header">
                         <div>
                             <h2 id="recent-transactions-title">Recent transactions</h2>
-                            <p class="section-description">Your latest ten checkouts across all dates.</p>
                         </div>
                         <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">View all</a>
                     </div>
                     <div class="dashboard-panel-header">
                         <div>
-                            <h3>Today's sales by hour</h3>
-                            <p class="section-description">All your sales today, before refunds. Philippine time (UTC+08:00).</p>
+                            <h3>Today's gross sales by hour (PHT)</h3>
                         </div>
                     </div>
                         <div class="cashier-sales-chart">
@@ -129,7 +123,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="dashboard-panel-header">
                         <div>
                             <h2 id="stock-alerts-title">Stock alerts</h2>
-                            <p class="section-description">Warnings triggered by products you sold.</p>
                         </div>
                     </div>
                     <div class="dashboard-panel-body">
@@ -147,7 +140,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                                 <div class="stock-alert-item clear">
                                     <div>
                                         <strong>No current warnings</strong>
-                                        <span>Low-stock products will appear here after checkout.</span>
                                     </div>
                                     <span class="stock-level-pill">Clear</span>
                                 </div>
