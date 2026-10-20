@@ -113,11 +113,6 @@
 }
 .cashier-stock-issues-page :is(.adjustment-product, .adjustment-reason, .adjustment-details) { overflow-wrap: anywhere; }
 .cashier-stock-issues-page .form-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
-.cashier-stock-issues-page #stock-issue-form .form-section > p {
-    margin: 0 0 1rem;
-    color: var(--muted);
-    line-height: 1.5;
-}
 .cashier-stock-issues-page #selected-product {
     margin: 0;
     padding: 1rem;

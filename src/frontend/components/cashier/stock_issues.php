@@ -109,16 +109,12 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
 
             <div class="report-form">
                 <h2>New Stock Issue Report</h2>
-                <?php if ($openShift): ?>
-                    <p>Reporting from shift #<?= (int)$openShift['shift_id'] ?>. Reported units stay sellable until review.</p>
-                <?php endif; ?>
                 <form method="POST" id="stock-issue-form" <?= $openShift ? '' : 'aria-disabled="true"' ?>>
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                     <input type="hidden" name="product_id" id="product_id" value="">
 
                     <div class="form-section">
                         <h3>1. Identify the product</h3>
-                        <p>Scan the barcode or search by name, SKU, or barcode. Only active, sellable products can be reported.</p>
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="barcode-input">Barcode scan</label>
@@ -156,7 +152,6 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                                     <option value="expired">Expired</option>
                                     <option value="other">Other</option>
                                 </select>
-                                <div class="type-info" id="type-info"></div>
                             </div>
                             <div class="form-group">
                                 <label for="form" class="required">Stock form</label>
@@ -174,7 +169,6 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                         <div class="form-group">
                             <label for="explanation" class="required">Explanation</label>
                             <textarea name="explanation" id="explanation" placeholder="Describe what happened, when discovered, any relevant details..." required <?= $openShift ? '' : 'disabled' ?>></textarea>
-                            <small id="explanation-hint">An explanation is always required. "Other" needs at least <?= StockIssueService::OTHER_MIN_EXPLANATION ?> characters.</small>
                         </div>
                     </div>
 
@@ -291,8 +285,6 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         const resultsBox = document.getElementById('product-results');
         const productIdField = document.getElementById('product_id');
         const selectedCard = document.getElementById('selected-product');
-        const categorySelect = document.getElementById('category');
-        const typeInfo = document.getElementById('type-info');
         let searchTimer = null;
 
         function escapeHtml(value) {
@@ -442,17 +434,6 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                 lookup(productsApiUrl + '?q=' + encodeURIComponent(term) + '&limit=12', 'No matching active product was found.');
             }, 250);
         });
-
-        function updateTypeInfo() {
-            const info = {
-                damaged: 'Item physically damaged or unusable',
-                missing: 'Item lost or cannot be located in inventory',
-                expired: 'Item past expiration date and cannot be sold',
-                other: 'Other inventory discrepancy (meaningful explanation required)'
-            };
-            typeInfo.textContent = info[categorySelect.value] || '';
-        }
-        categorySelect.addEventListener('change', updateTypeInfo);
 
         document.getElementById('stock-issue-form').addEventListener('submit', event => {
             if (productIdField.value === '') {

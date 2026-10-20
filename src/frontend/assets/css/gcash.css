@@ -19,7 +19,7 @@
 #gcash-workspace .gcash-confirm:focus-within { outline: 2px solid var(--cashier-blue); outline-offset: 3px; }
 .gcash-reference-field { grid-column: 1 / -1; }
 .gcash-field { display: grid; gap: .4rem; min-width: 0; }
-.gcash-field small, .gcash-help, .gcash-camera p { color: var(--muted); line-height: 1.6; }
+.gcash-field small, .gcash-help { color: var(--muted); line-height: 1.6; }
 .gcash-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin-top: .5rem; }
 #gcash-duplicate { color: var(--theme-danger-text, #b91c1c); font-weight: 600; }
 .gcash-camera { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; }
