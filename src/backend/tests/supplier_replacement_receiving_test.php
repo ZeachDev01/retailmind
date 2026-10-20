@@ -258,6 +258,24 @@ $pdo->exec("
     );
 ");
 
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_size INTEGER NULL");
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_barcode TEXT NULL");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN sealed_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN loose_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN cost_price REAL NULL");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pack_size_used INTEGER NOT NULL DEFAULT 1");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN received_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN accepted_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN damaged_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN received_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN accepted_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN damaged_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN pack_size_used INTEGER NULL");
+
 $managerId = 1;
 $receivingService = new ReceivingService($pdo);
 $pulloutService = new SupplierPulloutService($pdo, null, 'inventory_manager');
@@ -504,6 +522,77 @@ $assert(str_contains($receivingServiceCode, 'pullout_id'), "ReceivingService per
 $invServiceCode = (string)file_get_contents(dirname(__DIR__, 2) . '/backend/app/Services/InventoryService.php');
 $assert(str_contains($invServiceCode, 'sr.pullout_id'), "InventoryService queries sr.pullout_id");
 $assert(str_contains($invServiceCode, '\'pullout_id\' => $pulloutId'), "InventoryService exposes pullout_id in batch array");
+
+
+echo "\n--- Scenario 6: Ticket #249 Stock Forms Across Pullout and Replacement Receiving ---\n";
+$packReceivingService = new ReceivingService($pdo);
+$packPulloutService = new SupplierPulloutService($pdo, null, 'inventory_manager');
+$packInventoryService = new InventoryService($pdo);
+
+// Product 4: Canned Sardines with Sales Pack of 6
+$pdo->prepare("INSERT INTO products (product_id, sku, barcode, pack_barcode, product_name, units_per_package, pack_size, cost_price, status) VALUES (4, 'SARD-06', '10004', '20004', 'Canned Sardines 6-Pack', 6, 6, 12.00, 'active')")->execute();
+$pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (4, 34)")->execute();
+// Source batch 40: 5 sealed packs (30) + 4 loose pieces (4) = 34 base units, cost 12.00, exp 2026-10-18
+$pdo->prepare("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, cost_price, expiration_date, supplier) VALUES (40, 4, 'SARD-SRC-40', 34, 34, 5, 4, 12.00, '2026-10-18', 'OceanFoods')")->execute();
+
+// 1. Pull out 2 sealed packs + 3 loose pieces (15 base units) from Batch 40
+$sardPullout = $packPulloutService->recordPullout([
+    'product_id' => 4,
+    'batch_id' => 40,
+    'pulled_packs' => 2,
+    'pulled_loose' => 3,
+    'reason' => 'Dented cans and torn shrinkwrap',
+], $managerId);
+$sardPulloutId = $sardPullout['pullout_id'];
+$assert($sardPullout['quantity'] === 15 && $sardPullout['pulled_packs'] === 2 && $sardPullout['pulled_loose'] === 3, 'Sardines pullout records 2 packs + 3 loose = 15 base units');
+$assert($sardPullout['remaining_batch_packs'] === 3 && $sardPullout['remaining_batch_loose'] === 1 && $sardPullout['remaining_batch_qty'] === 19, 'Source batch retains 3 sealed packs + 1 loose piece = 19 base units');
+
+// 2. Receive partial replacement #1: 1 sealed pack + 2 loose pieces (8 base units), no cost provided (optional cost)
+$sardRep1 = $packReceivingService->receiveStock([
+    'product_id' => 4,
+    'received_packs' => 1,
+    'received_loose' => 2,
+    'cost_price' => '',
+    'batch_number' => 'SARD-REP-1',
+    'expiration_date' => '2026-12-01',
+    'pullout_id' => $sardPulloutId,
+], $managerId);
+$assert($sardRep1['accepted_qty'] === 8 && $sardRep1['accepted_packs'] === 1 && $sardRep1['accepted_loose'] === 2, 'Partial replacement #1 accepts 1 pack + 2 loose = 8 base units');
+
+// 3. Receive delayed replacement #2: 2 sealed packs + 0 loose pieces (12 base units, total 20 vs 15 pulled), with updated cost 12.75
+$sardRep2 = $packReceivingService->receiveStock([
+    'product_id' => 4,
+    'received_packs' => 2,
+    'received_loose' => 0,
+    'cost_price' => '12.75',
+    'batch_number' => 'SARD-REP-2',
+    'expiration_date' => '2026-12-20',
+    'pullout_id' => $sardPulloutId,
+], $managerId);
+$assert($sardRep2['accepted_qty'] === 12 && $sardRep2['accepted_packs'] === 2 && $sardRep2['accepted_loose'] === 0, 'Delayed replacement #2 accepts 2 packs + 0 loose = 12 base units');
+
+// 4. Verify pullout summary aggregates both base units and stock forms
+$sardSummary = $packPulloutService->getPullout($sardPulloutId);
+$assert((int)$sardSummary['pulled_packs'] === 2 && (int)$sardSummary['pulled_loose'] === 3 && (int)$sardSummary['quantity'] === 15, 'getPullout preserves pulled_packs=2, pulled_loose=3, quantity=15');
+$assert((int)$sardSummary['total_replaced_qty'] === 20 && (int)$sardSummary['total_replaced_packs'] === 3 && (int)$sardSummary['total_replaced_loose'] === 2 && (int)$sardSummary['replacement_count'] === 2, 'getPullout aggregates replaced forms (3 packs, 2 loose, 20 base units across 2 receipts)');
+
+// 5. Verify batch-level stock forms, expiration dates, and cost provenance via InventoryService
+$sardBatches = $packInventoryService->getProductBatches(4);
+$assert(count($sardBatches) === 3, 'Product 4 has 3 distinct batches (1 source + 2 replacements)');
+$byNumber = [];
+foreach ($sardBatches as $sb) { $byNumber[$sb['batch_number']] = $sb; }
+$assert($byNumber['SARD-SRC-40']['sealed_quantity'] === 3 && $byNumber['SARD-SRC-40']['loose_quantity'] === 1 && $byNumber['SARD-SRC-40']['remaining_quantity'] === 19, 'Source batch retains 3 packs, 1 loose, 19 remaining');
+$assert($byNumber['SARD-SRC-40']['expiration_date'] === '2026-10-18' && $byNumber['SARD-SRC-40']['cost_price'] === 12.00, 'Source batch retains original expiration date and cost_price 12.00');
+$assert($byNumber['SARD-REP-1']['sealed_quantity'] === 1 && $byNumber['SARD-REP-1']['loose_quantity'] === 2 && $byNumber['SARD-REP-1']['remaining_quantity'] === 8, 'Replacement batch 1 retains 1 pack, 2 loose, 8 remaining');
+$assert($byNumber['SARD-REP-1']['expiration_date'] === '2026-12-01' && $byNumber['SARD-REP-1']['cost_price'] === null && $byNumber['SARD-REP-1']['source'] === 'Replacement', 'Replacement batch 1 retains own expiration, null optional cost, and Replacement source');
+$assert($byNumber['SARD-REP-2']['sealed_quantity'] === 2 && $byNumber['SARD-REP-2']['loose_quantity'] === 0 && $byNumber['SARD-REP-2']['remaining_quantity'] === 12, 'Replacement batch 2 retains 2 packs, 0 loose, 12 remaining');
+$assert($byNumber['SARD-REP-2']['expiration_date'] === '2026-12-20' && $byNumber['SARD-REP-2']['cost_price'] === 12.75 && $byNumber['SARD-REP-2']['source'] === 'Replacement', 'Replacement batch 2 retains own expiration, 12.75 cost, and Replacement source');
+
+// 6. Cross-workflow stock form & base unit invariant check
+$sumRemaining = array_sum(array_column($sardBatches, 'remaining_quantity'));
+$sumFromForms = array_sum(array_map(static fn($b) => ($b['sealed_quantity'] * 6) + $b['loose_quantity'], $sardBatches));
+$sardOnHand = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = 4")->fetchColumn();
+$assert($sumRemaining === 39 && $sumFromForms === 39 && $sardOnHand === 39, 'Cross-workflow invariant: batch remaining sum (39) === form base-unit sum (39) === inventory on hand (39)');
 
 if (!empty($failures)) {
     echo "\nFailed assertions (" . count($failures) . "):\n";
