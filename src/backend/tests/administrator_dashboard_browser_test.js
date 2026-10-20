@@ -177,6 +177,18 @@ const {chromium} = require('playwright');
                     'unusual_discounts' => ['Unusual discounts', false],
                     'reversals' => ['Reversals', false],
                 ];
+                $grossProfit = null;
+                $hasGrossProfit = false;
+                $grossProfitPeriods = [];
+                $activeProfitData = [];
+                $profitStatus = 'recorded';
+                $profitTotal = null;
+                $costTotal = null;
+                $profitMargin = null;
+                $affectedLinesCount = 0;
+                $activeProfitTitle = "Today's Gross Profit";
+                $activeCostTitle = "Today's Product Cost";
+                $profitReportUrl = '#';
                 eval('?>'.stream_get_contents(STDIN));
             `, testPayload], {input: template, encoding: 'utf8', cwd: path.join(root, 'src/frontend/components/administrator')});
 
@@ -446,6 +458,18 @@ const {chromium} = require('playwright');
                 $netSalesAsOf = $hasNetSales ? ($netSales['as_of'] ?? null) : null;
                 $headlineOrder = [];
                 $comparisonOrder = [];
+                $grossProfit = null;
+                $hasGrossProfit = false;
+                $grossProfitPeriods = [];
+                $activeProfitData = [];
+                $profitStatus = 'recorded';
+                $profitTotal = null;
+                $costTotal = null;
+                $profitMargin = null;
+                $affectedLinesCount = 0;
+                $activeProfitTitle = "Today's Gross Profit";
+                $activeCostTitle = "Today's Product Cost";
+                $profitReportUrl = '#';
                 eval('?>'.stream_get_contents(STDIN));
             `, zeroPayload], {input: template, encoding: 'utf8', cwd: path.join(root, 'src/frontend/components/administrator')});
 
@@ -511,6 +535,18 @@ const {chromium} = require('playwright');
                 $netSalesAsOf = $hasNetSales ? ($netSales['as_of'] ?? null) : null;
                 $headlineOrder = [];
                 $comparisonOrder = [];
+                $grossProfit = null;
+                $hasGrossProfit = false;
+                $grossProfitPeriods = [];
+                $activeProfitData = [];
+                $profitStatus = 'recorded';
+                $profitTotal = null;
+                $costTotal = null;
+                $profitMargin = null;
+                $affectedLinesCount = 0;
+                $activeProfitTitle = "Today's Gross Profit";
+                $activeCostTitle = "Today's Product Cost";
+                $profitReportUrl = '#';
                 eval('?>'.stream_get_contents(STDIN));
             `, errorPayload], {input: template, encoding: 'utf8', cwd: path.join(root, 'src/frontend/components/administrator')});
 
@@ -530,6 +566,240 @@ const {chromium} = require('playwright');
             assert.equal(await page.locator('.net-sales-summary-card[data-summary-period="month"] .value').innerText(), 'Unavailable');
             assert(await page.locator('.net-sales-section .dashboard-state-error strong').isVisible(), 'Error banner must be visible');
             assert.equal(await page.locator('#net-sales-hourly-chart').count(), 0, 'Chart must not render in error state');
+            await page.close();
+        }
+
+        // Test 4: Layout A with Gross Profit (Ticket #231)
+        {
+            const layoutAPayload = JSON.stringify({
+                state: 'ready',
+                role: 'admin',
+                range_days: 30,
+                headline: [],
+                exceptions: [],
+                comparison: [],
+                staff: {active_cashiers: 1, active_inventory_managers: 1, disabled_staff: 0},
+                shifts: {open: 1, unreviewed_variances: 0},
+                freshness: {generated_at: '2026-10-17 10:00:00', stale_after: '2026-10-17 10:05:00', refresh_seconds: 300, is_stale: false},
+                message: null,
+                net_sales: {
+                    period: 'today',
+                    status: 'ongoing',
+                    as_of: '2026-10-17 10:00:00',
+                    timezone: 'Asia/Manila',
+                    total: 305.25,
+                    sales_total: 375.25,
+                    refunds_total: 70.00,
+                    has_activity: true,
+                    points: [{hour: 10, label: '10:00', sales: 375.25, refunds: 70.00, net_sales: 305.25}],
+                    periods: {
+                        today: {
+                            period: 'today',
+                            label: "Today's Net Sales",
+                            interval_type: 'hourly',
+                            interval_label: 'Hour',
+                            status: 'ongoing',
+                            as_of: '2026-10-17 10:00:00',
+                            timezone: 'Asia/Manila',
+                            total: 305.25,
+                            sales_total: 375.25,
+                            refunds_total: 70.00,
+                            has_activity: true,
+                            points: [{hour: 10, label: '10:00', sales: 375.25, refunds: 70.00, net_sales: 305.25}],
+                        },
+                        week: {
+                            period: 'week',
+                            label: "This Week's Net Sales",
+                            interval_type: 'daily',
+                            interval_label: 'Day',
+                            status: 'ongoing',
+                            as_of: '2026-10-17 10:00:00',
+                            timezone: 'Asia/Manila',
+                            total: 655.25,
+                            sales_total: 825.25,
+                            refunds_total: 170.00,
+                            has_activity: true,
+                            points: [{day: 'Fri', label: 'Fri', date: '2026-10-16', sales: 825.25, refunds: 170.00, net_sales: 655.25}],
+                        },
+                        month: {
+                            period: 'month',
+                            label: "This Month's Net Sales",
+                            interval_type: 'daily',
+                            interval_label: 'Day',
+                            status: 'ongoing',
+                            as_of: '2026-10-17 10:00:00',
+                            timezone: 'Asia/Manila',
+                            total: 850.50,
+                            sales_total: 1050.50,
+                            refunds_total: 200.00,
+                            has_activity: true,
+                            points: [{day: 17, label: 'Oct 17', date: '2026-10-17', sales: 1050.50, refunds: 200.00, net_sales: 850.50}],
+                        },
+                    },
+                },
+                gross_profit: {
+                    status: 'ongoing',
+                    as_of: '2026-10-17 10:00:00',
+                    timezone: 'Asia/Manila',
+                    periods: {
+                        today: {
+                            period: 'today',
+                            status: 'recorded',
+                            date_range: {from: '2026-10-17', to: '2026-10-17'},
+                            total_net_sales: 305.25,
+                            total_net_cost: 150.00,
+                            total_gross_profit: 155.25,
+                            total_margin: 50.86,
+                            affected_lines_count: 0,
+                        },
+                        week: {
+                            period: 'week',
+                            status: 'estimated',
+                            date_range: {from: '2026-10-12', to: '2026-10-17'},
+                            total_net_sales: 655.25,
+                            total_net_cost: 320.00,
+                            total_gross_profit: 335.25,
+                            total_margin: null,
+                            affected_lines_count: 0,
+                        },
+                        month: {
+                            period: 'month',
+                            status: 'incomplete',
+                            date_range: {from: '2026-10-01', to: '2026-10-17'},
+                            total_net_sales: 850.50,
+                            total_net_cost: null,
+                            total_gross_profit: null,
+                            total_margin: null,
+                            affected_lines_count: 3,
+                        },
+                    },
+                },
+            });
+
+            const html = execFileSync(phpBinary, ['-r', `
+                function retailmind_theme_head() {}
+                function app_url($p) { return '/'.$p; }
+                function theme_url($p) { return '/'.$p; }
+                $displayName = 'Ada Administrator';
+                $selectedRange = 30;
+                $rangeUrl = '/components/administrator/dashboard.php?range=30';
+                $dashboard = json_decode($argv[1], true);
+                $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+                $formatDate = static fn(?string $v): string => $v ? (new DateTimeImmutable($v))->format('m-d-Y g:i A') : 'Unavailable';
+                $formatMetric = static fn(float|int $v, bool $c = false): string => ($c ? '₱' : '') . number_format((float)$v, $c ? 2 : 0);
+                $formatCurrency = static fn(float|int $v): string => ($v < 0 ? '-₱' : '₱') . number_format(abs((float)$v), 2);
+                $formatChange = static fn(?float $c): string => $c === null ? 'No prior baseline' : ($c > 0 ? '+' : '') . number_format($c, 1) . '%';
+                $netSales = $dashboard['net_sales'] ?? null;
+                $hasNetSales = $netSales !== null && is_array($netSales);
+                $netSalesPeriods = $hasNetSales ? ($netSales['periods'] ?? ['today' => $netSales]) : [];
+                $selectedPeriod = 'today';
+                $activePeriodData = $netSalesPeriods[$selectedPeriod] ?? [];
+                $activePeriodTitle = "Today's Net Sales";
+                $activePeriodTotal = $hasNetSales ? ($activePeriodData['total'] ?? 0.0) : null;
+                $activePeriodPoints = $hasNetSales ? ($activePeriodData['points'] ?? []) : [];
+                $activePeriodHasActivity = $hasNetSales && ($activePeriodData['has_activity'] ?? false);
+                $activePeriodIntervalLabel = 'Hour';
+                $netSalesPoints = $activePeriodPoints;
+                $netSalesTotal = $activePeriodTotal;
+                $netSalesHasActivity = $activePeriodHasActivity;
+                $netSalesAsOf = $hasNetSales ? ($netSales['as_of'] ?? null) : null;
+                $headlineOrder = [];
+                $comparisonOrder = [];
+
+                $grossProfit = $dashboard['gross_profit'] ?? null;
+                $hasGrossProfit = $grossProfit !== null && is_array($grossProfit);
+                $grossProfitPeriods = $hasGrossProfit ? ($grossProfit['periods'] ?? []) : [];
+                $activeProfitData = $grossProfitPeriods[$selectedPeriod] ?? ($grossProfitPeriods['today'] ?? []);
+                $activeProfitTitle = "Today's Gross Profit";
+                $activeCostTitle = "Today's Product Cost";
+                $profitStatus = (string)($activeProfitData['status'] ?? 'recorded');
+                $profitTotal = $activeProfitData['total_gross_profit'] ?? null;
+                $costTotal = $activeProfitData['total_net_cost'] ?? null;
+                $profitMargin = $activeProfitData['total_margin'] ?? null;
+                $affectedLinesCount = (int)($activeProfitData['affected_lines_count'] ?? 0);
+                $profitRange = $activeProfitData['date_range'] ?? [];
+                $activeProfitFrom = (string)($profitRange['from'] ?? date('Y-m-d'));
+                $activeProfitTo = (string)($profitRange['to'] ?? date('Y-m-d'));
+                $profitReportUrl = app_url('components/report/report_generation.php') . '?report=gross_profit&from=' . urlencode($activeProfitFrom) . '&to=' . urlencode($activeProfitTo);
+
+                eval('?>'.stream_get_contents(STDIN));
+            `, layoutAPayload], {input: template, encoding: 'utf8', cwd: path.join(root, 'src/frontend/components/administrator')});
+
+            const page = await browser.newPage();
+            await page.route('https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js', route => route.fulfill({
+                contentType: 'application/javascript',
+                body: 'window.Chart = class { constructor(canvas, config) { this.id = canvas.id; this.config = config; this.data = config.data; this.options = config.options; } update() {} };'
+            }));
+            await page.route('http://dashboard.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
+
+            await page.goto('http://dashboard.test/');
+
+            // 1. Group 3 cards: Net Sales, Gross Profit, Cost of Products Sold
+            assert.equal(await page.locator('.profit-cards-grid.layout-a-cards .layout-a-card').count(), 3, 'Must render exactly 3 Layout A cards');
+            assert.equal(await page.locator('#net-sales-card-label').innerText(), "Today's Net Sales");
+            assert.equal(await page.locator('#net-sales-card-value').innerText(), '₱305.25');
+
+            // 2. Gross profit beside Net Sales with restrained green emphasis only on positive complete result
+            assert.equal(await page.locator('#gross-profit-card-label').innerText(), "Today's Gross Profit");
+            assert.equal(await page.locator('#gross-profit-status-badge').innerText(), 'Recorded');
+            assert.equal(await page.locator('#gross-profit-card-value').innerText(), '₱155.25');
+            assert(await page.locator('.card-gross-profit').evaluate(el => el.classList.contains('is-positive-complete')), 'Positive complete profit must have is-positive-complete');
+            assert.equal(await page.locator('#profit-margin-value').innerText(), 'Margin: 50.9%');
+
+            // 3. Cost of Products Sold card
+            assert.equal(await page.locator('#cost-card-label').innerText(), "Today's Product Cost");
+            assert.equal(await page.locator('#cost-status-badge').innerText(), 'Recorded');
+            assert.equal(await page.locator('#cost-card-value').innerText(), '₱150.00');
+
+            // 4. Formula banner & exclusion note
+            assert(await page.locator('.profit-formula-bar').isVisible(), 'Formula bar must be visible');
+            assert(await page.getByText('Rent, wages, electricity, and other operating expenses are excluded').isVisible(), 'Operating expense exclusion note visible');
+
+            // 5. Expandable return help
+            const details = page.locator('#profit-return-help');
+            assert(!await details.evaluate(el => el.open), 'Return help details should be closed initially');
+            await page.locator('#profit-return-help summary').click();
+            assert(await details.evaluate(el => el.open), 'Clicking summary opens details');
+            assert(await page.getByText('Restockable returns:').isVisible(), 'Restockable help visible when open');
+
+            // 6. View profit report link preserving active date range
+            const reportBtn = page.locator('#viewProfitReportBtn');
+            assert.match(await reportBtn.getAttribute('href'), /report=gross_profit.*from=2026-10-17.*to=2026-10-17/);
+
+            // 7. Period switching: This Week (estimated status, margin withheld, no green emphasis)
+            await page.locator('.period-btn[data-period="week"]').click();
+            assert.equal(await page.locator('#net-sales-card-label').innerText(), "This Week's Net Sales");
+            assert.equal(await page.locator('#net-sales-card-value').innerText(), '₱655.25');
+            assert.equal(await page.locator('#gross-profit-card-label').innerText(), "This Week's Gross Profit");
+            assert.equal(await page.locator('#gross-profit-card-value').innerText(), '₱335.25');
+            assert.equal(await page.locator('#gross-profit-status-badge').innerText(), 'Estimated');
+            assert(!await page.locator('.card-gross-profit').evaluate(el => el.classList.contains('is-positive-complete')), 'Estimated profit must not have green emphasis');
+            assert.equal(await page.locator('#gross-profit-card-hint').innerText(), 'Costs estimated · Margin withheld');
+            assert.equal(await page.locator('#cost-card-label').innerText(), "This Week's Product Cost");
+            assert.equal(await page.locator('#cost-card-value').innerText(), '₱320.00');
+            assert.match(await reportBtn.getAttribute('href'), /from=2026-10-12.*to=2026-10-17/);
+
+            // 8. Period switching: This Month (incomplete status, numeric cost/profit withheld, affected lines count, explanation visible)
+            await page.locator('.period-btn[data-period="month"]').click();
+            assert.equal(await page.locator('#net-sales-card-label').innerText(), "This Month's Net Sales");
+            assert.equal(await page.locator('#net-sales-card-value').innerText(), '₱850.50');
+            assert.equal(await page.locator('#gross-profit-card-label').innerText(), "This Month's Gross Profit");
+            assert.equal(await page.locator('#gross-profit-status-badge').innerText(), 'Incomplete');
+            assert.equal(await page.locator('#gross-profit-card-value').innerText(), 'Incomplete');
+            assert(await page.locator('#gross-profit-card-value').evaluate(el => el.classList.contains('is-incomplete')));
+            assert.equal(await page.locator('#cost-card-label').innerText(), "This Month's Product Cost");
+            assert.equal(await page.locator('#cost-card-value').innerText(), 'Incomplete');
+            assert.equal(await page.locator('#profit-affected-lines').innerText(), '3 affected sold lines missing cost');
+            assert(!await page.locator('#profit-incomplete-explanation').evaluate(el => el.hidden), 'Incomplete explanation banner visible');
+            assert.match(await reportBtn.getAttribute('href'), /from=2026-10-01.*to=2026-10-17/);
+
+            // 9. Keyboard return to Today
+            const todayBtn = page.locator('.period-btn[data-period="today"]');
+            await todayBtn.focus();
+            await page.keyboard.press('Enter');
+            assert.equal(await page.locator('#gross-profit-card-value').innerText(), '₱155.25');
+            assert(await page.locator('.card-gross-profit').evaluate(el => el.classList.contains('is-positive-complete')));
+
             await page.close();
         }
 

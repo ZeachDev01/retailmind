@@ -15,6 +15,29 @@
 4. **Administrator (4 min):** switch Workspace, show dashboard, reports, and oversight.
 5. **Close (2 min):** confirm what matches their process, what blocks it, and the highest-priority change.
 
+## Complete gross profit demo
+
+Local development only, after an authorized operational reset and backup:
+
+```powershell
+php src/backend/scripts/seed_gross_profit_demo.php --confirm-local-database=inventory_system
+```
+
+Use your actual local database name. Apply the existing `202610180005_sold_stock_cost_snapshots` migration first. The seed refuses hosted databases, existing products/sales, open shifts, and protected fiscal periods; it does not reset data or reopen periods itself.
+
+The seed reuses the 60-product catalog and creates 91 days of simulated sales for 12 stocked products. The other 48 products start without stock. Sale cost snapshots come from recorded receiving costs, with catalog-cost estimation disabled. It verifies positive, recorded gross profit for today, this week, and this month, and checks every sold allocation has a recorded cost. If seeding fails after creating records, inspect the error and reset the demo before retrying.
+
+For new sales during the demo:
+
+1. **Inventory Manager:** select an active product and confirm its selling price.
+2. **Stock Receiving:** receive stock with its actual **purchase cost per base unit**, not just a selling price. For a case costing ₱240 with 24 pieces, enter ₱10 per piece. Save before selling.
+3. **Cashier:** start a shift, sell the received product, and complete payment. An unpaid cart or held sale does not count.
+4. **Administrator:** open the dashboard or Gross Profit Report for the sale's Philippine date. Net Sales minus the cost of units sold equals Gross Profit. Unsold stock is not deducted here.
+
+Example: receive 20 pieces at ₱10 each, then sell 2 at ₱15 each. With no discounts or refunds, Net Sales is ₱30, Product Cost is ₱20, and Gross Profit is ₱10.
+
+Entering a catalog cost after a sale is not equivalent to recording its historical purchase cost. Missing sale cost snapshots can keep past profit incomplete. Use stock with recorded receiving costs before checkout. Rent, utilities, internet, and wages remain outside gross profit.
+
 ## Rules
 
 - Use Demo Data only; no real customer, employee, or store records.

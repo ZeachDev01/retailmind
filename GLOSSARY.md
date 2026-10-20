@@ -4,6 +4,22 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**GCash Service**:
+A customer cash-in or cash-out exchange handled by the Store, separate from a Product purchase or its payment.
+_Avoid_: Product sale, GCash product payment
+
+**GCash Service Cash**:
+The physical money kept in a dedicated cash box or pouch for GCash Services, separate from the product-sale drawer.
+_Avoid_: Product-sale cash, wallet balance
+
+**GCash Service Wallet**:
+The single Store-owned GCash wallet dedicated to GCash Services. It is separate from personal wallets and accounts receiving Product payments.
+_Avoid_: Personal wallet, product-payment account
+
+**Bread Pullout Reminder**:
+An expiry-based prompt to prepare bread for supplier collection before its printed expiration date. It does not represent a completed collection.
+_Avoid_: Completed pullout, stock deduction, supplier collection schedule
+
 **Receipt History**:
 The store-wide immutable audit record of customer sale receipts, used for lookup, customer reprints, and dispute verification.
 _Avoid_: Sales (when referring to the receipt list), Transactions
@@ -47,6 +63,18 @@ _Avoid_: Selling unit, retail unit, loose unit
 **Receiving Unit**:
 The bulk commercial container or package used when purchasing goods from suppliers or supermarkets (e.g. case, box, ream, carton, pack).
 _Avoid_: Bulk unit, supplier unit, container
+
+**Sales Pack**:
+A sealed package containing a fixed number of a Product's Base Units, sold at a dedicated price cheaper than buying that number individually. It may have a barcode distinct from the individual piece barcode; unopened Sales Packs and loose pieces are counted separately within the same Product's stock.
+_Avoid_: Receiving Unit (when referring to a customer purchase)
+
+**Pack Opening**:
+The conversion of an unopened Sales Pack into its fixed number of loose Base Units for individual sale. It changes the form of the stock without changing the total quantity of goods.
+_Avoid_: Sale, Stock Receiving (when referring to opening existing stock)
+
+**Prepared Oil Pouch**:
+Oil portioned and packaged before sale, counted as individual pouches of a specified volume. The Store sells 250 mL (1/4 litre) pouches for PHP 20 and 500 mL (1/2 litre) pouches for PHP 40.
+_Avoid_: Bulk oil, peso amount (when referring to the pouch size)
 
 **Units per Package**:
 The fixed multiplier representing the exact number of Base Units contained within one Receiving Unit.

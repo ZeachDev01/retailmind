@@ -197,6 +197,7 @@ $administratorSections = [
             ['path' => 'components/administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Store Overview'],
             ['icon' => 'bi-shop', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
             ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
+            ['path' => 'components/administrator/gcash_overview.php', 'icon' => 'bi-wallet2', 'label' => 'GCash Overview'],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'bi-percent', 'label' => 'Promotions'],
             ['path' => 'components/administrator/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Oversight'],
             ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Store Reports', 'items' => $administratorReportItems],
@@ -218,6 +219,7 @@ $roleSections = [
                 ['icon' => 'bi-sliders', 'label' => 'Inventory Control', 'items' => [
                     ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-clipboard-check', 'label' => 'Inventory Counts'],
                     ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
+                    ['path' => 'components/inventory_management/supplier_pullouts.php', 'icon' => 'bi-arrow-return-left', 'label' => 'Supplier Pullouts'],
                 ]],
             ],
         ],
@@ -242,7 +244,7 @@ $roleSections = [
                 ['path' => 'components/cashier/gcash.php', 'icon' => 'bi-wallet2', 'label' => 'GCash'],
                 ['path' => 'components/cashier/shifts.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shift'],
                 ['path' => 'components/cashier/refunds.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Cash Refunds'],
-                ['path' => 'components/cashier/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Cashier Dashboard'],
+                ['path' => 'components/cashier/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard Overview'],
             ],
         ],
         [

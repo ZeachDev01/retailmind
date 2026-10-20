@@ -2,6 +2,8 @@
 
 This document provides operational instructions for deploying and maintaining the scheduled ML worker, which is responsible for daily Forecast Generation and weekly Model Retraining.
 
+The commands below run forecasting only. Also configure the independent [daily notification job](DAILY_NOTIFICATIONS.md) for Product-aware expiry reminders, including on days without transactions. The full-source maintenance wrappers already call both scripts.
+
 ## Supported Deployment Topologies
 
 The scheduled worker requires reliable execution and must not be interrupted by desktop power savings or employee workstation restarts.

@@ -1,12 +1,18 @@
 <?php
 // Run daily from Task Scheduler/cron to create and email operational alerts.
+if (PHP_SAPI !== 'cli') { http_response_code(403); exit; }
 require_once dirname(__DIR__) . '/bootstrap/app.php';
-require_once dirname(__DIR__) . '/config/db.php';
+set_exception_handler(static function (Throwable $exception): void {
+    error_log((string)$exception);
+    fwrite(STDERR, 'Daily notification checks failed: ' . $exception->getMessage() . PHP_EOL);
+    exit(1);
+});
+$pdo = App\Core\Database::connection();
 require_once dirname(__DIR__) . '/includes/functions.php';
 
 check_and_notify_low_stock($pdo);
 
-$clock = new App\Attention\SystemClock();
+$clock ??= new App\Attention\SystemClock();
 (new App\Authorization\DormancyRunner($pdo, $clock))->run();
 
 $recipients = $pdo->query(
@@ -58,17 +64,23 @@ function scheduled_alert(PDO $pdo, array $recipient, string $title, string $body
     }
 }
 
-$expiring = $pdo->query(
-    "SELECT pb.batch_id, p.product_name, pb.batch_number, pb.remaining_quantity, pb.expiration_date
-     FROM product_batches pb JOIN products p ON p.product_id = pb.product_id
-     WHERE pb.remaining_quantity > 0 AND pb.expiration_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
-     ORDER BY pb.expiration_date ASC"
-)->fetchAll(PDO::FETCH_ASSOC);
-foreach ($expiring as $batch) {
-    $title = 'Expiring stock: ' . $batch['product_name'];
-    $body = "Batch {$batch['batch_number']} has {$batch['remaining_quantity']} unit(s) remaining and expires on {$batch['expiration_date']}.";
+require_once dirname(__DIR__) . '/app/Services/NotificationService.php';
+$expiryNotifications = new NotificationService($pdo, $clock);
+$expiryNotifications->checkAndNotifyExpiringStock();
+// shortcut: email-only recipients retain repeated-run attempts; track deliveries if that behavior needs changing.
+foreach ($expiryNotifications->getEligibleExpiryReminders() as $reminder) {
     foreach ($recipients as $recipient) {
-        scheduled_alert($pdo, $recipient, $title, $body, (int)$batch['batch_id'], 'product_batch');
+        if (!empty($recipient['notify_email']) && !empty($recipient['email'])) {
+            if (!empty($recipient['notify_inapp']) && App\Database\Schema::tableExists($pdo, 'email_delivery_log')) {
+                $check = $pdo->prepare("SELECT 1 FROM email_delivery_log WHERE recipient = ? AND subject = ?
+                    AND created_at >= CURDATE() AND created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY) LIMIT 1");
+                $check->execute([(string)$recipient['email'], $reminder['title']]);
+                if ($check->fetchColumn()) {
+                    continue;
+                }
+            }
+            send_email_notification((string)$recipient['email'], $reminder['title'], $reminder['message']);
+        }
     }
 }
 

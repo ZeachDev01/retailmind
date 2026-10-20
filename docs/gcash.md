@@ -41,9 +41,29 @@ From history, choose **Verify / Reject**. Compare the actual reference, amount, 
 
 Pending records cannot be edited after saving. Correct the reference/amount before saving; reject an incorrect saved record and refer to its audit trail. A rejected reference stays reserved to prevent reuse. Product scanning is unchanged: this page attaches HID listeners only to its reference field and loads no POS product scanner code.
 
+## Automatic fees and exchange instructions preview
+
+The New Transaction form provides automatic fee calculations and physical/wallet exchange previews for **Cash-In** and **Cash-Out**. Generic Payment is excluded from new service entries (historical Payment records remain visible in history).
+
+Principal amounts accept positive whole pesos strictly from **PHP 1 to PHP 50,000** (Store operational ceiling). Principal excludes the service fee.
+
+Posted fee schedule:
+- PHP 1–499: PHP 5.00
+- PHP 500–1,000: PHP 10.00
+- PHP 1,001–10,000: PHP 15.00 for 1,001–1,500, increasing by PHP 5 per PHP 500 bracket up to PHP 100.00 for 9,501–10,000
+- Above PHP 10,000: 1% of principal, rounded to nearest centavo (e.g. PHP 12,345 principal has PHP 123.45 fee)
+
+Exchange instructions:
+- **Cash-In**: Cashier collects `principal + fee` cash at counter and sends `principal` from Store GCash wallet. Net cash: `+(principal + fee)`, net wallet: `-principal`. Fee earned in cash.
+- **Cash-Out (Fee via GCash)**: Customer transfers `principal + fee` to Store GCash wallet; Cashier hands over `principal` cash. Net cash: `-principal`, net wallet: `+(principal + fee)`. Fee earned in wallet.
+- **Cash-Out (Fee in cash)**: Customer transfers `principal` to Store GCash wallet; Cashier collects `fee` cash at counter and hands over `principal` cash. Net cash: `-(principal - fee)`, net wallet: `+principal`. Fee earned in cash.
+
+Previewing calculates authoritative amounts without creating database records or posting money movements.
+
 ## Checks
 
 ```powershell
+php src/backend/tests/gcash_fee_preview_test.php
 node src/backend/tests/gcash_reference_test.js
 $env:PHP_BINARY = 'C:/xampp/php/php.exe'
 $env:RUN_DB_TESTS = '1'

@@ -60,6 +60,33 @@ $netSalesTotal = $activePeriodTotal;
 $netSalesPoints = $activePeriodPoints;
 $netSalesHasActivity = $activePeriodHasActivity;
 $netSalesAsOf = $hasNetSales ? ($netSales['as_of'] ?? null) : null;
+
+$grossProfit = $dashboard['gross_profit'] ?? null;
+$hasGrossProfit = $grossProfit !== null && is_array($grossProfit);
+$grossProfitPeriods = $hasGrossProfit ? ($grossProfit['periods'] ?? []) : [];
+$activeProfitData = $grossProfitPeriods[$selectedPeriod] ?? ($grossProfitPeriods['today'] ?? []);
+
+$activeProfitTitle = match($selectedPeriod) {
+    'week' => "This Week's Gross Profit",
+    'month' => "This Month's Gross Profit",
+    default => "Today's Gross Profit",
+};
+$activeCostTitle = match($selectedPeriod) {
+    'week' => "This Week's Product Cost",
+    'month' => "This Month's Product Cost",
+    default => "Today's Product Cost",
+};
+
+$profitStatus = (string)($activeProfitData['status'] ?? 'recorded');
+$profitTotal = $activeProfitData['total_gross_profit'] ?? null;
+$costTotal = $activeProfitData['total_net_cost'] ?? null;
+$profitMargin = $activeProfitData['total_margin'] ?? null;
+$affectedLinesCount = (int)($activeProfitData['affected_lines_count'] ?? 0);
+$profitRange = $activeProfitData['date_range'] ?? [];
+$activeProfitFrom = (string)($profitRange['from'] ?? date('Y-m-d'));
+$activeProfitTo = (string)($profitRange['to'] ?? date('Y-m-d'));
+
+$profitReportUrl = app_url('components/report/report_generation.php') . '?report=gross_profit&from=' . urlencode($activeProfitFrom) . '&to=' . urlencode($activeProfitTo) . '&period=' . urlencode($selectedPeriod);
 $headlineOrder = [
     'sales_cash_exceptions' => ['Sales & cash exceptions', 'bi-exclamation-diamond'],
     'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam'],
@@ -145,32 +172,133 @@ $rangeUrl = $currentUrl;
             <?php endif; ?>
 
             <section class="dashboard-section net-sales-section" aria-labelledby="net-sales-title">
-                <div class="net-sales-summaries-grid" role="region" aria-label="Net Sales period summaries">
-                    <?php 
-                    $summaryPeriodDefs = [
-                        'today' => "Today's Net Sales",
-                        'week' => "This Week's Net Sales",
-                        'month' => "This Month's Net Sales",
-                    ];
-                    foreach ($summaryPeriodDefs as $pKey => $pLabel):
-                        $pData = $netSalesPeriods[$pKey] ?? null;
-                        $pTotal = $pData['total'] ?? null;
-                        $isNegative = $pTotal !== null && $pTotal < 0;
-                        $isSelected = $pKey === $selectedPeriod;
-                    ?>
-                        <article class="stat-card net-sales-summary-card <?= $isSelected ? 'is-selected' : '' ?>" data-summary-period="<?= $pKey ?>">
+                <?php if ($hasGrossProfit): ?>
+                    <div class="net-sales-summaries-grid profit-cards-grid layout-a-cards" role="region" aria-label="Sales and Profit summaries">
+                        <!-- Card 1: Net Sales -->
+                        <article class="stat-card net-sales-summary-card layout-a-card card-net-sales is-selected" data-card="net-sales" data-summary-period="<?= $escape($selectedPeriod) ?>">
                             <div class="label-wrap">
-                                <span class="label"><?= $escape($pLabel) ?></span>
+                                <span class="label" id="net-sales-card-label"><?= $escape($activePeriodTitle) ?></span>
                                 <span class="period-badge ongoing">Ongoing</span>
                             </div>
-                            <?php if ($hasNetSales && $pTotal !== null): ?>
-                                <div class="value <?= $isNegative ? 'is-negative' : '' ?>"><?= $escape($formatCurrency($pTotal)) ?></div>
+                            <?php if ($hasNetSales && $activePeriodTotal !== null): ?>
+                                <div class="value <?= $activePeriodTotal < 0 ? 'is-negative' : '' ?>" id="net-sales-card-value"><?= $escape($formatCurrency($activePeriodTotal)) ?></div>
                             <?php else: ?>
-                                <div class="value is-unavailable">Unavailable</div>
+                                <div class="value is-unavailable" id="net-sales-card-value">Unavailable</div>
                             <?php endif; ?>
+                            <div class="hint" id="net-sales-card-hint">Completed sales after discounts minus refunds</div>
                         </article>
-                    <?php endforeach; ?>
-                </div>
+
+                        <!-- Card 2: Gross Profit (beside Net Sales) -->
+                        <?php
+                        $isPositiveComplete = ($profitStatus === 'recorded' && $profitTotal !== null && $profitTotal > 0);
+                        $isProfitNegative = ($profitTotal !== null && $profitTotal < 0);
+                        $isProfitIncomplete = ($profitStatus === 'incomplete');
+                        $isProfitEstimated = ($profitStatus === 'estimated');
+                        ?>
+                        <article class="stat-card net-sales-summary-card layout-a-card card-gross-profit <?= $isPositiveComplete ? 'is-positive-complete' : '' ?> <?= $isProfitNegative ? 'is-negative' : '' ?>" data-card="gross-profit">
+                            <div class="label-wrap">
+                                <span class="label" id="gross-profit-card-label"><?= $escape($activeProfitTitle) ?></span>
+                                <span class="profit-status-badge status-<?= $escape($profitStatus) ?>" id="gross-profit-status-badge"><?= $escape(ucfirst($profitStatus)) ?></span>
+                            </div>
+                            <?php if ($isProfitIncomplete): ?>
+                                <div class="value is-incomplete" id="gross-profit-card-value">Incomplete</div>
+                            <?php elseif ($hasGrossProfit && $profitTotal !== null): ?>
+                                <div class="value <?= $isProfitNegative ? 'is-negative' : '' ?>" id="gross-profit-card-value"><?= $escape($formatCurrency($profitTotal)) ?></div>
+                            <?php else: ?>
+                                <div class="value is-unavailable" id="gross-profit-card-value">Unavailable</div>
+                            <?php endif; ?>
+                            <div class="profit-meta" id="gross-profit-card-meta">
+                                <?php if ($isProfitIncomplete): ?>
+                                    <span class="profit-affected-lines" id="profit-affected-lines"><?= $affectedLinesCount ?> affected sold line<?= $affectedLinesCount === 1 ? '' : 's' ?> missing cost</span>
+                                <?php elseif ($isProfitEstimated): ?>
+                                    <span class="hint" id="gross-profit-card-hint">Costs estimated &middot; Margin withheld</span>
+                                <?php elseif ($profitStatus === 'recorded' && $profitMargin !== null && $activePeriodTotal > 0): ?>
+                                    <strong class="profit-margin" id="profit-margin-value">Margin: <?= number_format($profitMargin, 1) ?>%</strong>
+                                <?php else: ?>
+                                    <span class="hint" id="gross-profit-card-hint"><?= ($activePeriodTotal !== null && $activePeriodTotal <= 0) ? 'Margin withheld for nonpositive sales' : 'Costs recorded' ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </article>
+
+                        <!-- Card 3: Cost of Products Sold -->
+                        <?php
+                        $isCostIncomplete = ($profitStatus === 'incomplete');
+                        $isCostNegative = ($costTotal !== null && $costTotal < 0);
+                        ?>
+                        <article class="stat-card net-sales-summary-card layout-a-card card-cost-of-sales" data-card="cost-of-sales">
+                            <div class="label-wrap">
+                                <span class="label" id="cost-card-label"><?= $escape($activeCostTitle) ?></span>
+                                <span class="profit-status-badge status-<?= $escape($profitStatus) ?>" id="cost-status-badge"><?= $escape(ucfirst($profitStatus)) ?></span>
+                            </div>
+                            <?php if ($isCostIncomplete): ?>
+                                <div class="value is-incomplete" id="cost-card-value">Incomplete</div>
+                            <?php elseif ($hasGrossProfit && $costTotal !== null): ?>
+                                <div class="value <?= $isCostNegative ? 'is-negative' : '' ?>" id="cost-card-value"><?= $escape($formatCurrency($costTotal)) ?></div>
+                            <?php else: ?>
+                                <div class="value is-unavailable" id="cost-card-value">Unavailable</div>
+                            <?php endif; ?>
+                            <div class="hint" id="cost-card-hint">
+                                <?= $isCostIncomplete ? 'Cost snapshots missing on sold items' : ($isProfitEstimated ? 'Estimated from catalog product costs' : 'Direct cost of sold merchandise') ?>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="profit-guidance-panel" id="profit-guidance-panel">
+                        <div class="profit-guidance-row">
+                            <div class="profit-formula-bar" aria-label="Gross profit calculation">
+                                <span class="formula-term">Net Sales</span>
+                                <span class="formula-operator">&minus;</span>
+                                <span class="formula-term">Product Cost</span>
+                                <span class="formula-operator">=</span>
+                                <span class="formula-term">Gross Profit</span>
+                            </div>
+                            <a class="btn btn-quiet btn-icon profit-report-link" id="viewProfitReportBtn" href="<?= $escape($profitReportUrl) ?>" data-dashboard-action>
+                                <i class="bi bi-file-earmark-bar-graph" aria-hidden="true"></i> View profit report
+                            </a>
+                        </div>
+                        <p class="profit-exclusion-note">
+                            <i class="bi bi-info-circle" aria-hidden="true"></i> Rent, wages, electricity, and other operating expenses are excluded from this calculation.
+                        </p>
+                        <div class="profit-incomplete-explanation" id="profit-incomplete-explanation" <?= $isProfitIncomplete ? '' : 'hidden' ?>>
+                            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+                            <span id="profit-incomplete-explanation-text">Some sold items in this period do not have batch cost snapshots or recorded costs. Full numeric cost and profit figures are withheld until costs are established.</span>
+                        </div>
+                        <details class="profit-return-help" id="profit-return-help">
+                            <summary><i class="bi bi-question-circle" aria-hidden="true"></i> How restockable and damaged returns affect profit</summary>
+                            <div class="return-help-drawer">
+                                <p><strong>Restockable returns:</strong> Returned items returned to saleable inventory reverse both Net Sales and Product Cost, restoring the gross profit margin.</p>
+                                <p><strong>Damaged returns:</strong> Damaged, disposed, or unsaleable items reverse Net Sales, but their stock cost is not reversed and remains an inventory loss because the items cannot be resold.</p>
+                            </div>
+                        </details>
+                    </div>
+                <?php else: ?>
+                    <div class="net-sales-summaries-grid" role="region" aria-label="Net Sales period summaries">
+                        <?php 
+                        $summaryPeriodDefs = [
+                            'today' => "Today's Net Sales",
+                            'week' => "This Week's Net Sales",
+                            'month' => "This Month's Net Sales",
+                        ];
+                        foreach ($summaryPeriodDefs as $pKey => $pLabel):
+                            $pData = $netSalesPeriods[$pKey] ?? null;
+                            $pTotal = $pData['total'] ?? null;
+                            $isNegative = $pTotal !== null && $pTotal < 0;
+                            $isSelected = $pKey === $selectedPeriod;
+                        ?>
+                            <article class="stat-card net-sales-summary-card <?= $isSelected ? 'is-selected' : '' ?>" data-summary-period="<?= $pKey ?>">
+                                <div class="label-wrap">
+                                    <span class="label"><?= $escape($pLabel) ?></span>
+                                    <span class="period-badge ongoing">Ongoing</span>
+                                </div>
+                                <?php if ($hasNetSales && $pTotal !== null): ?>
+                                    <div class="value <?= $isNegative ? 'is-negative' : '' ?>"><?= $escape($formatCurrency($pTotal)) ?></div>
+                                <?php else: ?>
+                                    <div class="value is-unavailable">Unavailable</div>
+                                <?php endif; ?>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
 
                 <div class="section-header control-center-section-header">
                     <div>
@@ -281,6 +409,7 @@ $rangeUrl = $currentUrl;
         if (typeof Chart !== 'undefined') {
             const canvas = document.getElementById('net-sales-hourly-chart');
             const netSalesData = <?= json_encode($netSalesPeriods, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            const grossProfitData = <?= json_encode($grossProfitPeriods, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
             let currentPeriod = <?= json_encode($selectedPeriod) ?>;
 
             if (canvas && netSalesData[currentPeriod]) {
@@ -374,6 +503,127 @@ $rangeUrl = $currentUrl;
                     if (summaryVal && pData.total !== undefined) {
                         summaryVal.innerText = formatPeso(pData.total);
                         summaryVal.classList.toggle('is-negative', pData.total < 0);
+                    }
+
+                    if (grossProfitData && grossProfitData[period]) {
+                        const gp = grossProfitData[period];
+                        const status = gp.status || 'recorded';
+                        const statusCap = status.charAt(0).toUpperCase() + status.slice(1);
+                        const isIncomplete = status === 'incomplete';
+                        const isEstimated = status === 'estimated';
+                        const gpTotal = gp.total_gross_profit;
+                        const costTotal = gp.total_net_cost;
+                        const margin = gp.total_margin;
+                        const netSalesTotal = pData.total;
+                        const isPositiveComplete = status === 'recorded' && gpTotal !== null && gpTotal > 0;
+                        const isProfitNegative = gpTotal !== null && gpTotal < 0;
+                        const isCostNegative = costTotal !== null && costTotal < 0;
+                        const affectedCount = gp.affected_lines_count || 0;
+
+                        const netSalesCard = document.querySelector('.card-net-sales');
+                        if (netSalesCard) {
+                            netSalesCard.dataset.summaryPeriod = period;
+                            netSalesCard.classList.add('is-selected');
+                        }
+                        const netSalesLabel = document.getElementById('net-sales-card-label');
+                        if (netSalesLabel) netSalesLabel.innerText = titleText;
+                        const netSalesVal = document.getElementById('net-sales-card-value');
+                        if (netSalesVal && netSalesTotal !== undefined) {
+                            netSalesVal.innerText = formatPeso(netSalesTotal);
+                            netSalesVal.className = 'value' + (netSalesTotal < 0 ? ' is-negative' : '');
+                        }
+
+                        const profitTitles = {
+                            today: "Today's Gross Profit",
+                            week: "This Week's Gross Profit",
+                            month: "This Month's Gross Profit"
+                        };
+                        const profitCard = document.querySelector('.card-gross-profit');
+                        if (profitCard) {
+                            profitCard.classList.toggle('is-positive-complete', isPositiveComplete);
+                            profitCard.classList.toggle('is-negative', !isIncomplete && isProfitNegative);
+                        }
+                        const profitLabel = document.getElementById('gross-profit-card-label');
+                        if (profitLabel) profitLabel.innerText = profitTitles[period] || profitTitles.today;
+                        const profitBadge = document.getElementById('gross-profit-status-badge');
+                        if (profitBadge) {
+                            profitBadge.className = 'profit-status-badge status-' + status;
+                            profitBadge.innerText = statusCap;
+                        }
+                        const profitVal = document.getElementById('gross-profit-card-value');
+                        if (profitVal) {
+                            if (isIncomplete) {
+                                profitVal.className = 'value is-incomplete';
+                                profitVal.innerText = 'Incomplete';
+                            } else if (gpTotal !== null && gpTotal !== undefined) {
+                                profitVal.className = 'value' + (isProfitNegative ? ' is-negative' : '');
+                                profitVal.innerText = formatPeso(gpTotal);
+                            } else {
+                                profitVal.className = 'value is-unavailable';
+                                profitVal.innerText = 'Unavailable';
+                            }
+                        }
+                        const profitMeta = document.getElementById('gross-profit-card-meta');
+                        if (profitMeta) {
+                            if (isIncomplete) {
+                                profitMeta.innerHTML = `<span class="profit-affected-lines" id="profit-affected-lines">${affectedCount} affected sold line${affectedCount === 1 ? '' : 's'} missing cost</span>`;
+                            } else if (isEstimated) {
+                                profitMeta.innerHTML = `<span class="hint" id="gross-profit-card-hint">Costs estimated &middot; Margin withheld</span>`;
+                            } else if (status === 'recorded' && margin !== null && margin !== undefined && netSalesTotal > 0) {
+                                profitMeta.innerHTML = `<strong class="profit-margin" id="profit-margin-value">Margin: ${Number(margin).toFixed(1)}%</strong>`;
+                            } else {
+                                profitMeta.innerHTML = `<span class="hint" id="gross-profit-card-hint">${netSalesTotal <= 0 ? 'Margin withheld for nonpositive sales' : 'Costs recorded'}</span>`;
+                            }
+                        }
+
+                        const costTitles = {
+                            today: "Today's Product Cost",
+                            week: "This Week's Product Cost",
+                            month: "This Month's Product Cost"
+                        };
+                        const costCard = document.querySelector('.card-cost-of-sales');
+                        if (costCard) {
+                            costCard.classList.toggle('is-negative', !isIncomplete && isCostNegative);
+                        }
+                        const costLabel = document.getElementById('cost-card-label');
+                        if (costLabel) costLabel.innerText = costTitles[period] || costTitles.today;
+                        const costBadge = document.getElementById('cost-status-badge');
+                        if (costBadge) {
+                            costBadge.className = 'profit-status-badge status-' + status;
+                            costBadge.innerText = statusCap;
+                        }
+                        const costVal = document.getElementById('cost-card-value');
+                        if (costVal) {
+                            if (isIncomplete) {
+                                costVal.className = 'value is-incomplete';
+                                costVal.innerText = 'Incomplete';
+                            } else if (costTotal !== null && costTotal !== undefined) {
+                                costVal.className = 'value' + (isCostNegative ? ' is-negative' : '');
+                                costVal.innerText = formatPeso(costTotal);
+                            } else {
+                                costVal.className = 'value is-unavailable';
+                                costVal.innerText = 'Unavailable';
+                            }
+                        }
+                        const costHint = document.getElementById('cost-card-hint');
+                        if (costHint) {
+                            costHint.innerText = isIncomplete
+                                ? 'Cost snapshots missing on sold items'
+                                : (isEstimated ? 'Estimated from catalog product costs' : 'Direct cost of sold merchandise');
+                        }
+
+                        const explanationEl = document.getElementById('profit-incomplete-explanation');
+                        if (explanationEl) {
+                            explanationEl.hidden = !isIncomplete;
+                        }
+
+                        const reportBtn = document.getElementById('viewProfitReportBtn');
+                        if (reportBtn && gp.date_range && gp.date_range.from && gp.date_range.to) {
+                            const repUrl = new URL(reportBtn.getAttribute('href'), window.location.href);
+                            repUrl.searchParams.set('from', gp.date_range.from);
+                            repUrl.searchParams.set('to', gp.date_range.to);
+                            reportBtn.href = repUrl.pathname + repUrl.search;
+                        }
                     }
 
                     const emptyNote = document.getElementById('net-sales-empty-note');

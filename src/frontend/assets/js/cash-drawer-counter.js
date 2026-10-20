@@ -35,7 +35,7 @@
     form.addEventListener('input', update);
     form.addEventListener('change', event => {
         if (event.target.matches('.money-counter-stepper input') && !event.target.checkValidity()) {
-            RetailMindUI.toast(event.target.validationMessage, 'error', undefined, 3000);
+            RetailMindUI.toast(event.target.validationMessage, 'error', undefined, 4300);
         }
     });
     form.addEventListener('click', event => {
@@ -51,7 +51,7 @@
         if (!confirmed) return;
         for (const row of rows) row.querySelector('input').value = '0';
         update();
-        RetailMindUI.toast('Cash count reset.', 'success', undefined, 3000);
+        RetailMindUI.toast('Cash count reset.', 'success', undefined, 4300);
     });
     form.addEventListener('submit', () => {
         // Preserve the submit payload while preventing a second click.

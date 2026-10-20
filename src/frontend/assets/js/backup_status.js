@@ -109,7 +109,7 @@
       }
     }, 6000);
     if (RM.toast) {
-      RM.toast("Saving changes is available again.", "success", "Update", 6000);
+      RM.toast("Saving changes is available again.", "success", "Update");
     }
   }
 
@@ -153,8 +153,8 @@
         return;
       }
       event.preventDefault();
-      if (RM.alert) {
-        RM.alert(
+      if (RM.toast) {
+        RM.toast(
           PAUSE_NOTICE +
             " Your work is still here — wait a moment and save again.",
           "warning",

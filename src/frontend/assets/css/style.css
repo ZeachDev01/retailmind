@@ -1444,6 +1444,27 @@ body.sidebar-collapsed .global-topbar { left: var(--sidebar-collapsed-width); }
 
 .net-sales-section { margin-top: 1.25rem; }
 .net-sales-summaries-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+.profit-cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.card-gross-profit.is-positive-complete { border-color: #86efac; background: var(--theme-surface-soft, #f0fdf4); }
+.card-gross-profit.is-positive-complete .value { color: #15803d; }
+.profit-status-badge { display: inline-flex; align-items: center; padding: .15rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 700; text-transform: capitalize; }
+.profit-status-badge.status-recorded { background: #dcfce7; color: #166534; }
+.profit-status-badge.status-estimated { background: #fef3c7; color: #92400e; }
+.profit-status-badge.status-incomplete { background: #fee2e2; color: #991b1b; }
+.profit-guidance-panel { background: var(--theme-surface-soft, #f8fafc); border: 1px solid var(--border); border-radius: 11px; padding: .85rem 1rem; margin-bottom: 1.25rem; }
+.profit-guidance-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .4rem; }
+.profit-formula-bar { display: inline-flex; align-items: center; gap: .45rem; font-size: .92rem; font-weight: 600; color: var(--text); }
+.profit-formula-bar .formula-operator { color: var(--muted); font-weight: 800; }
+.profit-exclusion-note { font-size: .82rem; color: var(--muted); margin: .25rem 0 .5rem; line-height: 1.4; }
+.profit-incomplete-explanation { display: flex; align-items: flex-start; gap: .5rem; padding: .6rem .75rem; margin: .5rem 0; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: .82rem; line-height: 1.4; }
+.profit-return-help { margin-top: .4rem; font-size: .85rem; }
+.profit-return-help summary { cursor: pointer; color: var(--primary, #2563eb); font-weight: 600; padding: .2rem 0; }
+.profit-return-help summary:hover { text-decoration: underline; }
+.profit-return-help summary:focus-visible { outline: 2px solid var(--primary, #2563eb); outline-offset: 2px; border-radius: 4px; }
+.return-help-drawer { padding: .65rem .85rem; margin-top: .4rem; background: var(--card-bg, #fff); border: 1px solid var(--border); border-radius: 8px; font-size: .82rem; line-height: 1.5; }
+.return-help-drawer p { margin: .35rem 0; }
+.profit-margin-wrap strong.profit-margin { font-size: .88rem; color: var(--text); }
+.profit-affected-lines { display: inline-block; color: #991b1b; font-weight: 600; font-size: .8rem; }
 .net-sales-summary-card { padding: .9rem; border: 1px solid var(--border); border-radius: 11px; background: var(--theme-surface-soft, #f8fafc); }
 .net-sales-summary-card.is-selected { border-color: var(--primary, #2563eb); box-shadow: 0 0 0 1px var(--primary, #2563eb); }
 .net-sales-summary-card .label-wrap { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .35rem; }
@@ -1451,6 +1472,7 @@ body.sidebar-collapsed .global-topbar { left: var(--sidebar-collapsed-width); }
 .net-sales-summary-card .value { font-size: clamp(1.2rem, 1.8vw, 1.5rem); font-weight: 800; color: var(--text); }
 .net-sales-summary-card .value.is-negative { color: #dc2626; }
 .net-sales-summary-card .value.is-unavailable { color: var(--muted); font-size: 1.1rem; }
+.net-sales-summary-card .value.is-incomplete { color: var(--muted); font-size: 1.1rem; }
 .net-sales-title-wrap { display: flex; align-items: center; gap: .6rem; }
 .net-sales-title-wrap h2 { margin: 0; }
 .period-badge { display: inline-flex; align-items: center; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
@@ -1511,6 +1533,8 @@ body.sidebar-collapsed .global-topbar { left: var(--sidebar-collapsed-width); }
     .access-readiness-action { width: 100%; min-width: 0; }
     .net-sales-section .section-header { flex-direction: column; align-items: flex-start; gap: .75rem; }
     .net-sales-summaries-grid { grid-template-columns: 1fr; }
+    .profit-cards-grid { grid-template-columns: 1fr; }
+    .profit-guidance-row { flex-direction: column; align-items: flex-start; }
     .net-sales-header-controls { flex-direction: column; align-items: flex-start; width: 100%; gap: .75rem; }
     .period-controls { width: 100%; display: flex; }
     .period-btn { flex: 1; text-align: center; }

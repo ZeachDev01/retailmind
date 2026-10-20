@@ -28,7 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if ($action === 'approve') {
-            $stockIssueService->approveReport($adjustmentId, (int)$_SESSION['user_id'], trim((string)($_POST['review_notes'] ?? '')));
+            $batchAllocations = isset($_POST['batches']) && is_array($_POST['batches']) ? $_POST['batches'] : null;
+            $stockIssueService->approveReport($adjustmentId, (int)$_SESSION['user_id'], trim((string)($_POST['review_notes'] ?? '')), $batchAllocations);
             $message = "Report #{$adjustmentId} approved. Inventory deducted and a linked stock movement recorded.";
             log_activity(
                 $pdo,
@@ -179,6 +180,45 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                         <small>Only Other reports can be recategorized. Quantity and explanation are never rewritten here.</small>
                                     </div>
                                 <?php endif; ?>
+                                <?php
+                                $productBatches = $stockIssueService->getProductBatches((int)$report['product_id']);
+                                if (!empty($productBatches)):
+                                    $fefoAllocations = $stockIssueService->recommendBatchAllocation((int)$report['product_id'], abs((int)$report['adjustment_qty']));
+                                ?>
+                                    <div class="form-group">
+                                        <label><strong>Batch Allocation</strong> (prefilled via FEFO)</label>
+                                        <div class="table-wrap u-mt-1">
+                                            <table>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Batch</th>
+                                                        <th>Expiration</th>
+                                                        <th>Remaining</th>
+                                                        <th>Deduct</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($productBatches as $pb): ?>
+                                                        <tr>
+                                                            <td><?= htmlspecialchars($pb['batch_number'] ?? ('#' . $pb['batch_id'])) ?></td>
+                                                            <td><?= htmlspecialchars($pb['expiration_date'] ?? 'Not recorded') ?></td>
+                                                            <td><?= (int)$pb['remaining_quantity'] ?></td>
+                                                            <td>
+                                                                <input type="number"
+                                                                       name="batches[<?= (int)$pb['batch_id'] ?>]"
+                                                                       value="<?= (int)($fefoAllocations[$pb['batch_id']] ?? 0) ?>"
+                                                                       min="0"
+                                                                       max="<?= (int)$pb['remaining_quantity'] ?>"
+                                                                       style="width: 80px;"
+                                                                       class="form-control">
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="review-actions">
                                     <button type="submit" name="action" value="approve" class="btn-submit" <?= $short ? 'disabled title="Insufficient available stock"' : '' ?>>Approve &amp; Deduct</button>
                                     <button type="submit" name="action" value="reject" class="btn btn-secondary">Reject</button>
@@ -267,6 +307,17 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                 <strong>Reviewed by:</strong> <?= htmlspecialchars($review['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($review['approved_at'])) ?>
                             </div>
                             <?php if ($review['status'] === 'approved'): ?>
+                                <?php $reviewBatches = $stockIssueService->getReportBatches((int)$review['adjustment_id']); ?>
+                                <?php if (!empty($reviewBatches)): ?>
+                                    <div class="adjustment-reason">
+                                        <strong>Deducted batches:</strong>
+                                        <ul class="u-mt-1" style="margin-left: 1.25rem;">
+                                            <?php foreach ($reviewBatches as $rb): ?>
+                                                <li>Batch <?= htmlspecialchars($rb['batch_number'] ?? ('#' . $rb['batch_id'])) ?><?= !empty($rb['expiration_date']) ? ' (Exp: ' . htmlspecialchars($rb['expiration_date']) . ')' : '' ?>: -<?= (int)$rb['quantity'] ?></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="adjustment-reason">
                                     <strong>This report is locked.</strong> If the approval was wrong, do not reopen it — record a separate linked inventory count:
                                     <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php?correct=' . (int)$review['adjustment_id'])) ?>">Correct via inventory count</a>

@@ -1,6 +1,8 @@
 <?php
 // app/Services/DashboardService.php
 
+require_once __DIR__ . '/InventoryService.php';
+
 class DashboardService
 {
     private PDO $pdo;
@@ -67,12 +69,7 @@ class DashboardService
                  JOIN inventory i ON i.product_id = p.product_id
                  WHERE p.status = 'active' AND i.quantity_on_hand <= 0"
             )->fetchColumn(),
-            'expiring_count' => (int)$this->pdo->query(
-                "SELECT COUNT(*)
-                 FROM product_batches
-                 WHERE remaining_quantity > 0
-                   AND expiration_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)"
-            )->fetchColumn(),
+            'expiring_count' => count((new InventoryService($this->pdo))->getExpiringSoonBatches(30)),
             'forecasted_demand' => (int)$this->pdo->query(
                 "SELECT COALESCE(SUM(predicted_units), 0)
                  FROM demand_forecasts df

@@ -412,7 +412,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         document.getElementById('stock-issue-form').addEventListener('submit', event => {
             if (productIdField.value === '') {
                 event.preventDefault();
-                alert('Select a product by barcode scan or search first.');
+                RetailMindUI.toast('Select a product by barcode scan or search first.', 'error');
             }
         });
 

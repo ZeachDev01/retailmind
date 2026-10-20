@@ -66,6 +66,18 @@ if ($argv[1] === 'reports') {
         $product->execute([$id, 'REPORT-' . $id, 'REPORT-' . $id, 'Report pagination item ' . $id, 25, 3]);
         $pdo->exec("INSERT IGNORE INTO inventory (product_id,quantity_on_hand) VALUES ({$id},10)");
     }
+    $pdo->exec("INSERT INTO categories (category_name) VALUES ('Tea & Coffee')");
+    $categoryId = (int)$pdo->lastInsertId();
+    $pdo->exec("UPDATE products SET category_id={$categoryId}, brand='Lookup Brand' WHERE product_id=164");
+    $pdo->exec("UPDATE products SET unit_price=2.50, cost_price=1.15 WHERE product_id=100");
+    $pdo->exec("UPDATE products SET unit_price=10, cost_price=9.50 WHERE product_id=101");
+    $pdo->exec("UPDATE products SET unit_price=1000, cost_price=100 WHERE product_id=102");
+    $pdo->exec("UPDATE inventory SET quantity_on_hand=2 WHERE product_id=100");
+    $pdo->exec("UPDATE inventory SET quantity_on_hand=100 WHERE product_id=102");
+    $pdo->exec("INSERT INTO product_batches (product_id,batch_number,quantity,remaining_quantity,expiration_date) VALUES
+        (100,'SORT-100-EXPIRED',1,1,'2000-01-01'), (100,'SORT-100-FUTURE',1,1,'2099-12-01'),
+        (101,'SORT-101-EXPIRED',8,8,'2000-01-01'), (101,'SORT-101-FUTURE',2,2,'2099-02-01'),
+        (102,'SORT-102-EXPIRED',12,12,'2000-01-01')");
     $pdo->exec("INSERT IGNORE INTO forecast_runs (forecast_run_id,model_name,model_version,forecast_period_days) VALUES (100,'Random Forest','theme-test',7)");
     $pdo->exec('INSERT IGNORE INTO stock_predictions (prediction_id,forecast_run_id,product_id,forecast_period_days,forecast_value,actual_demand) VALUES (100,100,1,7,8,6)');
     $pdo->exec("INSERT IGNORE INTO model_training_runs (training_run_id,model_name,model_version,status,metrics_json) VALUES (100,'Random Forest','theme-test','completed','{\"wape\":12,\"mean_absolute_error\":2}'),(101,'Random Forest','theme-test','completed','{\"wape\":10,\"mean_absolute_error\":1}')");
@@ -136,6 +148,11 @@ if ($argv[1] === 'gates') {
     $pdo->exec("USE `{$database}`");
     $pdo->exec('UPDATE users SET must_change_password=1 WHERE user_id=1');
     $pdo->exec('UPDATE cashier_shifts SET locked_at=CURRENT_TIMESTAMP WHERE shift_id=1'); exit;
+}
+if ($argv[1] === 'gcash_legacy') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("INSERT INTO gcash_transactions (cashier_id, reference_number, transaction_type, amount, verification_status, created_at) VALUES (4, '0012345678990', 'Cash-In', 500.00, 'Verified', NOW())");
+    exit;
 }
 $pdo->exec("CREATE DATABASE `{$database}`");
 $pdo->exec("USE `{$database}`");

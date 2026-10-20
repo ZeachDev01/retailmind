@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/ReceivingService.php';
+require_once __DIR__ . '/../../../backend/app/Services/SupplierPulloutService.php';
 require_role(['admin', 'super_admin', 'inventory_manager']);
 
 $receivingService = new ReceivingService($pdo);
@@ -13,8 +14,27 @@ $error = '';
 $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 $formValues = [];
 $prefillProductId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+$prefillPulloutId = isset($_GET['pullout_id']) ? (int)$_GET['pullout_id'] : 0;
+$linkedPullout = null;
+if ($prefillPulloutId > 0) {
+    try {
+        $linkedPullout = (new SupplierPulloutService($pdo))->getPullout($prefillPulloutId);
+        if ($linkedPullout && $prefillProductId <= 0) {
+            $prefillProductId = (int)$linkedPullout['product_id'];
+        }
+    } catch (Throwable) {
+        $linkedPullout = null;
+    }
+}
 if ($prefillProductId > 0 && $_SERVER['REQUEST_METHOD'] === 'GET') {
-    $formValues = ['lines' => [['product_id' => (string)$prefillProductId]]];
+    $initialLine = ['product_id' => (string)$prefillProductId];
+    if ($prefillPulloutId > 0) {
+        $initialLine['pullout_id'] = (string)$prefillPulloutId;
+    }
+    $formValues = [
+        'lines' => [$initialLine],
+        'supplier' => $linkedPullout['supplier'] ?? '',
+    ];
 }
 
 // Handle form submission
@@ -53,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'discrepancy_qty' => $_POST['discrepancy_qty'] ?? 0,
             'discrepancy_notes' => $_POST['discrepancy_notes'] ?? '',
             'notes' => $_POST['notes'] ?? '',
+            'pullout_id' => $_POST['pullout_id'] ?? ($_POST['lines'][0]['pullout_id'] ?? null),
             ]];
         }
         $results = $receivingService->receiveShoppingTrip($lines, $entry, (int)$_SESSION['user_id']);
@@ -142,6 +163,15 @@ $categoryIcon = static function (string $categoryName): string {
             <div class="message error"><span role="alert"><?= htmlspecialchars($error) ?></span></div>
         <?php endif; ?>
 
+        <?php if ($linkedPullout): ?>
+            <div class="message info pullout-link-notice" role="status">
+                <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                <strong>Replacement Receiving:</strong> Linked to Supplier Pullout #<?= (int)$linkedPullout['pullout_id'] ?>
+                (<?= htmlspecialchars($linkedPullout['product_name']) ?>, <?= (int)$linkedPullout['quantity'] ?> units pulled on <?= htmlspecialchars(substr((string)$linkedPullout['pulled_at'], 0, 10)) ?><?= !empty($linkedPullout['supplier']) ? ' from ' . htmlspecialchars($linkedPullout['supplier']) : '' ?>).
+                Fresh goods will be saved in a new batch.
+            </div>
+        <?php endif; ?>
+
         <div class="receiving-form" data-step="1" <?= !$canReceive ? 'data-readonly="true"' : '' ?>>
             <h2 id="receiving_step_title" class="receiving-step-title" tabindex="-1">1. Select products</h2>
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
@@ -201,6 +231,9 @@ $categoryIcon = static function (string $categoryName): string {
                                     <span class="line-number">1</span>.
                                     <strong class="receiving-product-name playlist-product-name"></strong>
                                     <span class="receiving-product-sku playlist-product-sku"></span>
+                                    <span class="receiving-pullout-badge badge" data-field="pullout_badge" style="display:none; font-size:0.75rem; margin-left:0.5rem; background:#0284c7; color:#fff; border-radius:0.25rem; padding:0.15rem 0.4rem; vertical-align:middle;">
+                                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Linked Pullout #<span data-field="pullout_badge_id"></span>
+                                    </span>
                                 </div>
                                 <div class="receiving-product-pack playlist-pack-info"></div>
                             </div>
@@ -218,6 +251,7 @@ $categoryIcon = static function (string $categoryName): string {
                         </div>
                     </div>
                     <input type="hidden" name="lines[0][product_id]" id="product_id" data-field="product_id" value="">
+                    <input type="hidden" name="lines[0][pullout_id]" id="pullout_id" data-field="pullout_id" value="">
 
                     <div class="form-section receiving-quantity">
                         <div class="form-grid">
@@ -941,6 +975,15 @@ function addReceivingLine(values = {}) {
             restoreField(row.querySelector('[data-field="' + name + '"]'), String(value));
         }
     }
+    const pulloutInput = row.querySelector('[data-field="pullout_id"]');
+    if (pulloutInput && pulloutInput.value) {
+        const badge = row.querySelector('[data-field="pullout_badge"]');
+        const badgeId = row.querySelector('[data-field="pullout_badge_id"]');
+        if (badge && badgeId) {
+            badgeId.textContent = pulloutInput.value;
+            badge.style.display = 'inline-block';
+        }
+    }
     updateQuantityMode(row);
     updateExtrasDisclosure(row);
     if (!canReceive) {
@@ -1095,7 +1138,14 @@ function renderReview() {
             const target = field('quantity_mode') || row.querySelector('input:not([type="hidden"]), select');
             target?.focus();
         });
-        section.append(title, mode, details, notes, edit);
+        section.append(title, mode, details);
+        const pulloutIdVal = field('pullout_id')?.value;
+        if (pulloutIdVal) {
+            const pulloutInfo = document.createElement('p');
+            pulloutInfo.textContent = 'Linked replacement: Supplier Pullout #' + pulloutIdVal;
+            section.append(pulloutInfo);
+        }
+        section.append(notes, edit);
         review.append(section);
     }
 }
@@ -1137,7 +1187,9 @@ try {
             const requestedLines = retainedValues.lines || [];
             retainedValues = draft;
             for (const line of requestedLines) {
-                if (!draft.lines.some(saved => String(saved.product_id) === String(line.product_id))) draft.lines.push(line);
+                const existing = draft.lines.find(saved => String(saved.product_id) === String(line.product_id));
+                if (!existing) draft.lines.push(line);
+                else if (line.pullout_id) existing.pullout_id = line.pullout_id;
             }
         }
     }

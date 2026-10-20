@@ -700,3 +700,25 @@ function send_email_notification(string $email, string $subject, string $message
     }
     return $success;
 }
+
+function validate_calendar_date(mixed $rawDate): ?string
+{
+    if ($rawDate === null) {
+        return null;
+    }
+    if (!is_string($rawDate) && !is_int($rawDate)) {
+        throw new RuntimeException('Enter a valid expiration date.');
+    }
+    $trimmed = trim((string)$rawDate);
+    if ($trimmed === '') {
+        return null;
+    }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/D', $trimmed)) {
+        throw new RuntimeException('Enter a valid expiration date.');
+    }
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $trimmed);
+    if (!$date || $date->format('Y-m-d') !== $trimmed || $trimmed < '1000-01-01') {
+        throw new RuntimeException('Enter a valid expiration date.');
+    }
+    return $trimmed;
+}

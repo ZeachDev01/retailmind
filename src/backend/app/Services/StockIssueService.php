@@ -484,7 +484,7 @@ class StockIssueService
      * when insufficient (never negative, never partial), deduct the full
      * reported quantity, and record a linked stock movement.
      */
-    public function approveReport(int $adjustmentId, int $approverId, string $reviewNotes = ''): void
+    public function approveReport(int $adjustmentId, int $approverId, string $reviewNotes = '', ?array $batchAllocations = null): void
     {
         if ($adjustmentId <= 0) {
             throw new RuntimeException('Invalid report selected.');
@@ -535,6 +535,145 @@ class StockIssueService
                 );
             }
 
+            $finalAllocations = [];
+            if ($batchAllocations !== null) {
+                if (!$this->hasBatchesTable()) {
+                    throw new RuntimeException('Batch allocation requested but batch tracking is not available.');
+                }
+                $allocations = [];
+                foreach ($batchAllocations as $key => $val) {
+                    if (is_array($val)) {
+                        $bIdRaw = $val['batch_id'] ?? $key;
+                        $qRaw = $val['quantity'] ?? $val['qty'] ?? 0;
+                    } else {
+                        $bIdRaw = $key;
+                        $qRaw = $val;
+                    }
+
+                    if (!is_int($bIdRaw) && !(is_string($bIdRaw) && preg_match('/^\d+$/', trim($bIdRaw)))) {
+                        throw new RuntimeException('Invalid batch ID.');
+                    }
+                    $batchId = (int)$bIdRaw;
+                    if ($batchId <= 0) {
+                        throw new RuntimeException('Invalid batch ID.');
+                    }
+
+                    if (is_string($qRaw)) {
+                        $qStr = trim($qRaw);
+                        if ($qStr === '') {
+                            continue;
+                        }
+                        if (!preg_match('/^-?\d+$/', $qStr)) {
+                            throw new RuntimeException('Allocated quantity must be a whole number.');
+                        }
+                        $allocQty = (int)$qStr;
+                    } elseif (is_int($qRaw)) {
+                        $allocQty = $qRaw;
+                    } else {
+                        throw new RuntimeException('Allocated quantity must be a whole number.');
+                    }
+
+                    if ($allocQty < 0) {
+                        throw new RuntimeException('Allocated quantity cannot be negative.');
+                    }
+                    if ($allocQty === 0) {
+                        continue;
+                    }
+
+                    $allocations[$batchId] = ($allocations[$batchId] ?? 0) + $allocQty;
+                }
+
+                $sumAllocated = array_sum($allocations);
+                if ($sumAllocated !== $quantity) {
+                    throw new RuntimeException(
+                        "Allocated batch quantity ({$sumAllocated}) does not match reported quantity ({$quantity})."
+                    );
+                }
+
+                foreach ($allocations as $batchId => $allocQty) {
+                    $batchStmt = $this->pdo->prepare(
+                        "SELECT batch_id, product_id, remaining_quantity
+                         FROM product_batches
+                         WHERE batch_id = ?{$this->forUpdate()}"
+                    );
+                    $batchStmt->execute([$batchId]);
+                    $batch = $batchStmt->fetch(PDO::FETCH_ASSOC);
+                    if (!$batch) {
+                        throw new RuntimeException("Selected batch #{$batchId} not found.");
+                    }
+                    if ((int)$batch['product_id'] !== $productId) {
+                        throw new RuntimeException("Batch #{$batchId} does not belong to product #{$productId}.");
+                    }
+                    if ((int)$batch['remaining_quantity'] < $allocQty) {
+                        throw new RuntimeException(
+                            "Insufficient stock in batch #{$batchId} ({$batch['remaining_quantity']} available, {$allocQty} allocated)."
+                        );
+                    }
+                    $finalAllocations[$batchId] = $allocQty;
+                }
+            } else {
+                if ($this->hasBatchesTable()) {
+                    $countStmt = $this->pdo->prepare('SELECT COUNT(*) FROM product_batches WHERE product_id = ?');
+                    $countStmt->execute([$productId]);
+                    $totalBatches = (int)$countStmt->fetchColumn();
+
+                    if ($totalBatches > 0) {
+                        $fefoStmt = $this->pdo->prepare(
+                            "SELECT batch_id, remaining_quantity, expiration_date
+                             FROM product_batches
+                             WHERE product_id = ? AND remaining_quantity > 0
+                             ORDER BY
+                                CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
+                                expiration_date ASC,
+                                date_received ASC,
+                                batch_id ASC{$this->forUpdate()}"
+                        );
+                        $fefoStmt->execute([$productId]);
+                        $availableBatches = $fefoStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                        $needed = $quantity;
+                        foreach ($availableBatches as $batch) {
+                            if ($needed <= 0) {
+                                break;
+                            }
+                            $take = min($needed, (int)$batch['remaining_quantity']);
+                            if ($take > 0) {
+                                $finalAllocations[(int)$batch['batch_id']] = $take;
+                                $needed -= $take;
+                            }
+                        }
+
+                        if ($needed > 0) {
+                            throw new RuntimeException(
+                                "Insufficient batch stock available for product #{$productId} ({$needed} units unallocated)."
+                            );
+                        }
+                    }
+                }
+            }
+
+            if (!empty($finalAllocations)) {
+                $deductBatchStmt = $this->pdo->prepare(
+                    'UPDATE product_batches
+                     SET remaining_quantity = remaining_quantity - ?
+                     WHERE batch_id = ? AND remaining_quantity >= ?'
+                );
+                $recordBatchStmt = $this->pdo->prepare(
+                    'INSERT INTO stock_issue_batches (adjustment_id, batch_id, quantity)
+                     VALUES (?, ?, ?)'
+                );
+
+                foreach ($finalAllocations as $batchId => $allocQty) {
+                    $deductBatchStmt->execute([$allocQty, $batchId, $allocQty]);
+                    if ($deductBatchStmt->rowCount() === 0) {
+                        throw new RuntimeException(
+                            "Batch #{$batchId} stock changed while reviewing. Approval refused; inventory unchanged."
+                        );
+                    }
+                    $recordBatchStmt->execute([$adjustmentId, $batchId, $allocQty]);
+                }
+            }
+
             // Conditional deduction: concurrent approvals cannot drive stock negative.
             $deductStmt = $this->pdo->prepare(
                 'UPDATE inventory SET quantity_on_hand = quantity_on_hand - ?
@@ -568,6 +707,16 @@ class StockIssueService
                 throw new RuntimeException('This report was already reviewed.');
             }
 
+            $newRevisionValues = [
+                'status' => 'approved',
+                'quantity_on_hand' => $available - $quantity,
+                'deducted_qty' => $quantity,
+                'review_notes' => $notes,
+            ];
+            if (!empty($finalAllocations)) {
+                $newRevisionValues['batches'] = $finalAllocations;
+            }
+
             $this->insertRevision(
                 $adjustmentId,
                 $approverId,
@@ -575,7 +724,7 @@ class StockIssueService
                 'pending',
                 'approved',
                 ['status' => 'pending', 'quantity_on_hand' => $available],
-                ['status' => 'approved', 'quantity_on_hand' => $available - $quantity, 'deducted_qty' => $quantity, 'review_notes' => $notes]
+                $newRevisionValues
             );
 
             log_activity(
@@ -595,6 +744,7 @@ class StockIssueService
                     'quantity_on_hand' => $available - $quantity,
                     'deducted_qty' => $quantity,
                     'detail' => $auditDetail,
+                    'batches' => $finalAllocations ?: null,
                 ]
             );
 
@@ -846,6 +996,7 @@ class StockIssueService
             'revisions' => $this->getRevisions($adjustmentId),
             'stock_movements' => $movementStmt->fetchAll(PDO::FETCH_ASSOC),
             'correction_counts' => $this->getCorrectionCounts($adjustmentId),
+            'batches' => $this->getReportBatches($adjustmentId),
         ];
     }
 
@@ -1047,6 +1198,77 @@ class StockIssueService
         return $quantity === false ? 0 : (int)$quantity;
     }
 
+    /**
+     * Active remaining batches for a product, ordered by FEFO.
+     */
+    public function getProductBatches(int $productId): array
+    {
+        if ($productId <= 0 || !$this->hasBatchesTable()) {
+            return [];
+        }
+        $stmt = $this->pdo->prepare(
+            "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.quantity, pb.remaining_quantity,
+                    pb.expiration_date, pb.date_received, pb.supplier
+             FROM product_batches pb
+             WHERE pb.product_id = ? AND pb.remaining_quantity > 0
+             ORDER BY
+                CASE WHEN pb.expiration_date IS NULL THEN 1 ELSE 0 END,
+                pb.expiration_date ASC,
+                pb.date_received ASC,
+                pb.batch_id ASC"
+        );
+        $stmt->execute([$productId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Batch deductions recorded for an approved stock-issue report.
+     */
+    public function getReportBatches(int $adjustmentId): array
+    {
+        if ($adjustmentId <= 0) {
+            return [];
+        }
+        try {
+            $stmt = $this->pdo->prepare(
+                "SELECT sib.id, sib.adjustment_id, sib.batch_id, sib.quantity, sib.created_at,
+                        pb.batch_number, pb.expiration_date
+                 FROM stock_issue_batches sib
+                 LEFT JOIN product_batches pb ON pb.batch_id = sib.batch_id
+                 WHERE sib.adjustment_id = ?
+                 ORDER BY sib.id ASC"
+            );
+            $stmt->execute([$adjustmentId]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Recommend FEFO batch allocations for a given product and quantity.
+     */
+    public function recommendBatchAllocation(int $productId, int $quantity): array
+    {
+        if ($quantity <= 0) {
+            return [];
+        }
+        $batches = $this->getProductBatches($productId);
+        $allocations = [];
+        $needed = $quantity;
+        foreach ($batches as $batch) {
+            if ($needed <= 0) {
+                break;
+            }
+            $take = min($needed, (int)$batch['remaining_quantity']);
+            if ($take > 0) {
+                $allocations[(int)$batch['batch_id']] = $take;
+                $needed -= $take;
+            }
+        }
+        return $allocations;
+    }
+
     public function getOpenShift(int $cashierId): ?array
     {
         $stmt = $this->pdo->prepare(
@@ -1192,6 +1414,16 @@ class StockIssueService
                     REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
         );
+    }
+
+    private function hasBatchesTable(): bool
+    {
+        try {
+            $this->pdo->query('SELECT 1 FROM product_batches LIMIT 1');
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function insertRevision(

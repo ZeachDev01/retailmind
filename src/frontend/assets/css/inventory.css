@@ -13,7 +13,7 @@
 .overview-branch-filter select { min-width: 190px; min-height: 40px; padding: .5rem .7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface, #fff); color: var(--text); }
 .overview-workflow-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
 .overview-workflow-actions .btn { min-height: 40px; }
-.overview-metrics { display: grid; grid-template-columns: repeat(6, minmax(145px, 1fr)); gap: .7rem; margin-bottom: 1.75rem; }
+.overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .7rem; margin-bottom: 1.75rem; }
 .overview-metric { min-width: 0; min-height: 86px; display: flex; align-items: center; gap: .7rem; padding: .8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface, #fff); color: var(--text); font: inherit; text-align: left; }
 button.overview-metric { cursor: pointer; }
 button.overview-metric:hover,button.overview-metric:focus-visible { border-color: #93c5fd; box-shadow: 0 6px 16px rgba(37,99,235,.08); outline: none; }
@@ -88,6 +88,9 @@ button.overview-metric:hover,button.overview-metric:focus-visible { border-color
 .overview-product-table th,.overview-product-table td { padding: .8rem 1rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
 .overview-product-table th { position: sticky; top: 0; z-index: 2; background: var(--theme-surface-soft, #f8fafc); color: var(--theme-muted, #64748b); font-size: .76rem; font-weight: 800; white-space: nowrap; }
 .overview-product-table th i { color: var(--theme-muted, #64748b); }
+.overview-product-table th button { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; min-width: 44px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.overview-product-table th button:hover { color: var(--theme-info-text, #2563eb); }
+.overview-product-table th button:focus-visible { outline: 2px solid var(--theme-info-text, #2563eb); outline-offset: 3px; }
 .overview-product-table tbody tr:hover { background: var(--theme-surface-soft, #fafcff); }
 .overview-product-table tbody tr:last-child td { border-bottom: 0; }
 .overview-product-table td { font-size: .84rem; }
@@ -711,5 +714,21 @@ button.overview-metric:hover,button.overview-metric:focus-visible { border-color
 @media(max-width:700px) {
  .main-content:has(.supplier-plan) .u-flex-end-sticky { position:static; padding-top:.75rem; }
  .main-content:has(.supplier-plan) .u-flex-end-sticky .btn { width:100%; white-space:normal; }
- .po-create-form .btn { width:100%; }
+.po-create-form .btn { width:100%; }
 }
+
+.overview-stock-flag { display: inline-flex; align-items: center; gap: .25rem; font-size: .72rem; padding: .15rem .45rem; border-radius: 4px; margin-top: .25rem; }
+.overview-stock-flag--unbatched { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-weight: 600; }
+.overview-view-filter-group { display: flex; flex: 1; flex-wrap: wrap; align-items: flex-end; gap: .75rem; min-width: 0; }
+.overview-filter-field { display: flex; flex: 1 1 160px; flex-direction: column; gap: .35rem; min-width: 0; }
+.overview-search-field { flex-basis: 260px; }
+.overview-filter-field label { color: var(--text); font-size: .84rem; font-weight: 600; }
+.overview-view-filter-group :is(input,select) { width: 100%; min-width: 0; min-height: 44px; padding: .65rem .75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; }
+.overview-view-filter-group :is(input,select):focus-visible { outline: 2px solid var(--theme-info-text, #2563eb); outline-offset: 2px; }
+.overview-tab-card[hidden] { display: none; }
+@media(max-width:900px) { .overview-view-filter-group { width: 100%; } }
+.btn-view-batches { white-space: nowrap; font-size: .78rem; padding: .25rem .55rem; }
+.btn-return-supplier { font-size: .72rem; padding: .2rem .45rem; text-decoration: none; display: inline-flex; align-items: center; gap: .25rem; }
+.view-batches-alert { margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 6px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+
+

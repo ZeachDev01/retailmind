@@ -711,6 +711,31 @@ CREATE TABLE `inventory_counts` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `inventory_count_batches`
+--
+
+DROP TABLE IF EXISTS `inventory_count_batches`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `inventory_count_batches` (
+  `count_batch_id` int(11) NOT NULL AUTO_INCREMENT,
+  `count_id` int(11) NOT NULL,
+  `batch_id` int(11) DEFAULT NULL,
+  `system_quantity` int(11) NOT NULL DEFAULT 0,
+  `physical_quantity` int(11) NOT NULL DEFAULT 0,
+  `difference_qty` int(11) NOT NULL DEFAULT 0,
+  `expiration_date` date DEFAULT NULL,
+  `batch_number` varchar(100) DEFAULT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`count_batch_id`),
+  KEY `idx_inventory_count_batches_count_id` (`count_id`),
+  KEY `idx_inventory_count_batches_batch_id` (`batch_id`),
+  CONSTRAINT `fk_inventory_count_batches_count` FOREIGN KEY (`count_id`) REFERENCES `inventory_counts` (`count_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_inventory_count_batches_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `login_attempts`
 --
 
@@ -806,7 +831,7 @@ DROP TABLE IF EXISTS `notifications`;
 CREATE TABLE `notifications` (
   `notification_id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
-  `type` enum('low_stock','replenishment','adjustment','system','fiscal_period','expiring_stock','expired_stock') NOT NULL,
+  `type` enum('low_stock','replenishment','adjustment','system','fiscal_period','expiring_stock','expired_stock','attention') NOT NULL,
   `title` varchar(200) NOT NULL,
   `message` text NOT NULL,
   `reference_id` int(11) DEFAULT NULL,
@@ -897,6 +922,7 @@ CREATE TABLE `product_batches` (
   `quantity` int(11) NOT NULL,
   `remaining_quantity` int(11) NOT NULL,
   `expiration_date` date DEFAULT NULL,
+  `cost_price` decimal(10,2) DEFAULT NULL,
   `date_received` timestamp NOT NULL DEFAULT current_timestamp(),
   `supplier` varchar(150) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -940,6 +966,7 @@ CREATE TABLE `products` (
   `base_unit` varchar(40) NOT NULL DEFAULT 'piece',
   `receiving_unit` varchar(40) NOT NULL DEFAULT 'package',
   `expiration_date` date DEFAULT NULL,
+  `warning_lead_time_days` int(11) DEFAULT NULL,
   `product_image` varchar(255) DEFAULT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
   `created_by` int(11) DEFAULT NULL,
@@ -1106,8 +1133,13 @@ DROP TABLE IF EXISTS `sale_item_batches`;
 CREATE TABLE `sale_item_batches` (
   `sale_item_batch_id` int(11) NOT NULL AUTO_INCREMENT,
   `sale_item_id` int(11) NOT NULL,
-  `batch_id` int(11) NOT NULL,
+  `batch_id` int(11) DEFAULT NULL,
   `quantity` int(11) NOT NULL,
+  `unit_cost` decimal(10,2) DEFAULT NULL,
+  `cost_price` decimal(10,2) DEFAULT NULL,
+  `cost_status` enum('recorded','estimated','missing') NOT NULL DEFAULT 'missing',
+  `cost_source` varchar(50) DEFAULT NULL,
+  `cost_provenance` varchar(50) DEFAULT NULL,
   PRIMARY KEY (`sale_item_batch_id`),
   KEY `idx_sale_item_batches_sale_item` (`sale_item_id`),
   KEY `idx_sale_item_batches_batch` (`batch_id`),
@@ -1285,19 +1317,43 @@ CREATE TABLE `stock_movements` (
   `movement_id` int(11) NOT NULL AUTO_INCREMENT,
   `product_id` int(11) NOT NULL,
   `change_qty` int(11) NOT NULL,
-  `reason` enum('purchase','sale','adjustment','return') NOT NULL,
+  `reason` enum('purchase','sale','adjustment','return','supplier_pullout') NOT NULL,
   `moved_by` int(11) DEFAULT NULL,
   `adjustment_id` int(11) DEFAULT NULL,
+  `pullout_id` int(11) DEFAULT NULL,
   `moved_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`movement_id`),
   KEY `idx_stock_movements_product_id` (`product_id`),
   KEY `idx_stock_movements_moved_at` (`moved_at`),
   KEY `idx_stock_movements_adjustment` (`adjustment_id`),
+  KEY `idx_stock_movements_pullout` (`pullout_id`),
   KEY `moved_by` (`moved_by`),
   CONSTRAINT `stock_movements_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `stock_movements_ibfk_2` FOREIGN KEY (`moved_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `fk_stock_movements_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_stock_movements_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_stock_movements_pullout` FOREIGN KEY (`pullout_id`) REFERENCES `supplier_pullouts` (`pullout_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=19723 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `stock_issue_batches`
+--
+
+DROP TABLE IF EXISTS `stock_issue_batches`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `stock_issue_batches` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `adjustment_id` int(11) NOT NULL,
+  `batch_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_stock_issue_batches_adjustment` (`adjustment_id`),
+  KEY `idx_stock_issue_batches_batch` (`batch_id`),
+  CONSTRAINT `fk_stock_issue_batches_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_stock_issue_batches_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1349,6 +1405,34 @@ CREATE TABLE `stock_predictions` (
 -- Table structure for table `stock_receiving`
 --
 
+--
+-- Table structure for table `supplier_pullouts`
+--
+
+DROP TABLE IF EXISTS `supplier_pullouts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `supplier_pullouts` (
+  `pullout_id` int(11) NOT NULL AUTO_INCREMENT,
+  `product_id` int(11) NOT NULL,
+  `batch_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `supplier` varchar(150) DEFAULT NULL,
+  `pulled_by` int(11) NOT NULL,
+  `pulled_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `notes` text DEFAULT NULL,
+  PRIMARY KEY (`pullout_id`),
+  KEY `idx_supplier_pullouts_product` (`product_id`),
+  KEY `idx_supplier_pullouts_batch` (`batch_id`),
+  KEY `idx_supplier_pullouts_pulled_by` (`pulled_by`),
+  KEY `idx_supplier_pullouts_pulled_at` (`pulled_at`),
+  CONSTRAINT `fk_supplier_pullouts_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
+  CONSTRAINT `fk_supplier_pullouts_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`),
+  CONSTRAINT `fk_supplier_pullouts_user` FOREIGN KEY (`pulled_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 DROP TABLE IF EXISTS `stock_receiving_groups`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -1390,11 +1474,14 @@ CREATE TABLE `stock_receiving` (
   `discrepancy_qty` int(11) NOT NULL DEFAULT 0,
   `discrepancy_notes` text DEFAULT NULL,
   `notes` text DEFAULT NULL,
+  `pullout_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`receiving_id`),
   KEY `idx_stock_receiving_group_id` (`group_id`),
+  KEY `idx_stock_receiving_pullout_id` (`pullout_id`),
   KEY `product_id` (`product_id`),
   KEY `received_by` (`received_by`),
   CONSTRAINT `fk_stock_receiving_group` FOREIGN KEY (`group_id`) REFERENCES `stock_receiving_groups` (`group_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_stock_receiving_pullout` FOREIGN KEY (`pullout_id`) REFERENCES `supplier_pullouts` (`pullout_id`) ON DELETE SET NULL,
   CONSTRAINT `stock_receiving_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `stock_receiving_ibfk_3` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=469 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1875,6 +1962,8 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010001_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610170001_cancel_checkout_attempts','Retain cancelled checkout identities without creating a sale') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010003_safe_refund_exceptions','Preserve external settlement and specific Cash Refund exception attribution (#113)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610040001_user_theme','Personal display theme for every Staff account') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180003_product_warning_lead_time','Optional warning_lead_time_days on products (ticket #223)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610190004_gcash_funding_and_corrections','GCash service funding movements, linked corrections, and discrepancy waiver') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- Forecast defaults; retain any configured values.
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_history_days','30');
@@ -1896,23 +1985,112 @@ INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_dai
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_day','Sunday');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_time','01:00');
 
+CREATE TABLE `gcash_service_sessions` (
+  `session_id` int NOT NULL AUTO_INCREMENT,
+  `shift_id` int NOT NULL,
+  `cashier_id` int NOT NULL,
+  `opening_service_cash` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `opening_wallet_balance` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `opened_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `status` enum('open','closed') NOT NULL DEFAULT 'open',
+  `expected_service_cash` decimal(12,2) DEFAULT NULL,
+  `expected_wallet_balance` decimal(12,2) DEFAULT NULL,
+  `closing_service_cash` decimal(12,2) DEFAULT NULL,
+  `closing_wallet_balance` decimal(12,2) DEFAULT NULL,
+  `cash_variance` decimal(12,2) DEFAULT NULL,
+  `wallet_variance` decimal(12,2) DEFAULT NULL,
+  `closing_notes` text DEFAULT NULL,
+  `closed_at` timestamp NULL DEFAULT NULL,
+  `closed_by` int DEFAULT NULL,
+  `unresolved_carryover_count` int NOT NULL DEFAULT '0',
+  `waiver_notes` text DEFAULT NULL,
+  `waived_by` int DEFAULT NULL,
+  `waived_at` timestamp NULL DEFAULT NULL,
+  `is_open` int GENERATED ALWAYS AS (if(`status` = 'open',1,NULL)) STORED,
+  PRIMARY KEY (`session_id`),
+  UNIQUE KEY `uq_gcash_open_session` (`is_open`),
+  KEY `idx_gcash_sessions_shift` (`shift_id`),
+  KEY `idx_gcash_sessions_cashier` (`cashier_id`),
+  KEY `idx_gcash_sessions_closed_by` (`closed_by`),
+  KEY `idx_gcash_sessions_waived_by` (`waived_by`),
+  CONSTRAINT `fk_gcash_session_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`),
+  CONSTRAINT `fk_gcash_session_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_session_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_session_waived_by` FOREIGN KEY (`waived_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `gcash_funding_movements` (
+  `movement_id` int NOT NULL AUTO_INCREMENT,
+  `session_id` int NOT NULL,
+  `movement_type` enum('replenishment','withdrawal','product_drawer_transfer','owner_capital') NOT NULL,
+  `fund_type` enum('cash','wallet') NOT NULL,
+  `amount` decimal(12,2) NOT NULL,
+  `direction` enum('in','out') NOT NULL,
+  `evidence_reference` varchar(120) DEFAULT NULL,
+  `reason` varchar(255) NOT NULL,
+  `authorized_by` int NOT NULL,
+  `recorded_by` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`movement_id`),
+  KEY `idx_gcash_funding_session` (`session_id`),
+  KEY `idx_gcash_funding_auth` (`authorized_by`),
+  KEY `idx_gcash_funding_rec` (`recorded_by`),
+  CONSTRAINT `fk_gcash_funding_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`),
+  CONSTRAINT `fk_gcash_funding_auth` FOREIGN KEY (`authorized_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_funding_rec` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `gcash_adjustments` (
+  `adjustment_id` int NOT NULL AUTO_INCREMENT,
+  `transaction_id` bigint unsigned NOT NULL,
+  `session_id` int NOT NULL,
+  `service_cash_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `wallet_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `reason` varchar(255) NOT NULL,
+  `authorized_by` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`adjustment_id`),
+  KEY `idx_gcash_adj_tx` (`transaction_id`),
+  KEY `idx_gcash_adj_session` (`session_id`),
+  KEY `idx_gcash_adj_auth` (`authorized_by`),
+  CONSTRAINT `fk_gcash_adj_tx` FOREIGN KEY (`transaction_id`) REFERENCES `gcash_transactions` (`transaction_id`),
+  CONSTRAINT `fk_gcash_adj_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`),
+  CONSTRAINT `fk_gcash_adj_auth` FOREIGN KEY (`authorized_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `gcash_transactions` (
   `transaction_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` int DEFAULT NULL,
+  `shift_id` int DEFAULT NULL,
   `transaction_type` enum('Cash-In','Cash-Out','Payment') NOT NULL,
-  `reference_number` varchar(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `reference_number` varchar(32) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
   `amount` decimal(10,2) NOT NULL,
+  `principal_amount` decimal(12,2) DEFAULT NULL,
+  `fee_amount` decimal(12,2) DEFAULT NULL,
+  `fee_method` enum('cash','wallet') DEFAULT NULL,
+  `service_cash_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `wallet_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `gross_fee` decimal(12,2) NOT NULL DEFAULT '0.00',
   `cashier_id` int NOT NULL,
-  `verification_status` enum('Pending','Verified','Rejected') NOT NULL DEFAULT 'Pending',
+  `confirmed_wallet` tinyint(1) NOT NULL DEFAULT 0,
+  `confirmed_cash` tinyint(1) NOT NULL DEFAULT 0,
+  `notes` text DEFAULT NULL,
+  `verification_status` enum('Pending','Verified','Rejected','Completed','Needs checking') NOT NULL DEFAULT 'Pending',
   `verified_by` int DEFAULT NULL,
   `verification_note` varchar(500) DEFAULT NULL,
   `reviewed_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`transaction_id`),
   UNIQUE KEY `uq_gcash_reference` (`reference_number`),
   KEY `idx_gcash_cashier_history` (`cashier_id`,`transaction_id`),
+  KEY `idx_gcash_transaction_session` (`session_id`),
+  KEY `idx_gcash_transaction_shift` (`shift_id`),
   KEY `fk_gcash_reviewer` (`verified_by`),
   CONSTRAINT `fk_gcash_cashier` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `fk_gcash_reviewer` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `fk_gcash_reviewer` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_gcash_transaction_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`),
+  CONSTRAINT `fk_gcash_transaction_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE ml_jobs (

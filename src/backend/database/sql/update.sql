@@ -1403,6 +1403,150 @@ DROP TABLE IF EXISTS `supplier_products`;
 DROP TABLE IF EXISTS `suppliers`;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610150003_retire_procurement_storage','Retire development procurement storage; preserve receiving and operational records') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+CREATE TABLE IF NOT EXISTS `inventory_count_batches` (
+  `count_batch_id` int(11) NOT NULL AUTO_INCREMENT,
+  `count_id` int(11) NOT NULL,
+  `batch_id` int(11) DEFAULT NULL,
+  `system_quantity` int(11) NOT NULL DEFAULT 0,
+  `physical_quantity` int(11) NOT NULL DEFAULT 0,
+  `difference_qty` int(11) NOT NULL DEFAULT 0,
+  `expiration_date` date DEFAULT NULL,
+  `batch_number` varchar(100) DEFAULT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`count_batch_id`),
+  KEY `idx_inventory_count_batches_count_id` (`count_id`),
+  KEY `idx_inventory_count_batches_batch_id` (`batch_id`),
+  CONSTRAINT `fk_inventory_count_batches_count` FOREIGN KEY (`count_id`) REFERENCES `inventory_counts` (`count_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_inventory_count_batches_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180001_inventory_count_batches','Track batch-level counted quantities, shortages, extras, and undated reconciliation items') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+CREATE TABLE IF NOT EXISTS `stock_issue_batches` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `adjustment_id` int(11) NOT NULL,
+  `batch_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_stock_issue_batches_adjustment` (`adjustment_id`),
+  KEY `idx_stock_issue_batches_batch` (`batch_id`),
+  CONSTRAINT `fk_stock_issue_batches_adjustment` FOREIGN KEY (`adjustment_id`) REFERENCES `inventory_adjustments` (`adjustment_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_stock_issue_batches_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180002_stock_issue_batches','Track affected batches deducted during stock issue approval') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='products' AND column_name='warning_lead_time_days'), 'ALTER TABLE `products` ADD COLUMN `warning_lead_time_days` INT NULL AFTER `expiration_date`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180003_product_warning_lead_time','Optional warning_lead_time_days on products (ticket #223)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+CREATE TABLE IF NOT EXISTS `supplier_pullouts` (
+  `pullout_id` int(11) NOT NULL AUTO_INCREMENT,
+  `product_id` int(11) NOT NULL,
+  `batch_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `supplier` varchar(150) DEFAULT NULL,
+  `pulled_by` int(11) NOT NULL,
+  `pulled_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `notes` text DEFAULT NULL,
+  PRIMARY KEY (`pullout_id`),
+  KEY `idx_supplier_pullouts_product` (`product_id`),
+  KEY `idx_supplier_pullouts_batch` (`batch_id`),
+  KEY `idx_supplier_pullouts_pulled_by` (`pulled_by`),
+  KEY `idx_supplier_pullouts_pulled_at` (`pulled_at`),
+  CONSTRAINT `fk_supplier_pullouts_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
+  CONSTRAINT `fk_supplier_pullouts_batch` FOREIGN KEY (`batch_id`) REFERENCES `product_batches` (`batch_id`),
+  CONSTRAINT `fk_supplier_pullouts_user` FOREIGN KEY (`pulled_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_movements' AND column_name='reason' AND column_type NOT LIKE '%''supplier_pullout''%'),
+  'ALTER TABLE `stock_movements` MODIFY COLUMN `reason` ENUM(''purchase'',''sale'',''adjustment'',''return'',''supplier_pullout'') NOT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_movements' AND column_name='pullout_id'), 'ALTER TABLE `stock_movements` ADD COLUMN `pullout_id` INT NULL AFTER `adjustment_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='stock_movements' AND index_name='idx_stock_movements_pullout'), 'ALTER TABLE `stock_movements` ADD INDEX `idx_stock_movements_pullout` (`pullout_id`)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='stock_movements' AND column_name='pullout_id' AND referenced_table_name='supplier_pullouts' AND referenced_column_name='pullout_id'), 'ALTER TABLE `stock_movements` ADD CONSTRAINT `fk_stock_movements_pullout` FOREIGN KEY (`pullout_id`) REFERENCES `supplier_pullouts` (`pullout_id`) ON DELETE SET NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='stock_receiving') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='pullout_id'), 'ALTER TABLE `stock_receiving` ADD COLUMN `pullout_id` INT NULL AFTER `group_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='stock_receiving') AND NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND index_name='idx_stock_receiving_pullout_id'), 'ALTER TABLE `stock_receiving` ADD INDEX `idx_stock_receiving_pullout_id` (`pullout_id`)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='stock_receiving') AND NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='stock_receiving' AND column_name='pullout_id' AND referenced_table_name='supplier_pullouts' AND referenced_column_name='pullout_id'), 'ALTER TABLE `stock_receiving` ADD CONSTRAINT `fk_stock_receiving_pullout` FOREIGN KEY (`pullout_id`) REFERENCES `supplier_pullouts` (`pullout_id`) ON DELETE SET NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180004_supplier_pullouts','Record batch-specific Supplier Pullouts under Inventory Control (ticket #224)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202610180005_sold_stock_cost_snapshots: Gross Profit: preserve sold-stock costs during checkout (ticket #228)
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='product_batches' AND column_name='cost_price'), 'ALTER TABLE `product_batches` ADD COLUMN `cost_price` DECIMAL(10,2) NULL AFTER `expiration_date`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='unit_cost'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `unit_cost` DECIMAL(10,2) NULL AFTER `quantity`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='cost_price'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `cost_price` DECIMAL(10,2) NULL AFTER `unit_cost`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='cost_status'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `cost_status` ENUM(''recorded'',''estimated'',''missing'') NOT NULL DEFAULT ''missing'' AFTER `cost_price`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='cost_source'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `cost_source` VARCHAR(50) NULL AFTER `cost_status`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='cost_provenance'), 'ALTER TABLE `sale_item_batches` ADD COLUMN `cost_provenance` VARCHAR(50) NULL AFTER `cost_source`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180005_sold_stock_cost_snapshots','Gross Profit: preserve sold-stock costs during checkout (ticket #228)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202610180006_historical_sale_cost_recovery: Gross Profit: establish stable historical costs for older sales (ticket #230)
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_item_batches' AND column_name='batch_id' AND is_nullable='NO'), 'ALTER TABLE `sale_item_batches` MODIFY COLUMN `batch_id` INT(11) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180006_historical_sale_cost_recovery','Gross Profit: establish stable historical costs for older sales (ticket #230)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 SET SESSION time_zone = @rm_old_time_zone;
 SET SESSION sql_mode = @rm_old_sql_mode;
-SELECT 'RetailMind SQL update completed through 202610150003_retire_procurement_storage' AS result;
+SELECT 'RetailMind SQL update completed through 202610180006_historical_sale_cost_recovery' AS result;
+
+
+
+-- 202610190001_attention_notification_type: Allow the daily shared attention writer.
+ALTER TABLE notifications MODIFY COLUMN type
+    ENUM('low_stock','replenishment','adjustment','system','fiscal_period','expiring_stock','expired_stock','attention') NOT NULL;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610190001_attention_notification_type','Allow shared attention notifications in the daily operational check') ON DUPLICATE KEY UPDATE description=VALUES(description);

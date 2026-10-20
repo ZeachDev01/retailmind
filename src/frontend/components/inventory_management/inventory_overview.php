@@ -8,7 +8,16 @@ require_role(['admin', 'super_admin', 'inventory_manager']);
 
 $inventoryService = new InventoryService($pdo);
 $productService = new ProductService($pdo);
-$products = $productService->getProductsForManagement();
+
+if (isset($_GET['action']) && $_GET['action'] === 'get_batches') {
+    $productId = (int)($_GET['product_id'] ?? 0);
+    $batches = $inventoryService->getProductBatches($productId);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($batches);
+    exit;
+}
+
+$products = $inventoryService->getProductsWithBatchSummaries();
 $low_stock = $inventoryService->getLowStockProducts();
 $expiring_batches = $inventoryService->getExpiringSoonBatches(30);
 $expired_batches = $inventoryService->getExpiredBatches();
@@ -55,6 +64,8 @@ $statusCounts = [
     'expired' => 0,
 ];
 
+$missing_expiration_count = 0;
+
 foreach ($products as $p) {
     $cat = trim((string)($p['category_name'] ?? 'Uncategorized'));
     if ($cat === '') {
@@ -66,9 +77,13 @@ foreach ($products as $p) {
     }
     $categoryStats[$cat] += $qty;
 
+    if (!empty($p['has_missing_expiration'])) {
+        $missing_expiration_count++;
+    }
+
     $pid = (int)($p['product_id'] ?? 0);
     $threshold = max((int)($p['reorder_level'] ?? 0), (int)($p['safety_stock'] ?? 0));
-    $isExp = isset($expiredProductIds[$pid]);
+    $isExp = ($p['expired_quantity'] ?? 0) > 0 || isset($expiredProductIds[$pid]);
     $isExpiring = !$isExp && isset($expiringProductIds[$pid]);
     if ($isExp) {
         $statusCounts['expired']++;
@@ -84,6 +99,8 @@ foreach ($products as $p) {
 }
 
 arsort($categoryStats);
+$productCategories = array_keys($categoryStats);
+sort($productCategories, SORT_NATURAL | SORT_FLAG_CASE);
 $topCategories = array_slice($categoryStats, 0, 8, true);
 $categoryLabels = array_keys($topCategories);
 $categoryUnits = array_values($topCategories);
@@ -135,7 +152,7 @@ $chartDataJson = json_encode([
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
-        <header class="page-heading"><div><h1>Stock Overview</h1><p class="page-subtitle">Review stock levels, expiry risks, and recent movements. Select a summary to inspect products.</p></div></header>
+        <header class="page-heading"><div><h1>Stock Overview</h1><p class="page-subtitle">Search products, review stock levels, and check expiry risks. Select a summary to filter products.</p></div></header>
         <section class="overview-metrics" aria-label="Inventory summary">
             <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
@@ -144,7 +161,7 @@ $chartDataJson = json_encode([
             </button>
             <button type="button" class="overview-metric" data-overview-view="in-stock" aria-controls="overview-product-view">
                 <span class="overview-metric-icon overview-metric-icon--green" aria-hidden="true"><i class="bi bi-boxes"></i></span>
-                <span class="overview-metric-copy"><strong><?= number_format((int)$total_units) ?></strong><span>Units in stock</span></span>
+                <span class="overview-metric-copy"><strong><?= number_format((int)$total_units) ?></strong><span>Units on hand</span></span>
                 <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
             <button type="button" class="overview-metric overview-metric--danger" data-overview-view="out" aria-controls="overview-product-view">
@@ -167,7 +184,13 @@ $chartDataJson = json_encode([
                 <span class="overview-metric-copy"><strong><?= number_format(count($expired_batches)) ?></strong><span>Expired batches</span></span>
                 <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
+            <button type="button" class="overview-metric overview-metric--warning" data-overview-view="missing-exp" aria-controls="overview-product-view">
+                <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-calendar-minus"></i></span>
+                <span class="overview-metric-copy"><strong><?= number_format((int)$missing_expiration_count) ?></strong><span>Missing Expiration</span></span>
+                <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
+            </button>
         </section>
+
 
         <section class="overview-chart-card overview-forecast-card" aria-labelledby="overview-forecast-heading">
             <div class="overview-chart-header">
@@ -232,7 +255,131 @@ $chartDataJson = json_encode([
             </div>
         </section>
 
-        <div id="overview-default-view" class="overview-tab-card">
+        <section class="overview-product-view" id="overview-product-view" aria-label="Filtered products">
+            <div class="overview-product-view-header">
+                <button type="button" class="btn btn-quiet" id="overview-back">View stock movements</button>
+                <div class="overview-view-filter-group">
+                    <div class="overview-filter-field overview-search-field">
+                    <label for="overview-product-search">Search products</label>
+                    <input type="search" id="overview-product-search" class="form-control" placeholder="Name, brand, SKU, barcode" aria-controls="overview-product-table-body">
+                    </div>
+                    <div class="overview-filter-field">
+                    <label for="overview-category-filter">Category</label>
+                    <select id="overview-category-filter" class="form-select">
+                        <option value="">All Categories</option>
+                        <?php foreach ($productCategories as $category): ?>
+                        <option value="<?= htmlspecialchars($category) ?>"><?= htmlspecialchars($category) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    </div>
+                    <div class="overview-filter-field">
+                    <label for="overview-filter-select">Stock status</label>
+                    <select id="overview-filter-select" class="form-select form-select-sm" aria-label="Filter products">
+                        <option value="all">All Products</option>
+                        <option value="in-stock">In Stock</option>
+                        <option value="out">Out of Stock</option>
+                        <option value="low">Low Stock</option>
+                        <option value="expiring">Expiring Soon</option>
+                        <option value="expired">Expired</option>
+                        <option value="missing-exp">Missing Expiration</option>
+                    </select>
+                    </div>
+                </div>
+            </div>
+            <div class="overview-product-table-shell">
+                <table class="overview-product-table">
+                    <thead>
+                        <tr>
+                            <th class="overview-select-cell"><input type="checkbox" id="overview-select-all" aria-label="Select all visible products"></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="1">Product <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="2">SKU / Barcode <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="3">Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="4" data-sort-type="number">Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="5" data-sort-type="number">Cost Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="6" data-sort-type="number">On Hand <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="7" data-sort-type="number">Expired Qty <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th class="overview-col-undated" style="display:none;">Qty Without Date</th>
+                            <th aria-sort="none"><button type="button" data-sort-column="9" data-sort-type="date">Next Expiration <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="10">Status <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="overview-product-table-body">
+                    <?php foreach ($products as $product): ?>
+                    <?php
+                        $productId = (int)$product['product_id'];
+                        $quantity = (int)($product['quantity_on_hand'] ?? 0);
+                        $threshold = max((int)($product['reorder_level'] ?? 0), (int)($product['safety_stock'] ?? 0));
+                        $stockState = $quantity <= 0 ? 'out' : ($quantity <= $threshold ? 'low' : 'available');
+                        $isLowStock = isset($lowStockProductIds[$productId]);
+                        $expiredQty = (int)($product['expired_quantity'] ?? 0);
+                        $undatedQty = (int)($product['undated_quantity'] ?? 0);
+                        $isExpired = $expiredQty > 0 || isset($expiredProductIds[$productId]);
+                        $isExpiring = !$isExpired && isset($expiringProductIds[$productId]);
+                        $hasMissingExp = !empty($product['has_missing_expiration']);
+                        $hasUnbatched = !empty($product['has_unbatched_stock']);
+                        $unbatchedQty = (int)($product['unbatched_quantity'] ?? 0);
+                        $nextExp = $product['next_expiration'] ? htmlspecialchars($product['next_expiration']) : '—';
+                        $statusClass = $isExpired ? 'expired' : ($isExpiring ? 'expiring' : $stockState);
+                        $statusLabel = $isExpired ? 'Expired' : ($isExpiring ? 'Expiring soon' : ($stockState === 'out' ? 'Out of stock' : ($stockState === 'low' ? 'Low stock' : 'Available')));
+                        $productCategory = trim((string)($product['category_name'] ?? ''));
+                        $productCategory = $productCategory === '' ? 'Uncategorized' : $productCategory;
+                    ?>
+                    <tr data-overview-product-row data-category="<?= htmlspecialchars($productCategory) ?>" data-search="<?= htmlspecialchars(implode(' ', [$product['product_name'], $product['brand'] ?? '', $product['sku'] ?? '', $product['barcode'] ?? ''])) ?>" data-stock-state="<?= $stockState ?>" data-low="<?= $isLowStock ? '1' : '0' ?>" data-expiring="<?= $isExpiring ? '1' : '0' ?>" data-expired="<?= $isExpired ? '1' : '0' ?>" data-missing-exp="<?= $hasMissingExp ? '1' : '0' ?>" data-unbatched="<?= $hasUnbatched ? '1' : '0' ?>">
+                        <td class="overview-select-cell"><input type="checkbox" class="overview-row-select" aria-label="Select <?= htmlspecialchars($product['product_name']) ?>"></td>
+                        <td data-sort-value="<?= htmlspecialchars($product['product_name']) ?>"><div class="overview-product-name"><span class="overview-product-thumb"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span><strong><?= htmlspecialchars($product['product_name']) ?></strong><small><?= htmlspecialchars($product['brand'] ?: 'No brand') ?></small></span></div></td>
+                        <td data-sort-value="<?= htmlspecialchars(($product['sku'] ?? '') . ' ' . ($product['barcode'] ?? '')) ?>"><strong><?= htmlspecialchars($product['sku'] ?? '-') ?></strong><small><?= htmlspecialchars($product['barcode'] ?: 'Not assigned') ?></small></td>
+                        <td><?= htmlspecialchars($productCategory) ?></td>
+                        <td data-sort-value="<?= (float)($product['unit_price'] ?? 0) ?>">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
+                        <td data-sort-value="<?= (float)($product['cost_price'] ?? 0) ?>">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
+                        <td data-sort-value="<?= $quantity ?>">
+                            <strong><?= number_format($quantity) ?></strong>
+                            <?php if ($expiredQty > 0): ?>
+                                <small class="text-muted d-block">Saleable: <?= number_format(max(0, $quantity - $expiredQty)) ?></small>
+                            <?php endif; ?>
+                            <small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small>
+                            <?php if ($hasUnbatched): ?>
+                                <span class="overview-stock-flag overview-stock-flag--unbatched" title="Reconciliation exception: Recorded stock exceeds batch balances"><i class="bi bi-exclamation-diamond-fill" aria-hidden="true"></i> Unbatched: <?= number_format($unbatchedQty) ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td data-sort-value="<?= $expiredQty ?>">
+                            <?php if ($expiredQty > 0): ?>
+                                <strong class="text-danger"><?= number_format($expiredQty) ?></strong>
+                            <?php else: ?>
+                                <span class="text-muted">0</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="overview-col-undated" style="display:none;">
+                            <?php if ($undatedQty > 0): ?>
+                                <strong class="text-warning"><?= number_format($undatedQty) ?></strong>
+                            <?php else: ?>
+                                <span class="text-muted">0</span>
+                            <?php endif; ?>
+                        </td>
+                        <td data-sort-value="<?= htmlspecialchars($product['next_expiration'] ?? '') ?>"><span class="overview-next-exp"><?= $nextExp ?></span></td>
+                        <td><span class="overview-stock-status overview-stock-status--<?= $statusClass ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-quiet btn-view-batches" data-product-id="<?= $productId ?>" data-product-name="<?= htmlspecialchars($product['product_name']) ?>" data-unbatched="<?= $hasUnbatched ? '1' : '0' ?>" data-unbatched-qty="<?= $unbatchedQty ?>" title="View Batches">
+                                <i class="bi bi-boxes" aria-hidden="true"></i> View Batches
+                            </button>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <div class="overview-product-empty" id="overview-product-empty" hidden><i class="bi bi-inbox" aria-hidden="true"></i><strong>No matching products</strong><span>Clear your search or change the category and stock filters.</span></div>
+            </div>
+            <nav class="overview-product-pagination" id="overview-product-pagination" aria-label="Product pagination">
+                <span id="overview-page-summary" role="status">Showing 0 products</span>
+                <div>
+                    <button type="button" class="btn btn-quiet" id="overview-page-previous"><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
+                    <span id="overview-page-status" aria-live="polite">Page 1 of 1</span>
+                    <button type="button" class="btn btn-quiet" id="overview-page-next">Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                </div>
+            </nav>
+        </section>
+
+        <div id="overview-default-view" class="overview-tab-card" hidden>
         <div class="overview-tabs" role="tablist" aria-label="Inventory overview sections">
             <button type="button" class="overview-tab is-active" id="overview-tab-movements" role="tab" aria-selected="true" aria-controls="overview-panel-movements" data-overview-tab="movements">Recent Stock Movements</button>
             <button type="button" class="overview-tab" id="overview-tab-fefo" role="tab" aria-selected="false" aria-controls="overview-panel-fefo" data-overview-tab="fefo" tabindex="-1">FEFO Pick Recommendations</button>
@@ -282,14 +429,22 @@ $chartDataJson = json_encode([
                     <tbody>
                     <?php foreach ($fefo_recommendations as $batch): ?>
                     <?php
-                        $expirationTimestamp = !empty($batch['expiration_date']) ? strtotime((string)$batch['expiration_date']) : false;
-                        $daysRemaining = $expirationTimestamp === false ? null : (int)floor(($expirationTimestamp - strtotime('today')) / 86400);
+                        $todayManila = \App\Services\PhilippineTime::today();
+                        $expDate = !empty($batch['expiration_date']) ? trim((string)$batch['expiration_date']) : null;
+                        $daysRemaining = null;
+                        if ($expDate !== null && $expDate !== '') {
+                            $daysRemaining = (int)round((strtotime($expDate) - strtotime($todayManila)) / 86400);
+                        }
+                        $urgencyThreshold = (isset($batch['warning_lead_time_days']) && $batch['warning_lead_time_days'] !== null && $batch['warning_lead_time_days'] !== '')
+                            ? (int)$batch['warning_lead_time_days']
+                            : 7;
+                        $isUrgent = ($daysRemaining !== null && $daysRemaining >= 0 && $daysRemaining <= $urgencyThreshold);
                     ?>
                     <tr>
                         <td><strong><?= htmlspecialchars($batch['product_name']) ?></strong><small><?= htmlspecialchars($batch['sku']) ?></small></td>
                         <td><?= htmlspecialchars($batch['batch_number'] ?? '-') ?></td>
                         <td><?= number_format((int)$batch['remaining_quantity']) ?></td>
-                        <td><span class="expiry-status <?= $daysRemaining !== null && $daysRemaining <= 7 ? 'expiry-status--urgent' : '' ?>"><?= htmlspecialchars($batch['expiration_date'] ?? 'No expiration date') ?></span><?php if ($daysRemaining !== null): ?><small><?= $daysRemaining < 0 ? abs($daysRemaining) . ' days overdue' : $daysRemaining . ' days remaining' ?></small><?php endif; ?></td>
+                        <td><span class="expiry-status <?= $isUrgent ? 'expiry-status--urgent' : '' ?>"><?= htmlspecialchars($batch['expiration_date'] ?? 'No expiration date') ?></span><?php if ($daysRemaining !== null): ?><small><?= $daysRemaining < 0 ? abs($daysRemaining) . ' days overdue' : $daysRemaining . ' days remaining' ?></small><?php endif; ?></td>
                         <td><?= htmlspecialchars($batch['supplier'] ?? '-') ?></td>
                     </tr>
                     <?php endforeach; ?>
@@ -311,48 +466,6 @@ $chartDataJson = json_encode([
         </div>
         </div>
 
-        <section class="overview-product-view" id="overview-product-view" aria-label="Filtered products" hidden>
-            <div class="overview-product-view-header"><button type="button" class="btn btn-quiet" id="overview-back">Back to stock movements</button></div>
-            <div class="overview-product-table-shell">
-                <table class="overview-product-table">
-                    <thead><tr><th class="overview-select-cell"><input type="checkbox" id="overview-select-all" aria-label="Select all visible products"></th><th>Product <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>SKU / Barcode <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Cost Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Current Stock <i class="bi bi-arrow-down-up" aria-hidden="true"></i></th><th>Status</th></tr></thead>
-                    <tbody id="overview-product-table-body">
-                    <?php foreach ($products as $product): ?>
-                    <?php
-                        $productId = (int)$product['product_id'];
-                        $quantity = (int)($product['quantity_on_hand'] ?? 0);
-                        $threshold = max((int)($product['reorder_level'] ?? 0), (int)($product['safety_stock'] ?? 0));
-                        $stockState = $quantity <= 0 ? 'out' : ($quantity <= $threshold ? 'low' : 'available');
-                        $isLowStock = isset($lowStockProductIds[$productId]);
-                        $isExpired = isset($expiredProductIds[$productId]);
-                        $isExpiring = !$isExpired && isset($expiringProductIds[$productId]);
-                        $statusClass = $isExpired ? 'expired' : ($isExpiring ? 'expiring' : $stockState);
-                        $statusLabel = $isExpired ? 'Expired' : ($isExpiring ? 'Expiring soon' : ($stockState === 'out' ? 'Out of stock' : ($stockState === 'low' ? 'Low stock' : 'Available')));
-                    ?>
-                    <tr data-overview-product-row data-stock-state="<?= $stockState ?>" data-low="<?= $isLowStock ? '1' : '0' ?>" data-expiring="<?= $isExpiring ? '1' : '0' ?>" data-expired="<?= $isExpired ? '1' : '0' ?>">
-                        <td class="overview-select-cell"><input type="checkbox" class="overview-row-select" aria-label="Select <?= htmlspecialchars($product['product_name']) ?>"></td>
-                        <td><div class="overview-product-name"><span class="overview-product-thumb"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span><strong><?= htmlspecialchars($product['product_name']) ?></strong><small><?= htmlspecialchars($product['brand'] ?: 'No brand') ?></small></span></div></td>
-                        <td><strong><?= htmlspecialchars($product['sku'] ?? '-') ?></strong><small><?= htmlspecialchars($product['barcode'] ?: 'Not assigned') ?></small></td>
-                        <td><?= htmlspecialchars($product['category_name'] ?? 'Uncategorized') ?></td>
-                        <td>₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
-                        <td>₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
-                        <td><strong><?= number_format($quantity) ?></strong><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
-                        <td><span class="overview-stock-status overview-stock-status--<?= $statusClass ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <div class="overview-product-empty" id="overview-product-empty" hidden><i class="bi bi-inbox" aria-hidden="true"></i><strong>No matching products</strong><span>No products belong to this inventory view.</span></div>
-            </div>
-            <nav class="overview-product-pagination" id="overview-product-pagination" aria-label="Product pagination">
-                <span id="overview-page-summary">Showing 0 products</span>
-                <div>
-                    <button type="button" class="btn btn-quiet" id="overview-page-previous"><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
-                    <span id="overview-page-status" aria-live="polite">Page 1 of 1</span>
-                    <button type="button" class="btn btn-quiet" id="overview-page-next">Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
-                </div>
-            </nav>
-        </section>
     </main>
 </div>
 <?php include __DIR__ . '/../modals/product_overview/lowOfStack.php'; ?>
@@ -360,6 +473,7 @@ $chartDataJson = json_encode([
 <?php include __DIR__ . '/../modals/product_overview/expringSoon.php'; ?>
 <?php include __DIR__ . '/../modals/product_overview/expiredStock.php'; ?>
 <?php include __DIR__ . '/../modals/product_overview/product.php'; ?>
+<?php include __DIR__ . '/../modals/product_overview/viewBatches.php'; ?>
 <script>
 window.addEventListener('pagehide', () => document.documentElement.classList.remove('overview-fefo-active'));
 
@@ -692,6 +806,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const productView = document.getElementById('overview-product-view');
     const productEmpty = document.getElementById('overview-product-empty');
     const productRows = Array.from(document.querySelectorAll('[data-overview-product-row]'));
+    const productSearch = document.getElementById('overview-product-search');
+    const categoryFilter = document.getElementById('overview-category-filter');
     const selectAll = document.getElementById('overview-select-all');
     const productPagination = document.getElementById('overview-product-pagination');
     const pageSummary = document.getElementById('overview-page-summary');
@@ -708,19 +824,30 @@ document.addEventListener('DOMContentLoaded', function () {
         if (view === 'low') return row.dataset.low === '1';
         if (view === 'expiring') return row.dataset.expiring === '1';
         if (view === 'expired') return row.dataset.expired === '1';
+        if (view === 'missing-exp') return row.dataset.missingExp === '1';
         return true;
     }
 
-    function showProductView(view) {
+    function rowMatchesFilters(row) {
+        return rowMatchesView(row, activeProductView)
+            && (!categoryFilter.value || row.dataset.category === categoryFilter.value)
+            && row.dataset.search.toLowerCase().includes(productSearch.value.trim().toLowerCase());
+    }
+
+    function showProductView(view, scroll = true) {
         activeProductView = view;
         productPage = 1;
         renderProductPage();
         document.querySelectorAll('[data-overview-view]').forEach(function (button) {
             button.classList.toggle('is-active', button.dataset.overviewView === view);
         });
+        const filterSelect = document.getElementById('overview-filter-select');
+        if (filterSelect) {
+            filterSelect.value = view;
+        }
         defaultView.hidden = true;
         productView.hidden = false;
-        productView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (scroll) productView.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     document.getElementById('overview-back').addEventListener('click', function () {
@@ -729,13 +856,17 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('[data-overview-view]').forEach(function (button) {
             button.classList.remove('is-active');
         });
-        document.querySelector('[data-overview-view="' + activeProductView + '"]').focus();
+        document.querySelector('.overview-tab.is-active').focus({preventScroll: true});
+        defaultView.scrollIntoView({behavior: 'smooth', block: 'start'});
     });
 
     function renderProductPage() {
-        const matchingRows = productRows.filter(function (row) {
-            return rowMatchesView(row, activeProductView);
+        const showUndated = activeProductView === 'missing-exp';
+        document.querySelectorAll('.overview-col-undated').forEach(function (el) {
+            el.style.display = showUndated ? '' : 'none';
         });
+
+        const matchingRows = productRows.filter(rowMatchesFilters);
         const pageCount = Math.max(1, Math.ceil(matchingRows.length / productPageSize));
         productPage = Math.min(productPage, pageCount);
         const firstRow = (productPage - 1) * productPageSize;
@@ -752,6 +883,43 @@ document.addEventListener('DOMContentLoaded', function () {
         nextPageButton.disabled = productPage === pageCount;
         productPagination.hidden = matchingRows.length === 0;
     }
+
+    showProductView('all', false);
+    let sortColumn = null;
+    let sortDirection = 1;
+    const sortButtons = Array.from(document.querySelectorAll('.overview-product-table [data-sort-column]'));
+    const productCollator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
+    sortButtons.forEach(function (button) {
+        button.addEventListener('click', function () {
+            const column = Number(button.dataset.sortColumn);
+            sortDirection = sortColumn === column ? -sortDirection : 1;
+            sortColumn = column;
+            productRows.sort(function (a, b) {
+                const left = a.cells[column].dataset.sortValue ?? a.cells[column].textContent.trim();
+                const right = b.cells[column].dataset.sortValue ?? b.cells[column].textContent.trim();
+                if (button.dataset.sortType === 'date' && (!left || !right)) {
+                    return left === right ? 0 : (left ? -1 : 1);
+                }
+                return sortDirection * (button.dataset.sortType === 'number' ? Number(left) - Number(right) : productCollator.compare(left, right));
+            });
+            document.getElementById('overview-product-table-body').append(...productRows);
+            sortButtons.forEach(function (sortButton) {
+                const active = sortButton === button;
+                sortButton.closest('th').setAttribute('aria-sort', active ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none');
+                sortButton.querySelector('i').className = active ? (sortDirection === 1 ? 'bi bi-arrow-up' : 'bi bi-arrow-down') : 'bi bi-arrow-down-up';
+            });
+            productPage = 1;
+            renderProductPage();
+        });
+    });
+    productSearch.addEventListener('input', function () {
+        productPage = 1;
+        renderProductPage();
+    });
+    categoryFilter.addEventListener('change', function () {
+        productPage = 1;
+        renderProductPage();
+    });
 
     document.querySelectorAll('[data-overview-view]').forEach(function (button) {
         button.addEventListener('click', function () {
@@ -773,7 +941,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     nextPageButton.addEventListener('click', function () {
-        const matchingCount = productRows.filter(function (row) { return rowMatchesView(row, activeProductView); }).length;
+        const matchingCount = productRows.filter(rowMatchesFilters).length;
         const pageCount = Math.max(1, Math.ceil(matchingCount / productPageSize));
         if (productPage >= pageCount) return;
         productPage += 1;
@@ -840,6 +1008,76 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!modal) return;
         trigger.addEventListener('click', function () {
             RetailMindUI.openOverlay(modal);
+        });
+    });
+
+    const filterSelect = document.getElementById('overview-filter-select');
+    if (filterSelect) {
+        filterSelect.addEventListener('change', function () {
+            showProductView(this.value);
+        });
+    }
+
+    function escapeBatchHtml(str) {
+        if (str === null || str === undefined) return '';
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    document.querySelectorAll('.btn-view-batches').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const productId = this.dataset.productId;
+            const productName = this.dataset.productName || 'Product';
+            const hasUnbatched = this.dataset.unbatched === '1';
+            const modal = document.getElementById('view-batches-modal');
+            if (!modal) return;
+
+            document.getElementById('view-batches-title').textContent = 'Batches: ' + productName;
+            const reconAlert = document.getElementById('view-batches-reconciliation-alert');
+            if (reconAlert) {
+                reconAlert.style.display = hasUnbatched ? 'block' : 'none';
+            }
+
+            const tbody = document.getElementById('view-batches-table-body');
+            tbody.innerHTML = '<tr><td class="u-empty-cell" colspan="7"><i class="bi bi-arrow-repeat"></i> Loading batches...</td></tr>';
+            RetailMindUI.openOverlay(modal);
+
+            fetch('inventory_overview.php?action=get_batches&product_id=' + encodeURIComponent(productId))
+                .then(function (res) { return res.json(); })
+                .then(function (batches) {
+                    tbody.innerHTML = '';
+                    if (!batches || batches.length === 0) {
+                        tbody.innerHTML = '<tr><td class="u-empty-cell" colspan="7">No batches recorded for this product.</td></tr>';
+                        return;
+                    }
+                    batches.forEach(function (b) {
+                        const tr = document.createElement('tr');
+                        const expLabel = b.expiration_date ? escapeBatchHtml(b.expiration_date) : '<span class="text-muted">Not recorded</span>';
+                        const daysLabel = b.days_remaining !== null ? (b.days_remaining >= 0 ? (b.days_remaining + ' days') : (Math.abs(b.days_remaining) + ' days ago')) : '—';
+                        let actionHtml = '—';
+                        if (b.return_to_supplier_url) {
+                            actionHtml = '<a href="' + escapeBatchHtml(b.return_to_supplier_url) + '" class="btn btn-sm btn-outline-danger btn-return-supplier"><i class="bi bi-arrow-return-left"></i> Return to Supplier</a>';
+                        }
+
+                        let sourceBadge = '<span class="badge">' + escapeBatchHtml(b.source) + '</span>';
+                        if (b.pullout_id) {
+                            sourceBadge += ' <small class="text-muted d-block">Pullout #' + escapeBatchHtml(String(b.pullout_id)) + '</small>';
+                        }
+
+                        tr.innerHTML = '<td><strong>' + escapeBatchHtml(b.batch_number) + '</strong></td>' +
+                            '<td>' + sourceBadge + '</td>' +
+                            '<td><strong>' + Number(b.remaining_quantity).toLocaleString() + '</strong></td>' +
+                            '<td>' + expLabel + '</td>' +
+                            '<td>' + daysLabel + '</td>' +
+                            '<td><span class="overview-stock-status overview-stock-status--' + (b.status === 'Expired' ? 'expired' : (b.status === 'Active' ? 'available' : 'out')) + '">' + escapeBatchHtml(b.status) + '</span></td>' +
+                            '<td>' + actionHtml + '</td>';
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(function () {
+                    tbody.innerHTML = '<tr><td class="u-empty-cell text-danger" colspan="7">Failed to load batches. Please try again.</td></tr>';
+                });
         });
     });
 });

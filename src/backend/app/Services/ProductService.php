@@ -2,6 +2,7 @@
 // app/Services/ProductService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/PhilippineTime.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
@@ -13,10 +14,12 @@ class ProductService
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
 
-    public function __construct(PDO $pdo)
-    {
+    public function __construct(
+        PDO $pdo,
+        ?NotificationService $notificationService = null
+    ) {
         $this->pdo = $pdo;
-        $this->notificationService = new NotificationService($pdo);
+        $this->notificationService = $notificationService ?? new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
     }
 
@@ -31,7 +34,7 @@ class ProductService
            $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand
              FROM products p
-             JOIN inventory i ON p.product_id = i.product_id
+             LEFT JOIN inventory i ON p.product_id = i.product_id
                WHERE (p.barcode = ? OR p.case_barcode = ? OR p.sku = ? OR p.product_name = ?){$scopeSql}
              LIMIT 1"
         );
@@ -44,7 +47,7 @@ class ProductService
         $stmt = $this->pdo->prepare(
             "SELECT p.*, i.quantity_on_hand
              FROM products p
-             JOIN inventory i ON p.product_id = i.product_id
+             LEFT JOIN inventory i ON p.product_id = i.product_id
              WHERE (p.barcode LIKE ? OR p.case_barcode LIKE ? OR p.product_name LIKE ?){$scopeSql}
              ORDER BY p.product_name
              LIMIT 1"
@@ -76,11 +79,20 @@ class ProductService
         $caseBarcode = trim((string)($data['case_barcode'] ?? ''));
         $parentProductId = (int)($data['parent_product_id'] ?? 0);
         $variantLabel = trim((string)($data['variant_label'] ?? ''));
-        $expirationDate = (($data['expiration_date'] ?? '') !== '') ? $data['expiration_date'] : null;
+        $rawExpiration = $data['expiration_date'] ?? null;
+        $expirationDate = validate_calendar_date($rawExpiration);
         $batchNumber = trim((string)($data['batch_number'] ?? ''));
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
-        $initialStock = max(0, (int)($data['initial_stock_quantity'] ?? 0));
+        $initialStock = $this->validateStockSetting($data['initial_stock_quantity'] ?? 0, 'Starting quantity', 0);
+        $productExpirationDate = ($initialStock > 0) ? $expirationDate : null;
+        $warningLeadTimeDays = $this->validateWarningLeadTime($data['warning_lead_time_days'] ?? null);
+        if ($warningLeadTimeDays !== null || $initialStock > 0) {
+            $role = function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? null);
+            if ($role !== null && $role !== 'inventory_manager') {
+                throw new RuntimeException('Only the active Inventory Manager workspace can mutate stock or warning overrides.');
+            }
+        }
         $branchId = function_exists('store_scope_id')
             ? store_scope_id($this->pdo)
             : (new App\Store\StoreScope($this->pdo))->id();
@@ -132,8 +144,8 @@ class ProductService
                     sku, barcode, case_barcode, parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
                     quantity_purchased, quantity_sold, reorder_level, supplier, preferred_supplier,
                     supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, base_unit, receiving_unit, expiration_date,
-                    product_image, status, created_by, branch_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    warning_lead_time_days, product_image, status, created_by, branch_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $barcode,
@@ -157,7 +169,8 @@ class ProductService
                 $unitsPerPackage,
                 $baseUnit,
                 $receivingUnit,
-                $expirationDate,
+                $productExpirationDate,
+                $warningLeadTimeDays,
                 $productImage !== '' ? $productImage : null,
                 $status,
                 $userId,
@@ -208,7 +221,7 @@ class ProductService
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
         $searchTerm = trim((string)($data['search_term'] ?? ''));
-        $purchaseQuantity = max(0, (int)($data['purchase_quantity'] ?? 0));
+        $purchaseQuantity = $this->validateStockSetting($data['purchase_quantity'] ?? 0, 'Purchase quantity', 1);
         $costPrice = (float)($data['purchase_cost_price'] ?? 0);
         $purchaseDate = (($data['purchase_date'] ?? '') !== '') ? $data['purchase_date'] : date('Y-m-d H:i:s');
         $barcode = trim((string)($data['barcode'] ?? ''));
@@ -228,7 +241,8 @@ class ProductService
         $baseUnit = trim((string)($data['base_unit'] ?? 'piece')) ?: 'piece';
         $receivingUnit = trim((string)($data['receiving_unit'] ?? 'package')) ?: 'package';
         $caseBarcode = trim((string)($data['case_barcode'] ?? ''));
-        $expirationDate = (($data['expiration_date'] ?? '') !== '') ? $data['expiration_date'] : null;
+        $rawExpiration = $data['expiration_date'] ?? null;
+        $expirationDate = validate_calendar_date($rawExpiration);
         $batchNumber = trim((string)($data['batch_number'] ?? ''));
         $productImage = trim((string)($data['product_image'] ?? ''));
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
@@ -246,6 +260,19 @@ class ProductService
         StoreWriteGate::begin($this->pdo);
         try {
             if ($existingProduct) {
+                $balanceStmt = $this->pdo->prepare(
+                    'SELECT i.quantity_on_hand, p.quantity_purchased FROM products p
+                     JOIN inventory i ON i.product_id = p.product_id WHERE p.product_id = ?' . $this->rowLock()
+                );
+                $balanceStmt->execute([(int)$existingProduct['product_id']]);
+                $balance = $balanceStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$balance) {
+                    throw new RuntimeException('Inventory record not found for selected product.');
+                }
+                if ((int)$balance['quantity_on_hand'] + $purchaseQuantity > 2147483647
+                    || (int)$balance['quantity_purchased'] + $purchaseQuantity > 2147483647) {
+                    throw new RuntimeException('Purchase quantity would exceed the supported stock total.');
+                }
                 $previousProduct = $existingProduct;
                 $updateParts = ['quantity_purchased = quantity_purchased + ?', 'cost_price = ?'];
                 $params = [$purchaseQuantity, $costPrice];
@@ -289,10 +316,6 @@ class ProductService
                 if ($hasUnitsPerPackage) {
                     $updateParts[] = 'units_per_package = ?';
                     $params[] = $unitsPerPackage;
-                }
-                if ($expirationDate !== null) {
-                    $updateParts[] = 'expiration_date = ?';
-                    $params[] = $expirationDate;
                 }
                 if ($productImage !== '') {
                     $updateParts[] = 'product_image = ?';
@@ -429,8 +452,7 @@ class ProductService
                 "SELECT p.product_id, p.sku, p.product_name, i.quantity_on_hand
                  FROM products p
                  JOIN inventory i ON i.product_id = p.product_id
-                  WHERE p.product_id = ?{$scopeSql}
-                 FOR UPDATE"
+                  WHERE p.product_id = ?{$scopeSql}" . $this->rowLock()
             );
               $beforeStmt->execute(array_merge([$productId], $scopeParams));
             $before = $beforeStmt->fetch();
@@ -446,6 +468,49 @@ class ProductService
 
             if ($stmt->rowCount() === 0) {
                 throw new RuntimeException('Adjustment would take stock below zero.');
+            }
+
+            if ($qtyChange > 0) {
+                $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
+                $this->pdo->prepare(
+                    "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
+                     VALUES (?, ?, ?, NULL, ?)"
+                )->execute([$productId, $qtyChange, $qtyChange, $nowManila]);
+            } elseif ($qtyChange < 0) {
+                $deductRemaining = abs($qtyChange);
+                $batchStmt = $this->pdo->prepare(
+                    "SELECT batch_id, remaining_quantity
+                     FROM product_batches
+                     WHERE product_id = ? AND remaining_quantity > 0
+                     ORDER BY
+                         CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
+                         expiration_date ASC,
+                         date_received ASC,
+                         batch_id ASC" . $this->rowLock()
+                );
+                $batchStmt->execute([$productId]);
+                $batches = $batchStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                foreach ($batches as $batch) {
+                    if ($deductRemaining <= 0) {
+                        break;
+                    }
+                    $take = min($deductRemaining, (int)$batch['remaining_quantity']);
+                    if ($take > 0) {
+                        $batchUpd = $this->pdo->prepare(
+                            "UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ? AND remaining_quantity >= ?"
+                        );
+                        $batchUpd->execute([$take, (int)$batch['batch_id'], $take]);
+                        if ($batchUpd->rowCount() === 0) {
+                            throw new RuntimeException("Concurrent change detected while adjusting batch #{$batch['batch_id']}.");
+                        }
+                        $deductRemaining -= $take;
+                    }
+                }
+
+                if (!empty($batches) && $deductRemaining > 0) {
+                    throw new RuntimeException('Insufficient batch stock to satisfy adjustment deduction.');
+                }
             }
 
             $this->pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, ?, ?)")
@@ -489,7 +554,7 @@ class ProductService
         try {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
             $stmt = $this->pdo->prepare(
-                "SELECT product_id, sku, barcode, product_name FROM products WHERE product_id = ?{$scopeSql} FOR UPDATE"
+                "SELECT product_id, sku, barcode, product_name FROM products WHERE product_id = ?{$scopeSql}" . $this->rowLock()
             );
             $stmt->execute(array_merge([$productId], $scopeParams));
             $product = $stmt->fetch();
@@ -580,16 +645,27 @@ class ProductService
 
     public function getProductsForManagement(): array
     {
+        $todayManila = \App\Services\PhilippineTime::today();
         [$scopeSql, $scopeParams] = $this->storeProductScope();
         $stmt = $this->pdo->prepare(
-            "SELECT p.*, i.quantity_on_hand, c.category_name
+            "SELECT p.*, i.quantity_on_hand, c.category_name,
+                    CASE WHEN i.quantity_on_hand > 0 THEN b.next_expiration_date ELSE NULL END AS next_expiration_date,
+                    CASE WHEN i.quantity_on_hand > 0 THEN COALESCE(b.expired_quantity, 0) ELSE 0 END AS expired_quantity
              FROM products p
              JOIN inventory i ON p.product_id = i.product_id
              LEFT JOIN categories c ON p.category_id = c.category_id
+             LEFT JOIN (
+                 SELECT product_id,
+                        MIN(CASE WHEN expiration_date >= ? THEN expiration_date END) AS next_expiration_date,
+                        SUM(CASE WHEN expiration_date < ? THEN remaining_quantity ELSE 0 END) AS expired_quantity
+                 FROM product_batches
+                 WHERE remaining_quantity > 0 AND expiration_date IS NOT NULL
+                 GROUP BY product_id
+             ) b ON b.product_id = p.product_id
              WHERE 1 = 1{$scopeSql}
              ORDER BY p.product_name"
         );
-        $stmt->execute($scopeParams);
+        $stmt->execute(array_merge([$todayManila, $todayManila], $scopeParams));
         return $stmt->fetchAll();
     }
 
@@ -696,6 +772,21 @@ class ProductService
         $costPrice = (float)($existing['cost_price'] ?? 0);
         $warning = null;
 
+        if (array_key_exists('cost_price', $data)) {
+            $rawCost = $data['cost_price'];
+            if ((!is_string($rawCost) && !is_int($rawCost) && !is_float($rawCost)) || !is_numeric($rawCost)) {
+                throw new RuntimeException('Cost price must be a valid number of PHP 0 or more.');
+            }
+            $costPrice = (float)$rawCost;
+            if (!is_finite($costPrice) || $costPrice < 0) {
+                throw new RuntimeException('Cost price must be PHP 0 or more.');
+            }
+            $costPrice = round($costPrice, 2);
+            if ($costPrice > 99999999.99) {
+                throw new RuntimeException('Cost price is out of range.');
+            }
+        }
+
         if ($hasSellingPrice) {
             $rawPrice = $data['selling_price'];
             $trimmedPrice = is_string($rawPrice) ? trim($rawPrice) : $rawPrice;
@@ -709,12 +800,11 @@ class ProductService
             if ($sellingPrice > 999999999.99) {
                 throw new RuntimeException('Selling price is out of range.');
             }
-
-            if ($costPrice > 0 && $sellingPrice < $costPrice) {
-                $warning = sprintf('Warning: Selling price (₱%s) is below cost price (₱%s).', number_format($sellingPrice, 2), number_format($costPrice, 2));
-            }
         } else {
             $sellingPrice = (float)$existing['unit_price'];
+        }
+        if ($costPrice > 0 && $sellingPrice < $costPrice) {
+            $warning = sprintf('Warning: Selling price (₱%s) is below cost price (₱%s).', number_format($sellingPrice, 2), number_format($costPrice, 2));
         }
 
         $hasStatus = array_key_exists('status', $data);
@@ -748,6 +838,11 @@ class ProductService
             ? $this->validateStockSetting($data['safety_stock'], 'Safety stock', 0)
             : (int)$existing['safety_stock'];
 
+        $hasWarningLeadTime = array_key_exists('warning_lead_time_days', $data);
+        $warningLeadTimeDays = $hasWarningLeadTime
+            ? $this->validateWarningLeadTime($data['warning_lead_time_days'])
+            : (isset($existing['warning_lead_time_days']) && $existing['warning_lead_time_days'] !== null && $existing['warning_lead_time_days'] !== '' ? (int)$existing['warning_lead_time_days'] : null);
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             StoreWriteGate::begin($this->pdo);
@@ -761,11 +856,13 @@ class ProductService
                      category_id = ?,
                      product_image = ?,
                      unit_price = ?,
+                     cost_price = ?,
                      status = ?,
                      units_per_package = ?,
                      minimum_order_quantity = ?,
                      reorder_level = ?,
-                     safety_stock = ?
+                     safety_stock = ?,
+                     warning_lead_time_days = ?
                  WHERE product_id = ?"
             );
             $updateStmt->execute([
@@ -775,11 +872,13 @@ class ProductService
                 $categoryId,
                 $productImage,
                 $sellingPrice,
+                $costPrice,
                 $status,
                 $unitsPerPackage,
                 $minimumOrderQuantity,
                 $reorderLevel,
                 $safetyStock,
+                $warningLeadTimeDays,
                 $productId,
             ]);
 
@@ -794,11 +893,15 @@ class ProductService
             $updated = $fetchStmt->fetch(PDO::FETCH_ASSOC) ?: [];
             if ($updated) {
                 $updated['unit_price'] = (float)$updated['unit_price'];
+                $updated['cost_price'] = (float)$updated['cost_price'];
                 $updated['selling_price'] = (float)$updated['unit_price'];
                 $updated['units_per_package'] = (int)$updated['units_per_package'];
                 $updated['minimum_order_quantity'] = (int)$updated['minimum_order_quantity'];
                 $updated['reorder_level'] = (int)$updated['reorder_level'];
                 $updated['safety_stock'] = (int)$updated['safety_stock'];
+                $updated['warning_lead_time_days'] = ($updated['warning_lead_time_days'] !== null && $updated['warning_lead_time_days'] !== '')
+                    ? (int)$updated['warning_lead_time_days']
+                    : null;
                 if ($warning !== null) {
                     $updated['warning'] = $warning;
                 }
@@ -860,6 +963,15 @@ class ProductService
         return $int;
     }
 
+    private function validateWarningLeadTime(mixed $value): ?int
+    {
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return null;
+        }
+
+        return $this->validateStockSetting($value, 'Expiry warning lead time', 1);
+    }
+
     private function storeProductScope(): array
     {
         if (function_exists('store_product_scope')) {
@@ -890,5 +1002,10 @@ class ProductService
             $dateReceived,
             $supplier,
         ]);
+    }
+
+    private function rowLock(): string
+    {
+        return $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
     }
 }

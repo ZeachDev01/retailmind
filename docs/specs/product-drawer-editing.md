@@ -18,10 +18,10 @@ Allow routine catalog corrections without leaving the Products drawer. Opening a
 - Edit product enters an explicit edit mode with Save and Cancel.
 - Cancel discards the draft. Warn before closing or otherwise leaving an unsaved draft.
 - Save validates the changes, persists them, and returns the drawer to read-only mode with updated values. Failed saves retain the draft and show actionable errors.
-- Editable product details: product name, variant label, brand, category, product image, selling price, and active/inactive status.
+- Editable product details: product name, variant label, brand, category, product image, cost price, selling price, and active/inactive status.
 - Editable stock settings: Units per Package/Case, Minimum Order Quantity, Reorder Level, and Safety Stock. These are settings, not adjustments to Current Stock.
 - Variant-label edits correct an existing variant of the same physical product. Preserve its parent product and identity; a different size or physical item requires a separate product. Retain the existing variant-label requirements and 100-character limit.
-- SKU, barcode (including case barcode), parent product, cost price, batch expiration, current quantity, Base Unit, and Receiving Unit remain outside this editor. Keep existing Stock Receiving, inventory count, and stock adjustment workflows.
+- SKU, barcode (including case barcode), parent product, batch expiration, current quantity, Base Unit, and Receiving Unit remain outside this editor. Keep existing Stock Receiving, inventory count, and stock adjustment workflows.
 
 ## Stock settings
 
@@ -34,6 +34,7 @@ Allow routine catalog corrections without leaving the Products drawer. Opening a
 
 ## Price and status rules
 
+- Cost price may be edited to PHP 0 or more and is rounded to two decimal places. Catalog corrections preserve receiving records, batch costs, and transaction history; later Stock Receiving may replace the catalog cost.
 - Selling price must be greater than PHP 0. A price below the latest purchase cost is allowed with a warning.
 - New checkout uses current prices. Preserve completed sales and receipt details, consistent with [ADR-0006](../adr/0006-preserve-customer-receipt-details.md).
 - Retain the existing held-sale rule: holding reserves neither stock nor price. Resuming uses current prices and reports changes; checkout validates current prices and active status.

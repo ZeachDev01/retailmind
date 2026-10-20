@@ -16,6 +16,8 @@ for directory in app bootstrap config database includes; do
   mkdir -p "$release/src/backend/$directory"
   cp -a "src/backend/$directory/." "$release/src/backend/$directory/"
 done
+mkdir -p "$release/src/backend/scripts"
+cp src/backend/scripts/run_notifications.php "$release/src/backend/scripts/"
 mkdir -p "$release/src/backend/legacy/routes"
 cp -a src/backend/legacy/routes/. "$release/src/backend/legacy/routes/"
 

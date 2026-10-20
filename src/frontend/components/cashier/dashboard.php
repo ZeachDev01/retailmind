@@ -19,15 +19,23 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cashier Dashboard</title>
+    <title>Dashboard Overview</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/gcash.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/gcash.css')) ?>">
 </head>
 
 <body class="cashier-page cashier-dashboard-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <main class="main-content">
+        <main class="main-content" id="cashier-overview" data-api="<?= htmlspecialchars(app_url('components/cashier/gcash_api.php?action=overview')) ?>" data-history="<?= htmlspecialchars(app_url('components/cashier/gcash.php?tab=history')) ?>">
+            <div class="gcash-tabs-nav-wrap">
+                <nav class="gcash-tablist" role="tablist" aria-label="Cashier overview">
+                    <button type="button" role="tab" id="tab-cashier" class="gcash-tab active" aria-selected="true" aria-controls="panel-cashier" tabindex="0">Cashier</button>
+                    <button type="button" role="tab" id="tab-gcash" class="gcash-tab" aria-selected="false" aria-controls="panel-gcash" tabindex="-1">GCash</button>
+                </nav>
+            </div>
+            <div role="tabpanel" id="panel-cashier" aria-labelledby="tab-cashier" tabindex="0">
             <nav class="cashier-quick-actions" aria-label="Cashier quick actions">
                 <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">
                     <span class="action-icon"><i class="bi bi-upc-scan" aria-hidden="true"></i></span>
@@ -163,6 +171,98 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     </div>
                 </aside>
             </div>
+            </div>
+        <div role="tabpanel" id="panel-gcash" aria-labelledby="tab-gcash" tabindex="0" class="gcash-tabpanel" hidden>
+            <p id="gcash-overview-status" role="status">Loading GCash overview...</p>
+            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-balances-title">
+                <div class="pos-panel-header">
+                    <div class="pos-panel-title">
+                        <div class="pos-panel-icon"><i class="bi bi-cash-stack" aria-hidden="true"></i></div>
+                        <div>
+                            <h2 id="gcash-overview-balances-title">Expected Balances</h2>
+                            <p>Expected figures based on counted opening, accountable movements, and adjustments. No live GCash balance API is implied.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="gcash-overview-grid gcash-balances-grid">
+                    <div class="gcash-card gcash-card-balance">
+                        <div class="gcash-card-header">
+                            <span class="gcash-card-label">Expected Service Cash</span>
+                            <span class="gcash-badge gcash-badge-expected">Expected</span>
+                        </div>
+                        <div class="gcash-card-value" id="gcash-overview-expected-cash">₱0.00</div>
+                        <div class="gcash-card-sub" id="gcash-overview-cash-checked">Last actual check: Not checked yet</div>
+                    </div>
+                    <div class="gcash-card gcash-card-balance">
+                        <div class="gcash-card-header">
+                            <span class="gcash-card-label">Expected Wallet Balance</span>
+                            <span class="gcash-badge gcash-badge-expected">Expected</span>
+                        </div>
+                        <div class="gcash-card-value" id="gcash-overview-expected-wallet">₱0.00</div>
+                        <div class="gcash-card-sub" id="gcash-overview-wallet-checked">Last actual check: Not checked yet</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-metrics-title">
+                <div class="pos-panel-header">
+                    <div class="pos-panel-title">
+                        <div class="pos-panel-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
+                        <div>
+                            <h2 id="gcash-overview-metrics-title">Current-Shift Activity</h2>
+                            <p>Completed transactions and gross service fees earned in your active shift.</p>
+                        </div>
+                    </div>
+                    <div class="gcash-overview-quick-actions">
+                        <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?type=cash-in')) ?>" class="btn btn-primary" id="gcash-overview-action-cash-in">
+                            <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>New Cash-In
+                        </a>
+                        <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?type=cash-out')) ?>" class="btn btn-secondary" id="gcash-overview-action-cash-out">
+                            <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>New Cash-Out
+                        </a>
+                    </div>
+                </div>
+                <div class="gcash-overview-grid gcash-metrics-grid">
+                    <div class="gcash-card">
+                        <span class="gcash-card-label">Cash-In Principal</span>
+                        <div class="gcash-card-value" id="gcash-metric-cash-in-principal">₱0.00</div>
+                        <div class="gcash-card-sub">Completed customer deposits</div>
+                    </div>
+                    <div class="gcash-card">
+                        <span class="gcash-card-label">Cash-Out Principal</span>
+                        <div class="gcash-card-value" id="gcash-metric-cash-out-principal">₱0.00</div>
+                        <div class="gcash-card-sub">Completed customer withdrawals</div>
+                    </div>
+                    <div class="gcash-card">
+                        <span class="gcash-card-label">Gross Fees (Cash)</span>
+                        <div class="gcash-card-value" id="gcash-metric-fees-cash">₱0.00</div>
+                        <div class="gcash-card-sub">Service fees paid in counter cash</div>
+                    </div>
+                    <div class="gcash-card">
+                        <span class="gcash-card-label">Gross Fees (Wallet)</span>
+                        <div class="gcash-card-value" id="gcash-metric-fees-wallet">₱0.00</div>
+                        <div class="gcash-card-sub">Service fees received via GCash</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-nc-title">
+                <div class="pos-panel-header">
+                    <div class="pos-panel-title">
+                        <div class="pos-panel-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
+                        <div>
+                            <h2 id="gcash-overview-nc-title">Needs Checking Items</h2>
+                            <p>Transactions held for investigation. Resolve before closing responsibility.</p>
+                        </div>
+                    </div>
+                    <span id="gcash-overview-nc-count" class="gcash-status gcash-status-needs-checking">0 open</span>
+                </div>
+                <div id="gcash-overview-nc-list" class="gcash-nc-list">
+                    <p class="gcash-empty-msg">No unresolved Needs checking transactions.</p>
+                </div>
+            </section>
+        </div>
+
         </main>
     </div>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -199,6 +299,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 });
             }
         </script>
+<script src="<?= htmlspecialchars(app_url('assets/js/cashier-overview.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/cashier-overview.js')) ?>"></script>
 </body>
 
 </html>

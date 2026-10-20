@@ -88,6 +88,7 @@
   };
 
   RM.toast = function (message, type, title, duration) {
+    const target = activeSwalTarget();
     const stack =
       qs("#rm-toast-stack") ||
       (() => {
@@ -98,6 +99,7 @@
         document.body.appendChild(node);
         return node;
       })();
+    if (stack.parentNode !== target) target.appendChild(stack);
     const kind = type || "info";
     const icons = {
       success: "bi-check-circle-fill",
@@ -136,7 +138,7 @@
     qs(".rm-toast-close", toast).addEventListener("click", remove);
     stack.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add("show"));
-    setTimeout(remove, Number(duration || (kind === "warning" ? 20000 : 4800)));
+    setTimeout(remove, Number(duration || (kind === "warning" ? 20000 : 4300)));
     return toast;
   };
 
@@ -235,7 +237,7 @@
 
   let alertQueue = Promise.resolve();
   RM.queueAlert = function (message, type, title) {
-    alertQueue = alertQueue.then(() => RM.alert(message, type, title));
+    alertQueue = alertQueue.then(() => RM.toast(message, type, title));
     return alertQueue;
   };
 
@@ -367,9 +369,8 @@
       RM.toast(flash.dataset.loginSuccess, "success").classList.add("rm-toast-centered");
       delete flash.dataset.loginSuccess;
     }
-    const hasSwal = window.Swal && typeof window.Swal.fire === "function";
     const notices = [];
-    if (flash && hasSwal) {
+    if (flash) {
       flash.hidden = true;
       ["success", "error", "warning", "info"].forEach((kind) => {
         const message = flash.dataset[kind];
@@ -382,7 +383,7 @@
     qsa(".alert, .error-msg, .message, .pos-alert").forEach((node) => {
       if (node === flash) return;
       if (typeof node.closest === "function" && node.closest(".landing-login-modal")) return;
-      if (node.dataset.rmAlertProcessed === "1") return;
+      if (node.dataset.rmAlertProcessed === "1" || node.getAttribute("role") === "note") return;
       const message = (node.textContent || "")
         .split(/\r?\n/)
         .map(function (line) {
@@ -392,9 +393,9 @@
         .join("\n");
       if (!message) return;
       const kind = node.matches(
-        ".error-msg, .message.error, .alert-error, .pos-alert.error, .tag-warning, .alert-warning",
+        ".error-msg, .message.error, .alert-error, .pos-alert.error, .message.warning, .tag-warning, .alert-warning",
       )
-        ? node.matches(".tag-warning, .alert-warning")
+        ? node.matches(".message.warning, .tag-warning, .alert-warning")
           ? "warning"
           : "error"
         : node.matches(
@@ -403,24 +404,18 @@
           ? "success"
           : "info";
       node.dataset.rmAlertProcessed = "1";
-      if (hasSwal) {
-        node.hidden = true;
-        notices.push({ message, kind });
-      }
+      // Keep instructions and failures available after their toast expires.
+      if (kind === "success") node.hidden = true;
+      notices.push({ message, kind });
     });
-    let lastAlert = null;
     notices.forEach((notice) => {
-      lastAlert = RM.queueAlert(notice.message, notice.kind);
+      RM.queueAlert(notice.message, notice.kind);
     });
     if (flash && flash.dataset.redirect) {
-      if (hasSwal && lastAlert) {
-        lastAlert.then(() => RM.navigate(flash.dataset.redirect));
-      } else if (!hasSwal) {
-        window.setTimeout(
-          () => RM.navigate(flash.dataset.redirect),
-          3500,
-        );
-      }
+      window.setTimeout(
+        () => RM.navigate(flash.dataset.redirect),
+        notices.some((notice) => notice.kind === "warning") ? 20000 : 4800,
+      );
     }
   }
 

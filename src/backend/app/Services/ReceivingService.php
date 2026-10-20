@@ -5,18 +5,33 @@ require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/../../includes/functions.php';
 
 class ReceivingService
 {
     private PDO $pdo;
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
+    private ?bool $hasPulloutColumn = null;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
         $this->notificationService = new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
+    }
+
+    private function hasPulloutColumn(): bool
+    {
+        if ($this->hasPulloutColumn === null) {
+            try {
+                $this->pdo->query("SELECT pullout_id FROM stock_receiving LIMIT 1");
+                $this->hasPulloutColumn = true;
+            } catch (Throwable) {
+                $this->hasPulloutColumn = false;
+            }
+        }
+        return $this->hasPulloutColumn;
     }
 
     public function receiveStock(array $data, int $userId): array
@@ -118,19 +133,33 @@ class ReceivingService
         $supplier = $this->text($data['supplier'] ?? '', 'Shopping store', 150);
         $invoiceNumber = $this->text($data['invoice_number'] ?? '', 'Receipt reference', 100);
         $batchNumber = $this->text($data['batch_number'] ?? '', 'Batch number', 100);
-        $expirationDate = $this->text($data['expiration_date'] ?? '', 'Expiration date', 10);
-        if ($expirationDate !== '') {
-            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $expirationDate);
-            if (!$date || $date->format('Y-m-d') !== $expirationDate || $expirationDate < '1000-01-01') {
-                throw new RuntimeException('Enter a valid expiration date.');
-            }
-        }
+        $expirationDate = validate_calendar_date($data['expiration_date'] ?? null);
         $discrepancyType = $data['discrepancy_type'] ?? 'none';
         $discrepancyQty = $this->wholeNumber($data['discrepancy_qty'] ?? 0, 'Discrepancy quantity');
         $discrepancyNotes = $this->text($data['discrepancy_notes'] ?? '', 'Discrepancy details', 65535);
         $notes = $this->text($data['notes'] ?? '', 'Notes', 65535);
         if ($productId <= 0) {
             throw new RuntimeException('Product is required.');
+        }
+
+        $pulloutId = null;
+        if (isset($data['pullout_id']) && $data['pullout_id'] !== '' && $data['pullout_id'] !== null) {
+            $pulloutId = $this->wholeNumber($data['pullout_id'], 'Linked supplier pullout');
+            if ($pulloutId <= 0) {
+                throw new RuntimeException('Linked supplier pullout not found.');
+            }
+            $pulloutStmt = $this->pdo->prepare('SELECT pullout_id, product_id, supplier FROM supplier_pullouts WHERE pullout_id = ?');
+            $pulloutStmt->execute([$pulloutId]);
+            $pullout = $pulloutStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$pullout) {
+                throw new RuntimeException('Linked supplier pullout not found.');
+            }
+            if ((int)$pullout['product_id'] !== $productId) {
+                throw new RuntimeException('Linked supplier pullout does not match the product being received.');
+            }
+            if ($supplier === '' && !empty($pullout['supplier'])) {
+                $supplier = trim((string)$pullout['supplier']);
+            }
         }
         if (!in_array($discrepancyType, ['none', 'short', 'over', 'damaged', 'documentation', 'other'], true)) {
             throw new RuntimeException('Invalid delivery discrepancy type.');
@@ -200,20 +229,32 @@ class ReceivingService
 
         $groupId = isset($data['group_id']) && (int)$data['group_id'] > 0 ? (int)$data['group_id'] : null;
 
+        if ($pulloutId !== null && !$this->hasPulloutColumn()) {
+            throw new RuntimeException('Linked supplier pullouts require the latest database schema.');
+        }
+
+        $pulloutCol = $this->hasPulloutColumn() ? 'pullout_id, ' : '';
+        $pulloutPlaceholder = $this->hasPulloutColumn() ? '?, ' : '';
         $stmt = $this->pdo->prepare("INSERT INTO stock_receiving (
-                                   group_id, product_id, received_qty, received_packages, units_per_package_used, accepted_qty, damaged_qty, cost_price, total_cost, received_by,
+                                   group_id, {$pulloutCol}product_id, received_qty, received_packages, units_per_package_used, accepted_qty, damaged_qty, cost_price, total_cost, received_by,
                                    supplier, invoice_number,
                                    batch_number, expiration_date, discrepancy_type, discrepancy_qty,
                                    discrepancy_notes, notes
-                               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
-            $groupId, $productId, $receivedQty, $receivedPackages, $unitsPerPackageUsed, $acceptedQty, $damagedQty,
+                               ) VALUES (?, {$pulloutPlaceholder}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+        $params = [$groupId];
+        if ($this->hasPulloutColumn()) {
+            $params[] = $pulloutId;
+        }
+        $params = array_merge($params, [
+            $productId, $receivedQty, $receivedPackages, $unitsPerPackageUsed, $acceptedQty, $damagedQty,
             $costPrice, $totalCost, $userId,
             $supplier !== '' ? $supplier : null,
             $invoiceNumber !== '' ? $invoiceNumber : null, $batchNumber !== '' ? $batchNumber : null,
-            $expirationDate !== '' ? $expirationDate : null, $discrepancyType, $discrepancyQty,
+            $expirationDate, $discrepancyType, $discrepancyQty,
             $discrepancyNotes !== '' ? $discrepancyNotes : null, $notes,
         ]);
+        $stmt->execute($params);
 
         $receivingId = (int)$this->pdo->lastInsertId();
         if ($acceptedQty > 0) {
@@ -227,7 +268,7 @@ class ReceivingService
                 $batchNumber !== '' ? $batchNumber : null,
                 $acceptedQty,
                 $acceptedQty,
-                $expirationDate !== '' ? $expirationDate : null,
+                $expirationDate,
                 $supplier !== '' ? $supplier : null,
             ]);
 
@@ -242,10 +283,6 @@ class ReceivingService
             if ($costPrice !== null) {
                 $productUpdateParts[] = 'cost_price = ?';
                 $productUpdateParams[] = $costPrice;
-            }
-            if ($expirationDate !== '') {
-                $productUpdateParts[] = 'expiration_date = ?';
-                $productUpdateParams[] = $expirationDate;
             }
             $productUpdateParams[] = $productId;
             $this->pdo->prepare('UPDATE products SET ' . implode(', ', $productUpdateParts) . ' WHERE product_id = ?')
@@ -281,6 +318,7 @@ class ReceivingService
         $recording = $recordingStmt->fetch(PDO::FETCH_ASSOC);
         return [
             'group_id' => $groupId,
+            'pullout_id' => $pulloutId,
             'product_name' => $product['product_name'],
             'recorded_by' => $recording['full_name'],
             'received_at' => $recording['received_at'],
@@ -303,7 +341,8 @@ class ReceivingService
 
     public function getReceivingHistory(?int $userId): array
     {
-        $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.group_id, sr.received_qty, sr.accepted_qty, sr.damaged_qty,
+        $pulloutSelect = $this->hasPulloutColumn() ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
+        $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.group_id, {$pulloutSelect} sr.received_qty, sr.accepted_qty, sr.damaged_qty,
                                sr.cost_price, sr.received_packages, sr.units_per_package_used, sr.batch_number, sr.expiration_date, sr.discrepancy_type,
                                sr.discrepancy_qty, sr.received_at, sr.supplier, sr.invoice_number,
                                p.sku, p.product_name, u.full_name
@@ -326,8 +365,9 @@ class ReceivingService
             JOIN products p ON sr.product_id = p.product_id
             JOIN users u ON sr.received_by = u.user_id';
         $key = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
+        $pulloutSelect = $this->hasPulloutColumn() ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
         $stmt = $this->pdo->prepare("SELECT
-                sr.receiving_id, sr.group_id, sr.product_id, sr.received_qty, sr.received_packages,
+                sr.receiving_id, sr.group_id, {$pulloutSelect} sr.product_id, sr.received_qty, sr.received_packages,
                 sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,
                 sr.cost_price, sr.total_cost, sr.received_by, sr.received_at,
                 sr.supplier, sr.invoice_number, sr.batch_number, sr.expiration_date,
@@ -385,6 +425,7 @@ class ReceivingService
             $groups[$groupKey]['lines'][] = [
                 'receiving_id' => (int)$row['receiving_id'],
                 'group_id' => $row['group_id'] !== null ? (int)$row['group_id'] : null,
+                'pullout_id' => $row['pullout_id'] !== null ? (int)$row['pullout_id'] : null,
                 'product_id' => (int)$row['product_id'],
                 'product_name' => $row['product_name'],
                 'sku' => $row['sku'],
@@ -438,5 +479,4 @@ class ReceivingService
 
         return (new App\Store\StoreScope($this->pdo))->productScope('p');
     }
-
 }

@@ -13,6 +13,11 @@ final class PhilippineTime
     public const ZONE = 'Asia/Manila';
     public const DATABASE_OFFSET = '+08:00';
 
+    public static function today(): string
+    {
+        return (new DateTimeImmutable('now', new DateTimeZone(self::ZONE)))->format('Y-m-d');
+    }
+
     public static function format(mixed $value): string
     {
         $zone = new DateTimeZone(self::ZONE);

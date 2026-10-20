@@ -4,6 +4,13 @@
 function table_columns(PDO $pdo, string $table): array
 {
     $columns = [];
+    $driver = (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+    if ($driver === 'sqlite') {
+        foreach ($pdo->query("PRAGMA table_info(`{$table}`)")->fetchAll(PDO::FETCH_ASSOC) as $column) {
+            $columns[$column['name']] = true;
+        }
+        return $columns;
+    }
     foreach ($pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC) as $column) {
         $columns[$column['Field']] = true;
     }
@@ -179,6 +186,105 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ensure_table_column($pdo, 'stock_receiving', 'received_packages', 'INT NOT NULL DEFAULT 0 AFTER received_qty');
     ensure_table_column($pdo, 'stock_receiving', 'units_per_package_used', 'INT NOT NULL DEFAULT 1 AFTER received_packages');
 
+    ensure_table_column($pdo, 'product_batches', 'cost_price', 'DECIMAL(10,2) NULL AFTER expiration_date');
+    ensure_table_column($pdo, 'sale_item_batches', 'unit_cost', 'DECIMAL(10,2) NULL AFTER quantity');
+    ensure_table_column($pdo, 'sale_item_batches', 'cost_price', 'DECIMAL(10,2) NULL AFTER unit_cost');
+    ensure_table_column($pdo, 'sale_item_batches', 'cost_status', "ENUM('recorded','estimated','missing') NOT NULL DEFAULT 'missing' AFTER cost_price");
+    ensure_table_column($pdo, 'sale_item_batches', 'cost_source', 'VARCHAR(50) NULL AFTER cost_status');
+    ensure_table_column($pdo, 'sale_item_batches', 'cost_provenance', 'VARCHAR(50) NULL AFTER cost_source');
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_service_sessions (
+        session_id INT AUTO_INCREMENT PRIMARY KEY,
+        shift_id INT NOT NULL,
+        cashier_id INT NOT NULL,
+        opening_service_cash DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        opening_wallet_balance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status ENUM('open','closed') NOT NULL DEFAULT 'open',
+        expected_service_cash DECIMAL(12,2) NULL,
+        expected_wallet_balance DECIMAL(12,2) NULL,
+        closing_service_cash DECIMAL(12,2) NULL,
+        closing_wallet_balance DECIMAL(12,2) NULL,
+        cash_variance DECIMAL(12,2) NULL,
+        wallet_variance DECIMAL(12,2) NULL,
+        closing_notes TEXT NULL,
+        closed_at TIMESTAMP NULL,
+        closed_by INT NULL,
+        unresolved_carryover_count INT NOT NULL DEFAULT 0,
+        waiver_notes TEXT NULL,
+        waived_by INT NULL,
+        waived_at TIMESTAMP NULL,
+        is_open INT GENERATED ALWAYS AS (IF(status = 'open', 1, NULL)) STORED,
+        UNIQUE KEY uq_gcash_open_session (is_open),
+        INDEX idx_gcash_sessions_shift (shift_id),
+        INDEX idx_gcash_sessions_cashier (cashier_id),
+        INDEX idx_gcash_sessions_closed_by (closed_by),
+        INDEX idx_gcash_sessions_waived_by (waived_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    ensure_table_column($pdo, 'gcash_service_sessions', 'waiver_notes', 'TEXT NULL AFTER unresolved_carryover_count');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'waived_by', 'INT NULL AFTER waiver_notes');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'waived_at', 'TIMESTAMP NULL AFTER waived_by');
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_funding_movements (
+        movement_id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id INT NOT NULL,
+        movement_type ENUM('replenishment','withdrawal','product_drawer_transfer','owner_capital') NOT NULL,
+        fund_type ENUM('cash','wallet') NOT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        direction ENUM('in','out') NOT NULL,
+        evidence_reference VARCHAR(120) NULL,
+        reason VARCHAR(255) NOT NULL,
+        authorized_by INT NOT NULL,
+        recorded_by INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_gcash_funding_session (session_id),
+        INDEX idx_gcash_funding_auth (authorized_by),
+        INDEX idx_gcash_funding_rec (recorded_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_adjustments (
+        adjustment_id INT AUTO_INCREMENT PRIMARY KEY,
+        transaction_id BIGINT UNSIGNED NOT NULL,
+        session_id INT NOT NULL,
+        service_cash_delta DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        wallet_delta DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        reason VARCHAR(255) NOT NULL,
+        authorized_by INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_gcash_adj_tx (transaction_id),
+        INDEX idx_gcash_adj_session (session_id),
+        INDEX idx_gcash_adj_auth (authorized_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $gcashTableExists = false;
+    try {
+        $driver = (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'sqlite') {
+            $gcashTableExists = (bool)$pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='gcash_transactions'")->fetchColumn();
+        } else {
+            $gcashTableExists = (bool)$pdo->query("SHOW TABLES LIKE 'gcash_transactions'")->fetchColumn();
+        }
+    } catch (Throwable $e) {}
+    if ($gcashTableExists) {
+        ensure_table_column($pdo, 'gcash_transactions', 'session_id', 'INT NULL AFTER transaction_id');
+        ensure_table_column($pdo, 'gcash_transactions', 'shift_id', 'INT NULL AFTER session_id');
+        ensure_table_column($pdo, 'gcash_transactions', 'principal_amount', 'DECIMAL(12,2) NULL AFTER amount');
+        ensure_table_column($pdo, 'gcash_transactions', 'fee_amount', 'DECIMAL(12,2) NULL AFTER principal_amount');
+        ensure_table_column($pdo, 'gcash_transactions', 'fee_method', "ENUM('cash','wallet') NULL AFTER fee_amount");
+        ensure_table_column($pdo, 'gcash_transactions', 'service_cash_delta', 'DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER fee_method');
+        ensure_table_column($pdo, 'gcash_transactions', 'wallet_delta', 'DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER service_cash_delta');
+        ensure_table_column($pdo, 'gcash_transactions', 'gross_fee', 'DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER wallet_delta');
+        ensure_table_column($pdo, 'gcash_transactions', 'confirmed_wallet', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER cashier_id');
+        ensure_table_column($pdo, 'gcash_transactions', 'confirmed_cash', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER confirmed_wallet');
+        ensure_table_column($pdo, 'gcash_transactions', 'notes', 'TEXT NULL AFTER confirmed_cash');
+        ensure_table_column($pdo, 'gcash_transactions', 'completed_at', 'DATETIME NULL AFTER reviewed_at');
+        if ($driver !== 'sqlite') {
+            $pdo->exec("ALTER TABLE gcash_transactions
+                MODIFY COLUMN reference_number VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
+                MODIFY COLUMN verification_status ENUM('Pending','Verified','Rejected','Completed','Needs checking') NOT NULL DEFAULT 'Pending'");
+        }
+    }
 
     $stmt = $pdo->prepare(
         "INSERT INTO schema_migrations (migration_key, description) VALUES (?, ?)
