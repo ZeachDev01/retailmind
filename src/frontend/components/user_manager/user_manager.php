@@ -205,7 +205,7 @@ $disabledCount = count($users) - $activeCount;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle) ?></title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" data-bootstrap-icons>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>" data-bootstrap-icons>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/avatars.css')) ?>?v=<?= (int)@filemtime(__DIR__ . '/../../assets/css/avatars.css') ?>" data-avatar-styles>
 </head>

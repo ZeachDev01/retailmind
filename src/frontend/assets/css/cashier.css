@@ -1268,23 +1268,37 @@
 .cashier-dashboard-page .cashier-action-card:first-child { border-color: var(--primary); background: var(--theme-surface-soft, #eff6ff); }
 .cashier-dashboard-page .cashier-action-card > span:last-child { min-width: 0; }
 .cashier-dashboard-page .cashier-action-card :is(span, strong) { white-space: normal; overflow-wrap: anywhere; }
-.cashier-dashboard-page .cashier-action-card strong { color: var(--text); }
+.cashier-dashboard-page .cashier-action-card strong { color: var(--text); font-size: 1rem; font-weight: 700; line-height: 1.3; }
+.cashier-dashboard-page .cashier-action-card > span > span { margin-top: .35rem; font-size: .875rem; line-height: 1.5; }
 .cashier-dashboard-page .cashier-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
 .cashier-dashboard-page .cashier-stats .stat-card { min-width: 0; padding: 1.25rem; box-shadow: none; }
-.cashier-dashboard-page .cashier-stats .value { font-size: clamp(1.3rem, 2vw, 1.8rem); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-.cashier-dashboard-page .cashier-stats .hint { line-height: 1.5; }
+.cashier-dashboard-page :is(.cashier-stats .value, .gcash-card-value) { font-size: clamp(1.4rem, 2vw, 1.8rem); font-weight: 700; line-height: 1.2; letter-spacing: -.02em; overflow-wrap: anywhere; font-variant-numeric: lining-nums tabular-nums; }
+.cashier-dashboard-page :is(.cashier-stats .label, .gcash-card-label) { color: var(--text); font-size: .875rem; font-weight: 600; line-height: 1.5; }
+.cashier-dashboard-page :is(.cashier-stats .hint, .gcash-card-sub, .gcash-nc-meta) { font-size: .875rem; line-height: 1.5; }
 .cashier-dashboard-page .cashier-dashboard-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1.25rem; }
 .cashier-dashboard-page .dashboard-panel { box-shadow: none; }
 .cashier-dashboard-page .cashier-sales-chart { position: relative; height: 300px; min-width: 0; margin: 1rem; }
 .cashier-dashboard-page .dashboard-panel-header { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .cashier-dashboard-page .dashboard-panel-header > div { flex: 1 1 180px; min-width: 0; }
-.cashier-dashboard-page .dashboard-panel-header .section-description { margin: .35rem 0 0; line-height: 1.5; }
+.cashier-dashboard-page :is(.dashboard-panel-header h2, .pos-panel-title h2) { font-size: 1.25rem; font-weight: 700; line-height: 1.3; letter-spacing: -.02em; text-wrap: balance; }
+.cashier-dashboard-page .dashboard-panel-header h3 { font-size: 1.05rem; font-weight: 600; line-height: 1.3; }
+.cashier-dashboard-page :is(.section-description, .pos-panel-title p) { max-width: 65ch; font-size: 1rem; line-height: 1.5; }
+.cashier-dashboard-page .dashboard-panel-header .section-description { margin: .35rem 0 0; }
 .cashier-dashboard-page .dashboard-panel-header .btn { min-height: 44px; white-space: nowrap; }
+.cashier-dashboard-page :is(.gcash-tab, .btn) { font-family: inherit; }
+.cashier-dashboard-page .pos-panel-title > div { min-width: 0; overflow-wrap: anywhere; }
+.cashier-dashboard-page .gcash-card { overflow-wrap: anywhere; }
+.cashier-dashboard-page .gcash-card-header { flex-wrap: wrap; }
+.cashier-dashboard-page .gcash-metrics-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
 .cashier-dashboard-page .cashier-recent-table { width: 100%; min-width: 0; table-layout: fixed; font-variant-numeric: tabular-nums; }
 .cashier-dashboard-page .cashier-recent-table :is(th, td) { padding: .85rem .6rem; white-space: normal; overflow-wrap: anywhere; }
-.cashier-dashboard-page .cashier-recent-table th { color: var(--muted); font-size: .75rem; background: var(--theme-surface-soft, #f8fafc); }
+.cashier-dashboard-page .cashier-recent-table th { color: var(--muted); font-size: .875rem; font-weight: 600; background: var(--theme-surface-soft, #f8fafc); }
+.cashier-dashboard-page .cashier-recent-table .receipt-link { font-size: .875rem; font-weight: 600; }
 .cashier-dashboard-page .stock-alert-item { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .cashier-dashboard-page .stock-alert-item > div { flex: 1 1 150px; min-width: 0; overflow-wrap: anywhere; }
+.cashier-dashboard-page .stock-alert-item strong { font-size: 1rem; font-weight: 600; line-height: 1.5; }
+.cashier-dashboard-page .stock-alert-item span { font-size: .875rem; line-height: 1.5; }
+.cashier-dashboard-page .stock-alert-item .stock-level-pill { font-weight: 600; font-variant-numeric: tabular-nums; }
 .cashier-dashboard-page :is(a, [tabindex]):focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
 @media (max-width: 1300px) {
     .cashier-dashboard-page .cashier-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1296,7 +1310,7 @@
     .cashier-dashboard-page .cashier-recent-table tbody { display: block; }
     .cashier-dashboard-page .cashier-recent-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 1rem; padding: .85rem; border: 1px solid var(--border); border-radius: 12px; }
     .cashier-dashboard-page .cashier-recent-table tbody td { display: block; padding: 0; border: 0; min-width: 0; text-align: left; }
-    .cashier-dashboard-page .cashier-recent-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: var(--muted); font-size: .75rem; }
+    .cashier-dashboard-page .cashier-recent-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: var(--muted); font-size: .875rem; font-weight: 600; }
     .cashier-dashboard-page .cashier-recent-table td:last-child { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {

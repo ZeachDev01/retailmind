@@ -103,8 +103,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
         </section>
     </main>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/sweetalert2/sweetalert2.min.css')) ?>">
+    <script src="<?= htmlspecialchars(app_url('assets/vendor/sweetalert2/sweetalert2.all.min.js')) ?>"></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/ui.js')) ?>"></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/password-feedback.js')) ?>"></script>
     <script>

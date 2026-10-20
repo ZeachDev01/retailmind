@@ -273,7 +273,7 @@ $GLOBALS['rm_navigation_shell'] = [
 <link rel="stylesheet" href="<?= sidebar_e($avatarStylesheetUrl) ?>" data-avatar-styles>
 <script>
     (function() {
-        var href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';
+        var href = <?= json_encode(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         if (document.head && !document.querySelector('link[href="' + href + '"]')) {
             var link = document.createElement('link');
             link.rel = 'stylesheet';
@@ -420,8 +420,8 @@ $GLOBALS['rm_navigation_shell'] = [
 </div>
 
 <div id="rm-flash-messages" hidden data-login-success="<?= sidebar_e($loginSuccess) ?>"<?php foreach ($flashMessages as $flashType => $flashMessage): ?> data-<?= sidebar_e($flashType) ?>="<?= sidebar_e($flashMessage) ?>" <?php endforeach; ?>></div>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/vendor/sweetalert2/sweetalert2.min.css')) ?>">
+<script src="<?= sidebar_e(app_url('assets/vendor/sweetalert2/sweetalert2.all.min.js')) ?>"></script>
 <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
 <script src="<?= sidebar_e(app_url('assets/js/ui.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/ui.js')) ?>"></script>
 <script src="<?= sidebar_e(app_url('assets/js/sidebar-loader.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/sidebar-loader.js')) ?>"></script>
