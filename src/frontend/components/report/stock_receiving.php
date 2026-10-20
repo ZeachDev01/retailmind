@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
         if (isset($_POST['entry_mode']) || array_key_exists('lines', $_POST)) {
             if (($_POST['receiving_complete'] ?? '') !== '1') {
-                throw new RuntimeException('The shopping entry was not fully received. Nothing was saved. Split it into smaller entries and try again.');
+                throw new RuntimeException('The receiving entry is incomplete. Nothing was saved. Split it into smaller entries and try again.');
             }
             $lines = $_POST['lines'] ?? [];
             if (!is_array($lines)) throw new RuntimeException('Product lines must be a list of receiving details.');
@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($result['damaged_qty'] > 0) $summary .= ", {$result['damaged_qty']} damaged units excluded";
             $summaries[] = $summary;
         }
-        $message = 'Shopping entry saved. ' . implode('; ', $summaries)
+        $message = 'Receiving entry saved. ' . implode('; ', $summaries)
             . ". Recorded by {$results[0]['recorded_by']} at {$results[0]['received_at']}.";
         try {
             log_activity($pdo, $_SESSION['user_id'], 'Received shopping entry: ' . implode('; ', $summaries));
@@ -164,7 +164,7 @@ $categoryIcon = static function (string $categoryName): string {
     <main class="main-content" id="receiving_main" tabindex="-1">
         <?php if ($message): ?>
             <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
-            <p>Stock is updated. <a href="../inventory_management/replenishment_queue.php">Review updated recommendations</a> using current stock and existing forecast outputs, or <a href="receiving_history.php">view receiving history</a>.</p>
+            <p>Stock is updated. <a href="../inventory_management/replenishment_queue.php">Review replenishment recommendations</a> or <a href="receiving_history.php">view receiving history</a>.</p>
         <?php endif; ?>
 
         <?php if ($error): ?>
@@ -187,14 +187,14 @@ $categoryIcon = static function (string $categoryName): string {
             <noscript><p role="alert">Enable JavaScript to select products, review quantities, and save this receiving entry.</p></noscript>
             <fieldset class="receiving-fieldset-reset" <?= !$canReceive || !$products ? 'disabled' : '' ?>>
             <div class="form-section" id="receiving_selection">
-                <div class="receiving-panel-heading"><div><h2>Product catalog</h2><p>Find what arrived</p></div><div class="receiving-catalog-actions"><button type="button" class="btn btn-secondary" id="receiving_help_open" aria-haspopup="dialog">How to use</button><span class="receiving-count"><?= count($products) ?> products</span></div></div>
+                <div class="receiving-panel-heading"><div><h2>Product catalog</h2></div><div class="receiving-catalog-actions"><button type="button" class="btn btn-secondary" id="receiving_help_open" aria-haspopup="dialog">How to receive stock</button><span class="receiving-count"><?= count($products) ?> products</span></div></div>
                 <div class="receiving-search-bar form-group">
                     <label for="product_search_scan">Scan barcode or search by name or SKU</label>
                     <div class="receiving-search-group">
                         <input type="search" id="product_search_scan" autocomplete="off" aria-describedby="scan_status product_search_status" placeholder="Scan barcode or search by name, SKU or barcode">
-                        <button type="button" class="btn btn-secondary" id="add_scanned_item">+ Add item</button>
+                        <button type="button" class="btn btn-secondary" id="add_scanned_item">Add to delivery</button>
                     </div>
-                    <small id="scan_status" role="status" aria-live="polite">Scan barcode or search by name or SKU, or choose a product manually below.</small>
+                    <small id="scan_status" role="status" aria-live="polite"></small>
                     <small id="product_search_status" role="status"></small>
                 </div>
                 <div class="receiving-category-filters" id="receiving_category_filters" role="group" aria-label="Product categories">
@@ -219,10 +219,10 @@ $categoryIcon = static function (string $categoryName): string {
                 <input type="hidden" name="receiving_nonce" value="<?= htmlspecialchars($receivingNonce) ?>">
                 <input type="hidden" name="entry_mode" value="shopping_trip">
                 <div class="delivery-editor">
-                <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2><p>Enter quantities exactly as received.</p></div><div class="receiving-delivery-actions"><span id="delivery_count" class="receiving-count">0 products</span><button type="button" class="btn btn-primary" id="receiving_next">Add quantity</button></div></div>
+                <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2></div><div class="receiving-delivery-actions"><span id="delivery_count" class="receiving-count">0 products</span><button type="button" class="btn btn-primary" id="receiving_next">Continue to quantities</button></div></div>
                 <div id="delivery_empty_state" class="delivery-empty-state">
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
-                    <p>No products added yet. Scan a barcode or click + Add to Delivery from the catalog below.</p>
+                    <p>No products added yet. Scan a barcode or add a product from the catalog.</p>
                 </div>
                 <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
                 <div id="receiving_lines"></div>
@@ -236,7 +236,7 @@ $categoryIcon = static function (string $categoryName): string {
                             </span>
                             <div class="playlist-row-identity">
                                 <div class="playlist-row-title">
-                                    <span class="line-number">1</span>.
+                                    <span class="line-number">1</span>
                                     <strong class="receiving-product-name playlist-product-name"></strong>
                                     <span class="receiving-product-sku playlist-product-sku"></span>
                                     <span class="receiving-pullout-badge badge" data-field="pullout_badge" style="display:none; font-size:0.75rem; margin-left:0.5rem; background:#0284c7; color:#fff; border-radius:0.25rem; padding:0.15rem 0.4rem; vertical-align:middle;">
@@ -264,7 +264,7 @@ $categoryIcon = static function (string $categoryName): string {
                     <div class="form-section receiving-quantity">
                         <div class="form-grid">
                             <div class="form-group receiving-quantity">
-                                <label for="quantity_mode">Receiving quantity type</label>
+                                <label for="quantity_mode">Quantity type</label>
                                 <select name="quantity_mode" id="quantity_mode" data-field="quantity_mode">
                                     <option value="units">Base units</option>
                                     <option value="packages">Packages / cases</option>
@@ -272,7 +272,7 @@ $categoryIcon = static function (string $categoryName): string {
                                 </select>
                             </div>
                             <div class="form-group receiving-quantity" id="units_qty_group" data-field="units_qty_group">
-                                <label for="received_qty">Base units received</label>
+                                <label for="received_qty">Units received</label>
                                 <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_qty" id="received_qty" data-field="received_qty" value="">
                             </div>
                             <div class="form-group receiving-quantity" id="packages_qty_group" data-field="packages_qty_group" style="display:none">
@@ -280,7 +280,7 @@ $categoryIcon = static function (string $categoryName): string {
                                 <input type="text" inputmode="numeric" pattern="[0-9]+" name="received_packages" id="received_packages" data-field="received_packages" value="">
                             </div>
                             <div class="form-group receiving-quantity" id="single_damaged_group" data-field="single_damaged_group">
-                                <label for="damaged_qty">Damaged base units on delivery</label>
+                                <label for="damaged_qty">Damaged units</label>
                                 <input type="text" inputmode="numeric" pattern="[0-9]+" name="damaged_qty" id="damaged_qty" data-field="damaged_qty" value="0">
                             </div>
                             <div class="form-group receiving-quantity" id="packs_qty_group" data-field="packs_qty_group" style="display:none">
@@ -312,7 +312,7 @@ $categoryIcon = static function (string $categoryName): string {
                     </div>
 
                     <details class="receiving-quantity receiving-extras">
-                        <summary>Cost, batch, expiry & notes</summary>
+                        <summary>Optional details</summary>
                         <div class="form-section">
                             <div class="form-grid">
                                 <div class="form-group">
@@ -345,24 +345,24 @@ $categoryIcon = static function (string $categoryName): string {
                 </section>
                 </template>
                 <p id="entry_status" role="alert"></p>
-                <section id="receiving_review" hidden aria-label="Review shopping entry"></section>
+                <section id="receiving_review" hidden aria-label="Review receiving entry"></section>
                 </div>
                 <section class="receiving-summary" aria-label="Delivery summary">
                 <div class="receiving-panel-heading"><h2>Delivery summary</h2><span id="summary_status" class="receiving-count">Draft</span></div>
                 <div class="receiving-summary-body">
-                    <div class="receiving-accepted"><strong id="summary_products">0</strong><span>Products added</span><small>In current delivery list</small></div>
-                    <dl class="receiving-totals"><div><dt>Accepted units</dt><dd id="summary_accepted">0</dd></div><div><dt>Received units</dt><dd id="summary_received">0</dd></div><div><dt>Damaged units</dt><dd id="summary_damaged">0</dd></div><div><dt>Known accepted cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
-                    <p class="receiving-summary-note">Damaged units are recorded separately. They never increase available stock. Blank purchase costs remain unknown.</p>
+                    <div class="receiving-accepted"><strong id="summary_products">0</strong><span>Products</span></div>
+                    <dl class="receiving-totals"><div><dt>Accepted units</dt><dd id="summary_accepted" class="receiving-total-accepted">0</dd></div><div><dt>Received units</dt><dd id="summary_received" class="receiving-total-received">0</dd></div><div><dt>Damaged units</dt><dd id="summary_damaged" class="receiving-total-damaged">0</dd></div><div><dt>Known cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
+                    <p class="receiving-summary-note">Damaged units do not increase stock. Blank costs are unknown.</p>
                 <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
                 <div class="form-section receiving-quantity">
                     <h3>Receipt details</h3>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="supplier">Shopping store (optional)</label>
+                            <label for="supplier">Bought from (optional)</label>
                             <input type="text" name="supplier" id="supplier" maxlength="150" placeholder="Where the goods were bought">
                         </div>
                         <div class="form-group">
-                            <label for="invoice_number">Receipt / invoice reference (optional)</label>
+                            <label for="invoice_number">Receipt reference (optional)</label>
                             <input type="text" name="invoice_number" id="invoice_number" maxlength="100" placeholder="Receipt reference">
                         </div>
                     </div>
@@ -370,11 +370,10 @@ $categoryIcon = static function (string $categoryName): string {
                 </fieldset>
 
                 <div class="u-flex-wrap receiving-actions">
-                    <button type="button" class="btn btn-secondary" id="receiving_return_products" hidden>Return to products</button>
-                    <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Back</button>
-                    <button type="submit" class="btn-submit" <?= !$canReceive ? 'disabled' : '' ?> hidden>Save shopping entry & update inventory</button>
+                    <button type="button" class="btn btn-secondary" id="receiving_return_products" hidden>Add products</button>
+                    <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Edit quantities</button>
+                    <button type="submit" class="btn-submit" <?= !$canReceive ? 'disabled' : '' ?> hidden>Save receiving entry & update stock</button>
                 </div>
-                <small>Review is required before stock changes.</small>
                 </div>
                 </section>
                 <input type="hidden" name="receiving_complete" value="1">
@@ -387,7 +386,7 @@ $categoryIcon = static function (string $categoryName): string {
     <ol>
         <li><strong>Select products:</strong> scan a barcode, search by name or SKU, or choose a category and add products from the catalog.</li>
         <li><strong>Enter quantities:</strong> continue to quantities, choose units or packages, then enter received and damaged units. Add cost, batch, expiry, or notes when needed.</li>
-        <li><strong>Review and save:</strong> check the delivery summary and receipt details, review the stock changes, then save the entry.</li>
+        <li><strong>Review and save:</strong> check the delivery summary and receipt details, then save the entry to update stock.</li>
     </ol>
 </dialog>
 
@@ -581,9 +580,6 @@ function updatePackageConversion(row = activeLine) {
     const prodId = field('product_id')?.value;
     const prod = productMap.get(String(prodId));
     if (!prod) return;
-    const units = Number(prod.units_per_package || 1);
-    const receiving = prod.receiving_unit || 'package';
-    const base = prod.base_unit || 'piece';
     const mode = field('quantity_mode')?.value || 'units';
 
     const convEl = field('package_conversion');
@@ -599,17 +595,15 @@ function updatePackageConversion(row = activeLine) {
         const rejectedLooseInput = Number(field('rejected_loose')?.value || 0);
         const acceptedPacks = Math.max(0, receivedPacksInput - damagedPacksInput - rejectedPacksInput);
         const acceptedLoose = Math.max(0, receivedLooseInput - damagedLooseInput - rejectedLooseInput);
-        const total = (receivedPacksInput * packSize) + receivedLooseInput;
-        const damagedTotal = (damagedPacksInput * packSize) + damagedLooseInput;
-        const rejectedTotal = (rejectedPacksInput * packSize) + rejectedLooseInput;
         const acceptedTotal = (acceptedPacks * packSize) + acceptedLoose;
-        convEl.textContent = `1 Sales Pack = ${packSize} ${base}(s). ${receivedPacksInput} pack(s) × ${packSize} + ${receivedLooseInput} loose = ${total} units received; ${damagedTotal} damaged; ${rejectedTotal} rejected; ${acceptedTotal} accepted (${acceptedPacks} sealed packs, ${acceptedLoose} loose pieces).`;
+        convEl.textContent = `Accepted: ${acceptedTotal} units (${acceptedPacks} packs, ${acceptedLoose} loose pieces).`;
     } else {
-        const packages = Number(field('received_packages')?.value || 0);
         const damaged = Number(field('damaged_qty')?.value || 0);
         const packageMode = mode === 'packages';
-        const total = packageMode ? packages * units : Number(field('received_qty')?.value || 0);
-        convEl.textContent = `1 ${receiving} = ${units} ${base}(s). ${packageMode ? `${packages} × ${units} = ` : ''}${total} units received; ${damaged} damaged units; ${Math.max(0, total - damaged)} accepted units.`;
+        const total = packageMode
+            ? Number(field('received_packages')?.value || 0) * Number(prod.units_per_package || 1)
+            : Number(field('received_qty')?.value || 0);
+        convEl.textContent = `Accepted: ${Math.max(0, total - damaged)} units.`;
     }
     refreshDelivery();
 }
@@ -676,6 +670,32 @@ function updateQuantityMode(row = activeLine) {
 let step = 1;
 const form = document.getElementById('receiving_form');
 
+function getLineQuantities(row, prod) {
+    const field = name => row.querySelector('[data-field="' + name + '"]');
+    const mode = field('quantity_mode')?.value || 'units';
+    if (mode === 'packs') {
+        const packSize = Number(prod.pack_size || 1);
+        const value = name => /^\d+$/.test(field(name)?.value) ? Number(field(name).value) : 0;
+        const receivedPacks = value('received_packs');
+        const receivedLoose = value('received_loose');
+        const damagedPacks = value('damaged_packs');
+        const damagedLoose = value('damaged_loose');
+        const rejectedPacks = value('rejected_packs');
+        const rejectedLoose = value('rejected_loose');
+        const total = (receivedPacks * packSize) + receivedLoose;
+        const damaged = (damagedPacks * packSize) + damagedLoose;
+        const accepted = (Math.max(0, receivedPacks - damagedPacks - rejectedPacks) * packSize)
+            + Math.max(0, receivedLoose - damagedLoose - rejectedLoose);
+        return {total, damaged, accepted};
+    }
+
+    const packages = mode === 'packages';
+    const quantity = field(packages ? 'received_packages' : 'received_qty').value;
+    const total = /^\d+$/.test(quantity) ? Number(quantity) * (packages ? Number(prod.units_per_package || 1) : 1) : 0;
+    const damaged = /^\d+$/.test(field('damaged_qty').value) ? Number(field('damaged_qty').value) : 0;
+    return {total, damaged, accepted: Math.max(0, total - damaged)};
+}
+
 function refreshDelivery() {
     let products = 0, received = 0, damaged = 0, accepted = 0, cost = 0;
     for (const row of lineContainer.children) {
@@ -684,38 +704,17 @@ function refreshDelivery() {
         const prod = productMap.get(String(prodId));
         if (!prodId || !prod) continue;
         products++;
-        const mode = field('quantity_mode')?.value || 'units';
-        let total = 0, damage = 0, usable = 0;
-        if (mode === 'packs') {
-            const packSize = Number(prod.pack_size || 1);
-            const receivedPacksInput = /^\d+$/.test(field('received_packs')?.value) ? Number(field('received_packs').value) : 0;
-            const receivedLooseInput = /^\d+$/.test(field('received_loose')?.value) ? Number(field('received_loose').value) : 0;
-            const damagedPacksInput = /^\d+$/.test(field('damaged_packs')?.value) ? Number(field('damaged_packs').value) : 0;
-            const damagedLooseInput = /^\d+$/.test(field('damaged_loose')?.value) ? Number(field('damaged_loose').value) : 0;
-            const rejectedPacksInput = /^\d+$/.test(field('rejected_packs')?.value) ? Number(field('rejected_packs').value) : 0;
-            const rejectedLooseInput = /^\d+$/.test(field('rejected_loose')?.value) ? Number(field('rejected_loose').value) : 0;
-            total = (receivedPacksInput * packSize) + receivedLooseInput;
-            damage = (damagedPacksInput * packSize) + damagedLooseInput;
-            const acceptedPacksCount = Math.max(0, receivedPacksInput - damagedPacksInput - rejectedPacksInput);
-            const acceptedLooseCount = Math.max(0, receivedLooseInput - damagedLooseInput - rejectedLooseInput);
-            usable = (acceptedPacksCount * packSize) + acceptedLooseCount;
-        } else {
-            const packages = mode === 'packages';
-            const quantity = field(packages ? 'received_packages' : 'received_qty').value;
-            const unitsPerPkg = Number(prod.units_per_package || 1);
-            total = /^\d+$/.test(quantity) ? Number(quantity) * (packages ? unitsPerPkg : 1) : 0;
-            damage = /^\d+$/.test(field('damaged_qty').value) ? Number(field('damaged_qty').value) : 0;
-            usable = Math.max(0, total - damage);
-        }
-        received += total;
-        damaged += damage;
-        accepted += usable;
+        const quantities = getLineQuantities(row, prod);
+        received += quantities.total;
+        damaged += quantities.damaged;
+        accepted += quantities.accepted;
         const price = field('cost_price').value.trim();
-        if (/^\d{1,8}(?:\.\d{1,2})?$/.test(price)) cost += Math.round(Number(price) * 100) * usable;
+        if (/^\d{1,8}(?:\.\d{1,2})?$/.test(price)) cost += Math.round(Number(price) * 100) * quantities.accepted;
     }
     for (const [name, value] of Object.entries({products, received, damaged, accepted})) {
         document.getElementById('summary_' + name).textContent = value;
     }
+    document.getElementById('summary_damaged').classList.toggle('is-positive', damaged > 0);
     document.getElementById('summary_cost').textContent = '₱' + (cost / 100).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     document.getElementById('delivery_count').textContent = products + (products === 1 ? ' product' : ' products');
     const emptyState = document.getElementById('delivery_empty_state');
@@ -1164,7 +1163,7 @@ function showStep(next, focus = true) {
     document.getElementById('receiving_back').hidden = step === 1;
     document.getElementById('receiving_return_products').hidden = step !== 2;
     document.getElementById('receiving_next').hidden = step === 3;
-    document.getElementById('receiving_next').textContent = step === 1 ? 'Add quantity' : 'Review shopping entry';
+    document.getElementById('receiving_next').textContent = step === 1 ? 'Continue to quantities' : 'Review entry';
     form.querySelector('.btn-submit').hidden = step !== 3;
     if (focus) document.getElementById('receiving_step_title').focus();
 }
@@ -1309,28 +1308,40 @@ function validateQuantities() {
 function renderReview() {
     const review = document.getElementById('receiving_review');
     review.replaceChildren();
-    const shared = document.createElement('p');
-    shared.textContent = 'Shopping store: ' + (form.elements.supplier.value || 'Not supplied')
-        + ' · Receipt reference: ' + (form.elements.invoice_number.value || 'Not supplied');
-    review.append(shared);
+    const sharedDetails = [
+        form.elements.supplier.value && 'Bought from: ' + form.elements.supplier.value,
+        form.elements.invoice_number.value && 'Receipt: ' + form.elements.invoice_number.value,
+    ].filter(Boolean);
+    if (sharedDetails.length) {
+        const shared = document.createElement('p');
+        shared.className = 'receiving-review-entry-details';
+        shared.textContent = sharedDetails.join(' · ');
+        review.append(shared);
+    }
     for (const [index, row] of Array.from(lineContainer.children).entries()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const prodId = field('product_id')?.value;
         const prod = productMap.get(String(prodId));
         const section = document.createElement('section');
-        section.className = 'receiving-line';
+        section.className = 'receiving-review-line';
+        const header = document.createElement('div');
+        header.className = 'receiving-review-header';
+        const identity = document.createElement('div');
         const title = document.createElement('h3');
-        title.textContent = prod ? `${prod.product_name} (${prod.sku})` : 'Product ' + (index + 1);
-        const mode = document.createElement('p');
+        title.textContent = prod?.product_name || 'Product ' + (index + 1);
+        identity.append(title);
+        if (prod?.sku) {
+            const sku = document.createElement('span');
+            sku.className = 'receiving-review-sku';
+            sku.textContent = prod.sku;
+            identity.append(sku);
+        }
+        const mode = document.createElement('span');
+        mode.className = 'receiving-review-mode';
         const qtyModeSelect = field('quantity_mode');
         const modeText = qtyModeSelect.options[qtyModeSelect.selectedIndex]?.textContent || 'Units';
-        mode.textContent = modeText + ' · ' + field('package_conversion').textContent;
-        const details = document.createElement('p');
-        details.textContent = 'Purchase cost per base unit: ' + (field('cost_price').value || 'Unknown; current cost preserved')
-            + ' · Batch: ' + (field('batch_number').value || 'Not supplied')
-            + ' · Expiry: ' + (field('expiration_date').value || 'Not supplied');
-        const notes = document.createElement('p');
-        notes.textContent = [field('discrepancy_notes').value, field('notes').value].filter(Boolean).join(' · ');
+        mode.textContent = modeText;
+        identity.append(mode);
         const edit = document.createElement('button');
         edit.type = 'button';
         edit.className = 'btn btn-secondary';
@@ -1341,14 +1352,40 @@ function renderReview() {
             const target = field('quantity_mode') || row.querySelector('input:not([type="hidden"]), select');
             target?.focus();
         });
-        section.append(title, mode, details);
+        header.append(identity, edit);
+        const quantities = getLineQuantities(row, prod);
+        const quantityList = document.createElement('dl');
+        quantityList.className = 'receiving-review-quantities';
+        for (const [label, value] of [['Received', quantities.total], ['Damaged', quantities.damaged], ['Accepted', quantities.accepted]]) {
+            const item = document.createElement('div');
+            item.className = 'receiving-review-quantity is-' + label.toLowerCase() + (label === 'Damaged' && value > 0 ? ' is-positive' : '');
+            const term = document.createElement('dt');
+            term.textContent = label;
+            const detail = document.createElement('dd');
+            detail.textContent = value + ' units';
+            item.append(term, detail);
+            quantityList.append(item);
+        }
+        section.append(header, quantityList);
         const pulloutIdVal = field('pullout_id')?.value;
         if (pulloutIdVal) {
             const pulloutInfo = document.createElement('p');
             pulloutInfo.textContent = 'Linked replacement: Supplier Pullout #' + pulloutIdVal;
             section.append(pulloutInfo);
         }
-        section.append(notes, edit);
+        const details = [
+            field('cost_price').value && 'Cost: ₱' + field('cost_price').value + ' per unit',
+            field('batch_number').value && 'Batch: ' + field('batch_number').value,
+            field('expiration_date').value && 'Expiry: ' + field('expiration_date').value,
+            field('discrepancy_notes').value,
+            field('notes').value,
+        ].filter(Boolean);
+        if (details.length) {
+            const detailText = document.createElement('p');
+            detailText.className = 'receiving-review-details';
+            detailText.textContent = details.join(' · ');
+            section.append(detailText);
+        }
         review.append(section);
     }
 }

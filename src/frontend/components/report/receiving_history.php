@@ -61,8 +61,7 @@ try {
     <main class="main-content" id="main-content" tabindex="-1">
         <header class="rh-mb-6 rh-flex rh-flex-col rh-gap-4 xl:rh-flex-row xl:rh-items-center xl:rh-justify-between">
             <div>
-                <h1 class="rh-m-0 rh-text-2xl rh-font-bold">Receiving History</h1>
-                <p class="muted rh-mb-0 rh-mt-1 rh-text-sm"><?= $canReceive ? 'My Receipts' : 'Store Receipts (Read-only Oversight)' ?></p>
+                <h1 class="rh-m-0 rh-text-2xl rh-font-bold"><?= $canReceive ? 'My Receiving History' : 'Store Receiving History' ?></h1>
             </div>
         <nav class="rh-flex rh-flex-col rh-gap-2 sm:rh-flex-row sm:rh-flex-wrap" aria-label="Stock replenishment">
             <?php if ($canReceive): ?>
