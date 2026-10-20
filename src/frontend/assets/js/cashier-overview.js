@@ -45,14 +45,12 @@
             const expCash = document.getElementById('gcash-overview-expected-cash');
             const expWallet = document.getElementById('gcash-overview-expected-wallet');
             const cashChecked = document.getElementById('gcash-overview-cash-checked');
-            const walletChecked = document.getElementById('gcash-overview-wallet-checked');
 
             if (expCash) expCash.textContent = formatPhp(data.expected_service_cash || 0);
             if (expWallet) expWallet.textContent = formatPhp(data.expected_wallet_balance || 0);
 
             const lastCheckedStr = data.last_checked_formatted ? ('Last actual check: ' + data.last_checked_formatted) : 'Last actual check: Not checked yet';
             if (cashChecked) cashChecked.textContent = lastCheckedStr;
-            if (walletChecked) walletChecked.textContent = lastCheckedStr;
 
             const ciPrin = document.getElementById('gcash-metric-cash-in-principal');
             const coPrin = document.getElementById('gcash-metric-cash-out-principal');

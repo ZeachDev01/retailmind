@@ -42,9 +42,8 @@ const {chromium} = require('playwright');
                 assert.equal(chart.config.data.datasets[0].data[8], 1234567.89);
                 assert.equal(chart.config.options.scales.y.beginAtZero, true);
             }
-            assert.equal(await page.locator('.cashier-action-card').count(), 3);
+            assert.equal(await page.locator('.cashier-quick-actions, .cashier-action-card').count(), 0);
             assert.equal(await page.locator('.cashier-stats article').count(), 4);
-            assert.equal(await page.locator('.cashier-action-card strong').first().evaluate(el => getComputedStyle(el).fontSize), '16px');
             assert.equal(await page.locator('.cashier-stats .hint').first().evaluate(el => getComputedStyle(el).fontSize), '14px');
             assert.equal(await page.locator('.dashboard-panel-header h2').first().evaluate(el => getComputedStyle(el).fontSize), '20px');
             assert.match(await page.locator('.gcash-card-value').first().evaluate(el => getComputedStyle(el).fontVariantNumeric), /tabular-nums/);
@@ -54,7 +53,7 @@ const {chromium} = require('playwright');
                 await page.setViewportSize({width, height: 900});
                 assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Dashboard fits at ${width}`);
                 assert(await page.locator('.table-wrap').evaluate(el => el.scrollWidth <= el.clientWidth), `Transactions fit at ${width}`);
-                for (const selector of ['.cashier-stats', '.cashier-quick-actions', '.cashier-dashboard-grid']) {
+                for (const selector of ['.cashier-stats', '.cashier-dashboard-grid']) {
                     assert(await page.locator(selector).evaluate(el => el.scrollWidth <= el.clientWidth), `${selector} fits at ${width}`);
                 }
                 if ([1440, 390].includes(width)) await page.screenshot({path: path.join(screenshots, `cashier-${empty ? 'empty' : 'populated'}-${width}.png`), fullPage: true});
@@ -71,7 +70,7 @@ const {chromium} = require('playwright');
             await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
             assert(await page.locator('#panel-gcash').evaluate(el => el.scrollWidth <= el.clientWidth), 'GCash fits at 200% text size: ' + await page.locator('#panel-gcash').evaluate(el => JSON.stringify([...el.querySelectorAll('*')].filter(item => item.scrollWidth > item.clientWidth).map(item => item.className))));
             await page.getByRole('tab', {name: 'Cashier', exact: true}).click();
-            for (const selector of ['.cashier-stats', '.cashier-quick-actions', '.cashier-dashboard-grid']) {
+            for (const selector of ['.cashier-stats', '.cashier-dashboard-grid']) {
                 assert(await page.locator(selector).evaluate(el => el.scrollWidth <= el.clientWidth), `${selector} fits at 200% text size`);
             }
             await page.close();
