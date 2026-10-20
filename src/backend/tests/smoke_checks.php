@@ -267,10 +267,6 @@ $checks = [
         'needles' => ['VIEW_STORE_REPORTS', "'store_id' => store_scope_id(\$pdo)", '{$alias}.branch_id = ?'],
         'forbidden' => ["require_role(['admin', 'inventory_manager'])"],
     ],
-    'Audit Logs search control is inset' => [
-        'file' => 'src/frontend/assets/css/audit-logs.css',
-        'needles' => ['.dt-container > .dt-layout-row:first-child', 'padding: 0.65rem 1rem 0.15rem;'],
-    ],
     'Audit logs use direct navigation' => [
         'file' => 'src/frontend/components/sidebar.php',
         'needles' => ['components/system_administrator/audit_logs.php'],

@@ -8,18 +8,22 @@
 .reset-panel { min-width: 0; background: var(--theme-surface, var(--card-bg)); border: 1px solid var(--border); border-radius: 14px; padding: 1.5rem; }
 .reset-product { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 1.25fr); gap: 2rem; }
 .reset-product-intro, .reset-product-form, .reset-review, .reset-confirm { min-width: 0; }
+.reset-product-form { border-left: 1px solid var(--border); padding-left: 2rem; }
 .reset-product-intro h2, .reset-backup h2 { margin-bottom: .5rem; }
 .reset-outcomes { margin: 1rem 0; padding-left: 1.25rem; line-height: 1.5; }
 .reset-outcomes li + li { margin-top: .75rem; }
 .reset-outcomes strong { color: var(--text); font-weight: 600; }
 .reset-note { font-size: 1rem; }
+.reset-product-warning { margin-top: 1.25rem; padding: .875rem 1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--theme-danger-surface, #fef2f2); color: var(--reset-danger); font-size: .875rem; }
+.reset-product-warning strong { font-weight: 600; }
 .reset-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .reset-page .form-group { margin-bottom: 1rem; min-width: 0; }
-.reset-page label { font-size: 1rem; color: var(--text); }
+.reset-page label { font-size: .875rem; line-height: 1.5; color: var(--text); }
+.reset-page label strong { font-weight: 700; }
 .reset-page input, .reset-page select { width: 100%; min-height: 44px; background: var(--theme-surface, var(--card-bg)); color: var(--text); font-size: 1rem; caret-color: var(--primary); }
 .reset-page select { overflow: hidden; text-overflow: ellipsis; }
 .reset-page .btn { min-height: 44px; font-size: 1rem; white-space: normal; }
-.reset-page .reset-delete { color: var(--reset-danger); background: transparent; border: 1px solid var(--reset-danger); }
+.reset-page .reset-delete { display: block; margin-left: auto; color: var(--reset-danger); background: transparent; border: 1px solid var(--reset-danger); }
 .reset-page .reset-delete:hover:not(:disabled) { background: var(--theme-danger-surface, var(--surface-soft)); }
 .reset-page .btn:disabled { opacity: .55; cursor: not-allowed; }
 .reset-page .alert { display: block; width: 100%; padding: .75rem 1rem; border: 1px solid transparent; border-radius: 10px; line-height: 1.5; overflow-wrap: break-word; }
@@ -30,9 +34,11 @@
 .reset-section-heading, .reset-record-group > summary { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; cursor: pointer; list-style: none; }
 .reset-page summary::-webkit-details-marker { display: none; }
 .reset-section-heading { padding: 1.5rem; border-radius: 14px; }
+.reset-store[open] > .reset-section-heading { border-radius: 14px 14px 0 0; }
 .reset-section-heading:hover, .reset-record-group > summary:hover { background: var(--surface-soft); }
 .reset-section-title, .reset-blocked, .reset-group-total { display: block; }
 .reset-review-link { display: inline-flex; align-items: center; gap: .5rem; color: var(--primary); font-weight: 600; flex-shrink: 0; }
+.reset-store[open] > summary .reset-review-link { color: var(--text); }
 .reset-blocked { margin-top: .5rem; font-size: 1rem; color: var(--theme-warning-text, #92400e); }
 .reset-page summary svg { flex-shrink: 0; transition: transform .18s ease-out; }
 .reset-page details[open] > summary svg { transform: rotate(180deg); }
@@ -52,9 +58,9 @@
 .reset-record span { min-width: 0; overflow-wrap: break-word; }
 .reset-record strong { flex-shrink: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
 .reset-preserved { margin-top: 1.5rem; }
-.reset-preserved ul { padding-left: 1.25rem; font-size: 1rem; }
+.reset-preserved ul { padding-left: 1.25rem; font-size: 1rem; line-height: 1.5; }
 .reset-preserved li + li { margin-top: .5rem; }
-.reset-preflight { list-style: none; padding: 0; margin: 1rem 0 1.5rem; }
+.reset-preflight { list-style: disc; padding-left: 1.25rem; margin: 1rem 0 1.5rem; line-height: 1.5; }
 .reset-preflight li + li { margin-top: 1rem; }
 .reset-confirmation { border-top: 1px solid var(--border); padding-top: 1.5rem; }
 .reset-confirmation h3 { color: var(--reset-danger); }
@@ -74,6 +80,7 @@ html[data-theme="dark"] .reset-page ::selection { background: var(--primary); co
 @media (prefers-reduced-motion: reduce) { .reset-page summary svg { transition: none; } }
 @media (max-width: 1180px) {
     .reset-product, .reset-layout { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+    .reset-product-form { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; padding-top: 1.5rem; }
     .reset-confirm { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; padding-top: 1.5rem; }
 }
 @media (max-width: 760px) {

@@ -193,7 +193,7 @@ try {
                         <h2 id="create-title">Create backup</h2>
                     </div>
                     <form method="post" class="backup-create-form"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn btn-primary" data-backup-create>Create SQL backup</button></form>
-                    <div class="backup-storage-note"><strong>Unencrypted: includes password hashes and restricted audit history. Keep private on separate storage.</strong></div>
+                    <div class="backup-storage-note"><strong>Unencrypted:</strong> includes password hashes and restricted audit history. Keep private on separate storage.</div>
                     <details class="restore-details"><summary>Backup details</summary><ul class="backup-guidance"><li>Copies all Store records, accounts, settings, and audit history at one point in time.</li><li>Saving pauses briefly during capture, then resumes.</li><li>Completed means created; it does not confirm the file was safely stored. Download and verify it separately.</li></ul></details>
                     <?php if (is_file(RecoveryStore::path('latest-safety.sql'))): ?>
                         <div class="backup-safety"><a href="<?= $escape(app_url('components/backup/safety_download.php')) ?>">Download latest pre-restore safety backup</a></div>
@@ -203,7 +203,7 @@ try {
                     <div class="recovery-panel-heading"><h2 id="restore-title">Restore backup</h2></div>
                     <div class="restore-warning" id="restore-warning"><strong>This replaces the entire database, including accounts, passwords, settings, and audit history.</strong><p>Newer records are lost. Undo requires another restore.</p></div>
                     <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="restore">
-                        <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>"><label for="backup-file">Trusted RetailMind SQL backup (max <?= number_format($maxUploadBytes / 1048576, 1) ?> MB)</label><div class="restore-file-field"><input id="backup-file" type="file" name="backup_file" accept=".sql"<?= $invalidField === 'file' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required></div></div>
+                        <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>"><label for="backup-file">Trusted RetailMind SQL backup</label><p class="restore-file-hint" id="backup-file-hint">Max <?= number_format($maxUploadBytes / 1048576, 1) ?> MB</p><div class="restore-file-field"><input id="backup-file" type="file" name="backup_file" accept=".sql" aria-describedby="backup-file-hint<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required></div></div>
                         <div class="form-group<?= $invalidField === 'restore' ? ' invalid' : '' ?>"><label for="restore-password">Current password</label><input id="restore-password" type="password" name="restore_password" autocomplete="current-password"<?= $invalidField === 'restore' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required></div>
                         <button type="submit" class="btn btn-danger" data-backup-restore aria-describedby="restore-warning">Restore database</button>
                     </form>
@@ -218,7 +218,7 @@ try {
                 <?php endif; ?>
                 <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
                     <table data-no-smart-table>
-                        <thead><tr><th scope="col">File / activity</th><th scope="col">Created</th><th scope="col">Outcome</th><th scope="col">Size</th><th scope="col">Requested by</th></tr></thead>
+                        <thead><tr><th scope="col">File / activity</th><th scope="col">Created</th><th scope="col">Outcome</th><th scope="col" class="history-size">Size</th><th scope="col">Requested by</th></tr></thead>
                         <tbody><?php foreach ($history as $row): ?>
                             <tr data-history-row data-outcome="<?= $escape($row['status']) ?>">
                                 <td class="history-file"><span class="history-filename"><?= $escape($row['filename']) ?></span><span class="history-type"><?= $escape(ucfirst((string)$row['backup_type'])) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="history-notes"><summary aria-label="View notes for <?= $escape($row['filename']) ?> (<?= $escape(format_display_datetime((string)$row['created_at'])) ?>)">View notes</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>

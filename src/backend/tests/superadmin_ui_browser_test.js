@@ -100,6 +100,7 @@ const fixture = action => {
         for (const screen of screens.filter(screen => !process.env.UI_SCREENS || process.env.UI_SCREENS.split(',').includes(screen))) {
             console.log(label + ': ' + screen);
             const [route, query] = screen.split('?');
+            if (screen === 'system_administrator/audit_logs' && !admin && !inventory) fixture('audit');
             const response = await page.goto(origin + '/components/' + route + '.php' + (query ? '?' + query : ''), {waitUntil: 'networkidle'});
             if (response.status() !== 200) {
                 checks.push({screen, issues: ['HTTP ' + response.status()]});
@@ -187,6 +188,19 @@ const fixture = action => {
             }
             const verify = async () => {
                 await page.setViewportSize({width: 375, height: 812});
+                if (screen === 'system_administrator/system_health') {
+                    assert.match(await page.locator('.system-health-checked').textContent(), /Checked .+\d{4}/, 'Check timestamp displays a formatted date');
+                    const commands = page.locator('.system-health-maintenance');
+                    assert.equal(await commands.evaluate(el => el.open), false, 'Maintenance reference starts collapsed');
+                    await commands.locator('summary').focus();
+                    await page.keyboard.press('Enter');
+                    assert.equal(await commands.evaluate(el => el.open), true, 'Maintenance reference opens with the keyboard');
+                    assert.equal(await commands.locator('code:visible').count(), 3, 'All maintenance commands remain available');
+                    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Expanded maintenance commands fit on mobile');
+                    if (!process.argv.includes('--no-screenshots')) await page.screenshot({path: path.join(output, 'system-health-maintenance-expanded.png'), fullPage: true});
+                    await page.keyboard.press('Enter');
+                    assert.equal(await commands.evaluate(el => el.open), false, 'Maintenance reference closes with the keyboard');
+                }
                 const menu = page.locator('#menuToggle');
                 if (await menu.count()) {
                     await menu.tap();
@@ -208,8 +222,37 @@ const fixture = action => {
                 }
                 if (screen === 'super_administrator/dashboard') {
                     const issue = page.locator('.triage-item').nth(1);
+                    const destination = new URL(await issue.getAttribute('href'), page.url()).href;
+                    await issue.focus();
+                    assert.equal(await issue.evaluate(el => getComputedStyle(el).outlineStyle), 'solid', 'Issue has a visible keyboard focus indicator');
                     await issue.tap();
-                    assert.equal(await issue.getAttribute('aria-pressed'), 'true', 'Issue selection responds to touch');
+                    await page.waitForURL(destination);
+                    assert.equal(await page.locator('main h1').count(), 1, 'Issue opens its control page on touch');
+                }
+                if (screen === 'system_administrator/audit_logs' && liveCdn && !admin && !inventory) {
+                    const statTops = await page.locator('.audit-log-stats .stat-card').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().top));
+                    assert.equal(new Set(statTops).size, 1, 'Mobile audit counts stay in one compact row');
+                    const search = page.locator('.dt-search input');
+                    await search.fill('Audit layout fixture 01');
+                    await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1');
+                    const viewport = page.getByRole('region', {name: 'Record history table', exact: true});
+                    await viewport.focus();
+                    const searchLeft = (await search.boundingBox()).x;
+                    await page.keyboard.press('ArrowRight');
+                    await page.waitForFunction(() => document.querySelector('#auditLogsTable_wrapper .dt-layout-table').scrollLeft > 0);
+                    assert.equal((await search.boundingBox()).x, searchLeft, 'Horizontal table scrolling keeps search in place');
+                    const details = page.locator('#auditLogsTable summary').first();
+                    await details.click();
+                    assert.equal(await details.evaluate(el => el.parentElement.open), true, 'Record details expand');
+                    assert.ok((await page.locator('.audit-details[open] dd').last().textContent()).includes('Long audit evidence'), 'Expanded details preserve long evidence');
+                    await search.fill('no-matching-audit-record-7921');
+                    await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '0');
+                    const [download] = await Promise.all([
+                        page.waitForEvent('download'), page.getByRole('button', {name: 'Export CSV', exact: true}).click()
+                    ]);
+                    const csv = fs.readFileSync(await download.path(), 'utf8');
+                    assert.equal(csv.trim().split(/\r?\n/).length, 1, 'Export with no matches contains only headers');
+                    assert.equal(await page.locator('[name="matched_log_ids"]').inputValue(), 'none', 'Export preserves the empty filter');
                 }
                 if (screen === 'user_manager/user_manager') {
                     for (const opener of ['#openUserModal', '.open-user-drawer']) {

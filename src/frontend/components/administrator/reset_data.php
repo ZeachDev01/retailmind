@@ -82,9 +82,9 @@ $recordGroups = [
     <div class="reset-product-intro">
         <h2 id="product-title">Delete one product</h2>
         <ul class="reset-outcomes"><li><strong>No stock or history:</strong> permanently deleted with its product promotions.</li><li><strong>Has stock or history:</strong> made inactive; stock and records kept.</li></ul>
-        <p class="reset-note"><strong>No automatic backup or recovery from this page.</strong></p>
+        <p id="delete-product-warning" class="reset-note reset-product-warning"><strong>No automatic backup or recovery from this page.</strong></p>
     </div>
-    <form method="post" class="reset-product-form">
+    <form method="post" class="reset-product-form" aria-labelledby="product-title" aria-describedby="delete-product-warning">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="delete_product">
         <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
@@ -92,7 +92,7 @@ $recordGroups = [
         <?php if (!$products): ?><p id="delete-product-empty" class="reset-note">No products to delete.</p><?php endif; ?>
         <div class="reset-fields">
             <div class="form-group"><label for="delete-password">Current password</label><input type="password" id="delete-password" name="current_password" autocomplete="current-password" required></div>
-            <div class="form-group"><label for="delete-confirmation">Type DELETE PRODUCT to confirm</label><input type="text" id="delete-confirmation" name="confirmation" pattern="DELETE PRODUCT" title="Type DELETE PRODUCT in uppercase to confirm" maxlength="32" autocomplete="off" spellcheck="false" required></div>
+            <div class="form-group"><label for="delete-confirmation">Type <strong>DELETE PRODUCT</strong> to confirm</label><input type="text" id="delete-confirmation" name="confirmation" pattern="DELETE PRODUCT" title="Type DELETE PRODUCT in uppercase to confirm" maxlength="32" autocomplete="off" spellcheck="false" required></div>
         </div>
         <button type="submit" class="btn btn-danger reset-delete" <?= !$products ? 'disabled' : '' ?>>Delete selected product</button>
     </form>
@@ -128,7 +128,7 @@ $recordGroups = [
                     <?= csrf_field() ?>
                     <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
                     <div class="form-group"><label for="reset-password">Current password</label><input type="password" id="reset-password" name="current_password" autocomplete="current-password" required></div>
-                    <div class="form-group"><label for="reset-confirmation">Type RESET ALL DATA to confirm</label><input type="text" id="reset-confirmation" name="confirmation" autocomplete="off" pattern="RESET ALL DATA" title="Type RESET ALL DATA in uppercase to confirm" maxlength="32" spellcheck="false" required></div>
+                    <div class="form-group"><label for="reset-confirmation">Type <strong>RESET ALL DATA</strong> to confirm</label><input type="text" id="reset-confirmation" name="confirmation" autocomplete="off" pattern="RESET ALL DATA" title="Type RESET ALL DATA in uppercase to confirm" maxlength="32" spellcheck="false" required></div>
                     <button type="submit" class="btn btn-danger" <?= $blockers ? 'disabled' : '' ?>>Reset all operational data</button>
                 </form>
             </div>

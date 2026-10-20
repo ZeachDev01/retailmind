@@ -840,7 +840,6 @@ body.system-health-open {
   min-height: 44px;
   padding: 0.6rem 0.95rem;
   border-radius: 10px;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
 }
 @media (max-width: 700px) {
   .manage-users-section-action {
@@ -862,6 +861,77 @@ body.system-health-open {
 .manage-users-page .users-table thead {
   background: var(--surface-soft);
   border-bottom: 1px solid var(--border);
+}
+.manage-users-page .card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1.5rem;
+}
+.manage-users-page .stat-card.with-icon {
+  min-height: 104px;
+  border-color: var(--border);
+  background: var(--card-bg);
+  box-shadow: none;
+}
+.manage-users-page .stat-card .value {
+  font-variant-numeric: tabular-nums;
+}
+.manage-users-page .stat-card:last-child:not(.warning) .stat-icon {
+  background: var(--theme-surface-soft, #f8fafc);
+  color: var(--muted);
+}
+.manage-users-list .section-header h2 {
+  margin-bottom: 0;
+}
+.manage-users-page .users-table {
+  min-width: 880px;
+}
+.manage-users-page .users-table td {
+  padding: 0.9rem 0.85rem;
+  vertical-align: middle;
+  line-height: 1.45;
+}
+.manage-users-page .users-table td:first-child {
+  min-width: 220px;
+  max-width: 300px;
+  padding-left: 0.9rem;
+  white-space: normal;
+}
+.manage-users-page .users-table td:nth-child(2),
+.manage-users-page .users-table td:nth-child(3) {
+  min-width: 150px;
+  max-width: 240px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.manage-users-page .users-table td.action-cell {
+  display: table-cell;
+  padding-right: 0.9rem;
+  text-align: right;
+  white-space: nowrap;
+}
+.manage-users-page .users-table tbody tr:hover,
+.manage-users-page .users-table tbody tr:focus-within {
+  background: var(--theme-surface-soft, #f8fafc);
+}
+.manage-users-page .table-empty-row td {
+  padding: 2rem 1rem;
+  text-align: center;
+}
+@media (max-width: 700px) {
+  .manage-users-page .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.65rem;
+  }
+  .manage-users-page .stat-card.with-icon {
+    min-height: 0;
+    padding: 1rem 0.75rem;
+  }
+  .manage-users-page .stat-card .stat-icon {
+    display: none;
+  }
+  .manage-users-page .stat-card .label {
+    line-height: 1.4;
+  }
 }
 .manage-users-page .users-table th {
   padding: 0.75rem 0.85rem;

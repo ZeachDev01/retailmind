@@ -8,6 +8,16 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'audit') {
+    $pdo->exec("USE `{$database}`");
+    $insert = $pdo->prepare("INSERT INTO activity_log (user_id,action,category,module,record_id,new_value,ip_address) VALUES (2,?,'security','Authentication',?,?,'127.0.0.1')");
+    foreach (range(1, 28) as $index) {
+        $insert->execute(['Audit layout fixture ' . sprintf('%02d', $index), $index,
+            json_encode(['review_note' => str_repeat('Long audit evidence remains readable. ', 12)])]);
+    }
+    $pdo->exec("INSERT INTO login_attempts (username,ip_address) VALUES ('theme_super_admin','127.0.0.1'),('unrecognized_test_account','127.0.0.2')");
+    exit;
+}
 if (in_array($argv[1], ['reset_ready', 'reset_state', 'reset_failure', 'reset_allow', 'reset_fiscal_block', 'reset_fiscal_open', 'reset_forecast_lock'], true)) {
     $pdo->exec("USE `{$database}`");
     if ($argv[1] === 'reset_ready') {

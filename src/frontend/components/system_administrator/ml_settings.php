@@ -14,14 +14,17 @@ $fieldGroups = [
     ],
     'accuracy' => [
         'title' => 'Accuracy & special dates',
+        'description' => 'Demand percentiles define the lower and upper ends of the forecast range.',
     ],
     'forest' => [
         'title' => 'Advanced: Random Forest tuning',
+        'description' => 'Adjust the number and complexity of trees in the model.',
     ],
 ];
 $definitions = [
     'minimum_history_days' => [
         'label' => 'Minimum calendar history (days)',
+        'help' => 'Required calendar span before a product is eligible for training.',
         'min' => 14,
         'max' => 365,
         'type' => 'number',
@@ -30,6 +33,7 @@ $definitions = [
     ],
     'preferred_history_days' => [
         'label' => 'Preferred calendar history (days)',
+        'help' => 'At least the minimum history; no more than the maximum training history.',
         'min' => 30,
         'max' => 730,
         'type' => 'number',
@@ -78,6 +82,7 @@ $definitions = [
     ],
     'min_samples_split' => [
         'label' => 'Minimum samples to split',
+        'help' => 'Training samples needed to split a tree node.',
         'min' => 2,
         'max' => 50,
         'type' => 'number',
@@ -86,6 +91,7 @@ $definitions = [
     ],
     'min_samples_leaf' => [
         'label' => 'Minimum samples per leaf',
+        'help' => 'Samples per leaf; no more than the minimum samples to split.',
         'min' => 1,
         'max' => 30,
         'type' => 'number',
@@ -101,7 +107,8 @@ $definitions = [
         'group' => 'schedule',
     ],
     'retrain_new_sales_records' => [
-        'label' => 'Retrain after new sale items',
+        'label' => 'New sale items before retraining',
+        'help' => 'Count sale-item records, rather than receipts or units sold.',
         'min' => 1,
         'max' => 100000,
         'type' => 'number',
@@ -110,6 +117,8 @@ $definitions = [
     ],
     'accuracy_threshold_wape' => [
         'label' => 'Forecast error warning threshold (WAPE %)',
+        'help' => 'Weighted absolute percentage error. Lower values mean less forecast error.',
+        'full' => true,
         'min' => 1,
         'max' => 200,
         'step' => '0.1',
@@ -135,6 +144,7 @@ $definitions = [
     ],
     'holiday_dates' => [
         'label' => 'Additional special dates (optional)',
+        'help' => 'Use YYYY-MM-DD dates separated by commas. Leave blank if none.',
         'type' => 'text',
         'required' => false,
         'group' => 'accuracy',
@@ -190,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updates[$key] = $value;
     }
 
-    if (!isset($fieldErrors['minimum_history_days'], $fieldErrors['preferred_history_days'])
+    if (isset($updates['minimum_history_days'], $updates['preferred_history_days'])
         && (int)$updates['minimum_history_days'] > (int)$updates['preferred_history_days']
     ) {
         $crossError = 'Minimum calendar history cannot exceed Preferred calendar history.';
@@ -198,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = $crossError;
     }
 
-    if (!isset($fieldErrors['preferred_history_days'], $fieldErrors['history_window_days'])
+    if (isset($updates['preferred_history_days'], $updates['history_window_days'])
         && (int)$updates['preferred_history_days'] > (int)$updates['history_window_days']
     ) {
         $crossError = 'Preferred calendar history cannot exceed Maximum training history.';
@@ -206,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = $crossError;
     }
 
-    if (!isset($fieldErrors['minimum_nonzero_sales_days'], $fieldErrors['minimum_history_days'])
+    if (isset($updates['minimum_nonzero_sales_days'], $updates['minimum_history_days'])
         && (int)$updates['minimum_nonzero_sales_days'] > (int)$updates['minimum_history_days']
     ) {
         $crossError = 'Minimum days with sales cannot exceed Minimum calendar history.';
@@ -214,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = $crossError;
     }
 
-    if (!isset($fieldErrors['min_samples_leaf'], $fieldErrors['min_samples_split'])
+    if (isset($updates['min_samples_leaf'], $updates['min_samples_split'])
         && (int)$updates['min_samples_leaf'] > (int)$updates['min_samples_split']
     ) {
         $crossError = 'Minimum samples per leaf cannot exceed Minimum samples to split.';
@@ -222,7 +232,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = $crossError;
     }
 
-    if (!isset($fieldErrors['prediction_interval_lower'], $fieldErrors['prediction_interval_upper'])
+    if (isset($updates['prediction_interval_lower'], $updates['prediction_interval_upper'])
         && (int)$updates['prediction_interval_lower'] >= (int)$updates['prediction_interval_upper']
     ) {
         $crossError = 'Prediction interval lower percentile must be strictly less than the upper percentile.';
@@ -302,7 +312,7 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
 <section class="dashboard-section"><div class="section-header"><div><h2>Forecast settings</h2></div></div><form method="post" novalidate><?= csrf_field() ?>
 <?php foreach ($fieldGroups as $groupKey => $groupMeta): ?>
 <?php if ($groupKey === 'forest'): ?><details class="ml-tuning"<?= $fieldErrors ? ' open' : '' ?>><summary id="ml-tuning-title"><?= htmlspecialchars($groupMeta['title']) ?></summary><?php endif; ?>
-<fieldset class="settings-fieldset"<?= $groupKey === 'forest' ? ' aria-labelledby="ml-tuning-title"' : '' ?>><?php if ($groupKey !== 'forest'): ?><legend><?= htmlspecialchars($groupMeta['title']) ?></legend><?php endif; ?><div class="form-grid">
+<fieldset class="settings-fieldset"<?= $groupKey === 'forest' ? ' aria-labelledby="ml-tuning-title"' : '' ?>><?php if ($groupKey !== 'forest'): ?><legend><?= htmlspecialchars($groupMeta['title']) ?></legend><?php endif; ?><?php if (isset($groupMeta['description'])): ?><p class="fieldset-description"><?= htmlspecialchars($groupMeta['description']) ?></p><?php endif; ?><div class="form-grid">
 <?php foreach ($definitions as $key => $definition):
     if (($definition['group'] ?? '') !== $groupKey) {
         continue;
@@ -310,14 +320,16 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
     $isRequired = !empty($definition['required']);
     $hasError = isset($fieldErrors[$key]);
     $errorId = $key . '_error';
+    $helpId = $key . '_help';
+    $describedBy = trim((isset($definition['help']) ? $helpId : '') . ($hasError ? ' ' . $errorId : ''));
     $groupClasses = 'form-group' . (!empty($definition['full']) ? ' full' : '') . ($hasError ? ' invalid' : '');
     $inputMode = $definition['type'] === 'number' ? (isset($definition['step']) ? 'decimal' : 'numeric') : null;
-?><div class="<?= $groupClasses ?>"><label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($definition['label']) ?><?php if ($isRequired): ?> <span class="required-mark" aria-hidden="true">*</span><?php endif; ?></label><input id="<?= htmlspecialchars($key) ?>" name="<?= htmlspecialchars($key) ?>" type="<?= htmlspecialchars($definition['type']) ?>" value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"<?= $inputMode ? ' inputmode="' . $inputMode . '"' : '' ?><?= isset($definition['min']) ? ' min="' . (int)$definition['min'] . '"' : '' ?><?= isset($definition['max']) ? ' max="' . (int)$definition['max'] . '"' : '' ?><?= isset($definition['step']) ? ' step="' . htmlspecialchars((string)$definition['step']) . '"' : '' ?><?= isset($definition['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$definition['placeholder']) . '"' : '' ?> autocomplete="off"<?= $hasError ? ' aria-describedby="' . htmlspecialchars($errorId) . '"' : '' ?><?= $hasError ? ' aria-invalid="true"' : '' ?><?= $isRequired ? ' required' : '' ?>><?php if ($hasError): ?><small id="<?= htmlspecialchars($errorId) ?>" class="field-error"><?= htmlspecialchars($fieldErrors[$key]) ?></small><?php endif; ?></div><?php endforeach; ?>
+?><div class="<?= $groupClasses ?>"><label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($definition['label']) ?></label><input id="<?= htmlspecialchars($key) ?>" name="<?= htmlspecialchars($key) ?>" type="<?= htmlspecialchars($definition['type']) ?>" value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"<?= $inputMode ? ' inputmode="' . $inputMode . '"' : '' ?><?= isset($definition['min']) ? ' min="' . (int)$definition['min'] . '"' : '' ?><?= isset($definition['max']) ? ' max="' . (int)$definition['max'] . '"' : '' ?><?= isset($definition['step']) ? ' step="' . htmlspecialchars((string)$definition['step']) . '"' : '' ?><?= isset($definition['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$definition['placeholder']) . '"' : '' ?> autocomplete="off"<?= $describedBy !== '' ? ' aria-describedby="' . htmlspecialchars($describedBy) . '"' : '' ?><?= $hasError ? ' aria-invalid="true"' : '' ?><?= $isRequired ? ' required' : '' ?>><?php if (isset($definition['help'])): ?><small id="<?= htmlspecialchars($helpId) ?>" class="field-help"><?= htmlspecialchars($definition['help']) ?></small><?php endif; ?><?php if ($hasError): ?><small id="<?= htmlspecialchars($errorId) ?>" class="field-error"><?= htmlspecialchars($fieldErrors[$key]) ?></small><?php endif; ?></div><?php endforeach; ?>
 </div></fieldset>
 <?php if ($groupKey === 'forest'): ?></details><?php endif; ?>
 <?php endforeach; ?>
-<div class="form-actions"><button type="submit" class="btn">Save ML settings</button></div></form></section>
-<section class="dashboard-section"><div class="section-header"><div><h2>Recent training runs</h2></div></div><div class="table-wrap"><table><thead><tr><th scope="col">Started</th><th scope="col">Trigger</th><th scope="col">Status</th><th scope="col" class="u-num-col">Duration</th><th scope="col" class="u-num-col">Products</th><th scope="col" class="u-num-col">Records</th><th scope="col">Details</th></tr></thead><tbody>
+<div class="form-actions"><button type="submit" class="btn">Save ML settings</button><p class="section-description">Saving does not start retraining. Retrain the model to apply changes.</p></div></form></section>
+<section class="dashboard-section"><div class="section-header"><div><h2>Recent training runs</h2><p class="section-description">Latest 12 runs, newest first.</p></div></div><div class="table-wrap"><table><thead><tr><th scope="col">Started</th><th scope="col">Trigger</th><th scope="col">Status</th><th scope="col" class="u-num-col">Duration</th><th scope="col" class="u-num-col">Products</th><th scope="col" class="u-num-col">Sale records</th><th scope="col">Details</th></tr></thead><tbody>
 <?php foreach ($runs as $run):
     $statusMeta = $formatRunStatus($run['status'] ?? null);
 ?><tr><td><?= htmlspecialchars(format_display_datetime($run['started_at'] ?? null)) ?></td><td><?= htmlspecialchars($formatRunTrigger($run['trigger_type'] ?? null)) ?></td><td><span class="<?= htmlspecialchars($statusMeta['class']) ?>"><?= htmlspecialchars($statusMeta['label']) ?></span></td><td class="u-num-col"><?= $run['duration_seconds'] !== null ? number_format((float)$run['duration_seconds'], 2) . ' s' : '-' ?></td><td class="u-num-col"><?= number_format((int)($run['eligible_products'] ?? 0)) ?></td><td class="u-num-col"><?= number_format((int)($run['sales_records_used'] ?? 0)) ?></td><td class="table-cell-note"><?= htmlspecialchars($formatRunDetails($run['error_message'] ?? null)) ?></td></tr><?php endforeach; ?>
