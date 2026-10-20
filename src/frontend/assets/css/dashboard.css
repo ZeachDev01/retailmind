@@ -318,6 +318,55 @@
 .connection-status.offline::before { background: #ef4444; }
 
 /* Super Administrator: issues and system status */
+/* Administrator dashboard: one surface per task, quiet metric groups. */
+body.admin-dashboard-page.administrator-workspace .store-operations-headlines { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body.admin-dashboard-page.administrator-workspace .dashboard-section { box-shadow: none; }
+body.admin-dashboard-page.administrator-workspace .section-header { gap: 1rem; flex-wrap: wrap; }
+body.admin-dashboard-page.administrator-workspace .page-heading-actions .btn { height: 44px; width: auto; }
+body.admin-dashboard-page.administrator-workspace .store-attention-queue { margin-bottom: 1.5rem; }
+body.admin-dashboard-page.administrator-workspace .attention-item { border: 0; border-radius: 0; padding-inline: 0; }
+body.admin-dashboard-page.administrator-workspace .attention-item + .attention-item { border-top: 1px solid var(--border); }
+body.admin-dashboard-page.administrator-workspace .dashboard-state-empty { border: 0; min-height: 0; padding: .5rem 0; background: transparent; }
+body.admin-dashboard-page.administrator-workspace .net-sales-summaries-grid { gap: 0; }
+body.admin-dashboard-page.administrator-workspace .net-sales-summary-card { padding: 1rem; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+body.admin-dashboard-page.administrator-workspace .net-sales-summary-card + .net-sales-summary-card { border-left: 1px solid var(--border); }
+body.admin-dashboard-page.administrator-workspace .net-sales-summary-card .label-wrap { align-items: flex-start; flex-wrap: wrap; }
+body.admin-dashboard-page.administrator-workspace .net-sales-summary-card .label { text-transform: none; letter-spacing: normal; font-weight: 600; }
+body.admin-dashboard-page.administrator-workspace .net-sales-summary-card .value { font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: .25rem; }
+body.admin-dashboard-page.administrator-workspace .net-sales-summary-card .value.is-negative { color: var(--theme-danger-text, #dc2626); }
+body.admin-dashboard-page.administrator-workspace .net-sales-summary-card .value:is(.is-incomplete, .is-unavailable) { color: var(--muted); font-size: 1.1rem; }
+body.admin-dashboard-page.administrator-workspace .card-gross-profit.is-positive-complete .value { color: var(--theme-success-text, #166534); }
+body.admin-dashboard-page.administrator-workspace .profit-guidance-panel { border: 0; border-block: 1px solid var(--border); border-radius: 0; background: transparent; padding: .75rem 0; }
+body.admin-dashboard-page.administrator-workspace .profit-return-help summary { padding-block: .65rem; }
+body.admin-dashboard-page.administrator-workspace .return-help-drawer { border: 0; border-radius: 0; background: transparent; padding: 0 0 .5rem; max-width: 72ch; }
+body.admin-dashboard-page.administrator-workspace .profit-formula-bar { flex-wrap: wrap; }
+body.admin-dashboard-page.administrator-workspace .period-badge { text-transform: none; letter-spacing: normal; }
+body.admin-dashboard-page.administrator-workspace .period-btn { min-height: 44px; }
+body.admin-dashboard-page.administrator-workspace .comparison-grid { gap: 0; }
+body.admin-dashboard-page.administrator-workspace .comparison-card { border: 0; border-radius: 0; background: transparent; }
+body.admin-dashboard-page.administrator-workspace .comparison-card + .comparison-card { border-left: 1px solid var(--border); }
+body.admin-dashboard-page.administrator-workspace .period-comparison .section-description { margin: .35rem 0 0; color: var(--muted); font-size: .85rem; }
+body.admin-dashboard-page.administrator-workspace .period-comparison form { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+body.admin-dashboard-page.administrator-workspace .comparison-range-label { font-size: .85rem; color: var(--muted); }
+body.admin-dashboard-page.administrator-workspace .period-comparison select { min-height: 44px; }
+body.admin-dashboard-page.administrator-workspace .net-sales-table :is(th, td):not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+body.admin-dashboard-page.administrator-workspace :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+body.admin-dashboard-page.administrator-workspace ::selection { background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); }
+@media (max-width: 1180px) {
+    body.admin-dashboard-page.administrator-workspace .comparison-card:nth-child(3) { border-left: 0; }
+}
+@media (max-width: 640px) {
+    body.admin-dashboard-page.administrator-workspace .store-operations-headlines { grid-template-columns: 1fr; }
+    body.admin-dashboard-page.administrator-workspace .net-sales-summary-card { padding: 1rem 0; }
+    body.admin-dashboard-page.administrator-workspace .net-sales-summary-card + .net-sales-summary-card { border-left: 0; border-top: 1px solid var(--border); }
+    body.admin-dashboard-page.administrator-workspace .comparison-card + .comparison-card { border-left: 0; border-top: 1px solid var(--border); }
+    body.admin-dashboard-page.administrator-workspace .net-sales-table .net-sales-breakdown-col { display: table-cell; }
+    body.admin-dashboard-page.administrator-workspace .net-sales-table :is(th, td) { white-space: nowrap; font-size: .78rem; padding: .5rem .35rem; }
+    body.admin-dashboard-page.administrator-workspace .net-sales-table-wrap .net-sales-table { min-width: 340px; }
+    body.admin-dashboard-page.administrator-workspace .period-controls { width: 100%; }
+    body.admin-dashboard-page.administrator-workspace .period-btn { flex: 1; padding-inline: .5rem; }
+}
+
 body.super-administrator-workspace {
     --control-navy: #0f1f3d;
     --control-blue: #2563eb;

@@ -209,6 +209,8 @@ const {chromium} = require('playwright');
             assert.equal(await page.locator('#inventory-title').count(), 0, 'Inventory oversight section must be absent');
             assert.equal(await page.locator('#forecast-title').count(), 0, 'Demand Forecast performance section must be absent');
 
+            assert.equal(await page.locator('.period-comparison #dashboardRange').count(), 1, 'Comparison control stays beside performance');
+
             // Verify retained sections remain visible
             assert(await page.locator('#store-attention-title').isVisible(), 'Store attention queue must be visible');
             assert(await page.locator('#store-status-title').isVisible(), 'Store status must be visible');
@@ -335,7 +337,8 @@ const {chromium} = require('playwright');
                 assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Dashboard fits at ${width}px without horizontal overflow`);
                 assert(await page.locator('.net-sales-section').evaluate(el => el.scrollWidth <= el.clientWidth), `Net sales section fits at ${width}px`);
                 assert(await page.locator('.net-sales-summaries-grid').evaluate(el => el.scrollWidth <= el.clientWidth), `Summaries grid fits at ${width}px`);
-                assert(await page.locator('.net-sales-table-wrap').evaluate(el => el.scrollWidth <= el.clientWidth), `Accessible table fits at ${width}px`);
+                assert(await page.locator('.net-sales-table-wrap').evaluate(el => getComputedStyle(el).overflowX === 'auto' && el.getBoundingClientRect().right <= innerWidth), `Exact breakdown remains scrollable within viewport at ${width}px`);
+                assert(await page.locator('.net-sales-breakdown-col').first().isVisible(), `Sales and refunds remain available at ${width}px`);
                 assert(await page.locator('.staff-shifts-section').evaluate(el => el.scrollWidth <= el.clientWidth), `Staff section fits at ${width}px`);
                 assert.equal(await page.locator('#staff-shifts-title i.bi.bi-people').count(), 1, `Staff icon present at ${width}px`);
                 assert.equal(await page.locator('#staff-shifts-title').evaluate(el => window.getComputedStyle(el).display), 'inline-flex', `Staff heading aligned at ${width}px`);
@@ -478,7 +481,10 @@ const {chromium} = require('playwright');
                 contentType: 'application/javascript',
                 body: 'window.Chart = class { constructor(canvas, config) { this.id = canvas.id; this.config = config; this.data = config.data; this.options = config.options; } update() {} };'
             }));
-            await page.route('http://dashboard.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
+            await page.route('http://dashboard.test/**', route => {
+                const asset = new URL(route.request().url()).pathname.match(/^\/assets\/(.*)/);
+                return route.fulfill(asset ? {path: path.join(root, 'src/frontend/assets', asset[1])} : {contentType: 'text/html', body: html});
+            });
 
             await page.goto('http://dashboard.test/');
             assert.equal(await page.locator('.net-sales-summary-stat .net-sales-summary-value').innerText(), '₱0.00');
@@ -555,7 +561,10 @@ const {chromium} = require('playwright');
                 contentType: 'application/javascript',
                 body: 'window.Chart = class { constructor(canvas, config) { this.id = canvas.id; this.config = config; this.data = config.data; this.options = config.options; } update() {} };'
             }));
-            await page.route('http://dashboard.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
+            await page.route('http://dashboard.test/**', route => {
+                const asset = new URL(route.request().url()).pathname.match(/^\/assets\/(.*)/);
+                return route.fulfill(asset ? {path: path.join(root, 'src/frontend/assets', asset[1])} : {contentType: 'text/html', body: html});
+            });
 
             await page.goto('http://dashboard.test/');
             const totalText = await page.locator('.net-sales-summary-stat .net-sales-summary-value').innerText();
@@ -730,9 +739,27 @@ const {chromium} = require('playwright');
                 contentType: 'application/javascript',
                 body: 'window.Chart = class { constructor(canvas, config) { this.id = canvas.id; this.config = config; this.data = config.data; this.options = config.options; } update() {} };'
             }));
-            await page.route('http://dashboard.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
+            await page.route('http://dashboard.test/**', route => {
+                const asset = new URL(route.request().url()).pathname.match(/^\/assets\/(.*)/);
+                return route.fulfill(asset ? {path: path.join(root, 'src/frontend/assets', asset[1])} : {contentType: 'text/html', body: html});
+            });
 
             await page.goto('http://dashboard.test/');
+
+            assert.equal(await page.locator('.net-sales-summary-stat').count(), 0, 'Profit layout shows each selected total once');
+            const periodControls = await page.locator('.period-controls').boundingBox();
+            const summaries = await page.locator('.profit-cards-grid').boundingBox();
+            assert(periodControls.y < summaries.y, 'Period controls precede the figures they affect');
+            for (const width of [1440, 768, 390, 320]) {
+                await page.setViewportSize({width, height: 1000});
+                assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Profit layout fits at ${width}px`);
+                assert(await page.locator('.net-sales-breakdown-col').first().isVisible(), 'Exact sales and refunds stay accessible');
+                if (process.env.DASHBOARD_SCREENSHOT_DIR) {
+                    fs.mkdirSync(process.env.DASHBOARD_SCREENSHOT_DIR, {recursive: true});
+                    await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIR, `dashboard-${width}.png`), fullPage: true});
+                }
+            }
+            await page.setViewportSize({width: 1440, height: 1000});
 
             // 1. Group 3 cards: Net Sales, Gross Profit, Cost of Products Sold
             assert.equal(await page.locator('.profit-cards-grid.layout-a-cards .layout-a-card').count(), 3, 'Must render exactly 3 Layout A cards');

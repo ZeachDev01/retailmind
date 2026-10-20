@@ -70,8 +70,9 @@ $allRegisters = $registers->all();
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Registers</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/registers.css')) ?>">
 </head>
-<body>
+<body class="registers-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
@@ -81,10 +82,10 @@ $allRegisters = $registers->all();
             </div>
         </header>
 
-        <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+        <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?>
 
-        <section class="dashboard-section">
-            <h2>Add a Register</h2>
+        <section class="dashboard-section" aria-labelledby="add-register-heading">
+            <h2 id="add-register-heading">Add a Register</h2>
             <form method="post" class="form-grid">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create">
@@ -105,31 +106,40 @@ $allRegisters = $registers->all();
             </form>
         </section>
 
-        <section class="dashboard-section">
-            <h2>Store Registers (<?= count($allRegisters) ?>)</h2>
+        <section class="dashboard-section" aria-labelledby="store-registers-heading">
+            <h2 id="store-registers-heading">Store Registers <span class="register-count">(<?= count($allRegisters) ?>)</span></h2>
 
             <?php if ($allRegisters === []): ?>
-                <p>No Registers yet. Create one above so Cashier Shifts have a till to anchor to.</p>
+                <p class="section-description">No Registers yet. Create one above so Cashier Shifts have a till to anchor to.</p>
             <?php else: ?>
                 <div class="data-table-shell">
-                    <div class="data-table-scroll">
+                    <div class="data-table-scroll" tabindex="0" role="region" aria-labelledby="store-registers-heading">
                         <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Register</th>
-                            <th>Register ID</th>
-                            <th>Availability</th>
-                            <th>Receipt paper width</th>
-                            <th>Rename</th>
-                            <th>Actions</th>
+                            <th scope="col">Register</th>
+                            <th scope="col">Availability</th>
+                            <th scope="col">Receipt paper width</th>
+                            <th scope="col">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                     <?php foreach ($allRegisters as $register): ?>
                         <?php $isActive = $register['status'] === RegisterService::STATUS_ACTIVE; ?>
                         <tr>
-                            <td><?= htmlspecialchars($register['name']) ?></td>
-                            <td>#<?= (int)$register['register_id'] ?></td>
+                            <td>
+                                <div class="register-identity">
+                                    <strong><?= htmlspecialchars($register['name']) ?></strong>
+                                    <span class="register-id">Register ID #<?= (int)$register['register_id'] ?></span>
+                                </div>
+                                <form method="post" class="inline-form">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="rename">
+                                    <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
+                                    <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" value="<?= htmlspecialchars($register['name']) ?>" aria-label="Rename <?= htmlspecialchars($register['name']) ?>" required>
+                                    <button class="btn btn-secondary" type="submit" aria-label="Rename <?= htmlspecialchars($register['name']) ?>">Rename</button>
+                                </form>
+                            </td>
                             <td>
                                 <?php if ($isActive): ?>
                                     <span class="tag-success">Available for new shifts</span>
@@ -146,32 +156,25 @@ $allRegisters = $registers->all();
                                         <option value="80" <?= $register['paper_width_mm'] === 80 ? 'selected' : '' ?>>80 mm</option>
                                         <option value="58" <?= $register['paper_width_mm'] === 58 ? 'selected' : '' ?>>58 mm</option>
                                     </select>
-                                    <button class="btn btn-secondary" type="submit">Save width</button>
+                                    <button class="btn btn-secondary" type="submit" aria-label="Save width for <?= htmlspecialchars($register['name']) ?>">Save width</button>
                                 </form>
                             </td>
                             <td>
-                                <form method="post" class="inline-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="rename">
-                                    <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
-                                    <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" value="<?= htmlspecialchars($register['name']) ?>" aria-label="Rename <?= htmlspecialchars($register['name']) ?>" required>
-                                    <button class="btn btn-secondary" type="submit">Rename</button>
-                                </form>
-                            </td>
-                            <td>
+                                <div class="register-actions">
                                 <form method="post" class="inline-form">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="set_status">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
                                     <input type="hidden" name="status" value="<?= $isActive ? RegisterService::STATUS_DISABLED : RegisterService::STATUS_ACTIVE ?>">
-                                    <button class="btn btn-secondary" type="submit"><?= $isActive ? 'Disable' : 'Enable' ?></button>
+                                    <button class="btn btn-secondary" type="submit" aria-label="<?= $isActive ? 'Disable' : 'Enable' ?> <?= htmlspecialchars($register['name']) ?>"><?= $isActive ? 'Disable' : 'Enable' ?></button>
                                 </form>
                                 <form method="post" class="inline-form">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
-                                    <button class="btn btn-danger" type="submit">Delete</button>
+                                    <button class="btn btn-danger" type="submit" aria-label="Delete <?= htmlspecialchars($register['name']) ?>">Delete</button>
                                 </form>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
