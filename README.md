@@ -83,58 +83,43 @@ PHP requires Fileinfo and GD with JPEG, PNG, and WebP support. The release ships
 locked settings must permit those limits, including multipart request overhead.
 Check the effective web PHP settings after deployment; CLI settings may differ.
 
-On a push to `main`, `.github/workflows/ci.yml` installs production Composer
-dependencies and runs `scripts/build-infinityfree-release.sh`. It checks file
-sizes and the deployment contract, then uploads only `.release/` using explicit
-FTPS with strict certificate verification. The package includes PHP runtime code,
-frontend assets, dependencies, and database migration files. It excludes runtime
-storage, logs, tests, the Python service, and development files. Database migration
-files are not imported automatically.
+On each push to `main`, `.github/workflows/ci.yml` builds the PHP release,
+checks deployment isolation and database configuration, then uploads `.release/`
+to the [Hosted Demo](https://antiquewhite-cattle-865506.hostingersite.com).
+A local commit deploys after it is pushed to GitHub. Manual redeployment is
+available under **Actions > Deploy to Hostinger > Run workflow**.
 
-The separate Playwright workflow currently runs example tests against
-`playwright.dev`; it does not verify RetailMind or gate deployment.
+FTPS uses `srv2062.hstgr.io:21` with strict certificate verification. Create an
+additional FTP account restricted to the Demo's `public_html` directory, then
+configure these repository secrets under **Settings > Secrets and variables >
+Actions**:
 
-Before the first deployment, configure these in the GitHub repository under
-**Settings → Secrets and variables → Actions**:
+| Secret | Value |
+| --- | --- |
+| `HOSTINGER_DEMO_FTP_USERNAME` | Complete assigned username of the Demo-only FTP account |
+| `HOSTINGER_DEMO_FTP_PASSWORD` | Password of that FTP account |
 
-| Type     | Name                          | Value                                                                                                                      |
-| -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Secret   | `FTP_USERNAME`               | FTP username from the InfinityFree account dashboard |
-| Secret   | `FTP_PASSWORD`               | FTP password from that dashboard |
-| Secret   | `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Production MySQL connection details |
+The FTP account's root must be
+`/home/u125532033/domains/antiquewhite-cattle-865506.hostingersite.com/public_html`;
+the workflow uploads to `./` inside it. Do not use the main account with access
+to every website. Existing generic `FTP_*` and `DB_*` repository secrets are
+not used by this deployment.
 
-The FTP server is fixed to `ftpupload.net`; the old `FTP_SERVER` secret is unused.
-`FTP_USERNAME` must match `DB_USER` for the same InfinityFree hosting account.
-You can also deploy from Actions using **Run workflow**.
-Deployment targets `/htdocs/` on port 21. Missing database or FTP secrets stop the job
-before upload. The sync excludes hosted `.env`, storage, logs, and the legacy
-root `backend/` tree from deletion. After the code sync, a separate verified FTPS
-upload replaces `.env` using the database secrets and production settings for
-`retailmind.infinityfreeapp.com`. Import the database through phpMyAdmin. Change
-the initial Super Administrator password before exposing the site.
+Deployments preserve the hosted `.env`, sessions, uploads and logs. Keep
+`APP_ENV=production`, `APP_DEBUG=false`, `DATABASE_ENV=hosted`, the Demo database
+credentials and `FORECAST_REPLAY_DATABASE` in the private hosted `.env`.
+Database migrations and Demo SQL imports are never run automatically. Never
+import `schema.sql` or a Demo snapshot into an operating Store.
 
-Earlier repository-wide deployments could upload development files such as
-`.scratch` scripts. Packaging prevents new uploads but does not guarantee removal
-of files left by failed syncs. Inspect existing hosted files before deleting any.
+Uploads run one at a time without cancelling an active upload. After upload,
+the workflow checks the HTTPS login page and confirms `/.env` returns 403.
+These checks do not authenticate or verify database contents. The separate
+Playwright workflow tests `playwright.dev` examples and does not gate deployment.
 
-For a manual upload, create `htdocs/.env` (beside `index.php`, named exactly
-`.env`, without `.txt`). Set `APP_ENV=production`, `APP_DEBUG=false`,
-`APP_URL` to your website's HTTPS URL, and `SESSION_SECURE_COOKIE=true`.
-Set `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` using the hosting
-account's MySQL details. The password
-is the hosting/database password, not your InfinityFree website login password.
-Enable hidden-file visibility in your FTP client if `.env` is not listed.
-The real `.env` is intentionally excluded from Git, so uploading a GitHub source
-archive alone does not supply database credentials. Never commit the filled file.
-
-If the hosted page says "RetailMind cannot reach its data", read the latest
-error in `htdocs/src/backend/storage/logs/app.log` through the hosting File
-Manager. Keep `APP_DEBUG=false` on the live site. Confirm `htdocs/.env` exists
-and its `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` match the account's
-MySQL Databases page; use the full database name and the exact MySQL hostname,
-not the website or FTP hostname. For automated deployments, correct the GitHub
-database secrets: the final upload replaces the hosted `.env`.
-The environment loader supports hosting with `putenv()` disabled.
+For a hosted database error, read
+`public_html/src/backend/storage/logs/app.log` in hPanel. Correct the private
+hosted `.env`; redeployment deliberately leaves it unchanged. See the
+[Hosted Demo guide](docs/guides/hostinger-demo-replay.md) for the isolated snapshot.
 
 ### Single-run database imports
 

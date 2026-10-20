@@ -39,33 +39,38 @@ Decisions confirmed on 2026-10-21 (Asia/Manila):
 
 - The separate website is provisioned and its setup is complete.
 - Created database and user `u125532033_rmdemo26` for this website only.
-  No snapshot has been imported yet.
+  The user reports both SQL imports and the `.env` upload are complete.
 - Verified PHP 8.3.35, enabled PDO MySQL/Fileinfo/GD, `date.timezone=Asia/Manila`,
   `log_errors=On` and `display_errors=Off` on the new website.
 - Built the allowlisted application under `.release/` and deployed it using the
   Hostinger PHP deployment tool. Dependencies are present on the server.
 - HTTPS returns the RetailMind page. Requests for `/.env` return 403 and the
-  backend configuration path returns 404. Staff authentication and data screens
-  are not verified until the environment and SQL imports are complete.
+  backend configuration path returns 404. The login form renders and the
+  forecast report redirects unauthenticated visitors to login. Staff
+  authentication and data screens remain unverified by the agent.
 - Verified the snapshot SHA-256 against `work/hostinger-demo/manifest.json`.
 - Removed hosted database credential fallbacks. PHP syntax, hosted database
   configuration checks and the deployment contract pass.
 - The old exposed credentials identify a different hosting account; rotation
   requires access to that account. The new Demo uses fresh credentials.
 
-## Remaining setup
+## Automatic redeployment
 
-The connected Hostinger tools lack a PHP environment-file editor and a SQL
-import operation. Browser inventory is empty; opening a browser also failed.
-An authenticated browser connection or a manual hPanel handoff is needed:
+The workflow targets this Demo on pushes to `main` and manual dispatch. It uses
+strict FTPS to `srv2062.hstgr.io`, a Demo-only FTP account rooted at this site's
+`public_html`, and repository secrets `HOSTINGER_DEMO_FTP_USERNAME` and
+`HOSTINGER_DEMO_FTP_PASSWORD`. It preserves the manually uploaded `.env` and
+runtime storage, serializes uploads, and checks the HTTPS login and `/.env`
+protection after deployment. It never imports SQL or runs migrations.
 
-1. Import `work/hostinger-demo/replay-demo.sql` into the new empty database,
-   then import `.scratch/hostinger-demo-private/activate-accounts.sql` there.
-2. Upload `.scratch/hostinger-demo-private/upload/.env` into the new site's
-   `public_html` directory. It already has the correct protected filename.
-   Never upload it under a temporary public name before renaming it: it
-   contains the private DB password. Do not share its contents.
-3. The application release is already deployed. Do not upload the repository,
-   SQL exports or the private import bundle into `public_html`.
-4. Verify HTTPS, protected paths, staff login, inventory and the saved forecast
-   report. The application is not live or verified until these checks pass.
+The FTPS certificate hostname was verified before configuring the workflow.
+The previous workflow failed because its server IP did not match the certificate.
+Creating the additional FTP account and entering its new credentials require
+the user: the connector lacks FTP account management and no browser is connected.
+An optional private guide is at
+`.scratch/hostinger-demo-private/setup-autodeploy.sh`; it stores credentials in
+an ignored local file and GitHub secrets without printing the password.
+
+Staff login, inventory and the saved forecast report still require an
+authenticated check. Do not upload SQL exports, the private import bundle or
+the repository into `public_html`.

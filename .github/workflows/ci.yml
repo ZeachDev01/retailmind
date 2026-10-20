@@ -6,18 +6,32 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: hostinger-demo
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
-      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_SERVER: srv2062.hstgr.io
       FTP_SERVER_DIR: ./
-      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      FTP_USERNAME: ${{ secrets.HOSTINGER_DEMO_FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.HOSTINGER_DEMO_FTP_PASSWORD }}
+      APP_URL: https://antiquewhite-cattle-865506.hostingersite.com
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Check demo deployment credentials
+        run: |
+          test -n "$FTP_USERNAME" || { echo 'Missing HOSTINGER_DEMO_FTP_USERNAME secret'; exit 1; }
+          test -n "$FTP_PASSWORD" || { echo 'Missing HOSTINGER_DEMO_FTP_PASSWORD secret'; exit 1; }
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -32,38 +46,7 @@ jobs:
           composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
           bash scripts/build-infinityfree-release.sh
           python src/backend/tests/infinityfree_deploy_contract.py
-
-      - name: Create production environment
-        env:
-          APP_URL: ${{ secrets.APP_URL }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        run: |
-          test -n "$APP_URL" || { echo 'Missing APP_URL secret'; exit 1; }
-          test -n "$DB_HOST" || { echo 'Missing DB_HOST secret'; exit 1; }
-          test -n "$DB_NAME" || { echo 'Missing DB_NAME secret'; exit 1; }
-          test -n "$DB_USER" || { echo 'Missing DB_USER secret'; exit 1; }
-          test -n "$DB_PASSWORD" || { echo 'Missing DB_PASSWORD secret'; exit 1; }
-          test -n "$FTP_SERVER" || { echo 'Missing FTP_SERVER secret'; exit 1; }
-          test -n "$FTP_USERNAME" || { echo 'Missing FTP_USERNAME secret'; exit 1; }
-          test -n "$FTP_PASSWORD" || { echo 'Missing FTP_PASSWORD secret'; exit 1; }
-          umask 077
-          printf '%s\n' \
-            'APP_NAME=RetailMind' \
-            'APP_ENV=production' \
-            'APP_DEBUG=false' \
-            "APP_URL=$APP_URL" \
-            'APP_TIMEZONE=Asia/Manila' \
-            'SESSION_SECURE_COOKIE=true' \
-            'DB_CONNECTION=mysql' \
-            "DB_HOST=$DB_HOST" \
-            'DB_PORT=3306' \
-            "DB_NAME=$DB_NAME" \
-            "DB_USER=$DB_USER" \
-            "DB_PASSWORD=$DB_PASSWORD" \
-            'DB_CHARSET=utf8mb4' > .release/.env
+          php src/backend/tests/hosted_database_config_test.php
 
       - name: Deploy to Hostinger
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -76,13 +59,20 @@ jobs:
           security: strict
           local-dir: .release/
           server-dir: ${{ env.FTP_SERVER_DIR }}
-          # Preserve hosted data even if the old repository-wide sync tracked it.
+          # Keep the manually configured Demo environment and runtime data.
           exclude: |
             **/.git*
             **/.git*/**
             **/node_modules/**
+            **/.env
             backend/
             backend/**
             **/storage/
             **/storage/**
             **/*.log
+
+      - name: Verify hosted login and environment protection
+        run: |
+          curl --fail --silent --show-error --retry 3 "$APP_URL/?login=1" -o /tmp/retailmind-login.html
+          grep -q 'id="landing-login-username"' /tmp/retailmind-login.html
+          test "$(curl --silent --show-error -o /dev/null -w '%{http_code}' "$APP_URL/.env")" = 403
