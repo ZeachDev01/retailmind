@@ -331,6 +331,7 @@ class DashboardService
     {
         $columns = $this->saleItemColumns ?? [];
         if ($this->saleItemColumns === null) {
+            $probed = true;
             try {
                 if ((string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
                     foreach ($this->pdo->query('PRAGMA table_info(sale_items)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
@@ -342,8 +343,12 @@ class DashboardService
                     }
                 }
             } catch (Throwable) {
+                // Cache only a successful probe, so a transient failure can retry.
+                $probed = false;
             }
-            $this->saleItemColumns = $columns;
+            if ($probed) {
+                $this->saleItemColumns = $columns;
+            }
         }
 
         if (!isset($columns['selling_form'], $columns['pack_size'])) {

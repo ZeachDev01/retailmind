@@ -548,6 +548,25 @@ $assert($policy->allows('inventory_manager', App\Authorization\RoleCapabilityPol
 $assert($policy->allows('super_admin', App\Authorization\RoleCapabilityPolicy::VIEW_STORE_REPORTS),
     'Super administrator can still view store reports');
 
+// =========================================================================
+// Test 9: Partially allocated pack line is flagged as missing cost
+// =========================================================================
+echo "\n--- Test 9: Partially allocated pack line ---\n";
+$pdo->exec('ALTER TABLE sale_items ADD COLUMN base_unit_quantity INTEGER');
+$pdo->exec("INSERT INTO products (product_id, branch_id, sku, barcode, product_name, category_id, unit_price, cost_price)
+            VALUES (108, 1, 'SKU-PACK-CHEAP', 'BC-PACK-CHEAP', 'Partly Allocated Pack', 1, 100.00, 10.00)");
+$pdo->exec("INSERT INTO sales (sale_id, shift_id, cashier_id, gross_amount, total_amount, discount_amount, sale_date)
+            VALUES (6, 1, {$cashierId}, 100.00, 100.00, 0.00, '2026-10-15 09:00:00')");
+// One pack line of 12 Base Units but only 6 Base Units have a batch allocation with cost.
+$pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, base_unit_quantity, unit_price, subtotal)
+            VALUES (8, 6, 108, 1, 12, 100.00, 100.00)");
+$pdo->exec("INSERT INTO sale_item_batches (sale_item_batch_id, sale_item_id, batch_id, quantity, unit_cost, cost_price, cost_status)
+            VALUES (9, 8, 1008, 6, 10.00, 10.00, 'recorded')");
+$partialPack = $service->calculate(['from' => '2026-10-15', 'to' => '2026-10-15', 'product_id' => 108, 'store_id' => 1]);
+$assert($partialPack['summary']['status'] === 'incomplete', 'A partially allocated pack line is reported incomplete, not recorded');
+$assert($partialPack['summary']['affected_lines_count'] === 1, 'The partially allocated pack line is counted as affected');
+$assert($partialPack['summary']['total_units'] === 12, 'Pack demand contributes its 12 Base Units once');
+
 echo "\n============================================================\n";
 if (empty($failures)) {
     echo "All Ticket #229 gross profit reporting tests passed cleanly!\n";

@@ -475,7 +475,7 @@ class GrossProfitService
                 }
             }
 
-            if ($allocQty < (int)$line['quantity']) {
+            if ($allocQty < (int)($line['base_unit_quantity'] ?? $line['quantity'])) {
                 $lineMissing = true;
             }
 

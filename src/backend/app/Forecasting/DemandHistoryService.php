@@ -15,14 +15,20 @@ class DemandHistoryService
     private DateTimeZone $timezone;
     private StoreCalendar $calendar;
     private ScheduledDemandDriverService $driverService;
-    /** @var array<int, array<string, true>> */
-    private array $columnCache = [];
+    /**
+     * Keyed by the connection itself so a destroyed and replaced PDO cannot
+     * inherit another connection's columns.
+     *
+     * @var \WeakMap<PDO, array<string, array<string, true>>>
+     */
+    private \WeakMap $columnCache;
 
     public function __construct()
     {
         $this->timezone = new DateTimeZone('Asia/Manila');
         $this->calendar = new StoreCalendar();
         $this->driverService = new ScheduledDemandDriverService();
+        $this->columnCache = new \WeakMap();
     }
 
     /**
@@ -333,12 +339,13 @@ class DemandHistoryService
     /** @return array<string, true> */
     private function columns(PDO $pdo, string $table): array
     {
-        $key = spl_object_id($pdo);
-        if (isset($this->columnCache[$key][$table])) {
-            return $this->columnCache[$key][$table];
+        $cached = $this->columnCache[$pdo] ?? [];
+        if (isset($cached[$table])) {
+            return $cached[$table];
         }
 
         $columns = [];
+        $probed = true;
         try {
             if ((string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
                 foreach ($pdo->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_ASSOC) as $column) {
@@ -350,8 +357,17 @@ class DemandHistoryService
                 }
             }
         } catch (Throwable) {
+            // A failed probe must not be cached: treating it as "no columns"
+            // would disable pack conversion for the life of this connection.
+            $probed = false;
         }
 
-        return $this->columnCache[$key][$table] = $columns;
+        if (!$probed) {
+            return [];
+        }
+
+        $cached[$table] = $columns;
+        $this->columnCache[$pdo] = $cached;
+        return $columns;
     }
 }

@@ -127,7 +127,10 @@ class HeldSaleService
             $total = 0.0;
             foreach ($requestedCart as $line) {
                 $itemCount += (int)$line['qty'];
-                $total += (float)$line['price'] * (int)$line['qty'];
+                // The hold total is the server-reviewed price, never the price
+                // the request claimed; the reviewed hash is what checkout will
+                // charge, and the two must agree.
+                $total += (float)($line['server_price'] ?? $line['price']) * (int)$line['qty'];
             }
 
             $reference = 'H' . date('ymdHis') . str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -487,6 +490,10 @@ class HeldSaleService
             }
             $productId = (int)$rawId;
             $qty = (int)$line['qty'];
+            // A held line carries the pack contents it was held with. Keep that
+            // historical size instead of rewriting it to today's catalog value,
+            // so a later pack-size edit cannot silently reinterpret the line.
+            $storedPackSize = isset($line['pack_size']) && (int)$line['pack_size'] > 1 ? (int)$line['pack_size'] : null;
 
             $stmt->execute([$productId]);
             $product = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -513,10 +520,11 @@ class HeldSaleService
             $requestedLine = array_merge($line, [
                 'product_id' => $productId,
                 'selling_form' => $sellingForm,
-                'pack_size' => $sellingForm === 'pack' ? $packSize : ($hasPackConfig ? $packSize : null),
+                'pack_size' => $sellingForm === 'pack' ? ($storedPackSize ?? $packSize) : ($hasPackConfig ? $packSize : null),
                 'name' => $name,
                 'qty' => $qty,
                 'price' => $price,
+                'server_price' => $currentPrice,
             ]);
             $requested[$id] = $requestedLine;
 
@@ -529,6 +537,7 @@ class HeldSaleService
                 'name' => $name,
                 'product' => $product,
                 'pack_size' => $packSize,
+                'stored_pack_size' => $storedPackSize,
                 'pack_price' => $packPrice,
                 'has_pack_config' => $hasPackConfig,
                 'current_price' => $currentPrice,
@@ -579,6 +588,7 @@ class HeldSaleService
             $currentPrice = $item['current_price'];
             $price = $item['price'];
             $productId = $item['product_id'];
+            $storedPackSize = $item['stored_pack_size'];
 
             if (!$product || $product['status'] !== 'active') {
                 $changes[] = $name . ': unavailable; proposed removal of ' . $qty . ' unit(s).';
@@ -625,6 +635,9 @@ class HeldSaleService
             }
             if ($name !== $product['product_name'] && $name !== ($product['product_name'] . " (Pack of {$packSize})") && $name !== ($product['product_name'] . " (Pack)")) {
                 $changes[] = $name . ': now named ' . $product['product_name'] . '.';
+            }
+            if ($sellingForm === 'pack' && $storedPackSize !== null && $storedPackSize !== $packSize) {
+                $changes[] = $name . ': pack contents changed from ' . $storedPackSize . ' to ' . $packSize . ' pieces; re-add it as a new line before checkout.';
             }
         }
         return ['requested_cart' => $requested, 'cart' => $proposal, 'changes' => $changes];
