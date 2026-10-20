@@ -17,16 +17,18 @@ return [
                 $pdo->exec('ALTER TABLE supplier_pullouts ADD COLUMN pulled_loose INTEGER NOT NULL DEFAULT 0');
             }
             if (!in_array('pack_size_used', $cols, true)) {
-                $pdo->exec('ALTER TABLE supplier_pullouts ADD COLUMN pack_size_used INTEGER NULL');
+                $pdo->exec('ALTER TABLE supplier_pullouts ADD COLUMN pack_size_used INTEGER NOT NULL DEFAULT 1');
             }
             $pdo->exec('UPDATE supplier_pullouts SET pulled_loose = quantity WHERE pulled_packs = 0 AND pulled_loose = 0 AND quantity > 0');
+            $pdo->exec('UPDATE supplier_pullouts SET pack_size_used = 1 WHERE pack_size_used IS NULL OR pack_size_used <= 0');
             return;
         }
 
         Schema::addColumnIfMissing($pdo, 'supplier_pullouts', 'pulled_packs', 'INT NOT NULL DEFAULT 0 AFTER `quantity`');
         Schema::addColumnIfMissing($pdo, 'supplier_pullouts', 'pulled_loose', 'INT NOT NULL DEFAULT 0 AFTER `pulled_packs`');
-        Schema::addColumnIfMissing($pdo, 'supplier_pullouts', 'pack_size_used', 'INT NULL DEFAULT NULL AFTER `pulled_loose`');
+        Schema::addColumnIfMissing($pdo, 'supplier_pullouts', 'pack_size_used', 'INT NOT NULL DEFAULT 1 AFTER `pulled_loose`');
 
         $pdo->exec('UPDATE supplier_pullouts SET pulled_loose = quantity WHERE pulled_packs = 0 AND pulled_loose = 0 AND quantity > 0');
+        $pdo->exec('UPDATE supplier_pullouts SET pack_size_used = 1 WHERE pack_size_used IS NULL OR pack_size_used <= 0');
     },
 ];

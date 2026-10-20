@@ -141,6 +141,12 @@ $pdo->exec("CREATE TABLE supplier_pullouts (
     pulled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT NULL
 )");
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_size INTEGER NULL");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN sealed_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN loose_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN cost_price REAL NULL");
+$mig249 = require __DIR__ . '/../database/migrations/202610200005_supplier_movements_stock_forms.php';
+$mig249['up']($pdo);
 
 $pdo->exec("CREATE TABLE store_write_gate (
     gate_key TEXT PRIMARY KEY,
@@ -515,13 +521,7 @@ $assert(count($expiredBatchAlerts) === 1 && $laterNotifications->getBatchReminde
 
 
 echo "\n--- Test 9: Ticket #249 Stock Forms in Supplier Pullouts ---\n";
-$pdo->exec("ALTER TABLE products ADD COLUMN pack_size INTEGER NULL");
-$pdo->exec("ALTER TABLE product_batches ADD COLUMN sealed_quantity INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE product_batches ADD COLUMN loose_quantity INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE product_batches ADD COLUMN cost_price REAL NULL");
-$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_packs INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_loose INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pack_size_used INTEGER NOT NULL DEFAULT 1");
+// Columns already migrated via 202610200005_supplier_movements_stock_forms.php
 
 $packPulloutService = new SupplierPulloutService($pdo, null, "inventory_manager");
 
@@ -600,6 +600,43 @@ $packRes2 = $packPulloutService->recordPullout([
 $assert($packRes2['quantity'] === 10 && $packRes2['remaining_batch_packs'] === 0 && $packRes2['remaining_batch_loose'] === 5 && $packRes2['remaining_batch_qty'] === 5, 'Expired batch form pullout deducts sealed and loose quantities accurately');
 $inv10 = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = 10")->fetchColumn();
 $assert($inv10 === 26, 'Inventory on hand matches sum of remaining batch base units (21 + 5 = 26)');
+
+// Conflicting quantity vs pulled_packs/pulled_loose rejected
+$assertThrows(
+    fn() => $packPulloutService->recordPullout([
+        'product_id' => 10,
+        'batch_id' => 10,
+        'pulled_packs' => 1,
+        'pulled_loose' => 1,
+        'quantity' => 99,
+        'reason' => 'Mismatched explicit quantity',
+    ], $managerId),
+    InvalidArgumentException::class,
+    'does not match pulled packs and loose pieces',
+    'Rejects conflicting explicit quantity vs pulled_packs and pulled_loose'
+);
+
+// Repeated submission check: second identical pullout of 3 packs from Batch 10 (which now has 3 packs) succeeds once then rejects repeat
+$repeatPayload = [
+    'product_id' => 10,
+    'batch_id' => 10,
+    'pulled_packs' => 3,
+    'pulled_loose' => 0,
+    'reason' => 'Pull remaining 3 packs',
+];
+$firstSub = $packPulloutService->recordPullout($repeatPayload, $managerId);
+$assert($firstSub['remaining_batch_packs'] === 0 && $firstSub['remaining_batch_loose'] === 3 && $firstSub['remaining_batch_qty'] === 3, 'First submission deducts 3 packs leaving 0 packs and 3 loose');
+$assertThrows(
+    fn() => $packPulloutService->recordPullout($repeatPayload, $managerId),
+    RuntimeException::class,
+    'exceeds batch remaining balance',
+    'Repeated identical submission is rejected once batch packs are already deducted'
+);
+
+// formatFormBreakdown helper check (including 0 packs + N loose on pack-enabled products)
+$assert(SupplierPulloutService::formatFormBreakdown(2, 3, 6) === '2 packs + 3 loose', 'formatFormBreakdown formats packs + loose');
+$assert(SupplierPulloutService::formatFormBreakdown(0, 4, 6) === '0 packs + 4 loose', 'formatFormBreakdown shows 0 packs + N loose when packSize > 1');
+$assert(SupplierPulloutService::formatFormBreakdown(0, 4, 1) === '', 'formatFormBreakdown returns empty string for piece-only products');
 
 $stockFormMigFile = __DIR__ . '/../database/migrations/202610200005_supplier_movements_stock_forms.php';
 $assert(file_exists($stockFormMigFile), '202610200005_supplier_movements_stock_forms.php migration exists');

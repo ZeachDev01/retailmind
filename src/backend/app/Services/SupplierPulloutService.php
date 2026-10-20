@@ -5,6 +5,7 @@ require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/PhilippineTime.php';
+require_once __DIR__ . '/SalesWorkflowService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 use App\Store\StoreWriteGate;
@@ -16,7 +17,6 @@ class SupplierPulloutService
     private FiscalPeriodGuardService $fiscalPeriodGuard;
     private NotificationService $notificationService;
     private ?string $actorRole;
-    private array $columnCache = [];
 
     public function __construct(PDO $pdo, ?FiscalPeriodGuardService $fiscalPeriodGuard = null, ?string $actorRole = null)
     {
@@ -24,6 +24,21 @@ class SupplierPulloutService
         $this->fiscalPeriodGuard = $fiscalPeriodGuard ?? new FiscalPeriodGuardService($pdo);
         $this->notificationService = new NotificationService($pdo);
         $this->actorRole = $actorRole;
+    }
+
+    public static function formatFormBreakdown(int $packs, int $loose, int $packSize = 1): string
+    {
+        if ($packs <= 0 && ($packSize <= 1 || $loose <= 0)) {
+            return '';
+        }
+        if ($packs > 0) {
+            $parts = [$packs . ' pack' . ($packs === 1 ? '' : 's')];
+            if ($loose > 0) {
+                $parts[] = $loose . ' loose';
+            }
+            return implode(' + ', $parts);
+        }
+        return '0 packs + ' . $loose . ' loose';
     }
 
     private function isSqlite(): bool
@@ -34,20 +49,6 @@ class SupplierPulloutService
     private function rowLock(): string
     {
         return $this->isSqlite() ? '' : ' FOR UPDATE';
-    }
-
-    private function hasColumn(string $table, string $column): bool
-    {
-        $key = "{$table}.{$column}";
-        if (!isset($this->columnCache[$key])) {
-            try {
-                $this->pdo->query("SELECT {$column} FROM {$table} LIMIT 1");
-                $this->columnCache[$key] = true;
-            } catch (Throwable) {
-                $this->columnCache[$key] = false;
-            }
-        }
-        return $this->columnCache[$key];
     }
 
     private function storeProductScope(): array
@@ -80,23 +81,26 @@ class SupplierPulloutService
         }
     }
 
-    private function parseWholeCount($rawValue, string $label): int
+    private function parseWholeCount($rawValue, string $label, bool $required = false): int
     {
         if ($rawValue === null || $rawValue === '') {
+            if ($required) {
+                throw new InvalidArgumentException("{$label} is required.");
+            }
             return 0;
         }
         if (!is_numeric($rawValue) || is_bool($rawValue)) {
-            throw new InvalidArgumentException("{$label} must be a non-negative whole number.");
+            throw new InvalidArgumentException("{$label} must be a positive whole number.");
         }
         if (is_float($rawValue) || (is_string($rawValue) && str_contains($rawValue, '.'))) {
-            throw new InvalidArgumentException("Fractional quantities are not allowed for {$label}. Provide a non-negative whole number.");
+            throw new InvalidArgumentException('Fractional quantities are not allowed. Provide a positive whole number.');
         }
         if (!preg_match('/^-?\d+$/D', trim((string)$rawValue))) {
-            throw new InvalidArgumentException("{$label} must be a non-negative whole number.");
+            throw new InvalidArgumentException("{$label} must be a positive whole number.");
         }
         $val = (int)$rawValue;
-        if ($val < 0 || (float)$rawValue > 2147483647) {
-            throw new InvalidArgumentException("{$label} must be a non-negative whole number.");
+        if (($required ? $val <= 0 : $val < 0) || (float)$rawValue > 2147483647) {
+            throw new InvalidArgumentException("{$label} must be greater than zero.");
         }
         return $val;
     }
@@ -118,32 +122,24 @@ class SupplierPulloutService
         $hasPacksInput = array_key_exists('pulled_packs', $data) && $data['pulled_packs'] !== '' && $data['pulled_packs'] !== null;
         $hasLooseInput = array_key_exists('pulled_loose', $data) && $data['pulled_loose'] !== '' && $data['pulled_loose'] !== null;
         $hasFormInput = $hasPacksInput || $hasLooseInput;
+        $hasQtyInput = array_key_exists('quantity', $data) && $data['quantity'] !== '' && $data['quantity'] !== null;
 
         $pulledPacks = 0;
         $pulledLoose = 0;
         $quantity = 0;
+        $explicitQty = null;
 
         if ($hasFormInput) {
-            $pulledPacks = $this->parseWholeCount($data['pulled_packs'] ?? 0, 'Pulled packs');
-            $pulledLoose = $this->parseWholeCount($data['pulled_loose'] ?? 0, 'Pulled loose pieces');
+            $pulledPacks = $this->parseWholeCount($data['pulled_packs'] ?? null, 'Pulled packs');
+            $pulledLoose = $this->parseWholeCount($data['pulled_loose'] ?? null, 'Pulled loose pieces');
             if ($pulledPacks <= 0 && $pulledLoose <= 0) {
                 throw new InvalidArgumentException('Pullout quantity must be greater than zero.');
             }
+            if ($hasQtyInput) {
+                $explicitQty = $this->parseWholeCount($data['quantity'], 'Pullout quantity', true);
+            }
         } else {
-            if (!isset($data['quantity']) || $data['quantity'] === '') {
-                throw new InvalidArgumentException('Pullout quantity is required.');
-            }
-            $rawQty = $data['quantity'];
-            if (!is_numeric($rawQty)) {
-                throw new InvalidArgumentException('Pullout quantity must be a positive whole number.');
-            }
-            if (is_float($rawQty) || (is_string($rawQty) && str_contains($rawQty, '.'))) {
-                throw new InvalidArgumentException('Fractional quantities are not allowed. Provide a positive whole number.');
-            }
-            $quantity = (int)$rawQty;
-            if ($quantity <= 0) {
-                throw new InvalidArgumentException('Pullout quantity must be greater than zero.');
-            }
+            $quantity = $this->parseWholeCount($data['quantity'] ?? null, 'Pullout quantity', true);
             $pulledPacks = 0;
             $pulledLoose = $quantity;
         }
@@ -165,8 +161,8 @@ class SupplierPulloutService
 
         try {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
-            $hasProductPackCol = $this->hasColumn('products', 'pack_size');
-            $productCols = $hasProductPackCol ? 'product_id, pack_size' : 'product_id';
+            $productTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'products');
+            $productCols = isset($productTableCols['pack_size']) ? 'product_id, pack_size' : 'product_id';
             $scopeStmt = $this->pdo->prepare("SELECT {$productCols} FROM products p WHERE p.product_id = ?{$scopeSql}");
             $scopeStmt->execute(array_merge([$productId], $scopeParams));
             $productRow = $scopeStmt->fetch(PDO::FETCH_ASSOC);
@@ -190,19 +186,13 @@ class SupplierPulloutService
                 throw new RuntimeException("Batch #{$batchId} does not belong to the selected product (#{$productId}).");
             }
 
-            $remainingQty = (int)$batch['remaining_quantity'];
-            $hasBatchFormCols = $this->hasColumn('product_batches', 'sealed_quantity') && $this->hasColumn('product_batches', 'loose_quantity');
+            $normalizedBatch = $this->normalizeBatchFormRow($batch);
+            $remainingQty = (int)$normalizedBatch['remaining_quantity'];
+            $batchSealed = (int)$normalizedBatch['sealed_quantity'];
+            $batchLoose = (int)$normalizedBatch['loose_quantity'];
 
-            if ($hasBatchFormCols) {
-                $batchSealed = (int)($batch['sealed_quantity'] ?? 0);
-                $batchLoose = (int)($batch['loose_quantity'] ?? 0);
-                if ($batchSealed === 0 && $batchLoose === 0 && $remainingQty > 0) {
-                    $batchLoose = $remainingQty;
-                }
-            } else {
-                $batchSealed = 0;
-                $batchLoose = $remainingQty;
-            }
+            $pbTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'product_batches');
+            $hasBatchFormCols = isset($pbTableCols['sealed_quantity']) && isset($pbTableCols['loose_quantity']);
 
             if ($pulledPacks > 0 && $productPackSize <= 1) {
                 throw new RuntimeException('Cannot pull out sealed packs: product has no Sales Pack configured.');
@@ -211,6 +201,9 @@ class SupplierPulloutService
             $packSizeUsed = $productPackSize > 1 ? $productPackSize : 1;
             if ($hasFormInput) {
                 $quantity = ($pulledPacks * $packSizeUsed) + $pulledLoose;
+                if ($explicitQty !== null && $explicitQty !== $quantity) {
+                    throw new InvalidArgumentException("Pullout quantity ({$explicitQty}) does not match pulled packs and loose pieces ({$quantity} base units).");
+                }
             }
 
             if ($quantity > $remainingQty) {
@@ -265,7 +258,8 @@ class SupplierPulloutService
             );
             $updateInv->execute([$quantity, $productId]);
 
-            if ($this->hasColumn('supplier_pullouts', 'pulled_packs')) {
+            $spTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'supplier_pullouts');
+            if (isset($spTableCols['pulled_packs'])) {
                 $pulloutStmt = $this->pdo->prepare(
                     "INSERT INTO supplier_pullouts (product_id, batch_id, quantity, pulled_packs, pulled_loose, pack_size_used, reason, supplier, pulled_by, pulled_at, notes)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -325,9 +319,13 @@ class SupplierPulloutService
     public function getPullouts(array $filters = []): array
     {
         [$scopeSql, $scopeParams] = $this->storeProductScope();
-        $hasPulloutForms = $this->hasColumn('supplier_pullouts', 'pulled_packs');
-        $hasReceivingForms = $this->hasColumn('stock_receiving', 'accepted_packs');
-        $hasProductPackSize = $this->hasColumn('products', 'pack_size');
+        $spCols = SalesWorkflowService::getTableColumns($this->pdo, 'supplier_pullouts');
+        $srCols = SalesWorkflowService::getTableColumns($this->pdo, 'stock_receiving');
+        $pCols = SalesWorkflowService::getTableColumns($this->pdo, 'products');
+
+        $hasPulloutForms = isset($spCols['pulled_packs']);
+        $hasReceivingForms = isset($srCols['accepted_packs']);
+        $hasProductPackSize = isset($pCols['pack_size']);
 
         $pulloutFormSelect = $hasPulloutForms
             ? 'sp.pulled_packs, sp.pulled_loose, sp.pack_size_used,'
@@ -418,7 +416,8 @@ class SupplierPulloutService
 
     public function getBatchForPullout(int $batchId): ?array
     {
-        $packSelect = $this->hasColumn('products', 'pack_size') ? ', p.pack_size' : '';
+        $pCols = SalesWorkflowService::getTableColumns($this->pdo, 'products');
+        $packSelect = isset($pCols['pack_size']) ? ', p.pack_size' : '';
         $stmt = $this->pdo->prepare(
             "SELECT pb.*, p.product_name, p.sku{$packSelect}, i.quantity_on_hand
              FROM product_batches pb

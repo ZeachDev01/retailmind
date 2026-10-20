@@ -258,6 +258,24 @@ $pdo->exec("
     );
 ");
 
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_size INTEGER NULL");
+$pdo->exec("ALTER TABLE products ADD COLUMN pack_barcode TEXT NULL");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN sealed_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN loose_quantity INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE product_batches ADD COLUMN cost_price REAL NULL");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pack_size_used INTEGER NOT NULL DEFAULT 1");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN received_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN accepted_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN damaged_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_packs INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN received_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN accepted_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN damaged_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_loose INTEGER NOT NULL DEFAULT 0");
+$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN pack_size_used INTEGER NULL");
+
 $managerId = 1;
 $receivingService = new ReceivingService($pdo);
 $pulloutService = new SupplierPulloutService($pdo, null, 'inventory_manager');
@@ -507,24 +525,6 @@ $assert(str_contains($invServiceCode, '\'pullout_id\' => $pulloutId'), "Inventor
 
 
 echo "\n--- Scenario 6: Ticket #249 Stock Forms Across Pullout and Replacement Receiving ---\n";
-$pdo->exec("ALTER TABLE products ADD COLUMN pack_size INTEGER NULL");
-$pdo->exec("ALTER TABLE products ADD COLUMN pack_barcode TEXT NULL");
-$pdo->exec("ALTER TABLE product_batches ADD COLUMN sealed_quantity INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE product_batches ADD COLUMN loose_quantity INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE product_batches ADD COLUMN cost_price REAL NULL");
-$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_packs INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pulled_loose INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE supplier_pullouts ADD COLUMN pack_size_used INTEGER NOT NULL DEFAULT 1");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN received_packs INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN accepted_packs INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN damaged_packs INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_packs INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN received_loose INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN accepted_loose INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN damaged_loose INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_loose INTEGER NOT NULL DEFAULT 0");
-$pdo->exec("ALTER TABLE stock_receiving ADD COLUMN pack_size_used INTEGER NULL");
-
 $packReceivingService = new ReceivingService($pdo);
 $packPulloutService = new SupplierPulloutService($pdo, null, 'inventory_manager');
 $packInventoryService = new InventoryService($pdo);

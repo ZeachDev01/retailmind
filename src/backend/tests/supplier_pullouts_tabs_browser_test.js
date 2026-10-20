@@ -11,6 +11,7 @@ const source = fs.readFileSync(file, 'utf8');
 // Render the real template with display fixtures; no database or POST handler runs.
 function render(canMutate) {
     const php = `
+        require_once ${JSON.stringify(path.resolve(__dirname, '../app/Services/SupplierPulloutService.php').replaceAll('\\', '/'))};
         function retailmind_theme_head() {}
         function app_url($url) { return '/' . $url; }
         function generate_csrf_token() { return 'test-token'; }
@@ -22,7 +23,7 @@ function render(canMutate) {
         $pulloutHistory = array_fill(0, 30, [
             'pullout_id' => 1, 'product_id' => 1, 'batch_id' => 1,
             'pulled_at' => '2026-10-19 10:00:00', 'product_name' => 'Test product',
-            'sku' => 'SKU-1', 'batch_number' => 'BATCH-1', 'quantity' => 10,
+            'sku' => 'SKU-1', 'batch_number' => 'BATCH-1', 'quantity' => 10, 'pulled_packs' => 0, 'pulled_loose' => 10, 'pack_size_used' => 6,
             'reason' => 'Expired stock', 'pulled_by_name' => 'Inventory Manager'
         ]);
         eval('?>' . file_get_contents('php://stdin'));

@@ -32,9 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $result = $pulloutService->recordPullout($_POST, (int)$_SESSION['user_id']);
-        $formDetail = ((int)($result['pulled_packs'] ?? 0) > 0)
-            ? " ({$result['pulled_packs']} pack(s)" . ((int)($result['pulled_loose'] ?? 0) > 0 ? " + {$result['pulled_loose']} loose" : "") . ")"
-            : "";
+        $breakdown = SupplierPulloutService::formatFormBreakdown((int)($result['pulled_packs'] ?? 0), (int)($result['pulled_loose'] ?? 0), (int)($result['pack_size_used'] ?? 1));
+        $formDetail = $breakdown !== '' ? " ({$breakdown})" : "";
         $message = "Supplier pullout #{$result['pullout_id']} recorded. Deducted {$result['quantity']} units{$formDetail} from batch #{$result['batch_id']}. Remaining batch quantity: {$result['remaining_batch_qty']}.";
         log_activity(
             $pdo,
@@ -259,12 +258,9 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                         <td><?= htmlspecialchars($row['expiration_date'] ?? 'Not recorded') ?></td>
                                         <td class="text-right [font-variant-numeric:tabular-nums]">
                                             <strong class="text-danger">-<?= number_format((int)$row['quantity']) ?></strong>
-                                            <?php
-                                            $pulledPacks = (int)($row['pulled_packs'] ?? 0);
-                                            $pulledLoose = (int)($row['pulled_loose'] ?? 0);
-                                            ?>
-                                            <?php if ($pulledPacks > 0): ?>
-                                                <br><small class="text-muted"><?= $pulledPacks ?> pack<?= $pulledPacks === 1 ? '' : 's' ?><?= $pulledLoose > 0 ? ' + ' . $pulledLoose . ' pc' : '' ?></small>
+                                            <?php $pulledBreakdown = SupplierPulloutService::formatFormBreakdown((int)($row['pulled_packs'] ?? 0), (int)($row['pulled_loose'] ?? 0), (int)($row['pack_size_used'] ?? ($row['pack_size'] ?? 1))); ?>
+                                            <?php if ($pulledBreakdown !== ''): ?>
+                                                <br><small class="text-muted"><?= htmlspecialchars($pulledBreakdown) ?></small>
                                             <?php endif; ?>
                                         </td>
                                         <td><?= htmlspecialchars($row['supplier'] ?? '—') ?></td>
@@ -274,14 +270,13 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                         <td>
                                             <?php
                                             $totalReplaced = (int)($row['total_replaced_qty'] ?? 0);
-                                            $replacedPacks = (int)($row['total_replaced_packs'] ?? 0);
-                                            $replacedLoose = (int)($row['total_replaced_loose'] ?? 0);
                                             $repCount = (int)($row['replacement_count'] ?? 0);
+                                            $replacedBreakdown = SupplierPulloutService::formatFormBreakdown((int)($row['total_replaced_packs'] ?? 0), (int)($row['total_replaced_loose'] ?? 0), (int)($row['pack_size_used'] ?? ($row['pack_size'] ?? 1)));
                                             ?>
                                             <?php if ($totalReplaced > 0): ?>
                                                 <span class="badge badge-success">Replaced: <?= number_format($totalReplaced) ?> units</span>
-                                                <?php if ($replacedPacks > 0): ?>
-                                                    <small class="text-muted d-block">(<?= $replacedPacks ?> pack<?= $replacedPacks === 1 ? '' : 's' ?><?= $replacedLoose > 0 ? ' + ' . $replacedLoose . ' pc' : '' ?>)</small>
+                                                <?php if ($replacedBreakdown !== ''): ?>
+                                                    <small class="text-muted d-block">(<?= htmlspecialchars($replacedBreakdown) ?>)</small>
                                                 <?php endif; ?>
                                                 <?php if ($repCount > 1): ?>
                                                     <small class="text-muted d-block">(<?= $repCount ?> receipts)</small>
