@@ -208,19 +208,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                                         </span>
                                     </div>
                                     <div class="u-text-right">
-                                        <?php
-                                        $fType = $adj['form'] ?? 'piece';
-                                        $repQty = (int)($adj['reported_qty'] ?? 0);
-                                        $baseQty = abs((int)$adj['adjustment_qty']);
-                                        if ($fType === 'pack' && $repQty > 0) {
-                                            $qtyLabel = "-{$repQty} " . ($repQty === 1 ? 'pack' : 'packs') . " ({$baseQty} pcs)";
-                                        } elseif ($repQty > 0) {
-                                            $qtyLabel = "-{$repQty} " . ($repQty === 1 ? 'piece' : 'pieces');
-                                        } else {
-                                            $qtyLabel = "-{$baseQty} " . ($baseQty === 1 ? 'piece' : 'pieces');
-                                        }
-                                        ?>
-                                        <div class="adjustment-qty"><?= htmlspecialchars($qtyLabel) ?></div>
+                                        <div class="adjustment-qty"><?= htmlspecialchars(StockIssueService::formatIssueQuantity($adj)) ?></div>
                                         <span class="adjustment-status <?= htmlspecialchars($adj['status']) ?>">
                                             <?= htmlspecialchars(ucfirst($adj['status'])) ?>
                                         </span>

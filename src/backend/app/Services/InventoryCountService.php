@@ -5,6 +5,7 @@ require_once __DIR__ . '/NotificationService.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/SalesWorkflowService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 class InventoryCountService
@@ -104,9 +105,12 @@ class InventoryCountService
 
     public function getCountBatches(int $countId): array
     {
+        $packSelect = $this->hasColumn('products', 'pack_size') ? ', p.pack_size AS product_pack_size' : '';
         $stmt = $this->pdo->prepare(
-            "SELECT icb.*, pb.batch_number AS original_batch_number, pb.expiration_date AS original_expiration_date
+            "SELECT icb.*, pb.batch_number AS original_batch_number, pb.expiration_date AS original_expiration_date{$packSelect}
              FROM inventory_count_batches icb
+             JOIN inventory_counts ic ON ic.count_id = icb.count_id
+             JOIN products p ON p.product_id = ic.product_id
              LEFT JOIN product_batches pb ON pb.batch_id = icb.batch_id
              WHERE icb.count_id = ?
              ORDER BY icb.count_batch_id ASC"
@@ -235,54 +239,35 @@ class InventoryCountService
                 $totalBatchLoose += $bLoose;
             }
 
-            if (count($batchEntries) > 0) {
-                if (isset($data['physical_quantity']) && $data['physical_quantity'] !== '') {
-                    $physicalQty = $parseNonNegativeInt($data['physical_quantity'], 'Physically counted quantity must be a non-negative whole number.');
-                    if ($physicalQty !== $totalBatchPhysical) {
-                        throw new RuntimeException('Physically counted quantity does not match the sum of batch quantities.');
-                    }
-                } else {
-                    $physicalQty = $totalBatchPhysical;
+        }
+
+        if (count($batchEntries) > 0) {
+            if (isset($data['physical_quantity']) && $data['physical_quantity'] !== '') {
+                $physicalQty = $parseNonNegativeInt($data['physical_quantity'], 'Physically counted quantity must be a non-negative whole number.');
+                if ($physicalQty !== $totalBatchPhysical) {
+                    throw new RuntimeException('Physically counted quantity does not match the sum of batch quantities.');
                 }
-                $physicalSealed = $totalBatchSealed;
-                $physicalLoose = $totalBatchLoose;
             } else {
-                if (isset($data['physical_sealed_quantity']) || isset($data['physical_loose_quantity'])) {
-                    $physicalSealed = isset($data['physical_sealed_quantity']) && $data['physical_sealed_quantity'] !== ''
-                        ? $parseNonNegativeInt($data['physical_sealed_quantity'], 'Physically counted quantity must be a non-negative whole number.') : 0;
-                    $physicalLoose = isset($data['physical_loose_quantity']) && $data['physical_loose_quantity'] !== ''
-                        ? $parseNonNegativeInt($data['physical_loose_quantity'], 'Physically counted quantity must be a non-negative whole number.') : 0;
-                    if (!$hasPack && $physicalSealed > 0) {
-                    throw new RuntimeException('Cannot record sealed packs for a product without a Sales Pack configured.');
-                }
-                if ($hasPack && (((float)$physicalSealed * (float)$packSize) + (float)$physicalLoose) > 2147483647) {
-                    throw new RuntimeException('Physically counted quantity is too large.');
-                }
-                $physicalQty = $hasPack ? ($physicalSealed * $packSize) + $physicalLoose : $physicalLoose;
-                } else {
-                    $physicalQty = $parseNonNegativeInt($data['physical_quantity'] ?? null, 'Physically counted quantity must be a non-negative whole number.');
-                    $physicalSealed = 0;
-                    $physicalLoose = $physicalQty;
-                }
+                $physicalQty = $totalBatchPhysical;
             }
+            $physicalSealed = $totalBatchSealed;
+            $physicalLoose = $totalBatchLoose;
+        } elseif (isset($data['physical_sealed_quantity']) || isset($data['physical_loose_quantity'])) {
+            $physicalSealed = isset($data['physical_sealed_quantity']) && $data['physical_sealed_quantity'] !== ''
+                ? $parseNonNegativeInt($data['physical_sealed_quantity'], 'Physically counted quantity must be a non-negative whole number.') : 0;
+            $physicalLoose = isset($data['physical_loose_quantity']) && $data['physical_loose_quantity'] !== ''
+                ? $parseNonNegativeInt($data['physical_loose_quantity'], 'Physically counted quantity must be a non-negative whole number.') : 0;
+            if (!$hasPack && $physicalSealed > 0) {
+                throw new RuntimeException('Cannot record sealed packs for a product without a Sales Pack configured.');
+            }
+            if ($hasPack && (((float)$physicalSealed * (float)$packSize) + (float)$physicalLoose) > 2147483647) {
+                throw new RuntimeException('Physically counted quantity is too large.');
+            }
+            $physicalQty = $hasPack ? ($physicalSealed * $packSize) + $physicalLoose : $physicalLoose;
         } else {
-            if (isset($data['physical_sealed_quantity']) || isset($data['physical_loose_quantity'])) {
-                $physicalSealed = isset($data['physical_sealed_quantity']) && $data['physical_sealed_quantity'] !== ''
-                    ? $parseNonNegativeInt($data['physical_sealed_quantity'], 'Physically counted quantity must be a non-negative whole number.') : 0;
-                $physicalLoose = isset($data['physical_loose_quantity']) && $data['physical_loose_quantity'] !== ''
-                    ? $parseNonNegativeInt($data['physical_loose_quantity'], 'Physically counted quantity must be a non-negative whole number.') : 0;
-                if (!$hasPack && $physicalSealed > 0) {
-                    throw new RuntimeException('Cannot record sealed packs for a product without a Sales Pack configured.');
-                }
-                if ($hasPack && (((float)$physicalSealed * (float)$packSize) + (float)$physicalLoose) > 2147483647) {
-                    throw new RuntimeException('Physically counted quantity is too large.');
-                }
-                $physicalQty = $hasPack ? ($physicalSealed * $packSize) + $physicalLoose : $physicalLoose;
-            } else {
-                $physicalQty = $parseNonNegativeInt($data['physical_quantity'] ?? null, 'Physically counted quantity must be a non-negative whole number.');
-                $physicalSealed = 0;
-                $physicalLoose = $physicalQty;
-            }
+            $physicalQty = $parseNonNegativeInt($data['physical_quantity'] ?? null, 'Physically counted quantity must be a non-negative whole number.');
+            $physicalSealed = 0;
+            $physicalLoose = $physicalQty;
         }
 
         StoreWriteGate::begin($this->pdo);
@@ -526,12 +511,42 @@ class InventoryCountService
             $cbStmt->execute([$countId]);
             $countBatches = $cbStmt->fetchAll(PDO::FETCH_ASSOC);
 
+            $hasBatchTable = $this->hasColumn('product_batches', 'batch_id');
+            $hasBatchFormCols = $this->hasColumn('product_batches', 'sealed_quantity');
+
+            if ($hasBatchFormCols) {
+                $batchUpdateStmt = $this->pdo->prepare(
+                    "UPDATE product_batches
+                     SET remaining_quantity = ?, sealed_quantity = ?, loose_quantity = ?
+                     WHERE batch_id = ?"
+                );
+                $batchInsertStmt = $this->pdo->prepare(
+                    "INSERT INTO product_batches (
+                        product_id, receiving_id, batch_number, quantity, remaining_quantity,
+                        sealed_quantity, loose_quantity,
+                        expiration_date, date_received, supplier, created_at
+                    ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP)"
+                );
+            } elseif ($hasBatchTable) {
+                $batchUpdateStmt = $this->pdo->prepare(
+                    "UPDATE product_batches
+                     SET remaining_quantity = ?
+                     WHERE batch_id = ?"
+                );
+                $batchInsertStmt = $this->pdo->prepare(
+                    "INSERT INTO product_batches (
+                        product_id, receiving_id, batch_number, quantity, remaining_quantity,
+                        expiration_date, date_received, supplier, created_at
+                    ) VALUES (?, NULL, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP)"
+                );
+            }
+
             if (!empty($countBatches)) {
-                // Lock and revalidate all batch lines
+                $countedBatchIds = [];
                 foreach ($countBatches as $cb) {
                     $batchId = !empty($cb['batch_id']) ? (int)$cb['batch_id'] : null;
                     if ($batchId !== null) {
-                        $hasBatchFormCols = $this->hasColumn('product_batches', 'sealed_quantity');
+                        $countedBatchIds[] = $batchId;
                         $bFormSelect = $hasBatchFormCols ? ', sealed_quantity, loose_quantity' : '';
                         $pbStmt = $this->pdo->prepare(
                             "SELECT remaining_quantity{$bFormSelect} FROM product_batches WHERE batch_id = ? AND product_id = ?{$this->forUpdate()}"
@@ -557,33 +572,21 @@ class InventoryCountService
                     }
                 }
 
-                // Apply batch updates
-                $hasBatchFormCols = $this->hasColumn('product_batches', 'sealed_quantity');
-                if ($hasBatchFormCols) {
-                    $batchUpdateStmt = $this->pdo->prepare(
-                        "UPDATE product_batches
-                         SET remaining_quantity = ?, sealed_quantity = ?, loose_quantity = ?
-                         WHERE batch_id = ?"
+                // Zero out any active batches not included in this batch count so batch sum equals quantity_on_hand
+                if ($hasBatchTable) {
+                    $otherStmt = $this->pdo->prepare(
+                        "SELECT batch_id FROM product_batches WHERE product_id = ? AND remaining_quantity > 0{$this->forUpdate()}"
                     );
-                    $batchInsertStmt = $this->pdo->prepare(
-                        "INSERT INTO product_batches (
-                            product_id, receiving_id, batch_number, quantity, remaining_quantity,
-                            sealed_quantity, loose_quantity,
-                            expiration_date, date_received, supplier, created_at
-                        ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP)"
-                    );
-                } else {
-                    $batchUpdateStmt = $this->pdo->prepare(
-                        "UPDATE product_batches
-                         SET remaining_quantity = ?
-                         WHERE batch_id = ?"
-                    );
-                    $batchInsertStmt = $this->pdo->prepare(
-                        "INSERT INTO product_batches (
-                            product_id, receiving_id, batch_number, quantity, remaining_quantity,
-                            expiration_date, date_received, supplier, created_at
-                        ) VALUES (?, NULL, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP)"
-                    );
+                    $otherStmt->execute([$productId]);
+                    foreach ($otherStmt->fetchAll(PDO::FETCH_COLUMN) as $activeId) {
+                        if (!in_array((int)$activeId, $countedBatchIds, true)) {
+                            if ($hasBatchFormCols) {
+                                $batchUpdateStmt->execute([0, 0, 0, (int)$activeId]);
+                            } else {
+                                $batchUpdateStmt->execute([0, (int)$activeId]);
+                            }
+                        }
+                    }
                 }
 
                 $hasBatchAdjustments = false;
@@ -599,32 +602,100 @@ class InventoryCountService
                     if ($hasBatchFormCols) {
                         if ($batchId !== null) {
                             $batchUpdateStmt->execute([$physicalBatchQty, $physicalSealed, $physicalLoose, $batchId]);
-                        } else {
-                            if ($physicalBatchQty > 0) {
-                                $batchInsertStmt->execute([
-                                    $productId,
-                                    $countBatch['batch_number'],
-                                    $physicalBatchQty,
-                                    $physicalBatchQty,
-                                    $physicalSealed,
-                                    $physicalLoose,
-                                    $countBatch['expiration_date'],
-                                ]);
-                            }
+                        } elseif ($physicalBatchQty > 0) {
+                            $batchInsertStmt->execute([
+                                $productId,
+                                $countBatch['batch_number'],
+                                $physicalBatchQty,
+                                $physicalBatchQty,
+                                $physicalSealed,
+                                $physicalLoose,
+                                $countBatch['expiration_date'],
+                            ]);
                         }
                     } else {
                         if ($batchId !== null) {
                             $batchUpdateStmt->execute([$physicalBatchQty, $batchId]);
+                        } elseif ($physicalBatchQty > 0) {
+                            $batchInsertStmt->execute([
+                                $productId,
+                                $countBatch['batch_number'],
+                                $physicalBatchQty,
+                                $physicalBatchQty,
+                                $countBatch['expiration_date'],
+                            ]);
+                        }
+                    }
+                }
+            } elseif ($hasBatchTable) {
+                // Reconcile product_batches for top-level / unbatched counts so batch sums match inventory.quantity_on_hand
+                $bFormSelect = $hasBatchFormCols ? ', sealed_quantity, loose_quantity' : '';
+                $activeStmt = $this->pdo->prepare(
+                    "SELECT batch_id, remaining_quantity{$bFormSelect}
+                     FROM product_batches
+                     WHERE product_id = ? AND remaining_quantity > 0
+                     ORDER BY (expiration_date IS NULL) ASC, expiration_date ASC, date_received ASC, batch_id ASC{$this->forUpdate()}"
+                );
+                $activeStmt->execute([$productId]);
+                $activeBatches = $activeStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                if ($hasBatchFormCols && array_key_exists('system_sealed_quantity', $count) && !empty($activeBatches)) {
+                    $curSealedSum = 0;
+                    $curLooseSum = 0;
+                    foreach ($activeBatches as $ab) {
+                        $s = (int)($ab['sealed_quantity'] ?? 0);
+                        $l = (int)($ab['loose_quantity'] ?? 0);
+                        if ($s === 0 && $l === 0 && (int)$ab['remaining_quantity'] > 0) {
+                            $l = (int)$ab['remaining_quantity'];
+                        }
+                        $curSealedSum += $s;
+                        $curLooseSum += $l;
+                    }
+                    if ($curSealedSum !== (int)$count['system_sealed_quantity'] || $curLooseSum !== (int)$count['system_loose_quantity']) {
+                        throw new RuntimeException('Stock form balances have changed since this count was recorded. Please record a fresh count before approval.');
+                    }
+                }
+
+                $physicalQty = (int)$count['physical_quantity'];
+                $physicalSealed = (int)($count['physical_sealed_quantity'] ?? 0);
+                $physicalLoose = array_key_exists('physical_loose_quantity', $count) && $count['physical_loose_quantity'] !== null
+                    ? (int)$count['physical_loose_quantity']
+                    : $physicalQty;
+
+                if (count($activeBatches) === 1) {
+                    $targetBatchId = (int)$activeBatches[0]['batch_id'];
+                    if ($hasBatchFormCols) {
+                        $batchUpdateStmt->execute([$physicalQty, $physicalSealed, $physicalLoose, $targetBatchId]);
+                    } else {
+                        $batchUpdateStmt->execute([$physicalQty, $targetBatchId]);
+                    }
+                } else {
+                    foreach ($activeBatches as $ab) {
+                        if ($hasBatchFormCols) {
+                            $batchUpdateStmt->execute([0, 0, 0, (int)$ab['batch_id']]);
                         } else {
-                            if ($physicalBatchQty > 0) {
-                                $batchInsertStmt->execute([
-                                    $productId,
-                                    $countBatch['batch_number'],
-                                    $physicalBatchQty,
-                                    $physicalBatchQty,
-                                    $countBatch['expiration_date'],
-                                ]);
-                            }
+                            $batchUpdateStmt->execute([0, (int)$ab['batch_id']]);
+                        }
+                    }
+                    if ($physicalQty > 0) {
+                        if ($hasBatchFormCols) {
+                            $batchInsertStmt->execute([
+                                $productId,
+                                'COUNT-' . $countId,
+                                $physicalQty,
+                                $physicalQty,
+                                $physicalSealed,
+                                $physicalLoose,
+                                null,
+                            ]);
+                        } else {
+                            $batchInsertStmt->execute([
+                                $productId,
+                                'COUNT-' . $countId,
+                                $physicalQty,
+                                $physicalQty,
+                                null,
+                            ]);
                         }
                     }
                 }
@@ -808,17 +879,6 @@ class InventoryCountService
 
     private function hasColumn(string $table, string $column): bool
     {
-        try {
-            $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-            if ($driver === 'sqlite') {
-                $cols = $this->pdo->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_COLUMN, 1);
-                return in_array($column, $cols, true);
-            }
-            $stmt = $this->pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE ?");
-            $stmt->execute([$column]);
-            return (bool)$stmt->fetch();
-        } catch (Throwable) {
-            return false;
-        }
+        return isset(SalesWorkflowService::getTableColumns($this->pdo, $table)[$column]);
     }
 }

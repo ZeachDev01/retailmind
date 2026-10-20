@@ -19,10 +19,24 @@ require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Dashboard\StoreOperationsDashboardWorkspace;
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/SalesWorkflowService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 class StockIssueService
 {
+    public static function formatIssueQuantity(array $row): string
+    {
+        $form = $row['form'] ?? 'piece';
+        $repQty = (int)($row['reported_qty'] ?? 0);
+        $baseQty = abs((int)($row['adjustment_qty'] ?? 0));
+        if ($repQty <= 0) {
+            $repQty = $baseQty;
+        }
+        if ($form === 'pack') {
+            return '-' . $repQty . ' pack' . ($repQty === 1 ? '' : 's') . ' (' . $baseQty . ' pcs)';
+        }
+        return '-' . $baseQty . ' piece' . ($baseQty === 1 ? '' : 's');
+    }
     public const CATEGORIES = ['damaged', 'missing', 'expired', 'other'];
 
     public const STATUSES = ['pending', 'returned', 'cancelled', 'approved', 'rejected'];
@@ -53,23 +67,9 @@ class StockIssueService
 
         $productId = (int)($data['product_id'] ?? 0);
         $category = strtolower(trim((string)($data['category'] ?? $data['adjustment_type'] ?? '')));
-        $rawQty = $data['quantity'] ?? $data['adjustment_qty'] ?? null;
-        if (!is_int($rawQty) && !(is_string($rawQty) && preg_match('/^-?\d+$/D', trim($rawQty)))) {
-            throw new RuntimeException('Quantity must be a positive whole number of units.');
-        }
-        if (is_string($rawQty) && (float)trim($rawQty) > 2147483647) {
-            throw new RuntimeException('Quantity is too large.');
-        }
-        $quantity = (int)$rawQty;
-        if ($quantity > 2147483647) {
-            throw new RuntimeException('Quantity is too large.');
-        }
+        $quantity = $this->parseQuantity($data['quantity'] ?? $data['adjustment_qty'] ?? null);
         $explanation = trim((string)($data['explanation'] ?? $data['reason'] ?? ''));
-
-        $form = strtolower(trim((string)($data['form'] ?? $data['selling_form'] ?? 'piece')));
-        if (!in_array($form, ['piece', 'pack'], true)) {
-            throw new RuntimeException('Invalid stock form. Select piece or pack.');
-        }
+        $form = $this->normalizeForm((string)($data['form'] ?? $data['selling_form'] ?? 'piece'));
 
         $this->validateReportFields($productId, $category, $quantity, $explanation);
 
@@ -79,30 +79,7 @@ class StockIssueService
         StoreWriteGate::begin($this->pdo);
         try {
             $shift = (new \App\Services\CashierShiftService($this->pdo))->lockOpenShift($cashierId, true);
-            [$scopeSql, $scopeParams] = $this->productScope();
-            $hasPackCol = $this->hasColumn('products', 'pack_size');
-            $packSelect = $hasPackCol ? ', p.pack_size' : '';
-            $productStmt = $this->pdo->prepare(
-                "SELECT p.product_id{$packSelect} FROM products p WHERE p.product_id = ? AND p.status = 'active'{$scopeSql}{$this->forUpdate()}"
-            );
-            $productStmt->execute(array_merge([$productId], $scopeParams));
-            $product = $productStmt->fetch(PDO::FETCH_ASSOC);
-            if (!$product) {
-                throw new RuntimeException('Active product not found.');
-            }
-
-            $packSize = !empty($product['pack_size']) && (int)$product['pack_size'] > 1 ? (int)$product['pack_size'] : null;
-            if ($form === 'pack') {
-                if ($packSize === null) {
-                    throw new RuntimeException('Cannot report pack issue for product without Sales Pack configured.');
-                }
-                if (((float)$quantity * (float)$packSize) > 2147483647) {
-                    throw new RuntimeException('Resulting unit quantity is too large.');
-                }
-                $baseUnitQty = $quantity * $packSize;
-            } else {
-                $baseUnitQty = $quantity;
-            }
+            [$packSize, $baseUnitQty] = $this->resolveProductPackAndBaseUnits($productId, $quantity, $form, true);
 
             $hasFormCols = $this->hasColumn('inventory_adjustments', 'form');
             if ($hasFormCols) {
@@ -217,17 +194,7 @@ class StockIssueService
             }
 
             if ($hasQuantity) {
-                $rawQty = $data['quantity'] ?? $data['adjustment_qty'] ?? null;
-                if (!is_int($rawQty) && !(is_string($rawQty) && preg_match('/^-?\d+$/D', trim($rawQty)))) {
-                    throw new RuntimeException('Quantity must be a positive whole number of units.');
-                }
-                if (is_string($rawQty) && (float)trim($rawQty) > 2147483647) {
-                    throw new RuntimeException('Quantity is too large.');
-                }
-                $quantity = (int)$rawQty;
-                if ($quantity > 2147483647) {
-                    throw new RuntimeException('Quantity is too large.');
-                }
+                $quantity = $this->parseQuantity($data['quantity'] ?? $data['adjustment_qty'] ?? null);
             } else {
                 $repQ = (int)($report['reported_qty'] ?? 0);
                 $quantity = $repQ > 0 ? $repQ : abs((int)$report['adjustment_qty']);
@@ -242,30 +209,8 @@ class StockIssueService
             $this->validateReportFields((int)$report['product_id'], $category, $quantity, $explanation);
 
             $hasFormCols = $this->hasColumn('inventory_adjustments', 'form');
-            $form = $hasFormCols ? strtolower(trim((string)($data['form'] ?? $report['form'] ?? 'piece'))) : 'piece';
-            if ($form !== 'piece' && $form !== 'pack') {
-                throw new RuntimeException('Invalid stock form. Select piece or pack.');
-            }
-
-            $packSize = null;
-            if ($this->hasColumn('products', 'pack_size')) {
-                $pStmt = $this->pdo->prepare('SELECT pack_size FROM products WHERE product_id = ?');
-                $pStmt->execute([(int)$report['product_id']]);
-                $rawPack = $pStmt->fetchColumn();
-                $packSize = $rawPack !== false && (int)$rawPack > 1 ? (int)$rawPack : null;
-            }
-
-            if ($form === 'pack') {
-                if ($packSize === null) {
-                    throw new RuntimeException('Cannot report pack issue for product without Sales Pack configured.');
-                }
-                if (((float)$quantity * (float)$packSize) > 2147483647) {
-                    throw new RuntimeException('Resulting unit quantity is too large.');
-                }
-                $baseUnitQty = $quantity * $packSize;
-            } else {
-                $baseUnitQty = $quantity;
-            }
+            $form = $hasFormCols ? $this->normalizeForm((string)($data['form'] ?? $data['selling_form'] ?? $report['form'] ?? 'piece')) : 'piece';
+            [$packSize, $baseUnitQty] = $this->resolveProductPackAndBaseUnits((int)$report['product_id'], $quantity, $form, false);
 
             $oldValues = [
                 'adjustment_qty' => (int)$report['adjustment_qty'],
@@ -596,10 +541,8 @@ class StockIssueService
         StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->productScope();
-            $hasPackCol = $this->hasColumn('products', 'pack_size');
-            $packSelect = $hasPackCol ? ', p.pack_size AS product_pack_size' : '';
             $reportStmt = $this->pdo->prepare(
-                "SELECT ia.*{$packSelect} FROM inventory_adjustments ia
+                "SELECT ia.*{$this->packSizeSelect()} FROM inventory_adjustments ia
                   JOIN products p ON p.product_id = ia.product_id
                   WHERE ia.adjustment_id = ?{$scopeSql}{$this->forUpdate()}"
             );
@@ -1228,11 +1171,15 @@ class StockIssueService
             return [];
         }
 
+        $formCols = $this->hasColumn('inventory_counts', 'physical_sealed_quantity')
+            ? ', ic.system_sealed_quantity, ic.system_loose_quantity, ic.physical_sealed_quantity, ic.physical_loose_quantity, ic.difference_sealed_qty, ic.difference_loose_qty'
+            : '';
+
         $stmt = $this->pdo->prepare(
-            'SELECT ic.count_id, ic.product_id, ic.system_quantity, ic.physical_quantity,
-                    ic.difference_qty, ic.discrepancy_reason, ic.counted_by, ic.approved_by,
+            "SELECT ic.count_id, ic.product_id, ic.system_quantity, ic.physical_quantity,
+                    ic.difference_qty{$formCols}, ic.discrepancy_reason, ic.counted_by, ic.approved_by,
                     ic.counted_at, ic.approved_at, ic.status, ic.related_adjustment_id,
-                    p.sku, p.product_name,
+                    p.sku, p.product_name{$this->packSizeSelect()},
                     counter.full_name AS counted_by_name,
                     approver.full_name AS approved_by_name
              FROM inventory_counts ic
@@ -1240,7 +1187,7 @@ class StockIssueService
              LEFT JOIN users counter ON counter.user_id = ic.counted_by
              LEFT JOIN users approver ON approver.user_id = ic.approved_by
              WHERE ic.related_adjustment_id = ?
-             ORDER BY ic.counted_at DESC, ic.count_id DESC'
+             ORDER BY ic.counted_at DESC, ic.count_id DESC"
         );
         $stmt->execute([$adjustmentId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1252,11 +1199,9 @@ class StockIssueService
     public function getReport(int $adjustmentId): ?array
     {
         [$scopeSql, $scopeParams] = $this->productScope();
-        $hasPackCol = $this->hasColumn('products', 'pack_size');
-        $packSelect = $hasPackCol ? ', p.pack_size AS product_pack_size' : '';
         $stmt = $this->pdo->prepare(
             "SELECT ia.*,
-                    p.sku, p.product_name{$packSelect},
+                    p.sku, p.product_name{$this->packSizeSelect()},
                     reporter.full_name AS cashier_name,
                     reviewer.full_name AS reviewer_name
              FROM inventory_adjustments ia
@@ -1652,18 +1597,70 @@ class StockIssueService
 
     private function hasColumn(string $table, string $column): bool
     {
-        try {
-            $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-            if ($driver === 'sqlite') {
-                $cols = $this->pdo->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_COLUMN, 1);
-                return in_array($column, $cols, true);
-            }
-            $stmt = $this->pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE ?");
-            $stmt->execute([$column]);
-            return (bool)$stmt->fetch();
-        } catch (Throwable) {
-            return false;
+        return isset(SalesWorkflowService::getTableColumns($this->pdo, $table)[$column]);
+    }
+
+    private function parseQuantity(mixed $rawQty): int
+    {
+        if (!is_int($rawQty) && !(is_string($rawQty) && preg_match('/^-?\d+$/D', trim($rawQty)))) {
+            throw new RuntimeException('Quantity must be a positive whole number of units.');
         }
+        if (is_string($rawQty) && (float)trim($rawQty) > 2147483647) {
+            throw new RuntimeException('Quantity is too large.');
+        }
+        $quantity = (int)$rawQty;
+        if ($quantity > 2147483647) {
+            throw new RuntimeException('Quantity is too large.');
+        }
+        return $quantity;
+    }
+
+    private function normalizeForm(string $rawForm): string
+    {
+        $form = strtolower(trim($rawForm));
+        if ($form !== 'piece' && $form !== 'pack') {
+            throw new RuntimeException('Invalid stock form. Select piece or pack.');
+        }
+        return $form;
+    }
+
+    /**
+     * @return array{0: ?int, 1: int} [packSize, baseUnitQty]
+     */
+    private function resolveProductPackAndBaseUnits(int $productId, int $quantity, string $form, bool $requireActiveScoped = false): array
+    {
+        if ($requireActiveScoped) {
+            [$scopeSql, $scopeParams] = $this->productScope();
+            $stmt = $this->pdo->prepare(
+                "SELECT p.product_id{$this->packSizeSelect()} FROM products p WHERE p.product_id = ? AND p.status = 'active'{$scopeSql}{$this->forUpdate()}"
+            );
+            $stmt->execute(array_merge([$productId], $scopeParams));
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$product) {
+                throw new RuntimeException('Active product not found.');
+            }
+            $rawPack = $product['product_pack_size'] ?? null;
+        } else {
+            $rawPack = null;
+            if ($this->hasColumn('products', 'pack_size')) {
+                $stmt = $this->pdo->prepare('SELECT pack_size FROM products WHERE product_id = ?');
+                $stmt->execute([$productId]);
+                $rawPack = $stmt->fetchColumn();
+            }
+        }
+
+        $packSize = !empty($rawPack) && (int)$rawPack > 1 ? (int)$rawPack : null;
+        if ($form === 'pack') {
+            if ($packSize === null) {
+                throw new RuntimeException('Cannot report pack issue for product without Sales Pack configured.');
+            }
+            if (((float)$quantity * (float)$packSize) > 2147483647) {
+                throw new RuntimeException('Resulting unit quantity is too large.');
+            }
+            return [$packSize, $quantity * $packSize];
+        }
+
+        return [$packSize, $quantity];
     }
 
     private function insertRevision(

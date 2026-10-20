@@ -33,16 +33,7 @@ $categoryLabels = [
 $categoryLabel = static function (string $category) use ($categoryLabels): string {
     return $categoryLabels[$category] ?? ucfirst($category);
 };
-$formatIssueQty = static function (array $row): string {
-    $fType = $row['form'] ?? 'piece';
-    $repQty = (int)($row['reported_qty'] ?? 0);
-    $baseQty = abs((int)($row['adjustment_qty'] ?? 0));
-    if ($fType === 'pack' && $repQty > 0) {
-        return "-{$repQty} " . ($repQty === 1 ? 'pack' : 'packs') . " ({$baseQty} pcs)";
-    }
-    $q = $repQty > 0 ? $repQty : $baseQty;
-    return "-{$q} " . ($q === 1 ? 'piece' : 'pieces');
-};
+$formatIssueQty = [StockIssueService::class, 'formatIssueQuantity'];
 
 $filters = [
     'status' => trim((string)($_GET['status'] ?? '')),
@@ -334,10 +325,21 @@ try {
                                 </thead>
                                 <tbody>
                                     <?php foreach ($detail['correction_counts'] as $countRow): ?>
+                                        <?php $hasCountPack = !empty($countRow['product_pack_size']) && (int)$countRow['product_pack_size'] > 1; ?>
                                         <tr>
                                             <td>#<?= (int)$countRow['count_id'] ?></td>
-                                            <td><?= (int)$countRow['system_quantity'] ?></td>
-                                            <td><?= (int)$countRow['physical_quantity'] ?></td>
+                                            <td>
+                                                <?= (int)$countRow['system_quantity'] ?>
+                                                <?php if ($hasCountPack && array_key_exists('system_sealed_quantity', $countRow)): ?>
+                                                    <br><small class="muted"><?= (int)$countRow['system_sealed_quantity'] ?> pk, <?= (int)$countRow['system_loose_quantity'] ?> loose</small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?= (int)$countRow['physical_quantity'] ?>
+                                                <?php if ($hasCountPack && array_key_exists('physical_sealed_quantity', $countRow)): ?>
+                                                    <br><small class="muted"><?= (int)$countRow['physical_sealed_quantity'] ?> pk, <?= (int)$countRow['physical_loose_quantity'] ?> loose</small>
+                                                <?php endif; ?>
+                                            </td>
                                             <td><?= (int)$countRow['difference_qty'] > 0 ? '+' . (int)$countRow['difference_qty'] : (int)$countRow['difference_qty'] ?></td>
                                             <td><?= htmlspecialchars($countRow['discrepancy_reason']) ?></td>
                                             <td><?= htmlspecialchars($countRow['counted_by_name'] ?? 'Unknown') ?></td>

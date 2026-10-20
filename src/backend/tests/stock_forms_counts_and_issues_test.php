@@ -804,6 +804,32 @@ $assert($packDetail !== null && $packDetail['report']['form'] === 'pack', 'Overs
 $assert((int)$packDetail['report']['reported_qty'] === 1, 'Oversight detail retains reported_qty = 1');
 $assert(!empty($packDetail['batches']) && $packDetail['batches'][0]['form'] === 'pack' && (int)$packDetail['batches'][0]['reported_qty'] === 1, 'Oversight batch detail retains form = pack and reported_qty = 1');
 
+// 8.7b: Top-level / unbatched count with sealed/loose reconciles product_batches parity with inventory.quantity_on_hand
+$pdo->exec("
+    INSERT INTO products (product_id, sku, barcode, pack_size, pack_barcode, pack_price, product_name, unit_price, cost_price, status)
+    VALUES (3, 'SKU-PACK-UNBATCHED', '480444444444', 6, '480555555555', 50.0, 'Unbatched Juice 6pk', 10.0, 6.0, 'active');
+    INSERT INTO inventory (product_id, quantity_on_hand) VALUES (3, 18);
+");
+$topCountId = $countService->recordCount([
+    'product_id' => 3,
+    'physical_sealed_quantity' => 2,
+    'physical_loose_quantity' => 3,
+    'discrepancy_reason' => 'Unbatched shelf count found 2 sealed packs + 3 loose',
+], 1);
+$countService->approveCount($topCountId, 1);
+$cov3 = $countService->getProductBatchCoverage(3);
+$assert($cov3['on_hand'] === 15, 'Top-level pack count updated inventory.quantity_on_hand to 15 (2*6 + 3)');
+$assert($cov3['batch_sum'] === 15, 'Top-level pack count reconciled product_batches sum to 15');
+$assert($cov3['batch_sealed_sum'] === 2, 'Top-level pack count reconciled batch_sealed_sum to 2');
+$assert($cov3['batch_loose_sum'] === 3, 'Top-level pack count reconciled batch_loose_sum to 3');
+$assert($cov3['has_mismatch'] === false, 'Top-level pack count eliminated batch vs inventory mismatch');
+
+// 8.7c: StockIssueService::formatIssueQuantity shared helper
+$assert(StockIssueService::formatIssueQuantity(['form' => 'pack', 'reported_qty' => 2, 'adjustment_qty' => -24]) === '-2 packs (24 pcs)', 'formatIssueQuantity formats plural packs with base units');
+$assert(StockIssueService::formatIssueQuantity(['form' => 'pack', 'reported_qty' => 1, 'adjustment_qty' => -12]) === '-1 pack (12 pcs)', 'formatIssueQuantity formats singular pack with base units');
+$assert(StockIssueService::formatIssueQuantity(['form' => 'piece', 'reported_qty' => 3, 'adjustment_qty' => -3]) === '-3 pieces', 'formatIssueQuantity formats plural pieces');
+$assert(StockIssueService::formatIssueQuantity(['form' => 'piece', 'reported_qty' => 1, 'adjustment_qty' => -1]) === '-1 piece', 'formatIssueQuantity formats singular piece');
+
 // 8.8: Run migration 202610200004_stock_counts_and_issues_forms idempotently
 $mig = require __DIR__ . '/../database/migrations/202610200004_stock_counts_and_issues_forms.php';
 $assert($mig['key'] === '202610200004_stock_counts_and_issues_forms', 'Migration key is 202610200004_stock_counts_and_issues_forms');
