@@ -152,7 +152,7 @@ $chartDataJson = json_encode([
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
-        <header class="page-heading"><div><h1>Stock Overview</h1><p class="page-subtitle">Search products, review stock levels, and check expiry risks. Select a summary to filter products.</p></div></header>
+        <header class="page-heading"><div><h1>Stock Overview</h1></div></header>
         <section class="overview-metrics" aria-label="Inventory summary">
             <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
@@ -198,10 +198,8 @@ $chartDataJson = json_encode([
                     <span class="overview-chart-icon overview-chart-icon--blue" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
                     <div>
                         <h3 id="overview-forecast-heading">Demand Forecast vs Current Stock</h3>
-                        <p>Top 10 products by predicted 30-day demand. Forecasts are estimates; 7-day demand is included in the 30-day total.</p>
                     </div>
                 </div>
-                <span class="overview-chart-badge"><?= count($forecastProducts) ?> forecast-ready SKUs</span>
             </div>
             <?php if ($topForecastProducts): ?>
             <div class="overview-chart-body">
@@ -209,6 +207,7 @@ $chartDataJson = json_encode([
             </div>
             <details>
                 <summary>View forecast values</summary>
+                <p>Top 10 products by predicted 30-day demand. Forecasts are estimates; 7-day demand is included in the 30-day total.</p>
                 <div class="overview-table-shell"><table class="overview-table">
                     <thead><tr><th>Product</th><th>Current stock</th><th>7-day demand</th><th>30-day demand</th></tr></thead>
                     <tbody><?php foreach ($topForecastProducts as $forecast): ?>
@@ -217,7 +216,7 @@ $chartDataJson = json_encode([
                 </table></div>
             </details>
             <?php else: ?>
-            <p class="overview-empty">No current forecasts are available. Check sales data and update forecasts on the Demand Forecasting page.</p>
+            <p class="overview-empty">No forecasts available. Check Demand Forecasting.</p>
             <?php endif; ?>
         </section>
 
@@ -228,10 +227,8 @@ $chartDataJson = json_encode([
                         <span class="overview-chart-icon" aria-hidden="true"><i class="bi bi-pie-chart-fill"></i></span>
                         <div>
                             <h3>Stock Health Distribution</h3>
-                            <p>Breakdown of products by inventory health state</p>
                         </div>
                     </div>
-                    <span class="overview-chart-badge"><?= number_format((int)$total_products) ?> SKUs</span>
                 </div>
                 <div class="overview-chart-body">
                     <canvas id="overviewStatusChart" aria-label="Stock health distribution chart" role="img"></canvas>
@@ -244,10 +241,8 @@ $chartDataJson = json_encode([
                         <span class="overview-chart-icon overview-chart-icon--blue" aria-hidden="true"><i class="bi bi-bar-chart-fill"></i></span>
                         <div>
                             <h3>Stock Volume by Category</h3>
-                            <p>Top product categories ranked by units on hand</p>
                         </div>
                     </div>
-                    <span class="overview-chart-badge"><?= number_format((int)$total_units) ?> Units</span>
                 </div>
                 <div class="overview-chart-body">
                     <canvas id="overviewCategoryChart" aria-label="Stock volume by category chart" role="img"></canvas>
@@ -387,7 +382,7 @@ $chartDataJson = json_encode([
         <div class="overview-tab-panels">
         <section class="overview-section overview-tab-panel is-active" id="overview-panel-movements" role="tabpanel" aria-labelledby="overview-tab-movements" data-overview-tab-panel="movements">
             <header class="overview-section-header">
-                <div><span class="overview-section-icon" aria-hidden="true"><i class="bi bi-arrow-left-right"></i></span><div><h2 id="movement-heading">Recent Stock Movements</h2><p>Latest inventory changes recorded across this store scope.</p></div></div>
+                <div><span class="overview-section-icon" aria-hidden="true"><i class="bi bi-arrow-left-right"></i></span><div><h2 id="movement-heading">Recent Stock Movements</h2></div></div>
             </header>
             <div class="overview-table-shell">
                 <table class="overview-table">
@@ -420,7 +415,7 @@ $chartDataJson = json_encode([
 
         <section class="overview-section overview-tab-panel" id="overview-panel-fefo" role="tabpanel" aria-labelledby="overview-tab-fefo" data-overview-tab-panel="fefo" hidden>
             <header class="overview-section-header">
-                <div><span class="overview-section-icon overview-section-icon--amber" aria-hidden="true"><i class="bi bi-calendar2-week"></i></span><div><h2 id="fefo-heading">FEFO Pick Recommendations</h2><p>Prioritize batches with the nearest expiration dates.</p></div></div>
+                <div><span class="overview-section-icon overview-section-icon--amber" aria-hidden="true"><i class="bi bi-calendar2-week"></i></span><div><h2 id="fefo-heading">FEFO Pick Recommendations</h2></div></div>
                 <a href="<?= htmlspecialchars(app_url('components/report/stock_receiving.php')) ?>">Open stock receiving <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
             </header>
             <div class="overview-table-shell">
@@ -449,7 +444,7 @@ $chartDataJson = json_encode([
                     </tr>
                     <?php endforeach; ?>
                     <?php if (!$fefo_recommendations): ?>
-                    <tr><td class="overview-empty" colspan="5"><i class="bi bi-check2-circle" aria-hidden="true"></i><strong>No FEFO recommendations</strong><span>No batch stock currently requires picking priority.</span></td></tr>
+                    <tr><td class="overview-empty" colspan="5"><i class="bi bi-check2-circle" aria-hidden="true"></i><strong>No FEFO recommendations</strong></td></tr>
                     <?php endif; ?>
                     </tbody>
                 </table>

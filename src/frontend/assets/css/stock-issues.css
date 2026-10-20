@@ -1,0 +1,53 @@
+.stock-issues-page .main-content { min-width:0; }
+.stock-issues-page .history-section { padding:0; margin-bottom:1.5rem; border:0; background:transparent; box-shadow:none; }
+.stock-issues-page h2 { display:inline-flex; align-items:center; gap:.625rem; margin:0 0 1rem; font-size:1.05rem; line-height:1.4; }
+.stock-issues-page .issue-count { padding:.125rem .5rem; border-radius:6px; background:var(--surface-soft); color:var(--muted); font-size:.875rem; font-weight:600; font-variant-numeric:tabular-nums; }
+.stock-issues-page .adjustment-card { margin-bottom:1rem; padding:1.25rem; border:1px solid var(--border); border-radius:14px; background:var(--card-bg); }
+.stock-issues-page .adjustment-header { gap:1rem; margin-bottom:.75rem; }
+.stock-issues-page .adjustment-header > div:first-child { min-width:0; }
+.stock-issues-page .adjustment-product { font-size:1.05rem; overflow-wrap:anywhere; }
+.stock-issues-page .adjustment-sku { margin-top:.25rem; font-family:inherit; overflow-wrap:anywhere; }
+.stock-issues-page .adjustment-type { padding:0; margin-top:.375rem; border-radius:0; background:transparent; color:var(--muted); font-size:.875rem; font-weight:400; }
+.stock-issues-page .u-text-right { flex-shrink:0; }
+.stock-issues-page .issue-quantity-label { color:var(--muted); font-size:.8125rem; }
+.stock-issues-page .adjustment-qty { margin:0; color:var(--text); font-size:1.5rem; font-variant-numeric:tabular-nums; }
+.stock-issues-page .adjustment-status { margin-top:.375rem; border-radius:6px; }
+.stock-issues-page .adjustment-details,
+.stock-issues-page .issue-stock { display:flex; flex-wrap:wrap; gap:.375rem 1.25rem; font-size:.875rem; }
+.stock-issues-page .adjustment-details { color:var(--muted); overflow-wrap:anywhere; }
+.stock-issues-page .issue-stock { margin-top:.75rem; }
+.stock-issues-page .issue-warning { color:var(--theme-danger-text, #dc2626); }
+.stock-issues-page .adjustment-reason { padding:.75rem 0; border-radius:0; background:transparent; overflow-wrap:anywhere; }
+.stock-issues-page .review-form { display:grid; grid-template-columns:minmax(0, 1fr); gap:1rem; margin-top:.75rem; padding-top:1rem; border-top:1px solid var(--border); }
+.stock-issues-page .form-group { display:grid; gap:.375rem; margin:0; }
+.stock-issues-page .form-group label { margin:0; color:var(--text); font-weight:600; }
+.stock-issues-page .form-group small,
+.stock-issues-page .issue-batches p { color:var(--muted); font-size:.875rem; line-height:1.5; }
+.stock-issues-page .form-group textarea,
+.stock-issues-page .form-group select { width:100%; min-width:0; margin:0; border:1px solid var(--border); border-radius:10px; background:var(--card-bg); color:var(--text); font:inherit; padding:.625rem .75rem; }
+.stock-issues-page .form-group textarea { min-height:4.5rem; resize:vertical; }
+.stock-issues-page .form-group select { max-width:24rem; min-height:44px; }
+.stock-issues-page summary { cursor:pointer; min-height:44px; padding-block:.625rem; color:var(--text); }
+.stock-issues-page .issue-batches p { margin:.375rem 0 .75rem; }
+.stock-issues-page .table-wrap { max-width:100%; border-color:var(--border); }
+.stock-issues-page .table-wrap table { min-width:420px; }
+.stock-issues-page .table-wrap input { width:5rem; min-height:44px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); font:inherit; padding:.5rem; }
+.stock-issues-page .review-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
+.stock-issues-page .review-actions button { min-height:44px; padding:.625rem 1rem; border-radius:10px; font-size:.9rem; }
+.stock-issues-page .btn-secondary { border:1px solid var(--border); background:var(--surface-soft); color:var(--text); }
+.stock-issues-page .btn-secondary:hover { border-color:var(--muted); background:var(--surface-soft); color:var(--text); }
+.stock-issues-page .btn-submit:disabled { opacity:.6; cursor:not-allowed; }
+.stock-issues-page .btn-submit:disabled:hover { background:var(--theme-action, #2563eb); }
+.stock-issues-page .issue-history { border-top:1px solid var(--border); padding-top:.5rem; }
+.stock-issues-page .issue-history > summary h2 { margin:0; }
+.stock-issues-page .issue-history[open] > summary { margin-bottom:.75rem; }
+.stock-issues-page .issue-empty { display:grid; justify-items:center; gap:1rem; padding:3rem 1rem; border-radius:14px; background:color-mix(in srgb, var(--primary) 4%, var(--card-bg)); text-align:center; }
+.stock-issues-page .issue-empty-icon { color:var(--primary); }
+.stock-issues-page .issue-empty h3 { color:var(--text); font-size:1rem; font-weight:600; }
+.stock-issues-page :is(summary, textarea, select, input, button, a):focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
+@media(max-width:640px) {
+    .stock-issues-page .adjustment-card { padding:1rem; }
+    .stock-issues-page .review-actions { display:grid; grid-template-columns:1fr; }
+    .stock-issues-page .review-actions button { width:100%; }
+    .stock-issues-page .issue-history > summary h2 { font-size:1rem; }
+}

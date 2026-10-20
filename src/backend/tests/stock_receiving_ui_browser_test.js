@@ -40,6 +40,10 @@ function fixture(action) {
         }
         browser = await chromium.launch({headless: true});
         const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+        // Each navigation starts a separate scenario; draft persistence has its own test.
+        await page.addInitScript(() => {
+            Object.keys(sessionStorage).filter(key => key.startsWith('receiving-draft:')).forEach(key => sessionStorage.removeItem(key));
+        });
         page.setDefaultTimeout(6000);
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
@@ -60,11 +64,10 @@ function fixture(action) {
         assert.equal(await firstCard.locator('.receiving-card-add').isDisabled(), false, 'depleted and in-stock items remain enabled for receiving replenishment');
         assert.equal(await page.locator('#summary_products').innerText(), '0');
         assert.match(await page.locator('.receiving-accepted').innerText(), /Products added/);
-        assert.match(await page.locator('.receiving-accepted').innerText(), /In current delivery list/);
         // Verification 1: Empty start state and removal of dropdown / "Add another product" button
         assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 0, 'starts with 0 delivery lines');
         assert.equal(await page.locator('#delivery_empty_state').isVisible(), true, 'empty state visible');
-        assert.match(await page.locator('#delivery_empty_state').innerText(), /No products added yet\. Scan a barcode or click \+ Add to Delivery/);
+        assert.match(await page.locator('#delivery_empty_state').innerText(), /No products added\. Scan a barcode or add products from the catalog\./);
         assert.equal(await page.locator('select[name="product_id"]').count(), 0, 'select dropdown removed');
         assert.equal(await page.locator('#add_receiving_line').count(), 0, 'Add another product button removed');
         await page.locator('#receiving_next').click();
@@ -149,6 +152,9 @@ function fixture(action) {
         assert.equal(await page.locator('#summary_accepted').innerText(), '10');
         assert.equal(await page.locator('#summary_damaged').innerText(), '2');
         assert.equal(await page.locator('#summary_cost').innerText(), '₱35.00');
+        assert.equal(await page.locator('#package_conversion').innerText(), '12 units received − 2 damaged = 10 accepted units.');
+        assert.equal(await page.locator('#receiving_back').innerText(), 'Back to products');
+        assert.equal(await page.locator('#receiving_return_products').count(), 0, 'one action returns to products');
 
         page.once('dialog', dialog => dialog.dismiss());
         await page.locator('.remove-receiving-line').first().click();
@@ -168,6 +174,9 @@ function fixture(action) {
         await page.locator('#received_qty').fill('10');
         await page.locator('#receiving_next').click();
         assert.match(await page.locator('#receiving_review').innerText(), /10 accepted units/);
+        assert.equal(await page.locator('#receiving_review > p').count(), 0, 'blank receipt details stay out of review');
+        assert.doesNotMatch(await page.locator('#receiving_review').innerText(), /Not supplied/);
+        assert.match(await page.locator('#receiving_review').innerText(), /Unit cost: unknown; product cost unchanged/);
         assert.equal(await page.locator('.sidebar').innerHTML(), navbar, 'receiving steps preserve navigation');
 
         await page.goto(url);
@@ -331,7 +340,11 @@ function fixture(action) {
         await page.locator('#batch_number').fill('B-99');
         await page.locator('#expiration_date').fill('2028-06-30');
         await page.locator('#notes').fill('Rejection test note');
+        await page.locator('#supplier').fill('Review test store');
+        await page.locator('#invoice_number').fill('REVIEW-123');
         await page.locator('#receiving_next').click();
+        assert.equal(await page.locator('#receiving_review > p').innerText(), 'Shopping store: Review test store · Receipt: REVIEW-123');
+        assert.match(await page.locator('#receiving_review').innerText(), /Unit cost: ₱4.50 · Batch: B-99 · Expiry: 2028-06-30/);
         assert.match(await page.locator('#receiving_review').innerText(), /B-99/);
         assert.match(await page.locator('#receiving_review').innerText(), /Rejection test note/);
         await page.getByRole('button', {name: 'Edit line 1'}).click();

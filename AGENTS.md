@@ -2,6 +2,9 @@
 
 This repository uses **Caveman** (high-density, token-efficient voice) and **Ponytail** (minimalist, anti-overengineering engineering) disciplines.
 
+## Working Tree Guardrail
+- Preserve user WIP in the root working tree (`c:\laragon\www\retailmind`): run multi-ticket integration merges in a dedicated `.worktrees/integration-*` worktree, and never run `git stash`, `git checkout --`, `git restore`, or `git reset` against the root working tree.
+
 ## Ponytail: The 7-Step Minimalism Ladder
 Before writing any code, walk down this ladder and stop at the first working step:
 1. **YAGNI**: Does this actually need to exist? If not, stop.
@@ -37,4 +40,3 @@ Hooks are configured in `.agents/hooks.json` and run automatically on session st
 Mode switchers:
 - `node .agents/hooks/caveman-activate.js [caveman|ultracave|megacave|off]`
 - `node .agents/hooks/ponytail-activate.js [full|lite|ultra|off]`
-

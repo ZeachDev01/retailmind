@@ -6,7 +6,6 @@
 }
 .replenishment-page .topbar { align-items: flex-start; }
 .replenishment-page .topbar h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); letter-spacing: -.025em; }
-.replenishment-page .page-subtitle { margin-top: .5rem; color: var(--muted); }
 .replenishment-page .queue-print, .replenishment-page .queue-recalculate, .replenishment-page .alert .btn { min-height: 44px; background: var(--card-bg); border: 1px solid var(--border); gap: .5rem; }
 .queue-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.15fr); gap: 1rem; margin-bottom: 1.5rem; }
 .queue-stat { display: flex; align-items: center; gap: 1.25rem; min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg); }
@@ -26,14 +25,12 @@
 .queue-guidance { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.5rem; padding: .75rem 1rem; border-radius: 10px; background: var(--queue-info-surface); color: var(--text); font-size: 1rem; }
 .queue-guidance details { flex: 1; min-width: 0; }
 .queue-guidance summary { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; min-height: 44px; cursor: pointer; }
-.queue-guidance summary span { color: var(--muted); }
 .queue-guidance p { max-width: 75ch; margin-top: .5rem; line-height: 1.5; }
 .queue-panel { min-width: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg); overflow: hidden; }
 .queue-panel-heading, .queue-panel-footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; }
 .queue-panel-heading { border-bottom: 1px solid var(--border); }
 .queue-panel-heading > div { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .queue-panel-heading h2 { font-size: 1.05rem; letter-spacing: -.02em; }
-.queue-panel-heading > span { font-size: .75rem; }
 .queue-count { background: var(--surface-soft); color: var(--muted); border-radius: 6px; padding: .2rem .5rem; font-size: .75rem; }
 .queue-filters { display: grid; grid-template-columns: minmax(12rem, 3fr) minmax(9rem, 1.1fr) minmax(10rem, 1.1fr); gap: .75rem; padding: 1.25rem 1.5rem .75rem; }
 .queue-filters label { display: flex; flex-direction: column; gap: .4rem; color: var(--muted); font-size: .75rem; font-weight: 600; min-width: 0; }
@@ -70,12 +67,11 @@
 .queue-reason { font-size: .85rem; }
 .queue-receive { display: inline-flex; justify-content: center; align-items: center; gap: .4rem; min-height: 44px; padding: .35rem .65rem; white-space: nowrap; font-size: .85rem; }
 .queue-receive.btn-secondary { background: var(--card-bg); border: 1px solid var(--border); }
-.queue-panel-footer, .queue-page-footer { color: var(--muted); font-size: .75rem; }
+.queue-panel-footer { color: var(--muted); font-size: .75rem; }
 .queue-pagination { display: flex; gap: .25rem; }
 .queue-pagination button, #queue-page-size { min-height: 36px; padding: .35rem .6rem; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); color: var(--text); }
 .queue-pagination button[aria-current="page"] { border-color: var(--primary); color: var(--primary); font-weight: 700; }
 .queue-pagination button:disabled { opacity: .5; cursor: not-allowed; }
-.queue-page-footer { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; }
 .queue-panel > .empty-state, .queue-panel > p { padding: 1.5rem; }
 .queue-panel > .queue-help { padding: 0 1.5rem .75rem; }
 .queue-panel :focus-visible, .queue-guidance :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
@@ -92,10 +88,6 @@ html[data-theme="dark"] .queue-panel ::selection { background: var(--primary); c
     .queue-stat { gap: .75rem; padding: 1rem; }
     .queue-filters { grid-template-columns: 1fr; padding: 1rem; }
     .queue-panel-heading, .queue-panel-footer { padding: 1rem; flex-wrap: wrap; }
-    .queue-panel-footer > span:last-child { display: none; }
-    .queue-panel-heading > span { display: none; }
-    .queue-page-footer { flex-direction: column; }
-    .queue-guidance summary span { display: block; width: 100%; }
 }
 @media print {
     .queue-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
