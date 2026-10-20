@@ -451,6 +451,14 @@ $assert($storedCart['1:piece']['selling_form'] === 'piece', 'Preserved selling_f
 $assert((float)$storedCart['1:piece']['price'] === 10.00, 'Preserved piece price 10.00');
 $assert((float)$row['total_amount'] === 130.00, 'Stored total amount is 130.00');
 
+// Test 5.1b: A tampered request price cannot set the held total; the server-reviewed price does.
+$tamperedHold = $heldService->hold(1, 'cashier', [
+    '1:pack' => ['product_id' => 1, 'selling_form' => 'pack', 'qty' => 1, 'price' => 1.00, 'name' => 'Chocolate Biscuit (Pack)'],
+], 'Customer Tampered');
+$tamperedRow = $pdo->query("SELECT item_count, total_amount FROM held_sales WHERE held_sale_id = {$tamperedHold['held_sale_id']}")->fetch(PDO::FETCH_ASSOC);
+$assert((float)$tamperedRow['total_amount'] === 100.00, 'Held total uses the reviewed server pack price (100.00), not the requested 1.00');
+$assert((int)$tamperedRow['item_count'] === 1, 'Held item count still follows the requested quantity');
+
 // Test 5.2: Resume held sale preserves forms and lines
 $resumed = $heldService->resume(1, 'cashier', $heldSaleId);
 $assert(count($resumed['cart']) === 2, 'Resumed cart has 2 distinct lines');
@@ -463,6 +471,15 @@ $review = $heldService->reviewCart($resumed['cart']);
 $assert((float)$review['cart']['1:pack']['price'] === 110.00, 'Review proposal updated to new pack price (110.00)');
 $changesText = implode(' ', $review['changes']);
 $assert(str_contains($changesText, 'price changed from PHP 100.00 to PHP 110.00'), 'Reported exact old and new pack price change');
+
+// Test 5.3b: A pack-contents (pack_size) edit is surfaced, not silently reinterpreted.
+$pdo->exec("UPDATE products SET pack_size = 24 WHERE product_id = 1");
+$reviewResized = $heldService->reviewCart($resumed['cart']);
+$resizedChanges = implode(' ', $reviewResized['changes']);
+$assert(str_contains($resizedChanges, 'pack contents changed from 12 to 24'), 'Reported pack contents change from 12 to 24 pieces');
+$assert((int)$reviewResized['requested_cart']['1:pack']['pack_size'] === 12, 'Held line keeps its historical pack_size 12 instead of being overwritten');
+$assert((int)$reviewResized['requested_cart']['1:pack']['server_price'] === 110, 'Requested line carries the reviewed server price');
+$pdo->exec("UPDATE products SET pack_size = 12 WHERE product_id = 1");
 
 // Test 5.4: Held sale review detects pack configuration removal
 $pdo->exec("UPDATE products SET pack_size = NULL, pack_barcode = NULL, pack_price = NULL WHERE product_id = 1");

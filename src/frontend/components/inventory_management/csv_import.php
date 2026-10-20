@@ -218,6 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             $message = "Product import completed: $successful successful, $failed failed";
         } elseif ($import_type === 'inventory') {
             // Expected columns: sku, quantity_to_add
+            $batchHasFormCols = isset(\SalesWorkflowService::getTableColumns($pdo, 'product_batches')['loose_quantity']);
             while (($row = fgetcsv($fp)) !== false) {
                 if (empty(array_filter($row))) continue;
 
@@ -275,11 +276,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
                     if ($qty > 0) {
                         $nowManila = (new DateTimeImmutable('now', new DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
-                        $batch_ins = $pdo->prepare(
-                            "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
-                             VALUES (?, ?, ?, NULL, ?)"
-                        );
-                        App\Store\StoreWriteGate::execute($pdo, $batch_ins, [$product_id, $qty, $qty, $nowManila]);
+                        if ($batchHasFormCols) {
+                            // An import cannot establish that packs are still sealed,
+                            // so the added stock is recorded entirely as loose pieces.
+                            $batch_ins = $pdo->prepare(
+                                "INSERT INTO product_batches (product_id, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date, date_received)
+                                 VALUES (?, ?, ?, 0, ?, NULL, ?)"
+                            );
+                            App\Store\StoreWriteGate::execute($pdo, $batch_ins, [$product_id, $qty, $qty, $qty, $nowManila]);
+                        } else {
+                            $batch_ins = $pdo->prepare(
+                                "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
+                                 VALUES (?, ?, ?, NULL, ?)"
+                            );
+                            App\Store\StoreWriteGate::execute($pdo, $batch_ins, [$product_id, $qty, $qty, $nowManila]);
+                        }
                     }
 
                     // Log stock movement

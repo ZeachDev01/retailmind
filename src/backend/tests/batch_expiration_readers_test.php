@@ -97,6 +97,9 @@ $pdo->exec("CREATE TABLE products (
     supplier TEXT NULL,
     preferred_supplier TEXT NULL,
     expiration_date TEXT NULL,
+    pack_size INTEGER NULL,
+    pack_barcode TEXT NULL,
+    pack_price REAL NULL,
     status TEXT NOT NULL DEFAULT 'active',
     created_by INTEGER NULL
 )");
@@ -113,6 +116,8 @@ $pdo->exec("CREATE TABLE product_batches (
     batch_number TEXT NULL,
     quantity INTEGER NOT NULL,
     remaining_quantity INTEGER NOT NULL,
+    sealed_quantity INTEGER NOT NULL DEFAULT 0,
+    loose_quantity INTEGER NOT NULL DEFAULT 0,
     expiration_date TEXT NULL,
     date_received TEXT NOT NULL,
     supplier TEXT NULL,
@@ -159,6 +164,9 @@ $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (4, 0
 $pdo->prepare("INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity, expiration_date, date_received)
                VALUES (4, 'B-EMPTY', 10, 0, ?, ?)")->execute([$nextMonthManila, $todayManila]);
 
+// Migration 202610200001 backfill: legacy stock reads as loose in the stock-form model.
+$pdo->exec("UPDATE product_batches SET loose_quantity = remaining_quantity WHERE sealed_quantity = 0 AND loose_quantity = 0");
+
 
 // =========================================================================
 // 1. ProductService::getProductsForManagement() tests
@@ -194,6 +202,10 @@ $assert($managedById[4]['next_expiration_date'] === null,
 // 2. Expiry Reports (report_generation.php) tests
 // =========================================================================
 // Evaluate report functions directly from report_generation.php source
+// The evaled source needs the role accessor that includes/auth.php would define.
+if (!function_exists('current_role')) {
+    function current_role(): ?string { return 'admin'; }
+}
 if (!function_exists('run_report')) {
     $reportSource = file_get_contents(__DIR__ . '/../../frontend/components/report/report_generation.php');
     $endPos = strpos($reportSource, '$selectedReport =');

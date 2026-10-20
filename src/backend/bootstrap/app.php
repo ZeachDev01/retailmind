@@ -84,7 +84,9 @@ set_exception_handler(static function (Throwable $exception): void {
 
     if (PHP_SAPI === 'cli') {
         fwrite(STDERR, 'Unhandled application exception: ' . $exception->getMessage() . PHP_EOL);
-        return;
+        // CLI/test callers must observe a fatal through a nonzero exit code;
+        // logging and returning would silently truncate a suite.
+        exit(1);
     }
 
     // A Database Backup capture is pausing Store writes (#69). That is a

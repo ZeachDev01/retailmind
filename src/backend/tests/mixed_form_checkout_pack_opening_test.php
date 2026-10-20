@@ -620,9 +620,28 @@ $pieceHtml = ob_get_clean();
 $assert(str_contains($pieceHtml, 'Selling Form: Piece'), 'Receipt display renders Selling Form: Piece');
 
 // =========================================================================
-// SECTION 10: Structured Concurrency Exception
+// SECTION 10: Guarded depletion conflict mapping (SQLite simulation)
 // =========================================================================
-echo "\n--- Section 10: Structured Concurrency Exception ---\n";
+// Real last-sealed-pack contention needs two database connections; SQLite has
+// no row locks, so a second connection here would prove nothing. The check
+// below is deliberately a unit test of the mapping only: a zero-row guarded
+// depletion must surface as the structured StockConflictException.
+//
+// The real serialization this relies on already exists and is exercised by the
+// MySQL integration suites (opt in with RUN_CHECKOUT_DB_TESTS=1 /
+// RUN_REFUND_DB_TESTS=1; they create their own disposable database):
+//   * SalesWorkflowService::lockProductForCheckout() reads inventory FOR UPDATE,
+//     so two checkouts for one product serialize inside their transactions.
+//   * depleteBatchAllocation() updates with `sealed_quantity >= ?` and
+//     `remaining_quantity >= ?` guards; a loser changes zero rows and throws
+//     StockConflictException, rolling the whole sale back.
+//   * checkout() retries only fast-fail gate/deadlock/lock-timeout races and
+//     never retries a StockConflictException.
+// Proving "only one of two competing final-pack checkouts succeeds" therefore
+// needs real MySQL connections: pack_last_pack_concurrency_integration.php does
+// exactly that inside a disposable database (opt in with RUN_DB_TESTS=1). This
+// SQLite block stays a mapping-only unit test and never claims to be that proof.
+echo "\n--- Section 10: Guarded depletion conflict mapping (SQLite simulation) ---\n";
 // Product 7
 $pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barcode, pack_price, product_name, unit_price, cost_price)
             VALUES (7, 'RACE-01', 'RACE-PC', 12, 'RACE-PK', 100.00, 'Race Biscuit', 10.00, 6.00)");

@@ -396,12 +396,22 @@ final class DailySalesTrendSeeder
             ]);
             $receivingId = (int)$this->pdo->lastInsertId();
 
-            $batch = $this->pdo->prepare(
-                "INSERT INTO product_batches
-                    (product_id, receiving_id, batch_number, quantity, remaining_quantity, expiration_date, date_received, supplier)
-                 VALUES (?, ?, ?, ?, ?, NULL, ?, 'RetailMind Seed Supplier')"
-            );
-            $batch->execute([$productId, $receivingId, $batchNumber, $quantity, $quantity, $receivedAt->format('Y-m-d H:i:s')]);
+            if (Schema::columnExists($this->pdo, 'product_batches', 'loose_quantity')) {
+                // Simulated opening stock is an unverified total: record it as loose.
+                $batch = $this->pdo->prepare(
+                    "INSERT INTO product_batches
+                        (product_id, receiving_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date, date_received, supplier)
+                     VALUES (?, ?, ?, ?, ?, 0, ?, NULL, ?, 'RetailMind Seed Supplier')"
+                );
+                $batch->execute([$productId, $receivingId, $batchNumber, $quantity, $quantity, $quantity, $receivedAt->format('Y-m-d H:i:s')]);
+            } else {
+                $batch = $this->pdo->prepare(
+                    "INSERT INTO product_batches
+                        (product_id, receiving_id, batch_number, quantity, remaining_quantity, expiration_date, date_received, supplier)
+                     VALUES (?, ?, ?, ?, ?, NULL, ?, 'RetailMind Seed Supplier')"
+                );
+                $batch->execute([$productId, $receivingId, $batchNumber, $quantity, $quantity, $receivedAt->format('Y-m-d H:i:s')]);
+            }
             $batches[$productId] = ['batch_id' => (int)$this->pdo->lastInsertId(), 'remaining' => $quantity];
 
             $this->pdo->prepare(
@@ -438,9 +448,10 @@ final class DailySalesTrendSeeder
         $allocationInsert = $this->pdo->prepare(
             'INSERT INTO sale_item_batches (sale_item_id, batch_id, quantity) VALUES (?, ?, ?)'
         );
-        $batchUpdate = $this->pdo->prepare(
-            'UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ? AND remaining_quantity >= ?'
-        );
+        $hasForms = Schema::columnExists($this->pdo, 'product_batches', 'loose_quantity');
+        $batchUpdate = $this->pdo->prepare($hasForms
+            ? 'UPDATE product_batches SET remaining_quantity = remaining_quantity - ?, loose_quantity = loose_quantity - ? WHERE batch_id = ? AND remaining_quantity >= ? AND loose_quantity >= ?'
+            : 'UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ? AND remaining_quantity >= ?');
         $inventoryUpdate = $this->pdo->prepare(
             'UPDATE inventory SET quantity_on_hand = quantity_on_hand - ? WHERE product_id = ? AND quantity_on_hand >= ?'
         );
@@ -504,7 +515,11 @@ final class DailySalesTrendSeeder
                     $saleItemId = (int)$this->pdo->lastInsertId();
                     $itemCount++;
 
-                    $batchUpdate->execute([$quantity, $batches[$productId]['batch_id'], $quantity]);
+                    if ($hasForms) {
+                        $batchUpdate->execute([$quantity, $quantity, $batches[$productId]['batch_id'], $quantity, $quantity]);
+                    } else {
+                        $batchUpdate->execute([$quantity, $batches[$productId]['batch_id'], $quantity]);
+                    }
                     $inventoryUpdate->execute([$quantity, $productId, $quantity]);
                     if ($batchUpdate->rowCount() !== 1 || $inventoryUpdate->rowCount() !== 1) {
                         throw new RuntimeException("Insufficient simulation stock for product #{$productId}.");

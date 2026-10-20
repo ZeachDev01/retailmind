@@ -60,7 +60,9 @@ try {
     $pdo->exec('INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash) VALUES (1, 1, 1, 100)');
     $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, branch_id) VALUES (1, 'CHECKOUT-TEST', 'CHECKOUT-TEST', 'Fixture Item', 25, 10, 1)");
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 10)');
-    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, date_received) VALUES (1, 1, 'TEST-BATCH', 10, 10, NOW())");
+    // Stock forms: a piece-only product holds its stock as loose pieces, so a
+    // fresh-schema batch with zero sealed/loose balances is not sellable.
+    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, date_received) VALUES (1, 1, 'TEST-BATCH', 10, 10, 0, 10, NOW())");
     $pdo->exec("INSERT INTO held_sales (held_sale_id, cashier_id, shift_id, reference_no, cart_json, item_count, total_amount, status) VALUES (1, 1, 1, 'TEST-HELD', '[]', 2, 50, 'resumed')");
     App\Store\StoreWriteGate::begin($pdo); $pdo->commit();
 

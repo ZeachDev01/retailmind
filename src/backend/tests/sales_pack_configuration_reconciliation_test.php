@@ -741,6 +741,129 @@ $assert((int)$mvt['moved_by'] === 1, 'Stock movement moved_by is user 1');
 $act = $pdo->query("SELECT * FROM activity_log WHERE user_id = 1 AND action = 'Physical stock reconciliation' ORDER BY log_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 $assert($act !== false, 'Activity log recorded for physical stock reconciliation');
 
+// 18. Blank starting_loose on a pack product means zero, never the auto-computed total.
+echo "Testing blank starting loose with starting packs...\n";
+$blankLooseProdId = $productService->createProduct([
+    'barcode' => 'BLANK-LOOSE-PC',
+    'product_name' => 'Blank Loose Biscuit',
+    'unit_price' => 10.00,
+    'pack_size' => 6,
+    'pack_barcode' => 'BLANK-LOOSE-PK',
+    'pack_price' => 50.00,
+    'starting_packs' => 2,
+    'initial_stock_quantity' => 12,
+], 1);
+$blankLooseInv = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$blankLooseProdId}")->fetchColumn();
+$blankLooseBatch = $pdo->query("SELECT sealed_quantity, loose_quantity, remaining_quantity FROM product_batches WHERE product_id = {$blankLooseProdId}")->fetch(PDO::FETCH_ASSOC);
+$assert($blankLooseInv === 12, 'Blank starting loose with 2 packs of 6 gives exactly 12 Base Units, not 24');
+$assert((int)$blankLooseBatch['sealed_quantity'] === 2 && (int)$blankLooseBatch['loose_quantity'] === 0 && (int)$blankLooseBatch['remaining_quantity'] === 12, 'Blank starting loose records 2 sealed packs and 0 loose');
+
+// 19. Reconciliation must allocate the whole asserted sealed count across batches or refuse atomically.
+echo "Testing multi-batch sealed reconciliation...\n";
+$multiReconProdId = $productService->createProduct([
+    'barcode' => 'MULTI-RECON-PC',
+    'product_name' => 'Multi Batch Biscuit',
+    'unit_price' => 10.00,
+    'pack_size' => 12,
+    'pack_barcode' => 'MULTI-RECON-PK',
+    'pack_price' => 100.00,
+    'starting_loose' => 6,
+    'expiration_date' => '2027-01-01',
+], 1);
+$pdo->exec("INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
+    VALUES ({$multiReconProdId}, 'MULTI-B2', 6, 6, 0, 6, '2027-06-01')");
+$pdo->exec("UPDATE inventory SET quantity_on_hand = 12 WHERE product_id = {$multiReconProdId}");
+
+try {
+    $productService->reconcilePhysicalStock($multiReconProdId, 1, 0, 'Verified annual physical inventory count', 1);
+    $assert(false, 'Reconciliation should reject a sealed pack that cannot be allocated without fragmenting batches');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), 'cannot be allocated'), 'Reconciliation rejects an unallocatable sealed count: ' . $e->getMessage());
+}
+$multiBatches = $pdo->query("SELECT remaining_quantity, sealed_quantity, loose_quantity, expiration_date FROM product_batches WHERE product_id = {$multiReconProdId} ORDER BY batch_id")->fetchAll(PDO::FETCH_ASSOC);
+$assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$multiReconProdId}")->fetchColumn() === 12, 'Rejected reconciliation leaves inventory unchanged');
+$assert(
+    count($multiBatches) === 2
+        && (int)$multiBatches[0]['remaining_quantity'] === 6 && (int)$multiBatches[0]['sealed_quantity'] === 0 && (int)$multiBatches[0]['loose_quantity'] === 6
+        && (int)$multiBatches[1]['remaining_quantity'] === 6 && (int)$multiBatches[1]['sealed_quantity'] === 0 && (int)$multiBatches[1]['loose_quantity'] === 6,
+    'Rejected reconciliation leaves both batches and their forms unchanged'
+);
+
+// A valid count preserves existing sealed placement and each batch's provenance.
+$multiBatchIds = $pdo->query("SELECT batch_id FROM product_batches WHERE product_id = {$multiReconProdId} ORDER BY batch_id")->fetchAll(PDO::FETCH_COLUMN);
+$pdo->exec("UPDATE product_batches SET remaining_quantity = 12, sealed_quantity = 1, loose_quantity = 0, batch_number = 'MULTI-B1' WHERE batch_id = " . (int)$multiBatchIds[0]);
+$pdo->exec("UPDATE product_batches SET remaining_quantity = 12, sealed_quantity = 0, loose_quantity = 12, batch_number = 'MULTI-B2' WHERE batch_id = " . (int)$multiBatchIds[1]);
+$pdo->exec("UPDATE inventory SET quantity_on_hand = 24 WHERE product_id = {$multiReconProdId}");
+$productService->reconcilePhysicalStock($multiReconProdId, 2, 0, 'Verified annual physical inventory count', 1);
+$allocated = $pdo->query("SELECT batch_number, remaining_quantity, sealed_quantity, loose_quantity, expiration_date FROM product_batches WHERE product_id = {$multiReconProdId} ORDER BY batch_number")->fetchAll(PDO::FETCH_ASSOC);
+$assert(
+    count($allocated) === 2
+        && $allocated[0]['batch_number'] === 'MULTI-B1' && (int)$allocated[0]['sealed_quantity'] === 1 && (int)$allocated[0]['loose_quantity'] === 0
+        && $allocated[1]['batch_number'] === 'MULTI-B2' && (int)$allocated[1]['sealed_quantity'] === 1 && (int)$allocated[1]['loose_quantity'] === 0
+        && (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$multiReconProdId}")->fetchColumn() === 24,
+    'Reconciliation allocates both sealed packs across batches and preserves base-unit totals and expirations'
+);
+$assert($allocated[0]['expiration_date'] === '2027-01-01' && $allocated[1]['expiration_date'] === '2027-06-01', 'Reconciliation keeps each batch expiration date');
+
+// 20. Emergency stock adjustments never reinterpret sealed packs as loose pieces.
+echo "Testing form-aware stock adjustments...\n";
+$adjustProdId = $productService->createProduct([
+    'barcode' => 'ADJUST-FORM-PC',
+    'product_name' => 'Adjustable Pack Biscuit',
+    'unit_price' => 10.00,
+    'pack_size' => 6,
+    'pack_barcode' => 'ADJUST-FORM-PK',
+    'pack_price' => 50.00,
+    'starting_packs' => 2,
+    'starting_loose' => 3,
+], 1);
+$formBefore = $pdo->query("SELECT sealed_quantity, loose_quantity, remaining_quantity FROM product_batches WHERE product_id = {$adjustProdId}")->fetch(PDO::FETCH_ASSOC);
+$assert((int)$formBefore['sealed_quantity'] === 2 && (int)$formBefore['loose_quantity'] === 3 && (int)$formBefore['remaining_quantity'] === 15,
+    'Adjustment fixture starts at 2 sealed packs + 3 loose pieces (15 Base Units)');
+
+$productService->adjustStock([
+    'product_id' => $adjustProdId,
+    'qty_change' => 5,
+    'adjustment_reason' => 'Found extra loose pieces during aisle inspection',
+], 1);
+$adjustInv = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$adjustProdId}")->fetchColumn();
+$adjustNewBatch = $pdo->query("SELECT sealed_quantity, loose_quantity, remaining_quantity FROM product_batches WHERE product_id = {$adjustProdId} AND batch_number IS NULL ORDER BY batch_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$adjustSealed = (int)$pdo->query("SELECT SUM(sealed_quantity) FROM product_batches WHERE product_id = {$adjustProdId}")->fetchColumn();
+$adjustLoose = (int)$pdo->query("SELECT SUM(loose_quantity) FROM product_batches WHERE product_id = {$adjustProdId}")->fetchColumn();
+$assert($adjustInv === 20 && (int)$adjustNewBatch['sealed_quantity'] === 0 && (int)$adjustNewBatch['loose_quantity'] === 5,
+    'Positive adjustment adds 5 Base Units as loose pieces only (sealed 0)');
+$assert($adjustSealed === 2 && $adjustLoose === 8 && $adjustSealed * 6 + $adjustLoose === $adjustInv,
+    'Positive adjustment preserves sealed packs and the sealed/loose invariant (2 x 6 + 8 = 20)');
+
+$productService->adjustStock([
+    'product_id' => $adjustProdId,
+    'qty_change' => -4,
+    'adjustment_reason' => 'Loose pieces damaged while restocking the shelf',
+], 1);
+$adjustInv = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$adjustProdId}")->fetchColumn();
+$adjustSealed = (int)$pdo->query("SELECT SUM(sealed_quantity) FROM product_batches WHERE product_id = {$adjustProdId}")->fetchColumn();
+$adjustLoose = (int)$pdo->query("SELECT SUM(loose_quantity) FROM product_batches WHERE product_id = {$adjustProdId}")->fetchColumn();
+$assert($adjustInv === 16 && $adjustSealed === 2 && $adjustLoose === 4 && $adjustSealed * 6 + $adjustLoose === $adjustInv,
+    'Negative adjustment removes 4 loose pieces, leaves 2 sealed packs untouched, and keeps the invariant');
+
+$beforeRefusal = $pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$adjustProdId}")->fetchColumn();
+$beforeRefusalBatches = $pdo->query("SELECT batch_id, remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE product_id = {$adjustProdId} ORDER BY batch_id")->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $productService->adjustStock([
+        'product_id' => $adjustProdId,
+        'qty_change' => -5,
+        'adjustment_reason' => 'Attempt to consume an unopened sealed pack',
+    ], 1);
+    $assert(false, 'Adjustment beyond available loose stock should be refused instead of opening sealed packs');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), 'loose') && (str_contains($e->getMessage(), 'Stock Issue') || str_contains($e->getMessage(), 'physical count')),
+        'Adjustment beyond loose stock is refused with operator guidance: ' . $e->getMessage());
+}
+$afterRefusalBatches = $pdo->query("SELECT batch_id, remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE product_id = {$adjustProdId} ORDER BY batch_id")->fetchAll(PDO::FETCH_ASSOC);
+$assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$adjustProdId}")->fetchColumn() === (int)$beforeRefusal
+    && $afterRefusalBatches === $beforeRefusalBatches,
+    'Refused adjustment writes nothing to inventory or batches');
+
 if (!empty($failures)) {
     echo "\nFailed with " . count($failures) . " failure(s):\n";
     foreach ($failures as $f) {

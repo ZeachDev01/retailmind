@@ -265,6 +265,12 @@ class InventoryCountService
             }
             $physicalQty = $hasPack ? ($physicalSealed * $packSize) + $physicalLoose : $physicalLoose;
         } else {
+            if ($hasPack) {
+                // A total cannot prove a sealed pack exists; assuming it is all
+                // loose would reinterpret unopened packs without the operator
+                // saying so. Do not divide by pack size either.
+                throw new RuntimeException('Enter the counted sealed packs and loose pieces separately for this product; a total alone cannot show sealed-pack availability.');
+            }
             $physicalQty = $parseNonNegativeInt($data['physical_quantity'] ?? null, 'Physically counted quantity must be a non-negative whole number.');
             $physicalSealed = 0;
             $physicalLoose = $physicalQty;
@@ -487,6 +493,15 @@ class InventoryCountService
 
             $productId = (int)$count['product_id'];
             $differenceQty = (int)$count['difference_qty'];
+            $diffSealedTotal = (int)($count['difference_sealed_qty'] ?? 0);
+            $diffLooseTotal = (int)($count['difference_loose_qty'] ?? 0);
+
+            $hasPack = false;
+            if ($this->hasColumn('products', 'pack_size')) {
+                $packStmt = $this->pdo->prepare('SELECT pack_size FROM products WHERE product_id = ?');
+                $packStmt->execute([$productId]);
+                $hasPack = (int)$packStmt->fetchColumn() > 1;
+            }
 
             $inventoryStmt = $this->pdo->prepare(
                 "SELECT quantity_on_hand
@@ -595,7 +610,9 @@ class InventoryCountService
                     $physicalBatchQty = (int)$countBatch['physical_quantity'];
                     $physicalSealed = (int)($countBatch['physical_sealed_quantity'] ?? 0);
                     $physicalLoose = (int)($countBatch['physical_loose_quantity'] ?? $physicalBatchQty);
-                    if ((int)$countBatch['difference_qty'] !== 0) {
+                    if ((int)$countBatch['difference_qty'] !== 0
+                        || (int)($countBatch['difference_sealed_qty'] ?? 0) !== 0
+                        || (int)($countBatch['difference_loose_qty'] ?? 0) !== 0) {
                         $hasBatchAdjustments = true;
                     }
 
@@ -669,7 +686,15 @@ class InventoryCountService
                     } else {
                         $batchUpdateStmt->execute([$physicalQty, $targetBatchId]);
                     }
+                } elseif (count($activeBatches) > 1 && $hasPack) {
+                    // For packs, merging several dated batches into one undated
+                    // COUNT batch would discard their expiration and supplier
+                    // provenance while also losing the sealed/loose placement.
+                    // Require the operator to count each batch instead.
+                    throw new RuntimeException('This product has multiple active batches. Record the count against each batch so its expiration and supplier details are preserved.');
                 } else {
+                    // Piece-only products keep the previous behaviour: merge the
+                    // product-level count into one undated COUNT batch.
                     foreach ($activeBatches as $ab) {
                         if ($hasBatchFormCols) {
                             $batchUpdateStmt->execute([0, 0, 0, (int)$ab['batch_id']]);
@@ -707,7 +732,12 @@ class InventoryCountService
                  WHERE product_id = ?"
             )->execute([(int)$count['physical_quantity'], $productId]);
 
-            if ($differenceQty !== 0 || !empty($hasBatchAdjustments)) {
+            // A same-total correction that only moves pieces between sealed and
+            // loose is still a stock change worth attributing; change_qty stays 0
+            // and the count's discrepancy reason explains it. 'adjustment' is the
+            // only matching value in the stock_movements.reason enum.
+            if ($differenceQty !== 0 || !empty($hasBatchAdjustments)
+                || $diffSealedTotal !== 0 || $diffLooseTotal !== 0) {
                 $this->pdo->prepare(
                     "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
                      VALUES (?, ?, 'adjustment', ?)"

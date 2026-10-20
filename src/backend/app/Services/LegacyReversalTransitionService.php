@@ -10,6 +10,7 @@ use PDOException;
 use Throwable;
 
 require_once __DIR__ . '/CashierShiftService.php';
+require_once __DIR__ . '/SalesWorkflowService.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../Audit/AuditRecordCategory.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
@@ -147,6 +148,9 @@ final class LegacyReversalTransitionService
             $id = $item['sale_item_id']; $q = (int)$item['quantity'];
             if (!isset($net[$id]) || isset($seen[$id]) || $q <= 0) throw new DomainException('Invalid or duplicate historical return line.');
             $seen[$id]=true; [$line,$lineNet] = $net[$id];
+            if (($line['selling_form'] ?? 'piece') === 'pack') {
+                throw new DomainException('Use the authorized Cash Refund workflow for Sales Packs; this legacy reversal cannot reconstruct their stock form.');
+            }
             if ($item['product_id'] != $line['product_id'] || (float)$item['unit_price'] != (float)$line['unit_price'] || (int)round((float)$item['subtotal']*100) !== (int)round((float)$line['unit_price']*$q*100)) throw new DomainException('Historical return does not match the original sale.');
             $stmt = $this->pdo->prepare("SELECT COALESCE(SUM(i.quantity),0) FROM sale_reversal_items i JOIN sale_reversals r ON r.reversal_id=i.reversal_id WHERE i.sale_item_id=? AND r.status='approved'");
             $stmt->execute([$id]); $previous=(int)$stmt->fetchColumn();
@@ -185,6 +189,7 @@ final class LegacyReversalTransitionService
         $stmt=$this->pdo->prepare('SELECT a.quantity AS allocated_quantity,b.* FROM sale_item_batches a LEFT JOIN product_batches b ON b.batch_id=a.batch_id WHERE a.sale_item_id=? ORDER BY a.sale_item_batch_id FOR UPDATE');
         $stmt->execute([$line['sale_item_id']]); $rows=$stmt->fetchAll();
         if (array_sum(array_column($rows,'allocated_quantity'))!=(int)$line['quantity']) throw new DomainException('Missing or inconsistent batch allocation evidence.');
+        $hasForms = isset(\SalesWorkflowService::getTableColumns($this->pdo, 'product_batches')['loose_quantity']);
         $seenBatches = [];
         foreach ($rows as $batch) {
             if (isset($seenBatches[$batch['batch_id']])) throw new DomainException('Duplicate historical batch allocation: leave pending for investigation.');
@@ -194,7 +199,14 @@ final class LegacyReversalTransitionService
             $skip=min($previous,$allocated); $previous-=$skip;
             $restore=min($quantity,$allocated-$skip);
             if (!$batch['batch_id'] || $batch['product_id'] != $line['product_id'] || (int)$batch['remaining_quantity'] < 0 || (int)$batch['remaining_quantity']+$restore>(int)$batch['quantity']) throw new DomainException('Batch restoration cannot be reconciled.');
-            if ($restore>0) $this->pdo->prepare('UPDATE product_batches SET remaining_quantity=remaining_quantity+? WHERE batch_id=?')->execute([$restore,$batch['batch_id']]);
+            if ($restore>0) {
+                if (!$hasForms) {
+                    $this->pdo->prepare('UPDATE product_batches SET remaining_quantity=remaining_quantity+? WHERE batch_id=?')->execute([$restore,$batch['batch_id']]);
+                } else {
+                    $this->pdo->prepare('UPDATE product_batches SET remaining_quantity=remaining_quantity+?, loose_quantity=loose_quantity+? WHERE batch_id=?')
+                        ->execute([$restore, $restore, $batch['batch_id']]);
+                }
+            }
             $quantity-=$restore;
         }
         if ($quantity !== 0) throw new DomainException('Incomplete batch restoration evidence.');

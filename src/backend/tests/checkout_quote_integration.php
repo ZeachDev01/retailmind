@@ -54,12 +54,12 @@ try {
     $pdo->exec('INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash) VALUES (1, 1, 1, 100)');
     $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, branch_id) VALUES (1, 'CHECKOUT-TEST', 'CHECKOUT-TEST', 'Fixture Item', 25, 10, 1)");
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 10)');
-    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, date_received) VALUES (1, 1, 'TEST-BATCH', 10, 10, NOW())");
+    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, date_received) VALUES (1, 1, 'TEST-BATCH', 10, 10, 0, 10, NOW())");
     $pdo->exec("INSERT INTO held_sales (held_sale_id, cashier_id, shift_id, reference_no, cart_json, item_count, total_amount, status) VALUES (1, 1, 1, 'TEST-HELD', '[]', 2, 50, 'resumed')");
     App\Store\StoreWriteGate::begin($pdo); $pdo->commit();
 
     $pdo->exec('UPDATE inventory SET quantity_on_hand=100');
-    $pdo->exec('UPDATE product_batches SET remaining_quantity=100, quantity=100');
+    $pdo->exec('UPDATE product_batches SET remaining_quantity=100, loose_quantity=100, quantity=100');
     $pdo->exec("INSERT INTO roles (role_id, role_name) VALUES (2, 'admin'), (3, 'super_admin')");
     $password = password_hash('fixture-secret', PASSWORD_DEFAULT);
     $pdo->prepare("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id) VALUES (3, 'Fixture Administrator', 'approver', ?, 2, 1), (4, 'Fixture Super Administrator', 'technical', ?, 3, 1)")->execute([$password, $password]);
@@ -88,7 +88,7 @@ try {
     $pdo->exec('UPDATE inventory SET quantity_on_hand=99 WHERE product_id=1');
     $refuse(static fn() => $save($quote), 'Review the final quote again');
     $quote = $review();
-    $pdo->exec('UPDATE product_batches SET remaining_quantity=99 WHERE batch_id=1');
+    $pdo->exec('UPDATE product_batches SET remaining_quantity=99, loose_quantity=99 WHERE batch_id=1');
     $refuse(static fn() => $save($quote), 'Review the final quote again');
     $quote = $review();
     $pdo->exec("INSERT INTO promotions (promotion_name, discount_type, discount_value, scope, starts_at, ends_at, created_by) VALUES ('Fixture promotion', 'percentage', 20, 'all', DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 1 DAY), 3)");
