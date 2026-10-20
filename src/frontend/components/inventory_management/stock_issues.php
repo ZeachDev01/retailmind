@@ -78,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$formatIssueQty = [StockIssueService::class, 'formatIssueQuantity'];
 $pending = $stockIssueService->getPendingReports();
 $pendingCount = $stockIssueService->getPendingCount();
 $returned = $stockIssueService->getReturnedReports();
@@ -131,7 +132,26 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                     <p>No pending stock issue reports. Cashier submissions will appear here.</p>
                 <?php else: ?>
                     <?php foreach ($pending as $report): ?>
-                        <?php $short = (int)$report['quantity_on_hand'] < abs((int)$report['adjustment_qty']); ?>
+                        <?php
+                        $productBatches = $stockIssueService->getProductBatches((int)$report['product_id']);
+                        $reportForm = $report['form'] ?? 'piece';
+                        $repQty = (int)($report['reported_qty'] ?? 0) ?: abs((int)$report['adjustment_qty']);
+                        $hasPackConfig = !empty($report['pack_size']) || (!empty($report['product_pack_size']) && (int)$report['product_pack_size'] > 1);
+                        $availSealedSum = 0;
+                        $availLooseSum = 0;
+                        foreach ($productBatches as $pbItem) {
+                            $availSealedSum += (int)($pbItem['sealed_quantity'] ?? 0);
+                            $availLooseSum += (int)($pbItem['loose_quantity'] ?? 0);
+                        }
+                        $short = (int)$report['quantity_on_hand'] < abs((int)$report['adjustment_qty']);
+                        if (!$short && !empty($productBatches)) {
+                            if ($reportForm === 'pack' && $availSealedSum < $repQty) {
+                                $short = true;
+                            } elseif ($reportForm === 'piece' && $hasPackConfig && $availLooseSum < $repQty) {
+                                $short = true;
+                            }
+                        }
+                        ?>
                         <div class="adjustment-card pending">
                             <div class="adjustment-header">
                                 <div>
@@ -142,7 +162,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$report['adjustment_qty']) ?></div>
+                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
                                     <span class="adjustment-status pending">Pending</span>
                                 </div>
                             </div>
@@ -151,7 +171,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                 <strong>Cashier:</strong> <?= htmlspecialchars($report['cashier_name']) ?> |
                                 <strong>Shift:</strong> #<?= (int)$report['shift_id'] ?> |
                                 <strong>Reported:</strong> <?= htmlspecialchars($report['reported_at']) ?>
-                                <br><strong>Available stock:</strong> <?= (int)$report['quantity_on_hand'] ?>
+                                <br><strong>Available stock:</strong> <?= (int)$report['quantity_on_hand'] ?> pcs<?= $hasPackConfig && !empty($productBatches) ? " ({$availSealedSum} sealed pk, {$availLooseSum} loose pcs)" : '' ?>
                                 <?php if ($short): ?>
                                     <strong class="adjustment-status rejected">Insufficient stock — approval will be refused</strong>
                                 <?php endif; ?>
@@ -181,12 +201,11 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </div>
                                 <?php endif; ?>
                                 <?php
-                                $productBatches = $stockIssueService->getProductBatches((int)$report['product_id']);
                                 if (!empty($productBatches)):
-                                    $fefoAllocations = $stockIssueService->recommendBatchAllocation((int)$report['product_id'], abs((int)$report['adjustment_qty']));
+                                    $fefoAllocations = $stockIssueService->recommendBatchAllocation((int)$report['product_id'], $repQty, $reportForm);
                                 ?>
                                     <div class="form-group">
-                                        <label><strong>Batch Allocation</strong> (prefilled via FEFO)</label>
+                                        <label><strong>Batch Allocation</strong> (prefilled via FEFO — deducting in <?= $reportForm === 'pack' ? 'Sealed Packs' : 'Loose Pieces' ?>)</label>
                                         <div class="table-wrap u-mt-1">
                                             <table>
                                                 <thead>
@@ -194,21 +213,31 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                                         <th>Batch</th>
                                                         <th>Expiration</th>
                                                         <th>Remaining</th>
-                                                        <th>Deduct</th>
+                                                        <th>Deduct (<?= $reportForm === 'pack' ? 'Packs' : 'Pieces' ?>)</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     <?php foreach ($productBatches as $pb): ?>
+                                                        <?php
+                                                        $maxDeduct = $reportForm === 'pack'
+                                                            ? (int)($pb['sealed_quantity'] ?? 0)
+                                                            : ($hasPackConfig ? (int)($pb['loose_quantity'] ?? 0) : (int)$pb['remaining_quantity']);
+                                                        ?>
                                                         <tr>
                                                             <td><?= htmlspecialchars($pb['batch_number'] ?? ('#' . $pb['batch_id'])) ?></td>
                                                             <td><?= htmlspecialchars($pb['expiration_date'] ?? 'Not recorded') ?></td>
-                                                            <td><?= (int)$pb['remaining_quantity'] ?></td>
+                                                            <td>
+                                                                <?= (int)$pb['remaining_quantity'] ?> pcs
+                                                                <?php if ($hasPackConfig): ?>
+                                                                    <br><small class="muted"><?= (int)($pb['sealed_quantity'] ?? 0) ?> pk, <?= (int)($pb['loose_quantity'] ?? 0) ?> loose</small>
+                                                                <?php endif; ?>
+                                                            </td>
                                                             <td>
                                                                 <input type="number"
                                                                        name="batches[<?= (int)$pb['batch_id'] ?>]"
                                                                        value="<?= (int)($fefoAllocations[$pb['batch_id']] ?? 0) ?>"
                                                                        min="0"
-                                                                       max="<?= (int)$pb['remaining_quantity'] ?>"
+                                                                       max="<?= $maxDeduct ?>"
                                                                        style="width: 80px;"
                                                                        class="form-control">
                                                             </td>
@@ -253,7 +282,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$report['adjustment_qty']) ?></div>
+                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
                                     <span class="adjustment-status returned">Returned</span>
                                 </div>
                             </div>
@@ -295,7 +324,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                     </span>
                                 </div>
                                 <div class="u-text-right">
-                                    <div class="adjustment-qty">-<?= abs((int)$review['adjustment_qty']) ?></div>
+                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($review)) ?></div>
                                     <span class="adjustment-status <?= htmlspecialchars($review['status']) ?>">
                                         <?= htmlspecialchars(ucfirst($review['status'])) ?>
                                     </span>
@@ -313,7 +342,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                         <strong>Deducted batches:</strong>
                                         <ul class="u-mt-1" style="margin-left: 1.25rem;">
                                             <?php foreach ($reviewBatches as $rb): ?>
-                                                <li>Batch <?= htmlspecialchars($rb['batch_number'] ?? ('#' . $rb['batch_id'])) ?><?= !empty($rb['expiration_date']) ? ' (Exp: ' . htmlspecialchars($rb['expiration_date']) . ')' : '' ?>: -<?= (int)$rb['quantity'] ?></li>
+                                                <li>Batch <?= htmlspecialchars($rb['batch_number'] ?? ('#' . $rb['batch_id'])) ?><?= !empty($rb['expiration_date']) ? ' (Exp: ' . htmlspecialchars($rb['expiration_date']) . ')' : '' ?>: <?= ($rb['form'] ?? 'piece') === 'pack' && (int)($rb['reported_qty'] ?? 0) > 0 ? '-' . (int)$rb['reported_qty'] . ' pack(s) (' . (int)$rb['quantity'] . ' pcs)' : '-' . (int)$rb['quantity'] . ' pc(s)' ?></li>
                                             <?php endforeach; ?>
                                         </ul>
                                     </div>

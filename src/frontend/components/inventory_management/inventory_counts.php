@@ -246,6 +246,17 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             </div>
                         </div>
 
+                        <div id="top_level_pack_counts" style="display:none; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="physical_sealed_quantity">Sealed Packs</label>
+                                <input type="number" name="physical_sealed_quantity" id="physical_sealed_quantity" min="0" disabled <?= $canMutateInventory ? '' : 'readonly' ?>>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="physical_loose_quantity">Loose Pieces</label>
+                                <input type="number" name="physical_loose_quantity" id="physical_loose_quantity" min="0" disabled <?= $canMutateInventory ? '' : 'readonly' ?>>
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <label for="physical_quantity">Physically Counted Quantity</label>
                             <input type="number" name="physical_quantity" id="physical_quantity" min="0" required <?= $canMutateInventory ? '' : 'readonly' ?>>
@@ -321,9 +332,18 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                                 <strong><?= htmlspecialchars($count['sku']) ?></strong>
                                                 <br><small class="muted"><?= htmlspecialchars($count['product_name']) ?></small>
                                             </td>
-                                            <td><?= (int)$count['system_quantity'] ?></td>
+                                            <?php $hasCountPack = !empty($count['product_pack_size']) && (int)$count['product_pack_size'] > 1; ?>
+                                            <td>
+                                                <?= (int)$count['system_quantity'] ?>
+                                                <?php if ($hasCountPack && array_key_exists('system_sealed_quantity', $count)): ?>
+                                                    <br><small class="muted"><?= (int)$count['system_sealed_quantity'] ?> pk, <?= (int)$count['system_loose_quantity'] ?> loose</small>
+                                                <?php endif; ?>
+                                            </td>
                                             <td>
                                                 <?= (int)$count['physical_quantity'] ?>
+                                                <?php if ($hasCountPack && array_key_exists('physical_sealed_quantity', $count)): ?>
+                                                    <br><small class="muted"><?= (int)$count['physical_sealed_quantity'] ?> pk, <?= (int)$count['physical_loose_quantity'] ?> loose</small>
+                                                <?php endif; ?>
                                                 <?php if (!empty($count['batch_count'])): ?>
                                                     <br><button type="button" class="btn btn-small btn-secondary btn-view-batches" data-count-id="<?= (int)$count['count_id'] ?>" style="margin-top: 4px; padding: 2px 6px; font-size: 11px;">
                                                         <?= (int)$count['batch_count'] ?> batch<?= (int)$count['batch_count'] === 1 ? '' : 'es' ?>
@@ -436,6 +456,23 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             fetchBatchCoverage(productSelect.value);
         });
         physicalInput.addEventListener('input', updatePreview);
+        const topLevelPackWrap = document.getElementById('top_level_pack_counts');
+        const topLevelSealedInput = document.getElementById('physical_sealed_quantity');
+        const topLevelLooseInput = document.getElementById('physical_loose_quantity');
+
+        function recomputeTopLevelPackCount() {
+            if (!activeCoverage || !activeCoverage.has_sales_pack || !topLevelSealedInput || !topLevelLooseInput || topLevelSealedInput.disabled) return;
+            const s = parseInt(topLevelSealedInput.value, 10) || 0;
+            const l = parseInt(topLevelLooseInput.value, 10) || 0;
+            const pSize = parseInt(activeCoverage.pack_size, 10) || 1;
+            if (topLevelSealedInput.value !== '' || topLevelLooseInput.value !== '') {
+                physicalInput.value = (s * pSize) + l;
+                updatePreview();
+            }
+        }
+        if (topLevelSealedInput) topLevelSealedInput.addEventListener('input', recomputeTopLevelPackCount);
+        if (topLevelLooseInput) topLevelLooseInput.addEventListener('input', recomputeTopLevelPackCount);
+
         useSystemQuantity.addEventListener('click', function () {
             if (activeCoverage && activeCoverage.batches && activeCoverage.batches.length > 0) {
                 const inputs = batchSection.querySelectorAll('tbody .batch-count-input');
@@ -446,7 +483,12 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 });
                 recomputeTotalFromBatches();
             } else {
-                physicalInput.value = productSelect.selectedOptions[0].dataset.systemQty;
+                const sysTotal = parseInt(productSelect.selectedOptions[0].dataset.systemQty, 10) || 0;
+                if (activeCoverage && activeCoverage.has_sales_pack && topLevelSealedInput && !topLevelSealedInput.disabled) {
+                    topLevelSealedInput.value = activeCoverage.batch_sealed_sum || 0;
+                    topLevelLooseInput.value = activeCoverage.batch_loose_sum || sysTotal;
+                }
+                physicalInput.value = sysTotal;
                 physicalInput.dispatchEvent(new Event('input', { bubbles: true }));
                 physicalInput.focus();
             }
@@ -509,8 +551,23 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             }
             unbatchedAlert.hidden = true;
 
+            const hasNoBatches = !coverage.batches || coverage.batches.length === 0;
+            if (topLevelPackWrap && topLevelSealedInput && topLevelLooseInput) {
+                if (coverage.has_sales_pack && hasNoBatches) {
+                    topLevelPackWrap.style.display = 'grid';
+                    topLevelSealedInput.disabled = false;
+                    topLevelLooseInput.disabled = false;
+                } else {
+                    topLevelPackWrap.style.display = 'none';
+                    topLevelSealedInput.disabled = true;
+                    topLevelLooseInput.disabled = true;
+                    topLevelSealedInput.value = '';
+                    topLevelLooseInput.value = '';
+                }
+            }
+
             batchTbody.replaceChildren();
-            if (!coverage.batches || coverage.batches.length === 0) {
+            if (hasNoBatches) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = '<td colspan="5" class="muted" style="text-align:center; padding:12px;">No active batches recorded. Enter unbatched or found stock using "+ Add Extra / Found Batch" below.</td>';
                 batchTbody.appendChild(tr);
@@ -523,17 +580,47 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         ? '<span class="status-pill status-rejected" style="font-size:11px;">Expired</span>'
                         : '<span class="status-pill status-approved" style="font-size:11px;">Active</span>';
 
+                    let countedCell = '';
+                    let systemCell = `${b.remaining_quantity}`;
+                    if (coverage.has_sales_pack) {
+                        systemCell += ` <small class="muted" style="display:block;">${b.sealed_quantity || 0} pk, ${b.loose_quantity || 0} loose</small>`;
+                        countedCell = `
+                            <input type="hidden" name="batches[${idx}][batch_id]" value="${b.batch_id}">
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <div>
+                                    <label style="font-size:10px; display:block;">Packs</label>
+                                    <input type="number" class="batch-count-input batch-count-sealed"
+                                           name="batches[${idx}][physical_sealed_quantity]"
+                                           min="0" style="width: 65px;" data-pack-size="${coverage.pack_size}"
+                                           data-system-qty="${b.sealed_quantity ?? 0}"
+                                           value="${b.sealed_quantity ?? 0}" <?= $canMutateInventory ? '' : 'readonly' ?>>
+                                </div>
+                                <div>
+                                    <label style="font-size:10px; display:block;">Loose</label>
+                                    <input type="number" class="batch-count-input batch-count-loose"
+                                           name="batches[${idx}][physical_loose_quantity]"
+                                           min="0" style="width: 65px;"
+                                           data-system-qty="${b.loose_quantity ?? 0}"
+                                           value="${b.loose_quantity ?? 0}" <?= $canMutateInventory ? '' : 'readonly' ?>>
+                                </div>
+                                <input type="hidden" class="batch-base-qty" name="batches[${idx}][physical_quantity]" value="${b.remaining_quantity}">
+                            </div>
+                        `;
+                    } else {
+                        countedCell = `
+                            <input type="hidden" name="batches[${idx}][batch_id]" value="${b.batch_id}">
+                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${idx}][physical_quantity]"
+                                   min="0" style="width: 80px;" data-system-qty="${b.remaining_quantity}"
+                                   placeholder="0" <?= $canMutateInventory ? '' : 'readonly' ?>>
+                        `;
+                    }
+
                     tr.innerHTML = `
                         <td><strong>${escapeHtml(bNum)}</strong></td>
                         <td>${escapeHtml(bExp)}</td>
                         <td>${statusBadge}</td>
-                        <td>${b.remaining_quantity}</td>
-                        <td>
-                            <input type="hidden" name="batches[${idx}][batch_id]" value="${b.batch_id}">
-                            <input type="number" class="batch-count-input" name="batches[${idx}][physical_quantity]"
-                                   min="0" style="width: 80px;" data-system-qty="${b.remaining_quantity}"
-                                   placeholder="0" <?= $canMutateInventory ? '' : 'readonly' ?>>
-                        </td>
+                        <td>${systemCell}</td>
+                        <td>${countedCell}</td>
                     `;
                     batchTbody.appendChild(tr);
                 });
@@ -553,14 +640,30 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
 
         function recomputeTotalFromBatches() {
             if (!batchSection) return;
-            const inputs = batchSection.querySelectorAll('.batch-count-input');
-            if (inputs.length === 0) return;
+            const rows = batchSection.querySelectorAll('tbody tr, .extra-batch-row');
+            if (rows.length === 0) return;
             let sum = 0;
             let hasAny = false;
-            inputs.forEach(function (inp) {
-                if (inp.value !== '') {
-                    hasAny = true;
-                    sum += parseInt(inp.value, 10) || 0;
+            rows.forEach(function (row) {
+                const sealedInp = row.querySelector('.batch-count-sealed');
+                const looseInp = row.querySelector('.batch-count-loose');
+                const baseInp = row.querySelector('.batch-base-qty');
+                const plainInp = row.querySelector('.batch-count-input:not(.batch-count-sealed):not(.batch-count-loose)');
+                if (sealedInp || looseInp) {
+                    const sealed = parseInt(sealedInp?.value, 10) || 0;
+                    const loose = parseInt(looseInp?.value, 10) || 0;
+                    const packSize = parseInt(sealedInp?.dataset.packSize, 10) || (activeCoverage?.pack_size || 1);
+                    const rowTotal = (sealed * packSize) + loose;
+                    if (sealedInp?.value !== '' || looseInp?.value !== '') {
+                        hasAny = true;
+                    }
+                    if (baseInp) baseInp.value = rowTotal;
+                    sum += rowTotal;
+                } else if (plainInp) {
+                    if (plainInp.value !== '') {
+                        hasAny = true;
+                        sum += parseInt(plainInp.value, 10) || 0;
+                    }
                 }
             });
             if (hasAny) {
@@ -575,16 +678,34 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 const div = document.createElement('div');
                 div.className = 'extra-batch-row';
                 div.style.cssText = 'border:1px dashed #ccc; padding:10px; margin-bottom:8px; border-radius:4px; background:rgba(0,0,0,0.02);';
+                let batchFields = '';
+                if (activeCoverage && activeCoverage.has_sales_pack) {
+                    batchFields = `
+                        <div class="form-group" style="margin-bottom:4px;">
+                            <label style="font-size:12px;">Sealed Packs (x ${activeCoverage.pack_size})</label>
+                            <input type="number" class="batch-count-input batch-count-sealed" name="batches[${key}][physical_sealed_quantity]" min="0" value="0" data-pack-size="${activeCoverage.pack_size}" style="width:100%;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:4px;">
+                            <label style="font-size:12px;">Loose Pieces</label>
+                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_loose_quantity]" min="0" value="0" style="width:100%;">
+                        </div>
+                        <input type="hidden" class="batch-base-qty" name="batches[${key}][physical_quantity]" value="0">
+                    `;
+                } else {
+                    batchFields = `
+                        <div class="form-group" style="margin-bottom:4px; grid-column: span 2;">
+                            <label style="font-size:12px;">Counted Quantity *</label>
+                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_quantity]" min="1" required style="width:100%;">
+                        </div>
+                    `;
+                }
                 div.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                         <strong>Extra / Found Stock Batch</strong>
                         <button type="button" class="btn btn-small btn-secondary remove-batch-btn" style="padding:1px 6px;">&times; Remove</button>
                     </div>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                        <div class="form-group" style="margin-bottom:4px;">
-                            <label style="font-size:12px;">Counted Quantity *</label>
-                            <input type="number" class="batch-count-input" name="batches[${key}][physical_quantity]" min="1" required style="width:100%;">
-                        </div>
+                        ${batchFields}
                         <div class="form-group" style="margin-bottom:4px;">
                             <label style="font-size:12px;">Expiration date (leave blank if not recorded)</label>
                             <input type="date" name="batches[${key}][expiration_date]" style="width:100%;">
@@ -593,7 +714,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <label style="font-size:12px;">Batch number / label (optional)</label>
                             <input type="text" name="batches[${key}][batch_number]" placeholder="e.g. FOUND-01" style="width:100%;">
                         </div>
-                        <div class="form-group" style="margin-bottom:4px;">
+                        <div class="form-group" style="margin-bottom:4px; grid-column: span 2;">
                             <label style="font-size:12px;">Notes (optional)</label>
                             <input type="text" name="batches[${key}][notes]" placeholder="e.g. Unbatched shelf stock" style="width:100%;">
                         </div>
@@ -631,11 +752,18 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         const bNum = b.batch_number ? b.batch_number : (b.original_batch_number ? b.original_batch_number : (b.batch_id ? 'Batch #' + b.batch_id : 'Added / Found'));
                         const bExp = b.expiration_date ? b.expiration_date : (b.original_expiration_date ? b.original_expiration_date : 'Not recorded');
                         const diff = b.difference_qty > 0 ? '+' + b.difference_qty : b.difference_qty;
+                        let sysStr = `${b.system_quantity}`;
+                        let countedStr = `${b.physical_quantity}`;
+                        const hasPack = Number(b.product_pack_size || 0) > 1 || Number(b.system_sealed_quantity || 0) > 0 || Number(b.physical_sealed_quantity || 0) > 0;
+                        if (hasPack) {
+                            sysStr += ` <small class="muted">(${b.system_sealed_quantity ?? 0} pk, ${b.system_loose_quantity ?? 0} loose)</small>`;
+                            countedStr += ` <small class="muted">(${b.physical_sealed_quantity ?? 0} pk, ${b.physical_loose_quantity ?? 0} loose)</small>`;
+                        }
                         html += `<tr>
                             <td><strong>${escapeHtml(bNum)}</strong></td>
                             <td>${escapeHtml(bExp)}</td>
-                            <td>${b.system_quantity}</td>
-                            <td>${b.physical_quantity}</td>
+                            <td>${sysStr}</td>
+                            <td>${countedStr}</td>
                             <td>${diff}</td>
                             <td>${escapeHtml(b.notes || '-')}</td>
                         </tr>`;
