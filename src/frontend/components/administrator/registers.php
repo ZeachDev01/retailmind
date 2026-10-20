@@ -79,7 +79,7 @@ $availableCount = count($registers->available());
         <header class="page-heading">
             <div>
                 <h1>Registers</h1>
-                <p class="page-subtitle">Create and maintain the Store's physical tills. Renaming a Register keeps the identity that earlier records already reference, and disabling one keeps its history intact.</p>
+                <p class="page-subtitle">Create and manage the Store's physical tills. Renaming or disabling a Register preserves its earlier records.</p>
             </div>
         </header>
 
@@ -87,7 +87,7 @@ $availableCount = count($registers->available());
 
         <section class="dashboard-section">
             <h2>Add a Register</h2>
-            <p class="section-description">Each Register gets a stable identity that never changes, plus the display name Cashiers see.</p>
+            <p class="section-description">Each Register has a permanent ID and a display name Cashiers see.</p>
             <form method="post" class="form-grid">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create">
@@ -124,7 +124,7 @@ $availableCount = count($registers->available());
                     <thead>
                         <tr>
                             <th>Register</th>
-                            <th>Identity</th>
+                            <th>Register ID</th>
                             <th>Availability</th>
                             <th>Receipt paper width</th>
                             <th>Rename</th>
@@ -186,7 +186,7 @@ $availableCount = count($registers->available());
                         </table>
                     </div>
                 </div>
-                <p class="section-description">A Register that any operational record still references cannot be deleted. Disable it instead so its history stays intact.</p>
+                <p class="section-description">You cannot delete a Register linked to an operational record. Disable it to keep its history.</p>
             <?php endif; ?>
         </section>
     </main>

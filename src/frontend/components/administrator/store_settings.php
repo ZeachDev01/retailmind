@@ -49,12 +49,12 @@ $effective = $service->thresholdsFor('admin');
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <div><h1>Store Settings</h1><p class="page-subtitle">Govern sales, cash, Stock Issue oversight, and Fiscal Period attention thresholds within Platform safety limits.</p></div>
+            <div><h1>Store Settings</h1><p class="page-subtitle">Set attention thresholds for sales, cash, Stock Issues, and Fiscal Periods within Platform safety limits.</p></div>
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <section class="dashboard-section">
             <h2>Attention thresholds</h2>
-            <p class="section-description">If a requested value exceeds a Platform safety limit, RetailMind uses the stricter effective value shown below.</p>
+            <p class="section-description">When a value exceeds a Platform safety limit, RetailMind uses the stricter value shown below.</p>
             <form method="post">
                 <?= csrf_field() ?>
                 <div class="form-grid">

@@ -228,7 +228,7 @@ $emptyTableCopy = $canViewPlatformAudit
                     <div class="section-header">
                         <div>
                             <h2 id="sign-in-review-title">Review failed sign-ins</h2>
-                            <p class="section-description"><?= $pendingSignInCount ?> unreviewed failures in the last 24 hours. Clearing records your review; it does not block further attempts.</p>
+                            <p class="section-description"><?= $pendingSignInCount ?> failures need review. Clearing records your review; it does not block further attempts.</p>
                         </div>
                     </div>
                     <?php if ($reviewMessage !== ''): ?>
@@ -240,8 +240,7 @@ $emptyTableCopy = $canViewPlatformAudit
                     <?php if ($pendingSignIns === []): ?>
                         <p>No failed sign-ins need review.</p>
                     <?php else: ?>
-                        <p>Check the account and time with its owner. Compare IP addresses and look for unfamiliar accounts or repeated attempts. A shared IP can belong to several people; logs cannot prove intent. Search <strong>Login failure</strong> in Record history below and open <strong>View details</strong> for the failure reason.</p>
-                        <p>If attempts look unauthorized, secure the account through <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php')) ?>">User Manager</a> before clearing. Record what you checked and any action taken.</p>
+                        <p>Confirm the account and time with its owner. Check for unfamiliar accounts or repeated attempts; a shared IP cannot prove intent. Search <strong>Login failure</strong> below for the failure reason. If activity looks unauthorized, secure the account through <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php')) ?>">User Manager</a> before clearing it.</p>
                         <div class="table-wrap audit-log-table-wrap">
                             <table class="audit-log-table" data-no-smart-table>
                                 <caption>Oldest <?= count($pendingSignIns) ?> unreviewed attempts. Only these listed attempts will be cleared.</caption>
@@ -273,7 +272,7 @@ $emptyTableCopy = $canViewPlatformAudit
                             <div class="form-group">
                                 <label for="sign-in-review-note">Review note <span class="required-mark" aria-hidden="true">*</span></label>
                                 <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" required aria-describedby="sign-in-note-help"><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
-                                <p id="sign-in-note-help" class="section-description">Briefly record who confirmed the attempts, what you checked, and any account-security action taken.</p>
+                                <p id="sign-in-note-help" class="section-description">Record who confirmed the attempts and any security action taken.</p>
                             </div>
                             <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> <span>I reviewed the listed attempts. <span class="required-mark" aria-hidden="true">*</span></span></label>
                             <button type="submit" class="btn btn-primary">Save review and clear listed attempts</button>
@@ -286,7 +285,7 @@ $emptyTableCopy = $canViewPlatformAudit
                 <div class="section-header">
                     <div>
                         <h2 id="audit-table-title">Record history</h2>
-                        <p class="section-description">Use the table search for quick matching across the filtered records.</p>
+                        <p class="section-description">Search the filtered records.</p>
                     </div>
                 </div>
                 <div class="table-wrap audit-log-table-wrap">

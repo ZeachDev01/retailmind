@@ -73,7 +73,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             <div class="topbar">
                 <div>
                     <h1>Database Backup</h1>
-                    <p class="page-subtitle">Create an unencrypted SQL copy of the Store database and download it to your own device.</p>
+                    <p class="page-subtitle">Create an unencrypted SQL copy of the Store database, then download it to your device.</p>
                 </div>
             </div>
 
@@ -82,7 +82,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
                     <h2 id="backup-ready-title">Your backup is ready</h2>
-                    <p class="section-description">A completed download is not proof that the file was saved. Keep <?= $escape($download['filename']) ?> on separate storage, and give it to your Super Administrator if you ever need it restored.</p>
+                    <p class="section-description">A completed download does not confirm the file was saved. Store <?= $escape($download['filename']) ?> separately and give it to your Super Administrator if it needs restoring.</p>
                     <p><a class="btn" href="<?= $escape($download['url']) ?>" data-backup-download>Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
                 </section>
             <?php endif; ?>
@@ -90,7 +90,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             <div class="card-grid">
                 <section class="dashboard-section">
                     <h2>Create backup</h2>
-                    <p class="section-description">Saving changes pauses briefly while a consistent point-in-time copy is captured, then resumes automatically. You can keep browsing and your unsaved work is not lost.</p>
+                    <p class="section-description">RetailMind briefly pauses saving while it captures a consistent copy, then resumes automatically. You can keep browsing; unsaved work is not lost.</p>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn" data-backup-create>Create backup</button></form>
                 </section>
                 <section class="dashboard-section">
@@ -108,7 +108,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 
             <div class="dashboard-section">
                 <h2>Backup history</h2>
-                <p class="section-description">Recent backup activity. A completed entry means the server created the backup; it does not confirm the file reached your device.</p>
+                <p class="section-description">Recent backup activity. A completed entry means the server created the backup, not that it reached your device.</p>
                 <div class="table-wrap">
                     <table>
                         <tr>

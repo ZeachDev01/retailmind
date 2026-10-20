@@ -214,7 +214,7 @@ $disabledCount = count($users) - $activeCount;
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="topbar">
-            <div><h1><?= htmlspecialchars($pageTitle) ?></h1><p class="page-subtitle">Manage fixed role templates and account access for the single Store.</p></div>
+            <div><h1><?= htmlspecialchars($pageTitle) ?></h1><p class="page-subtitle">Manage Store staff accounts and fixed role access.</p></div>
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <div class="card-grid">
@@ -224,7 +224,7 @@ $disabledCount = count($users) - $activeCount;
         </div>
         <section class="dashboard-section manage-users-list" id="usersPanel">
             <div class="section-header">
-                <div><h2>Store accounts</h2><p class="section-description">Every operational account is scoped to this Store automatically.</p></div>
+                <div><h2>Store accounts</h2></div>
                 <button type="button" class="btn manage-users-primary manage-users-section-action" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
             </div>
             <div class="table-wrap">

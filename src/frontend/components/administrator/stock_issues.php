@@ -106,7 +106,7 @@ try {
             <div class="topbar">
                 <div>
                     <h1>Stock Issue Oversight</h1>
-                    <p class="page-subtitle">Read-only review of every Stock Issue report: Damaged, Missing/Lost, Expired, and Other. Administrators cannot approve, reject, edit, or delete reports from this page.</p>
+                    <p class="page-subtitle">Review Damaged, Missing/Lost, Expired, and Other Stock Issue reports. This page is read-only.</p>
                 </div>
                 <span class="muted"><?= count($reports) ?> Reports</span>
             </div>
@@ -116,7 +116,7 @@ try {
             <?php endif; ?>
 
             <div class="history-section">
-                <h2>Filters</h2>
+                <h2>Find reports</h2>
                 <form method="GET" class="review-form">
                     <div class="form-grid">
                         <div class="form-group">
@@ -177,7 +177,7 @@ try {
                         </div>
                     </div>
                     <div class="review-actions">
-                        <button type="submit" class="btn">Apply filters</button>
+                        <button type="submit" class="btn">Show reports</button>
                         <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php')) ?>">Clear</a>
                     </div>
                 </form>
@@ -189,7 +189,7 @@ try {
                     <div class="section-header">
                         <div>
                             <h2>Report #<?= (int)$report['adjustment_id'] ?> — Stock Issue detail</h2>
-                            <p class="section-description">Complete lifecycle history. Approved and rejected reports are immutable; corrections happen through a separate Inventory Manager inventory count.</p>
+                            <p class="section-description">Complete lifecycle history. Approved and rejected reports cannot change; Inventory Managers correct stock through an inventory count.</p>
                         </div>
                         <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php' . ($filterQuery !== '' ? '?' . rtrim($filterQuery, '&') : ''))) ?>">Back to list</a>
                     </div>
@@ -371,7 +371,7 @@ try {
                                     <th>Cashier</th>
                                     <th>Approver</th>
                                     <th>Reported</th>
-                                    <th></th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -393,7 +393,7 @@ try {
                                         <td><?= htmlspecialchars($row['reviewer_name'] ?? '—') ?></td>
                                         <td><?= htmlspecialchars($row['reported_at']) ?></td>
                                         <td>
-                                            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php?' . $filterQuery . 'detail=' . (int)$row['adjustment_id'])) ?>">View</a>
+                                            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php?' . $filterQuery . 'detail=' . (int)$row['adjustment_id'])) ?>">Open report</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

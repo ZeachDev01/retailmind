@@ -157,7 +157,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
         <div class="topbar">
             <div>
                 <h1>Forecast Analytics <?php if ($isDemoMode): ?><span class="demo-badge">Demo Evidence (S001)</span><?php endif; ?></h1>
-                <p class="page-subtitle">Evaluation metrics bound directly to the active displayed model and run context.</p>
+                <p class="page-subtitle">Evaluation metrics for the active model.</p>
             </div>
             <div>
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">View Forecasts</a>
@@ -185,7 +185,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             <div class="empty-state">
                 <i class="bi bi-bar-chart empty-icon"></i>
                 <h2>No Evaluation Records Available</h2>
-                <p>Candidate evaluations have not been recorded for the current model version. Retrain a candidate model to review evaluation benchmarks.</p>
+                <p>Retrain a candidate model to record evaluation benchmarks.</p>
             </div>
         <?php else: ?>
             <div class="horizon-grid">

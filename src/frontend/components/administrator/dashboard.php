@@ -117,7 +117,6 @@ $rangeUrl = $currentUrl;
             <header class="page-heading control-center-heading">
                 <div>
                     <h1>Store Operations</h1>
-                    <p class="page-subtitle">Welcome, <?= $escape($displayName) ?>. Resolve Store exceptions, approvals, staff oversight, and operational risks.</p>
                     <p class="dashboard-freshness"><i class="bi bi-clock" aria-hidden="true"></i> Last updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?></p>
                 </div>
                 <div class="page-heading-actions">
@@ -138,7 +137,7 @@ $rangeUrl = $currentUrl;
 
             <section class="dashboard-section governance-queue store-attention-queue" aria-labelledby="store-attention-title">
                 <div class="section-header">
-                    <div><h2 id="store-attention-title">Store attention queue</h2><p class="section-description">Reversals, cash variances, unusual discounts, and read-only Stock Issue oversight.</p></div>
+                    <div><h2 id="store-attention-title">Store attention queue</h2></div>
                 </div>
                 <?php if ($dashboard['state'] === 'error'): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><div><strong>Store status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div><a class="btn btn-quiet" href="<?= $escape($rangeUrl) ?>">Try again</a></div>
@@ -159,7 +158,7 @@ $rangeUrl = $currentUrl;
 
             <?php if ($dashboard['headline'] !== []): ?>
                 <section aria-labelledby="store-status-title">
-                    <div class="section-header control-center-section-header"><div><h2 id="store-status-title">Store status</h2><p class="section-description">Unresolved controls and the active accounting window.</p></div></div>
+                    <div class="section-header control-center-section-header"><div><h2 id="store-status-title">Store status</h2></div></div>
                     <div class="card-grid store-operations-headlines">
                         <?php foreach ($headlineOrder as $key => [$label, $icon]): $item = $dashboard['headline'][$key]; ?>
                             <article class="stat-card with-icon status-<?= $escape($item['status']) ?>">
@@ -306,7 +305,6 @@ $rangeUrl = $currentUrl;
                             <h2 id="net-sales-title"><?= $escape($activePeriodTitle) ?></h2>
                             <span class="period-badge ongoing">Ongoing</span>
                         </div>
-                        <p class="section-description">Philippine time (UTC+08:00) · Completed sales after discounts minus issued refunds<?php if ($netSalesAsOf): ?> · As of <?= $escape($formatDate($netSalesAsOf)) ?><?php endif; ?></p>
                     </div>
                     <div class="net-sales-header-controls">
                         <div class="period-controls btn-group" role="group" aria-label="Net Sales period">
@@ -376,7 +374,7 @@ $rangeUrl = $currentUrl;
 
             <?php if ($dashboard['headline'] !== []): ?>
                 <section class="dashboard-section period-comparison" aria-labelledby="comparison-title">
-                    <div class="section-header"><div><h2 id="comparison-title"><?= $selectedRange ?>-day performance</h2><p class="section-description">Compared with the Previous equivalent period.</p></div></div>
+                    <div class="section-header"><div><h2 id="comparison-title"><?= $selectedRange ?>-day performance</h2></div></div>
                     <div class="comparison-grid">
                         <?php foreach ($comparisonOrder as $key => [$label, $currency]): $item = $dashboard['comparison'][$key]; ?>
                             <article class="comparison-card"><span><?= $escape($label) ?></span><strong><?= $escape($formatMetric($item['current'], $currency)) ?></strong><small>Previous <?= $escape($formatMetric($item['previous'], $currency)) ?> · <?= $escape($formatChange($item['change_percent'])) ?></small></article>
@@ -388,15 +386,14 @@ $rangeUrl = $currentUrl;
                     <div class="section-header">
                         <div>
                             <h2 id="staff-shifts-title"><i class="bi bi-people" aria-hidden="true"></i> Staff &amp; cashier shifts</h2>
-                            <p class="section-description">Delegated staff and cash-control oversight.</p>
                         </div>
                     </div>
                     <div class="indicator-list">
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-check" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Cashiers</strong><span>Available operational staff</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_cashiers'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Inventory Managers</strong><span>Routine inventory operators</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_inventory_managers'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-x" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Disabled Accounts</strong><span>Retained staff identities</span></span><b class="indicator-value"><?= (int)$dashboard['staff']['disabled_staff'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Open cashier shifts</strong><span>Currently active shifts</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['open'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Unreviewed variances</strong><span>Closed shifts awaiting review</span></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-check" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Cashiers</strong></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_cashiers'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Inventory Managers</strong></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_inventory_managers'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-x" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Disabled Accounts</strong></span><b class="indicator-value"><?= (int)$dashboard['staff']['disabled_staff'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Open cashier shifts</strong></span><b class="indicator-value"><?= (int)$dashboard['shifts']['open'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Unreviewed variances</strong></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
                     </div>
                 </section>
             <?php endif; ?>

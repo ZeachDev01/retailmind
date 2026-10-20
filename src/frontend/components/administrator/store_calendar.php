@@ -246,7 +246,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         <header class="page-heading">
             <div>
                 <h1>Store Calendar</h1>
-                <p class="page-subtitle">Monthly trading status, holidays, and exceptional closures.</p>
+                <p class="page-subtitle">Set monthly trading status for holidays and exceptional closures.</p>
             </div>
             <button type="button" class="btn" id="record-date-btn">Record date status</button>
         </header>
@@ -265,7 +265,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <h2><?= htmlspecialchars($monthTitle) ?></h2>
             </div>
 
-            <p>Select a date to record or change its status.</p>
+            <p>Select a date to set or change its trading status.</p>
             <div class="calendar-legend" aria-label="Calendar status legend">
                 <span class="calendar-status-badge status-open">Open</span>
                 <span class="calendar-status-badge status-closed">Closed</span>
@@ -327,7 +327,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
 <div class="rm-modal-overlay" id="calendar-editor" aria-hidden="true">
         <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-editor-title">
             <header class="rm-modal-header">
-                <div><h2 id="calendar-editor-title">Record date status</h2><p>Choose the trading status for this date or a date range.</p></div>
+                <div><h2 id="calendar-editor-title">Record date status</h2><p>Set the trading status for one date or a date range.</p></div>
                 <button type="button" class="rm-close" aria-label="Close date editor"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </header>
             <form method="post" id="calendar-form">
@@ -339,7 +339,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                         <input id="calendar_date" type="date" name="calendar_date" required value="<?= htmlspecialchars($_POST['calendar_date'] ?? $today) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="through_date">Through Date <span class="muted">(Optional Range)</span></label>
+                        <label for="through_date">End date <span class="muted">(optional)</span></label>
                         <input id="through_date" type="date" name="through_date" value="<?= htmlspecialchars($_POST['through_date'] ?? '') ?>">
                         <small class="form-hint" id="range-preview-hint" role="status">Leave empty to update only the selected date.</small>
                     </div>

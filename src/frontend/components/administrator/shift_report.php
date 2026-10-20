@@ -57,7 +57,7 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
     <header class="page-heading"><h1>Cashier Shift Report</h1>
-        <p class="page-subtitle">Store-wide drawer accountability. Dates select shifts by opening date; each shift shows its full activity. Unassigned sales use sale date.</p></header>
+        <p class="page-subtitle">Review Store-wide drawer activity. Dates use each shift's opening date; unassigned sales use their sale date.</p></header>
     <?php if ($error !== ''): ?><div class="alert tag-warning"><?= shift_report_e($error) ?></div><?php endif; ?>
     <section class="dashboard-section report-filters"><h2>Filters</h2>
         <form method="get" class="report-filter-grid">
@@ -75,14 +75,14 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
         </form>
     </section>
     <section class="dashboard-section u-mt-15"><div class="section-header"><div><h2>Results</h2><p><?= count($report['rows']) ?> rows</p></div></div>
-        <p class="section-description">Payment totals are separate from physical drawer cash. Expected cash is the closing snapshot; blank counted cash means no reconciliation was recorded. Older sale reversals without a Shift are listed as Legacy / Unassigned.</p>
+        <p class="section-description">Payment totals differ from physical drawer cash. Expected cash is the closing snapshot; a blank counted cash value means no reconciliation was recorded. Older reversals without a Shift are Legacy / Unassigned.</p>
         <div class="table-wrap"><table><thead><tr><?php foreach ($report['headers'] as $header): ?><th><?= shift_report_e($header) ?></th><?php endforeach; ?></tr></thead>
             <tbody><?php foreach ($report['rows'] as $row): ?><tr><?php foreach ($report['headers'] as $header): ?><td><?= shift_report_e($row[$header] ?? '') ?></td><?php endforeach; ?></tr><?php endforeach; ?>
             <?php if (!$report['rows']): ?><tr><td colspan="<?= count($report['headers']) ?>">No records match these filters.</td></tr><?php endif; ?>
             <?php if ($report['rows']): ?><tr><th>TOTAL</th><?php foreach (array_slice($report['headers'], 1) as $header): ?><td><?= shift_report_e($report['totals'][$header] ?? '') ?></td><?php endforeach; ?></tr><?php endif; ?></tbody></table></div>
         <form method="post" class="report-actions"><?= csrf_field() ?><input type="hidden" name="action" value="export_csv">
             <?php foreach ($filters as $name => $value): ?><input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>"><?php endforeach; ?>
-            <button class="btn" type="submit" <?= $error !== '' ? 'disabled' : '' ?>>Export CSV</button>
+            <button class="btn" type="submit" <?= $error !== '' ? 'disabled' : '' ?>>Export report CSV</button>
         </form>
     </section>
 </main></div></body></html>

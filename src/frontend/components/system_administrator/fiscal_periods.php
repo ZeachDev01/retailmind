@@ -137,7 +137,7 @@ foreach ($periods as $period) {
             <div class="topbar">
                 <div>
                     <h1>Fiscal Periods</h1>
-                    <p class="page-subtitle">Open, close, and lock accounting windows for controlled retail operations.</p>
+                    <p class="page-subtitle">Manage accounting windows for Store transactions.</p>
                 </div>
             </div>
 
@@ -174,7 +174,7 @@ foreach ($periods as $period) {
                 <div class="section-header">
                     <div>
                         <h2 id="create-period-title">Create a fiscal period</h2>
-                        <p class="section-description">Define the date range in which transactions can be recorded.</p>
+                        <p class="section-description">Transactions can be recorded only within this date range.</p>
                     </div>
                 </div>
                 <form method="POST" class="fiscal-period-form">
@@ -202,7 +202,7 @@ foreach ($periods as $period) {
                 <div class="fiscal-period-list-heading">
                     <div>
                         <h2 id="period-list-title">Period history</h2>
-                        <p>Review status, ownership, and controls for every fiscal period.</p>
+                        <p>Review each period's status and controls.</p>
                     </div>
                     <span class="fiscal-period-count"><?= count($periods) ?> total</span>
                 </div>

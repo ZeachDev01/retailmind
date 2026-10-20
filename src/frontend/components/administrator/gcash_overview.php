@@ -67,7 +67,7 @@ function gcash_admin_money(mixed $val): string {
         <header class="topbar">
             <div>
                 <h1>GCash Overview</h1>
-                <p class="page-subtitle">Store-wide GCash accountability, expected balances, reconciliation differences, and transaction history.</p>
+                <p class="page-subtitle">Review Store-wide GCash balances, reconciliation differences, and transaction history.</p>
             </div>
             <div class="gcash-topbar-actions">
                 <a href="<?= gcash_admin_e(app_url('components/administrator/dashboard.php')) ?>" class="btn btn-secondary">
@@ -89,7 +89,7 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-balances-title">Current Expected Balances</h2>
-                        <p>Store-wide expected service cash and wallet funds from the current or latest counted session. These figures reflect real money on hand and are unaffected by historical date filters.</p>
+                        <p>Expected service cash and wallet funds from the current or latest counted session. Date filters do not change these balances.</p>
                     </div>
                 </div>
                 <div>
@@ -135,7 +135,7 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-funnel" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-filters-title">Activity Filters</h2>
-                        <p>Philippine reporting-day boundaries (00:00:00 to 23:59:59 Asia/Manila) and Cashier scoping.</p>
+                        <p>Filter activity by Philippine reporting date and Cashier.</p>
                     </div>
                 </div>
             </div>
@@ -177,7 +177,7 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-metrics-title">Filtered Activity Totals</h2>
-                        <p>Aggregated principal and gross fees earned within the filtered period. Historical totals do not represent the current wallet balance.</p>
+                        <p>Principal and gross fees for the selected period. These totals are not the current wallet balance.</p>
                     </div>
                 </div>
                 <div>
@@ -217,7 +217,7 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-diff-title">Reconciliation Differences</h2>
-                        <p>Closed sessions with physical service cash or wallet variances. Underlying variances remain permanently on record.</p>
+                        <p>Closed sessions with cash or wallet variances. Waiving a discrepancy does not change the recorded variance.</p>
                     </div>
                 </div>
             </div>
@@ -297,7 +297,7 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-nc-title">Unresolved Activity (Needs Checking)</h2>
-                        <p>Open exchanges across the store requiring confirmation or resolution. Partial recorded movements remain in expected balances.</p>
+                        <p>Open exchanges that need confirmation or resolution. Expected balances include recorded partial movements.</p>
                     </div>
                 </div>
                 <div>
@@ -315,10 +315,10 @@ function gcash_admin_money(mixed $val): string {
                             <th scope="col">Cashier</th>
                             <th scope="col">Type</th>
                             <th scope="col">Principal</th>
-                            <th scope="col">Fee &amp; Loc</th>
+                            <th scope="col">Fee location</th>
                             <th scope="col">Movements</th>
                             <th scope="col">Reference</th>
-                            <th scope="col">Notes / Status</th>
+                            <th scope="col">Notes and status</th>
                         </tr>
                     </thead>
                     <tbody id="gcash-admin-nc-body">
@@ -366,7 +366,7 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-list-columns-reverse" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-history-title">Store-wide Transaction History</h2>
-                        <p>Complete historical activity across cashiers with traceable exchange details and legacy reference isolation.</p>
+                        <p>All Cashier activity, including legacy reference records.</p>
                     </div>
                 </div>
             </div>
@@ -383,7 +383,7 @@ function gcash_admin_money(mixed $val): string {
                             <th scope="col">Status</th>
                             <th scope="col">Cashier</th>
                             <th scope="col">Shift</th>
-                            <th scope="col">Details &amp; Legacy</th>
+                            <th scope="col">Details</th>
                         </tr>
                     </thead>
                     <tbody id="gcash-admin-history-body">
@@ -458,7 +458,7 @@ function gcash_admin_money(mixed $val): string {
         <!-- Discrepancy Waiver Dialog -->
         <dialog id="gcash-admin-waiver-dialog" aria-labelledby="waiver-dialog-title">
             <h2 id="waiver-dialog-title" style="margin-top:0;">Waive Closing Discrepancy</h2>
-            <p>Under Policy 2, the underlying counted variance remains permanently on record. Recording a waiver attaches your administrative approval and reason.</p>
+            <p>The counted variance stays on record. This waiver records your approval and reason.</p>
             <div id="admin-waiver-summary" style="margin:1rem 0; padding:.75rem; background:var(--surface-bg, #fff); border:1px solid var(--border); border-radius:8px;">
                 <p style="margin:0 0 .5rem;"><strong>Session:</strong> #<span id="waiver-target-session"></span> (<span id="waiver-target-cashier"></span>)</p>
                 <p style="margin:0 0 .25rem;"><strong>Cash Variance:</strong> <span id="waiver-target-cash-var"></span></p>
@@ -468,7 +468,7 @@ function gcash_admin_money(mixed $val): string {
             <form id="admin-waiver-form">
                 <input type="hidden" id="waiver-session-id" name="session_id" value="">
                 <div class="gcash-field">
-                    <label for="admin-waiver-notes" style="font-weight:600;">Waiver Notes / Explanation (5–500 chars)</label>
+                    <label for="admin-waiver-notes" style="font-weight:600;">Reason for waiver (5–500 characters)</label>
                     <textarea id="admin-waiver-notes" name="waiver_notes" class="form-control" rows="3" required minlength="5" maxlength="500" placeholder="Explain why this closing discrepancy was approved or resolved without modifying recorded cash."></textarea>
                 </div>
                 <div class="gcash-actions" style="margin-top:1rem; justify-content:flex-end;">

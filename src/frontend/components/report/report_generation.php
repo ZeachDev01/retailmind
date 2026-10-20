@@ -699,7 +699,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
         <div class="topbar">
             <div>
                 <h1 id="page-heading"><?= htmlspecialchars($pageTitle) ?></h1>
-                <p class="page-subtitle"><?= $selectedReport === 'gross_profit' ? 'Product gross profit, net sales, costs, and margins.' : 'Sales, inventory, stock movement, forecast, and variance reporting.' ?></p>
+                <p class="page-subtitle"><?= $selectedReport === 'gross_profit' ? 'Product gross profit, sales, cost, and margin.' : 'Sales, inventory, forecast, and variance reports.' ?></p>
             </div>
             <?php if ($selectedReport === 'gross_profit'): ?>
                 <div class="topbar-actions">
@@ -800,7 +800,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                         <!-- Left Panel on desktop: Product Table -->
                         <div class="gp-table-panel">
                             <p class="net-units-note" id="net-units-explanation">
-                                <strong>Net units:</strong> Units sold minus units refunded in the selected period. Products refunded with no sales in this period appear with negative net units and do not indicate lifetime customer holdings.
+                                <strong>Net units:</strong> Units sold minus units refunded in this period. Negative values can be refunds for earlier sales.
                             </p>
 
                             <div class="gp-table-wrap" tabindex="0" role="region" aria-label="Products gross profit table container">
@@ -929,19 +929,19 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                                                 <div><span class="known-label">Known Margin</span> <span class="known-val"><?= number_format((float)$summary['known_margin'], 2) ?>%</span></div>
                                             <?php endif; ?>
                                         </div>
-                                        <p class="small text-muted" style="margin: 0.5rem 0 0;">Excludes sale lines missing cost snapshots.</p>
+                                        <p class="small text-muted" style="margin: 0.5rem 0 0;">Excludes lines without cost snapshots.</p>
                                     </div>
                                 <?php endif; ?>
 
                                 <details class="profit-return-help" id="profit-return-help">
                                     <summary>How returns affect profit</summary>
                                     <div class="return-help-drawer">
-                                        <p><strong>Restockable returns:</strong> Items returned to sellable inventory reverse their original product cost in this period.</p>
-                                        <p><strong>Damaged / Disposed returns:</strong> Unsellable items do not reverse product cost, resulting in an operational loss of the merchandise cost.</p>
+                                        <p><strong>Restockable returns:</strong> Return their product cost in this period.</p>
+                                        <p><strong>Damaged / Disposed returns:</strong> Do not return product cost because the merchandise cannot be resold.</p>
                                     </div>
                                 </details>
 
-                                <p class="profit-exclusion-note" id="profit-exclusion-note">Gross profit reflects product revenue minus product cost. Rent, wages, electricity, and other operating expenses are excluded.</p>
+                                <p class="profit-exclusion-note" id="profit-exclusion-note">Gross profit is product revenue minus product cost; operating expenses are excluded.</p>
                             </div>
                         </div>
                     </div>
@@ -976,9 +976,9 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                     </div>
                     <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
                     <?php if (in_array($selectedReport, ['sales_period', 'sales_product', 'sales_category', 'sales_cashier', 'fast_moving', 'slow_moving'], true)): ?>
-                        <p class="section-description">Refunds are shown separately from original sales and grouped by the sale date.</p>
+                        <p class="section-description">Refunds are separate from sales and grouped by sale date.</p>
                     <?php elseif ($selectedReport === 'refunds'): ?>
-                        <p class="section-description">Refunds are listed by the date they were issued.</p>
+                        <p class="section-description">Refunds are grouped by issue date.</p>
                     <?php endif; ?>
 
                     <?php if (!empty($reportData['metrics'])): ?>
