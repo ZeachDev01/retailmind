@@ -218,18 +218,18 @@ $disabledCount = count($users) - $activeCount;
         <header class="topbar">
             <div><h1><?= htmlspecialchars($pageTitle) ?></h1><p class="page-subtitle">Manage Store staff accounts and fixed role access.</p></div>
         </header>
-        <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+        <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <div class="card-grid">
             <article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill" aria-hidden="true"></i></span><div class="value"><?= count($users) ?></div><div class="label">Total Users</div></article>
             <article class="stat-card with-icon success"><span class="stat-icon"><i class="bi bi-person-check-fill" aria-hidden="true"></i></span><div class="value"><?= $activeCount ?></div><div class="label">Active Users</div></article>
-            <article class="stat-card with-icon <?= $disabledCount ? 'warning' : 'success' ?>"><span class="stat-icon"><i class="bi bi-person-x-fill" aria-hidden="true"></i></span><div class="value"><?= $disabledCount ?></div><div class="label">Disabled Users</div></article>
+            <article class="stat-card with-icon <?= $disabledCount ? 'warning' : '' ?>"><span class="stat-icon"><i class="bi bi-person-x-fill" aria-hidden="true"></i></span><div class="value"><?= $disabledCount ?></div><div class="label">Disabled Users</div></article>
         </div>
         <section class="dashboard-section manage-users-list" id="usersPanel">
             <div class="section-header">
-                <div><h2>Store accounts</h2></div>
+                <div><h2 id="usersHeading">Store accounts</h2></div>
                 <button type="button" class="btn manage-users-primary manage-users-section-action" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap" role="region" aria-labelledby="usersHeading" tabindex="0">
                 <table class="users-table">
                     <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Password</th><th scope="col">Action</th></tr></thead>
                     <tbody>
@@ -258,7 +258,7 @@ $disabledCount = count($users) - $activeCount;
                                 <?php if (!$canManage): ?>
                                     <span class="user-protected-label"><i class="bi bi-lock-fill" aria-hidden="true"></i> Protected</span>
                                 <?php else: ?>
-                                    <button type="button" class="btn btn-small open-user-drawer"
+                                    <button type="button" class="btn btn-secondary btn-small open-user-drawer"
                                         aria-label="Manage <?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?>"
                                         data-user-id="<?= (int)$user['user_id'] ?>"
                                         data-full-name="<?= htmlspecialchars((string)$user['full_name'], ENT_QUOTES, 'UTF-8') ?>"

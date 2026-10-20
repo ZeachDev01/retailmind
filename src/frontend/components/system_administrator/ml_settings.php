@@ -7,40 +7,38 @@ $messageClass = '';
 $fieldErrors = [];
 $fieldGroups = [
     'history' => [
-        'title' => 'Sales History & Horizon',
-        'description' => 'Controls how much daily store history is sampled and how far ahead demand is projected.',
-    ],
-    'forest' => [
-        'title' => 'Random Forest Complexity',
-        'description' => 'Controls ensemble size and decision-tree splitting thresholds during training.',
+        'title' => 'Sales history & forecast period',
     ],
     'schedule' => [
-        'title' => 'Automatic Retraining Triggers',
-        'description' => 'Defines when scheduled or sales-volume retraining runs are queued.',
+        'title' => 'Automatic retraining',
     ],
     'accuracy' => [
-        'title' => 'Accuracy Guardrails & Special Dates',
-        'description' => 'Sets error warning thresholds, demand confidence intervals, and store-specific event dates.',
+        'title' => 'Accuracy & special dates',
+        'description' => 'Demand percentiles define the lower and upper ends of the forecast range.',
+    ],
+    'forest' => [
+        'title' => 'Advanced: Random Forest tuning',
+        'description' => 'Adjust the number and complexity of trees in the model.',
     ],
 ];
 $definitions = [
     'minimum_history_days' => [
         'label' => 'Minimum calendar history (days)',
+        'help' => 'Required calendar span before a product is eligible for training.',
         'min' => 14,
         'max' => 365,
         'type' => 'number',
         'required' => true,
         'group' => 'history',
-        'help' => '14 to 365 days. Shortest calendar span required before a product is eligible for training.',
     ],
     'preferred_history_days' => [
         'label' => 'Preferred calendar history (days)',
+        'help' => 'At least the minimum history; no more than the maximum training history.',
         'min' => 30,
         'max' => 730,
         'type' => 'number',
         'required' => true,
         'group' => 'history',
-        'help' => '30 to 730 days. Target history span for full seasonal and day-of-week weighting.',
     ],
     'minimum_nonzero_sales_days' => [
         'label' => 'Minimum days with sales',
@@ -49,7 +47,6 @@ $definitions = [
         'type' => 'number',
         'required' => true,
         'group' => 'history',
-        'help' => '1 to 365 days. Active selling days required within the history window.',
     ],
     'history_window_days' => [
         'label' => 'Maximum training history (days)',
@@ -58,7 +55,6 @@ $definitions = [
         'type' => 'number',
         'required' => true,
         'group' => 'history',
-        'help' => '60 to 1,095 days. Upper lookback cap used when sampling historical sales records.',
     ],
     'forecast_period_days' => [
         'label' => 'Forecast period (days)',
@@ -67,7 +63,6 @@ $definitions = [
         'type' => 'number',
         'required' => true,
         'group' => 'history',
-        'help' => '7 to 90 days. Forward horizon generated on each prediction run.',
     ],
     'n_estimators' => [
         'label' => 'Random Forest trees',
@@ -76,7 +71,6 @@ $definitions = [
         'type' => 'number',
         'required' => true,
         'group' => 'forest',
-        'help' => '50 to 1,000 trees. Higher counts reduce variance at the cost of longer training time.',
     ],
     'max_depth' => [
         'label' => 'Maximum tree depth',
@@ -85,25 +79,24 @@ $definitions = [
         'type' => 'number',
         'required' => true,
         'group' => 'forest',
-        'help' => '2 to 60 levels. Controls how deeply each tree can branch on calendar and lag features.',
     ],
     'min_samples_split' => [
         'label' => 'Minimum samples to split',
+        'help' => 'Training samples needed to split a tree node.',
         'min' => 2,
         'max' => 50,
         'type' => 'number',
         'required' => true,
         'group' => 'forest',
-        'help' => '2 to 50 observations required before an internal node can split.',
     ],
     'min_samples_leaf' => [
         'label' => 'Minimum samples per leaf',
+        'help' => 'Samples per leaf; no more than the minimum samples to split.',
         'min' => 1,
         'max' => 30,
         'type' => 'number',
         'required' => true,
         'group' => 'forest',
-        'help' => '1 to 30 observations required in every terminal leaf node.',
     ],
     'retrain_frequency_days' => [
         'label' => 'Scheduled retraining interval (days)',
@@ -112,53 +105,51 @@ $definitions = [
         'type' => 'number',
         'required' => true,
         'group' => 'schedule',
-        'help' => '1 to 90 days between automatic scheduled retraining runs.',
     ],
     'retrain_new_sales_records' => [
-        'label' => 'Retrain after new sale items',
+        'label' => 'New sale items before retraining',
+        'help' => 'Count sale-item records, rather than receipts or units sold.',
         'min' => 1,
         'max' => 100000,
         'type' => 'number',
         'required' => true,
         'group' => 'schedule',
-        'help' => '1 to 100,000 new sale line items before volume-triggered retraining queues.',
     ],
     'accuracy_threshold_wape' => [
-        'label' => 'Maximum acceptable WAPE (%)',
+        'label' => 'Forecast error warning threshold (WAPE %)',
+        'help' => 'Weighted absolute percentage error. Lower values mean less forecast error.',
+        'full' => true,
         'min' => 1,
         'max' => 200,
         'step' => '0.1',
         'type' => 'number',
         'required' => true,
         'group' => 'accuracy',
-        'help' => '1.0% to 200.0%. Error ceiling before forecast accuracy warnings surface.',
     ],
     'prediction_interval_lower' => [
-        'label' => 'Prediction interval lower percentile',
+        'label' => 'Lower demand percentile',
         'min' => 1,
         'max' => 49,
         'type' => 'number',
         'required' => true,
         'group' => 'accuracy',
-        'help' => '1st to 49th percentile used for the conservative lower demand band.',
     ],
     'prediction_interval_upper' => [
-        'label' => 'Prediction interval upper percentile',
+        'label' => 'Upper demand percentile',
         'min' => 51,
         'max' => 99,
         'type' => 'number',
         'required' => true,
         'group' => 'accuracy',
-        'help' => '51st to 99th percentile used for the upper safety-stock demand band.',
     ],
     'holiday_dates' => [
-        'label' => 'Additional special dates (YYYY-MM-DD, comma-separated)',
+        'label' => 'Additional special dates (optional)',
+        'help' => 'Use YYYY-MM-DD dates separated by commas. Leave blank if none.',
         'type' => 'text',
         'required' => false,
         'group' => 'accuracy',
         'full' => true,
-        'placeholder' => 'e.g. 2026-11-27, 2026-12-24 (optional)',
-        'help' => 'Optional store promo days, closures, or local holidays in YYYY-MM-DD format separated by commas. Leave blank if none.',
+        'placeholder' => '2026-11-27, 2026-12-24',
     ],
 ];
 
@@ -209,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updates[$key] = $value;
     }
 
-    if (!isset($fieldErrors['minimum_history_days'], $fieldErrors['preferred_history_days'])
+    if (isset($updates['minimum_history_days'], $updates['preferred_history_days'])
         && (int)$updates['minimum_history_days'] > (int)$updates['preferred_history_days']
     ) {
         $crossError = 'Minimum calendar history cannot exceed Preferred calendar history.';
@@ -217,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = $crossError;
     }
 
-    if (!isset($fieldErrors['preferred_history_days'], $fieldErrors['history_window_days'])
+    if (isset($updates['preferred_history_days'], $updates['history_window_days'])
         && (int)$updates['preferred_history_days'] > (int)$updates['history_window_days']
     ) {
         $crossError = 'Preferred calendar history cannot exceed Maximum training history.';
@@ -225,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = $crossError;
     }
 
-    if (!isset($fieldErrors['minimum_nonzero_sales_days'], $fieldErrors['minimum_history_days'])
+    if (isset($updates['minimum_nonzero_sales_days'], $updates['minimum_history_days'])
         && (int)$updates['minimum_nonzero_sales_days'] > (int)$updates['minimum_history_days']
     ) {
         $crossError = 'Minimum days with sales cannot exceed Minimum calendar history.';
@@ -233,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = $crossError;
     }
 
-    if (!isset($fieldErrors['min_samples_leaf'], $fieldErrors['min_samples_split'])
+    if (isset($updates['min_samples_leaf'], $updates['min_samples_split'])
         && (int)$updates['min_samples_leaf'] > (int)$updates['min_samples_split']
     ) {
         $crossError = 'Minimum samples per leaf cannot exceed Minimum samples to split.';
@@ -241,7 +232,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = $crossError;
     }
 
-    if (!isset($fieldErrors['prediction_interval_lower'], $fieldErrors['prediction_interval_upper'])
+    if (isset($updates['prediction_interval_lower'], $updates['prediction_interval_upper'])
         && (int)$updates['prediction_interval_lower'] >= (int)$updates['prediction_interval_upper']
     ) {
         $crossError = 'Prediction interval lower percentile must be strictly less than the upper percentile.';
@@ -256,7 +247,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Random Forest settings saved. Retrain the model to apply them.';
         $messageClass = 'tag-success';
     } else {
-        $message = 'Review the highlighted fields below. ' . implode(' ', $errors);
+        $message = 'Settings were not saved. Review the highlighted fields below.';
         $messageClass = 'tag-warning';
     }
 }
@@ -314,32 +305,33 @@ $formatRunDetails = static function (?string $errorMessage): string {
 $stylePath = __DIR__ . '/../../assets/css/style.css';
 $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
 ?>
-<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ML Operation</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . rawurlencode($styleVersion)) ?>"></head>
-<body><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
-<div class="topbar"><div><h1>ML Operation</h1><p class="page-subtitle">Manage Store sales history, Random Forest settings, and training runs.</p></div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Open forecasts</a></div>
+<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ML Operation</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . rawurlencode($styleVersion)) ?>"><link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/ml-settings.css')) ?>"></head>
+<body class="ml-settings-page"><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
+<div class="topbar"><div><h1>ML Operation</h1></div><div class="ml-page-actions"><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/forecast_import.php')) ?>">Import sales history</a><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Open forecasts</a></div></div>
 <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-<section class="dashboard-section"><h2>Forecast Data Import</h2><p class="section-description">Upload this Store's historical daily sales totals, preview them, and confirm the import. Model retraining remains a separate action.</p><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/forecast_import.php')) ?>">Import sales history</a></section>
-<section class="dashboard-section"><div class="section-header"><div><h2>Random Forest Configuration</h2><p class="section-description">Configure history windows, tree complexity, automatic retraining triggers, and prediction interval bounds. Fields marked with <span class="required-mark" aria-hidden="true">*</span> are required.</p></div></div><form method="post" novalidate><?= csrf_field() ?>
+<section class="dashboard-section"><div class="section-header"><div><h2>Forecast settings</h2></div></div><form method="post" novalidate><?= csrf_field() ?>
 <?php foreach ($fieldGroups as $groupKey => $groupMeta): ?>
-<fieldset class="settings-fieldset"><legend><?= htmlspecialchars($groupMeta['title']) ?></legend><p class="fieldset-description"><?= htmlspecialchars($groupMeta['description']) ?></p><div class="form-grid">
+<?php if ($groupKey === 'forest'): ?><details class="ml-tuning"<?= $fieldErrors ? ' open' : '' ?>><summary id="ml-tuning-title"><?= htmlspecialchars($groupMeta['title']) ?></summary><?php endif; ?>
+<fieldset class="settings-fieldset"<?= $groupKey === 'forest' ? ' aria-labelledby="ml-tuning-title"' : '' ?>><?php if ($groupKey !== 'forest'): ?><legend><?= htmlspecialchars($groupMeta['title']) ?></legend><?php endif; ?><?php if (isset($groupMeta['description'])): ?><p class="fieldset-description"><?= htmlspecialchars($groupMeta['description']) ?></p><?php endif; ?><div class="form-grid">
 <?php foreach ($definitions as $key => $definition):
     if (($definition['group'] ?? '') !== $groupKey) {
         continue;
     }
     $isRequired = !empty($definition['required']);
     $hasError = isset($fieldErrors[$key]);
-    $helpId = $key . '_help';
     $errorId = $key . '_error';
-    $describedBy = $hasError ? ($errorId . ' ' . $helpId) : $helpId;
+    $helpId = $key . '_help';
+    $describedBy = trim((isset($definition['help']) ? $helpId : '') . ($hasError ? ' ' . $errorId : ''));
     $groupClasses = 'form-group' . (!empty($definition['full']) ? ' full' : '') . ($hasError ? ' invalid' : '');
     $inputMode = $definition['type'] === 'number' ? (isset($definition['step']) ? 'decimal' : 'numeric') : null;
-?><div class="<?= $groupClasses ?>"><label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($definition['label']) ?><?php if ($isRequired): ?> <span class="required-mark" aria-hidden="true">*</span><?php endif; ?></label><input id="<?= htmlspecialchars($key) ?>" name="<?= htmlspecialchars($key) ?>" type="<?= htmlspecialchars($definition['type']) ?>" value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"<?= $inputMode ? ' inputmode="' . $inputMode . '"' : '' ?><?= isset($definition['min']) ? ' min="' . (int)$definition['min'] . '"' : '' ?><?= isset($definition['max']) ? ' max="' . (int)$definition['max'] . '"' : '' ?><?= isset($definition['step']) ? ' step="' . htmlspecialchars((string)$definition['step']) . '"' : '' ?><?= isset($definition['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$definition['placeholder']) . '"' : '' ?> autocomplete="off" aria-describedby="<?= htmlspecialchars($describedBy) ?>"<?= $hasError ? ' aria-invalid="true"' : '' ?><?= $isRequired ? ' required' : '' ?>><?php if ($hasError): ?><small id="<?= htmlspecialchars($errorId) ?>" class="field-error"><?= htmlspecialchars($fieldErrors[$key]) ?></small><?php endif; ?><small id="<?= htmlspecialchars($helpId) ?>" class="field-help"><?= htmlspecialchars($definition['help']) ?></small></div><?php endforeach; ?>
+?><div class="<?= $groupClasses ?>"><label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($definition['label']) ?></label><input id="<?= htmlspecialchars($key) ?>" name="<?= htmlspecialchars($key) ?>" type="<?= htmlspecialchars($definition['type']) ?>" value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"<?= $inputMode ? ' inputmode="' . $inputMode . '"' : '' ?><?= isset($definition['min']) ? ' min="' . (int)$definition['min'] . '"' : '' ?><?= isset($definition['max']) ? ' max="' . (int)$definition['max'] . '"' : '' ?><?= isset($definition['step']) ? ' step="' . htmlspecialchars((string)$definition['step']) . '"' : '' ?><?= isset($definition['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$definition['placeholder']) . '"' : '' ?> autocomplete="off"<?= $describedBy !== '' ? ' aria-describedby="' . htmlspecialchars($describedBy) . '"' : '' ?><?= $hasError ? ' aria-invalid="true"' : '' ?><?= $isRequired ? ' required' : '' ?>><?php if (isset($definition['help'])): ?><small id="<?= htmlspecialchars($helpId) ?>" class="field-help"><?= htmlspecialchars($definition['help']) ?></small><?php endif; ?><?php if ($hasError): ?><small id="<?= htmlspecialchars($errorId) ?>" class="field-error"><?= htmlspecialchars($fieldErrors[$key]) ?></small><?php endif; ?></div><?php endforeach; ?>
 </div></fieldset>
+<?php if ($groupKey === 'forest'): ?></details><?php endif; ?>
 <?php endforeach; ?>
-<div class="form-actions"><button type="submit" class="btn">Save ML settings</button></div></form></section>
-<section class="dashboard-section"><div class="section-header"><div><h2>Recent training runs</h2><p class="section-description">Every manual, scheduled, automatic, or command-line attempt is recorded.</p></div></div><div class="table-wrap"><table><thead><tr><th scope="col">Started</th><th scope="col">Trigger</th><th scope="col">Status</th><th scope="col" class="u-num-col">Duration</th><th scope="col" class="u-num-col">Products</th><th scope="col" class="u-num-col">Records</th><th scope="col">Details</th></tr></thead><tbody>
+<div class="form-actions"><button type="submit" class="btn">Save ML settings</button><p class="section-description">Saving does not start retraining. Retrain the model to apply changes.</p></div></form></section>
+<section class="dashboard-section"><div class="section-header"><div><h2>Recent training runs</h2><p class="section-description">Latest 12 runs, newest first.</p></div></div><div class="table-wrap"><table><thead><tr><th scope="col">Started</th><th scope="col">Trigger</th><th scope="col">Status</th><th scope="col" class="u-num-col">Duration</th><th scope="col" class="u-num-col">Products</th><th scope="col" class="u-num-col">Sale records</th><th scope="col">Details</th></tr></thead><tbody>
 <?php foreach ($runs as $run):
     $statusMeta = $formatRunStatus($run['status'] ?? null);
 ?><tr><td><?= htmlspecialchars(format_display_datetime($run['started_at'] ?? null)) ?></td><td><?= htmlspecialchars($formatRunTrigger($run['trigger_type'] ?? null)) ?></td><td><span class="<?= htmlspecialchars($statusMeta['class']) ?>"><?= htmlspecialchars($statusMeta['label']) ?></span></td><td class="u-num-col"><?= $run['duration_seconds'] !== null ? number_format((float)$run['duration_seconds'], 2) . ' s' : '-' ?></td><td class="u-num-col"><?= number_format((int)($run['eligible_products'] ?? 0)) ?></td><td class="u-num-col"><?= number_format((int)($run['sales_records_used'] ?? 0)) ?></td><td class="table-cell-note"><?= htmlspecialchars($formatRunDetails($run['error_message'] ?? null)) ?></td></tr><?php endforeach; ?>
-<?php if (!$runs): ?><tr><td colspan="7" class="u-empty-cell-padded u-text-center">No training runs recorded yet. Save your configuration above or import sales history, then run a forecast training job.</td></tr><?php endif; ?></tbody></table></div></section>
+<?php if (!$runs): ?><tr><td colspan="7" class="u-empty-cell-padded u-text-center">No training runs yet. Import sales history if needed, then run a model training job.</td></tr><?php endif; ?></tbody></table></div></section>
 </main></div></body></html>

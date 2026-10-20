@@ -32,7 +32,6 @@ if (!RecoveryStore::isAvailable()) {
         . '<section class="dashboard-section">'
         . '<h1>Backup &amp; Restore</h1>'
         . '<p role="alert">Database Backup and Restore are unavailable on this hosting plan.</p>'
-        . '<p class="recovery-intro">You can continue using your other workspaces.</p>'
         . '<p class="recovery-standalone-actions"><a class="btn btn-primary" href="' . $workspaceUrl . '">Change workspace</a> '
         . '<a class="btn btn-secondary" href="' . $dashboardUrl . '">Return to dashboard</a> '
         . '<a class="recovery-standalone-link" href="' . $logoutUrl . '">Log out</a></p>'
@@ -175,7 +174,6 @@ try {
             <header class="topbar recovery-heading">
                 <div>
                     <h1>Backup &amp; Restore</h1>
-                    <p class="page-subtitle">Preserve Store records. Recover from a trusted backup.</p>
                 </div>
                 <a class="recovery-history-link" href="#backup-history">View backup history</a>
             </header>
@@ -185,7 +183,6 @@ try {
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
                     <h2 id="backup-ready-title">Your backup is ready</h2>
-                    <p class="section-description">Save <?= $escape($download['filename']) ?> on separate storage and verify the file.</p>
                     <p class="backup-ready-actions"><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" data-backup-download>Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
                 </section>
             <?php endif; ?>
@@ -194,41 +191,34 @@ try {
                 <section class="dashboard-section backup-create-panel" aria-labelledby="create-title">
                     <div class="recovery-panel-heading">
                         <h2 id="create-title">Create backup</h2>
-                        <span class="recovery-format">.sql</span>
                     </div>
-                    <p class="recovery-intro">A complete copy of the Store database, captured at one point in time.</p>
-                    <dl class="backup-specification">
-                        <div><dt>Contents</dt><dd>Store records, accounts, settings &amp; audit history</dd></div>
-                        <div><dt>During capture</dt><dd>Saving pauses briefly, then resumes</dd></div>
-                        <div><dt>After capture</dt><dd>Download the file to separate storage</dd></div>
-                    </dl>
                     <form method="post" class="backup-create-form"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn btn-primary" data-backup-create>Create SQL backup</button></form>
-                    <div class="backup-storage-note"><strong>Keep this file private.</strong><p>This unencrypted backup includes password hashes and restricted audit history. Save it somewhere other than the application server.</p></div>
+                    <div class="backup-storage-note"><strong>Unencrypted:</strong> includes password hashes and restricted audit history. Keep private on separate storage.</div>
+                    <details class="restore-details"><summary>Backup details</summary><ul class="backup-guidance"><li>Copies all Store records, accounts, settings, and audit history at one point in time.</li><li>Saving pauses briefly during capture, then resumes.</li><li>Completed means created; it does not confirm the file was safely stored. Download and verify it separately.</li></ul></details>
                     <?php if (is_file(RecoveryStore::path('latest-safety.sql'))): ?>
-                        <div class="backup-safety"><strong>Pre-restore safety copy</strong><p>Retained before the latest database replacement.</p><a href="<?= $escape(app_url('components/backup/safety_download.php')) ?>">Download safety backup</a></div>
+                        <div class="backup-safety"><a href="<?= $escape(app_url('components/backup/safety_download.php')) ?>">Download latest pre-restore safety backup</a></div>
                     <?php endif; ?>
                 </section>
                 <section class="dashboard-section backup-restore-panel" aria-labelledby="restore-title">
-                    <div class="recovery-panel-heading"><h2 id="restore-title">Restore backup</h2><span class="restore-access">Super Administrator only</span></div>
-                    <p class="recovery-intro">Return the Store database to a previously saved state.</p>
-                    <div class="restore-warning" id="restore-warning"><strong>This replaces the entire database.</strong><p>Accounts, passwords, settings and audit history return to the backup's state. Newer records are lost. Undo requires another restore.</p></div>
+                    <div class="recovery-panel-heading"><h2 id="restore-title">Restore backup</h2></div>
+                    <div class="restore-warning" id="restore-warning"><strong>This replaces the entire database, including accounts, passwords, settings, and audit history.</strong><p>Newer records are lost. Undo requires another restore.</p></div>
                     <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="restore">
-                        <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>"><label for="backup-file">RetailMind SQL backup <span class="field-required">Required</span></label><div class="restore-file-field"><input id="backup-file" type="file" name="backup_file" accept=".sql" aria-describedby="restore-file-help<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required><p id="restore-file-help">Choose a trusted .sql file, up to <?= number_format($maxUploadBytes / 1048576, 1) ?> MB. Older .rmbak files are not supported.</p></div></div>
-                        <div class="form-group<?= $invalidField === 'restore' ? ' invalid' : '' ?>"><label for="restore-password">Your current password <span class="field-required">Required</span></label><input id="restore-password" type="password" name="restore_password" autocomplete="current-password" aria-describedby="restore-password-help<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?> required><p class="backup-hint" id="restore-password-help">Verifies your identity before replacing the database.</p></div>
-                        <button type="submit" class="btn btn-danger" data-backup-restore aria-describedby="restore-warning">Verify password &amp; restore</button>
+                        <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>"><label for="backup-file">Trusted RetailMind SQL backup</label><p class="restore-file-hint" id="backup-file-hint">Max <?= number_format($maxUploadBytes / 1048576, 1) ?> MB</p><div class="restore-file-field"><input id="backup-file" type="file" name="backup_file" accept=".sql" aria-describedby="backup-file-hint<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required></div></div>
+                        <div class="form-group<?= $invalidField === 'restore' ? ' invalid' : '' ?>"><label for="restore-password">Current password</label><input id="restore-password" type="password" name="restore_password" autocomplete="current-password"<?= $invalidField === 'restore' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required></div>
+                        <button type="submit" class="btn btn-danger" data-backup-restore aria-describedby="restore-warning">Restore database</button>
                     </form>
-                    <details class="restore-details"><summary>What happens during a restore?</summary><ul class="backup-guidance"><li>A safety backup is saved before replacement.</li><li>Store access is blocked during replacement.</li><li>Everyone signs in again with the backup's credentials.</li><li>A failed restore blocks Store access until offline recovery.</li></ul></details>
+                    <details class="restore-details"><summary>Restore details</summary><ul class="backup-guidance"><li>Only trusted RetailMind .sql files are supported; older .rmbak files cannot be restored.</li><li>A safety backup is saved before replacement.</li><li>Store access is blocked during replacement.</li><li>Everyone signs in again with the backup's credentials.</li><li>A failed restore blocks Store access until offline recovery.</li></ul></details>
                 </section>
             </div>
 
             <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="history-title">
-                <div class="recovery-panel-heading"><div><h2 id="history-title">Backup history</h2><p class="section-description">Completed means created; it does not confirm the file was safely stored.</p></div><span class="history-total"><?= count($history) ?> <?= count($history) === 1 ? 'record' : 'records' ?></span></div>
+                <div class="recovery-panel-heading"><h2 id="history-title">Backup history</h2><span class="history-total"><?= count($history) ?> <?= count($history) === 1 ? 'record' : 'records' ?></span></div>
                 <?php if ($history): ?>
                     <div class="history-tools" hidden data-history-tools><div class="history-search"><label for="history-search">Search history</label><input id="history-search" type="search" placeholder="File, date, user or notes"></div><div class="history-filter"><label for="history-outcome">Outcome</label><select id="history-outcome"><option value="">All outcomes</option><?php foreach (array_unique(array_column($history, 'status')) as $status): ?><option value="<?= $escape($status) ?>"><?= $escape(ucfirst((string)$status)) ?></option><?php endforeach; ?></select></div><p class="history-count" data-history-count role="status"></p></div>
                 <?php endif; ?>
                 <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
                     <table data-no-smart-table>
-                        <thead><tr><th scope="col">File / activity</th><th scope="col">Created</th><th scope="col">Outcome</th><th scope="col">Size</th><th scope="col">Requested by</th></tr></thead>
+                        <thead><tr><th scope="col">File / activity</th><th scope="col">Created</th><th scope="col">Outcome</th><th scope="col" class="history-size">Size</th><th scope="col">Requested by</th></tr></thead>
                         <tbody><?php foreach ($history as $row): ?>
                             <tr data-history-row data-outcome="<?= $escape($row['status']) ?>">
                                 <td class="history-file"><span class="history-filename"><?= $escape($row['filename']) ?></span><span class="history-type"><?= $escape(ucfirst((string)$row['backup_type'])) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="history-notes"><summary aria-label="View notes for <?= $escape($row['filename']) ?> (<?= $escape(format_display_datetime((string)$row['created_at'])) ?>)">View notes</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
@@ -237,11 +227,10 @@ try {
                                 <td class="history-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
                                 <td class="history-user"><?= $escape($row['requested_by']) ?></td>
                             </tr><?php endforeach; ?>
-                            <tr data-history-empty <?= $history ? 'hidden' : '' ?>><td colspan="5"><div class="recovery-empty"><strong><?= $history ? 'No matching records' : 'No backups yet' ?></strong><p><?= $history ? 'Try another search or outcome.' : 'Create your first SQL backup to start a recovery history.' ?></p></div></td></tr>
+                            <tr data-history-empty <?= $history ? 'hidden' : '' ?>><td colspan="5"><div class="recovery-empty"><strong><?= $history ? 'No matching records' : 'No backups yet' ?></strong></div></td></tr>
                         </tbody>
                     </table>
                 </div>
-                <p class="history-footnote">History includes backup creation and database restoration. Files are downloaded separately.</p>
             </section>
         </main>
     </div>

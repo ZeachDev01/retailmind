@@ -1,16 +1,10 @@
 .system-health-page {
     --muted: color-mix(in srgb, #6b7280 75%, #1f2937);
     --sh-success-bg: var(--theme-success-surface, color-mix(in srgb, #16a34a 12%, #ffffff));
-    --sh-success-card-bg: var(--theme-surface-soft, color-mix(in srgb, #16a34a 6%, #ffffff));
-    --sh-success-border: color-mix(in srgb, #16a34a 35%, #e5e7eb);
     --sh-success-fg: var(--theme-success-text, color-mix(in srgb, #16a34a 72%, #0f172a));
     --sh-warning-bg: var(--theme-warning-surface, color-mix(in srgb, #d97706 14%, #ffffff));
-    --sh-warning-card-bg: var(--theme-surface-soft, color-mix(in srgb, #d97706 7%, #ffffff));
-    --sh-warning-border: color-mix(in srgb, #d97706 42%, #e5e7eb);
     --sh-warning-fg: var(--theme-warning-text, color-mix(in srgb, #d97706 68%, #0f172a));
     --sh-danger-bg: var(--theme-danger-surface, color-mix(in srgb, #dc2626 11%, #ffffff));
-    --sh-danger-card-bg: var(--theme-surface-soft, color-mix(in srgb, #dc2626 5%, #ffffff));
-    --sh-danger-border: color-mix(in srgb, #dc2626 35%, #e5e7eb);
     --sh-danger-fg: var(--theme-danger-text, color-mix(in srgb, #dc2626 75%, #0f172a));
     --sh-info-bg: var(--theme-info-surface, color-mix(in srgb, #2563eb 9%, #ffffff));
     --sh-info-fg: var(--theme-info-text, color-mix(in srgb, #2563eb 72%, #0f172a));
@@ -205,58 +199,33 @@ html[data-theme="dark"] .system-health-page {
 }
 
 .system-health-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.system-health-stats .value {
-    font-variant-numeric: tabular-nums;
-}
-
-.system-health-stats .stat-card.success {
-    border-color: var(--sh-success-border);
-    background: var(--sh-success-card-bg);
-}
-
-.system-health-stats .stat-card.success .stat-icon {
-    background: var(--sh-success-bg);
-    color: var(--sh-success-fg);
-}
-
-.system-health-stats .stat-card.warning {
-    border-color: var(--sh-warning-border);
-    background: var(--sh-warning-card-bg);
-}
-
-.system-health-stats .stat-card.warning .stat-icon {
-    background: var(--sh-warning-bg);
-    color: var(--sh-warning-fg);
-}
-
-.system-health-stats .system-health-critical {
-    border-color: var(--sh-danger-border);
-    background: var(--sh-danger-card-bg);
-}
-
-.system-health-stats .system-health-critical .stat-icon {
-    background: var(--sh-danger-bg);
-    color: var(--sh-danger-fg);
-}
-
-.system-health-stats .system-health-critical.is-clear {
-    border-color: var(--sh-success-border);
-    background: var(--sh-success-card-bg);
-}
-
-.system-health-stats .system-health-critical.is-clear .stat-icon {
-    background: var(--sh-success-bg);
-    color: var(--sh-success-fg);
-}
-
-.system-health-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(290px, 0.75fr);
-    gap: 1.5rem;
-    align-items: start;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 1.5rem;
+    padding: 1rem 0;
+    border-block: 1px solid var(--border);
+}
+
+.health-summary {
+    padding: 0 1.25rem;
+}
+
+.health-summary + .health-summary {
+    border-left: 1px solid var(--border);
+}
+
+.health-summary .value {
+    color: var(--text);
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+}
+
+.health-summary .label {
+    margin-top: 0.25rem;
+    color: var(--muted);
+    font-size: 0.875rem;
 }
 
 .system-health-checks,
@@ -264,14 +233,12 @@ html[data-theme="dark"] .system-health-page {
     min-width: 0;
 }
 
-.system-health-checks .section-header,
-.system-health-maintenance .section-header {
+.system-health-checks .section-header {
     align-items: flex-start;
     margin-bottom: 1rem;
 }
 
-.system-health-checks .section-header h2,
-.system-health-maintenance .section-header h2 {
+.system-health-checks .section-header h2 {
     margin-bottom: 0.25rem;
     font-size: 1.05rem;
 }
@@ -301,49 +268,14 @@ html[data-theme="dark"] .system-health-page {
     text-transform: uppercase;
 }
 
-.system-health-group-list {
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-}
-
 .health-check {
     min-width: 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.85rem;
-    align-items: start;
-    padding: 0.9rem 1rem;
-    background: var(--card-bg);
+    padding: 0.85rem 0;
     border-bottom: 1px solid var(--border);
 }
 
 .health-check:last-child {
     border-bottom: 0;
-}
-
-.health-icon {
-    width: 34px;
-    height: 34px;
-    display: grid;
-    place-items: center;
-    border-radius: 10px;
-    font-size: 1rem;
-}
-
-.health-icon.healthy {
-    background: var(--sh-success-bg);
-    color: var(--sh-success-fg);
-}
-
-.health-icon.warning {
-    background: var(--sh-warning-bg);
-    color: var(--sh-warning-fg);
-}
-
-.health-icon.critical {
-    background: var(--sh-danger-bg);
-    color: var(--sh-danger-fg);
 }
 
 .health-check-copy {
@@ -397,8 +329,31 @@ html[data-theme="dark"] .system-health-page {
 }
 
 .system-health-maintenance {
-    position: sticky;
-    top: 1.25rem;
+    margin-top: 1.5rem;
+}
+
+.system-health-maintenance summary {
+    min-height: 44px;
+    display: list-item;
+    align-content: center;
+    color: var(--text);
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.system-health-maintenance summary::marker {
+    color: var(--muted);
+}
+
+.system-health-maintenance summary:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 4px;
+    border-radius: 4px;
+}
+
+.system-health-maintenance[open] > .section-description {
+    margin: 0.5rem 0 1rem;
 }
 
 .maintenance-list {
@@ -451,32 +406,6 @@ html[data-theme="dark"] .system-health-page {
     scrollbar-color: var(--border) transparent;
 }
 
-.system-health-note {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.55rem;
-    margin-top: 1rem;
-    padding: 0.75rem;
-    border-radius: 10px;
-    background: var(--sh-info-bg);
-    color: var(--sh-info-fg);
-    font-size: 1rem;
-    line-height: 1.5;
-}
-
-html[data-theme="dark"] .system-health-page .system-health-stats .stat-card.success,
-html[data-theme="dark"] .system-health-page .system-health-stats .system-health-critical.is-clear {
-    border-color: color-mix(in srgb, var(--success) 45%, var(--border)) !important;
-}
-
-html[data-theme="dark"] .system-health-page .system-health-stats .stat-card.warning {
-    border-color: color-mix(in srgb, #d97706 55%, var(--border)) !important;
-}
-
-html[data-theme="dark"] .system-health-page .system-health-stats .system-health-critical:not(.is-clear) {
-    border-color: color-mix(in srgb, var(--danger) 50%, var(--border)) !important;
-}
-
 html[data-theme="dark"] .system-health-page .btn-primary:hover,
 html[data-theme="dark"] .system-health-page .btn-primary:focus-visible,
 html[data-theme="dark"] .system-health-page button[type="submit"]:hover,
@@ -493,16 +422,6 @@ html[data-theme="dark"] .system-health-page button[type="submit"]:focus-visible 
     }
 }
 
-@media (max-width: 1180px) {
-    .system-health-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .system-health-maintenance {
-        position: static;
-    }
-}
-
 @media (max-width: 900px) {
     .system-health-page .admin-mobile-menu,
     .system-health-page .admin-mobile-search,
@@ -514,8 +433,8 @@ html[data-theme="dark"] .system-health-page button[type="submit"]:focus-visible 
 }
 
 @media (max-width: 760px) {
-    .system-health-stats {
-        grid-template-columns: 1fr;
+    .health-summary {
+        padding-inline: 0.75rem;
     }
 
     .system-health-heading .page-heading-actions {

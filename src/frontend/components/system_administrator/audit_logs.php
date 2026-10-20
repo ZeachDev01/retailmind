@@ -201,7 +201,7 @@ $emptyTableCopy = $canViewPlatformAudit
                 </form>
             </div>
 
-            <div class="card-grid audit-log-stats">
+            <div class="audit-log-stats">
                 <div class="stat-card with-icon">
                     <span class="stat-icon" aria-hidden="true"><i class="bi bi-card-checklist"></i></span>
                     <div class="value" id="matchingRecordsCount" aria-live="polite" aria-atomic="true"><?= count($logs) ?></div>
@@ -283,7 +283,7 @@ $emptyTableCopy = $canViewPlatformAudit
                         <h2 id="audit-table-title">Record history</h2>
                     </div>
                 </div>
-                <div class="table-wrap audit-log-table-wrap">
+                <div class="table-wrap audit-log-table-wrap audit-history-wrap">
                     <table id="auditLogsTable" class="audit-log-table display" data-no-smart-table>
                         <thead>
                             <tr>
@@ -430,6 +430,11 @@ $emptyTableCopy = $canViewPlatformAudit
                     search: 'Search:'
                 }
             });
+
+            var tableViewport = document.querySelector('#auditLogsTable_wrapper .dt-layout-table');
+            tableViewport.tabIndex = 0;
+            tableViewport.setAttribute('role', 'region');
+            tableViewport.setAttribute('aria-label', 'Record history table');
 
             function syncExportFilters() {
                 document.getElementById('exportTableSearch').value = table.search();

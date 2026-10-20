@@ -1,0 +1,119 @@
+.ml-settings-page .ml-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+}
+
+.ml-settings-page .topbar {
+    align-items: flex-start;
+    row-gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.ml-settings-page .dashboard-section {
+    padding: 2rem;
+}
+
+.ml-settings-page .dashboard-section + .dashboard-section {
+    margin-top: 1.5rem;
+}
+
+.ml-settings-page .section-header {
+    margin-bottom: 1.75rem;
+}
+
+.ml-settings-page .settings-fieldset {
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+}
+
+.ml-settings-page .settings-fieldset > legend {
+    margin-bottom: .5rem;
+    font-size: 1.05rem;
+}
+
+.ml-settings-page .fieldset-description {
+    margin-bottom: 1.25rem;
+}
+
+.ml-settings-page .form-grid {
+    gap: 1.25rem 1.5rem;
+}
+
+.ml-settings-page .form-grid > .form-group {
+    margin-bottom: 0;
+}
+
+.ml-settings-page .field-help {
+    font-size: .82rem;
+}
+
+.ml-settings-page .form-actions {
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-top: .5rem;
+}
+
+.ml-settings-page .form-actions .btn {
+    flex-shrink: 0;
+}
+
+.ml-settings-page .form-actions p {
+    margin: 0;
+}
+
+.ml-settings-page .ml-tuning {
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.ml-settings-page .ml-tuning > summary:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+    border-radius: 6px;
+}
+
+.ml-settings-page .ml-tuning > summary {
+    padding: 1rem .5rem;
+    min-height: 44px;
+    box-sizing: border-box;
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 700;
+}
+
+.ml-settings-page .ml-tuning > summary:hover {
+    background: var(--surface-soft);
+}
+
+.ml-settings-page .ml-tuning .settings-fieldset {
+    padding: 1rem .5rem 1.5rem;
+    margin-bottom: 0;
+    border-bottom: 0;
+}
+
+.ml-settings-page .table-wrap :is(th, td):nth-child(-n + 3) {
+    white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+    .ml-settings-page .dashboard-section {
+        padding: 1.25rem;
+    }
+
+    .ml-settings-page .form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .ml-settings-page .form-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .ml-settings-page .form-actions .btn,
+    .ml-settings-page .ml-page-actions .btn {
+        width: 100%;
+    }
+}
