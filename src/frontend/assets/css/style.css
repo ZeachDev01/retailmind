@@ -750,14 +750,15 @@ button.btn-loading {
     margin-bottom: 0.2rem;
     font-size: 0.9rem;
 }
-.sidebar a i,
-.sidebar .dropbtn i {
+.sidebar a :is(i, .navigation-icon),
+.sidebar .dropbtn :is(i, .navigation-icon) {
     width: 22px;
     min-width: 22px;
     font-size: 18px;
     text-align: center;
     flex-shrink: 0;
 }
+.navigation-icon { display: inline-block; width: 22px; height: 22px; min-width: 22px; flex-shrink: 0; object-fit: contain; vertical-align: middle; pointer-events: none; }
 .sidebar a:hover, .sidebar a.active { background: rgba(37, 99, 235, 0.16); color: #fff; }
 .sidebar-nav-icon { flex-shrink: 0; width: 22px; height: 22px; object-fit: contain; }
 .sidebar-logout {
@@ -1059,9 +1060,9 @@ body.no-scroll { overflow: hidden; }
     border-color: rgba(96, 165, 250, .38);
     color: #fff;
 }
-.sidebar-workspace-switcher .sidebar-account-workspace > i:first-child,
-.sidebar-preferences-menu .sidebar-account-preferences > i:first-child,
-.sidebar-system-menu .sidebar-account-system > i:first-child {
+.sidebar-workspace-switcher .sidebar-account-workspace > :is(i, .navigation-icon):first-child,
+.sidebar-preferences-menu .sidebar-account-preferences > :is(i, .navigation-icon):first-child,
+.sidebar-system-menu .sidebar-account-system > :is(i, .navigation-icon):first-child {
     color: #93c5fd;
     font-size: 1.15rem;
     text-align: center;
@@ -1132,11 +1133,11 @@ button.sidebar-workspace-option:focus-visible {
     color: #fff;
     outline: none;
 }
-.sidebar-workspace-option > i:first-child {
+.sidebar-workspace-option > :is(i, .navigation-icon):first-child {
     color: #93c5fd;
     text-align: center;
 }
-.sidebar-workspace-option > i:last-child,
+.sidebar-workspace-option > :is(i, .navigation-icon):last-child,
 .sidebar-workspace-option small {
     color: var(--theme-info-text, #7f91aa);
     font-size: .68rem;
@@ -1146,16 +1147,16 @@ button.sidebar-workspace-option:focus-visible {
     background: var(--theme-surface-glass, rgba(255, 255, 255, .04));
     color: #fff;
 }
-.sidebar-account-actions a > i:first-child,
-.sidebar-account-button > i:first-child {
+.sidebar-account-actions a > :is(i, .navigation-icon):first-child,
+.sidebar-account-button > :is(i, .navigation-icon):first-child {
     width: 28px;
     min-width: 28px;
     color: #93c5fd;
     font-size: 1.15rem;
     text-align: center;
 }
-.sidebar-account-actions a > i:last-child,
-.sidebar-account-button > i:last-child {
+.sidebar-account-actions a > :is(i, .navigation-icon):last-child,
+.sidebar-account-button > :is(i, .navigation-icon):last-child {
     width: auto;
     min-width: 0;
     color: var(--theme-muted, #64748b);
@@ -1164,7 +1165,7 @@ button.sidebar-workspace-option:focus-visible {
 .sidebar-account-actions .sidebar-account-logout {
     color: #fecaca;
 }
-.sidebar-account-actions .sidebar-account-logout > i:first-child {
+.sidebar-account-actions .sidebar-account-logout > :is(i, .navigation-icon):first-child {
     color: #f87171;
 }
 .sidebar-preferences-options a,
@@ -1197,7 +1198,7 @@ button.sidebar-workspace-option:focus-visible {
     color: #fff;
     outline: none;
 }
-.sidebar-preference-option > i {
+.sidebar-preference-option > :is(i, .navigation-icon) {
     color: #93c5fd;
     font-size: 1.15rem;
     text-align: center;
@@ -3329,7 +3330,7 @@ body.system-health-open {
   padding: 0.85rem;
   border-bottom: 1px solid var(--border);
 }
-.command-search-row i {
+.command-search-row > :is(i, .navigation-icon) {
   position: absolute;
   left: 1.7rem;
   top: 50%;
@@ -3374,7 +3375,7 @@ body.system-health-open {
 .command-result.active {
   background: var(--theme-surface-soft, #eff6ff);
 }
-.command-result i {
+.command-result :is(i, .navigation-icon) {
   width: 24px;
   color: var(--primary);
   font-size: 1.1rem;
