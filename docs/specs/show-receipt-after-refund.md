@@ -66,16 +66,22 @@ Immediately show the saved Refund Receipt inline after a successful Cash Refund.
 
 The final requirement is to show the receipt automatically, not print automatically. This supersedes the earlier interview answer requesting an automatic print dialog.
 
-Code inspection indicates that the existing implementation already redirects a completed refund to its saved inline Refund Receipt. End-to-end runtime behavior has been verified through the production completion flow; no application change was needed.
+Code inspection indicates that the existing implementation already redirects a completed refund to its saved inline Refund Receipt. End-to-end runtime behavior has been verified through the production completion flow, with one repair to the persistent-shell navigation described below.
 
 ## Verification — 2026-10-22
 
+The first runtime report was “no receipt after a refund” even though the server logged the `303` and receipt `200`. The persistent shell committed the receipt correctly, but reset the scroll position only after optional page scripts finished. When a receipt script failed or hung, the swapped-in receipt stayed above the viewport and the operator still saw the refund page, so the completion looked like it had not redirected.
+
+`src/frontend/assets/js/page-navigation.js` now reveals the committed page (instant `scrollTo(0, 0)`) immediately after replacing the content and before page scripts run. `src/backend/tests/refund_completion_browser_test.js` therefore scrolls the refund form to its bottom before submitting and proves the failure path:
+
+- A fourth refund submits with `sale-receipt.js` aborted. The navigation error is reported, yet `window.scrollY` is `0` and the completed receipt is inside the viewport. With the previous scroll timing this assertion fails (`scrollY` 931, receipt above the viewport).
+
 `src/backend/tests/refund_completion_browser_test.js` drives the real Cash Refund handler against a disposable database for both 80 mm and 58 mm Register widths:
 
-- A valid full refund and two partial refunds each submit through the confirmation dialog, redirect to a GET for a distinct saved Refund Receipt, and render the inline thermal preview without a history search.
+- A valid full refund and two partial refunds each submit through the confirmation dialog, redirect to a GET for a distinct saved Refund Receipt, and render the inline thermal preview without a history search. The completed receipt is scrolled into view after submit.
 - Each receipt shows its own refund and original sale identifiers, only that refund's product, quantity, and amount, plus the existing Date/Time, Cashier, Register, Reason, payment method, and configured paper width. The internal note, kept item, and Damaged classification are absent.
-- The original Sale Receipt, sale lines, saved sale details, stock movements, inventory, and product batches remain unchanged by completion, printing, refreshes, and history visits. Only the three refunds append financial rows and audit records.
+- The original Sale Receipt, sale lines, saved sale details, stock movements, inventory, and product batches remain unchanged by completion, printing, refreshes, and history visits. Only the four refunds append financial rows and audit records.
 - Completion, two Print Refund Receipt attempts, refresh, and each history reopening never invoke `window.print`; clicking Print invokes it exactly once per click, uses the configured paper width, and leaves the completed receipt visible after the browser dismisses the dialog.
 - An already-refunded sale submitted directly returns the existing "already been fully refunded" validation error with no completed receipt shown.
 
-Existing coverage remains responsible for the exception path, narrow authorization, and saved-detail stability after Store, product, Cashier, and Register edits (`cash_refund_concurrency_integration.php`, `safe_refund_http_scenarios.php`), and for print styling and reprint behaviour (`refund_receipt_browser_test.js`, `refund_reprint_browser_test.js`). No demonstrated gap required repair.
+Existing coverage remains responsible for the exception path, narrow authorization, and saved-detail stability after Store, product, Cashier, and Register edits (`cash_refund_concurrency_integration.php`, `safe_refund_http_scenarios.php`), and for print styling and reprint behaviour (`refund_receipt_browser_test.js`, `refund_reprint_browser_test.js`).

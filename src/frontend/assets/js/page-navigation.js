@@ -313,6 +313,15 @@
             const replacement = document.importNode(main, true);
             if (!replacement.id) replacement.id = 'page-content';
             content.replaceWith(replacement);
+            // Reveal the committed page before optional page scripts run. A slow
+            // or failed receipt script must not leave a completed result above
+            // the viewport (the operator would still see the old page position).
+            const root = document.documentElement;
+            const scrollBehavior = root.style.scrollBehavior;
+            root.style.scrollBehavior = 'auto';
+            replacement.scrollTop = 0;
+            window.scrollTo(0, 0);
+            root.style.scrollBehavior = scrollBehavior;
             // Some legacy pages keep dialogs after </main>; move those with the page as well.
             main.remove();
             incoming.querySelector('.app-shell')?.replaceWith(...incoming.querySelector('.app-shell').childNodes);
@@ -353,8 +362,6 @@
             initializing = false;
             currentURL = location.href;
             window.dispatchEvent(new CustomEvent('retailmind:pagechange', {detail: {url: finalURL.href}}));
-            replacement.scrollTop = 0;
-            window.scrollTo(0, 0);
         } catch (error) {
             failProgress();
             if (request !== sequence || error.name === 'AbortError') return;

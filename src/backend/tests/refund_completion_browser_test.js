@@ -46,9 +46,15 @@ const { chromium } = require('playwright');
             await form.locator('select[name^="disposition"]').first().selectOption('damaged');
             await form.locator('#reason').selectOption('customer_return');
             await form.locator('#note').fill('INTERNAL-NOTE-269');
+            await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+            assert.ok(await page.evaluate(() => window.scrollY) > 0, 'refund form is scrolled before submit');
             await form.getByRole('button', { name: 'Record refund', exact: true }).click();
             await page.locator('.rm-modal-overlay[data-rm-confirm] .rm-accept').click();
             await page.waitForURL('**/refunds.php?refund_id=*');
+            await page.waitForFunction(() => window.scrollY === 0);
+            const receiptBox = await receipt.boundingBox();
+            assert.ok(receiptBox && receiptBox.y >= 0 && receiptBox.y < await page.evaluate(() => innerHeight),
+                'completed receipt is scrolled into view');
             const refundId = Number(new URL(page.url()).searchParams.get('refund_id'));
             assert.ok(refundId > 0 && !refundIds.includes(refundId), 'each completion opens a distinct saved receipt');
             refundIds.push(refundId);
@@ -81,6 +87,26 @@ const { chromium } = require('playwright');
             assert.equal(await preview.innerText(), text);
             assert.equal(await page.evaluate(() => window.printCalls), 0, 'refresh never auto-prints');
         }
+        // A completed refund must still reveal its receipt when a page script fails.
+        const failedSaleId = Number(process.argv[6]);
+        await page.goto(`${origin}/components/cashier/refunds.php?sale_id=${failedSaleId}`);
+        await page.locator('.main-content').waitFor();
+        const failedForm = page.locator('.refund-sale .refund-form');
+        await failedForm.locator('input[name^="quantity"]').first().fill('1');
+        await failedForm.locator('select[name^="disposition"]').first().selectOption('damaged');
+        await failedForm.locator('#reason').selectOption('customer_return');
+        await page.route('**/assets/js/sale-receipt.js*', route => route.abort());
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        assert.ok(await page.evaluate(() => window.scrollY) > 0, 'refund form is scrolled before submit');
+        await failedForm.getByRole('button', { name: 'Record refund', exact: true }).click();
+        await page.locator('.rm-modal-overlay[data-rm-confirm] .rm-accept').click();
+        await page.waitForURL('**/refunds.php?refund_id=*');
+        await page.locator('[data-navigation-status][role="alert"]').waitFor();
+        assert.equal(await page.evaluate(() => window.scrollY), 0, 'committed receipt is revealed when a page script fails');
+        const failedBox = await receipt.boundingBox();
+        assert.ok(failedBox && failedBox.y >= 0 && failedBox.y < await page.evaluate(() => innerHeight),
+            'completed receipt stays in view when a page script fails');
+        await page.unroute('**/assets/js/sale-receipt.js*');
         // Each receipt names only its own refund and original sale; nothing cumulative.
         for (const [index, text] of receipts.entries()) {
             for (const [other, refundId] of refundIds.entries()) {
@@ -95,7 +121,7 @@ const { chromium } = require('playwright');
             assert.equal(await receipt.locator('.receipt-print-area').innerText(), receipts[index]);
             assert.equal(await page.evaluate(() => window.printCalls), 0, 'history never auto-prints');
         }
-        assert.equal(posts.length, 3, 'printing, cancellation, refresh and history submit no extra refunds');
+        assert.equal(posts.length, 4, 'printing, cancellation, refresh and history submit no extra refunds');
         // Submit an exhausted sale directly to exercise server validation beyond browser limits.
         const failed = await page.request.post(`${origin}/components/cashier/refunds.php`, {
             form: { csrf_token: 'fixture-csrf', sale_id: saleId, [`quantity[${saleId}]`]: 1,
