@@ -263,17 +263,19 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         </dialog>
         <dialog id="gcash-open-dialog" aria-labelledby="gcash-open-title">
             <form id="gcash-open-form">
-                <h2 id="gcash-open-title">Open GCash responsibility</h2>
+                <h2 id="gcash-open-title">Open GCash Shift</h2>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-open-cash">Counted service cash (PHP)</label>
+                    <label class="pos-field-label" for="gcash-open-cash">Cash on Hand (PHP)</label>
                     <input class="pos-input" id="gcash-open-cash" name="opening_cash" type="number" step="0.01" min="0" required placeholder="0.00">
+                    <small>Enter physical cash in drawer</small>
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-open-wallet">Checked wallet balance (PHP)</label>
+                    <label class="pos-field-label" for="gcash-open-wallet">GCash Wallet Balance (PHP)</label>
                     <input class="pos-input" id="gcash-open-wallet" name="opening_wallet" type="number" step="0.01" min="0" required placeholder="0.00">
+                    <small>Enter current balance in GCash app</small>
                 </div>
                 <div class="gcash-actions">
-                    <button class="btn" type="submit" id="gcash-open-submit">Open session</button>
+                    <button class="btn btn-primary" type="submit" id="gcash-open-submit">Start Session</button>
                     <button class="btn btn-secondary" type="button" id="gcash-open-cancel">Cancel</button>
                 </div>
             </form>

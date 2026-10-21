@@ -1,0 +1,150 @@
+<?php
+
+use App\Core\Environment;
+use App\Support\ErrorFallback;
+use App\Support\OperatorAlert;
+
+$rootPath = dirname(__DIR__, 2);
+$backendPath = dirname(__DIR__);
+$frontendPath = $rootPath . '/frontend';
+
+$composerAutoload = dirname($rootPath) . '/vendor/autoload.php';
+if (!is_file($composerAutoload)) {
+    $composerAutoload = $rootPath . '/vendor/autoload.php';
+}
+if (is_file($composerAutoload)) {
+    require_once $composerAutoload;
+}
+
+spl_autoload_register(static function (string $class) use ($backendPath): void {
+    if (strncmp($class, 'App\\', 4) !== 0) {
+        return;
+    }
+
+    static $resolved = [];
+    if (isset($resolved[$class])) {
+        if ($resolved[$class] !== false) {
+            require_once $resolved[$class];
+        }
+        return;
+    }
+
+    $relativeClass = substr($class, 4);
+    $file = $backendPath . '/app/' . str_replace('\\', '/', $relativeClass) . '.php';
+    if (is_file($file)) {
+        $resolved[$class] = $file;
+        require_once $file;
+    } else {
+        $resolved[$class] = false;
+    }
+});
+
+$workspacePath = dirname($rootPath);
+$envPath = is_file($workspacePath . '/.env')
+    ? $workspacePath . '/.env'
+    : (is_file($rootPath . '/.env') ? $rootPath . '/.env' : $backendPath . '/.env');
+Environment::load($envPath);
+
+if (!function_exists('env')) {
+    function env(string $key, $default = null) {
+        return Environment::get($key, $default);
+    }
+}
+
+$appEnv = (string)env('APP_ENV', 'production');
+$debugDefault = $appEnv !== 'production' ? 'true' : 'false';
+$debug = filter_var(env('APP_DEBUG', $debugDefault), FILTER_VALIDATE_BOOLEAN);
+$timezone = (string)env('APP_TIMEZONE', 'Asia/Manila');
+
+date_default_timezone_set($timezone);
+
+$storagePath = $backendPath . '/storage';
+$logPath = $storagePath . '/logs';
+if (!is_dir($logPath)) {
+    mkdir($logPath, 0775, true);
+}
+
+ini_set('log_errors', '1');
+ini_set('error_log', $logPath . '/app.log');
+ini_set('display_errors', $debug ? '1' : '0');
+error_reporting(E_ALL);
+
+$GLOBALS['app'] = [
+    'root_path' => $rootPath,
+    'backend_path' => $backendPath,
+    'frontend_path' => $frontendPath,
+    'storage_path' => $storagePath,
+    'log_path' => $logPath,
+    'env' => $appEnv,
+    'debug' => $debug,
+];
+
+set_exception_handler(static function (Throwable $exception): void {
+    error_log((string)$exception);
+
+    if (PHP_SAPI === 'cli') {
+        fwrite(STDERR, 'Unhandled application exception: ' . $exception->getMessage() . PHP_EOL);
+        // CLI/test callers must observe a fatal through a nonzero exit code;
+        // logging and returning would silently truncate a suite.
+        exit(1);
+    }
+
+    // A Database Backup capture is pausing Store writes (#69). That is a
+    // retryable condition, not a failure, so it answers with a clear
+    // "saving is paused" result and never with a technical error page.
+    if ($exception instanceof App\Store\StoreWritePausedException) {
+        if (!headers_sent()) {
+            http_response_code(409);
+        }
+        if (App\Support\ErrorFallback::expectsJson()) {
+            if (!headers_sent()) {
+                header('Content-Type: application/json');
+            }
+            echo json_encode([
+                'success' => false,
+                'paused' => true,
+                'message' => $exception->getMessage(),
+                'errors' => [],
+            ]);
+            return;
+        }
+        echo App\Support\ErrorFallback::page(
+            $exception,
+            App\Support\OperatorAlert::isDebug(),
+            $exception->getMessage()
+        );
+        return;
+    }
+
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+
+    $debug = OperatorAlert::isDebug();
+
+    if (ErrorFallback::expectsJson()) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json');
+        }
+        echo json_encode(ErrorFallback::json($exception, $debug));
+        return;
+    }
+
+    echo ErrorFallback::page($exception, $debug);
+});
+
+// The filesystem lease survives MySQL DDL commits and database replacement.
+// Only the explicit offline recovery command can enter an incomplete restore.
+$offlineRecovery = PHP_SAPI === 'cli'
+    && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === realpath($backendPath . '/scripts/restore_database.php');
+if (!$offlineRecovery && !App\Backup\RecoveryStore::admitRequest()) {
+    if (PHP_SAPI !== 'cli') {
+        http_response_code(503);
+        header('Retry-After: 30');
+        header('Content-Type: text/plain; charset=utf-8');
+    }
+    echo 'Database recovery is in progress. Store access is paused. The Super Administrator can finish recovery using the offline restore command.';
+    exit(1);
+}
+
+return $GLOBALS['app'];
