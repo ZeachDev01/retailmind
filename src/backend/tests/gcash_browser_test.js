@@ -52,6 +52,14 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.goto(origin + '/components/cashier/gcash.php');
         const nav = await page.locator('.sidebar-nav a').allTextContents();
         assert.equal(nav.findIndex(label => label.trim() === 'GCash'), nav.findIndex(label => label.trim() === 'Point of Sale') + 1);
+        const gcashNav = page.locator('.sidebar-nav').getByRole('link', {name: 'GCash', exact: true});
+        const brandmark = gcashNav.locator('img');
+        assert.equal(await brandmark.count(), 1, 'GCash navigation displays the brandmark');
+        assert.equal(await brandmark.getAttribute('alt'), '', 'Link text supplies the accessible name');
+        const logoResponse = await page.request.get(new URL(await brandmark.getAttribute('src'), page.url()).href);
+        assert.equal(logoResponse.ok(), true, 'GCash brandmark is served locally');
+        assert.match(logoResponse.headers()['content-type'], /image\/svg\+xml/);
+        assert.equal(await brandmark.evaluate(image => image.complete && image.naturalWidth > 0), true, 'GCash SVG loads');
 
         const unavailableMessage = 'GCash records are unavailable. Try again later.';
         await page.route('**/gcash_api.php?action=session_status', route => route.fulfill({

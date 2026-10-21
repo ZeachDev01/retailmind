@@ -185,7 +185,7 @@
 .cashier-shifts-page .shift-topbar > div { flex: 1 1 320px; min-width: 0; }
 .cashier-shifts-page .shift-topbar .btn { flex: 0 0 auto; white-space: nowrap; }
 .cashier-shifts-page .shift-topbar h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); line-height: 1.2; letter-spacing: -.02em; text-wrap: balance; }
-.cashier-shifts-page .shift-topbar .page-subtitle { max-width: 65ch; font-size: 1rem; line-height: 1.6; }
+.cashier-shifts-page .shift-topbar .page-subtitle { max-width: 65ch; font-size: .875rem; line-height: 1.5; }
 .cashier-shifts-page .dashboard-section { border: 1px solid var(--border); border-radius: 16px; }
 .cashier-shifts-page .shift-overview { background: var(--theme-surface-soft, #f8fafc); }
 .cashier-shifts-page .shift-details { margin: 0; }
@@ -200,8 +200,9 @@
 .cashier-shifts-page .shift-help { line-height: 1.6; }
 .cashier-shifts-page .main-content { line-height: 1.5; }
 .cashier-shifts-page .main-content :is(input, select, textarea, button) { font-family: inherit; }
-.cashier-shifts-page :is(input[type="number"], .money-counter-totals strong, .money-count-breakdown dd, .metric, .shift-details dd) { font-variant-numeric: tabular-nums; }
+.cashier-shifts-page :is(input[type="number"], .money-counter-row label, .money-counter-totals strong, .money-count-breakdown dd, .metric, .shift-details dd, .shift-movement-table td[data-label="Amount"]) { font-variant-numeric: tabular-nums; }
 .cashier-shifts-page .shift-help a { text-underline-offset: .2em; }
+.cashier-shifts-page .money-counter-subtotal { font-size: 1rem; line-height: 1.5; }
 
 .cashier-shifts-page .shift-overview {
     grid-column: 1 / -1;
@@ -209,7 +210,7 @@
 
 .cashier-shifts-page h2 {
     margin-bottom: 1.25rem;
-    font-size: 1.05rem;
+    font-size: 1.25rem;
     line-height: 1.3;
     font-weight: 700;
     text-wrap: balance;
@@ -253,6 +254,8 @@
     margin-top: 0.25rem;
     font-weight: 600;
 }
+
+.cashier-shifts-page .shift-details dt { font-weight: 600; }
 
 .cashier-shifts-page .shift-metrics {
     display: flex;

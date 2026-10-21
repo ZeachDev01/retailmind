@@ -759,6 +759,7 @@ button.btn-loading {
     flex-shrink: 0;
 }
 .sidebar a:hover, .sidebar a.active { background: rgba(37, 99, 235, 0.16); color: #fff; }
+.sidebar-nav-icon { flex-shrink: 0; width: 22px; height: 22px; object-fit: contain; }
 .sidebar-logout {
     margin-top: 1rem;
     color: #f87171 !important;

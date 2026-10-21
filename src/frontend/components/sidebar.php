@@ -104,7 +104,7 @@ function sidebar_item_paths(array $items): array
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
 ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><?php if (!empty($item['image'])): ?><img class="sidebar-nav-icon" src="<?= sidebar_e(app_url($item['image'])) ?>" alt="" width="22" height="22"><?php else: ?><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><?php endif; ?><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
 <?php
 }
 
@@ -241,7 +241,7 @@ $roleSections = [
             'title' => 'Sales',
             'items' => [
                 ['path' => 'components/cashier/pos.php', 'icon' => 'bi-cart-check', 'label' => 'Point of Sale'],
-                ['path' => 'components/cashier/gcash.php', 'icon' => 'bi-wallet2', 'label' => 'GCash'],
+                ['path' => 'components/cashier/gcash.php', 'image' => 'assets/img/gcash-brandmark.svg', 'label' => 'GCash'],
                 ['path' => 'components/cashier/shifts.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shift'],
                 ['path' => 'components/cashier/refunds.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Cash Refunds'],
                 ['path' => 'components/cashier/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard Overview'],
