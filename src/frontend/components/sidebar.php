@@ -331,7 +331,6 @@ $GLOBALS['rm_navigation_shell'] = [
                 <strong><?= sidebar_e($sidebarUserName) ?></strong>
                 <span><?= sidebar_e($sidebarRoleLabel) ?></span>
             </span>
-            <?= sidebar_icon('menu', 'bi-three-dots-vertical') ?>
         </button>
     </div>
 </div>
