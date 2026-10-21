@@ -24,7 +24,7 @@ const { chromium } = require('playwright');
             const skuInput = document.getElementById('sku-input');
             const quickCategoryFilters = document.getElementById('quick-category-filters');
             const quickProductGrid = document.getElementById('quick-product-grid');
-            const quickProducts = Array.from({length: 24}, (_, i) => ({product_id: i + 1, name: i ? 'Peanut Butter 340g' : 'Long Grain Rice 1kg', price: 125, quantity_on_hand: 50, sku: 'GROCERY-001', category_name: 'Grocery'}));
+            const quickProducts = Array.from({length: 24}, (_, i) => ({product_id: i + 1, name: i ? 'Peanut Butter 340g' : 'Long Grain Rice 1kg', price: 125, quantity_on_hand: 50, sku: 'GROCERY-001', category_name: 'Grocery', ...(i === 0 ? {pack_size: 12, pack_price: 1400, sealed_packs: 4} : {})}));
             const quickProductById = new Map(quickProducts.map(p => [p.product_id, p]));
             const checkoutButton = document.getElementById('checkout-button'), holdSaleButton = document.getElementById('hold-sale-btn'), voidSaleButton = document.getElementById('void-sale-btn'), clearCartButton = document.getElementById('clear-cart-btn');
             function getLowStockThreshold() { return 0; }
@@ -50,6 +50,33 @@ const { chromium } = require('playwright');
                 const product = await page.locator('.pos-workspace').boundingBox();
                 const checkout = await page.locator('.checkout-panel').boundingBox();
                 const label = `${viewport.width}x${viewport.height}, fullscreen=${fullscreen}`;
+                for (const compact of [false, true]) {
+                    await page.locator('#quick-product-grid').evaluate((el, compact) => el.classList.toggle('compact', compact), compact);
+                    for (const [piece, pack] of [[0, 0], [1, 0], [0, 1], [1, 1], [2, 4]]) {
+                        await page.evaluate(({piece, pack}) => {
+                            cart = {'1:piece': {qty: piece}, '1:pack': {qty: pack}};
+                            updateQuickProductAvailability();
+                        }, {piece, pack});
+                        const action = page.locator('.quick-product-action').first();
+                        assert.ok(await action.evaluate(el => el.scrollWidth <= el.clientWidth + 1), `${label}: pack controls fit (compact=${compact}, piece=${piece}, pack=${pack})`);
+                        for (const button of await action.locator('button').all()) {
+                            const box = await button.boundingBox();
+                            assert.ok(box.width >= 44 && box.height >= 44, `${label}: pack and piece targets are at least 44px`);
+                        }
+                        if (pack === 0) {
+                            assert.ok(await action.locator('[data-selling-form="pack"]').evaluate(el => {
+                                const range = document.createRange();
+                                range.selectNodeContents(el.lastChild);
+                                return range.getClientRects().length === 1 && el.scrollWidth <= el.clientWidth;
+                            }), `${label}: Pack of 12 stays on one line`);
+                        }
+                        if (pack === 4) {
+                            assert.equal(await action.locator('[data-selling-form="pack"]').isDisabled(), true, `${label}: sealed pack limit still disables add`);
+                        }
+                    }
+                }
+                await page.locator('#quick-product-grid').evaluate(el => el.classList.remove('compact'));
+                await page.evaluate(() => populateCart());
                 for (const selector of ['.cart-table-wrap', '.pos-workspace', '.checkout-panel']) {
                     assert.ok(await page.locator(selector).evaluate(el => el.scrollWidth <= el.clientWidth + 1), `${label}: ${selector} has no horizontal overflow`);
                 }
