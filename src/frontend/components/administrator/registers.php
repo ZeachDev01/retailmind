@@ -127,12 +127,15 @@ $allRegisters = $registers->all();
                     <?php foreach ($allRegisters as $register): ?>
                         <?php $isActive = $register['status'] === RegisterService::STATUS_ACTIVE; ?>
                         <tr>
-                            <td>
+                            <td class="register-name-cell">
                                 <div class="register-identity">
                                     <strong><?= htmlspecialchars($register['name']) ?></strong>
+                                    <button class="register-edit-toggle" type="button" aria-label="Edit <?= htmlspecialchars($register['name']) ?>" aria-expanded="false" aria-controls="rename-form-<?= (int)$register['register_id'] ?>">
+                                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                                    </button>
                                     <span class="register-id">Register ID #<?= (int)$register['register_id'] ?></span>
                                 </div>
-                                <form method="post" class="inline-form">
+                                <form method="post" class="inline-form register-rename-form" id="rename-form-<?= (int)$register['register_id'] ?>" hidden>
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="rename">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
@@ -152,7 +155,7 @@ $allRegisters = $registers->all();
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="set_paper_width">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
-                                    <select name="paper_width_mm" aria-label="Receipt paper width for <?= htmlspecialchars($register['name']) ?>" required>
+                                    <select name="paper_width_mm" aria-label="Receipt paper width for <?= htmlspecialchars($register['name']) ?>" required onchange="this.form.requestSubmit()">
                                         <option value="80" <?= $register['paper_width_mm'] === 80 ? 'selected' : '' ?>>80 mm</option>
                                         <option value="58" <?= $register['paper_width_mm'] === 58 ? 'selected' : '' ?>>58 mm</option>
                                     </select>
@@ -186,5 +189,16 @@ $allRegisters = $registers->all();
         </section>
     </main>
 </div>
+<script>
+document.querySelectorAll('.register-edit-toggle').forEach(button => {
+    button.addEventListener('click', () => {
+        const form = document.getElementById(button.getAttribute('aria-controls'));
+        const open = form.hidden;
+        form.hidden = !open;
+        button.setAttribute('aria-expanded', String(open));
+        if (open) form.querySelector('input[name="name"]').focus();
+    });
+});
+</script>
 </body>
 </html>
