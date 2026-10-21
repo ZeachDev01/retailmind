@@ -2079,24 +2079,6 @@ CREATE TABLE `gcash_funding_movements` (
   CONSTRAINT `fk_gcash_funding_rec` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `gcash_adjustments` (
-  `adjustment_id` int NOT NULL AUTO_INCREMENT,
-  `transaction_id` bigint unsigned NOT NULL,
-  `session_id` int NOT NULL,
-  `service_cash_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
-  `wallet_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
-  `reason` varchar(255) NOT NULL,
-  `authorized_by` int NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`adjustment_id`),
-  KEY `idx_gcash_adj_tx` (`transaction_id`),
-  KEY `idx_gcash_adj_session` (`session_id`),
-  KEY `idx_gcash_adj_auth` (`authorized_by`),
-  CONSTRAINT `fk_gcash_adj_tx` FOREIGN KEY (`transaction_id`) REFERENCES `gcash_transactions` (`transaction_id`),
-  CONSTRAINT `fk_gcash_adj_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`),
-  CONSTRAINT `fk_gcash_adj_auth` FOREIGN KEY (`authorized_by`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE `gcash_transactions` (
   `transaction_id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `session_id` int DEFAULT NULL,
@@ -2130,6 +2112,24 @@ CREATE TABLE `gcash_transactions` (
   CONSTRAINT `fk_gcash_reviewer` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`),
   CONSTRAINT `fk_gcash_transaction_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`),
   CONSTRAINT `fk_gcash_transaction_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `gcash_adjustments` (
+  `adjustment_id` int NOT NULL AUTO_INCREMENT,
+  `transaction_id` bigint unsigned NOT NULL,
+  `session_id` int NOT NULL,
+  `service_cash_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `wallet_delta` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `reason` varchar(255) NOT NULL,
+  `authorized_by` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`adjustment_id`),
+  KEY `idx_gcash_adj_tx` (`transaction_id`),
+  KEY `idx_gcash_adj_session` (`session_id`),
+  KEY `idx_gcash_adj_auth` (`authorized_by`),
+  CONSTRAINT `fk_gcash_adj_tx` FOREIGN KEY (`transaction_id`) REFERENCES `gcash_transactions` (`transaction_id`),
+  CONSTRAINT `fk_gcash_adj_session` FOREIGN KEY (`session_id`) REFERENCES `gcash_service_sessions` (`session_id`),
+  CONSTRAINT `fk_gcash_adj_auth` FOREIGN KEY (`authorized_by`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE ml_jobs (
