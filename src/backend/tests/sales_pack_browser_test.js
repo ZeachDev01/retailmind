@@ -66,15 +66,12 @@ const { chromium } = require('playwright');
             await page.locator('#create-pack-price').fill('100.00');
             await page.locator('#wizard-next').click();
 
-            // Panel 4: Stock Mode & Starting Stock
+            // Panel 4: starting stock follows Sales Pack configuration automatically.
             assert.ok(await page.locator('[data-panel="4"]').evaluate(p => p.classList.contains('active')), 'Step 4 is now active');
 
-            // Verify sales pack option exists and switch mode
-            const packsModeRadio = page.locator('input[name="starting_stock_mode"][value="packs"]');
-            assert.ok(await packsModeRadio.isVisible(), 'Sales pack starting stock option is visible');
-
-            // Prior pieces quantity was 0, ensure switching to packs does NOT infer packs
-            await packsModeRadio.check();
+            assert.equal(await page.locator('[name="starting_stock_mode"]').count(), 0, 'No stock-mode selection is needed');
+            assert.ok(await page.getByLabel('Sales Packs', { exact: true }).isVisible(), 'Sales Pack count is shown automatically');
+            assert.equal(await page.getByLabel('Starting pieces', { exact: true }).isVisible(), false, 'Equivalent total is not editable');
             assert.ok(['0', ''].includes(await page.locator('#starting-packs-count').inputValue()), 'Packs count starts at 0 or empty (never inferred)');
             assert.ok(['0', ''].includes(await page.locator('#starting-pack-loose-count').inputValue()), 'Loose count starts at 0 or empty');
 
@@ -86,6 +83,49 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('#initial-stock-quantity').inputValue(), '63', '5 packs of 12 + 3 loose = 63 Base Units');
             const previewText = await page.locator('#stock-sales-pack-calc-preview').textContent();
             assert.ok(previewText.includes('63'), 'Calc preview reflects 63 Base Units');
+            assert.ok(previewText.includes('1 Sales Pack = 12'), 'Preview explains the Sales Pack size');
+            await page.getByLabel('Units per supplier box', { exact: true }).fill('144');
+            assert.equal(await page.locator('#initial-stock-quantity').inputValue(), '63', 'Supplier box size stays separate');
+
+            // Closing and reopening preserves explicit sealed and loose counts.
+            await page.locator('#add-product-modal [data-close-modal]').first().click();
+            await page.evaluate(() => RetailMindUI.openOverlay(document.getElementById('add-product-modal')));
+            assert.equal(await page.locator('#starting-packs-count').inputValue(), '5');
+            assert.equal(await page.locator('#starting-pack-loose-count').inputValue(), '3');
+            assert.equal(await page.locator('#initial-stock-quantity').inputValue(), '63');
+
+            // Invalid visible counts and overflow must block review.
+            for (const invalid of ['-1', '1.5', '2147483647']) {
+                await page.locator('#starting-packs-count').fill(invalid);
+                await page.locator('#wizard-next').click();
+                assert.ok(await page.locator('[data-panel="4"]').evaluate(p => p.classList.contains('active')), `${invalid} pack count blocks review`);
+            }
+            await page.locator('#starting-packs-count').fill('5');
+            await page.locator('#starting-pack-loose-count').fill('1.5');
+            await page.locator('#wizard-next').click();
+            assert.ok(await page.locator('[data-panel="4"]').evaluate(p => p.classList.contains('active')), 'Fractional loose count blocks review');
+            await page.locator('#starting-pack-loose-count').fill('3');
+
+            assert.equal(await page.locator('#stock-sales-packs-wrapper').evaluate(el => el.closest('.form-group').classList.contains('invalid')), false, 'Correcting counts clears the stock error');
+            await page.screenshot({ path: path.join(process.env.TEMP || '.', `retailmind-starting-stock-${width}.png`), fullPage: true });
+            assert.ok(await page.locator('#add-product-modal .rm-modal').evaluate(el => el.scrollWidth <= el.clientWidth), 'Modal has no horizontal overflow');
+
+            // Removing the pack configuration keeps the total as pieces; enabling it never invents sealed stock.
+            await page.evaluate(() => setWizardStep(3));
+            await page.locator('#create-pack-size').fill('');
+            await page.locator('#create-pack-barcode').fill('');
+            await page.locator('#create-pack-price').fill('');
+            await page.locator('#wizard-next').click();
+            assert.equal(await page.getByLabel('Starting pieces', { exact: true }).inputValue(), '63');
+            await page.evaluate(() => setWizardStep(3));
+            await page.locator('#create-pack-size').fill('12');
+            await page.locator('#create-pack-barcode').fill('BISCUIT-12PK');
+            await page.locator('#create-pack-price').fill('100.00');
+            await page.locator('#wizard-next').click();
+            assert.equal(await page.locator('#starting-packs-count').inputValue(), '0');
+            assert.equal(await page.locator('#starting-pack-loose-count').inputValue(), '63');
+            await page.locator('#starting-packs-count').fill('5');
+            await page.locator('#starting-pack-loose-count').fill('3');
 
             // Advance to Panel 5: Review
             await page.locator('#wizard-next').click();
@@ -105,10 +145,14 @@ const { chromium } = require('playwright');
             assert.equal(submitted.pack_size, '12');
             assert.equal(submitted.pack_barcode, 'BISCUIT-12PK');
             assert.equal(submitted.pack_price, '100.00');
-            assert.equal(submitted.starting_stock_mode, 'packs');
+            assert.equal(submitted.starting_stock_mode, undefined);
             assert.equal(submitted.starting_packs, '5');
             assert.equal(submitted.starting_loose, '3');
             assert.equal(submitted.initial_stock_quantity, '63');
+
+            await page.evaluate(() => clearFormState());
+            await page.evaluate(() => setWizardStep(4));
+            assert.equal(await page.getByLabel('Starting pieces', { exact: true }).inputValue(), '0', 'Reset returns to piece-only entry');
 
             assert.deepEqual(errors, []);
             await page.close();
