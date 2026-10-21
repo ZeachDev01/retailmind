@@ -2420,6 +2420,8 @@ foreach ($products as $product) {
                     saveBtn.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Save changes';
                 }
             }
+        }
+
         function updateProductTableRow(product) {
             const row = document.querySelector(`tr[data-product-id="${product.product_id}"]`);
             if (!row) return;
