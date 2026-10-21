@@ -63,7 +63,7 @@ Closing is allowed only once the end date has arrived, every Cashier Shift is cl
 
 ## Testing Decisions
 
-- Proposed test seams, pending the user's confirmation required by to-spec: use existing service entry points with database-backed integration tests for fiscal and transaction behavior, plus the Administrator request boundary for lifecycle authorization and validation. Use a small browser smoke check only for the changed controls and actionable blocker presentation. No new testing framework or production abstraction is needed.
+- User-confirmed test seams: use existing service entry points with database-backed integration tests for fiscal and transaction behavior, plus the Administrator request boundary for lifecycle authorization and validation. Use a small browser smoke check only for the changed controls and actionable blocker presentation. No new testing framework or production abstraction is needed.
 - Good tests call supported operations and assert user-visible results, persisted records, unchanged state after refusal, and audit behavior. Avoid tests that merely search source text or duplicate implementation conditions.
 - Follow the existing Cash Refund contract, Inventory Count reconciliation, Cashier Shift reconciliation, and GCash transaction integration tests. Reuse disposable databases and fixtures. Prefer the highest existing seam that exercises the behavior; do not force unrelated workflows behind a new test facade.
 - Cover custom multi-month and single-day ranges, invalid dates, reversed ranges, inclusive endpoints, leap days, Philippine midnight, first-period setup, consecutive successors, duplicate opens, overlap with open/closed/locked periods, and gaps.
