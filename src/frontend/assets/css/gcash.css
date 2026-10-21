@@ -11,6 +11,7 @@
 #gcash-workspace .gcash-session-banner { border-left-width: 1px; overflow-wrap: anywhere; }
 #gcash-workspace .gcash-session-banner.active { color: var(--theme-success-text, #15803d); }
 #gcash-workspace .gcash-session-banner.locked { color: var(--theme-danger-text, #b91c1c); }
+.gcash-session-logo { display: block; flex-shrink: 0; width: 88px; height: auto; }
 #gcash-session-message { margin: 0; }
 #gcash-workspace .gcash-field small, #gcash-scan-status { font-size: .875rem; line-height: 1.5; }
 #gcash-workspace input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--cashier-blue); }

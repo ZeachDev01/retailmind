@@ -21,7 +21,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         <section id="gcash-session-panel" class="pos-panel gcash-session-panel" aria-labelledby="gcash-session-title">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
-                    <div class="pos-panel-icon"><i class="bi bi-shield-lock" aria-hidden="true"></i></div>
+                    <img class="gcash-session-logo" src="<?= htmlspecialchars(app_url('assets/img/gcash-logo.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" width="88" height="21">
                     <div>
                         <h2 id="gcash-session-title">GCash Responsibility</h2>
                     </div>

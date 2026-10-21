@@ -12,6 +12,7 @@ use RuntimeException;
 
 require_once __DIR__ . '/../Audit/AuditRecordCategory.php';
 require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
+require_once __DIR__ . '/SalesWorkflowService.php';
 
 /**
  * Held Sales (ticket #91).

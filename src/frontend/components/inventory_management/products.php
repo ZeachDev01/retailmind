@@ -363,13 +363,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $categories = $productService->getCategories();
 $products = $productService->getProductsForManagement();
-$pageNotice = null;
-foreach (['success', 'warning', 'error'] as $noticeType) {
-    if (isset($_GET[$noticeType]) && is_string($_GET[$noticeType]) && $_GET[$noticeType] !== '') {
-        $pageNotice = ['type' => $noticeType, 'message' => $_GET[$noticeType]];
-        break;
-    }
-}
 $existingBrands = $pdo->query("SELECT DISTINCT TRIM(brand) AS brand FROM products WHERE brand IS NOT NULL AND TRIM(brand) <> '' ORDER BY brand")->fetchAll(PDO::FETCH_COLUMN);
 $knownFoodBrands = [
     "JACK'nJILL", 'Oishi', 'Piattos', 'Nova', 'Chippy', 'Clover', 'Rebisco',
@@ -1578,8 +1571,6 @@ foreach ($products as $product) {
 
     <script src="<?= htmlspecialchars(app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')) ?>"></script>
     <script>
-        const pageNotice = <?= json_encode($pageNotice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-        if (pageNotice) RetailMindUI.toast(pageNotice.message, pageNotice.type, undefined, pageNotice.type === 'warning' ? 20000 : 4300);
         const PRODUCT_PHOTO_LIMIT_MESSAGE = <?= json_encode(PRODUCT_PHOTO_LIMIT_MESSAGE) ?>;
         const productData = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const canDirectAdjust = <?= $canDirectAdjust ? 'true' : 'false' ?>;
