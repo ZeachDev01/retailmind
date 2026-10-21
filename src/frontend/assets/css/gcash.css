@@ -46,11 +46,10 @@ dialog[id^="gcash-"] { margin: auto; }
 .gcash-preview-panel { background: var(--theme-surface-soft, #f8fafc); border-radius: 12px; padding: 1rem; }
 .gcash-preview-heading { margin: 0 0 .5rem; font-size: 1rem; font-weight: 600; }
 .gcash-preview-status { color: var(--muted); font-size: .875rem; line-height: 1.5; }
-.gcash-preview-instructions { padding: .75rem; margin-bottom: .75rem; background: var(--cashier-blue-soft, #eff6ff); color: var(--cashier-blue); border-radius: 6px; font-weight: 500; font-size: .9rem; line-height: 1.5; }
 .gcash-preview-grid { display: grid; }
 .gcash-preview-item { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .65rem 0; border-bottom: 1px solid var(--border); }
 .gcash-preview-item:last-child { border-bottom: 0; }
-.gcash-preview-label { font-size: .875rem; color: var(--muted); }
+.gcash-preview-label { display: inline-flex; align-items: baseline; gap: .5rem; font-size: .875rem; color: var(--muted); }
 .gcash-preview-value { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .gcash-session-panel { margin-bottom: 1rem; }
 .gcash-session-header-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
@@ -61,6 +60,20 @@ dialog[id^="gcash-"] { margin: auto; }
 #gcash-open-dialog, #gcash-close-dialog, #gcash-handover-dialog, #gcash-needs-checking-dialog, #gcash-funding-dialog, #gcash-resolve-dialog, #gcash-correction-dialog, #gcash-waiver-dialog, #gcash-admin-waiver-dialog { width: min(540px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
 #gcash-open-dialog::backdrop, #gcash-close-dialog::backdrop, #gcash-handover-dialog::backdrop, #gcash-needs-checking-dialog::backdrop, #gcash-funding-dialog::backdrop, #gcash-resolve-dialog::backdrop, #gcash-correction-dialog::backdrop, #gcash-waiver-dialog::backdrop, #gcash-admin-waiver-dialog::backdrop { background: rgb(0 0 0 / .55); }
 .gcash-cash-in-confirm-group { padding: 0 .25rem; }
+:is(#gcash-needs-checking-form, #gcash-correction-form) { display: grid; gap: 1rem; }
+:is(#gcash-needs-checking-form, #gcash-correction-form) h2 { margin: 0; font-size: 1.25rem; }
+:is(#gcash-needs-checking-form, #gcash-correction-form) .gcash-help { margin: -.5rem 0 0; }
+.gcash-nc-movements, .gcash-correction-approval { min-width: 0; margin: 0; padding: 0; border: 0; }
+.gcash-nc-movements legend, .gcash-correction-approval legend { padding: 0; font-weight: 600; }
+#gcash-needs-checking-form .gcash-confirm { margin: 0; padding: .65rem 0; }
+#gcash-needs-checking-form input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--cashier-blue); }
+:is(#gcash-needs-checking-form, #gcash-correction-form) .pos-input { width: 100%; box-sizing: border-box; }
+:is(#gcash-needs-checking-form, #gcash-correction-form) .gcash-actions { margin: 0; }
+.gcash-correction-amounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+#gcash-correction-summary { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.gcash-correction-approval { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.gcash-correction-approval legend { margin-bottom: .75rem; }
+@media (max-width: 600px) { .gcash-correction-amounts, .gcash-correction-approval { grid-template-columns: minmax(0, 1fr); } }
 .gcash-variance-positive { color: var(--theme-success-text, #15803d); font-weight: 600; }
 .gcash-variance-negative { color: var(--theme-danger-text, #b91c1c); font-weight: 600; }
 .gcash-variance-zero { color: var(--muted); font-weight: 600; }
@@ -99,6 +112,22 @@ dialog[id^="gcash-"] { margin: auto; }
 .gcash-card-label { font-size: .85rem; font-weight: 600; color: var(--muted); }
 .gcash-card-value { font-size: 1.5rem; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
 .gcash-card-sub { font-size: .8rem; color: var(--muted); }
+.gcash-workspace-balances { margin-bottom: 1rem; padding: 1rem; background: var(--cashier-surface); border: 1px solid var(--border); border-radius: 12px; }
+.gcash-workspace-balances .gcash-card-balance { background: transparent; border: 0; border-radius: 0; padding: .5rem 1rem; gap: .5rem; }
+.gcash-workspace-balances .gcash-card-balance + .gcash-card-balance { border-left: 1px solid var(--border); }
+.gcash-workspace-balances .gcash-balances-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+.gcash-workspace-balances .gcash-card-label { font-size: 1rem; color: var(--text); }
+.gcash-workspace-balances .gcash-card-value { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.gcash-workspace-balances .gcash-card-sub { font-size: .875rem; }
+.gcash-workspace-balances .gcash-status { color: var(--muted); background: var(--theme-surface-soft); border-radius: 6px; }
+.gcash-workspace-balances .gcash-help { margin: .5rem 0 0; font-size: .875rem; }
+@media (max-width: 600px) {
+    .gcash-workspace-balances .gcash-card-balance { padding: .25rem .5rem; }
+    .gcash-workspace-balances .gcash-card-header { flex-direction: column; align-items: flex-start; }
+    .gcash-workspace-balances .gcash-card-label { font-size: .875rem; }
+    .gcash-workspace-balances .gcash-card-value { font-size: 1.25rem; }
+}
+#gcash-projected-balances { margin-top: .75rem; border-top: 1px solid var(--border); }
 .gcash-badge { display: inline-block; padding: .15rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
 .gcash-badge-expected { color: var(--cashier-blue, #2563eb); background: var(--cashier-blue-soft, #eff6ff); border: 1px solid var(--cashier-blue); }
 .gcash-badge-legacy { color: #64748b; background: #f1f5f9; border: 1px solid #cbd5e1; font-size: .75rem; font-weight: 600; padding: .15rem .45rem; border-radius: 999px; display: inline-block; margin-top: .25rem; }
@@ -137,8 +166,7 @@ dialog[id^="gcash-"] { margin: auto; }
 .gcash-panel-header .pos-panel-title { align-items: center; min-width: 0; }
 .gcash-panel-header .gcash-status { font-size: .875rem; white-space: nowrap; }
 .gcash-panel-header .pos-panel-icon { width: 36px; height: 36px; flex: 0 0 36px; }
-.gcash-preview-empty { min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; text-align: center; }
-.gcash-preview-empty > .bi { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid var(--border); border-radius: 16px; font-size: 1.8rem; color: var(--muted); background: var(--theme-surface-soft, #f8fafc); }
+.gcash-preview-empty { min-height: 120px; display: flex; align-items: center; justify-content: center; text-align: center; }
 .gcash-preview-empty .gcash-preview-status { max-width: 28ch; margin: 0; font-size: 1rem; }
 @media (max-width: 600px) { #gcash-workspace .gcash-panel-header { padding: 1rem; gap: .5rem; } .gcash-entry-scroll, .gcash-exchange-review { padding: 1rem; } #gcash-workspace .gcash-submit-actions { padding: 1rem; } }
 

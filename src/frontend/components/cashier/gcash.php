@@ -29,7 +29,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="gcash-session-header-actions">
                     <span id="gcash-session-status" class="gcash-status">Checking…</span>
                     <button class="btn btn-primary" type="button" id="gcash-open-session-btn" hidden>Open GCash</button>
-                    <button class="btn btn-secondary" type="button" id="gcash-funding-btn" hidden>Funding Movement</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-funding-btn" hidden>Move service funds</button>
                     <button class="btn btn-secondary" type="button" id="gcash-close-session-btn" hidden>Reconcile &amp; Close</button>
                     <button class="btn btn-secondary" type="button" id="gcash-handover-session-btn" hidden>Hand Over</button>
                     <button class="btn btn-secondary" type="button" id="gcash-waive-btn" hidden>Waive Variance</button>
@@ -52,6 +52,27 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         </div>
 
         <div role="tabpanel" id="panel-new-transaction" aria-labelledby="tab-new-transaction" tabindex="0" class="gcash-tabpanel">
+            <section id="gcash-balances" class="gcash-workspace-balances" aria-label="Expected GCash balances">
+                <div class="gcash-overview-grid gcash-balances-grid" aria-live="polite">
+                    <div class="gcash-card gcash-card-balance">
+                        <div class="gcash-card-header">
+                            <span class="gcash-card-label">Physical Service Cash</span>
+                            <span class="gcash-status">Expected</span>
+                        </div>
+                        <strong class="gcash-card-value" id="gcash-expected-cash">—</strong>
+                        <span class="gcash-card-sub" id="gcash-cash-checked">Last check: —</span>
+                    </div>
+                    <div class="gcash-card gcash-card-balance">
+                        <div class="gcash-card-header">
+                            <span class="gcash-card-label">GCash App Wallet</span>
+                            <span class="gcash-status">Expected</span>
+                        </div>
+                        <strong class="gcash-card-value" id="gcash-expected-wallet">—</strong>
+                        <span class="gcash-card-sub" id="gcash-wallet-checked">Last check: —</span>
+                    </div>
+                </div>
+                <p class="gcash-help" id="gcash-balances-message" role="status">Loading recorded balances…</p>
+            </section>
             <form id="gcash-form" class="gcash-form">
             <section class="pos-panel gcash-entry-panel" aria-labelledby="gcash-entry-title">
                 <div class="pos-panel-header gcash-panel-header">
@@ -65,7 +86,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="gcash-entry-scroll">
                     <div class="gcash-entry-fields">
                     <div class="gcash-field">
-                        <label class="pos-field-label" for="gcash-type">Transaction type</label>
+                        <label class="pos-field-label" for="gcash-type"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Transaction type</label>
                         <select class="pos-input" id="gcash-type" name="type" required>
                             <option value="Cash-In">Cash-In</option>
                             <option value="Cash-Out">Cash-Out</option>
@@ -73,10 +94,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </div>
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-amount">Principal amount (PHP)</label>
-                        <input class="pos-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000">
+                        <input class="pos-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000" aria-describedby="gcash-amount-help">
+                        <small id="gcash-amount-help">₱1–₱50,000 in whole pesos, excluding the service fee.</small>
                     </div>
                     <div class="gcash-field" id="gcash-fee-method-group" hidden>
-                        <label class="pos-field-label" for="gcash-fee-method">Fee payment method</label>
+                        <label class="pos-field-label" for="gcash-fee-method"><i class="bi bi-receipt" aria-hidden="true"></i> Fee payment method</label>
                         <select class="pos-input" id="gcash-fee-method" name="fee_method">
                             <option value="Fee via GCash">Fee via GCash</option>
                             <option value="Fee in cash">Fee in cash</option>
@@ -88,7 +110,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         <span id="gcash-scan-status" role="status" aria-live="polite">Ready for manual entry or USB scanner.</span>
                         <span id="gcash-duplicate" role="alert" hidden>This reference has already been recorded. Check transaction history before proceeding.</span>
                         <div class="gcash-reference-tools">
-                            <button class="btn btn-secondary" type="button" id="gcash-manual"><i class="bi bi-upc-scan" aria-hidden="true"></i> Enter / scan reference</button>
+                            <button class="btn btn-secondary" type="button" id="gcash-manual"><i class="bi bi-upc-scan" aria-hidden="true"></i> Use USB scanner</button>
                             <button class="btn btn-secondary" type="button" id="gcash-camera-open"><i class="bi bi-camera" aria-hidden="true"></i> Scan receipt</button>
                         </div>
                     </div>
@@ -120,35 +142,48 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <div class="gcash-exchange-review">
                     <section id="gcash-preview" class="gcash-preview-panel" aria-labelledby="gcash-preview-title">
                         <div id="gcash-preview-empty" class="gcash-preview-empty">
-                            <i class="bi bi-receipt" aria-hidden="true"></i>
                             <p id="gcash-preview-status" class="gcash-preview-status" role="status" aria-live="polite">Enter an amount to see the fee and cash to collect.</p>
                         </div>
                         <div id="gcash-preview-content" class="gcash-preview-content" hidden>
-                            <div id="gcash-preview-instructions" class="gcash-preview-instructions"></div>
                             <div class="gcash-preview-grid">
                                 <div class="gcash-preview-item">
-                                    <span class="gcash-preview-label">Service fee</span>
+                                    <span class="gcash-preview-label"><i class="bi bi-receipt" aria-hidden="true"></i><span id="preview-fee-label">Store service fee</span></span>
                                     <span class="gcash-preview-value" id="preview-fee">₱0.00</span>
                                 </div>
                                 <div class="gcash-preview-item">
-                                    <span class="gcash-preview-label">Customer transfers to Store wallet</span>
+                                    <span class="gcash-preview-label"><i class="bi bi-wallet2" aria-hidden="true"></i><span>Receive GCash from customer</span></span>
                                     <span class="gcash-preview-value" id="preview-customer-transfer">₱0.00</span>
                                 </div>
                                 <div class="gcash-preview-item">
-                                    <span class="gcash-preview-label">Cash collected at counter</span>
+                                    <span class="gcash-preview-label"><i class="bi bi-cash-stack" aria-hidden="true"></i><span id="preview-counter-label">Collect cash from customer</span></span>
                                     <span class="gcash-preview-value" id="preview-counter-collect">₱0.00</span>
                                 </div>
                                 <div class="gcash-preview-item">
-                                    <span class="gcash-preview-label">Cash handed over</span>
+                                    <span class="gcash-preview-label"><i class="bi bi-cash-stack" aria-hidden="true"></i><span>Pay cash to customer</span></span>
                                     <span class="gcash-preview-value" id="preview-cash-payout">₱0.00</span>
                                 </div>
                                 <div class="gcash-preview-item">
-                                    <span class="gcash-preview-label">Store wallet sent</span>
+                                    <span class="gcash-preview-label"><i class="bi bi-wallet2" aria-hidden="true"></i><span>Send GCash to customer</span></span>
                                     <span class="gcash-preview-value" id="preview-wallet-transfer">₱0.00</span>
                                 </div>
                             </div>
                             <details class="gcash-balance-details">
-                                <summary>Balance changes</summary>
+                                <summary>Exchange instructions</summary>
+                                <p id="gcash-preview-instructions" class="gcash-help"></p>
+                            </details>
+                            <details class="gcash-balance-details">
+                                <summary>Balance details</summary>
+                            <section id="gcash-projected-balances" aria-label="Expected balances after completion" aria-live="polite" hidden>
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Wallet after completion</span>
+                                    <span class="gcash-preview-value" id="gcash-projected-wallet">—</span>
+                                </div>
+                                <div class="gcash-preview-item">
+                                    <span class="gcash-preview-label">Cash box after completion</span>
+                                    <span class="gcash-preview-value" id="gcash-projected-cash">—</span>
+                                </div>
+                                <p class="gcash-help">Projected expected balances if this exchange is completed. Saving as Pending does not change balances.</p>
+                            </section>
                                 <div class="gcash-preview-item">
                                     <span class="gcash-preview-label">Net service cash</span>
                                     <span class="gcash-preview-value" id="preview-net-cash">₱0.00</span>
@@ -174,7 +209,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <div class="gcash-actions gcash-submit-actions">
                         <button class="btn btn-primary" type="button" id="gcash-complete-cash-in" hidden>Complete Cash-In</button>
                         <button class="btn btn-primary" type="button" id="gcash-complete-cash-out" hidden>Complete Cash-Out</button>
-                        <button class="btn btn-secondary" type="button" id="gcash-needs-checking-btn" hidden>Hold as Needs checking</button>
+                        <button class="btn btn-secondary" type="button" id="gcash-needs-checking-btn" hidden>Hold for checking</button>
                         <button class="btn btn-secondary" type="submit" id="gcash-save">Save as Pending</button>
                     </div>
             </section>
@@ -317,39 +352,42 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
             </form>
         </dialog>
-        <dialog id="gcash-needs-checking-dialog" aria-labelledby="gcash-needs-checking-title">
+        <dialog id="gcash-needs-checking-dialog" aria-labelledby="gcash-needs-checking-title" aria-describedby="gcash-nc-help">
             <form id="gcash-needs-checking-form">
-                <h2 id="gcash-needs-checking-title">Hold Cash-In as Needs checking</h2>
-                <p>Record known movements and hold for investigation. A fabricated reference is never required.</p>
-                <div class="gcash-preview-grid" style="margin-bottom: 1rem;">
+                <h2 id="gcash-needs-checking-title">Hold Cash-In for checking</h2>
+                <p id="gcash-nc-help" class="gcash-help">Save as Needs checking for review. Select only what actually happened.</p>
+                <div class="gcash-preview-grid">
                     <div class="gcash-preview-item">
                         <span class="gcash-preview-label">Principal amount</span>
                         <span class="gcash-preview-value" id="gcash-nc-preview-principal">₱0.00</span>
                     </div>
                     <div class="gcash-preview-item">
-                        <span class="gcash-preview-label">Service fee (cash)</span>
+                        <span class="gcash-preview-label">Service fee</span>
                         <span class="gcash-preview-value" id="gcash-nc-preview-fee">₱0.00</span>
                     </div>
                 </div>
-                <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-nc-reference">Reference number (optional, if known)</label>
-                    <input class="pos-input" id="gcash-nc-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="32" placeholder="Leave blank if not yet available">
-                </div>
-                <p style="margin-top: .75rem; margin-bottom: .25rem; font-weight: 600;">Accountable movements confirmed:</p>
+                <fieldset class="gcash-nc-movements">
+                    <legend>What happened?</legend>
                 <label class="gcash-confirm">
                     <input type="checkbox" id="gcash-nc-cash-collected" name="cash_collected">
-                    <span id="gcash-nc-cash-desc">Physical cash collected at counter (<span id="gcash-nc-cash-text">₱0.00</span>)</span>
+                    <span id="gcash-nc-cash-desc">Cash collected from customer (<span id="gcash-nc-cash-text">₱0.00</span>)</span>
                 </label>
                 <label class="gcash-confirm">
                     <input type="checkbox" id="gcash-nc-wallet-sent" name="wallet_sent">
-                    <span id="gcash-nc-wallet-desc">Wallet funds sent to customer (<span id="gcash-nc-wallet-text">₱0.00</span>)</span>
+                    <span id="gcash-nc-wallet-desc">Wallet transfer sent to customer (<span id="gcash-nc-wallet-text">₱0.00</span>)</span>
                 </label>
+                </fieldset>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-nc-notes">Explanatory notes (minimum 5 characters, required)</label>
-                    <textarea class="pos-input" id="gcash-nc-notes" name="notes" minlength="5" maxlength="500" required rows="3" placeholder="Explain what happened, which partial movements occurred, or why this transaction needs checking."></textarea>
+                    <label class="pos-field-label" for="gcash-nc-notes">Reason for checking (required)</label>
+                    <textarea class="pos-input" id="gcash-nc-notes" name="notes" minlength="5" maxlength="500" required rows="2" aria-describedby="gcash-nc-notes-help" placeholder="e.g. Cash received, wallet transfer not confirmed."></textarea>
+                    <small id="gcash-nc-notes-help">At least 5 characters.</small>
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-nc-reference">Reference number (optional)</label>
+                    <input class="pos-input" id="gcash-nc-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="32" placeholder="Leave blank if unknown">
                 </div>
                 <div class="gcash-actions">
-                    <button class="btn" type="submit" id="gcash-nc-submit">Save as Needs checking</button>
+                    <button class="btn" type="submit" id="gcash-nc-submit">Hold for checking</button>
                     <button class="btn btn-secondary" type="button" id="gcash-nc-cancel">Cancel</button>
                 </div>
             </form>
@@ -444,33 +482,40 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
             </form>
         </dialog>
-        <dialog id="gcash-correction-dialog" aria-labelledby="gcash-correction-title">
+        <dialog id="gcash-correction-dialog" aria-labelledby="gcash-correction-title" aria-describedby="gcash-correction-help">
             <form id="gcash-correction-form">
-                <h2 id="gcash-correction-title">Record Linked Correction</h2>
-                <p>Completed transactions are immutable. This records an audited adjusting record linked to the original exchange.</p>
-                <p id="gcash-correction-summary" style="font-weight: 600;"></p>
+                <h2 id="gcash-correction-title">Record correction</h2>
+                <p id="gcash-correction-help" class="gcash-help">Record an audited adjustment linked to this transaction. The original stays unchanged.</p>
+                <p id="gcash-correction-summary"></p>
+                <div class="gcash-correction-amounts">
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-cash-delta">Service Cash Delta (PHP, e.g. -10.00 or 10.00)</label>
-                    <input class="pos-input" id="gcash-correction-cash-delta" name="service_cash_delta" type="number" step="0.01" value="0.00">
+                    <label class="pos-field-label" for="gcash-correction-cash-delta">Service cash adjustment (PHP)</label>
+                    <input class="pos-input" id="gcash-correction-cash-delta" name="service_cash_delta" type="number" step="0.01" value="0.00" aria-describedby="gcash-correction-amounts-help">
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-wallet-delta">Wallet Delta (PHP, e.g. -10.00 or 10.00)</label>
-                    <input class="pos-input" id="gcash-correction-wallet-delta" name="wallet_delta" type="number" step="0.01" value="0.00">
+                    <label class="pos-field-label" for="gcash-correction-wallet-delta">Wallet adjustment (PHP)</label>
+                    <input class="pos-input" id="gcash-correction-wallet-delta" name="wallet_delta" type="number" step="0.01" value="0.00" aria-describedby="gcash-correction-amounts-help">
                 </div>
-                <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-reason">Correction Reason (min 5 characters)</label>
-                    <input class="pos-input" id="gcash-correction-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="Reason for adjustment">
                 </div>
+                <p id="gcash-correction-amounts-help" class="gcash-help">10.00 adds ₱10; -10.00 subtracts ₱10. Use 0 for no change. Change at least one amount.</p>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-approver">Authorizing Administrator username</label>
+                    <label class="pos-field-label" for="gcash-correction-reason">Reason for correction (required)</label>
+                    <input class="pos-input" id="gcash-correction-reason" name="reason" type="text" minlength="5" maxlength="255" required aria-describedby="gcash-correction-reason-help" placeholder="e.g. Service fee overcharged">
+                    <small id="gcash-correction-reason-help">At least 5 characters.</small>
+                </div>
+                <fieldset class="gcash-correction-approval">
+                    <legend>Administrator approval (required)</legend>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-correction-approver">Username</label>
                     <input class="pos-input" id="gcash-correction-approver" name="approver_username" type="text" required autocomplete="off">
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-password">Administrator password</label>
+                    <label class="pos-field-label" for="gcash-correction-password">Password</label>
                     <input class="pos-input" id="gcash-correction-password" name="approver_password" type="password" required autocomplete="new-password">
                 </div>
+                </fieldset>
                 <div class="gcash-actions">
-                    <button class="btn" type="submit" id="gcash-correction-submit">Record Adjustment</button>
+                    <button class="btn" type="submit" id="gcash-correction-submit">Record correction</button>
                     <button class="btn btn-secondary" type="button" id="gcash-correction-cancel">Cancel</button>
                 </div>
             </form>

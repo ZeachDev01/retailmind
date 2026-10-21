@@ -3,6 +3,29 @@
     const workspace = document.getElementById('gcash-admin-workspace');
     if (!workspace) return;
 
+    const tabs = [...workspace.querySelectorAll('[role="tab"]')];
+    function selectTab(tab, focus = false) {
+        tabs.forEach(item => {
+            const selected = item === tab;
+            item.setAttribute('aria-selected', String(selected));
+            item.tabIndex = selected ? 0 : -1;
+            document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
+        });
+        const url = new URL(location.href);
+        url.searchParams.set('tab', tab.getAttribute('aria-controls').replace('tab-', ''));
+        history.replaceState(null, '', url);
+        if (focus) tab.focus();
+    }
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => selectTab(tab));
+        tab.addEventListener('keydown', event => {
+            const next = {ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1}[event.key];
+            if (next === undefined) return;
+            event.preventDefault();
+            selectTab(tabs[next], true);
+        });
+    });
+
     const api = workspace.dataset.api;
     const csrf = workspace.dataset.csrf;
     const waiverDialog = document.getElementById('gcash-admin-waiver-dialog');
@@ -14,8 +37,140 @@
     function formatMoney(val) {
         const num = parseFloat(val);
         if (isNaN(num)) return '—';
-        return '₱' + num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        return (num < 0 ? '−' : '') + '₱' + Math.abs(num).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
+
+    const filterForm = document.getElementById('gcash-admin-filter-form');
+    const search = document.getElementById('gcash-search');
+    const typeInput = document.getElementById('gcash-type-filter');
+    let searchTimer;
+    let filterRequest;
+    async function filterTransactions() {
+        clearTimeout(searchTimer);
+        filterRequest?.abort();
+        const controller = new AbortController();
+        filterRequest = controller;
+        const url = new URL(filterForm.action);
+        url.search = new URLSearchParams(new FormData(filterForm)).toString();
+        const status = document.getElementById('gcash-filter-status');
+        status.textContent = 'Loading transactions…';
+        document.getElementById('gcash-admin-history-table').setAttribute('aria-busy', 'true');
+        try {
+            const response = await fetch(url, {signal: controller.signal});
+            if (!response.ok) throw new Error('Unable to load transactions. Try again.');
+            const html = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const error = html.querySelector('.gcash-filter-error');
+            if (error) throw new Error(error.textContent.trim());
+            const body = html.getElementById('gcash-admin-history-body');
+            if (!body) throw new Error('Unable to load transactions. Reload the page and try again.');
+            document.getElementById('gcash-admin-history-body').replaceChildren(...body.childNodes);
+            workspace.querySelector('.gcash-pagination').replaceWith(html.querySelector('.gcash-pagination'));
+            document.getElementById('tab-overview').replaceChildren(...html.getElementById('tab-overview').childNodes);
+            for (const button of workspace.querySelectorAll('[data-type]')) {
+                const incoming = html.querySelector(`[data-type="${button.dataset.type}"]`);
+                button.textContent = incoming.textContent;
+                button.setAttribute('aria-pressed', String(button.dataset.type === typeInput.value));
+            }
+            const badge = workspace.querySelector('#gcash-tab-transactions .gcash-badge');
+            badge.textContent = html.querySelector('#gcash-tab-transactions .gcash-badge').textContent;
+            url.searchParams.set('tab', workspace.querySelector('[role="tab"][aria-selected="true"]').getAttribute('aria-controls').replace('tab-', ''));
+            history.replaceState(null, '', url);
+            document.getElementById('gcash-export').href = url + '&export=csv';
+            status.textContent = `${badge.textContent} matching transactions`;
+        } catch (error) {
+            if (error.name !== 'AbortError') status.textContent = error.message;
+        } finally {
+            if (filterRequest === controller) document.getElementById('gcash-admin-history-table').removeAttribute('aria-busy');
+        }
+    }
+    search?.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        filterRequest?.abort();
+        searchTimer = setTimeout(filterTransactions, 200);
+    });
+    workspace.querySelectorAll('[data-type]').forEach(button => button.addEventListener('click', () => {
+        typeInput.value = button.dataset.type;
+        filterTransactions();
+    }));
+    document.getElementById('gcash-export')?.addEventListener('click', event => {
+        const url = new URL(filterForm.action);
+        url.search = new URLSearchParams(new FormData(filterForm)).toString();
+        url.searchParams.set('export', 'csv');
+        event.currentTarget.href = url;
+    });
+    document.getElementById('gcash-refresh')?.addEventListener('click', () => location.reload());
+    document.getElementById('gcash-record')?.addEventListener('click', () => document.getElementById('gcash-record-dialog').showModal());
+    workspace.querySelectorAll('dialog').forEach(dialog => {
+        dialog.addEventListener('click', event => {
+            if (event.target.closest('[data-close-dialog]')) dialog.close();
+            if (event.target === dialog) {
+                const rect = dialog.getBoundingClientRect();
+                if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+            }
+        });
+    });
+    const detailDialog = document.getElementById('txDetailModal');
+    workspace.addEventListener('click', event => {
+        const row = event.target.closest('tr[data-transaction]');
+        if (!row || event.target.closest('a')) return;
+        const tx = JSON.parse(row.dataset.transaction);
+        const fields = document.getElementById('tx-detail-fields');
+        fields.replaceChildren();
+        const signedMoney = value => (Number(value) < 0 ? '−' : '+') + formatMoney(Math.abs(Number(value)));
+        const values = {
+            'Status': tx.verification_status,
+            'Reference No.': tx.reference_number || '—',
+            'Timestamp': tx.time_formatted,
+            'Cashier & Shift': `${tx.cashier_name || tx.cashier_username} / ${tx.shift_id === null ? 'Legacy reference' : '#' + tx.shift_id}`,
+            'Exchange Type': tx.transaction_type,
+            'Customer Principal': tx.is_legacy ? 'Legacy reference — ' + formatMoney(tx.amount) : formatMoney(tx.principal_amount),
+            'Convenience Fee': tx.is_legacy ? 'Not recorded' : formatMoney(tx.gross_fee),
+            'Fee Deducted At': tx.fee_location || 'Not recorded',
+            'GCash Service Cash': tx.is_legacy ? 'Not recorded' : signedMoney(tx.service_cash_delta),
+            'GCash App Balance': tx.is_legacy ? 'Not recorded' : signedMoney(tx.wallet_delta),
+            'Notes': tx.notes || tx.verification_note || '—'
+        };
+        Object.entries(values).forEach(([label, value]) => {
+            const term = document.createElement('dt');
+            const description = document.createElement('dd');
+            term.textContent = label;
+            description.textContent = value;
+            if (label === 'GCash Service Cash' || label === 'GCash App Balance') {
+                description.className = value.startsWith('−') ? 'gcash-variance-negative' : 'gcash-variance-positive';
+            }
+            fields.append(term, description);
+        });
+        detailDialog.showModal();
+    });
+
+    const verifyDialog = document.getElementById('gcash-verify-dialog');
+    const verifyForm = document.getElementById('gcash-verify-form');
+    workspace.querySelectorAll('.gcash-verify').forEach(button => button.addEventListener('click', () => {
+        verifyForm.reset();
+        document.getElementById('gcash-verify-tx').value = button.dataset.transactionId;
+        document.getElementById('gcash-verify-id').textContent = button.dataset.transactionId;
+        document.getElementById('gcash-verify-reference').value = button.dataset.reference;
+        document.getElementById('gcash-verify-error').textContent = '';
+        verifyDialog.showModal();
+    }));
+    verifyForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const button = verifyForm.querySelector('[type="submit"]');
+        button.disabled = true;
+        try {
+            const response = await fetch(api, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
+                body: JSON.stringify({action: 'resolve_exchange', transaction_id: Number(document.getElementById('gcash-verify-tx').value), reference: document.getElementById('gcash-verify-reference').value, confirmed_wallet: document.getElementById('gcash-verify-wallet').checked, confirmed_cash: document.getElementById('gcash-verify-cash').checked})
+            });
+            const result = await response.json();
+            if (!response.ok || result.error) throw new Error(result.error || 'Unable to verify the exchange. Try again.');
+            location.reload();
+        } catch (error) {
+            document.getElementById('gcash-verify-error').textContent = error.message;
+            button.disabled = false;
+        }
+    });
 
     // Attach waiver dialog openers
     document.querySelectorAll('.admin-btn-waive').forEach(btn => {

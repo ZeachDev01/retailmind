@@ -1107,6 +1107,22 @@ $check($adminOv['current_expected_balances']['expected_wallet_balance'] > 0, 'Cu
 $check($adminOv['session_status'] === 'open', 'Session status open');
 $check($adminOv['controlling_cashier_id'] === 4, 'Controlling cashier id matches session 10');
 
+// Search/type filters apply before pagination and leave current funds unchanged.
+$searchEmpty = $service->adminOverview(['actor_role' => 'admin', 'search' => 'no-such-gcash-reference']);
+$check($searchEmpty['total_transactions'] === 0 && $searchEmpty['transactions'] === [], 'Unknown reference returns no matching transactions');
+$searchLiteral = $service->adminOverview(['actor_role' => 'admin', 'search' => '%']);
+$check($searchLiteral['total_transactions'] === 0, 'Search treats SQL wildcards as literal text');
+$cashInOnly = $service->adminOverview(['actor_role' => 'admin', 'type' => 'Cash-In', 'limit' => 10]);
+$check(count($cashInOnly['transactions']) > 0, 'Cash-in filter has matching exchanges');
+foreach ($cashInOnly['transactions'] as $tx) {
+    $check($tx['transaction_type'] === 'Cash-In', 'Type filter excludes other exchange types');
+}
+$check($cashInOnly['current_expected_service_cash'] === $adminOv['current_expected_service_cash'], 'Type filtering does not change current service cash');
+$shiftSearch = $service->adminOverview(['actor_role' => 'admin', 'search' => '#' . $cashInOnly['transactions'][0]['shift_id']]);
+$check($shiftSearch['total_transactions'] > 0, 'Search accepts a shift number with its displayed hash prefix');
+
+$refuse(static fn() => $service->adminOverview(['actor_role' => 'admin', 'type' => 'invalid']));
+
 // 3. Store-wide activity aggregation across cashiers
 $expectedTotals = $pdo->query(
     "SELECT
@@ -1194,6 +1210,13 @@ foreach ($afterWaiveOv['reconciliation_differences'] as $diff) {
     }
 }
 $check($waivedFound, 'Waived session verified in reconciliation differences');
+
+// Enough public records to exercise search/pagination and full filtered CSV export.
+for ($index = 0; $index < 55; $index++) {
+    $service->save(4, '888888888' . str_pad((string)$index, 4, '0', STR_PAD_LEFT), '1', 'Payment');
+}
+$exportPage = $service->adminOverview(['actor_role' => 'admin', 'search' => '888888888', 'page' => 2]);
+$check($exportPage['total_transactions'] === 55 && count($exportPage['transactions']) === 5, 'Search matches across page boundaries');
 
 echo "GCash MySQL integration: passed\n";
 

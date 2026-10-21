@@ -1,9 +1,7 @@
 #gcash-admin-workspace { --cashier-surface: var(--card-bg, #fff); min-width: 0; }
 #gcash-admin-workspace .topbar { gap: 1rem; }
 #gcash-admin-workspace .page-subtitle { max-width: 70ch; }
-.gcash-section-nav { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; margin: 0 0 1.5rem; border-bottom: 1px solid var(--border); }
-.gcash-section-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: .5rem 0; color: var(--muted); font-size: .875rem; font-weight: 600; text-decoration: none; border-bottom: 2px solid transparent; }
-.gcash-section-nav a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+.gcash-section-nav { display: flex; margin: 0 0 1.5rem; border-bottom: 1px solid var(--border); }
 #gcash-admin-workspace :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 #gcash-admin-workspace h2 { scroll-margin-top: 6rem; }
 #gcash-admin-workspace .gcash-overview-section { margin-bottom: 1.5rem; padding: 1.5rem; border-radius: 14px; box-shadow: none; }
@@ -56,3 +54,51 @@
     #gcash-admin-workspace .gcash-card-balance .gcash-card-value { font-size: 1.75rem; }
     #gcash-admin-workspace .gcash-card-value { font-size: 1.25rem; }
 }
+
+.gcash-section-nav { flex-wrap: nowrap; overflow-x: auto; gap: 1rem; }
+.gcash-section-nav button { flex-shrink: 0; display: inline-flex; align-items: center; gap: .5rem; min-height: 48px; padding: .65rem .25rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; }
+.gcash-section-nav button[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); }
+#gcash-admin-workspace section:has(#gcash-admin-filters-title), #gcash-admin-workspace section:has(#gcash-admin-metrics-title) { border: 1px solid var(--border); border-radius: 14px; margin-bottom: 1.5rem; }
+
+#gcash-admin-workspace .gcash-topbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+#gcash-admin-workspace .gcash-balances-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; border: 0; }
+#gcash-admin-workspace .gcash-balances-grid .gcash-card-balance { padding: 1.2rem; border: 1px solid var(--border); border-top: 2px solid var(--success, #059669); border-radius: 14px; }
+#gcash-admin-workspace .gcash-card-balance:nth-child(2) { border-top-color: var(--primary); }
+#gcash-admin-workspace .gcash-card-combined { background: linear-gradient(135deg, #0f172a, #1e293b); border-color: #1e293b; color: #fff; }
+#gcash-admin-workspace .gcash-card-combined .gcash-card-label, #gcash-admin-workspace .gcash-card-combined .gcash-card-value { color: #fff; }
+#gcash-admin-workspace .gcash-card-combined .gcash-card-sub { color: #cbd5e1; }
+#gcash-admin-workspace .gcash-card-combined .gcash-badge { background: #334155; color: #fff; }
+#gcash-admin-workspace .gcash-filter-search { flex: 1 1 240px; }
+.gcash-type-pills { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+#gcash-admin-workspace .gcash-type-pills [aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: #fff; }
+#gcash-filter-status { margin: .75rem 0 0; min-height: 1.5em; color: var(--muted); font-size: .875rem; }
+#gcash-admin-history-body tr[data-transaction] { cursor: pointer; }
+#gcash-admin-history-table td:nth-child(4), #gcash-admin-history-table td:nth-child(5) { text-align: right; white-space: nowrap; }
+#gcash-admin-workspace #tab-transactions section:has(#gcash-admin-filters-title) { margin-bottom: 0; border-radius: 14px 14px 0 0; border-bottom: 0; }
+#gcash-admin-workspace #tab-transactions section:has(#gcash-admin-history-title) { border-radius: 0 0 14px 14px; }
+#gcash-admin-workspace dialog { box-sizing: border-box; width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; margin: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 18px; background: var(--card-bg, #fff); color: var(--text); box-shadow: 0 24px 64px rgb(15 23 42 / .24); }
+#gcash-admin-workspace dialog::backdrop { background: rgb(15 23 42 / .55); }
+#tx-detail-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: .6rem 1rem; padding: 1rem 0; }
+#tx-detail-fields dt { color: var(--muted); }
+#tx-detail-fields dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) {
+    #gcash-admin-workspace .gcash-balances-grid { grid-template-columns: minmax(0, 1fr); }
+    #gcash-admin-workspace .gcash-card-balance + .gcash-card-balance { border-left: 1px solid var(--border); }
+    #gcash-admin-workspace .gcash-topbar-actions { width: 100%; }
+}
+
+.gcash-confirmation { display: flex; align-items: center; gap: .75rem; padding: .75rem 0; min-height: 44px; }
+.gcash-confirmation input { accent-color: var(--primary); width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+#gcash-verify-error { color: var(--danger, #dc2626); }
+
+#gcash-admin-workspace .topbar > div:first-child { flex: 1 1 340px; }
+#gcash-admin-workspace .gcash-topbar-actions { justify-content: flex-end; flex: 1 1 380px; }
+#gcash-admin-workspace .gcash-topbar-actions .btn { flex: 0 1 auto; width: auto; }
+#gcash-admin-workspace .gcash-topbar-actions .gcash-status { flex: 0 1 auto; width: auto; }
+@media (max-width: 767px) {
+    #gcash-admin-workspace .topbar > div:first-child, #gcash-admin-workspace .gcash-topbar-actions { flex: 0 1 auto; }
+    #gcash-admin-workspace .gcash-topbar-actions { flex-direction: row; justify-content: flex-start; }
+}
+
+#gcash-admin-workspace .gcash-table-wrap { max-height: 55dvh; overflow: auto; }
+#gcash-admin-workspace .gcash-table-wrap th { position: sticky; top: 0; z-index: 1; }

@@ -382,7 +382,31 @@ final class GCashTransactionService
             $whereConditions[] = 't.cashier_id = ?';
             $whereParams[] = $cashierId;
         }
+        $search = trim((string)($filters['search'] ?? ''));
+        if (strlen($search) > 200) {
+            throw new DomainException('Search must be 200 characters or fewer.');
+        }
+        $type = (string)($filters['type'] ?? 'all');
+        if (!in_array($type, ['all', 'Cash-In', 'Cash-Out'], true)) {
+            throw new DomainException('Select All, Cash-In, or Cash-Out.');
+        }
+        if ($search !== '') {
+            $whereConditions[] = "(t.reference_number LIKE ? ESCAPE '!' OR CONCAT('#', t.shift_id) LIKE ? ESCAPE '!' OR u.full_name LIKE ? ESCAPE '!' OR u.username LIKE ? ESCAPE '!')";
+            $term = '%' . strtr($search, ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
+            array_push($whereParams, $term, $term, $term, $term);
+        }
         $whereSql = $whereConditions !== [] ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+        $countsStmt = $this->pdo()->prepare("SELECT COUNT(*) AS all_count,
+            COALESCE(SUM(t.transaction_type = 'Cash-In'), 0) AS cash_in_count,
+            COALESCE(SUM(t.transaction_type = 'Cash-Out'), 0) AS cash_out_count
+            FROM gcash_transactions t JOIN users u ON t.cashier_id = u.user_id {$whereSql}");
+        $countsStmt->execute($whereParams);
+        $typeCounts = $countsStmt->fetch(PDO::FETCH_ASSOC);
+        if ($type !== 'all') {
+            $whereConditions[] = 't.transaction_type = ?';
+            $whereParams[] = $type;
+            $whereSql = 'WHERE ' . implode(' AND ', $whereConditions);
+        }
 
         $totalsStmt = $this->pdo()->prepare(
             "SELECT
@@ -391,7 +415,7 @@ final class GCashTransactionService
                 COALESCE(SUM(CASE WHEN t.transaction_type = 'Cash-Out' AND t.verification_status = 'Completed' THEN t.principal_amount ELSE 0 END), 0) AS cash_out_principal,
                 COALESCE(SUM(CASE WHEN t.fee_method = 'cash' AND t.verification_status = 'Completed' THEN t.gross_fee ELSE 0 END), 0) AS gross_fees_cash,
                 COALESCE(SUM(CASE WHEN t.fee_method = 'wallet' AND t.verification_status = 'Completed' THEN t.gross_fee ELSE 0 END), 0) AS gross_fees_wallet
-            FROM gcash_transactions t
+            FROM gcash_transactions t JOIN users u ON t.cashier_id = u.user_id
             {$whereSql}"
         );
         $totalsStmt->execute($whereParams);
@@ -574,6 +598,8 @@ final class GCashTransactionService
             'controlling_cashier_id' => $controllingCashierId,
             'controlling_cashier_name' => $controllingCashierName,
             'session_status' => $sessionStatus,
+            'session_id' => $openSession ? (int)$openSession['session_id'] : null,
+            'type_counts' => $typeCounts,
 
             'filtered_activity' => [
                 'start_date' => $startDate,
