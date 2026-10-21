@@ -158,12 +158,8 @@ if (!$account) {
     exit;
 }
 
-$displayName = trim((string)$account['full_name']);
 $roleLabel = account_role_label((string)$account['role_name']);
-$statusClass = $account['status'] === 'active' ? 'tag-success' : 'tag-warning';
-$passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required' : 'Current';
-$passwordStatusClass = (int)$account['must_change_password'] === 1 ? 'tag-warning' : 'tag-success';
-$profileImageUrl = profile_image_url((int)$account['user_id']);
+$passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required' : 'No change required';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -171,7 +167,7 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Info</title>
+    <title>My profile · RetailMind</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/user-info.css')) ?>">
 </head>
@@ -182,44 +178,28 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
         <main class="main-content">
             <header class="page-heading">
                 <div>
-                    <h1>User Info</h1>
-                    <p class="page-subtitle">Review your account details, contact information, and sign-in status.</p>
-                </div>
-                <div class="page-heading-actions">
-                    <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>"><i class="bi bi-shield-lock"></i>Change Password</a>
+                    <h1>My profile</h1>
+                    <p class="page-subtitle">Update your picture, name, and email.</p>
                 </div>
             </header>
 
             <?php if ($message): ?>
-                <div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div>
+                <div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
-
-            <section class="account-hero user-info-hero">
-                <div class="account-hero-copy">
-                    <h2><?= htmlspecialchars($account['full_name']) ?></h2>
-                    <p>@<?= htmlspecialchars($account['username']) ?></p>
-                    <div class="account-badges">
-                        <span class="badge-role"><?= htmlspecialchars($roleLabel) ?></span>
-                        <span class="<?= htmlspecialchars($statusClass) ?>"><?= htmlspecialchars((string)$account['status']) ?></span>
-                        <span class="<?= htmlspecialchars($passwordStatusClass) ?>"><?= htmlspecialchars($passwordStatus) ?></span>
-                    </div>
-                </div>
-            </section>
 
             <div class="user-info-layout">
                 <section class="dashboard-section profile-card">
                     <div class="section-header">
                         <div>
-                            <h3>Profile</h3>
-                            <p class="section-description">Keep your picture, name, and email current for account records.</p>
+                            <h2>Personal information</h2>
                         </div>
                     </div>
                     <?php if (can_manage_own_profile_image()): ?>
                         <div class="profile-picture-settings">
                             <div class="profile-picture-controls">
                                 <div class="profile-picture-copy">
-                                    <h4>Profile picture</h4>
-                                    <p>Optional. Without a picture, your name initials appear.</p>
+                                    <h3>Profile picture</h3>
+                                    <p>Optional. Your initials appear when no picture is set.</p>
                                 </div>
                                 <form method="POST" enctype="multipart/form-data" class="profile-picture-form" id="profile-picture-form"
                                       data-max-bytes="<?= ProfileImageStorage::MAX_BYTES ?>" data-max-dimension="<?= ProfileImageStorage::MAX_DIMENSION ?>" data-max-pixels="<?= ProfileImageStorage::MAX_PIXELS ?>">
@@ -227,11 +207,11 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
                                     <input type="hidden" name="action" value="replace_profile_image">
                                     <div class="profile-picture-picker">
                                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= ProfileImageStorage::MAX_FILE_SIZE ?>">
-                                        <input class="profile-picture-input" type="file" id="profile_image" name="profile_image" accept="<?= ProfileImageStorage::ACCEPT ?>" required>
+                                        <input class="profile-picture-input" type="file" id="profile_image" name="profile_image" accept="<?= ProfileImageStorage::ACCEPT ?>" aria-describedby="profile-picture-help profile-crop-error" required>
                                         <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-image"></i><?= !empty($account['profile_image']) ? 'Choose replacement' : 'Choose image' ?></label>
                                         <span class="profile-picture-filename" id="profile-picture-filename">No file selected</span>
                                     </div>
-                                    <small class="field-help"><?= ProfileImageStorage::HELP ?></small>
+                                    <small class="field-help" id="profile-picture-help"><?= ProfileImageStorage::HELP ?></small>
                                     <p id="profile-crop-error" class="field-help" role="alert"></p>
                                     <fieldset id="profile-crop-editor" hidden>
                                         <legend>Adjust square crop</legend>
@@ -261,69 +241,43 @@ $profileImageUrl = profile_image_url((int)$account['user_id']);
                             </div>
                         </div>
                     <?php endif; ?>
-                    <div class="profile-details-heading">
-                        <h4>Personal information</h4>
-                        <p>These details appear across account records and administrative activity.</p>
-                    </div>
                     <form method="POST" class="form-grid profile-details-form" autocomplete="off">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="update_profile">
                         <div class="form-group full">
-                            <label for="full_name">Full Name</label>
-                            <input id="full_name" name="full_name" value="<?= htmlspecialchars($account['full_name']) ?>" required>
+                            <label for="full_name">Full name (required)</label>
+                            <input id="full_name" name="full_name" autocomplete="name" value="<?= htmlspecialchars($account['full_name']) ?>" required>
                         </div>
                         <div class="form-group full">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" value="<?= htmlspecialchars((string)($account['email'] ?? '')) ?>" placeholder="name@example.com">
-                        </div>
-                        <div class="form-group">
-                            <label for="profile_username">Username</label>
-                            <input id="profile_username" value="<?= htmlspecialchars($account['username']) ?>" disabled>
-                        </div>
-                        <div class="form-group">
-                            <label for="profile_role">Role</label>
-                            <input id="profile_role" value="<?= htmlspecialchars($roleLabel) ?>" disabled>
+                            <label for="email">Email (optional)</label>
+                            <input type="email" id="email" name="email" autocomplete="email" value="<?= htmlspecialchars((string)($account['email'] ?? '')) ?>" placeholder="name@example.com">
                         </div>
                         <div class="full profile-save-row">
-                            <button class="btn" type="submit"><i class="bi bi-check2-circle"></i>Save Profile</button>
+                            <button class="btn" type="submit">Save details</button>
                         </div>
                     </form>
                 </section>
 
                 <section class="dashboard-section account-details-card">
-                    <div class="section-header account-details-header">
-                        <div>
-                            <span class="account-details-icon" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
-                            <h3>Account Details</h3>
-                            <p class="section-description">Your access and security metadata.</p>
-                        </div>
+                    <div class="section-header">
+                        <h2>Account details</h2>
                     </div>
-                    <div class="detail-grid account-detail-grid">
-                        <div class="detail-item">
-                            <span>User ID</span>
-                            <strong>#<?= (int)$account['user_id'] ?></strong>
-                        </div>
-                        <div class="detail-item">
-                            <span>Status</span>
-                            <strong class="account-status-value <?= $account['status'] === 'active' ? 'is-active' : 'is-inactive' ?>"><i class="bi <?= $account['status'] === 'active' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill' ?>"></i><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></strong>
-                        </div>
-                        <div class="detail-item full">
-                            <span>Last Login</span>
-                            <strong><?= htmlspecialchars(account_format_datetime($account['last_login_at'] ?? null)) ?></strong>
-                        </div>
-                        <div class="detail-item full">
-                            <span>Password Changed</span>
-                            <strong><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></strong>
-                        </div>
-                        <div class="detail-item full">
-                            <span>Account Created</span>
-                            <strong><?= htmlspecialchars(account_format_datetime($account['created_at'] ?? null)) ?></strong>
-                        </div>
+                    <dl class="account-detail-list">
+                        <div><dt>Username</dt><dd><?= htmlspecialchars($account['username']) ?></dd></div>
+                        <div><dt>Role</dt><dd><?= htmlspecialchars($roleLabel) ?></dd></div>
+                        <div><dt>Status</dt><dd class="account-status-value <?= $account['status'] === 'active' ? 'is-active' : 'is-inactive' ?>"><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></dd></div>
+                        <div><dt>User ID</dt><dd>#<?= (int)$account['user_id'] ?></dd></div>
+                        <div><dt>Last sign-in</dt><dd><?= htmlspecialchars(account_format_datetime($account['last_login_at'] ?? null)) ?></dd></div>
+                        <div><dt>Account created</dt><dd><?= htmlspecialchars(account_format_datetime($account['created_at'] ?? null)) ?></dd></div>
+                    </dl>
+                    <div class="account-security">
+                        <h3>Password</h3>
+                        <p><?= htmlspecialchars($passwordStatus) ?></p>
+                        <dl class="account-detail-list">
+                            <div><dt>Last changed</dt><dd><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></dd></div>
+                        </dl>
+                        <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>">Change password</a>
                     </div>
-                    <a class="account-security-link" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>">
-                        <span><i class="bi bi-key"></i><strong>Security settings</strong></span>
-                        <i class="bi bi-arrow-right" aria-hidden="true"></i>
-                    </a>
                 </section>
             </div>
         </main>

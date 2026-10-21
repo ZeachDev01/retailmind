@@ -38,6 +38,7 @@ $storage = new ProfileImageStorage($failure === 'storage' ? $directory . '/accou
     null, null, static fn(string $path): bool => $GLOBALS['failure'] === 'delete' && basename($path) === $GLOBALS['current'] ? false : unlink($path));
 function profile_image_storage(): ProfileImageStorage { return $GLOBALS['storage']; }
 function app_url(string $path = ''): string { return '/src/frontend/' . ltrim($path, '/'); }
+function theme_url(string $path): string { return app_url($path); }
 function format_display_datetime(string $value): string { return $value; }
 function log_activity(...$args): void {}
 function current_role(): string { return $GLOBALS['role']; }
