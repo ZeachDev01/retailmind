@@ -3,6 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { chromium } = require('playwright');
 const source = fs.readFileSync('src/frontend/components/inventory_management/products.php', 'utf8');
+// A syntax error anywhere in this script disables both catalog search and scanning.
+const fullScript = source.slice(source.indexOf('<script>') + 8, source.lastIndexOf('</script>'))
+    .replace(/<\?=[\s\S]*?\?>/g, 'null');
+new (require('node:vm').Script)(fullScript, { filename: 'products.inline.js' });
 const start = source.indexOf('        let productKeyboardCode');
 const script = source.slice(start, source.indexOf('        let productScanner', start))
     .replace(/<\?= json_encode\(app_url\('components\/barcodeScanner\/apiScanner\/product_code_lookup.php'\)\) \?>/, "'/lookup'");

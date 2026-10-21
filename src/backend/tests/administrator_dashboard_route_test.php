@@ -17,7 +17,7 @@ foreach ([
     'Store status',
     'Sales & cash exceptions',
     'Current Fiscal Period',
-    'Previous equivalent period',
+    'Compared with the previous',
     'Staff &amp; cashier shifts',
     'name="range"',
     'data-dashboard-refresh',

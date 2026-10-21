@@ -1,0 +1,61 @@
+.registers-page .form-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 220px) auto;
+    align-items: end;
+    gap: 1rem;
+}
+
+.registers-page .form-grid > .form-group { margin: 0; min-width: 0; }
+.registers-page .form-grid :is(input:not([type="hidden"]), select, .btn) { height: 46px; }
+.registers-page .data-table { min-width: 960px; table-layout: fixed; }
+.registers-page th:first-child { width: 34%; }
+.registers-page th:nth-child(2) { width: 20%; }
+.registers-page th:nth-child(3) { width: 25%; }
+.registers-page th:last-child { width: 21%; }
+.registers-page .data-table td { padding-block: 1.25rem; }
+.registers-page .data-table-scroll { scrollbar-color: var(--muted) var(--surface-soft); }
+.register-count { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+
+.register-identity { display: grid; gap: .25rem; margin-bottom: .75rem; overflow-wrap: anywhere; white-space: normal; }
+.register-id { color: var(--muted); font-variant-numeric: tabular-nums; }
+.registers-page .inline-form { display: flex; flex-wrap: nowrap; align-items: center; gap: .5rem; }
+.registers-page .inline-form input:not([type="hidden"]),
+.registers-page .inline-form select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: .65rem .75rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--theme-surface, #fff);
+    color: var(--text);
+    font: inherit;
+}
+.registers-page .inline-form select { flex: 1; }
+.registers-page .inline-form .btn { flex: none; white-space: nowrap; padding-inline: .75rem; }
+.registers-page .data-table :is(.tag-success, .tag-warning) { white-space: normal; }
+.register-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.registers-page .btn-danger {
+    background: transparent;
+    color: var(--theme-danger-text, var(--danger));
+    border: 1px solid var(--border);
+}
+.registers-page .btn-danger:hover,
+.registers-page .btn-danger:active {
+    background: var(--theme-danger-surface, var(--card-bg));
+    border-color: currentColor;
+}
+.registers-page :is(input, select, .data-table-scroll):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+.registers-page .data-table-scroll:focus-visible { outline-offset: -2px; }
+
+@media (max-width: 1180px) {
+    .registers-page .form-grid { grid-template-columns: minmax(0, 1fr) minmax(160px, 220px); }
+    .registers-page .form-grid > .form-group:last-child { grid-column: 1 / -1; justify-self: start; }
+}
+
+@media (max-width: 640px) {
+    .registers-page .form-grid { grid-template-columns: minmax(0, 1fr); }
+    .registers-page .form-grid > .form-group:last-child { justify-self: stretch; }
+}

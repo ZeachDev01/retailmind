@@ -1,5 +1,12 @@
 # GCash service design discussion
 
+## Cashier balance visibility (confirmed 2026-10-21)
+
+- On Cashier → GCash → New Transaction, show Physical Service Cash and GCash App Wallet above the form, each with an Expected badge and last-check time. Keep the section visible when closed or unavailable, using dashes and an explanatory message. Any Cashier can see an open session's recorded balances; only its responsible Cashier can transact.
+- Show projected wallet and cash box balances after completion in Exchange summary's collapsed **Balance details**, alongside net balance changes. Recalculate for the entered principal, transaction type, and fee payment method. Saving as Pending does not change balances.
+- Exchange summary shows only relevant actions: **Collect cash** and **Send GCash** for Cash-In; **Receive GCash** and **Give cash** for Cash-Out, plus **Collect cash fee** when the fee is paid in cash. Hide irrelevant zero-value movement rows. Show the service fee with its collection method so staff know whether it is included in the cash or GCash received.
+- Reuse recorded expected balances and existing exchange calculations. These are not live provider balances or physical counts; show the opening actual-check time and ask staff to check actual funds before exchanging money.
+
 Design discussion in progress. This document records intended behavior, not implemented functionality. Current behavior remains documented in [gcash.md](gcash.md).
 
 The consolidated specification is [gcash-service-spec.md](gcash-service-spec.md), published as [issue #236](https://github.com/ZeachDev01/retailmind/issues/236). It includes later agreements on overviews and recording, and incorporates operational policies settled in [issue #237](https://github.com/ZeachDev01/retailmind/issues/237).

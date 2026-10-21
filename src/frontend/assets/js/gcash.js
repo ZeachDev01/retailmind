@@ -64,6 +64,7 @@
     }
 
     function renderSessionStatus() {
+        renderBalances();
         const banner = el('session-banner');
         const statusPill = el('session-status');
         const msg = el('session-message');
@@ -97,9 +98,7 @@
             statusPill.textContent = 'Active (You)';
             statusPill.className = 'gcash-status gcash-status-verified';
             banner.className = 'gcash-session-banner active';
-            const expCash = Number(currentSession.expected_service_cash || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
-            const expWallet = Number(currentSession.expected_wallet_balance || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
-            msg.textContent = `Expected service cash: ₱${expCash} · Expected wallet: ₱${expWallet}`;
+            msg.textContent = 'You are responsible for the GCash wallet and service cash box.';
             openBtn.hidden = true;
             closeBtn.hidden = false;
             handoverBtn.hidden = false;
@@ -130,6 +129,9 @@
             renderSessionStatus();
             el('session-panel').hidden = false;
         } catch (e) {
+            currentSession = null;
+            renderSessionStatus();
+            el('balances-message').textContent = 'Balances unavailable. Reload to try again.';
             el('session-panel').hidden = true;
             notify(e.message || 'Could not verify GCash session status.', 'error');
         }
@@ -270,7 +272,40 @@
         return prefix + Math.abs(val).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     };
 
+    function renderBalances() {
+        const active = Boolean(currentSession?.is_controlling_cashier);
+        const principal = validatePrincipal(el('amount').value);
+        el('projected-balances').hidden = !active || principal === null;
+        if (!currentSession) {
+            el('expected-wallet').textContent = '—';
+            el('expected-cash').textContent = '—';
+            el('cash-checked').textContent = 'Last check: —';
+            el('wallet-checked').textContent = 'Last check: —';
+            el('balances-message').textContent = 'Open GCash to view the wallet and service cash balances.';
+            return;
+        }
+
+        const wallet = Number(currentSession.expected_wallet_balance);
+        const cash = Number(currentSession.expected_service_cash);
+        el('expected-wallet').textContent = formatPhp(wallet, wallet < 0);
+        el('expected-cash').textContent = formatPhp(cash, cash < 0);
+        const checked = new Date(currentSession.opened_at.replace(' ', 'T') + '+08:00').toLocaleString('en-PH', {
+            timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+        });
+        el('cash-checked').textContent = 'Last check: ' + checked;
+        el('wallet-checked').textContent = 'Last check: ' + checked;
+        el('balances-message').textContent = 'Expected funds from recorded movements; service cash is separate from the POS drawer. Check actual funds before exchanging money.';
+        if (!active || principal === null) return;
+
+        const preview = calculatePreview(el('type').value, principal, el('fee-method').value);
+        const projectedWallet = Math.round((wallet + preview.netWallet) * 100) / 100;
+        const projectedCash = Math.round((cash + preview.netServiceCash) * 100) / 100;
+        el('projected-wallet').textContent = formatPhp(projectedWallet, projectedWallet < 0);
+        el('projected-cash').textContent = formatPhp(projectedCash, projectedCash < 0);
+    }
+
     function updatePreview() {
+        renderBalances();
         el('confirm-wallet').checked = false;
         el('confirm-cash').checked = false;
         const type = el('type')?.value || 'Cash-In';
@@ -316,25 +351,33 @@
         document.getElementById('preview-counter-collect').textContent = formatPhp(preview.counterCollect);
         document.getElementById('preview-cash-payout').textContent = formatPhp(preview.cashPayout);
         document.getElementById('preview-wallet-transfer').textContent = formatPhp(preview.walletTransfer);
+        document.getElementById('preview-customer-transfer').parentElement.hidden = !isCashOut;
+        document.getElementById('preview-counter-collect').parentElement.hidden = preview.counterCollect === 0;
+        document.getElementById('preview-cash-payout').parentElement.hidden = !isCashOut;
+        document.getElementById('preview-wallet-transfer').parentElement.hidden = isCashOut;
+        document.getElementById('preview-counter-label').textContent = isCashOut ? 'Collect cash fee from customer' : 'Collect cash from customer';
+        document.getElementById('preview-fee-label').textContent = isCashOut
+            ? (preview.feeLocation === 'cash' ? 'Service fee · paid in cash' : 'Service fee · included in GCash received')
+            : 'Service fee · included in cash collected';
         document.getElementById('preview-net-cash').textContent = formatPhp(preview.netServiceCash, true);
         document.getElementById('preview-net-wallet').textContent = formatPhp(preview.netWallet, true);
 
         if (type === 'Cash-In') {
             if (el('confirm-wallet-text')) {
-                el('confirm-wallet-text').textContent = 'I confirmed the wallet transfer of ' + formatPhp(preview.walletTransfer) + ' in the authorized GCash app';
+                el('confirm-wallet-text').textContent = 'I checked the authorized GCash app: ' + formatPhp(preview.walletTransfer) + ' sent to the customer.';
             }
             if (el('confirm-cash-text')) {
-                el('confirm-cash-text').textContent = 'I confirmed receipt of ' + formatPhp(preview.counterCollect) + ' physical cash at the counter';
+                el('confirm-cash-text').textContent = 'I collected ' + formatPhp(preview.counterCollect) + ' cash, including the service fee.';
             }
         } else {
             if (el('confirm-wallet-text')) {
-                el('confirm-wallet-text').textContent = 'I confirmed customer wallet transfer of ' + formatPhp(preview.customerTransfer) + ' in the authorized GCash app';
+                el('confirm-wallet-text').textContent = 'I checked the authorized GCash app: ' + formatPhp(preview.customerTransfer) + ' received from the customer.';
             }
             if (el('confirm-cash-text')) {
                 if (feeMethod === 'Fee in cash') {
-                    el('confirm-cash-text').textContent = 'I confirmed collection of ' + formatPhp(preview.counterCollect) + ' cash fee and payout of ' + formatPhp(preview.cashPayout) + ' physical cash';
+                    el('confirm-cash-text').textContent = 'I collected the ' + formatPhp(preview.counterCollect) + ' cash fee and paid ' + formatPhp(preview.cashPayout) + ' cash to the customer.';
                 } else {
-                    el('confirm-cash-text').textContent = 'I confirmed payout of ' + formatPhp(preview.cashPayout) + ' physical cash handed over to customer';
+                    el('confirm-cash-text').textContent = 'I paid ' + formatPhp(preview.cashPayout) + ' cash to the customer.';
                 }
             }
         }
@@ -495,7 +538,7 @@
             const preview = calculatePreview(type, validPrincipal, feeMethod);
 
             if (isCashOut) {
-                if (el('needs-checking-title')) el('needs-checking-title').textContent = 'Hold Cash-Out as Needs checking';
+                if (el('needs-checking-title')) el('needs-checking-title').textContent = 'Hold Cash-Out for checking';
                 if (el('nc-cash-desc')) {
                     if (feeMethod === 'Fee in cash') {
                         el('nc-cash-desc').innerHTML = 'Cash payout handed over less cash fee collected (<span id="gcash-nc-cash-text">' + formatPhp(preview.cashPayout - preview.counterCollect) + '</span>)';
@@ -507,12 +550,12 @@
                     el('nc-wallet-desc').innerHTML = 'Customer wallet transfer received (<span id="gcash-nc-wallet-text">' + formatPhp(preview.customerTransfer) + '</span>)';
                 }
             } else {
-                if (el('needs-checking-title')) el('needs-checking-title').textContent = 'Hold Cash-In as Needs checking';
+                if (el('needs-checking-title')) el('needs-checking-title').textContent = 'Hold Cash-In for checking';
                 if (el('nc-cash-desc')) {
-                    el('nc-cash-desc').innerHTML = 'Physical cash collected at counter (<span id="gcash-nc-cash-text">' + formatPhp(preview.counterCollect) + '</span>)';
+                    el('nc-cash-desc').innerHTML = 'Cash collected from customer (<span id="gcash-nc-cash-text">' + formatPhp(preview.counterCollect) + '</span>)';
                 }
                 if (el('nc-wallet-desc')) {
-                    el('nc-wallet-desc').innerHTML = 'Wallet funds sent to customer (<span id="gcash-nc-wallet-text">' + formatPhp(preview.walletTransfer) + '</span>)';
+                    el('nc-wallet-desc').innerHTML = 'Wallet transfer sent to customer (<span id="gcash-nc-wallet-text">' + formatPhp(preview.walletTransfer) + '</span>)';
                 }
             }
 
@@ -533,7 +576,7 @@
             }
             const notes = el('nc-notes').value.trim();
             if (notes.length < 5) {
-                notify('Enter an explanatory note of at least 5 characters.', 'warning');
+                notify('Enter a reason for checking (at least 5 characters).', 'warning');
                 el('nc-notes').focus();
                 return;
             }
@@ -882,7 +925,7 @@
         canvas.width = el('video').videoWidth; canvas.height = el('video').videoHeight;
         canvas.getContext('2d').drawImage(el('video'), 0, 0);
         stopCamera();
-        el('ocr-status').textContent = 'Loading Tesseract.js — free OCR library — and reading receipt…';
+        el('ocr-status').textContent = 'Reading receipt…';
         try {
             await loadOCR();
             if (version !== cameraVersion || leaving) return;

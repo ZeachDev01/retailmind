@@ -14,10 +14,10 @@ $sidebarUserName = trim((string)($_SESSION['full_name'] ?? 'RetailMind User'));
 $sidebarProfileImage = isset($_SESSION['profile_image']) ? (string)$_SESSION['profile_image'] : null;
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
 $workspaceChoices = [
-    'super_admin' => ['label' => 'Super Administrator', 'icon' => 'bi-shield-lock'],
-    'admin' => ['label' => 'Administrator', 'icon' => 'bi-shop'],
-    'inventory_manager' => ['label' => 'Inventory', 'icon' => 'bi-boxes'],
-    'cashier' => ['label' => 'Cashier', 'icon' => 'bi-cart-check'],
+    'super_admin' => ['label' => 'Super Administrator', 'icon' => 'privacy'],
+    'admin' => ['label' => 'Administrator', 'icon' => 'shop'],
+    'inventory_manager' => ['label' => 'Inventory', 'icon' => 'deployment'],
+    'cashier' => ['label' => 'Cashier', 'icon' => 'self_service_kiosk'],
 ];
 $assignedWorkspaceRoles = array_values(array_filter(
     function_exists('current_workspace_roles') ? current_workspace_roles() : ($role === null ? [] : [$role]),
@@ -89,6 +89,13 @@ function sidebar_e(string $value): string
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 
+function sidebar_icon(string $name, string $class = ''): string
+{
+    return '<img class="navigation-icon ' . sidebar_e($class) . '" src="'
+        . sidebar_e(app_url('assets/img/navigation/' . $name . '.svg'))
+        . '" alt="" aria-hidden="true" width="22" height="22">';
+}
+
 function sidebar_item_paths(array $items): array
 {
     $paths = [];
@@ -104,7 +111,7 @@ function sidebar_item_paths(array $items): array
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
 ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><?php if (!empty($item['image'])): ?><img class="sidebar-nav-icon" src="<?= sidebar_e(app_url($item['image'])) ?>" alt="" width="22" height="22"><?php else: ?><?= sidebar_icon($item['icon']) ?><?php endif; ?><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
 <?php
 }
 
@@ -114,7 +121,7 @@ function sidebar_render_dropdown(array $item): void
     $openClass = sidebar_dropdown_class($paths);
 ?>
     <div class="dropdown<?= $openClass ?>">
-        <button type="button" class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" title="<?= sidebar_e($item['label']) ?>"><i class="bi <?= sidebar_e($item['icon']) ?>" aria-hidden="true"></i><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><i class="bi bi-chevron-right dropdown-chevron" aria-hidden="true"></i></button>
+        <button type="button" class="dropbtn" aria-expanded="<?= $openClass ? 'true' : 'false' ?>" title="<?= sidebar_e($item['label']) ?>"><?= sidebar_icon($item['icon']) ?><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?><?= sidebar_icon('next', 'bi-chevron-right dropdown-chevron') ?></button>
         <div class="dropdown-content">
             <?php foreach ($item['items'] as $child): ?>
                 <?php sidebar_render_link($child); ?>
@@ -149,43 +156,43 @@ function sidebar_render_section(array $section): void
 }
 
 $superAdministratorSystemItems = [
-    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-shield-lock', 'label' => 'Users & Access'],
-    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Protected Audit Records'],
-    ['path' => 'components/system_administrator/recovery_account.php', 'icon' => 'bi-safe', 'label' => 'Recovery Account'],
-    ['path' => 'components/system_administrator/system_health.php', 'icon' => 'bi-heart-pulse', 'label' => 'System Health'],
-    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'bi-cpu', 'label' => 'ML Operation'],
-    ['path' => 'components/administrator/reset_data.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Reset Data'],
-    ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
-    ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'bi-gear', 'label' => 'Platform Settings'],
+    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'privacy', 'label' => 'Users & Access'],
+    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'inspection', 'label' => 'Protected Audit Records'],
+    ['path' => 'components/system_administrator/recovery_account.php', 'icon' => 'safe', 'label' => 'Recovery Account'],
+    ['path' => 'components/system_administrator/system_health.php', 'icon' => 'support', 'label' => 'System Health'],
+    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'process', 'label' => 'ML Operation'],
+    ['path' => 'components/administrator/reset_data.php', 'icon' => 'delete_database', 'label' => 'Reset Data'],
+    ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'data_recovery', 'label' => 'Backup & Restore'],
+    ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'data_configuration', 'label' => 'Platform Settings'],
 ];
 
 $administratorSystemItems = [
-    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'bi-people', 'label' => 'Store Staff'],
-    ['path' => 'components/administrator/registers.php', 'icon' => 'bi-upc-scan', 'label' => 'Registers'],
-    ['path' => 'components/administrator/store_settings.php', 'icon' => 'bi-sliders', 'label' => 'Store Settings'],
-    ['path' => 'components/administrator/store_calendar.php', 'icon' => 'bi-calendar-date', 'label' => 'Store Calendar'],
-    ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'bi-calendar-check', 'label' => 'Fiscal Periods'],
-    ['path' => 'components/administrator/database_backup.php', 'icon' => 'bi-database-check', 'label' => 'Database Backup'],
-    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'bi-clock-history', 'label' => 'Operational Audit'],
+    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'conference_call', 'label' => 'Store Staff'],
+    ['path' => 'components/administrator/registers.php', 'icon' => 'self_service_kiosk', 'label' => 'Registers'],
+    ['path' => 'components/administrator/store_settings.php', 'icon' => 'settings', 'label' => 'Store Settings'],
+    ['path' => 'components/administrator/store_calendar.php', 'icon' => 'calendar', 'label' => 'Store Calendar'],
+    ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'planner', 'label' => 'Fiscal Periods'],
+    ['path' => 'components/administrator/database_backup.php', 'icon' => 'data_backup', 'label' => 'Database Backup'],
+    ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'inspection', 'label' => 'Operational Audit'],
 ];
 
 $managerInventoryItems = [];
 
 $administratorReportItems = [
-    ['path' => 'components/administrator/shift_report.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shifts'],
-    ['path' => 'components/report/receiving_history.php', 'icon' => 'bi-clock-history', 'label' => 'Receiving History'],
-    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Forecast Analytics'],
-    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
-    ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
-    ['path' => 'components/report/report_generation.php', 'icon' => 'bi-file-earmark-bar-graph', 'label' => 'Report Generation'],
+    ['path' => 'components/administrator/shift_report.php', 'icon' => 'overtime', 'label' => 'Cashier Shifts'],
+    ['path' => 'components/report/receiving_history.php', 'icon' => 'filing_cabinet', 'label' => 'Receiving History'],
+    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Forecast Analytics'],
+    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
+    ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
+    ['path' => 'components/report/report_generation.php', 'icon' => 'statistics', 'label' => 'Report Generation'],
 ];
 
 $superAdministratorSections = [
     [
         'title' => 'Platform Governance',
         'items' => [
-            ['path' => 'components/super_administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Control Center'],
-            ['icon' => 'bi-shield-lock', 'label' => 'Platform Administration', 'items' => $superAdministratorSystemItems],
+            ['path' => 'components/super_administrator/dashboard.php', 'icon' => 'services', 'label' => 'Control Center'],
+            ['icon' => 'privacy', 'label' => 'Platform Administration', 'items' => $superAdministratorSystemItems],
         ],
     ],
 ];
@@ -194,13 +201,13 @@ $administratorSections = [
     [
         'title' => 'Store Operations',
         'items' => [
-            ['path' => 'components/administrator/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Store Overview'],
-            ['icon' => 'bi-shop', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
-            ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
-            ['path' => 'components/administrator/gcash_overview.php', 'icon' => 'bi-wallet2', 'label' => 'GCash Overview'],
-            ['path' => 'components/inventory_management/promotions.php', 'icon' => 'bi-percent', 'label' => 'Promotions'],
-            ['path' => 'components/administrator/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Oversight'],
-            ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Store Reports', 'items' => $administratorReportItems],
+            ['path' => 'components/administrator/dashboard.php', 'icon' => 'shop', 'label' => 'Store Overview'],
+            ['icon' => 'business', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
+            ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
+            ['path' => 'components/administrator/gcash_overview.php', 'image' => 'assets/img/gcash-brandmark.svg', 'label' => 'GCash Overview'],
+            ['path' => 'components/inventory_management/promotions.php', 'icon' => 'advertising', 'label' => 'Promotions'],
+            ['path' => 'components/administrator/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Oversight'],
+            ['icon' => 'statistics', 'label' => 'Store Reports', 'items' => $administratorReportItems],
         ],
     ],
 ];
@@ -211,27 +218,27 @@ $roleSections = [
     'inventory_manager' => [
         [
             'items' => [
-                ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'bi-boxes', 'label' => 'Stock Overview'],
-                ['path' => 'components/inventory_management/products.php', 'icon' => 'bi-box-seam', 'label' => 'Products'],
-                ['path' => 'components/inventory_management/replenishment_queue.php', 'icon' => 'bi-diagram-3', 'label' => 'Replenishment Recommendations'],
-                ['path' => 'components/report/stock_receiving.php', 'icon' => 'bi-box-arrow-in-down', 'label' => 'Stock Receiving'],
-                ['path' => 'components/report/receiving_history.php', 'icon' => 'bi-clock-history', 'label' => 'Receiving History'],
-                ['icon' => 'bi-sliders', 'label' => 'Inventory Control', 'items' => [
-                    ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'bi-clipboard-check', 'label' => 'Inventory Counts'],
-                    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Stock Issue Reviews'],
-                    ['path' => 'components/inventory_management/supplier_pullouts.php', 'icon' => 'bi-arrow-return-left', 'label' => 'Supplier Pullouts'],
+                ['path' => 'components/inventory_management/inventory_overview.php', 'icon' => 'deployment', 'label' => 'Stock Overview'],
+                ['path' => 'components/inventory_management/products.php', 'icon' => 'package', 'label' => 'Products'],
+                ['path' => 'components/inventory_management/replenishment_queue.php', 'icon' => 'workflow', 'label' => 'Replenishment Recommendations'],
+                ['path' => 'components/report/stock_receiving.php', 'icon' => 'shipped', 'label' => 'Stock Receiving'],
+                ['path' => 'components/report/receiving_history.php', 'icon' => 'filing_cabinet', 'label' => 'Receiving History'],
+                ['icon' => 'settings', 'label' => 'Inventory Control', 'items' => [
+                    ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'survey', 'label' => 'Inventory Counts'],
+                    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Reviews'],
+                    ['path' => 'components/inventory_management/supplier_pullouts.php', 'icon' => 'export', 'label' => 'Supplier Pullouts'],
                 ]],
             ],
         ],
         [
             'items' => [
-                ['icon' => 'bi-file-earmark-bar-graph', 'label' => 'Reports', 'items' => [
-                    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'bi-bar-chart-line', 'label' => 'Analytics'],
-                    ['path' => 'components/report/predictions.php', 'icon' => 'bi-graph-up-arrow', 'label' => 'Demand Forecast'],
-                    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'bi-exclamation-diamond', 'label' => 'Forecast Exceptions'],
-                    ['path' => 'components/report/data_readiness.php', 'icon' => 'bi-database-check', 'label' => 'Data Readiness'],
-                    ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'bi-lightbulb', 'label' => 'Insights & Risk'],
-                    ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
+                ['icon' => 'statistics', 'label' => 'Reports', 'items' => [
+                    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Analytics'],
+                    ['path' => 'components/report/predictions.php', 'icon' => 'positive_dynamic', 'label' => 'Demand Forecast'],
+                    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
+                    ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
+                    ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'idea', 'label' => 'Insights & Risk'],
+                    ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
                 ]],
             ],
         ],
@@ -240,19 +247,19 @@ $roleSections = [
         [
             'title' => 'Sales',
             'items' => [
-                ['path' => 'components/cashier/pos.php', 'icon' => 'bi-cart-check', 'label' => 'Point of Sale'],
-                ['path' => 'components/cashier/gcash.php', 'icon' => 'bi-wallet2', 'label' => 'GCash'],
-                ['path' => 'components/cashier/shifts.php', 'icon' => 'bi-cash-stack', 'label' => 'Cashier Shift'],
-                ['path' => 'components/cashier/refunds.php', 'icon' => 'bi-arrow-counterclockwise', 'label' => 'Cash Refunds'],
-                ['path' => 'components/cashier/dashboard.php', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard Overview'],
+                ['path' => 'components/cashier/pos.php', 'icon' => 'self_service_kiosk', 'label' => 'Point of Sale'],
+                ['path' => 'components/cashier/gcash.php', 'image' => 'assets/img/gcash-brandmark.svg', 'label' => 'GCash'],
+                ['path' => 'components/cashier/shifts.php', 'icon' => 'overtime', 'label' => 'Cashier Shift'],
+                ['path' => 'components/cashier/refunds.php', 'icon' => 'money_transfer', 'label' => 'Cash Refunds'],
+                ['path' => 'components/cashier/dashboard.php', 'icon' => 'sales_performance', 'label' => 'Dashboard Overview'],
             ],
         ],
         [
             'title' => 'Documents',
             'items' => [
-                ['path' => 'components/cashier/history.php', 'icon' => 'bi-clock-history', 'label' => 'Transaction History'],
-                ['path' => 'components/invoice/sales.php', 'icon' => 'bi-receipt', 'label' => 'Receipt History'],
-                ['path' => 'components/cashier/stock_issues.php', 'icon' => 'bi-flag', 'label' => 'Report Stock Issue'],
+                ['path' => 'components/cashier/history.php', 'icon' => 'timeline', 'label' => 'Transaction History'],
+                ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
+                ['path' => 'components/cashier/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Report Stock Issue'],
             ],
         ],
     ],
@@ -273,7 +280,7 @@ $GLOBALS['rm_navigation_shell'] = [
 <link rel="stylesheet" href="<?= sidebar_e($avatarStylesheetUrl) ?>" data-avatar-styles>
 <script>
     (function() {
-        var href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';
+        var href = <?= json_encode(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         if (document.head && !document.querySelector('link[href="' + href + '"]')) {
             var link = document.createElement('link');
             link.rel = 'stylesheet';
@@ -285,7 +292,7 @@ $GLOBALS['rm_navigation_shell'] = [
 <div class="admin-mobile-topbar" aria-label="Mobile navigation">
     <div class="admin-mobile-brand">
         <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            <?= sidebar_icon('menu') ?>
         </button>
         <a class="admin-mobile-logo" href="<?= sidebar_e(app_url($mobileHomeTarget)) ?>" aria-label="RetailMind home">
             <img class="admin-mobile-logo-image" src="<?= sidebar_e($sidebarBrandIconUrl) ?>" data-brand-base="<?= sidebar_e($sidebarBrandBaseUrl) ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
@@ -294,7 +301,7 @@ $GLOBALS['rm_navigation_shell'] = [
     </div>
     <div class="admin-mobile-tools">
         <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
-            <i class="bi bi-search" aria-hidden="true"></i>
+            <?= sidebar_icon('search', 'bi-search') ?>
         </button>
         <button type="button" class="admin-mobile-avatar" data-account-menu-open aria-label="Open account menu" aria-expanded="false" aria-controls="sidebarAccountMenu">
             <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage) ?>
@@ -324,7 +331,7 @@ $GLOBALS['rm_navigation_shell'] = [
                 <strong><?= sidebar_e($sidebarUserName) ?></strong>
                 <span><?= sidebar_e($sidebarRoleLabel) ?></span>
             </span>
-            <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
+            <?= sidebar_icon('menu', 'bi-three-dots-vertical') ?>
         </button>
     </div>
 </div>
@@ -332,22 +339,22 @@ $GLOBALS['rm_navigation_shell'] = [
 <nav class="sidebar-account-menu" id="sidebarAccountMenu" aria-label="Account options" aria-hidden="true">
         <div class="sidebar-account-actions">
             <a href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>">
-                <i class="bi bi-person-circle" aria-hidden="true"></i>
+                <?= sidebar_icon('contacts', 'bi-person-circle') ?>
                 <span>User</span>
-                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                <?= sidebar_icon('next', 'bi-chevron-right') ?>
             </a>
             <details class="sidebar-workspace-switcher">
                 <summary class="sidebar-account-workspace">
-                    <i class="bi bi-grid" aria-hidden="true"></i>
+                    <?= sidebar_icon('grid', 'bi-grid') ?>
                     <span>Workspace</span>
-                    <i class="bi bi-chevron-right sidebar-workspace-chevron" aria-hidden="true"></i>
+                    <?= sidebar_icon('next', 'bi-chevron-right sidebar-workspace-chevron') ?>
                 </summary>
                 <div class="sidebar-workspace-options">
                     <?php foreach ($assignedWorkspaceRoles as $assignedRole): ?>
                         <?php $workspaceChoice = $workspaceChoices[$assignedRole]; ?>
                         <?php if ($assignedRole === $role): ?>
                             <div class="sidebar-workspace-option is-current" aria-current="page">
-                                <i class="bi <?= sidebar_e($workspaceChoice['icon']) ?>" aria-hidden="true"></i>
+                                <?= sidebar_icon($workspaceChoice['icon']) ?>
                                 <span><?= sidebar_e($workspaceChoice['label']) ?></span>
                                 <small>Current</small>
                             </div>
@@ -356,9 +363,9 @@ $GLOBALS['rm_navigation_shell'] = [
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="workspace" value="<?= sidebar_e($assignedRole) ?>">
                                 <button type="submit" class="sidebar-workspace-option">
-                                    <i class="bi <?= sidebar_e($workspaceChoice['icon']) ?>" aria-hidden="true"></i>
+                                    <?= sidebar_icon($workspaceChoice['icon']) ?>
                                     <span><?= sidebar_e($workspaceChoice['label']) ?></span>
-                                    <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                    <?= sidebar_icon('right', 'bi-arrow-right') ?>
                                 </button>
                             </form>
                         <?php endif; ?>
@@ -367,52 +374,52 @@ $GLOBALS['rm_navigation_shell'] = [
             </details>
             <details class="sidebar-preferences-menu">
                 <summary class="sidebar-account-preferences">
-                    <i class="bi bi-sliders" aria-hidden="true"></i>
+                    <?= sidebar_icon('settings', 'bi-sliders') ?>
                     <span>Preferences</span>
-                    <i class="bi bi-chevron-right sidebar-preferences-chevron" aria-hidden="true"></i>
+                    <?= sidebar_icon('next', 'bi-chevron-right sidebar-preferences-chevron') ?>
                 </summary>
                 <div class="sidebar-preferences-options">
                     <div class="sidebar-theme-target" data-sidebar-theme-target></div>
                     <button type="button" class="sidebar-preference-option" data-fullscreen-toggle aria-pressed="false">
-                        <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+                        <?= sidebar_icon('expand', 'bi-arrows-fullscreen') ?>
                         <span>Full Screen</span>
                     </button>
                     <?php if ($role !== 'cashier'): ?>
                         <a href="<?= sidebar_e(app_url('components/auth/preferences.php')) ?>">
-                            <i class="bi bi-bell" aria-hidden="true"></i>
+                            <?= sidebar_icon('notification', 'bi-bell') ?>
                             <span>Notifications</span>
-                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                            <?= sidebar_icon('next', 'bi-chevron-right') ?>
                         </a>
                     <?php endif; ?>
                 </div>
             </details>
             <a href="<?= sidebar_e(app_url('components/auth/logout.php')) ?>" class="sidebar-account-logout">
-                <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                <?= sidebar_icon('external', 'bi-box-arrow-right') ?>
                 <span>Logout</span>
-                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                <?= sidebar_icon('next', 'bi-chevron-right') ?>
             </a>
         </div>
 </nav>
 
 <div class="global-topbar" aria-label="Global tools">
     <button type="button" class="global-search-trigger" data-command-open aria-label="Search products, reports, settings, and pages">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+        <?= sidebar_icon('search') ?>
         <span>Search products, reports, settings, and pages...</span>
         <kbd>Ctrl K</kbd>
     </button>
     <a class="global-notification-button" href="<?= sidebar_e(app_url('components/notification/notifications.php')) ?>" aria-label="Notifications<?= $notificationCount > 0 ? ': ' . (int)$notificationCount . ' unread' : '' ?>">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4M12 2V1"/></svg>
+        <?= sidebar_icon('notification') ?>
         <span>Notifications</span>
         <?php if ($notificationCount > 0): ?><strong><?= $notificationCount > 99 ? '99+' : (int)$notificationCount ?></strong><?php endif; ?>
     </a>
 </div>
 
-<div class="command-overlay" id="commandPalette" aria-hidden="true" data-products-api="<?= sidebar_e(app_url('components/barcodeScanner/apiScanner/products.php')) ?>" data-product-target="<?= sidebar_e($commandProductTarget) ?>">
+<div class="command-overlay" id="commandPalette" aria-hidden="true" data-products-api="<?= sidebar_e(app_url('components/barcodeScanner/apiScanner/products.php')) ?>" data-product-target="<?= sidebar_e($commandProductTarget) ?>" data-product-icon="<?= sidebar_e(app_url('assets/img/navigation/package.svg')) ?>">
     <section class="command-dialog" role="dialog" aria-modal="true" aria-label="Search RetailMind">
         <div class="command-search-row">
-            <i class="bi bi-search" aria-hidden="true"></i>
+            <?= sidebar_icon('search', 'bi-search') ?>
             <input type="search" id="commandSearch" aria-label="Search RetailMind" placeholder="Search products, reports, settings, and pages..." autocomplete="off">
-            <button type="button" class="command-close" data-command-close aria-label="Close search"><i class="bi bi-x-lg"></i></button>
+            <button type="button" class="command-close" data-command-close aria-label="Close search"><?= sidebar_icon('close', 'bi-x-lg') ?></button>
         </div>
         <div class="command-results" id="commandResults"></div>
         <div class="command-footer"><span>↑↓ Navigate</span><span>Enter Open</span><span>Esc Close</span></div>
@@ -420,8 +427,8 @@ $GLOBALS['rm_navigation_shell'] = [
 </div>
 
 <div id="rm-flash-messages" hidden data-login-success="<?= sidebar_e($loginSuccess) ?>"<?php foreach ($flashMessages as $flashType => $flashMessage): ?> data-<?= sidebar_e($flashType) ?>="<?= sidebar_e($flashMessage) ?>" <?php endforeach; ?>></div>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/vendor/sweetalert2/sweetalert2.min.css')) ?>">
+<script src="<?= sidebar_e(app_url('assets/vendor/sweetalert2/sweetalert2.all.min.js')) ?>"></script>
 <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
 <script src="<?= sidebar_e(app_url('assets/js/ui.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/ui.js')) ?>"></script>
 <script src="<?= sidebar_e(app_url('assets/js/sidebar-loader.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/sidebar-loader.js')) ?>"></script>
@@ -492,9 +499,9 @@ cartWorkspace.bindNavigation();
                 menuToggle.classList.toggle('active', isOpen);
                 menuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
                 menuToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
-                var menuIcon = menuToggle.querySelector('i');
+                var menuIcon = menuToggle.querySelector('img.navigation-icon');
                 if (menuIcon) {
-                    menuIcon.className = 'bi ' + (isOpen ? 'bi-x-lg' : 'bi-list');
+                    menuIcon.src = new URL(isOpen ? 'close.svg' : 'menu.svg', menuIcon.src).href;
                 }
             }
             if (window.RetailMindUI?.syncScrollLock) RetailMindUI.syncScrollLock();

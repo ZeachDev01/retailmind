@@ -16,7 +16,6 @@
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../app/Services/HeldSaleService.php';
-require_once __DIR__ . '/../app/Services/SalesWorkflowService.php';
 
 // SalesWorkflowService predates the namespace and is still global; the other two
 // are namespaced like the rest of App\Services.
@@ -285,7 +284,6 @@ try {
     $pdo->exec('CREATE TABLE attention_settings (setting_scope TEXT, setting_key TEXT, setting_value TEXT)');
     $shifts = new CashierShiftService($pdo);
     $held = new HeldSaleService($pdo, $shifts);
-    $sales = new SalesWorkflowService($pdo);
 
     $cart = [1 => ['qty' => 2]];
     $absentHeldSaleId = 987654;
@@ -306,6 +304,16 @@ try {
     // holds a valid open shift for the rest of this block.
     $pdo->prepare('INSERT INTO cashier_shifts (cashier_id, register_id, opening_cash) VALUES (?, ?, 200.00)')
         ->execute([$alex, 12]);
+    // Match the held-sales endpoint: no checkout service preloaded before discard.
+    $pdo->beginTransaction();
+    $auditCount = (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn();
+    $held->discardCart($alex, 'cashier', $cart, 'customer_cancelled');
+    $assert(
+        (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn() === $auditCount + 1,
+        'discarding an ordinary cart loads its dependencies and records the reason'
+    );
+    $pdo->rollBack();
+    $sales = new SalesWorkflowService($pdo);
     $expectRefusal(
         static fn() => $held->hold($alex, 'admin', $cart),
         'holding a sale is refused outside the active Cashier workspace'

@@ -154,8 +154,59 @@ $definitions = [
 ];
 
 $settings = get_ml_settings($pdo);
+$demoMetadata = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_import_metadata'")->fetchColumn();
+$demoDatabase = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
+$isLocalDemo = $demoMetadata !== false
+    && preg_match('/^retailmind_demo_[a-z0-9_]+$/D', $demoDatabase)
+    && in_array(strtolower((string)env('APP_ENV')), ['development', 'test'], true)
+    && in_array((string)env('DB_HOST'), ['localhost', '127.0.0.1', '::1'], true);
+$isHostedReplay = !$isLocalDemo
+    && \App\Forecasting\ReplenishmentQueueService::replayDatabaseAllowed($demoDatabase)
+    && !empty(json_decode((string)$demoMetadata, true)['replay']);
+$latestCandidate = $pdo->query("SELECT model_version, metrics_json FROM model_training_runs
+    WHERE status='completed' ORDER BY training_run_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$trainingJob = $pdo->query("SELECT job_id,status,operator_message FROM ml_jobs
+    WHERE trigger_type='model_retraining' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$isTraining = in_array($trainingJob['status'] ?? '', ['queued', 'running'], true);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['train', 'approve_demo'], true)) {
+    csrf_verify();
+    try {
+        if ($_POST['action'] === 'train') {
+            if ($isHostedReplay) {
+                throw new RuntimeException('This hosted replay contains saved results. Train a fresh replay locally, then import its snapshot.');
+            }
+            require_capability(\App\Authorization\RoleCapabilityPolicy::RETRAIN_MODELS);
+            if ($isTraining) throw new RuntimeException('A training job is already queued or running.');
+            $jobId = (new \App\Services\MlJobService($pdo))->enqueue('model_retraining',
+                (int)$_SESSION['user_id'], current_role(), $_SERVER['REMOTE_ADDR'] ?? null);
+            $trainingJob = ['job_id' => $jobId, 'status' => 'queued'];
+            $isTraining = true;
+            $message = 'Training queued. This page refreshes while the background worker trains and evaluates the candidate.';
+        } else {
+            require_capability(\App\Authorization\RoleCapabilityPolicy::APPROVE_MODELS);
+            $version = (string)($_POST['model_version'] ?? '');
+            $candidateMetadata = json_decode($latestCandidate['metrics_json'] ?? '{}', true)['metadata'] ?? [];
+            if (!$isLocalDemo || $isTraining || !str_starts_with($version, 'demo_')
+                || $version !== ($latestCandidate['model_version'] ?? '')
+                || ($candidateMetadata['dataset_kind'] ?? '') !== 'demo'
+                || ($candidateMetadata['dataset_database'] ?? '') !== $demoDatabase) {
+                throw new RuntimeException('Review the latest local Demo candidate before approving it. Store activation is separate.');
+            }
+            $evaluation = new \App\Forecasting\CandidateEvaluationService($pdo);
+            (new \App\Forecasting\ModelPromotionService($pdo, $evaluation))->promote($version, (int)$_SESSION['user_id']);
+            $evaluation->setObservationMode(false, (int)$_SESSION['user_id']);
+            $evaluation->setRecommendationsSuspended(false, (int)$_SESSION['user_id']);
+            $message = 'Demo model approved. Open forecasts and select Generate Now. Store forecasting was not activated.';
+        }
+        $messageClass = 'tag-success';
+    } catch (Throwable $e) {
+        $message = \App\Support\OperatorAlert::message($e, 'Could not complete the model action. Review the candidate and worker status, then retry.');
+        $messageClass = 'tag-warning';
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', ['train', 'approve_demo'], true)) {
     csrf_verify();
     $updates = [];
     $errors = [];
@@ -304,11 +355,42 @@ $formatRunDetails = static function (?string $errorMessage): string {
 
 $stylePath = __DIR__ . '/../../assets/css/style.css';
 $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
+$candidateEvidence = json_decode($latestCandidate['metrics_json'] ?? '{}', true);
+$candidateQuality = $latestCandidate
+    ? (new \App\Forecasting\CandidateEvaluationService($pdo))->evaluateCandidateQuality($latestCandidate['model_version']) : null;
+$approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='ml_approved_model_version'")->fetchColumn() ?: '');
 ?>
 <!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ML Operation</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . rawurlencode($styleVersion)) ?>"><link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/ml-settings.css')) ?>"></head>
 <body class="ml-settings-page"><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
 <div class="topbar"><div><h1>ML Operation</h1></div><div class="ml-page-actions"><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/forecast_import.php')) ?>">Import sales history</a><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Open forecasts</a></div></div>
 <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+<section class="dashboard-section" aria-labelledby="training-title">
+    <div class="section-header"><div><h2 id="training-title">Train and review a candidate</h2>
+        <p class="section-description">Training tests a new model against later sales and the repeating-week baseline. It does not replace the approved model.</p></div></div>
+    <?php if ($isLocalDemo): ?><p>Isolated Demo: <?= htmlspecialchars(json_decode($demoMetadata, true)['source_label'] ?? 'S001') ?>. Approval here enables only this Demo, never Store forecasting.</p><?php endif; ?>
+    <?php if (($isLocalDemo || $isHostedReplay) && !empty(json_decode($demoMetadata, true)['replay'])): ?><p class="tag-warning">Only train.csv was loaded for fitting. Test sales were excluded. <?php if ($isHostedReplay): ?>Hosted snapshot: train a fresh replay locally to produce new results. <?php endif; ?><a href="../report/forecast_replay.php">Open the train/test replay and stock preview</a>.</p><?php endif; ?>
+    <form method="post"><?= csrf_field() ?><button class="btn" type="submit" name="action" value="train" <?= $isTraining || $isHostedReplay ? 'disabled' : '' ?>><?= $isTraining ? 'Training in progress' : 'Train model' ?></button></form>
+    <p role="status">Latest training job: <?= htmlspecialchars($trainingJob ? '#' . $trainingJob['job_id'] . ' — ' . $trainingJob['status'] : 'Not started') ?>.</p>
+    <?php if ($latestCandidate): ?>
+        <p>Candidate: <code><?= htmlspecialchars($latestCandidate['model_version']) ?></code>.
+            <?= (int)($candidateEvidence['metadata']['observations'] ?? 0) ?> daily observations;
+            <?= count($candidateEvidence['metadata']['products'] ?? []) ?> products.
+            <?= htmlspecialchars($candidateEvidence['metadata']['data_window_start'] ?? '') ?> to <?= htmlspecialchars($candidateEvidence['metadata']['data_window_end'] ?? '') ?>.</p>
+        <div class="table-wrap"><table aria-label="Candidate evaluation"><thead><tr><th>Horizon</th><th>Model WAPE</th><th>Baseline WAPE</th><th>Quality gate</th></tr></thead><tbody>
+        <?php foreach (($candidateQuality['horizons'] ?? []) as $evaluation): ?>
+            <tr><td><?= (int)$evaluation['horizon_days'] ?> days</td><td><?= $evaluation['wape'] === null ? 'Unknown' : number_format((float)$evaluation['wape'] * 100, 2) . '%' ?></td><td><?= $evaluation['baseline_wape'] === null ? 'Unknown' : number_format((float)$evaluation['baseline_wape'] * 100, 2) . '%' ?></td><td><?= htmlspecialchars($evaluation['gate_status'] ?? $evaluation['candidate_gate_outcome']) ?></td></tr>
+        <?php endforeach; ?></tbody></table></div>
+        <p>WAPE measures error; lower is better. <?= htmlspecialchars($candidateQuality['reason'] ?? '') ?></p>
+        <?php if ($isLocalDemo): ?><p>Training recipe: <?= (int)($candidateEvidence['metadata']['parameters']['n_estimators'] ?? 0) ?> trees,
+            maximum depth <?= (int)($candidateEvidence['metadata']['parameters']['max_depth'] ?? 0) ?>;
+            28 daily forecast targets per product. The shared pipeline fixes these settings for this experiment.</p><?php endif; ?>
+        <?php if ($isLocalDemo): ?>
+            <form method="post"><?= csrf_field() ?><input type="hidden" name="model_version" value="<?= htmlspecialchars($latestCandidate['model_version']) ?>"><button class="btn" name="action" value="approve_demo" <?= $isTraining || empty($candidateQuality['passed']) || $approvedVersion === $latestCandidate['model_version'] ? 'disabled' : '' ?>><?= $approvedVersion === $latestCandidate['model_version'] ? 'Demo model approved' : 'Approve demo model' ?></button></form>
+        <?php endif; ?>
+    <?php else: ?><p>No candidate yet. Import product-level history, start the background worker, then train.</p><?php endif; ?>
+    <p><a class="btn btn-secondary" href="../report/forecast_analytics.php">Review forecast analytics</a> <a class="btn btn-secondary" href="../report/predictions.php">Open forecasts</a></p>
+</section>
+<?php if (!$isLocalDemo): ?>
 <section class="dashboard-section"><div class="section-header"><div><h2>Forecast settings</h2></div></div><form method="post" novalidate><?= csrf_field() ?>
 <?php foreach ($fieldGroups as $groupKey => $groupMeta): ?>
 <?php if ($groupKey === 'forest'): ?><details class="ml-tuning"<?= $fieldErrors ? ' open' : '' ?>><summary id="ml-tuning-title"><?= htmlspecialchars($groupMeta['title']) ?></summary><?php endif; ?>
@@ -329,9 +411,10 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
 <?php if ($groupKey === 'forest'): ?></details><?php endif; ?>
 <?php endforeach; ?>
 <div class="form-actions"><button type="submit" class="btn">Save ML settings</button><p class="section-description">Saving does not start retraining. Retrain the model to apply changes.</p></div></form></section>
+<?php endif; ?>
 <section class="dashboard-section"><div class="section-header"><div><h2>Recent training runs</h2><p class="section-description">Latest 12 runs, newest first.</p></div></div><div class="table-wrap"><table><thead><tr><th scope="col">Started</th><th scope="col">Trigger</th><th scope="col">Status</th><th scope="col" class="u-num-col">Duration</th><th scope="col" class="u-num-col">Products</th><th scope="col" class="u-num-col">Sale records</th><th scope="col">Details</th></tr></thead><tbody>
 <?php foreach ($runs as $run):
     $statusMeta = $formatRunStatus($run['status'] ?? null);
 ?><tr><td><?= htmlspecialchars(format_display_datetime($run['started_at'] ?? null)) ?></td><td><?= htmlspecialchars($formatRunTrigger($run['trigger_type'] ?? null)) ?></td><td><span class="<?= htmlspecialchars($statusMeta['class']) ?>"><?= htmlspecialchars($statusMeta['label']) ?></span></td><td class="u-num-col"><?= $run['duration_seconds'] !== null ? number_format((float)$run['duration_seconds'], 2) . ' s' : '-' ?></td><td class="u-num-col"><?= number_format((int)($run['eligible_products'] ?? 0)) ?></td><td class="u-num-col"><?= number_format((int)($run['sales_records_used'] ?? 0)) ?></td><td class="table-cell-note"><?= htmlspecialchars($formatRunDetails($run['error_message'] ?? null)) ?></td></tr><?php endforeach; ?>
 <?php if (!$runs): ?><tr><td colspan="7" class="u-empty-cell-padded u-text-center">No training runs yet. Import sales history if needed, then run a model training job.</td></tr><?php endif; ?></tbody></table></div></section>
-</main></div></body></html>
+</main></div><?php if ($isTraining): ?><script>setTimeout(() => window.location.replace(window.location.href), 5000);</script><?php endif; ?></body></html>

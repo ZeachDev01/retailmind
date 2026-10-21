@@ -429,7 +429,7 @@
       .map((link) => ({
         label: (link.textContent || "").trim().replace(/\s+/g, " "),
         href: link.href,
-        icon: (qs("i", link) || {}).className || "bi bi-arrow-right",
+        icon: qs("img.navigation-icon, img.sidebar-nav-icon, i", link),
         section:
           (
             (link.closest(".sidebar-section") &&
@@ -449,6 +449,11 @@
     let productAbortController = null;
     const productsApi = overlay.dataset.productsApi || "";
     const productTarget = overlay.dataset.productTarget || "";
+    const productIcon = document.createElement("img");
+    productIcon.className = "navigation-icon";
+    if (overlay.dataset.productIcon) productIcon.src = overlay.dataset.productIcon;
+    productIcon.alt = "";
+    productIcon.setAttribute("aria-hidden", "true");
 
     function render() {
       const term = input.value.trim().toLowerCase();
@@ -482,12 +487,12 @@
             '" data-index="' +
             index +
             '">' +
-            '<i class="' +
-            item.icon +
-            '"></i><span class="command-result-copy"><strong></strong><span></span></span></a>',
+            '<span class="command-result-copy"><strong></strong><span></span></span></a>',
         )
         .join("");
       qsa(".command-result", results).forEach((node, index) => {
+        const icon = visibleItems[index].icon;
+        if (icon) node.prepend(icon.cloneNode(true));
         qs("strong", node).textContent = visibleItems[index].label;
         qs(".command-result-copy span", node).textContent =
           visibleItems[index].section.trim();
@@ -541,7 +546,7 @@
                   encodeURIComponent(
                     product.sku || product.barcode || product.name || term,
                   ),
-                icon: "bi bi-box-seam",
+                icon: overlay.dataset.productIcon ? productIcon : null,
                 section:
                   "Product · " + (product.sku || product.barcode || "No code"),
               }))
@@ -712,7 +717,7 @@
   function initFullscreenToggle() {
     const button = qs("[data-fullscreen-toggle]");
     if (!button) return;
-    const icon = qs("i", button);
+    const icon = qs("img.navigation-icon, i", button);
     const label = qs("span", button);
     const storageKey = "retailmind_fullscreen";
     const fullscreenDocument = window.parent !== window && window.parent.RetailMindNavigation
@@ -725,8 +730,11 @@
       root.classList.toggle("rm-app-fullscreen", active);
       document.documentElement.classList.toggle("rm-app-fullscreen", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
-      if (icon)
-        icon.className = "bi " + (active ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
+      if (icon) {
+        if (icon.tagName === "IMG")
+          icon.src = new URL(active ? "collapse.svg" : "expand.svg", icon.src).href;
+        else icon.className = "bi " + (active ? "bi-fullscreen-exit" : "bi-arrows-fullscreen");
+      }
       if (label) label.textContent = active ? "Exit Full Screen" : "Full Screen";
     };
     const save = (active) => {

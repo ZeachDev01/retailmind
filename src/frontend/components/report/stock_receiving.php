@@ -644,10 +644,6 @@ function updateQuantityMode(row = activeLine) {
 
     const receivedQty = field('received_qty');
     const receivedPackages = field('received_packages');
-    const receivedPacks = field('received_packs');
-    const rejectedPacks = field('rejected_packs');
-    const receivedLoose = field('received_loose');
-    const rejectedLoose = field('rejected_loose');
 
     if (receivedQty) {
         receivedQty.required = isUnits;
@@ -657,10 +653,10 @@ function updateQuantityMode(row = activeLine) {
         receivedPackages.required = isPackages;
         receivedPackages.disabled = !isPackages;
     }
-    if (receivedPacks) receivedPacks.disabled = !isPacks;
-    if (rejectedPacks) rejectedPacks.disabled = !isPacks;
-    if (receivedLoose) receivedLoose.disabled = !isPacks;
-    if (rejectedLoose) rejectedLoose.disabled = !isPacks;
+    for (const name of ['received_packs', 'damaged_packs', 'rejected_packs', 'received_loose', 'damaged_loose', 'rejected_loose']) {
+        const input = field(name);
+        if (input) input.disabled = !isPacks;
+    }
 
     for (const name of ['received_qty', 'received_packages']) {
         const input = field(name);

@@ -158,7 +158,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <div class="topbar shift-topbar">
                 <div>
                     <h1>Cashier Shifts</h1>
-                    <p class="page-subtitle">Open the register, record drawer cash changes, and reconcile cash at closing. Dates use Philippine time (Asia/Manila).</p>
+                    <p class="page-subtitle">All times in Philippine time.</p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
             </div>
             <?php foreach ([[$message, 'success'], [$error, 'error']] as [$notice, $noticeType]): ?>
@@ -171,8 +171,8 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <div class="shift-grid">
                 <section class="dashboard-section shift-overview">
                     <div class="shift-section-heading"><h2><?= $openShift ? 'Open shift' : 'Open a shift' ?></h2><?php if ($openShift): ?><span class="shift-status shift-status--open">Open</span><?php endif; ?></div>
-                    <?php if (!$isCashier): ?><p class="shift-help">A Cashier Shift is opened and owned by the Cashier who sells. <?= $actorRole === 'admin' ? 'An Administrator may reconcile an abandoned shift here.' : 'You may review shifts here.' ?></p><?php endif; ?>
-                    <?php if (!$openShift && $isCashier && !$availableRegisters): ?><p>No Register is free right now. Every Register is either disabled or already on an open shift. Tell your Administrator.</p><?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
+                    <?php if (!$isCashier): ?><p class="shift-help"><?= $actorRole === 'admin' ? 'Review or close an abandoned shift.' : 'Review Cashier Shifts here.' ?> Only Cashiers can open their own shifts.</p><?php endif; ?>
+                    <?php if (!$openShift && $isCashier && !$availableRegisters): ?><p>No Register is available. Ask your Administrator for help.</p><?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
                             <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($availableRegisters as $register): ?><option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option><?php endforeach; ?></select></div>
                             <div><label for="opening-float">Starting cash</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required></div>
                         </div><button class="btn" type="submit">Open shift</button></form><?php elseif ($openShift): ?>
@@ -203,7 +203,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </section>
                 <?php if ($openShift && $isCashier && !$ownRegisterLocked && !$countPreview): ?><section class="dashboard-section shift-movement">
                         <h2>Drawer movement</h2>
-                        <p class="shift-help">Expected cash is a ledger estimate; check physical funds before any payout. If funds are insufficient, physically add float and record the addition first. Use <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a> for customer refunds; never record a second drawer movement for a refund.</p>
+                        <p class="shift-help">Check physical cash before payouts; add and record float first if needed. Record refunds only in <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a>.</p>
                         <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="movement">
                             <div class="form-row">
                                 <div><label for="movement-type">Type</label><select id="movement-type" name="movement_type">
@@ -219,10 +219,18 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                     <?php endforeach; ?>
                                 <?php endforeach; ?>
                             </select><label for="movement-note">Explanation (required for Other)</label><textarea id="movement-note" name="note" maxlength="255" rows="2"></textarea>
-                            <p class="shift-help">Supplier payments and petty cash require Administrator authorization for this movement's amount and reason.</p>
-                            <label for="movement-approver">Authorizing Administrator username</label><input id="movement-approver" name="approver_username" autocomplete="off">
-                            <label for="movement-approval-password">Administrator password</label><input id="movement-approval-password" name="approver_password" type="password" autocomplete="new-password">
+                            <p class="shift-help">Supplier payments and petty cash require Administrator approval of the amount and reason.</p>
                             <button class="btn" type="submit">Record movement</button>
+                            <dialog id="movement-authorization" aria-labelledby="movement-authorization-title" aria-describedby="movement-authorization-summary">
+                                <h2 id="movement-authorization-title">Authorize drawer movement</h2>
+                                <p id="movement-authorization-summary" class="shift-help"></p>
+                                <label for="movement-approver">Authorizing Administrator username</label><input id="movement-approver" name="approver_username" autocomplete="off" required disabled autofocus>
+                                <label for="movement-approval-password">Administrator password</label><input id="movement-approval-password" name="approver_password" type="password" autocomplete="new-password" required disabled>
+                                <div class="modal-actions">
+                                    <button class="btn btn-secondary" type="button" id="movement-authorization-cancel">Cancel</button>
+                                    <button class="btn" type="submit">Authorize and record</button>
+                                </div>
+                            </dialog>
                         </form>
                     </section><?php endif; ?>
                 <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation">
@@ -236,7 +244,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         </div><?php endif; ?>
                         <?php if ($countPreview): ?>
                             <details class="money-count-breakdown">
-                                <summary>See the money you counted</summary>
+                                <summary>Cash count breakdown</summary>
                                 <?php foreach (CashDenominationCounter::DENOMINATIONS as $group => $denominations): ?>
                                     <h3><?= $group ?></h3>
                                     <dl><?php foreach ($denominations as $key => $cents): ?>
@@ -247,8 +255,8 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                             </details>
                             <p class="count-match <?= $countPreview['cash_variance'] < 0 ? 'negative' : 'positive' ?>" role="status"><?= $countPreview['cash_variance'] < 0 ? 'Cash shortage' : ($countPreview['cash_variance'] > 0 ? 'Cash overage' : 'Exact match') ?><?= $countPreview['cash_variance'] != 0 ? ': ₱' . number_format(abs((float)$countPreview['cash_variance']), 2) : ' — cash is balanced.' ?></p>
                             <div class="card-grid">
-                                <div class="stat-card"><div class="value">₱<?= number_format((float)$countPreview['counted_cash'], 2) ?></div><div class="label">You counted</div></div>
-                                <div class="stat-card"><div class="value">₱<?= number_format((float)$countPreview['expected_cash'], 2) ?></div><div class="label">Cash that should be here</div></div>
+                                <div class="stat-card"><div class="value">₱<?= number_format((float)$countPreview['counted_cash'], 2) ?></div><div class="label">Counted cash</div></div>
+                                <div class="stat-card"><div class="value">₱<?= number_format((float)$countPreview['expected_cash'], 2) ?></div><div class="label">Expected cash</div></div>
                                 <div class="stat-card"><div class="value">₱<?= number_format((float)$countPreview['cash_variance'], 2) ?></div><div class="label">Difference</div></div>
                             </div>
                             <?php if ($countPreview['variance_review_required']): ?><p class="message error" role="note" data-rm-alert-processed="1">This variance exceeds ₱<?= number_format((float)$countPreview['variance_threshold'], 2) ?>. Add a reason; the Administrator will review it after closure.</p><?php endif; ?>
@@ -262,7 +270,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <button class="btn" type="submit">Close shift</button>
                             </form>
                         <?php else: ?>
-                            <p class="shift-help" id="count-help">Enter how many bills and coins you have. For example, two ₱100 bills means enter 2 beside ₱100. We add it up for you.</p>
+                            <p class="shift-help" id="count-help">Enter the quantity of each bill and coin.</p>
                             <?php require __DIR__ . '/../../../backend/app/Views/cash_drawer_counter.php'; ?>
                         <?php endif; ?>
                     </section><?php endif; ?>
@@ -322,7 +330,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <td data-label="Variance" class="<?= (float)($r['cash_variance'] ?? 0) >= 0 ? 'positive' : 'negative' ?>"><?= $r['cash_variance'] !== null ? '₱' . number_format((float)$r['cash_variance'], 2) : '-' ?></td>
                             </tr><?php endforeach; ?></tbody>
                     </table>
-                </div><?php else: ?><p class="shift-empty">No shifts to show yet. Shift history will appear here after a shift is opened.</p><?php endif; ?>
+                </div><?php else: ?><p class="shift-empty">No shifts yet.</p><?php endif; ?>
             </section>
         </main>
     </div>
@@ -330,6 +338,23 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
         const movementType = document.getElementById('movement-type');
         const movementReason = document.getElementById('movement-reason');
         if (movementType && movementReason) {
+            const authorization = document.getElementById('movement-authorization');
+            const credentials = authorization.querySelectorAll('input');
+            movementType.form.addEventListener('submit', event => {
+                const spending = movementType.value === 'cash_out' && ['petty_cash', 'supplier_payment'].includes(movementReason.value);
+                if (!spending || authorization.open) return;
+                event.preventDefault();
+                document.getElementById('movement-authorization-summary').textContent =
+                    movementReason.selectedOptions[0].textContent + ' · ₱' + Number(document.getElementById('movement-amount').value).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                credentials.forEach(input => { input.disabled = false; });
+                authorization.showModal();
+                window.RetailMindUI?.syncScrollLock?.();
+            });
+            document.getElementById('movement-authorization-cancel').addEventListener('click', () => authorization.close());
+            authorization.addEventListener('close', () => {
+                credentials.forEach(input => { input.value = ''; input.disabled = true; });
+                window.RetailMindUI?.syncScrollLock?.();
+            });
             const syncReasons = () => {
                 for (const option of movementReason.options) {
                     option.hidden = !option.dataset.types.split(' ').includes(movementType.value);
@@ -339,9 +364,6 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                     movementReason.selectedIndex = [...movementReason.options].findIndex(option => !option.disabled);
                 }
                 document.getElementById('movement-note').required = movementReason.value === 'other';
-                const spending = movementType.value === 'cash_out' && ['petty_cash', 'supplier_payment'].includes(movementReason.value);
-                document.getElementById('movement-approver').required = spending;
-                document.getElementById('movement-approval-password').required = spending;
             };
             movementType.addEventListener('change', syncReasons);
             movementReason.addEventListener('change', syncReasons);

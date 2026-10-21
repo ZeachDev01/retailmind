@@ -1,5 +1,12 @@
 # Reproducible Demo forecasting (#173)
 
+For the capstone's **real public sales experiment**, use
+[the UCI browser walkthrough](guides/public-forecasting-demo.md) and
+[source/evaluation details](research/public-sales-capstone.md). This document describes
+the separate synthetic-data application demo. The publisher's API now confirms
+synthetic generation and a CC0 label; older unverified-status statements below
+record the earlier assessment, not current publisher metadata.
+
 Run from repository root on a local development machine. Use a separate
 PowerShell session with process-level settings; keep the Store `.env` separate.
 Requires local MySQL with CREATE DATABASE permission, PHP (`composer install`),

@@ -12,6 +12,8 @@ try {
 
     if ($method === 'GET') {
         $filters = [
+            'type' => (string)($_GET['type'] ?? 'all'),
+            'search' => trim((string)($_GET['search'] ?? '')),
             'actor_role' => (string)current_role(),
             'actor_id' => (int)($_SESSION['user_id'] ?? 0),
             'start_date' => !empty($_GET['start_date']) ? (string)$_GET['start_date'] : null,
@@ -35,7 +37,17 @@ try {
         }
 
         $action = (string)($input['action'] ?? '');
-        if ($action === 'waive_discrepancy') {
+        if ($action === 'resolve_exchange') {
+            $txId = filter_var($input['transaction_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!$txId || ($input['confirmed_wallet'] ?? false) !== true || ($input['confirmed_cash'] ?? false) !== true) {
+                throw new DomainException('Confirm both the wallet transfer and physical service cash exchange.');
+            }
+            $result = $service->resolveNeedsChecking((int)$_SESSION['user_id'], (int)$txId, 'complete', [
+                'reference' => (string)($input['reference'] ?? ''),
+                'notes' => 'Administrator verified wallet transfer and physical service cash exchange.',
+            ]);
+            echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
+        } elseif ($action === 'waive_discrepancy') {
             $sessId = filter_var($input['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if (!$sessId) {
                 throw new DomainException('Invalid session ID.');

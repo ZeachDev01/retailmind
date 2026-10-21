@@ -24,21 +24,19 @@ foreach (['host' => 'HOST', 'port' => 'PORT', 'database' => 'NAME', 'username' =
 }
 
 $_ENV['DB_HOST'] = '';
-$_ENV['DB_NAME'] = '';
-$_ENV['DB_USER'] = '';
 $config = require __DIR__ . '/../config/database.php';
-foreach (['host' => 'localhost', 'database' => 'u845277124_shalom', 'username' => 'u845277124_shalom', 'password' => 'current-PASSWORD'] as $field => $value) {
-    if ($config[$field] !== $value) {
-        throw new RuntimeException('Hostinger defaults and environment password must be used: ' . $field);
-    }
+if ($config['host'] !== 'localhost') {
+    throw new RuntimeException('Default to the hosting provider local database host.');
 }
 
+$_ENV['DB_NAME'] = '';
+$_ENV['DB_USER'] = '';
 $_ENV['DB_PASSWORD'] = '';
 try {
     require __DIR__ . '/../config/database.php';
-    throw new RuntimeException('Hosted database password must come from the environment.');
+    throw new RuntimeException('Hosted database credentials must come from the environment.');
 } catch (RuntimeException $exception) {
-    if (strpos($exception->getMessage(), 'Hosted database credentials are missing: password') !== 0) {
+    if (strpos($exception->getMessage(), 'Hosted database credentials are missing: database, username, password') !== 0) {
         throw $exception;
     }
 }

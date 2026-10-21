@@ -57,6 +57,60 @@ const {chromium} = require('playwright');
                 }
             }
             assert.equal(await page.locator('.shift-history td[data-label]').count(), 11);
+            if (variant === 'open') {
+                const username = page.locator('#movement-approver');
+                const password = page.locator('#movement-approval-password');
+                assert.equal(await username.isVisible(), false, 'Authorization username stays off the main page');
+                assert.equal(await password.isVisible(), false, 'Authorization password stays off the main page');
+                await page.evaluate(() => {
+                    window.movementPosts = [];
+                    document.getElementById('movement-type').form.addEventListener('submit', event => {
+                        if (!event.defaultPrevented) window.movementPosts.push(Object.fromEntries(new FormData(event.target)));
+                        event.preventDefault();
+                    });
+                });
+                await page.locator('#movement-amount').fill('100.00');
+                await page.locator('#movement-type').selectOption('cash_out');
+                for (const reason of ['petty_cash', 'supplier_payment']) {
+                    await page.locator('#movement-reason').selectOption(reason);
+                    await page.getByRole('button', {name: 'Record movement', exact: true}).click();
+                    const dialog = page.getByRole('dialog', {name: 'Authorize drawer movement'});
+                    assert(await dialog.isVisible(), `${reason}: record opens authorization`);
+                    assert(await username.evaluate(el => el === document.activeElement), 'Username receives focus');
+                    assert.equal(await page.evaluate(() => movementPosts.length), 0, 'Opening modal does not record a movement');
+                    await page.getByRole('button', {name: 'Authorize and record'}).click();
+                    assert.equal(await page.evaluate(() => movementPosts.length), 0, 'Empty credentials cannot submit');
+                    await username.fill('fixture-admin');
+                    await password.fill('fixture-password');
+                    for (const width of [1440, 390, 320]) {
+                        await page.setViewportSize({width, height: 900});
+                        assert(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth && el.getBoundingClientRect().width <= innerWidth), `Authorization fits at ${width}`);
+                    }
+                    await page.getByRole('button', {name: 'Cancel', exact: true}).click();
+                    await page.waitForFunction(() => document.getElementById('movement-approver').disabled);
+                    assert.equal(await username.inputValue(), '', 'Cancel clears username');
+                    assert.equal(await password.inputValue(), '', 'Cancel clears password');
+                    await page.getByRole('button', {name: 'Record movement', exact: true}).click();
+                    await username.fill('fixture-admin');
+                    await password.fill('fixture-password');
+                    await page.keyboard.press('Escape');
+                    await page.waitForFunction(() => document.getElementById('movement-approver').disabled);
+                    assert.equal(await password.inputValue(), '', 'Escape clears credentials');
+                    assert.equal(await dialog.isVisible(), false, 'Escape closes authorization');
+                }
+                await page.getByRole('button', {name: 'Record movement', exact: true}).click();
+                await username.fill('fixture-admin');
+                await password.fill('fixture-password');
+                await page.getByRole('button', {name: 'Authorize and record'}).click();
+                assert.deepEqual(await page.evaluate(() => movementPosts.map(post => [post.action, post.amount, post.reason, post.approver_username, post.approver_password])),
+                    [['movement', '100.00', 'supplier_payment', 'fixture-admin', 'fixture-password']], 'Approval posts original movement and credentials together');
+                await page.getByRole('button', {name: 'Cancel', exact: true}).click();
+                await page.waitForFunction(() => document.getElementById('movement-approver').disabled);
+                await page.locator('#movement-type').selectOption('cash_in');
+                await page.getByRole('button', {name: 'Record movement', exact: true}).click();
+                assert.equal(await page.evaluate(() => movementPosts.length), 2, 'Float addition submits without approval');
+                assert.equal(await page.evaluate(() => 'approver_password' in movementPosts[1]), false, 'Unapproved movement carries no credentials');
+            }
             await page.close();
         }
         console.log('Shift layouts: opening, open, reconciliation, admin, and locked states fit at seven desktop/mobile widths.');

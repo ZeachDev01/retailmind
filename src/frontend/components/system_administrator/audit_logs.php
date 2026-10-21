@@ -170,13 +170,11 @@ $emptyTableCopy = $canViewPlatformAudit
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle) ?></title>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="preconnect" href="https://cdn.datatables.net" crossorigin>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/columncontrol/2.0.2/css/columnControl.dataTables.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/datetime/2.0.0/css/dataTables.dateTime.min.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/datatables/datatables.min.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/datatables/columncontrol/columnControl.dataTables.min.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/datatables/datetime/dataTables.dateTime.min.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/audit-logs.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/audit-logs.css')) ?>">
 </head>
 <body class="audit-log-page">
@@ -348,9 +346,9 @@ $emptyTableCopy = $canViewPlatformAudit
         </main>
     </div>
 
-    <script defer src="https://cdn.datatables.net/v/dt/dt-3.0.4/datatables.min.js"></script>
-    <script defer src="https://cdn.datatables.net/columncontrol/2.0.2/js/dataTables.columnControl.min.js"></script>
-    <script defer src="https://cdn.datatables.net/datetime/2.0.0/js/dataTables.dateTime.min.js"></script>
+    <script defer src="<?= htmlspecialchars(app_url('assets/vendor/datatables/datatables.min.js')) ?>"></script>
+    <script defer src="<?= htmlspecialchars(app_url('assets/vendor/datatables/columncontrol/dataTables.columnControl.min.js')) ?>"></script>
+    <script defer src="<?= htmlspecialchars(app_url('assets/vendor/datatables/datetime/dataTables.dateTime.min.js')) ?>"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var reviewForm = document.getElementById('signInReviewForm');

@@ -52,6 +52,14 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.goto(origin + '/components/cashier/gcash.php');
         const nav = await page.locator('.sidebar-nav a').allTextContents();
         assert.equal(nav.findIndex(label => label.trim() === 'GCash'), nav.findIndex(label => label.trim() === 'Point of Sale') + 1);
+        const gcashNav = page.locator('.sidebar-nav').getByRole('link', {name: 'GCash', exact: true});
+        const brandmark = gcashNav.locator('img');
+        assert.equal(await brandmark.count(), 1, 'GCash navigation displays the brandmark');
+        assert.equal(await brandmark.getAttribute('alt'), '', 'Link text supplies the accessible name');
+        const logoResponse = await page.request.get(new URL(await brandmark.getAttribute('src'), page.url()).href);
+        assert.equal(logoResponse.ok(), true, 'GCash brandmark is served locally');
+        assert.match(logoResponse.headers()['content-type'], /image\/svg\+xml/);
+        assert.equal(await brandmark.evaluate(image => image.complete && image.naturalWidth > 0), true, 'GCash SVG loads');
 
         const unavailableMessage = 'GCash records are unavailable. Try again later.';
         await page.route('**/gcash_api.php?action=session_status', route => route.fulfill({
@@ -62,6 +70,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.reload();
         await page.locator('.rm-toast.error').filter({hasText: unavailableMessage}).waitFor();
         assert.equal(await page.locator('#gcash-session-panel').isVisible(), false);
+        assert.equal(await page.locator('#gcash-balances').isVisible(), true);
+        assert.equal(await page.locator('#gcash-expected-cash').textContent(), '—');
+        assert.match(await page.locator('#gcash-balances-message').textContent(), /Balances unavailable/);
         await page.unroute('**/gcash_api.php?action=session_status');
         await page.reload();
         await page.locator('#gcash-session-status').filter({hasText: /Closed|Active|Under control/}).waitFor();
@@ -116,6 +127,8 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
 
         // Ticket #239: Verify closed status, open responsibility session
         await page.locator('#gcash-session-status').filter({hasText: 'Closed'}).waitFor();
+        assert.equal(await page.locator('#panel-new-transaction #gcash-balances').isVisible(), true);
+        assert.match(await page.locator('#gcash-balances-message').textContent(), /Open GCash/);
         assert.equal(await page.locator('#gcash-open-session-btn').isVisible(), true);
         assert.equal(await page.locator('#gcash-cash-in-confirm-group').isVisible(), false, 'No zero-amount confirmations');
         assert.equal(await page.locator('#gcash-complete-cash-in').isDisabled(), true, 'Closed session cannot complete transactions');
@@ -125,6 +138,13 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-open-submit').click();
         await page.locator('#gcash-session-status').filter({hasText: 'Active (You)'}).waitFor();
         assert.equal(await page.locator('#gcash-close-session-btn').isVisible(), true);
+        assert.equal(await page.locator('#gcash-expected-cash').textContent(), '₱1,000.00');
+        assert.equal(await page.locator('#gcash-expected-wallet').textContent(), '₱5,000.00');
+        assert.equal(await page.locator('#gcash-balances').isVisible(), true);
+        assert.match(await page.locator('#gcash-balances').textContent(), /Physical Service Cash/);
+        assert.match(await page.locator('#gcash-balances').textContent(), /GCash App Wallet/);
+        assert.doesNotMatch(await page.locator('#gcash-cash-checked').textContent(), /Invalid Date|Last check: —/);
+        assert.equal(await page.locator('#gcash-projected-balances').isVisible(), false);
 
         // Ticket #243: Verify Overview expected balances update after opening session
         await tabOverview.click();
@@ -152,12 +172,18 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-amount').fill('125.50');
         await page.getByText('Enter a whole-peso principal amount from 1 to 50,000. Principal excludes the fee.').waitFor();
         assert.equal(await page.locator('#gcash-preview-content').isVisible(), false);
+        assert.equal(await page.locator('#gcash-projected-balances').isVisible(), false);
         await page.getByRole('button', {name: 'Save as Pending', exact: true}).click();
         assert.equal(await page.locator('#gcash-history-body tr').count(), 0, 'Invalid principal must not save');
 
         // Cash-In 1,000 preview
         await page.locator('#gcash-amount').fill('1000');
         await page.locator('#gcash-preview-content').waitFor();
+        assert.equal(await page.locator('#gcash-projected-balances').isVisible(), false, 'Balance details start collapsed');
+        await page.getByText('Balance details', {exact: true}).click();
+        assert.equal(await page.locator('#gcash-projected-balances').isVisible(), true);
+        assert.equal(await page.locator('#gcash-projected-wallet').textContent(), '₱4,000.00');
+        assert.equal(await page.locator('#gcash-projected-cash').textContent(), '₱2,010.00');
         assert.equal(await page.locator('#preview-fee').textContent(), '₱10.00');
         assert.equal(await page.locator('#gcash-preview-empty').isVisible(), false);
         assert.equal(await page.locator('#preview-counter-collect').textContent(), '₱1,010.00');
@@ -167,6 +193,26 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#preview-net-cash').textContent(), '+₱1,010.00');
         assert.equal(await page.locator('#preview-net-wallet').textContent(), '-₱1,000.00');
         assert.equal(await page.locator('#gcash-fee-method-group').isVisible(), false);
+        await page.getByText('Balance details', {exact: true}).click();
+        const checkSummary = async (labels, mode) => {
+            const instructions = page.locator('#gcash-preview-instructions');
+            assert.equal(await instructions.isVisible(), false, 'Detailed instructions stay collapsed until requested');
+            await page.getByText('Exchange instructions', {exact: true}).click();
+            assert.equal(await instructions.isVisible(), true, 'Detailed instructions remain available');
+            await page.getByText('Exchange instructions', {exact: true}).click();
+            assert.deepEqual(await page.locator('.gcash-preview-grid .gcash-preview-item:visible .gcash-preview-label').allTextContents(), labels);
+            assert.equal(await page.locator('.gcash-preview-grid .gcash-preview-item:visible .gcash-preview-label .bi[aria-hidden="true"]').count(), labels.length, 'Every movement and fee has a decorative icon');
+            for (const field of ['gcash-type', 'gcash-fee-method']) {
+                assert.equal(await page.locator('label[for="' + field + '"] .bi[aria-hidden="true"]').count(), 1);
+            }
+            for (const width of [1440, 390]) {
+                await page.setViewportSize({width, height: 900});
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Summary has no overflow at ' + width);
+                await page.locator('.gcash-review-panel').screenshot({path: path.join(output, 'gcash-summary-' + mode + '-' + width + '.png')});
+            }
+            await page.setViewportSize({width: 1440, height: 900});
+        };
+        await checkSummary(['Service fee · included in cash collected', 'Collect cash from customer', 'Send GCash to customer'], 'cash-in');
 
         // Cash-Out: Fee via GCash preview
         await page.locator('#gcash-type').selectOption('Cash-Out');
@@ -178,6 +224,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#preview-cash-payout').textContent(), '₱1,000.00');
         assert.equal(await page.locator('#preview-net-cash').textContent(), '-₱1,000.00');
         assert.equal(await page.locator('#preview-net-wallet').textContent(), '+₱1,010.00');
+        assert.equal(await page.locator('#gcash-projected-wallet').textContent(), '₱6,010.00');
+        assert.equal(await page.locator('#gcash-projected-cash').textContent(), '₱0.00');
+        await checkSummary(['Service fee · included in GCash received', 'Receive GCash from customer', 'Pay cash to customer'], 'cash-out-gcash-fee');
 
         // Cash-Out: Fee in cash preview
         await page.locator('#gcash-fee-method').selectOption('Fee in cash');
@@ -187,6 +236,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#preview-cash-payout').textContent(), '₱1,000.00');
         assert.equal(await page.locator('#preview-net-cash').textContent(), '-₱990.00');
         assert.equal(await page.locator('#preview-net-wallet').textContent(), '+₱1,000.00');
+        assert.equal(await page.locator('#gcash-projected-wallet').textContent(), '₱6,000.00');
+        assert.equal(await page.locator('#gcash-projected-cash').textContent(), '₱10.00');
+        await checkSummary(['Service fee · paid in cash', 'Receive GCash from customer', 'Collect cash fee from customer', 'Pay cash to customer'], 'cash-out-cash-fee');
 
         // 12,345 preview with 123.45 fee
         await page.locator('#gcash-amount').fill('12345');
@@ -194,6 +246,8 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#preview-counter-collect').textContent(), '₱123.45');
         assert.equal(await page.locator('#preview-net-cash').textContent(), '-₱12,221.55');
         assert.equal(await page.locator('#preview-net-wallet').textContent(), '+₱12,345.00');
+        assert.equal(await page.locator('#gcash-projected-cash').textContent(), '-₱11,221.55');
+        assert.equal(await page.locator('#gcash-expected-cash').textContent(), '₱1,000.00', 'Preview must not move funds');
 
         // Save valid Cash-In transaction
         await page.locator('#gcash-type').selectOption('Cash-In');
@@ -304,9 +358,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-confirm-cash').check();
         await page.locator('.rm-toast-close').evaluateAll(buttons => buttons.forEach(button => button.click()));
         await page.locator('.rm-toast').last().waitFor({state: 'detached'});
-        await page.getByText('Balance changes', {exact: true}).click();
+        await page.getByText('Balance details', {exact: true}).click();
         assert.equal(await page.locator('#preview-net-cash').isVisible(), true);
-        await page.getByText('Balance changes', {exact: true}).click();
+        await page.getByText('Balance details', {exact: true}).click();
         assert.equal(await page.locator('#preview-net-cash').isVisible(), false);
         const leftScroll = page.locator('.gcash-entry-scroll');
         for (const width of [1440, 1280, 390]) {
@@ -318,6 +372,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         }
         for (const theme of ['light', 'dark']) {
             await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+            assert.equal(await page.locator('#gcash-balances').evaluate(section =>
+                getComputedStyle(section).backgroundColor === getComputedStyle(document.getElementById('gcash-session-panel')).backgroundColor
+            ), true, 'Balance cards use the workspace surface in ' + theme);
             for (const width of [1440, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'GCash entry fits ' + theme + ' at ' + width);
@@ -702,6 +759,19 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const overviewRes = await adminPage.goto(origin + '/components/administrator/gcash_overview.php');
         assert.equal(overviewRes.status(), 200, 'Admin can access GCash Overview');
 
+        // Overview tabs expose one task at a time and support keyboard navigation.
+        assert.equal(await adminPage.getByRole('tab').count(), 4);
+        const balancesTab = adminPage.getByRole('tab', {name: 'Balances & Summary'});
+        assert.equal(await balancesTab.getAttribute('aria-selected'), 'true');
+        assert.equal(await adminPage.locator('#tab-transactions').isVisible(), false);
+        await balancesTab.focus();
+        await adminPage.keyboard.press('ArrowRight');
+        assert.equal(await adminPage.locator('#tab-transactions').isVisible(), true);
+        await adminPage.keyboard.press('End');
+        assert.equal(await adminPage.locator('#tab-unresolved').isVisible(), true);
+        await adminPage.keyboard.press('Home');
+        assert.equal(await adminPage.locator('#tab-overview').isVisible(), true);
+
         // Verify Current Expected Balances top section
         const expectedCashEl = adminPage.locator('#admin-expected-cash');
         const expectedWalletEl = adminPage.locator('#admin-expected-wallet');
@@ -713,6 +783,8 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         // Verify Filtered Activity Metrics cards
         const cashInMetricEl = adminPage.locator('#admin-metric-cash-in-principal');
         await cashInMetricEl.waitFor();
+
+        await adminPage.getByRole('tab', {name: 'Transactions & Filters'}).click();
 
         // Verify Date Filtering with Philippine reporting-day boundaries
         await adminPage.locator('#filter-start-date').fill('2026-01-01');
@@ -731,6 +803,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             adminPage.locator('#btn-reset-filters').click()
         ]);
 
+        await adminPage.getByRole('tab', {name: 'Reconciliation Log'}).click();
         // Reconciliation Differences Section
         const diffTable = adminPage.locator('#gcash-admin-diff-table');
         await diffTable.waitFor();
@@ -738,11 +811,13 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const diffText = await diffTable.textContent();
         assert.equal(diffText.includes('Waived') || diffText.includes('Variance') || diffText.includes('Session'), true, 'Reconciliation table contains session differences');
 
+        await adminPage.getByRole('tab', {name: 'Unresolved Activity'}).click();
         // Unresolved Activities Section
         const ncTable = adminPage.locator('#gcash-admin-nc-table');
         await ncTable.waitFor();
         assert.equal(await ncTable.isVisible(), true, 'Unresolved activities section is displayed');
 
+        await adminPage.getByRole('tab', {name: 'Transactions & Filters'}).click();
         // Store-wide Transaction History Table & Legacy reference distinction
         const historyTable = adminPage.locator('#gcash-admin-history-table');
         await historyTable.waitFor();

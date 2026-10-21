@@ -605,12 +605,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             </div>
                         </div>
                         <div class="pos-toolbar">
-                            <button type="button" class="btn btn-small btn-secondary" id="start-scanner">
-                                <i class="bi bi-camera" aria-hidden="true"></i>Use camera
-                            </button>
-                            <button type="button" class="btn btn-small btn-danger" id="stop-scanner" disabled>
-                                <i class="bi bi-stop-circle" aria-hidden="true"></i>Stop
-                            </button>
                             <?php if ($posShiftOpen): ?>
                                 <form method="post" data-confirm="Lock this register for a break? Your Cashier Shift stays open and your Register stays yours. Nobody else can use it until you unlock it with your password." data-confirm-title="Lock register" data-confirm-button="Lock register">
                                     <?= csrf_field() ?>
@@ -621,8 +615,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             <button type="button" class="quick-grid-toggle" id="quick-grid-toggle" title="Toggle compact product grid" aria-label="Toggle compact product grid" aria-pressed="false">
                                 <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
                             </button>
-                            <button type="button" class="btn btn-small btn-secondary" id="refresh-catalog" title="Refresh catalog">
-                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Refresh
+                            <button type="button" class="btn btn-small btn-secondary" id="refresh-catalog" title="Refresh catalog" aria-label="Refresh catalog">
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
@@ -635,13 +629,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         </button>
                     </div>
 
-                    <div class="scanner-area" id="scanner-area">
-                        <div id="scanner-reader" class="scanner-reader"></div>
-                        <div id="scanner-result" class="scanner-status" aria-live="polite">
-                            <strong>Camera scanner</strong>
-                            <span>Start the camera, then place a barcode inside the frame.</span>
-                        </div>
-                    </div>
                 </div>
 
                 <section class="quick-add-section" aria-label="Products">
@@ -675,8 +662,8 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         </div>
                         <p class="muted u-pos-hint">Review quantities before accepting payment.</p>
                     </div>
-                    <button type="button" class="btn btn-small btn-secondary" id="clear-cart-btn" disabled>
-                        <i class="bi bi-trash3" aria-hidden="true"></i>Clear
+                    <button type="button" class="btn btn-small btn-secondary" id="clear-cart-btn" title="Clear current sale" aria-label="Clear current sale" disabled>
+                        <i class="bi bi-trash3" aria-hidden="true"></i>
                     </button>
                 </div>
 
@@ -688,11 +675,11 @@ $quickCategoryIcon = static function (string $categoryName): string {
                 </div>
 
                 <div class="cart-table-wrap">
-                    <table class="cart-table" aria-label="Cart items">
-                        <thead>
-                            <tr><th>Item</th><th>Quantity</th><th>Subtotal</th><th><span class="sr-only">Remove</span></th></tr>
+                    <table class="cart-table" role="table" aria-label="Cart items">
+                        <thead role="rowgroup">
+                            <tr role="row"><th role="columnheader" scope="col">Item</th><th role="columnheader" scope="col">Quantity</th><th role="columnheader" scope="col">Subtotal</th><th role="columnheader" scope="col"><span class="sr-only">Remove</span></th></tr>
                         </thead>
-                        <tbody id="cart-body"></tbody>
+                        <tbody id="cart-body" role="rowgroup"></tbody>
                     </table>
                 </div>
 
@@ -889,7 +876,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
 
 <?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="<?= app_url('assets/js/checkout-attempt.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/checkout-attempt.js') ?>"></script>
 <script src="<?= app_url('assets/js/checkout-quote.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/checkout-quote.js') ?>"></script>
 <script>
@@ -902,12 +888,8 @@ let heldSales = [];
 // settles it against the Cashier and the shift, so this is a hint, not a claim.
 let resumedHeldSaleId = 0;
 let cartReviewUnresolved = false;
-let scanCooldown = false;
-let scannerActive = false;
 let checkoutConfirmed = false;
 let checkoutSubmitting = false;
-let lastScannedCode = '';
-let lastScannedAt = 0;
 let posAudioContext = null;
 
 const quickProducts = <?= json_encode($quickProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -916,11 +898,7 @@ const posCatalogPreload = <?= json_encode(($posShiftOpen && !$posRegisterLocked)
 const posCatalogEtag = <?= json_encode($catalogEtag) ?>;
 const posCatalogServerTime = <?= json_encode(date('Y-m-d H:i:s')) ?>;
 const skuInput = document.getElementById('sku-input');
-const scannerResult = document.getElementById('scanner-result');
-const scannerArea = document.getElementById('scanner-area');
 const recentScan = document.getElementById('recent-scan');
-const startBtn = document.getElementById('start-scanner');
-const stopBtn = document.getElementById('stop-scanner');
 const addCodeBtn = document.getElementById('add-code-btn');
 const checkoutForm = document.getElementById('checkout-form');
 const cartInput = document.getElementById('cart-input');
@@ -962,37 +940,6 @@ const heldSalesApiUrl = <?= json_encode(app_url('components/barcodeScanner/apiSc
 const csrfToken = <?= json_encode(generate_csrf_token()) ?>;
 const posShiftOpen = <?= $posShiftOpen ? 'true' : 'false' ?>;
 const lowStockFallback = 5;
-function getSupportedBarcodeFormats() {
-    const formats = window.Html5QrcodeSupportedFormats;
-    if (!formats) return undefined;
-    return [
-        formats.QR_CODE,
-        formats.CODE_128,
-        formats.CODE_39,
-        formats.CODE_93,
-        formats.EAN_13,
-        formats.EAN_8,
-        formats.UPC_A,
-        formats.UPC_E,
-        formats.ITF,
-        formats.CODABAR,
-    ].filter(format => typeof format === 'number');
-}
-
-const scannerConfig = {
-    fps: 10,
-    qrbox: { width: 280, height: 180 },
-    aspectRatio: 1.4,
-    disableFlip: true,
-    formatsToSupport: getSupportedBarcodeFormats(),
-    useBarCodeDetectorIfSupported: true,
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-};
-const html5QrCode = window.Html5Qrcode ? new Html5Qrcode('scanner-reader', {
-    formatsToSupport: getSupportedBarcodeFormats(),
-    useBarCodeDetectorIfSupported: true,
-}) : null;
-
 function money(value) {
     return Number(value || 0).toFixed(2);
 }
@@ -1085,7 +1032,7 @@ function updateQuickProductAvailability() {
                     <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" aria-label="Add piece" ${remainingBase <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
                 </div>`;
             } else {
-                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remainingBase <= 0 ? 'disabled' : ''} style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-plus-lg" aria-hidden="true"></i>Piece</button>`;
+                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remainingBase <= 0 ? 'disabled' : ''} style="flex:1;min-height:36px;padding:0.25rem 0.5rem;"><i class="bi bi-plus-lg" aria-hidden="true"></i>Piece</button>`;
             }
 
             let packHtml = '';
@@ -1097,7 +1044,7 @@ function updateQuickProductAvailability() {
                 </div>`;
             } else {
                 const packDisabled = (sealedStock <= 0 || remainingBase < Number(product.pack_size));
-                packHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" ${packDisabled ? 'disabled' : ''} style="flex:1;min-height:36px;font-size:0.8rem;padding:0.25rem 0.5rem;"><i class="bi bi-box-seam" aria-hidden="true"></i>Pack of ${product.pack_size}</button>`;
+                packHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="pack" ${packDisabled ? 'disabled' : ''} style="flex:1;min-height:36px;padding:0.25rem 0.5rem;"><i class="bi bi-box-seam" aria-hidden="true"></i>Pack of ${product.pack_size}</button>`;
             }
 
             action.innerHTML = `<div style="display:flex;gap:0.35rem;width:100%;align-items:center;">${pieceHtml}${packHtml}</div>`;
@@ -1605,7 +1552,6 @@ async function addScannedCode(code) {
 
     if (!addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode, product.selling_form, product.pack_size)) return;
     showRecentScan(product, code);
-    scannerResult.innerHTML = `<strong>Item added</strong><span>${escapeHtml(product.name)}</span>`;
 }
 
 function cartChangesAllowed() {
@@ -1773,7 +1719,7 @@ function renderCart() {
     let rows = '';
 
     if (Object.keys(cart).length === 0) {
-        rows = '<tr><td colspan="4" class="cart-empty-cell"><i class="bi bi-cart3" aria-hidden="true"></i>Scan or search for a product to begin.</td></tr>';
+        rows = '<tr role="row"><td role="cell" colspan="4" class="cart-empty-cell"><i class="bi bi-cart3" aria-hidden="true"></i>Scan or search for a product to begin.</td></tr>';
     } else {
         for (const id in cart) {
             const item = cart[id];
@@ -1790,11 +1736,11 @@ function renderCart() {
                 : `<span class="badge" style="background:#f3f4f6;color:#4b5563;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:500;">Piece</span>`;
             const escapedId = escapeHtml(String(id));
 
-            rows += `<tr>
-                <td><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</td>
-                <td><div class="cart-actions"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', -1)" aria-label="Decrease ${escapeHtml(item.name)} quantity">−</button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" onchange="updateCartQty('${escapedId}', Number(this.value))" aria-label="${escapeHtml(item.name)} quantity"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', 1)" aria-label="Increase ${escapeHtml(item.name)} quantity">+</button></div></td>
-                <td><strong>&#8369;${money(subtotal)}</strong></td>
-                <td><button type="button" class="remove-item-btn" onclick="removeFromCart('${escapedId}')" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
+            rows += `<tr role="row">
+                <td role="cell"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</td>
+                <td role="cell"><div class="cart-actions"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', -1)" aria-label="Decrease ${escapeHtml(item.name)} quantity"><i class="bi bi-dash-lg" aria-hidden="true"></i></button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" onchange="updateCartQty('${escapedId}', Number(this.value))" aria-label="${escapeHtml(item.name)} quantity"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', 1)" aria-label="Increase ${escapeHtml(item.name)} quantity"><i class="bi bi-plus-lg" aria-hidden="true"></i></button></div></td>
+                <td role="cell"><strong>&#8369;${money(subtotal)}</strong></td>
+                <td role="cell"><button type="button" class="remove-item-btn" onclick="removeFromCart('${escapedId}')" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
             </tr>`;
         }
     }
@@ -2350,92 +2296,6 @@ async function reviewCurrentCart() {
     return Object.keys(cart).length > 0;
 }
 
-function onScanSuccess(decodedText) {
-    if (scanCooldown) {
-        return;
-    }
-    scanCooldown = true;
-    setTimeout(() => { scanCooldown = false; }, 700);
-
-    const code = String(decodedText).trim();
-    const now = Date.now();
-    if (code === lastScannedCode && now - lastScannedAt < 1200) {
-        return;
-    }
-    lastScannedCode = code;
-    lastScannedAt = now;
-    scannerResult.innerHTML = `<strong>Barcode detected</strong><span>${escapeHtml(code)}</span>`;
-    if (navigator.vibrate) {
-        navigator.vibrate(100);
-    }
-    queueBarcode(code);
-}
-
-function showCameraStartFailure(hint, detail) {
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-    scannerResult.innerHTML = '<strong>Camera could not start</strong><span>' + escapeHtml(hint) + '</span>';
-    if (detail !== undefined) {
-        console.error('Camera start failed:', detail);
-    }
-    if (window.RetailMindUI && typeof window.RetailMindUI.toast === 'function') {
-        const easy = 'The camera could not start. Check your camera permission, or enter the code manually to continue. Tell your Administrator if this keeps happening.';
-        const tech = window.RetailMindUI.isDebug() && detail !== undefined ? '\n' + String(detail) : '';
-        showCartMessage(easy + tech, 'error');
-    }
-}
-
-function startScanner() {
-    scannerArea.classList.add('open');
-    if (!html5QrCode) {
-        showCameraStartFailure('The scanner library could not be loaded. Enter the code manually instead.', 'Html5Qrcode library is unavailable');
-        return;
-    }
-    const localHost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
-    if (!window.isSecureContext && !localHost) {
-        showCameraStartFailure('Open this page over HTTPS, or enter the code manually.', 'Camera requires a secure context (HTTPS or localhost)');
-        return;
-    }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showCameraStartFailure('This browser does not allow camera scanning. Enter the code manually.', 'navigator.mediaDevices.getUserMedia is unavailable');
-        return;
-    }
-    if (scannerActive) {
-        return;
-    }
-
-    startBtn.disabled = true;
-    scannerResult.innerHTML = '<strong>Starting camera</strong><span>Allow camera access when prompted.</span>';
-    html5QrCode.start({ facingMode: 'environment' }, scannerConfig, onScanSuccess, () => {})
-        .then(() => {
-            scannerActive = true;
-            stopBtn.disabled = false;
-            scannerResult.innerHTML = '<strong>Camera active</strong><span>Place a barcode inside the frame.</span>';
-        })
-        .catch(error => {
-            showCameraStartFailure('Check camera permission, or type the code manually.', error);
-        });
-}
-
-function stopScanner() {
-    if (!html5QrCode || !scannerActive) {
-        scannerArea.classList.remove('open');
-        return;
-    }
-    html5QrCode.stop()
-        .then(() => {
-            scannerActive = false;
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            scannerArea.classList.remove('open');
-            scannerResult.innerHTML = '<strong>Camera stopped</strong><span>Use the camera button to scan again.</span>';
-            skuInput.focus();
-        })
-        .catch(() => {
-            scannerResult.innerHTML = '<strong>Unable to stop camera</strong><span>Refresh the page if the camera remains active.</span>';
-        });
-}
-
 function updateClock() {
     if (!cashierClock) {
         return;
@@ -2444,8 +2304,6 @@ function updateClock() {
     cashierClock.innerHTML = `<i class="bi bi-clock" aria-hidden="true"></i>${now.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })} Philippine time`;
 }
 
-startBtn.addEventListener('click', startScanner);
-stopBtn.addEventListener('click', stopScanner);
 addCodeBtn.addEventListener('click', addCodeFromInput);
 clearCartButton.addEventListener('click', clearCart);
 checkoutButton.addEventListener('click', checkoutNow);

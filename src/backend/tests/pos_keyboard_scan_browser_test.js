@@ -16,7 +16,7 @@ function between(start, end) {
             <div class="checkout-modal" aria-modal="true"></div><div id="result"></div>`);
         await page.addScriptTag({ content: `
             let cart = {}, renders = 0, stock = 3, requests = [], messages = [], scans = [];
-            const skuInput = document.getElementById('sku'), scannerResult = document.getElementById('result');
+            const skuInput = document.getElementById('sku');
             const barcodeApiUrl = '/pos', csrfToken = 'fixture';
             const cartWorkspace = { context: { locked: false }, busy: false };
             const posShiftOpen = true, checkoutSubmitting = false, checkoutAttempt = { pending: false };
@@ -28,7 +28,7 @@ function between(start, end) {
             window.fetch = async (url, options) => {
                 const input = Object.fromEntries(options.body); requests.push(input);
                 await new Promise(resolve => setTimeout(resolve, 20));
-                const qty = JSON.parse(input.quantities)[1] || 0;
+                const qty = JSON.parse(input.quantities)['1:piece'] || 0;
                 return { json: async () => input.code !== '123456' ? { success: false, message: 'Product not found.' }
                     : qty >= stock ? { success: false, message: 'Insufficient stock.' }
                     : { success: true, product: { product_id: 1, product_name: 'Milk', unit_price: 12,
@@ -45,10 +45,10 @@ function between(start, end) {
         await scan();
         await scan();
         await page.evaluate(() => scanQueue);
-        assert.equal(await page.evaluate(() => cart[1].qty), 2, 'consecutive identical scans each add one');
+        assert.equal(await page.evaluate(() => cart['1:piece'].qty), 2, 'consecutive identical scans each add one');
         assert.equal(await page.evaluate(() => renders), 2);
-        assert.equal(await page.evaluate(() => JSON.parse(requests[1].quantities)[1]), 1, 'queued lookup sees prior scan');
-        assert.equal(await page.evaluate(() => cart[1].price * cart[1].qty), 24);
+        assert.equal(await page.evaluate(() => JSON.parse(requests[1].quantities)['1:piece']), 1, 'queued lookup sees prior scan');
+        assert.equal(await page.evaluate(() => cart['1:piece'].price * cart['1:piece'].qty), 24);
         await page.keyboard.press('Enter');
         await page.evaluate(() => scanQueue);
         assert.equal(await page.evaluate(() => requests.length), 2, 'extra Enter cannot replay cleared buffer');
@@ -68,12 +68,12 @@ function between(start, end) {
         await page.focus('#sku');
         await scan();
         await page.evaluate(() => scanQueue);
-        assert.equal(await page.evaluate(() => cart[1].qty), 3, 'focused scan is handled exactly once');
+        assert.equal(await page.evaluate(() => cart['1:piece'].qty), 3, 'focused scan is handled exactly once');
         assert.equal(await page.inputValue('#sku'), '');
         await page.focus('#idle');
         await scan();
         await page.evaluate(() => scanQueue);
-        assert.equal(await page.evaluate(() => cart[1].qty), 3, 'insufficient stock preserves cart');
+        assert.equal(await page.evaluate(() => cart['1:piece'].qty), 3, 'insufficient stock preserves cart');
         assert.match(await page.evaluate(() => messages.at(-1).message), /Insufficient stock/);
         await scan('999999');
         await page.evaluate(() => scanQueue);

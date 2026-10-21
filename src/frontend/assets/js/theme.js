@@ -50,7 +50,7 @@
         document.querySelectorAll('[data-theme-current]').forEach(trigger => {
             const selected = trigger.parentElement?.querySelector(`[data-theme-mode="${mode}"]`);
             trigger.dataset.themeCurrent = mode;
-            const icon = selected?.querySelector('svg');
+            const icon = selected?.querySelector('svg, img.navigation-icon');
             if (icon) trigger.innerHTML = icon.outerHTML + `<span>${mode[0].toUpperCase() + mode.slice(1)}</span>`;
             trigger.setAttribute('aria-label', 'Appearance: ' + mode);
         });
@@ -72,15 +72,20 @@
     document.addEventListener('DOMContentLoaded', () => {
         const wrapper = document.createElement('details');
         wrapper.className = 'theme-control theme-mobile-menu';
+        const sidebarThemeTarget = document.querySelector('[data-sidebar-theme-target]');
         const icons = {
             light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
             dark: '<path d="M20.5 13A9 9 0 0 1 11 3.5 9 9 0 1 0 20.5 13Z"/>',
             system: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M12 17v4m-4 0h8"/>'
         };
+        const colorIcons = {light: 'idea', dark: 'night_landscape', system: 'display'};
+        const sidebarIcon = document.querySelector('#appSidebar img.navigation-icon');
+        const themeIcon = value => sidebarThemeTarget && sidebarIcon
+            ? `<img class="navigation-icon" src="${new URL(colorIcons[value] + '.svg', sidebarIcon.src).href}" alt="" aria-hidden="true" width="22" height="22">`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[value]}</svg>`;
         wrapper.innerHTML = '<summary class="theme-trigger" data-theme-current="system"></summary><div class="theme-menu-panel"><div class="theme-options" role="group" aria-label="Display theme">' + modes.map(value =>
-            `<button type="button" data-theme-mode="${value}" aria-label="${value[0].toUpperCase() + value.slice(1)}" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[value]}</svg><span>${value[0].toUpperCase() + value.slice(1)}</span></button>`
+            `<button type="button" data-theme-mode="${value}" aria-label="${value[0].toUpperCase() + value.slice(1)}" aria-pressed="false">${themeIcon(value)}<span>${value[0].toUpperCase() + value.slice(1)}</span></button>`
         ).join('') + '</div></div>';
-        const sidebarThemeTarget = document.querySelector('[data-sidebar-theme-target]');
         const desktop = document.querySelector('.global-topbar');
         const mobile = document.querySelector('.admin-mobile-topbar');
         const landingLogin = document.querySelector('.landing-nav__login');

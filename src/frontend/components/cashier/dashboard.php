@@ -36,45 +36,26 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 </nav>
             </div>
             <div role="tabpanel" id="panel-cashier" aria-labelledby="tab-cashier" tabindex="0">
-            <nav class="cashier-quick-actions" aria-label="Cashier quick actions">
-                <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">
-                    <span class="action-icon"><i class="bi bi-upc-scan" aria-hidden="true"></i></span>
-                    <span><strong>New sale</strong><span>Scan items and collect payment</span></span>
-                </a>
-                <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/invoice/sales.php')) ?>">
-                    <span class="action-icon"><i class="bi bi-receipt" aria-hidden="true"></i></span>
-                    <span><strong>Receipt history</strong><span>Find receipts and reprints</span></span>
-                </a>
-                <a class="cashier-action-card" href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">
-                    <span class="action-icon"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></span>
-                    <span><strong>Cash refunds</strong><span>Process returns and refunds</span></span>
-                </a>
-            </nav>
-
             <section class="card-grid cashier-stats" aria-label="Today's sales summary">
                 <article class="stat-card with-icon">
                     <div class="stat-icon"><i class="bi bi-cash-stack" aria-hidden="true"></i></div>
                     <div class="value">&#8369;<?= number_format((float)$cashierMetrics['today_sales'], 2) ?></div>
                     <div class="label">Today's gross sales</div>
-                    <div class="hint">Before refunds, Philippine time</div>
                 </article>
                 <article class="stat-card with-icon">
                     <div class="stat-icon"><i class="bi bi-receipt-cutoff" aria-hidden="true"></i></div>
                     <div class="value"><?= (int)$cashierMetrics['transactions'] ?></div>
-                    <div class="label">Transactions</div>
-                    <div class="hint">Completed checkouts today</div>
+                    <div class="label">Today's transactions</div>
                 </article>
                 <article class="stat-card with-icon success">
                     <div class="stat-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
                     <div class="value">&#8369;<?= number_format((float)$cashierMetrics['average_transaction'], 2) ?></div>
-                    <div class="label">Average sale</div>
-                    <div class="hint">Average value per checkout</div>
+                    <div class="label">Today's average sale</div>
                 </article>
                 <article class="stat-card with-icon <?= $lowStockWarnings ? 'warning' : 'success' ?>">
                     <div class="stat-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
                     <div class="value"><?= count($lowStockWarnings) ?></div>
                     <div class="label">Low-stock alerts</div>
-                    <div class="hint">Products reduced to warning level</div>
                 </article>
             </section>
 
@@ -83,14 +64,12 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="dashboard-panel-header">
                         <div>
                             <h2 id="recent-transactions-title">Recent transactions</h2>
-                            <p class="section-description">Your latest ten checkouts across all dates.</p>
                         </div>
                         <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">View all</a>
                     </div>
                     <div class="dashboard-panel-header">
                         <div>
-                            <h3>Today's sales by hour</h3>
-                            <p class="section-description">All your sales today, before refunds. Philippine time (UTC+08:00).</p>
+                            <h3>Today's gross sales by hour (PHT)</h3>
                         </div>
                     </div>
                         <div class="cashier-sales-chart">
@@ -144,7 +123,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="dashboard-panel-header">
                         <div>
                             <h2 id="stock-alerts-title">Stock alerts</h2>
-                            <p class="section-description">Warnings triggered by products you sold.</p>
                         </div>
                     </div>
                     <div class="dashboard-panel-body">
@@ -162,7 +140,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                                 <div class="stock-alert-item clear">
                                     <div>
                                         <strong>No current warnings</strong>
-                                        <span>Low-stock products will appear here after checkout.</span>
                                     </div>
                                     <span class="stock-level-pill">Clear</span>
                                 </div>
@@ -179,29 +156,29 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="pos-panel-title">
                         <div class="pos-panel-icon"><i class="bi bi-cash-stack" aria-hidden="true"></i></div>
                         <div>
-                            <h2 id="gcash-overview-balances-title">Expected Balances</h2>
-                            <p>Expected figures based on counted opening, accountable movements, and adjustments. No live GCash balance API is implied.</p>
+                            <h2 id="gcash-overview-balances-title">Expected balances</h2>
                         </div>
                     </div>
                 </div>
                 <div class="gcash-overview-grid gcash-balances-grid">
                     <div class="gcash-card gcash-card-balance">
                         <div class="gcash-card-header">
-                            <span class="gcash-card-label">Expected Service Cash</span>
-                            <span class="gcash-badge gcash-badge-expected">Expected</span>
+                            <span class="gcash-card-label">Service cash</span>
                         </div>
                         <div class="gcash-card-value" id="gcash-overview-expected-cash">₱0.00</div>
-                        <div class="gcash-card-sub" id="gcash-overview-cash-checked">Last actual check: Not checked yet</div>
                     </div>
                     <div class="gcash-card gcash-card-balance">
                         <div class="gcash-card-header">
-                            <span class="gcash-card-label">Expected Wallet Balance</span>
-                            <span class="gcash-badge gcash-badge-expected">Expected</span>
+                            <span class="gcash-card-label">Wallet balance</span>
                         </div>
                         <div class="gcash-card-value" id="gcash-overview-expected-wallet">₱0.00</div>
-                        <div class="gcash-card-sub" id="gcash-overview-wallet-checked">Last actual check: Not checked yet</div>
                     </div>
                 </div>
+                <details class="gcash-balance-details">
+                    <summary>Balance details</summary>
+                    <p>Calculated from opening balances, recorded movements, and adjustments.</p>
+                    <p id="gcash-overview-cash-checked">Last actual check: Not checked yet</p>
+                </details>
             </section>
 
             <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-metrics-title">
@@ -209,8 +186,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="pos-panel-title">
                         <div class="pos-panel-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
                         <div>
-                            <h2 id="gcash-overview-metrics-title">Current-Shift Activity</h2>
-                            <p>Completed transactions and gross service fees earned in your active shift.</p>
+                            <h2 id="gcash-overview-metrics-title">Current shift</h2>
                         </div>
                     </div>
                     <div class="gcash-overview-quick-actions">
@@ -224,24 +200,20 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 </div>
                 <div class="gcash-overview-grid gcash-metrics-grid">
                     <div class="gcash-card">
-                        <span class="gcash-card-label">Cash-In Principal</span>
+                        <span class="gcash-card-label">Cash-In principal</span>
                         <div class="gcash-card-value" id="gcash-metric-cash-in-principal">₱0.00</div>
-                        <div class="gcash-card-sub">Completed customer deposits</div>
                     </div>
                     <div class="gcash-card">
-                        <span class="gcash-card-label">Cash-Out Principal</span>
+                        <span class="gcash-card-label">Cash-Out principal</span>
                         <div class="gcash-card-value" id="gcash-metric-cash-out-principal">₱0.00</div>
-                        <div class="gcash-card-sub">Completed customer withdrawals</div>
                     </div>
                     <div class="gcash-card">
-                        <span class="gcash-card-label">Gross Fees (Cash)</span>
+                        <span class="gcash-card-label">Gross fees · Cash</span>
                         <div class="gcash-card-value" id="gcash-metric-fees-cash">₱0.00</div>
-                        <div class="gcash-card-sub">Service fees paid in counter cash</div>
                     </div>
                     <div class="gcash-card">
-                        <span class="gcash-card-label">Gross Fees (Wallet)</span>
+                        <span class="gcash-card-label">Gross fees · Wallet</span>
                         <div class="gcash-card-value" id="gcash-metric-fees-wallet">₱0.00</div>
-                        <div class="gcash-card-sub">Service fees received via GCash</div>
                     </div>
                 </div>
             </section>
@@ -251,8 +223,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="pos-panel-title">
                         <div class="pos-panel-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
                         <div>
-                            <h2 id="gcash-overview-nc-title">Needs Checking Items</h2>
-                            <p>Transactions held for investigation. Resolve before closing responsibility.</p>
+                            <h2 id="gcash-overview-nc-title">Needs checking</h2>
                         </div>
                     </div>
                     <span id="gcash-overview-nc-count" class="gcash-status gcash-status-needs-checking">0 open</span>

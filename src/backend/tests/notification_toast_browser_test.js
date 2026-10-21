@@ -1,5 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
 
@@ -9,6 +10,24 @@ const {chromium} = require('playwright');
         const page = await browser.newPage();
         page.setDefaultTimeout(5000);
         const frontend = path.resolve(__dirname, '../../frontend');
+        const productSource = fs.readFileSync(path.join(frontend, 'components/inventory_management/products.php'), 'utf8');
+        const productNoticeScript = productSource.match(/<script>\s*([\s\S]*?)const PRODUCT_PHOTO_LIMIT_MESSAGE/)[1];
+        for (const type of ['success', 'warning', 'error']) {
+            const noticePage = await browser.newPage();
+            const message = type === 'success' ? 'Product added successfully. Barcode: RM26102112345678' : 'Check the product details.';
+            await noticePage.route('http://retailmind.test/**', route => route.fulfill({contentType: 'text/html', body: '<main></main>'}));
+            await noticePage.goto(`http://retailmind.test/products.php?${type}=${encodeURIComponent(message)}`);
+            await noticePage.addScriptTag({path: path.join(frontend, 'assets/js/ui.js')});
+            if (productNoticeScript.trim()) {
+                await noticePage.addScriptTag({content: productNoticeScript.replace(/<\?=[\s\S]*?\?>/g, JSON.stringify({type, message}))});
+            }
+            await noticePage.evaluate(() => {
+                RetailMindUI.initPageContent();
+                RetailMindUI.initPageContent();
+            });
+            assert.deepEqual(await noticePage.locator(`.rm-toast.${type} .rm-toast-copy > span`).allTextContents(), [message], `Product ${type} notice appears exactly once`);
+            await noticePage.close();
+        }
         await page.route('http://retailmind.test/**', route => route.fulfill({
             contentType: 'text/html',
             body: '<input id="scan"><main></main>',

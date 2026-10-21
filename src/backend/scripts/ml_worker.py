@@ -170,8 +170,9 @@ def dataset_context(cursor):
     if imported is not None:
         if not isolated or os.getenv('APP_ENV', '').lower() in ('production', 'live', 'infinityfree'):
             raise ValueError("Demo evidence requires an isolated non-operational database")
-        if imported.get('store_id') != 'S001' or imported.get('products_mapped') != 20:
-            raise ValueError("Demo selection must be S001 and all 20 products")
+        expected_store = 'UCI_ONLINE_RETAIL' if imported.get('source_kind') == 'uci_online_retail' else 'S001'
+        if imported.get('store_id') != expected_store or imported.get('products_mapped') != 20:
+            raise ValueError("Demo selection must match its declared source and all 20 products")
     elif any(marker in database.lower() for marker in ('demo', 'kaggle')):
         raise ValueError("Demo database has no imported demand provenance")
     return {
@@ -192,14 +193,18 @@ def artifact_directory(context):
 
 def load_history(cursor, context):
     if context['dataset_kind'] == 'demo':
-        cursor.execute("""
+        if context['source'].get('source_kind') == 'uci_online_retail':
+            cursor.execute('''SELECT sale_date AS date, product_id, quantity AS units_sold
+                FROM forecast_sales_imports ORDER BY product_id, sale_date''')
+        else:
+            cursor.execute("""
             SELECT DATE(s.sale_date) AS date, si.product_id, SUM(si.quantity) AS units_sold
             FROM sales s JOIN sale_items si ON si.sale_id = s.sale_id
             JOIN products p ON p.product_id = si.product_id
             WHERE s.cashier_id = 999 AND si.product_id BETWEEN 1 AND 20
             GROUP BY DATE(s.sale_date), si.product_id
             ORDER BY si.product_id, date
-        """)
+            """)
         rows = cursor.fetchall()
         data = normalize_history(pd.DataFrame(rows, columns=['date', 'product_id', 'units_sold']))
         source = context['source']
@@ -266,6 +271,8 @@ def run_forecast_generation(conn, cursor, job_id, observation_version=None):
             readiness = 'High'
         if is_demo:
             limitation = 'Demo evidence; source authenticity unverified; not Store accuracy'
+            if context['source'].get('source_kind') == 'uci_online_retail':
+                limitation = 'External Demo: UCI Online Retail; gross recorded sales; assumed zero days; not Store accuracy'
         if observation_version is not None:
             limitation = 'Observation only; not approved for routine purchasing. ' + limitation
         cursor.execute("""
@@ -319,7 +326,9 @@ def run_model_retraining(conn, cursor, job_id):
         'created_at': datetime.now(timezone.utc).isoformat(),
         'outcome': 'passed' if all(o == 'passed' for o in outcomes) else
                    'incomplete' if 'incomplete' in outcomes else 'failed',
-        'evidence_label': 'Demo evidence; provenance unverified' if context['dataset_kind'] == 'demo'
+        'evidence_label': ('External Demo: UCI Online Retail; not Store accuracy'
+                           if (context.get('source') or {}).get('source_kind') == 'uci_online_retail'
+                           else 'Demo evidence; provenance unverified') if context['dataset_kind'] == 'demo'
                           else 'Store evidence known at each completed-day cutoff',
     })
     cursor.execute("""

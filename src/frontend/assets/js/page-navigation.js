@@ -116,7 +116,7 @@
         content.setAttribute('aria-busy', error ? 'false' : 'true');
     }
     function once(url) {
-        return url.origin !== location.origin || /\/(?:theme|ui|page-navigation|cart-workspace|backup_status|checkout-attempt|checkout-quote)\.js$/.test(url.pathname);
+        return url.origin !== location.origin || url.pathname.includes('/assets/vendor/') || /\/(?:theme|ui|page-navigation|cart-workspace|backup_status|checkout-attempt|checkout-quote)\.js$/.test(url.pathname);
     }
     async function execute(script, url) {
         if (script.hasAttribute('data-rm-persistent')) return;

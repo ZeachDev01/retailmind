@@ -201,11 +201,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $productImage = handle_product_photo_upload($_FILES['product_image'] ?? null) ?? '';
 
 
-            $stockMode = $_POST['starting_stock_mode'] ?? 'pieces';
             $hasPackConfig = !empty($_POST['pack_size']) && (int)$_POST['pack_size'] > 1;
             $startingPacks = null;
             $startingLoose = null;
-            if ($stockMode === 'packs' && $hasPackConfig) {
+            if ($hasPackConfig) {
                 $startingPacks = isset($_POST['starting_packs']) && trim((string)$_POST['starting_packs']) !== '' ? $_POST['starting_packs'] : null;
                 $startingLoose = isset($_POST['starting_loose']) && trim((string)$_POST['starting_loose']) !== '' ? $_POST['starting_loose'] : null;
             }
@@ -364,13 +363,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $categories = $productService->getCategories();
 $products = $productService->getProductsForManagement();
-$pageNotice = null;
-foreach (['success', 'warning', 'error'] as $noticeType) {
-    if (isset($_GET[$noticeType]) && is_string($_GET[$noticeType]) && $_GET[$noticeType] !== '') {
-        $pageNotice = ['type' => $noticeType, 'message' => $_GET[$noticeType]];
-        break;
-    }
-}
 $existingBrands = $pdo->query("SELECT DISTINCT TRIM(brand) AS brand FROM products WHERE brand IS NOT NULL AND TRIM(brand) <> '' ORDER BY brand")->fetchAll(PDO::FETCH_COLUMN);
 $knownFoodBrands = [
     "JACK'nJILL", 'Oishi', 'Piattos', 'Nova', 'Chippy', 'Clover', 'Rebisco',
@@ -464,41 +456,9 @@ foreach ($products as $product) {
             box-sizing: border-box;
         }
 
-        #add-product-modal .stock-mode-selector {
-            display: inline-flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        #add-product-modal .stock-mode-selector label {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            min-height: 44px;
+        #add-product-modal .planning-section-title {
             margin: 0;
-            padding: 8px 12px;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            font-size: .875rem;
-            font-weight: 500;
-            white-space: nowrap;
-            cursor: pointer;
-        }
-
-        #add-product-modal .stock-mode-selector label:has(input:checked) {
-            border-color: var(--primary);
-            background: var(--theme-surface-soft, #f8fafc);
-            color: var(--primary);
-        }
-
-        #add-product-modal .stock-mode-selector input[type="radio"] {
-            flex: 0 0 16px;
-            width: 16px;
-            height: 16px;
-            min-height: 0;
-            margin: 0;
-            padding: 0;
-            accent-color: var(--primary);
+            font-size: 1rem;
         }
 
         #add-product-modal .u-checkbox-label {
@@ -1382,10 +1342,10 @@ foreach ($products as $product) {
                             <p class="section-description" id="add-product-scanner-result">Point the camera at a barcode.</p>
                         </div>
                         <div class="form-grid">
-                            <div class="form-group full"><label>Barcode</label>
+                            <div class="form-group full"><label for="create-barcode-input">Individual Item Barcode</label>
                                 <div class="u-flex-wrap"><input class="u-input-grow" name="barcode" id="create-barcode-input" maxlength="50" placeholder="Scan, enter, generate, or leave blank"><button type="button" class="btn btn-quiet" id="add-product-scan-btn"><i class="bi bi-camera"></i> Scan</button><button type="button" class="btn btn-warning" id="generate-barcode-btn"><i class="bi bi-upc"></i> Generate</button></div><small class="field-help">RetailMind automatically creates a unique internal barcode when this is blank.</small><small class="field-error">This barcode is already used by another product.</small>
                             </div>
-                            <div class="form-group"><label>Case / Package Barcode</label><input name="case_barcode" maxlength="80" placeholder="Optional outer-case barcode"></div>
+                            <div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout. If you receive the same Sales Pack you sell, enter its barcode only under Sales Pack Barcode.</small></div>
                             <div class="form-group"><label>Status</label><select name="status">
                                     <option value="active">Active</option>
                                     <option value="inactive">Inactive</option>
@@ -1426,78 +1386,61 @@ foreach ($products as $product) {
                                 </div>
                             </div>
                             <div class="form-group full" style="border-top:1px solid var(--border);padding-top:0.75rem;margin-top:0.5rem;">
-                                <strong style="font-size:0.9rem;display:block;margin-bottom:0.25rem;">Sales Pack Configuration (Optional)</strong>
-                                <small class="field-help" style="display:block;margin-bottom:0.5rem;">For products sold both individually and as a sealed multipack under a distinct barcode.</small>
+                                <strong style="font-size:0.9rem;display:block;margin-bottom:0.25rem;">Sales Packs — Sold at Checkout (optional)</strong>
+                                <small class="field-help" style="display:block;margin-bottom:0.5rem;">Complete all three fields only if you also sell sealed packs of this item. Otherwise, leave them blank.</small>
                             </div>
                             <div class="form-group">
-                                <label for="create-pack-size">Pack Size (Pieces per Pack)</label>
+                                <label for="create-pack-size">Items per Sales Pack</label>
                                 <input type="number" min="2" step="1" name="pack_size" id="create-pack-size" placeholder="e.g. 12">
-                                <small class="field-help">Whole number &gt; 1.</small>
+                                <small class="field-help">Number of individual items in one sealed pack, e.g. 6 bottles.</small>
                             </div>
                             <div class="form-group">
-                                <label for="create-pack-barcode">Pack Barcode</label>
+                                <label for="create-pack-barcode">Sales Pack Barcode</label>
                                 <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Distinct barcode for pack">
-                                <small class="field-help">Must differ from unit barcode, SKU, and case barcode.</small>
+                                <small class="field-help">Scanned at checkout to sell a whole pack. Must differ from the individual item barcode, SKU, and receiving package barcode.</small>
                             </div>
                             <div class="form-group">
-                                <label for="create-pack-price">Pack Selling Price (₱)</label>
+                                <label for="create-pack-price">Sales Pack Price (₱)</label>
                                 <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price" placeholder="Bundle price">
-                                <small class="field-help">Must be positive and &lt; Pack Size × Selling Price.</small>
+                                <small class="field-help">Price for one whole pack. Must be greater than zero and cheaper than buying its items individually.</small>
                             </div>
                         </div>
                     </section>
 
                     <section class="wizard-panel" data-panel="4">
                         <div class="form-grid">
+                            <h3 class="full planning-section-title">Starting Stock</h3>
                             <div class="form-group full">
-                                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.35rem;">
-                                    <label for="initial-stock-quantity" style="margin-bottom:0;">Starting Stock</label>
-                                    <div class="stock-mode-selector" role="radiogroup" aria-label="Starting stock unit">
-                                        <label><input type="radio" name="starting_stock_mode" value="pieces" checked> Pieces</label>
-                                        <label><input type="radio" name="starting_stock_mode" value="packages"> Packages / boxes</label>
-                                        <label id="stock-mode-packs-label"><input type="radio" name="starting_stock_mode" value="packs"> Sales Packs</label>
-                                    </div>
-                                </div>
                                 <div id="stock-pieces-wrapper">
+                                    <label for="initial-stock-quantity">Starting pieces</label>
                                     <input id="initial-stock-quantity" type="number" name="initial_stock_quantity" min="0" max="2147483647" step="1" value="0" required>
                                     <small class="field-help" id="stock-help-pieces">How many items do you have now? Enter 0 if you have none.</small>
                                 </div>
-                                <div id="stock-packages-wrapper" hidden>
-                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
-                                        <div>
-                                            <label for="starting-packages-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Full packages / boxes</label>
-                                            <input id="starting-packages-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
-                                        </div>
-                                        <div>
-                                            <label for="starting-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
-                                            <input id="starting-loose-count" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
-                                        </div>
-                                    </div>
-                                    <small class="field-help" id="stock-package-calc-preview" style="display:block;margin-top:0.4rem;font-weight:600;color:var(--primary, #0d6efd);">0 packages × 1 + 0 pieces = 0 pieces total</small>
-                                </div>
                                 <div id="stock-sales-packs-wrapper" hidden>
-                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                                    <div class="form-grid">
                                         <div>
-                                            <label for="starting-packs-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Sealed packs</label>
-                                            <input id="starting-packs-count" name="starting_packs" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                            <label for="starting-packs-count">Sales Packs</label>
+                                            <input id="starting-packs-count" name="starting_packs" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0" disabled>
                                         </div>
                                         <div>
-                                            <label for="starting-pack-loose-count" style="font-size:0.8rem;color:var(--text-muted, #666);display:block;margin-bottom:0.25rem;">Extra loose pieces</label>
-                                            <input id="starting-pack-loose-count" name="starting_loose" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0">
+                                            <label for="starting-pack-loose-count">Loose pieces</label>
+                                            <input id="starting-pack-loose-count" name="starting_loose" type="number" min="0" max="2147483647" step="1" value="0" placeholder="0" disabled>
                                         </div>
                                     </div>
-                                    <small class="field-help" id="stock-sales-pack-calc-preview" style="display:block;margin-top:0.4rem;font-weight:600;color:var(--primary, #0d6efd);">0 packs × 0 + 0 pieces = 0 pieces total</small>
+                                    <small class="field-help" id="stock-sales-pack-calc-preview" aria-live="polite"></small>
                                 </div>
-                                <small class="field-error">Enter a whole number of zero or more.</small>
+                                <small class="field-error">Enter whole numbers of zero or more. Total stock cannot exceed 2,147,483,647 pieces.</small>
                             </div>
-                            <div class="form-group"><label for="units-per-package">Units per Package/Case</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1"></div>
+                            <div class="form-group full" id="starting-stock-expiration-group" hidden><label for="starting-stock-expiration">Starting Stock Expiration</label><input type="date" id="starting-stock-expiration" name="expiration_date"></div>
+                            <h3 class="full planning-section-title">Restocking</h3>
+                            <div class="form-group"><label for="units-per-package">Items per Receiving Package</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1"><small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small></div>
                             <div class="form-group"><label>Minimum Order Quantity</label><input type="number" min="1" name="minimum_order_quantity" value="1"></div>
                             <div class="form-group"><label>Reorder Level</label><input type="number" min="0" name="reorder_level" value="10"></div>
                             <div class="form-group"><label>Safety Stock</label><input type="number" min="0" name="safety_stock" value="0"></div>
-                            <div class="form-group"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
-                            <div class="form-group"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>
                             <div class="form-group"><label for="warning-lead-time-days">Expiry Warning Lead Time (Days)</label><input id="warning-lead-time-days" type="number" min="1" step="1" name="warning_lead_time_days" placeholder="Default (30)"></div>
-                            <div class="form-group full" id="starting-stock-expiration-group" hidden><label for="starting-stock-expiration">Starting Stock Expiration</label><input type="date" id="starting-stock-expiration" name="expiration_date"></div>
+                            <h3 class="full planning-section-title">Supplier</h3>
+                            <div class="form-group full"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
+                            <div class="form-group full"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>
                         </div>
                     </section>
 
@@ -1628,8 +1571,6 @@ foreach ($products as $product) {
 
     <script src="<?= htmlspecialchars(app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')) ?>"></script>
     <script>
-        const pageNotice = <?= json_encode($pageNotice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-        if (pageNotice) RetailMindUI.toast(pageNotice.message, pageNotice.type, undefined, pageNotice.type === 'warning' ? 20000 : 4300);
         const PRODUCT_PHOTO_LIMIT_MESSAGE = <?= json_encode(PRODUCT_PHOTO_LIMIT_MESSAGE) ?>;
         const productData = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const canDirectAdjust = <?= $canDirectAdjust ? 'true' : 'false' ?>;
@@ -2070,12 +2011,12 @@ foreach ($products as $product) {
             const editBtn = document.getElementById('product-edit-btn');
             if (editBtn) editBtn.hidden = !canEditProduct || document.getElementById('product-panel-info').hidden;
             const packItems = product.pack_size && Number(product.pack_size) > 1 ? `
-        <div class="detail-item"><span>Pack Size</span><strong>${Number(product.pack_size)} pcs</strong></div><div class="detail-item"><span>Pack Barcode</span><strong>${escapeHtml(safe(product.pack_barcode, 'None'))}</strong></div>
-        <div class="detail-item"><span>Pack Price</span><strong>${product.pack_price ? formatMoney(product.pack_price) : '—'}</strong></div><div class="detail-item"><span>Sealed / Loose</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} pcs</strong></div>` : '';
+        <div class="detail-item"><span>Items per Sales Pack</span><strong>${Number(product.pack_size)} ${escapeHtml(product.base_unit || 'piece')}(s)</strong></div><div class="detail-item"><span>Sales Pack Barcode</span><strong>${escapeHtml(safe(product.pack_barcode, 'None'))}</strong></div>
+        <div class="detail-item"><span>Sales Pack Price</span><strong>${product.pack_price ? formatMoney(product.pack_price) : '—'}</strong></div><div class="detail-item"><span>Sealed / Loose</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} pcs</strong></div>` : '';
             document.getElementById('product-panel-info').innerHTML = `<div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
-        <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
+        <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
         <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
     </div>`;
@@ -2191,17 +2132,17 @@ foreach ($products as $product) {
                     <fieldset class="settings-fieldset product-edit-section"><legend>Sales Pack Configuration</legend>
                         <div class="form-grid">
                             <label class="form-field" for="edit-pack-size">
-                                <span>Pack Size (Pieces per Pack)</span>
+                                <span>Items per Sales Pack</span>
                                 <input type="number" step="1" min="2" max="2147483647" name="pack_size" id="edit-pack-size" value="${product.pack_size ? Number(product.pack_size) : ''}" placeholder="None" class="form-input" ${Number(product.physical_sealed_packs || 0) > 0 ? 'readonly title="Cannot change pack size while sealed pack inventory exists"' : ''}>
                                 ${Number(product.physical_sealed_packs || 0) > 0 ? `<small style="color:var(--warning-text, #b45309);">Cannot change pack size while ${product.physical_sealed_packs} sealed pack(s) exist. Reconcile stock first.</small>` : ''}
                             </label>
                             <label class="form-field" for="edit-pack-price">
-                                <span>Pack Selling Price (₱)</span>
+                                <span>Sales Pack Price (₱)</span>
                                 <input type="number" step="0.01" min="0.01" max="999999999.99" name="pack_price" id="edit-pack-price" value="${product.pack_price ? (Number(product.pack_price) || 0).toFixed(2) : ''}" placeholder="None" class="form-input">
                             </label>
                         </div>
                         <label class="form-field" for="edit-pack-barcode">
-                            <span>Pack Barcode</span>
+                            <span>Sales Pack Barcode</span>
                             <input type="text" name="pack_barcode" id="edit-pack-barcode" maxlength="50" value="${escapeHtml(product.pack_barcode || '')}" placeholder="None" class="form-input">
                         </label>
                     </fieldset>
@@ -2420,6 +2361,8 @@ foreach ($products as $product) {
                     saveBtn.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Save changes';
                 }
             }
+        }
+
         function updateProductTableRow(product) {
             const row = document.querySelector(`tr[data-product-id="${product.product_id}"]`);
             if (!row) return;
@@ -2783,6 +2726,7 @@ foreach ($products as $product) {
             nextButton.hidden = wizardStep === 5;
             saveButton.hidden = wizardStep !== 5;
             if (wizardStep === 5) renderReview();
+            if (wizardStep === 4) syncStartingStockFields();
             document.querySelector('#add-product-modal .rm-modal-body').scrollTop = 0;
             if (wizardStep === 2) {
                 document.getElementById('create-barcode-input').focus({ preventScroll: true });
@@ -2793,7 +2737,8 @@ foreach ($products as $product) {
             let valid = true;
             if (step === 4) {
                 const quantity = document.getElementById('initial-stock-quantity');
-                const invalid = !quantity.validity.valid;
+                const invalid = !quantity.validity.valid ||
+                    (!startingPacksCount.disabled && (!startingPacksCount.validity.valid || !startingPackLooseCount.validity.valid));
                 quantity.closest('.form-group').classList.toggle('invalid', invalid);
                 return !invalid;
             }
@@ -2887,20 +2832,15 @@ foreach ($products as $product) {
             saveButton.innerHTML = '<i class="bi bi-arrow-repeat"></i> Saving...';
         });
 
-        // Package and piece starting stock calculation
+        // Starting stock follows the product's Sales Pack configuration.
         const stockPiecesWrapper = document.getElementById('stock-pieces-wrapper');
-        const stockPackagesWrapper = document.getElementById('stock-packages-wrapper');
         const stockSalesPacksWrapper = document.getElementById('stock-sales-packs-wrapper');
         const initialStockInput = document.getElementById('initial-stock-quantity');
         const startingStockExpGroup = document.getElementById('starting-stock-expiration-group');
         const startingStockExpInput = document.getElementById('starting-stock-expiration');
-        const startingPackagesCount = document.getElementById('starting-packages-count');
-        const startingLooseCount = document.getElementById('starting-loose-count');
         const startingPacksCount = document.getElementById('starting-packs-count');
         const startingPackLooseCount = document.getElementById('starting-pack-loose-count');
         const packSizeInput = document.getElementById('create-pack-size');
-        const unitsPerPkgInput = document.getElementById('units-per-package');
-        const stockCalcPreview = document.getElementById('stock-package-calc-preview');
         const salesPackCalcPreview = document.getElementById('stock-sales-pack-calc-preview');
 
         function updateStartingStockExpirationVisibility() {
@@ -2914,22 +2854,6 @@ foreach ($products as $product) {
         }
         updateStartingStockExpirationVisibility();
 
-        function updatePackageStockCalc() {
-            const pkgs = Math.max(0, parseInt(startingPackagesCount?.value, 10) || 0);
-            const loose = Math.max(0, parseInt(startingLooseCount?.value, 10) || 0);
-            const units = Math.max(1, parseInt(unitsPerPkgInput?.value, 10) || 1);
-            const total = (pkgs * units) + loose;
-            if (initialStockInput) {
-                initialStockInput.value = total;
-            }
-            updateStartingStockExpirationVisibility();
-            if (stockCalcPreview) {
-                const base = addProductForm?.elements['base_unit']?.value?.trim() || 'piece';
-                const rec = addProductForm?.elements['receiving_unit']?.value?.trim() || 'package';
-                stockCalcPreview.textContent = `${pkgs} ${rec}(s) × ${units} + ${loose} ${base}(s) = ${total} ${base}(s) total`;
-            }
-        }
-
         function updateSalesPackStockCalc() {
             const psize = Math.max(1, parseInt(packSizeInput?.value, 10) || 1);
             const pks = Math.max(0, parseInt(startingPacksCount?.value, 10) || 0);
@@ -2937,36 +2861,30 @@ foreach ($products as $product) {
             const total = (pks * psize) + loose;
             if (initialStockInput) {
                 initialStockInput.value = total;
+                if (initialStockInput.validity.valid && startingPacksCount.validity.valid && startingPackLooseCount.validity.valid) {
+                    initialStockInput.closest('.form-group').classList.remove('invalid');
+                }
             }
             updateStartingStockExpirationVisibility();
             if (salesPackCalcPreview) {
                 const base = addProductForm?.elements['base_unit']?.value?.trim() || 'piece';
-                salesPackCalcPreview.textContent = `${pks} pack(s) × ${psize} + ${loose} ${base}(s) = ${total} ${base}(s) total`;
+                salesPackCalcPreview.textContent = `1 Sales Pack = ${psize} ${base}(s). Total starting stock: ${total} ${base}(s).`;
             }
         }
 
-        function setStartingStockMode(mode) {
-            const isPackages = mode === 'packages';
-            const isPacks = mode === 'packs';
-            if (stockPiecesWrapper) stockPiecesWrapper.hidden = isPackages || isPacks;
-            if (stockPackagesWrapper) stockPackagesWrapper.hidden = !isPackages;
-            if (stockSalesPacksWrapper) stockSalesPacksWrapper.hidden = !isPacks;
-
+        function syncStartingStockFields() {
+            const isPacks = Number(packSizeInput.value) > 1;
+            const wasPacks = !stockSalesPacksWrapper.hidden;
             const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
-            if (isPackages) {
-                const units = Math.max(1, parseInt(unitsPerPkgInput?.value, 10) || 1);
-                if (startingPackagesCount && startingLooseCount) {
-                    startingPackagesCount.value = Math.floor(currentTotal / units);
-                    startingLooseCount.value = currentTotal % units;
-                }
-                updatePackageStockCalc();
-            } else if (isPacks) {
-                // Never infer packs by dividing total. Leave packs as 0 or empty for explicit physical count entry.
-                if (startingPacksCount && !startingPacksCount.value) {
+            stockPiecesWrapper.hidden = isPacks;
+            stockSalesPacksWrapper.hidden = !isPacks;
+            startingPacksCount.disabled = !isPacks;
+            startingPackLooseCount.disabled = !isPacks;
+            if (isPacks) {
+                if (!wasPacks) {
+                    // Existing pieces stay loose; a total cannot prove unopened packs.
                     startingPacksCount.value = '0';
-                }
-                if (startingPackLooseCount && !startingPackLooseCount.value) {
-                    startingPackLooseCount.value = '0';
+                    startingPackLooseCount.value = currentTotal;
                 }
                 updateSalesPackStockCalc();
             } else {
@@ -2974,23 +2892,11 @@ foreach ($products as $product) {
             }
         }
 
-        addProductForm?.querySelectorAll('input[name="starting_stock_mode"]').forEach(radio => {
-            radio.addEventListener('change', () => setStartingStockMode(radio.value));
-        });
         initialStockInput?.addEventListener('input', updateStartingStockExpirationVisibility);
         initialStockInput?.addEventListener('change', updateStartingStockExpirationVisibility);
-        startingPackagesCount?.addEventListener('input', updatePackageStockCalc);
-        startingLooseCount?.addEventListener('input', updatePackageStockCalc);
         startingPacksCount?.addEventListener('input', updateSalesPackStockCalc);
         startingPackLooseCount?.addEventListener('input', updateSalesPackStockCalc);
-        unitsPerPkgInput?.addEventListener('input', () => {
-            const checkedMode = addProductForm?.querySelector('input[name="starting_stock_mode"]:checked')?.value;
-            if (checkedMode === 'packages') updatePackageStockCalc();
-        });
-        packSizeInput?.addEventListener('input', () => {
-            const checkedMode = addProductForm?.querySelector('input[name="starting_stock_mode"]:checked')?.value;
-            if (checkedMode === 'packs') updateSalesPackStockCalc();
-        });
+        packSizeInput?.addEventListener('input', syncStartingStockFields);
 
         function renderReview() {
             const data = new FormData(addProductForm);
@@ -2999,7 +2905,8 @@ foreach ($products as $product) {
                 ['Product', data.get('product_name')],
                 ['Brand', data.get('brand') || '—'],
                 ['Category', categoryText],
-                ['Barcode', data.get('barcode') || 'Generate automatically'],
+                ['Individual Item Barcode', data.get('barcode') || 'Generate automatically'],
+                ['Receiving Package Barcode', data.get('case_barcode') || 'None'],
                 ['Cost Price', formatMoney(data.get('cost_price'))],
                 ['Selling Price', formatMoney(data.get('selling_price'))],
                 ['Initial Quantity', `${data.get('initial_stock_quantity')} ${data.get('base_unit') || 'piece'}`],
@@ -3008,9 +2915,10 @@ foreach ($products as $product) {
             ];
             const initialQty = parseInt(data.get('initial_stock_quantity'), 10) || 0;
             if (data.get('pack_size') && parseInt(data.get('pack_size'), 10) > 1) {
-                items.push(['Sales Pack Size', `${data.get('pack_size')} pcs / pack`]);
-                items.push(['Pack Barcode', data.get('pack_barcode') || '—']);
-                items.push(['Pack Price', formatMoney(data.get('pack_price'))]);
+                items.push(['Starting Stock', `${data.get('starting_packs')} Sales Packs + ${data.get('starting_loose')} loose pieces`]);
+                items.push(['Items per Sales Pack', `${data.get('pack_size')} ${data.get('base_unit') || 'piece'}(s)`]);
+                items.push(['Sales Pack Barcode', data.get('pack_barcode') || '—']);
+                items.push(['Sales Pack Price', formatMoney(data.get('pack_price'))]);
             }
             if (initialQty > 0 && data.get('expiration_date')) {
                 items.push(['Starting Stock Expiration', data.get('expiration_date')]);
@@ -3039,10 +2947,13 @@ foreach ($products as $product) {
         function restoreFormState() {
             const savedState = localStorage.getItem(FORM_STATE_KEY);
             const savedStep = localStorage.getItem(FORM_STEP_KEY);
+            let hasSavedPackCounts = !stockSalesPacksWrapper.hidden;
 
             if (savedState) {
                 try {
                     const state = JSON.parse(savedState);
+                    hasSavedPackCounts = Object.hasOwn(state, 'starting_packs') &&
+                        (!state.starting_stock_mode || state.starting_stock_mode === 'packs');
                     Object.entries(state).forEach(([name, value]) => {
                         const field = addProductForm.elements[name];
                         if (field && field.type !== 'hidden') {
@@ -3071,8 +2982,9 @@ foreach ($products as $product) {
             }
 
             syncUnitSelects();
-            const restoredMode = addProductForm.querySelector('input[name="starting_stock_mode"]:checked')?.value || 'pieces';
-            setStartingStockMode(restoredMode);
+            // Restore explicit physical counts without converting the saved total into packs.
+            stockSalesPacksWrapper.hidden = !(Number(packSizeInput.value) > 1 && hasSavedPackCounts);
+            syncStartingStockFields();
 
             if (savedStep) {
                 const step = Math.max(1, Math.min(5, Number(savedStep)));
@@ -3087,11 +2999,7 @@ foreach ($products as $product) {
             syncUnitSelects();
             localStorage.removeItem(FORM_STATE_KEY);
             localStorage.removeItem(FORM_STEP_KEY);
-            const defaultRadio = addProductForm.querySelector('input[name="starting_stock_mode"][value="pieces"]');
-            if (defaultRadio) defaultRadio.checked = true;
-            setStartingStockMode('pieces');
-            if (startingPackagesCount) startingPackagesCount.value = '0';
-            if (startingLooseCount) startingLooseCount.value = '0';
+            syncStartingStockFields();
             wizardStep = 1;
             setWizardStep(1);
             saveButton.disabled = false;

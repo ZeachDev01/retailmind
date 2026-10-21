@@ -120,36 +120,27 @@ $rangeUrl = $currentUrl;
                     <p class="dashboard-freshness"><i class="bi bi-clock" aria-hidden="true"></i> Last updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?></p>
                 </div>
                 <div class="page-heading-actions">
-                    <form method="get" action="<?= $escape(app_url('components/administrator/dashboard.php')) ?>" data-dashboard-action>
-                        <input type="hidden" name="period" id="rangeFormPeriod" value="<?= $escape($selectedPeriod) ?>">
-                        <label class="sr-only" for="dashboardRange">Comparison range</label>
-                        <select class="u-select-filter" id="dashboardRange" name="range" onchange="this.form.submit()">
-                            <?php foreach ([7, 30, 90] as $range): ?>
-                                <option value="<?= $range ?>" <?= $range === $selectedRange ? 'selected' : '' ?>><?= $range ?> days</option>
-                            <?php endforeach; ?>
-                        </select>
-                    </form>
                     <a class="btn btn-quiet btn-icon" id="dashboardRefreshBtn" href="<?= $escape($rangeUrl) ?>" data-manual-refresh data-dashboard-action><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</a>
                 </div>
             </header>
 
-            <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> This view is stale. Automatic refresh is waiting for the current action to finish.</p>
+            <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
 
             <section class="dashboard-section governance-queue store-attention-queue" aria-labelledby="store-attention-title">
                 <div class="section-header">
-                    <div><h2 id="store-attention-title">Store attention queue</h2></div>
+                    <div><h2 id="store-attention-title">Needs attention</h2></div>
                 </div>
                 <?php if ($dashboard['state'] === 'error'): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><div><strong>Store status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div><a class="btn btn-quiet" href="<?= $escape($rangeUrl) ?>">Try again</a></div>
                 <?php elseif ($dashboard['exceptions'] === []): ?>
-                    <div class="dashboard-state dashboard-state-empty" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><div><strong>No action required</strong><p><?= $escape($dashboard['message']) ?></p></div></div>
+                    <div class="dashboard-state dashboard-state-empty" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><div><strong>No action required</strong></div></div>
                 <?php else: ?>
                     <div class="attention-list" aria-live="polite">
                         <?php foreach ($dashboard['exceptions'] as $item): ?>
                             <article class="attention-item attention-<?= $escape($item['severity']) ?>">
                                 <span class="attention-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span>
                                 <div class="attention-copy"><span class="severity-label"><?= $escape(ucfirst($item['severity'])) ?></span><strong><?= $escape($item['title']) ?></strong><span><?= $escape($item['detail']) ?> · <?= $escape($formatDate($item['detected_at'])) ?></span></div>
-                                <a class="btn btn-small" href="<?= $escape(app_url($item['destination'])) ?>" data-dashboard-action>Review</a>
+                                <a class="btn btn-small" href="<?= $escape(app_url($item['destination'])) ?>" data-dashboard-action aria-label="Review <?= $escape($item['title']) ?>">Review</a>
                             </article>
                         <?php endforeach; ?>
                     </div>
@@ -171,6 +162,32 @@ $rangeUrl = $currentUrl;
             <?php endif; ?>
 
             <section class="dashboard-section net-sales-section" aria-labelledby="net-sales-title">
+                <div class="section-header control-center-section-header">
+                    <div>
+                        <div class="net-sales-title-wrap">
+                            <h2 id="net-sales-title"><?= $escape($activePeriodTitle) ?></h2>
+                            <span class="period-badge ongoing">Ongoing</span>
+                        </div>
+                    </div>
+                    <div class="net-sales-header-controls">
+                        <div class="period-controls btn-group" role="group" aria-label="Net Sales period">
+                            <button type="button" class="btn btn-quiet period-btn <?= $selectedPeriod === 'today' ? 'active is-selected' : '' ?>" data-period="today" aria-pressed="<?= $selectedPeriod === 'today' ? 'true' : 'false' ?>">Today</button>
+                            <button type="button" class="btn btn-quiet period-btn <?= $selectedPeriod === 'week' ? 'active is-selected' : '' ?>" data-period="week" aria-pressed="<?= $selectedPeriod === 'week' ? 'true' : 'false' ?>">This Week</button>
+                            <button type="button" class="btn btn-quiet period-btn <?= $selectedPeriod === 'month' ? 'active is-selected' : '' ?>" data-period="month" aria-pressed="<?= $selectedPeriod === 'month' ? 'true' : 'false' ?>">This Month</button>
+                        </div>
+                        <?php if (!$hasGrossProfit): ?>
+                        <div class="net-sales-summary-stat">
+                            <span class="net-sales-summary-label"><?= $escape($activePeriodTitle) ?></span>
+                            <?php if ($hasNetSales && $activePeriodTotal !== null): ?>
+                                <strong class="net-sales-summary-value <?= $activePeriodTotal < 0 ? 'is-negative' : '' ?>"><?= $escape($formatCurrency($activePeriodTotal)) ?></strong>
+                            <?php else: ?>
+                                <strong class="net-sales-summary-value is-unavailable">Unavailable</strong>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
                 <?php if ($hasGrossProfit): ?>
                     <div class="net-sales-summaries-grid profit-cards-grid layout-a-cards" role="region" aria-label="Sales and Profit summaries">
                         <!-- Card 1: Net Sales -->
@@ -184,7 +201,6 @@ $rangeUrl = $currentUrl;
                             <?php else: ?>
                                 <div class="value is-unavailable" id="net-sales-card-value">Unavailable</div>
                             <?php endif; ?>
-                            <div class="hint" id="net-sales-card-hint">Completed sales after discounts minus refunds</div>
                         </article>
 
                         <!-- Card 2: Gross Profit (beside Net Sales) -->
@@ -236,9 +252,6 @@ $rangeUrl = $currentUrl;
                             <?php else: ?>
                                 <div class="value is-unavailable" id="cost-card-value">Unavailable</div>
                             <?php endif; ?>
-                            <div class="hint" id="cost-card-hint">
-                                <?= $isCostIncomplete ? 'Cost snapshots missing on sold items' : ($isProfitEstimated ? 'Estimated from catalog product costs' : 'Direct cost of sold merchandise') ?>
-                            </div>
                         </article>
                     </div>
 
@@ -256,17 +269,18 @@ $rangeUrl = $currentUrl;
                             </a>
                         </div>
                         <p class="profit-exclusion-note">
-                            <i class="bi bi-info-circle" aria-hidden="true"></i> Rent, wages, electricity, and other operating expenses are excluded from this calculation.
+                            <i class="bi bi-info-circle" aria-hidden="true"></i> Excludes operating expenses.
                         </p>
                         <div class="profit-incomplete-explanation" id="profit-incomplete-explanation" <?= $isProfitIncomplete ? '' : 'hidden' ?>>
                             <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
-                            <span id="profit-incomplete-explanation-text">Some sold items in this period do not have batch cost snapshots or recorded costs. Full numeric cost and profit figures are withheld until costs are established.</span>
+                            <span id="profit-incomplete-explanation-text">Record missing product costs to calculate cost and gross profit totals.</span>
                         </div>
                         <details class="profit-return-help" id="profit-return-help">
-                            <summary><i class="bi bi-question-circle" aria-hidden="true"></i> How restockable and damaged returns affect profit</summary>
+                            <summary><i class="bi bi-question-circle" aria-hidden="true"></i> How profit is calculated</summary>
                             <div class="return-help-drawer">
-                                <p><strong>Restockable returns:</strong> Returned items returned to saleable inventory reverse both Net Sales and Product Cost, restoring the gross profit margin.</p>
-                                <p><strong>Damaged returns:</strong> Damaged, disposed, or unsaleable items reverse Net Sales, but their stock cost is not reversed and remains an inventory loss because the items cannot be resold.</p>
+                                <p>Net Sales are sales after discounts and refunds. Product Cost is the cost of items sold. Operating expenses, such as rent and wages, are excluded.</p>
+                                <p><strong>Restockable returns:</strong> Reverse Net Sales and Product Cost.</p>
+                                <p><strong>Unsaleable returns:</strong> Reverse Net Sales; product cost remains an inventory loss.</p>
                             </div>
                         </details>
                     </div>
@@ -299,30 +313,6 @@ $rangeUrl = $currentUrl;
                     </div>
                 <?php endif; ?>
 
-                <div class="section-header control-center-section-header">
-                    <div>
-                        <div class="net-sales-title-wrap">
-                            <h2 id="net-sales-title"><?= $escape($activePeriodTitle) ?></h2>
-                            <span class="period-badge ongoing">Ongoing</span>
-                        </div>
-                    </div>
-                    <div class="net-sales-header-controls">
-                        <div class="period-controls btn-group" role="group" aria-label="Net Sales period">
-                            <button type="button" class="btn btn-quiet period-btn <?= $selectedPeriod === 'today' ? 'active is-selected' : '' ?>" data-period="today" aria-pressed="<?= $selectedPeriod === 'today' ? 'true' : 'false' ?>">Today</button>
-                            <button type="button" class="btn btn-quiet period-btn <?= $selectedPeriod === 'week' ? 'active is-selected' : '' ?>" data-period="week" aria-pressed="<?= $selectedPeriod === 'week' ? 'true' : 'false' ?>">This Week</button>
-                            <button type="button" class="btn btn-quiet period-btn <?= $selectedPeriod === 'month' ? 'active is-selected' : '' ?>" data-period="month" aria-pressed="<?= $selectedPeriod === 'month' ? 'true' : 'false' ?>">This Month</button>
-                        </div>
-                        <div class="net-sales-summary-stat">
-                            <span class="net-sales-summary-label"><?= $escape($activePeriodTitle) ?></span>
-                            <?php if ($hasNetSales && $activePeriodTotal !== null): ?>
-                                <strong class="net-sales-summary-value <?= $activePeriodTotal < 0 ? 'is-negative' : '' ?>"><?= $escape($formatCurrency($activePeriodTotal)) ?></strong>
-                            <?php else: ?>
-                                <strong class="net-sales-summary-value is-unavailable">Unavailable</strong>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-
                 <?php if (!$hasNetSales): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert">
                         <i class="bi bi-cloud-slash" aria-hidden="true"></i>
@@ -339,7 +329,7 @@ $rangeUrl = $currentUrl;
                         default => 'No sales or refunds recorded today.',
                     };
                     ?>
-                    <p class="section-description net-sales-empty-note" id="net-sales-empty-note" <?= $netSalesHasActivity ? 'hidden' : '' ?>><i class="bi bi-info-circle" aria-hidden="true"></i> <?= $escape($emptyNoteText) ?></p>
+                    <p class="section-description net-sales-empty-note" id="net-sales-empty-note" role="status" aria-live="polite" <?= $netSalesHasActivity ? 'hidden' : '' ?>><i class="bi bi-receipt" aria-hidden="true"></i> <?= $escape($emptyNoteText) ?></p>
 
                     <div class="net-sales-chart-wrapper">
                         <canvas id="net-sales-hourly-chart" role="img" aria-label="<?= $escape($activePeriodTitle) ?> in Philippine pesos"></canvas>
@@ -374,7 +364,17 @@ $rangeUrl = $currentUrl;
 
             <?php if ($dashboard['headline'] !== []): ?>
                 <section class="dashboard-section period-comparison" aria-labelledby="comparison-title">
-                    <div class="section-header"><div><h2 id="comparison-title"><?= $selectedRange ?>-day performance</h2></div></div>
+                    <div class="section-header"><div><h2 id="comparison-title"><?= $selectedRange ?>-day performance</h2></div>
+                    <form method="get" action="<?= $escape(app_url('components/administrator/dashboard.php')) ?>" data-dashboard-action>
+                        <input type="hidden" name="period" id="rangeFormPeriod" value="<?= $escape($selectedPeriod) ?>">
+                        <label class="comparison-range-label" for="dashboardRange">Comparison range</label>
+                        <select class="u-select-filter" id="dashboardRange" name="range" onchange="this.form.submit()">
+                            <?php foreach ([7, 30, 90] as $range): ?>
+                                <option value="<?= $range ?>" <?= $range === $selectedRange ? 'selected' : '' ?>><?= $range ?> days</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </form>
+                    </div>
                     <div class="comparison-grid">
                         <?php foreach ($comparisonOrder as $key => [$label, $currency]): $item = $dashboard['comparison'][$key]; ?>
                             <article class="comparison-card"><span><?= $escape($label) ?></span><strong><?= $escape($formatMetric($item['current'], $currency)) ?></strong><small>Previous <?= $escape($formatMetric($item['previous'], $currency)) ?> · <?= $escape($formatChange($item['change_percent'])) ?></small></article>
@@ -393,7 +393,7 @@ $rangeUrl = $currentUrl;
                         <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Inventory Managers</strong></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_inventory_managers'] ?></b></div>
                         <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-x" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Disabled Accounts</strong></span><b class="indicator-value"><?= (int)$dashboard['staff']['disabled_staff'] ?></b></div>
                         <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Open cashier shifts</strong></span><b class="indicator-value"><?= (int)$dashboard['shifts']['open'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Unreviewed variances</strong></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
+                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Cash variances awaiting review</strong></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
                     </div>
                 </section>
             <?php endif; ?>
@@ -602,13 +602,6 @@ $rangeUrl = $currentUrl;
                                 costVal.innerText = 'Unavailable';
                             }
                         }
-                        const costHint = document.getElementById('cost-card-hint');
-                        if (costHint) {
-                            costHint.innerText = isIncomplete
-                                ? 'Cost snapshots missing on sold items'
-                                : (isEstimated ? 'Estimated from catalog product costs' : 'Direct cost of sold merchandise');
-                        }
-
                         const explanationEl = document.getElementById('profit-incomplete-explanation');
                         if (explanationEl) {
                             explanationEl.hidden = !isIncomplete;
@@ -630,7 +623,7 @@ $rangeUrl = $currentUrl;
                             week: 'No sales or refunds recorded this week.',
                             month: 'No sales or refunds recorded this month.'
                         };
-                        emptyNote.innerHTML = '<i class="bi bi-info-circle" aria-hidden="true"></i> ' + (emptyTexts[period] || emptyTexts.today);
+                        emptyNote.innerHTML = '<i class="bi bi-receipt" aria-hidden="true"></i> ' + (emptyTexts[period] || emptyTexts.today);
                         emptyNote.hidden = pData.has_activity;
                     }
 
