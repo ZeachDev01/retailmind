@@ -59,6 +59,7 @@ function gcash_admin_money(mixed $val): string {
     <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/cashier.css')) ?>">
     <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/gcash.css')) ?>">
+    <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/gcash-admin.css')) ?>">
 </head>
 <body class="admin-page">
 <div class="app-shell">
@@ -75,6 +76,14 @@ function gcash_admin_money(mixed $val): string {
                 </a>
             </div>
         </header>
+
+        <nav class="gcash-section-nav" aria-label="GCash overview sections">
+            <a href="#gcash-admin-balances-title">Balances</a>
+            <a href="#gcash-admin-filters-title">Activity</a>
+            <a href="#gcash-admin-diff-title">Reconciliation</a>
+            <a href="#gcash-admin-nc-title">Unresolved activity</a>
+            <a href="#gcash-admin-history-title">Transaction history</a>
+        </nav>
 
         <?php if ($filterError): ?>
             <div class="alert alert-danger gcash-filter-error" role="alert">
@@ -101,7 +110,7 @@ function gcash_admin_money(mixed $val): string {
             <div class="gcash-overview-grid gcash-balances-grid">
                 <div class="gcash-card gcash-card-balance">
                     <div class="gcash-card-header">
-                        <span class="gcash-card-label">Current Expected Service Cash</span>
+                        <span class="gcash-card-label">Service cash</span>
                         <span class="gcash-badge gcash-badge-expected">Expected</span>
                     </div>
                     <div class="gcash-card-value" id="admin-expected-cash"><?= gcash_admin_money($overview['current_expected_service_cash'] ?? 0) ?></div>
@@ -114,7 +123,7 @@ function gcash_admin_money(mixed $val): string {
                 </div>
                 <div class="gcash-card gcash-card-balance">
                     <div class="gcash-card-header">
-                        <span class="gcash-card-label">Current Expected Wallet Balance</span>
+                        <span class="gcash-card-label">GCash wallet</span>
                         <span class="gcash-badge gcash-badge-expected">Expected</span>
                     </div>
                     <div class="gcash-card-value" id="admin-expected-wallet"><?= gcash_admin_money($overview['current_expected_wallet_balance'] ?? 0) ?></div>
@@ -161,7 +170,7 @@ function gcash_admin_money(mixed $val): string {
                 </div>
                 <div class="gcash-actions gcash-filter-actions">
                     <button type="submit" class="btn btn-primary" id="btn-apply-filters">
-                        <i class="bi bi-filter" aria-hidden="true"></i>Filter
+                        <i class="bi bi-filter" aria-hidden="true"></i>Apply filters
                     </button>
                     <a href="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" class="btn btn-secondary" id="btn-reset-filters">
                         Reset
@@ -188,12 +197,12 @@ function gcash_admin_money(mixed $val): string {
             </div>
             <div class="gcash-overview-grid gcash-metrics-grid">
                 <div class="gcash-card">
-                    <span class="gcash-card-label">Filtered Cash-In Principal</span>
+                    <span class="gcash-card-label">Cash-in principal</span>
                     <div class="gcash-card-value" id="admin-metric-cash-in-principal"><?= gcash_admin_money($overview['cash_in_principal'] ?? 0) ?></div>
                     <div class="gcash-card-sub">Completed customer deposits</div>
                 </div>
                 <div class="gcash-card">
-                    <span class="gcash-card-label">Filtered Cash-Out Principal</span>
+                    <span class="gcash-card-label">Cash-out principal</span>
                     <div class="gcash-card-value" id="admin-metric-cash-out-principal"><?= gcash_admin_money($overview['cash_out_principal'] ?? 0) ?></div>
                     <div class="gcash-card-sub">Completed customer payouts</div>
                 </div>

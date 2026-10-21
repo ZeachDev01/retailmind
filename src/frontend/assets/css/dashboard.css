@@ -319,6 +319,30 @@
 
 /* Super Administrator: issues and system status */
 /* Administrator dashboard: one surface per task, quiet metric groups. */
+body.admin-dashboard-page.administrator-workspace .main-content { line-height: 1.5; }
+body.admin-dashboard-page.administrator-workspace .control-center-heading { margin-bottom: 1.5rem; gap: 1rem; }
+body.admin-dashboard-page.administrator-workspace h1 { line-height: 1.2; }
+body.admin-dashboard-page.administrator-workspace h2 { font-size: 1.05rem; line-height: 1.3; letter-spacing: -.01em; text-wrap: balance; }
+body.admin-dashboard-page.administrator-workspace .dashboard-freshness { margin-top: .5rem; white-space: normal; flex-wrap: wrap; }
+body.admin-dashboard-page.administrator-workspace .dashboard-section { padding: 1.5rem; }
+body.admin-dashboard-page.administrator-workspace .section-header { margin-bottom: 1rem; }
+body.admin-dashboard-page.administrator-workspace :is(.stat-card .label, .comparison-card > span, .indicator-copy strong) { font-size: 1rem; line-height: 1.5; }
+body.admin-dashboard-page.administrator-workspace :is(.stat-card .hint, .comparison-card small, .dashboard-freshness, .attention-copy > span, .profit-exclusion-note) { font-size: .875rem; line-height: 1.5; }
+body.admin-dashboard-page.administrator-workspace :is(.stat-card .value, .comparison-card strong, .indicator-value) { font-variant-numeric: tabular-nums; line-height: 1.3; }
+body.admin-dashboard-page.administrator-workspace .store-operations-headlines { margin-bottom: 1.5rem; }
+body.admin-dashboard-page.administrator-workspace .store-operations-headlines .stat-card { min-height: 0; padding: 1rem 4rem 1rem 1rem; box-shadow: none; }
+body.admin-dashboard-page.administrator-workspace .store-operations-headlines .value { font-size: 1.4rem; margin-bottom: .5rem; }
+body.admin-dashboard-page.administrator-workspace .store-operations-headlines .stat-icon { width: 36px; height: 36px; border-radius: 10px; }
+body.admin-dashboard-page.administrator-workspace .net-sales-summary-card .value { font-size: 1.8rem; line-height: 1.2; letter-spacing: -.02em; overflow-wrap: anywhere; }
+body.admin-dashboard-page.administrator-workspace :is(.profit-exclusion-note, .dashboard-state p, .attention-copy) { max-width: 72ch; }
+body.admin-dashboard-page.administrator-workspace .net-sales-header-controls { flex-wrap: wrap; min-width: 0; }
+body.admin-dashboard-page.administrator-workspace .period-comparison { margin-bottom: 0; }
+body.admin-dashboard-page.administrator-workspace .comparison-card { padding: 1rem; }
+body.admin-dashboard-page.administrator-workspace .comparison-card strong { font-size: 1.4rem; margin-block: .5rem; }
+body.admin-dashboard-page.administrator-workspace .indicator-item { gap: .75rem; padding-block: 1rem; }
+body.admin-dashboard-page.administrator-workspace .indicator-value { font-size: 1.05rem; }
+body.admin-dashboard-page.administrator-workspace .net-sales-table-wrap { scrollbar-color: var(--muted) var(--card-bg); }
+body.admin-dashboard-page.administrator-workspace .net-sales-table :is(th, td) { font-size: 1rem; padding: .75rem; }
 body.admin-dashboard-page.administrator-workspace .store-operations-headlines { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 body.admin-dashboard-page.administrator-workspace .dashboard-section { box-shadow: none; }
 body.admin-dashboard-page.administrator-workspace .section-header { gap: 1rem; flex-wrap: wrap; }
@@ -326,7 +350,12 @@ body.admin-dashboard-page.administrator-workspace .page-heading-actions .btn { h
 body.admin-dashboard-page.administrator-workspace .store-attention-queue { margin-bottom: 1.5rem; }
 body.admin-dashboard-page.administrator-workspace .attention-item { border: 0; border-radius: 0; padding-inline: 0; }
 body.admin-dashboard-page.administrator-workspace .attention-item + .attention-item { border-top: 1px solid var(--border); }
-body.admin-dashboard-page.administrator-workspace .dashboard-state-empty { border: 0; min-height: 0; padding: .5rem 0; background: transparent; }
+body.admin-dashboard-page.administrator-workspace .dashboard-state-empty { border: 0; min-height: 0; padding: .75rem 0; background: transparent; gap: .75rem; }
+body.admin-dashboard-page.administrator-workspace .dashboard-state-empty > i { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; border-radius: 50%; background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); font-size: 1.4rem; }
+body.admin-dashboard-page.administrator-workspace .dashboard-state-empty strong { font-size: 1rem; font-weight: 600; }
+body.admin-dashboard-page.administrator-workspace .net-sales-empty-note { gap: .75rem; padding: 1rem; margin: 0 0 1rem; border-radius: 10px; background: var(--theme-surface-soft, #f8fafc); color: var(--text); font-size: 1rem; font-style: normal; line-height: 1.5; }
+body.admin-dashboard-page.administrator-workspace .net-sales-empty-note > i { flex: 0 0 auto; color: var(--muted); font-size: 1.4rem; }
+body.admin-dashboard-page.administrator-workspace .net-sales-empty-note[hidden] { display: none; }
 body.admin-dashboard-page.administrator-workspace .net-sales-summaries-grid { gap: 0; }
 body.admin-dashboard-page.administrator-workspace .net-sales-summary-card { padding: 1rem; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 body.admin-dashboard-page.administrator-workspace .net-sales-summary-card + .net-sales-summary-card { border-left: 1px solid var(--border); }
@@ -356,12 +385,18 @@ body.admin-dashboard-page.administrator-workspace ::selection { background: var(
     body.admin-dashboard-page.administrator-workspace .comparison-card:nth-child(3) { border-left: 0; }
 }
 @media (max-width: 640px) {
+    body.admin-dashboard-page.administrator-workspace .dashboard-section { padding: 1rem; }
+    body.admin-dashboard-page.administrator-workspace .control-center-heading { flex-wrap: wrap; }
+    body.admin-dashboard-page.administrator-workspace .page-heading-actions { width: auto; overflow: visible; }
+    body.admin-dashboard-page.administrator-workspace .page-heading-actions .btn { min-height: 44px; }
+    body.admin-dashboard-page.administrator-workspace .dashboard-freshness { font-size: .875rem; }
+    body.admin-dashboard-page.administrator-workspace .net-sales-title-wrap { flex-wrap: wrap; }
     body.admin-dashboard-page.administrator-workspace .store-operations-headlines { grid-template-columns: 1fr; }
     body.admin-dashboard-page.administrator-workspace .net-sales-summary-card { padding: 1rem 0; }
     body.admin-dashboard-page.administrator-workspace .net-sales-summary-card + .net-sales-summary-card { border-left: 0; border-top: 1px solid var(--border); }
     body.admin-dashboard-page.administrator-workspace .comparison-card + .comparison-card { border-left: 0; border-top: 1px solid var(--border); }
     body.admin-dashboard-page.administrator-workspace .net-sales-table .net-sales-breakdown-col { display: table-cell; }
-    body.admin-dashboard-page.administrator-workspace .net-sales-table :is(th, td) { white-space: nowrap; font-size: .78rem; padding: .5rem .35rem; }
+    body.admin-dashboard-page.administrator-workspace .net-sales-table :is(th, td) { white-space: nowrap; font-size: .875rem; padding: .75rem .5rem; }
     body.admin-dashboard-page.administrator-workspace .net-sales-table-wrap .net-sales-table { min-width: 340px; }
     body.admin-dashboard-page.administrator-workspace .period-controls { width: 100%; }
     body.admin-dashboard-page.administrator-workspace .period-btn { flex: 1; padding-inline: .5rem; }

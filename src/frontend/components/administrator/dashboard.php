@@ -124,16 +124,16 @@ $rangeUrl = $currentUrl;
                 </div>
             </header>
 
-            <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Updates paused while you work. This dashboard will refresh when your action is finished.</p>
+            <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
 
             <section class="dashboard-section governance-queue store-attention-queue" aria-labelledby="store-attention-title">
                 <div class="section-header">
-                    <div><h2 id="store-attention-title">Store attention queue</h2></div>
+                    <div><h2 id="store-attention-title">Needs attention</h2></div>
                 </div>
                 <?php if ($dashboard['state'] === 'error'): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><div><strong>Store status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div><a class="btn btn-quiet" href="<?= $escape($rangeUrl) ?>">Try again</a></div>
                 <?php elseif ($dashboard['exceptions'] === []): ?>
-                    <div class="dashboard-state dashboard-state-empty" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><div><strong>No action required</strong><p><?= $escape($dashboard['message']) ?></p></div></div>
+                    <div class="dashboard-state dashboard-state-empty" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><div><strong>No action required</strong></div></div>
                 <?php else: ?>
                     <div class="attention-list" aria-live="polite">
                         <?php foreach ($dashboard['exceptions'] as $item): ?>
@@ -201,7 +201,6 @@ $rangeUrl = $currentUrl;
                             <?php else: ?>
                                 <div class="value is-unavailable" id="net-sales-card-value">Unavailable</div>
                             <?php endif; ?>
-                            <div class="hint" id="net-sales-card-hint">Sales after discounts and refunds</div>
                         </article>
 
                         <!-- Card 2: Gross Profit (beside Net Sales) -->
@@ -253,9 +252,6 @@ $rangeUrl = $currentUrl;
                             <?php else: ?>
                                 <div class="value is-unavailable" id="cost-card-value">Unavailable</div>
                             <?php endif; ?>
-                            <div class="hint" id="cost-card-hint">
-                                <?= $isCostIncomplete ? 'Some sold items have no recorded cost' : ($isProfitEstimated ? 'Estimated from catalog product costs' : 'Cost of products sold') ?>
-                            </div>
                         </article>
                     </div>
 
@@ -273,17 +269,18 @@ $rangeUrl = $currentUrl;
                             </a>
                         </div>
                         <p class="profit-exclusion-note">
-                            <i class="bi bi-info-circle" aria-hidden="true"></i> Rent, wages, electricity, and other operating expenses are excluded from this calculation.
+                            <i class="bi bi-info-circle" aria-hidden="true"></i> Excludes operating expenses.
                         </p>
                         <div class="profit-incomplete-explanation" id="profit-incomplete-explanation" <?= $isProfitIncomplete ? '' : 'hidden' ?>>
                             <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
-                            <span id="profit-incomplete-explanation-text">Some sold items have no recorded cost. Product cost and gross profit totals are unavailable until those costs are recorded.</span>
+                            <span id="profit-incomplete-explanation-text">Record missing product costs to calculate cost and gross profit totals.</span>
                         </div>
                         <details class="profit-return-help" id="profit-return-help">
-                            <summary><i class="bi bi-question-circle" aria-hidden="true"></i> How returns affect profit</summary>
+                            <summary><i class="bi bi-question-circle" aria-hidden="true"></i> How profit is calculated</summary>
                             <div class="return-help-drawer">
-                                <p><strong>Restockable returns:</strong> Returned items returned to saleable inventory reverse both Net Sales and Product Cost, restoring the gross profit margin.</p>
-                                <p><strong>Damaged returns:</strong> Damaged, disposed, or unsaleable items reverse Net Sales, but their stock cost is not reversed and remains an inventory loss because the items cannot be resold.</p>
+                                <p>Net Sales are sales after discounts and refunds. Product Cost is the cost of items sold. Operating expenses, such as rent and wages, are excluded.</p>
+                                <p><strong>Restockable returns:</strong> Reverse Net Sales and Product Cost.</p>
+                                <p><strong>Unsaleable returns:</strong> Reverse Net Sales; product cost remains an inventory loss.</p>
                             </div>
                         </details>
                     </div>
@@ -332,7 +329,7 @@ $rangeUrl = $currentUrl;
                         default => 'No sales or refunds recorded today.',
                     };
                     ?>
-                    <p class="section-description net-sales-empty-note" id="net-sales-empty-note" <?= $netSalesHasActivity ? 'hidden' : '' ?>><i class="bi bi-info-circle" aria-hidden="true"></i> <?= $escape($emptyNoteText) ?></p>
+                    <p class="section-description net-sales-empty-note" id="net-sales-empty-note" role="status" aria-live="polite" <?= $netSalesHasActivity ? 'hidden' : '' ?>><i class="bi bi-receipt" aria-hidden="true"></i> <?= $escape($emptyNoteText) ?></p>
 
                     <div class="net-sales-chart-wrapper">
                         <canvas id="net-sales-hourly-chart" role="img" aria-label="<?= $escape($activePeriodTitle) ?> in Philippine pesos"></canvas>
@@ -367,7 +364,7 @@ $rangeUrl = $currentUrl;
 
             <?php if ($dashboard['headline'] !== []): ?>
                 <section class="dashboard-section period-comparison" aria-labelledby="comparison-title">
-                    <div class="section-header"><div><h2 id="comparison-title"><?= $selectedRange ?>-day performance</h2><p class="section-description">Compared with the previous <?= $selectedRange ?> days.</p></div>
+                    <div class="section-header"><div><h2 id="comparison-title"><?= $selectedRange ?>-day performance</h2></div>
                     <form method="get" action="<?= $escape(app_url('components/administrator/dashboard.php')) ?>" data-dashboard-action>
                         <input type="hidden" name="period" id="rangeFormPeriod" value="<?= $escape($selectedPeriod) ?>">
                         <label class="comparison-range-label" for="dashboardRange">Comparison range</label>
@@ -605,13 +602,6 @@ $rangeUrl = $currentUrl;
                                 costVal.innerText = 'Unavailable';
                             }
                         }
-                        const costHint = document.getElementById('cost-card-hint');
-                        if (costHint) {
-                            costHint.innerText = isIncomplete
-                                ? 'Some sold items have no recorded cost'
-                                : (isEstimated ? 'Estimated from catalog product costs' : 'Cost of products sold');
-                        }
-
                         const explanationEl = document.getElementById('profit-incomplete-explanation');
                         if (explanationEl) {
                             explanationEl.hidden = !isIncomplete;
@@ -633,7 +623,7 @@ $rangeUrl = $currentUrl;
                             week: 'No sales or refunds recorded this week.',
                             month: 'No sales or refunds recorded this month.'
                         };
-                        emptyNote.innerHTML = '<i class="bi bi-info-circle" aria-hidden="true"></i> ' + (emptyTexts[period] || emptyTexts.today);
+                        emptyNote.innerHTML = '<i class="bi bi-receipt" aria-hidden="true"></i> ' + (emptyTexts[period] || emptyTexts.today);
                         emptyNote.hidden = pData.has_activity;
                     }
 
