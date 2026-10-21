@@ -2499,12 +2499,12 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 }
 
 .quick-product-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
     gap: 0.85rem;
 }
 
 .quick-product-grid.compact {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
     gap: 0.6rem;
 }
 
@@ -2593,6 +2593,16 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 .quick-product-action {
     min-height: 36px;
     margin-top: 0.55rem;
+}
+
+.quick-product-selling-forms {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.quick-product-selling-forms > .quick-product-add {
+    padding: 0.5rem;
+    white-space: nowrap;
 }
 
 .quick-product-add {
@@ -2963,7 +2973,4 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
         overflow: visible;
     }
 
-    .cashier-pos-page .quick-product-grid.compact {
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
-    }
 }
