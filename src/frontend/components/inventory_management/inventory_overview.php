@@ -290,12 +290,13 @@ $chartDataJson = json_encode([
                             <th aria-sort="none"><button type="button" data-sort-column="2">Status <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th aria-sort="none"><button type="button" data-sort-column="3">SKU / Barcode <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th aria-sort="none"><button type="button" data-sort-column="4">Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="5" data-sort-type="number">Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="6" data-sort-type="number">Cost Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="7" data-sort-type="number">On Hand <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="8" data-sort-type="number">Expired Qty <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="5" data-sort-type="number">Cost Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="6" data-sort-type="number">Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="7" data-sort-type="number">Profit <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="8" data-sort-type="number">On Hand <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="9" data-sort-type="number">Expired Qty <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th class="overview-col-undated" style="display:none;">Qty Without Date</th>
-                            <th aria-sort="none"><button type="button" data-sort-column="10" data-sort-type="date">Next Expiration <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="11" data-sort-type="date">Next Expiration <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -326,8 +327,9 @@ $chartDataJson = json_encode([
                         <td><span class="overview-stock-status overview-stock-status--<?= $statusClass ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
                         <td data-sort-value="<?= htmlspecialchars(($product['sku'] ?? '') . ' ' . ($product['barcode'] ?? '')) ?>"><strong><?= htmlspecialchars($product['sku'] ?? '-') ?></strong><small><?= htmlspecialchars($product['barcode'] ?: 'Not assigned') ?></small></td>
                         <td><?= htmlspecialchars($productCategory) ?></td>
-                        <td data-sort-value="<?= (float)($product['unit_price'] ?? 0) ?>">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
                         <td data-sort-value="<?= (float)($product['cost_price'] ?? 0) ?>">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
+                        <td data-sort-value="<?= (float)($product['unit_price'] ?? 0) ?>">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
+                        <td data-sort-value="<?= (float)($product['cost_price'] ?? 0) - (float)($product['unit_price'] ?? 0) ?>">₱<?= number_format((float)($product['cost_price'] ?? 0) - (float)($product['unit_price'] ?? 0), 2) ?></td>
                         <td data-sort-value="<?= $quantity ?>">
                             <strong><?= number_format($quantity) ?></strong>
                             <?php if ($expiredQty > 0): ?>

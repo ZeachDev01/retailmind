@@ -1197,6 +1197,7 @@ foreach ($products as $product) {
                                     <th class="sortable" data-sort="name">Product <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="column-cost sortable" data-sort="cost">Cost Price <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="column-price sortable" data-sort="price">Selling Price <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="column-profit sortable" data-sort="profit">Profit <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="sortable" data-sort="stock">Current Stock <i class="bi bi-arrow-down-up"></i></th>
                                     <th>Status</th>
                                     <th class="u-text-right">Actions</th>
@@ -1245,6 +1246,7 @@ foreach ($products as $product) {
                                         </td>
                                         <td class="column-cost mobile-hide">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
                                         <td class="column-price mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
+                                        <td class="column-profit">₱<?= number_format((float)($product['cost_price'] ?? 0) - (float)($product['unit_price'] ?? 0), 2) ?></td>
                                         <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small style="color:var(--text-muted);"><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php if (!empty($product['expired_sealed_packs']) || !empty($product['expired_loose_pieces'])): ?><br><small style="color:var(--danger, #dc2626);"><?= (int)($product['expired_sealed_packs'] ?? 0) ?> pk, <?= (int)($product['expired_loose_pieces'] ?? 0) ?> loose expired</small><?php endif; ?><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">
@@ -1564,7 +1566,7 @@ foreach ($products as $product) {
                     <p>Choose which optional columns appear in the table.</p>
                 </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
             </header>
-            <div class="rm-modal-body"><label class="u-checkbox-row"><input type="checkbox" data-column="price" checked> Selling Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="cost" checked> Cost Price</label></div>
+            <div class="rm-modal-body"><label class="u-checkbox-row"><input type="checkbox" data-column="price" checked> Selling Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="cost" checked> Cost Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="profit" checked> Profit</label></div>
             <footer class="rm-modal-actions"><button type="button" class="btn" data-close-modal>Done</button></footer>
         </section>
     </div>
@@ -1722,6 +1724,7 @@ foreach ($products as $product) {
                     category: [a.dataset.categoryName, b.dataset.categoryName],
                     price: [Number(a.dataset.price), Number(b.dataset.price)],
                     cost: [Number(a.dataset.cost), Number(b.dataset.cost)],
+                    profit: [Number(a.dataset.cost) - Number(a.dataset.price), Number(b.dataset.cost) - Number(b.dataset.price)],
                     stock: [Number(a.dataset.stock), Number(b.dataset.stock)]
                 } [sortKey] || [a.dataset.name, b.dataset.name];
                 return (typeof values[0] === 'number' ? values[0] - values[1] : String(values[0]).localeCompare(String(values[1]))) * sortDirection;
@@ -2389,6 +2392,8 @@ foreach ($products as $product) {
             }
             const priceCell = row.querySelector('.column-price');
             const costCell = row.querySelector('.column-cost');
+            const profitCell = row.querySelector('.column-profit');
+            if (profitCell) profitCell.textContent = formatMoney(Number(product.cost_price || 0) - Number(product.unit_price || 0));
             if (costCell) costCell.textContent = formatMoney(product.cost_price);
             if (priceCell) priceCell.textContent = formatMoney(product.unit_price);
             const stockCell = row.querySelector('.stock-cell');
@@ -2667,11 +2672,11 @@ foreach ($products as $product) {
             return `"${String(value ?? '').replace(/"/g, '""')}"`;
         }
         document.getElementById('export-products').addEventListener('click', () => {
-            const header = ['Product', 'SKU', 'Barcode', 'Brand', 'Category', 'Selling Price', 'Cost Price', 'Current Stock', 'Next Expiration', 'Status'];
+            const header = ['Product', 'SKU', 'Barcode', 'Brand', 'Category', 'Cost Price', 'Selling Price', 'Profit', 'Current Stock', 'Next Expiration', 'Status'];
             const lines = [header.map(csvCell).join(',')];
             filteredRows.forEach(row => {
                 const product = productsById[Number(row.dataset.productId)];
-                lines.push([product.product_name, product.sku, product.barcode, product.brand, product.category_name, product.unit_price, product.cost_price, product.quantity_on_hand, product.next_expiration_date || '—', product.status].map(csvCell).join(','));
+                lines.push([product.product_name, product.sku, product.barcode, product.brand, product.category_name, product.cost_price, product.unit_price, (Number(product.cost_price || 0) - Number(product.unit_price || 0)).toFixed(2), product.quantity_on_hand, product.next_expiration_date || '—', product.status].map(csvCell).join(','));
             });
             const blob = new Blob([lines.join('\n')], {
                 type: 'text/csv;charset=utf-8'

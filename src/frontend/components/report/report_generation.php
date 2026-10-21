@@ -300,7 +300,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             $stmt->execute($productParams);
             $headers = $report === 'low_stock'
                 ? ['SKU', 'Product', 'Category', 'Qty On Hand', 'Reorder Level', 'Status']
-                : ['SKU', 'Product', 'Category', 'Qty On Hand', 'Cost Price', 'Retail Price', 'Inventory Value'];
+                : ['SKU', 'Product', 'Category', 'Qty On Hand', 'Cost Price', 'Retail Price', 'Profit', 'Inventory Value'];
             $rows = [];
             foreach ($stmt->fetchAll() as $row) {
                 $rows[] = $report === 'low_stock'
@@ -319,6 +319,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                         'Qty On Hand' => (int)$row['quantity_on_hand'],
                         'Cost Price' => money_value($row['cost_price']),
                         'Retail Price' => money_value($row['unit_price']),
+                        'Profit' => money_value((float)($row['cost_price'] ?? 0) - (float)($row['unit_price'] ?? 0)),
                         'Inventory Value' => money_value($row['inventory_value']),
                     ];
             }

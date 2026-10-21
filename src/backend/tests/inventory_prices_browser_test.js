@@ -42,16 +42,18 @@ const frontend = path.resolve(__dirname, '../../frontend');
             const headers = (await page.locator('thead th').allTextContents()).map(text => text.trim());
             const sellingIndex = headers.indexOf('Selling Price');
             const costIndex = headers.indexOf('Cost Price');
+            const profitIndex = headers.indexOf('Profit');
+            assert.deepEqual(headers.slice(costIndex, costIndex + 3), ['Cost Price', 'Selling Price', 'Profit'], 'Price columns appear in cost, sale, profit order');
             const productsPage = file === 'products.php';
-            assert.equal(headers[productsPage ? costIndex - 1 : sellingIndex - 4], 'Product', 'Comparison columns follow Product and inventory status');
+            assert.equal(headers[productsPage ? costIndex - 1 : costIndex - 4], 'Product', 'Comparison columns follow Product and inventory status');
             assert.ok(sellingIndex >= 0, 'Selling Price remains visible');
-            assert.equal(costIndex, sellingIndex + (productsPage ? -1 : 1), 'Products shows Cost Price before Selling Price; Stock Overview keeps its order');
+            assert.equal(sellingIndex, costIndex + 1, 'Selling Price follows Cost Price');
             if (productsPage) {
                 assert.ok(!headers.includes('SKU / Barcode'), 'Products table omits SKU / Barcode');
                 assert.ok(!headers.includes('Category'), 'Products table omits Category');
             } else {
                 assert.equal(headers[headers.indexOf('Product') + 1], 'Status', 'Inventory status appears immediately after Product');
-                assert.deepEqual(headers.slice(sellingIndex - 2, sellingIndex + 2), ['SKU / Barcode', 'Category', 'Selling Price', 'Cost Price']);
+                assert.deepEqual(headers.slice(costIndex - 2, costIndex + 2), ['SKU / Barcode', 'Category', 'Cost Price', 'Selling Price']);
             }
             const rows = page.locator('tbody tr');
             for (const [index, expectedCost] of ['₱1,234.50', '₱0.00', '₱0.00'].entries()) {
@@ -59,11 +61,12 @@ const frontend = path.resolve(__dirname, '../../frontend');
                 assert.equal(await cells.count(), headers.length, 'Price columns stay aligned with their headers');
                 assert.equal((await cells.nth(sellingIndex).innerText()).trim(), '₱1,500.00');
                 assert.equal((await cells.nth(costIndex).innerText()).trim(), expectedCost);
+                assert.equal((await cells.nth(profitIndex).innerText()).trim(), ['₱-265.50', '₱-1,500.00', '₱-1,500.00'][index]);
                 assert.equal(await cells.nth(costIndex).isVisible(), true);
                 if (!productsPage) {
                     assert.equal((await cells.nth(headers.indexOf('Status')).innerText()).trim(), ['Available', 'Out of stock', 'Low stock'][index]);
-                    assert.equal((await cells.nth(sellingIndex - 2).innerText()).replace(/\s+/g, ' ').trim(), `SKU-${index} 123456789${index}`);
-                    assert.equal((await cells.nth(sellingIndex - 1).innerText()).trim(), 'Test');
+                    assert.equal((await cells.nth(costIndex - 2).innerText()).replace(/\s+/g, ' ').trim(), `SKU-${index} 123456789${index}`);
+                    assert.equal((await cells.nth(costIndex - 1).innerText()).trim(), 'Test');
                 }
             }
             if (!productsPage) {
@@ -79,6 +82,7 @@ const frontend = path.resolve(__dirname, '../../frontend');
                 for (const [column, ascending, descending] of [
                     ['Status', ['Product 0', 'Product 2', 'Product 1'], ['Product 1', 'Product 2', 'Product 0']],
                     ['Cost Price', ['Product 1', 'Product 2', 'Product 0'], ['Product 0', 'Product 1', 'Product 2']],
+                    ['Profit', ['Product 1', 'Product 2', 'Product 0'], ['Product 0', 'Product 1', 'Product 2']],
                     ['SKU / Barcode', ['Product 0', 'Product 1', 'Product 2'], ['Product 2', 'Product 1', 'Product 0']],
                 ]) {
                     const sort = page.getByRole('button', { name: column, exact: true });
@@ -89,9 +93,25 @@ const frontend = path.resolve(__dirname, '../../frontend');
                 }
             }
             if (file === 'products.php') {
+                const helpers = source.slice(source.indexOf('        function escapeHtml('), source.indexOf('        function safe('));
+                const update = source.slice(source.indexOf('        function updateProductTableRow('), source.indexOf('        function updateReconcilePreview('));
+                // Load only the production functions needed by the rendered table.
+                await page.addScriptTag({ content: helpers + update });
+                await page.evaluate(() => updateProductTableRow({ product_id: 3, product_name: 'Updated', cost_price: 0.1, unit_price: 0.3, status: 'active' }));
+                assert.equal((await rows.nth(2).locator('td').nth(profitIndex).innerText()).trim(), '₱-0.20', 'Saving prices refreshes Profit with two decimal places');
+                await page.locator('body').evaluate(body => body.insertAdjacentHTML('beforeend', '<button id="export-products">Export</button>'));
+                const exportScript = source.slice(source.indexOf('        function csvCell('), source.indexOf('        // Product wizard'));
+                await page.addScriptTag({ content: `const filteredRows = Array.from(document.querySelectorAll('tbody tr')); const productsById = {1: {cost_price: 80, unit_price: 100}, 2: {cost_price: 120, unit_price: 100}, 3: {cost_price: 0.1, unit_price: 0.3}};` + exportScript });
+                const downloadPromise = page.waitForEvent('download');
+                await page.getByRole('button', { name: 'Export', exact: true }).click();
+                const download = await downloadPromise;
+                const csv = fs.readFileSync(await download.path(), 'utf8').split('\n').map(line => line.split(',').map(cell => cell.replace(/^"|"$/g, '')));
+                const exportedProfit = csv[0].indexOf('Profit');
+                assert.deepEqual(csv[0].slice(exportedProfit - 2, exportedProfit + 1), ['Cost Price', 'Selling Price', 'Profit'], 'CSV uses cost, sale, profit order');
+                assert.deepEqual(csv.slice(1).map(row => row[exportedProfit]), ['-20.00', '20.00', '-0.20'], 'CSV calculates signed profit without floating point artifacts');
                 for (const width of [1440, 1024, 768, 390]) {
                     await page.setViewportSize({ width, height: 900 });
-                    for (const index of [headers.indexOf('Product'), costIndex, sellingIndex]) {
+                    for (const index of [headers.indexOf('Product'), costIndex, profitIndex, sellingIndex]) {
                         assert.equal(await page.locator('thead th').nth(index).isVisible(), true, `${width}px: ${headers[index]} header visible`);
                         assert.equal(await rows.first().locator('td').nth(index).isVisible(), true, `${width}px: ${headers[index]} value visible`);
                     }
@@ -106,7 +126,7 @@ const frontend = path.resolve(__dirname, '../../frontend');
                 await page.evaluate(() => localStorage.setItem('retailmind_product_columns', JSON.stringify({ barcode: false, category: false, price: false, cost: false })));
                 assert.equal(await page.locator('[data-column="barcode"], [data-column="category"]').count(), 0, 'Removed columns cannot be restored through column controls');
                 await page.addScriptTag({ content: preferencesScript });
-                for (const name of ['Selling Price', 'Cost Price']) {
+                for (const name of ['Selling Price', 'Cost Price', 'Profit']) {
                     assert.equal(await page.getByRole('columnheader', { name, exact: true }).isVisible(), true, `${name}: old settings must not hide the newly requested columns after initialization`);
                 }
                 await page.reload();
@@ -117,6 +137,8 @@ const frontend = path.resolve(__dirname, '../../frontend');
                 await page.reload();
                 await page.addScriptTag({ content: preferencesScript });
                 assert.equal(await page.locator('th.column-cost').isVisible(), false, 'New visibility choices persist after reload');
+                await page.locator('[data-column="profit"]').uncheck();
+                assert.equal(await page.locator('th.column-profit').isVisible(), false, 'Profit respects column visibility choices');
             }
             await page.close();
         }
