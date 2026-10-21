@@ -20,6 +20,15 @@ const fixture = action => {
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return result.stdout;
 };
+// Query the disposable DB through the same configured connection as the fixture.
+const query = sql => {
+    const script = "require 'src/backend/bootstrap/app.php'; $c=require 'src/backend/config/database.php';"
+        + " $p=new PDO('mysql:host='.$c['host'].';port='.$c['port'].';dbname=" + database + "', $c['username'],$c['password']);"
+        + " echo json_encode($p->query(base64_decode(getenv('RM_TEST_SQL')))->fetchAll(PDO::FETCH_ASSOC));";
+    const result = spawnSync(php, ['-r', script], {encoding: 'utf8', env: {...env, RM_TEST_SQL: Buffer.from(sql).toString('base64')}});
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    return JSON.parse(result.stdout);
+};
 (async () => {
     let server, browser;
     try {
@@ -49,12 +58,24 @@ const fixture = action => {
         await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         const url = origin + '/components/notification/notifications.php';
         const submit = async button => Promise.all([page.waitForNavigation(), button.click()]);
+        const login = async username => {
+            await page.goto(origin + '/?login=1');
+            await page.waitForFunction(() => document.activeElement.id === 'landing-login-username');
+            await page.locator('#landing-login-username').fill(username);
+            await page.locator('#landing-login-password').fill(data.password);
+            await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+        };
+        const switchWorkspace = async role => {
+            await page.goto(origin + '/components/auth/workspace.php');
+            await Promise.all([page.waitForNavigation(), page.locator(`.workspace-option:has(input[value="${role}"])`).getByRole('button', {name: 'Open'}).click()]);
+        };
         await page.goto(origin + '/components/administrator/dashboard.php');
         assert.equal(await page.getByText('Pending approvals', {exact: true}).count(), 0);
         assert.equal(await page.getByText('Stock issues awaiting an Administrator decision.').count(), 0);
         assert.equal(await page.locator('.dashboard-state-error').count(), 0);
-        await page.locator('.attention-item').filter({hasText: 'Pending Stock Issue'}).getByRole('link', {name: 'Review', exact: true}).click();
-        await page.getByRole('link', {name: 'View', exact: true}).click();
+        assert.equal(await page.locator('.attention-item').filter({hasText: 'Pending Stock Issue'}).count(), 0, 'Routine report is not an Administrator escalation');
+        await page.goto(origin + '/components/administrator/stock_issues.php');
+        await page.getByRole('link', {name: 'Open report', exact: true}).click();
         await page.getByText('Disposable theme Stock Issue', {exact: false}).waitFor();
         assert.match(await page.locator('main').innerText(), /Disposable theme Stock Issue/);
         await page.goto(origin + '/components/report/data_readiness.php');
@@ -74,6 +95,11 @@ const fixture = action => {
         await page.locator('#low_stock_threshold').fill('7');
         await submit(page.getByRole('button', {name: /Save/}));
         assert.equal(await page.locator('#low_stock_threshold').inputValue(), '7', 'Retained notification preferences persist');
+        await page.goto(origin + '/components/auth/logout.php');
+        await page.goto(origin + '/?login=1');
+        await page.locator('#landing-login-username').fill('theme_inventory_manager');
+        await page.locator('#landing-login-password').fill(data.password);
+        await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         await page.goto(url);
         assert.equal(await page.locator('.notification-item').count(), 10);
         assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), Array.from({length: 10}, (_, i) => 'Notice ' + (27 - i)));
@@ -213,7 +239,7 @@ const fixture = action => {
         fixture('bread_create');
         const active = page.getByRole('region', {name: 'Active batch reminders', exact: true});
         await page.goto(url);
-        assert.match(await active.innerText(), /COLLECT-10.*Expiration: 2000-10-25\. Remaining: 10\./s);
+        assert.equal(await active.count(), 0, 'Routine batch reminders stay in Inventory workspace');
         assert.equal(await active.getByRole('link', {name: 'Record Supplier Pullout'}).count(), 0, 'Administrator oversight offers no mutation shortcut');
         await page.goto(origin + '/components/auth/logout.php');
         await page.goto(origin + '/?login=1');
@@ -243,6 +269,101 @@ const fixture = action => {
         assert.equal(await active.count(), 0, 'Final removal immediately clears active work');
         await page.goto(url);
         assert.match(await page.locator('.notification-list').innerText(), /Expiry alert history:.*Current remaining: 0\./s, 'Depleted notification remains clearly historical');
+
+        // ---- #262: workspace-scoped lists, counts, read state, role and account eligibility ----
+        await page.goto(origin + '/components/auth/logout.php');
+        await login('theme_super_admin');
+        fixture('workspace_seed');
+        const readState = async () => Object.fromEntries(
+            query('SELECT notification_id, is_read FROM notifications WHERE user_id = 2').map(row => [Number(row.notification_id), Number(row.is_read)]));
+        const bell = () => page.locator('.global-topbar .global-notification-button').first();
+
+        // 1. A multi-role user sees only the signed-in Workspace's rows, category counts, and bell count.
+        await page.goto(url);
+        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Super admin notice'], 'Super Administrator Workspace only lists its own rows');
+        assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'System'], 'Category options follow the active Workspace');
+        assert.equal(await bell().locator('strong').textContent(), '1', 'Bell count follows the active Workspace');
+        assert.equal(await bell().getAttribute('aria-label'), 'Notifications: 1 unread');
+        await page.goto(url + '?category=system');
+        assert.match(await page.locator('.notification-more').innerText(), /Showing 1 of 1/, 'Category counts follow the active Workspace');
+
+        await switchWorkspace('inventory_manager');
+        await page.goto(url);
+        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Inventory notice two', 'Inventory notice one'], 'Secondary-role recipient sees the secondary Workspace rows');
+        assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'System'], 'Secondary Workspace exposes only its own categories');
+        assert.equal(await page.locator('.notification-view-count').textContent(), '2', 'Unread count follows the active Workspace');
+        assert.equal(await bell().locator('strong').textContent(), '2', 'Bell count changes with the Workspace');
+
+        await switchWorkspace('admin');
+        await page.goto(url);
+        assert.equal(await page.locator('.notification-item').count(), 2, 'Administrator Workspace lists only its own rows');
+        assert.equal(await page.locator('.notification-item.unread').count(), 1, 'Read state is preserved per Workspace');
+        assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'Inventory adjustments', 'System']);
+        assert.equal(await bell().locator('strong').textContent(), '1');
+        await page.goto(url + '?category=adjustment');
+        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Admin adjustment notice'], 'Category list never widens across Workspaces');
+        assert.match(await page.locator('.notification-more').innerText(), /Showing 1 of 1/);
+
+        await switchWorkspace('cashier');
+        await page.goto(url);
+        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Cashier notice'], 'Cashier Workspace lists only its own rows');
+        assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'Inventory adjustments']);
+        assert.equal(await bell().locator('strong').textContent(), '1');
+
+        // 2. Role removal revokes that Workspace's visibility.
+        await switchWorkspace('inventory_manager');
+        await page.goto(url);
+        assert.equal(await page.locator('.notification-item').count(), 2);
+        assert.match(await page.locator('.sidebar-workspace-options').textContent(), /Inventory/);
+        fixture('workspace_revoke_role');
+        await page.goto(url);
+        assert.equal(await page.getByText('Inventory notice', {exact: false}).count(), 0, 'Removing a secondary role revokes that Workspace rows');
+        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Super admin notice'], 'The session falls back to a Workspace the account still holds');
+        assert.doesNotMatch(await page.locator('.sidebar-workspace-options').textContent(), /Inventory/, 'Revoked Workspace is no longer offered');
+        const revokedCsrf = await page.locator('input[name="csrf_token"]').first().inputValue();
+        const rejected = await page.request.post(origin + '/components/auth/workspace.php', {form: {workspace: 'inventory_manager', csrf_token: revokedCsrf}});
+        assert.equal(rejected.status(), 403, 'Revoked Workspace rejects a switch attempt');
+        fixture('workspace_restore_role');
+        await switchWorkspace('inventory_manager');
+        await page.goto(url);
+        assert.equal(await page.locator('.notification-item').count(), 2, 'Restoring the role restores the Workspace rows');
+
+        // 3. Reading one Workspace's updates does not clear another Workspace's unread work.
+        await submit(page.getByRole('button', {name: 'Mark all as read', exact: true}));
+        await page.goto(url);
+        assert.equal(await page.locator('.notification-item.unread').count(), 0, 'Bulk read clears only the active Workspace');
+        assert.equal(await bell().locator('strong').count(), 0, 'Bell count clears only for the active Workspace');
+        assert.deepEqual(await readState(), {9300: 0, 9310: 0, 9311: 1, 9320: 1, 9321: 1, 9330: 0}, 'Reading Inventory leaves other Workspace rows unread');
+        await switchWorkspace('admin');
+        await page.goto(url);
+        assert.equal(await page.locator('.notification-item.unread').count(), 1, 'Administrator unread work survives the Inventory bulk read');
+        assert.equal(await page.locator('.notification-item.unread .notification-content h2').textContent(), 'Admin adjustment notice');
+        assert.equal(await bell().locator('strong').textContent(), '1');
+        await switchWorkspace('super_admin');
+        await page.goto(url);
+        assert.equal(await page.locator('.notification-item.unread').count(), 1, 'Super Administrator unread work survives the Inventory bulk read');
+
+        // 4. A disabled account cannot see scoped rows.
+        fixture('workspace_disable');
+        await page.goto(url);
+        assert.equal(new URL(page.url()).searchParams.get('login'), '1', 'Disabled account loses access to scoped Notifications');
+        assert.equal(await page.locator('.notification-item').count(), 0, 'Disabled account sees no scoped rows');
+        fixture('workspace_enable');
+        await login('theme_super_admin');
+        await page.goto(url);
+        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Super admin notice'], 'Re-enabled account regains only its scoped rows');
+        assert.equal(await bell().locator('strong').textContent(), '1');
+
+        // 5. One account's reads never touch another account's rows (extends the 9000 "Private notice" coverage).
+        const csrfToken = await page.locator('input[name="csrf_token"]').first().inputValue();
+        const user3Unread = async () => Number((await query('SELECT COUNT(*) AS c FROM notifications WHERE user_id = 3 AND is_read = 0'))[0].c);
+        const user3Before = await user3Unread();
+        const foreignRead = Number((await query('SELECT is_read FROM notifications WHERE notification_id = 2'))[0].is_read);
+        await page.request.post(url, {form: {action: 'mark_read', notification_id: '2', csrf_token: csrfToken}});
+        assert.equal(Number((await query('SELECT is_read FROM notifications WHERE notification_id = 2'))[0].is_read), foreignRead, 'An account cannot mark another account\'s notification read');
+        await submit(page.getByRole('button', {name: 'Mark all as read', exact: true}));
+        assert.equal(await user3Unread(), user3Before, 'Bulk read never touches another account\'s unread rows');
+        assert.equal(Number((await query("SELECT COUNT(*) AS c FROM notifications WHERE user_id = 2 AND workspace = 'super_admin' AND is_read = 0"))[0].c), 0, 'Own Workspace unread work is still cleared');
         console.log('Notification list: passed; screenshots ' + output);
     } finally {
         if (browser) await browser.close();

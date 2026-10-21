@@ -478,9 +478,22 @@ function create_notification(
     int $reference_id = null,
     string $reference_type = null
 ): void {
-    $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, title, message, reference_id, reference_type) 
-                           VALUES (?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$user_id, $type, $title, $message, $reference_id, $reference_type]);
+    require_once __DIR__ . '/../app/Services/NotificationService.php';
+    (new NotificationService($pdo))->createNotification($user_id, $type, $title, $message, $reference_id, $reference_type);
+}
+
+/** Shared by list, bell, and mutations; membership is checked against current assignments. */
+function notification_workspace_scope(PDO $pdo, string $alias = 'notifications'): string
+{
+    $role = function_exists('current_role') ? current_role() : (string)($_SESSION['role'] ?? '');
+    if (!in_array($role, ['super_admin', 'admin', 'inventory_manager', 'cashier'], true)) return '1 = 0';
+    $workspace = $pdo->quote($role);
+    return "$alias.workspace = $workspace AND $alias.inapp_enabled = 1 AND EXISTS (
+        SELECT 1 FROM users nu JOIN roles nr ON nr.role_name = $workspace
+        WHERE nu.user_id = $alias.user_id AND nu.status = 'active' AND (
+            EXISTS (SELECT 1 FROM user_roles nur WHERE nur.user_id = nu.user_id AND nur.role_id = nr.role_id)
+            OR (nu.role_id = nr.role_id AND NOT EXISTS (SELECT 1 FROM user_roles nur WHERE nur.user_id = nu.user_id))
+        ))";
 }
 
 /**
@@ -489,7 +502,7 @@ function create_notification(
 function get_unread_notifications(PDO $pdo, int $user_id): array
 {
     $stmt = $pdo->prepare("SELECT notification_id, type, title, message, reference_id, reference_type, created_at
-                           FROM notifications WHERE user_id = ? AND is_read = FALSE
+                           FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND is_read = FALSE
                            ORDER BY created_at DESC");
     $stmt->execute([$user_id]);
     return $stmt->fetchAll();
@@ -500,7 +513,7 @@ function get_unread_notifications(PDO $pdo, int $user_id): array
  */
 function get_notification_count(PDO $pdo, int $user_id): int
 {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = FALSE");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND is_read = FALSE");
     $stmt->execute([$user_id]);
     return (int)$stmt->fetchColumn();
 }
@@ -510,7 +523,7 @@ function get_notification_count(PDO $pdo, int $user_id): int
  */
 function mark_notification_read(PDO $pdo, int $notification_id, int $user_id): void
 {
-    $stmt = $pdo->prepare("UPDATE notifications SET is_read = TRUE WHERE notification_id = ? AND user_id = ?");
+    $stmt = $pdo->prepare("UPDATE notifications SET is_read = TRUE WHERE notification_id = ? AND user_id = ? AND " . notification_workspace_scope($pdo));
     $stmt->execute([$notification_id, $user_id]);
 }
 
@@ -541,49 +554,8 @@ function get_notification_prefs(PDO $pdo, int $user_id): array
  */
 function check_and_notify_low_stock(PDO $pdo): void
 {
-    $users_stmt = $pdo->query(
-        "SELECT u.user_id, u.email, COALESCE(np.low_stock_threshold, 10) AS low_stock_threshold,
-                COALESCE(np.notify_email, 0) AS notify_email, COALESCE(np.notify_inapp, 1) AS notify_inapp
-         FROM users u
-         LEFT JOIN notification_preferences np ON np.user_id = u.user_id
-         WHERE u.status = 'active' AND COALESCE(np.notify_low_stock, 1) = 1"
-    );
-    $users = $users_stmt->fetchAll();
-
-    foreach ($users as $user) {
-        $threshold = isset($user['low_stock_threshold']) && (int)$user['low_stock_threshold'] > 0
-            ? (int)$user['low_stock_threshold']
-            : null;
-        $low_stock = get_low_stock_products($pdo, $threshold);
-
-        foreach ($low_stock as $product) {
-            $check_stmt = $pdo->prepare("SELECT notification_id FROM notifications 
-                                        WHERE user_id = ? AND type = 'low_stock' 
-                                        AND reference_id = ?
-                                        AND created_at >= CURDATE()");
-            $check_stmt->execute([$user['user_id'], $product['product_id']]);
-
-            if (!$check_stmt->fetch()) {
-                $reorder_target = $threshold !== null ? $threshold : $product['reorder_level'];
-                $title = 'Low Stock Alert: ' . $product['product_name'];
-                $body = "Product {$product['product_name']} ({$product['sku']}) is at or below the threshold. Current: {$product['quantity_on_hand']}, Threshold: {$reorder_target}";
-                if (!empty($user['notify_inapp'])) {
-                    create_notification(
-                        $pdo,
-                        (int)$user['user_id'],
-                        'low_stock',
-                        $title,
-                        $body,
-                        (int)$product['product_id'],
-                        'product'
-                    );
-                }
-                if (!empty($user['notify_email']) && !empty($user['email'])) {
-                    send_email_notification((string)$user['email'], $title, $body);
-                }
-            }
-        }
-    }
+    require_once __DIR__ . '/../app/Services/NotificationService.php';
+    (new NotificationService($pdo))->checkAndNotifyLowStock();
 }
 
 /**
@@ -725,7 +697,7 @@ function send_email_notification(string $email, string $subject, string $message
 
     try {
         $pdo = App\Core\Database::connection();
-        $pdo->exec("CREATE TABLE IF NOT EXISTS email_delivery_log (
+        if (!App\Database\Schema::tableExists($pdo, 'email_delivery_log')) $pdo->exec("CREATE TABLE IF NOT EXISTS email_delivery_log (
             email_log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
             recipient VARCHAR(190) NOT NULL,
             subject VARCHAR(255) NOT NULL,

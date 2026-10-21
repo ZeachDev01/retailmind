@@ -286,6 +286,8 @@ echo "\n--- Scenario 1: Spec Line 107 - Pullout 8 of 20, Receive 30 Fresh Linked
 $pdo->prepare("INSERT INTO products (product_id, sku, barcode, product_name, units_per_package, cost_price, status) VALUES (1, 'BREAD-01', '10001', 'Loaf Bread', 1, 50.00, 'active')")->execute();
 $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 20)")->execute();
 $pdo->prepare("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, expiration_date, supplier) VALUES (1, 1, 'BATCH-OLD', 20, 20, '2026-10-20', 'Gardenia')")->execute();
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 $reminderService = new NotificationService($pdo);
 $pdo->exec('ALTER TABLE notifications ADD COLUMN reference_type TEXT NULL');
 $reminderService->createNotification($managerId, 'expiring_stock', 'Old batch expiry', 'Prepare for collection', 1, 'product_batch_expiry_7');

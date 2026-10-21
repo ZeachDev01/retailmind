@@ -142,6 +142,8 @@ $pdo->exec('CREATE TABLE notifications (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )');
 
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 $quietNotifications = new class($pdo) extends NotificationService {
     public function checkAndNotifyLowStock(): void
     {
@@ -185,6 +187,8 @@ $submit = static function (int $userId, array $overrides = []) use ($service, $a
 $openShift($cashierId);
 $openShift($cashierTwoId);
 
+$pdo->exec("INSERT INTO user_roles (user_id,role_id) VALUES ({$adminId}," . $roleId('admin') . "),({$adminId}," . $roleId('inventory_manager') . ")");
+$pdo->exec("INSERT INTO notification_preferences (user_id) VALUES ({$adminId})");
 // --- Submission creates a revision + notifies Inventory Managers ---
 $firstId = $submit($cashierId);
 $assert($reportOf($firstId)['status'] === 'pending', 'Submission must create a pending report');
@@ -193,6 +197,10 @@ $assert(count($firstRevisions) === 1 && $firstRevisions[0]['action'] === 'submit
 $assert((int)$firstRevisions[0]['actor_id'] === $cashierId, 'Submission revision must record the cashier actor');
 $assert($firstRevisions[0]['created_at'] !== null && $firstRevisions[0]['created_at'] !== '', 'Revision must record a timestamp');
 $assert($notificationsFor($managerId, $firstId) !== [], 'Inventory Managers must be notified about new reports');
+$assert($notificationsFor($adminId, $firstId) !== [], 'A secondary Inventory Manager role receives the immediate report alert');
+$assert($notificationsFor($adminId, $firstId)[0]['workspace'] === 'inventory_manager', 'Immediate report alerts belong to the Inventory Workspace');
+$assert($notificationsFor($adminId, $firstId)[0]['email_pending'] == 1, 'Immediate alerts queue email for the daily run');
+
 $assert($notificationsFor($cashierId, $firstId) === [], 'Reporting cashier must not be notified about their own submission');
 $assert($service->getPendingCount() === 1, 'Pending-review badge must count the new pending report');
 

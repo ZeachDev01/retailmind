@@ -41,6 +41,8 @@ $pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, username TEXT, is_r
         attention_severity TEXT, attention_count INTEGER, attention_destination TEXT, is_read INTEGER,
         created_at TEXT);
     INSERT INTO users VALUES (1, 'owner', 0), (2, 'cashier', 0), (3, 'sealed_identity', 1)");
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 $clock = new SignInReviewClock();
 $reviews = new FailedSignInReviewService($pdo, $clock);
 $addAttempt = static function (string $identity = 'user:2', string $time = '2026-10-12 11:00:00', int $success = 0) use ($pdo): int {

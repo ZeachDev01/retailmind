@@ -445,7 +445,8 @@ class StockIssueService
                 $cashierId,
                 $adjustmentId,
                 "Stock issue report #{$adjustmentId} returned",
-                'An Inventory Manager returned your report: ' . $reason
+                'An Inventory Manager returned your report: ' . $reason,
+                true
             );
         }
     }
@@ -1692,55 +1693,35 @@ class StockIssueService
     {
         try {
             foreach ($this->managerUserIds() as $managerId) {
-                $this->insertNotification($managerId, $adjustmentId, $title, $message);
+                $this->insertNotification($managerId, $adjustmentId, $title, $message, 'inventory_manager');
             }
         } catch (Throwable $e) {
             error_log('Stock issue manager notification skipped: ' . $e->getMessage());
         }
     }
 
-    private function notifyUser(int $userId, int $adjustmentId, string $title, string $message): void
+    private function notifyUser(int $userId, int $adjustmentId, string $title, string $message, bool $required = false): void
     {
         try {
-            $this->insertNotification($userId, $adjustmentId, $title, $message);
+            $eligible = array_column($this->notificationService->recipients('cashier'), 'user_id');
+            if (in_array($userId, array_map('intval', $eligible), true)) {
+                $this->insertNotification($userId, $adjustmentId, $title, $message, 'cashier', $required);
+            }
         } catch (Throwable $e) {
             error_log('Stock issue user notification skipped: ' . $e->getMessage());
         }
     }
 
-    private function insertNotification(int $userId, int $adjustmentId, string $title, string $message): void
+    private function insertNotification(int $userId, int $adjustmentId, string $title, string $message, string $workspace, bool $required = true): void
     {
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO notifications (user_id, type, title, message, reference_id, reference_type)
-             VALUES (?, ?, ?, ?, ?, ?)'
-        );
-        // `adjustment` is an existing notifications.type enum value; the
-        // stock-issue link lives in reference_type so no enum change is needed.
-        $stmt->execute([$userId, 'adjustment', $title, $message, $adjustmentId, 'stock_issue']);
+        $inApp = $required || $this->notificationService->inAppEnabled($userId, 'notify_adjustment');
+        $this->notificationService->createNotification($userId, 'adjustment', $title, $message, $adjustmentId, 'stock_issue', $workspace, $inApp);
     }
 
-    /**
-     * @return int[]
-     */
+    /** @return int[] */
     private function managerUserIds(): array
     {
-        try {
-            $stmt = $this->pdo->prepare(
-                "SELECT u.user_id FROM users u
-                  JOIN roles r ON r.role_id = u.role_id
-                  WHERE r.role_name = 'inventory_manager' AND u.status = 'active'"
-            );
-            $stmt->execute();
-            return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
-        } catch (Throwable $e) {
-            $stmt = $this->pdo->prepare(
-                "SELECT u.user_id FROM users u
-                  JOIN roles r ON r.role_id = u.role_id
-                  WHERE r.role_name = 'inventory_manager'"
-            );
-            $stmt->execute();
-            return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
-        }
+        return array_map('intval', array_column($this->notificationService->recipients('inventory_manager'), 'user_id'));
     }
 
     private function productScope(): array

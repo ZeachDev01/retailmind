@@ -10,18 +10,13 @@ set_exception_handler(static function (Throwable $exception): void {
 $pdo = App\Core\Database::connection();
 require_once dirname(__DIR__) . '/includes/functions.php';
 
-check_and_notify_low_stock($pdo);
-
 $clock ??= new App\Attention\SystemClock();
 (new App\Authorization\DormancyRunner($pdo, $clock))->run();
 
-$recipients = $pdo->query(
-    "SELECT u.user_id, u.email, r.role_name, COALESCE(np.notify_email, 0) AS notify_email,
-            COALESCE(np.notify_inapp, 1) AS notify_inapp
-     FROM users u JOIN roles r ON r.role_id = u.role_id
-     LEFT JOIN notification_preferences np ON np.user_id = u.user_id
-     WHERE u.status = 'active' AND r.role_name IN ('super_admin','admin','inventory_manager')"
-)->fetchAll(PDO::FETCH_ASSOC);
+require_once dirname(__DIR__) . '/app/Services/NotificationService.php';
+$notifications = new NotificationService($pdo, $clock);
+$notifications->checkAndNotifyLowStock();
+$notifications->checkAndNotifyExpiringStock();
 
 $signalSource = new App\Attention\DatabaseAttentionSignalSource($pdo, $clock);
 $attentionCenter = new App\Attention\AttentionCenter(
@@ -32,99 +27,54 @@ require_once dirname(__DIR__) . '/app/Services/SystemHealthService.php';
 $healthChecks = (new SystemHealthService($pdo, dirname(__DIR__)))->checks();
 $platformSignals = $signalSource->platform($healthChecks);
 $storeSignals = $signalSource->store();
-foreach ($recipients as $recipient) {
-    if (!in_array($recipient['role_name'], ['super_admin', 'admin'], true)) {
-        continue;
-    }
-    $signals = $recipient['role_name'] === 'super_admin' ? $platformSignals : $storeSignals;
-    $result = $attentionCenter->refreshResult(
-        (int)$recipient['user_id'],
-        (string)$recipient['role_name'],
-        $signals,
-        !empty($recipient['notify_inapp'])
-    );
-    if (!empty($recipient['notify_email']) && !empty($recipient['email'])) {
-        foreach ($result->newItems() as $item) {
-            send_email_notification((string)$recipient['email'], $item->title, $item->explanation);
-        }
+foreach (['super_admin', 'admin'] as $role) {
+    foreach ($notifications->recipients($role) as $recipient) {
+        $attentionCenter->refreshResult((int)$recipient['user_id'], $role,
+            $role === 'super_admin' ? $platformSignals : $storeSignals,
+            (bool)($recipient['notify_inapp'] ?? true));
     }
 }
 
-function scheduled_alert(PDO $pdo, array $recipient, string $title, string $body, ?int $referenceId = null, string $referenceType = 'system'): void {
-    $check = $pdo->prepare("SELECT notification_id FROM notifications WHERE user_id = ? AND type = 'system' AND title = ? AND DATE(created_at) = CURDATE() LIMIT 1");
-    $check->execute([(int)$recipient['user_id'], $title]);
-    if ($check->fetch()) {
-        return;
-    }
-    if (!empty($recipient['notify_inapp'])) {
-        create_notification($pdo, (int)$recipient['user_id'], 'system', $title, $body, $referenceId, $referenceType);
-    }
-    if (!empty($recipient['notify_email']) && !empty($recipient['email'])) {
-        send_email_notification((string)$recipient['email'], $title, $body);
-    }
-}
+$notifications->checkAndNotifyForecasts();
 
-require_once dirname(__DIR__) . '/app/Services/NotificationService.php';
-$expiryNotifications = new NotificationService($pdo, $clock);
-$expiryNotifications->checkAndNotifyExpiringStock();
-// shortcut: email-only recipients retain repeated-run attempts; track deliveries if that behavior needs changing.
-foreach ($expiryNotifications->getEligibleExpiryReminders() as $reminder) {
-    foreach ($recipients as $recipient) {
-        if (!empty($recipient['notify_email']) && !empty($recipient['email'])) {
-            if (!empty($recipient['notify_inapp']) && App\Database\Schema::tableExists($pdo, 'email_delivery_log')) {
-                $check = $pdo->prepare("SELECT 1 FROM email_delivery_log WHERE recipient = ? AND subject = ?
-                    AND created_at >= CURDATE() AND created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY) LIMIT 1");
-                $check->execute([(string)$recipient['email'], $reminder['title']]);
-                if ($check->fetchColumn()) {
+// Persisted events let transaction checks queue email for the daily run, including email-only accounts.
+// Only a genuinely new or escalated condition is queued, so an unchanged rerun has nothing pending.
+$mailer = strtolower((string)env('MAIL_MAILER', 'smtp'));
+foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $role) {
+    foreach ($notifications->recipients($role) as $recipient) {
+        $pdo->beginTransaction();
+        try {
+            $pending = $pdo->prepare('SELECT n.notification_id, n.type, n.title, n.message
+                FROM notifications n
+                LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key
+                WHERE n.user_id = ? AND n.workspace = ? AND n.email_pending = 1
+                  AND (n.attention_key IS NULL OR s.is_active = 1)
+                ORDER BY n.notification_id FOR UPDATE');
+            $pending->execute([(int)$recipient['user_id'], $role]);
+            $clear = $pdo->prepare('UPDATE notifications SET email_pending = 0 WHERE notification_id = ?');
+            foreach ($pending->fetchAll(PDO::FETCH_ASSOC) as $event) {
+                $optionalLowStock = $event['type'] === 'low_stock';
+                $address = trim((string)($recipient['email'] ?? ''));
+                $optedIn = !empty($recipient['notify_email'])
+                    && (!$optionalLowStock || (bool)($recipient['notify_low_stock'] ?? true));
+                if (!$optedIn || $address === '' || filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
+                    // Nothing deliverable: stop retrying, but a failed attempt below stays queued.
+                    $clear->execute([(int)$event['notification_id']]);
                     continue;
                 }
+                if (send_email_notification($address, $event['title'], $event['message'])
+                    || !in_array($mailer, ['brevo', 'smtp', 'mail'], true)) {
+                    // A configured provider that fails stays queued for the next run; an unconfigured
+                    // environment has nothing to retry, and its attempt is already in the delivery log.
+                    $clear->execute([(int)$event['notification_id']]);
+                }
             }
-            send_email_notification((string)$recipient['email'], $reminder['title'], $reminder['message']);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            $pdo->rollBack();
+            throw $exception;
         }
     }
-}
-
-$spikes = $pdo->query(
-    "SELECT p.product_id, p.product_name, sp.predicted_demand_next_7_days,
-            COALESCE(hist.avg_weekly, 0) AS avg_weekly
-     FROM stock_predictions sp
-     JOIN products p ON p.product_id = sp.product_id
-     LEFT JOIN (
-         SELECT si.product_id, SUM(si.quantity) / 4 AS avg_weekly
-         FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
-         WHERE s.sale_date >= DATE_SUB(NOW(), INTERVAL 28 DAY)
-         GROUP BY si.product_id
-     ) hist ON hist.product_id = sp.product_id
-     WHERE sp.prediction_id = (
-         SELECT sp2.prediction_id FROM stock_predictions sp2
-         WHERE sp2.product_id = sp.product_id ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC LIMIT 1
-     )
-       AND hist.avg_weekly > 0
-       AND sp.predicted_demand_next_7_days >= hist.avg_weekly * 1.75"
-)->fetchAll(PDO::FETCH_ASSOC);
-foreach ($spikes as $spike) {
-    $title = 'Unusual demand forecast: ' . $spike['product_name'];
-    $body = sprintf(
-        'The 7-day forecast is %d units compared with a recent weekly average of %.1f units.',
-        (int)$spike['predicted_demand_next_7_days'],
-        (float)$spike['avg_weekly']
-    );
-    foreach ($recipients as $recipient) {
-        scheduled_alert($pdo, $recipient, $title, $body, (int)$spike['product_id'], 'product');
-    }
-}
-
-try {
-    $failedRun = $pdo->query("SELECT training_run_id, error_message, started_at FROM model_training_runs WHERE status = 'failed' AND started_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) ORDER BY started_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-    if ($failedRun) {
-        $title = 'Random Forest training failure';
-        $body = 'The latest model training failed on ' . $failedRun['started_at'] . '. ' . mb_strimwidth((string)$failedRun['error_message'], 0, 500, '...');
-        foreach ($recipients as $recipient) {
-            scheduled_alert($pdo, $recipient, $title, $body, (int)$failedRun['training_run_id'], 'model_training');
-        }
-    }
-} catch (PDOException $e) {
-    error_log('Training failure notification skipped: ' . $e->getMessage());
 }
 
 echo "Notification checks completed.\n";

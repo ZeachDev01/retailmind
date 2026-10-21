@@ -555,7 +555,10 @@ final class StoreOperationsDashboardWorkspace
         foreach ($this->rows(
             "SELECT ia.adjustment_id, ia.adjustment_qty, ia.adjustment_type, ia.reported_at, p.product_name
              FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id
-             WHERE ia.status = 'pending' ORDER BY ia.reported_at ASC LIMIT 20"
+             WHERE ia.status = 'pending' AND (ia.reported_at <= ? OR ABS(ia.adjustment_qty) * p.cost_price >= ?)
+             ORDER BY ia.reported_at ASC LIMIT 20",
+            [$now->modify('-' . (float)$thresholds['inventory_overdue_hours'] . ' hours')->format('Y-m-d H:i:s'),
+                (float)$thresholds['inventory_high_value_amount']]
         ) as $row) {
             $items[] = $this->exception('warning', 'Pending Stock Issue', (string)$row['product_name'] . ' · ' . (string)$row['adjustment_type'] . ' (' . (int)$row['adjustment_qty'] . ') · Awaiting Inventory Manager review', (string)$row['reported_at'], 'components/administrator/stock_issues.php');
         }

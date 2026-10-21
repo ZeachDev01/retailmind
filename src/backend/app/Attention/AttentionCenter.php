@@ -28,7 +28,8 @@ final class AttentionCenter
         return $this->notifications->synchronize(
             $userId,
             $this->rules->evaluate($role, $signals),
-            $createInApp
+            $createInApp,
+            $role === 'super_admin' ? 'platform.' : 'store.'
         );
     }
 }

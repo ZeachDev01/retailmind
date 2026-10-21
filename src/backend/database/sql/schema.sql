@@ -75,6 +75,7 @@ DROP TABLE IF EXISTS `attention_states`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `attention_states` (
+  `notification_level` int NOT NULL DEFAULT 0,
   `user_id` int(11) NOT NULL,
   `attention_key` varchar(120) NOT NULL,
   `fingerprint` char(64) NOT NULL,
@@ -846,6 +847,9 @@ DROP TABLE IF EXISTS `notifications`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `notifications` (
+  `workspace` varchar(30) NOT NULL DEFAULT '',
+  `inapp_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `email_pending` tinyint(1) NOT NULL DEFAULT 0,
   `notification_id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
   `type` enum('low_stock','replenishment','adjustment','system','fiscal_period','expiring_stock','expired_stock','attention') NOT NULL,
@@ -862,6 +866,7 @@ CREATE TABLE `notifications` (
   PRIMARY KEY (`notification_id`),
   KEY `idx_notifications_user_id` (`user_id`),
   KEY `idx_notifications_is_read` (`is_read`),
+  KEY `idx_notifications_workspace` (`user_id`,`workspace`,`inapp_enabled`,`is_read`),
   KEY `idx_notifications_attention` (`user_id`,`attention_key`,`created_at`),
   CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

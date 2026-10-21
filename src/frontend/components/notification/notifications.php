@@ -16,8 +16,9 @@ $category_labels = [
     'attention' => 'Attention',
 ];
 $notification_source = "notifications LEFT JOIN products p ON notifications.reference_type = 'product' AND p.product_id = notifications.reference_id";
+$workspace_scope = notification_workspace_scope($pdo);
 $visible_notifications = "(notifications.type <> 'low_stock' OR p.product_id IS NOT NULL)";
-$stmt = $pdo->prepare('SELECT notifications.type, COUNT(*) AS total, SUM(CASE WHEN notifications.is_read = FALSE THEN 1 ELSE 0 END) AS unread FROM ' . $notification_source . ' WHERE notifications.user_id = ? AND ' . $visible_notifications . ' GROUP BY notifications.type ORDER BY notifications.type');
+$stmt = $pdo->prepare('SELECT notifications.type, COUNT(*) AS total, SUM(CASE WHEN notifications.is_read = FALSE THEN 1 ELSE 0 END) AS unread FROM ' . $notification_source . ' WHERE notifications.user_id = ? AND ' . $workspace_scope . ' AND ' . $visible_notifications . ' GROUP BY notifications.type ORDER BY notifications.type');
 $stmt->execute([$user_id]);
 $categories = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
 $category = $_GET['category'] ?? '';
@@ -41,7 +42,7 @@ $unread_count = $category === '' ? array_sum(array_column($categories, 'unread')
 $total = $view === 'unread' ? $unread_count : ($category === '' ? array_sum(array_column($categories, 'total')) : (int)$categories[$category]['total']);
 $batch = min($batch, max(1, (int)ceil($total / 10)));
 $limit = min($total, $batch * 10);
-$where = 'notifications.user_id = ?' . ($category === '' ? '' : ' AND notifications.type = ?');
+$where = 'notifications.user_id = ? AND ' . $workspace_scope . ($category === '' ? '' : ' AND notifications.type = ?');
 $params = $category === '' ? [$user_id] : [$user_id, $category];
 $view_query = http_build_query(['category' => $category, 'view' => $view, 'batch' => $batch]);
 
@@ -61,11 +62,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 $list_where = $where . ' AND ' . $visible_notifications . ($view === 'unread' ? ' AND notifications.is_read = FALSE' : '');
-$stmt = $pdo->prepare('SELECT notifications.notification_id, notifications.type, notifications.title, notifications.message, notifications.reference_type, notifications.reference_id, notifications.is_read, notifications.created_at, p.product_name, p.sku FROM ' . $notification_source . ' WHERE ' . $list_where . ' ORDER BY notifications.created_at DESC, notifications.notification_id DESC LIMIT ' . (int)$limit);
+$stmt = $pdo->prepare('SELECT notifications.notification_id, notifications.type, notifications.title, notifications.message, notifications.reference_type, notifications.reference_id, notifications.is_read, notifications.created_at, notifications.attention_destination, p.product_name, p.sku FROM ' . $notification_source . ' WHERE ' . $list_where . ' ORDER BY notifications.created_at DESC, notifications.notification_id DESC LIMIT ' . (int)$limit);
 $stmt->execute($params);
 $notifications = $stmt->fetchAll();
-$batch_reminders = (new NotificationService($pdo))->getBatchReminders($user_id);
-$inventory_workspace = in_array(current_role(), ['inventory_manager', 'admin', 'super_admin'], true);
+$required_work = (new NotificationService($pdo))->requiredWork($user_id, current_role());
+$notification_service = new NotificationService($pdo);
+$batch_reminders = $notification_service->getBatchReminders($user_id);
+$inventory_workspace = current_role() === 'inventory_manager' && $notification_service->inWorkspace($user_id, 'inventory_manager');
 $active_batch_reminders = $inventory_workspace
     ? array_filter($batch_reminders, static fn(array $reminder): bool => $reminder['active']) : [];
 ?>
@@ -88,6 +91,18 @@ $active_batch_reminders = $inventory_workspace
             <header class="notification-heading">
                 <h1>Notifications</h1>
             </header>
+
+            <?php if ($required_work): ?>
+                <section aria-label="Required work">
+                    <h2>Action needed</h2>
+                    <?php foreach ($required_work as $work): ?>
+                        <article class="notification-priority">
+                            <h3><a href="<?= htmlspecialchars(app_url($work['destination'])) ?>"><?= htmlspecialchars($work['title']) ?></a></h3>
+                            <p><?= htmlspecialchars($work['message']) ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                </section>
+            <?php endif; ?>
 
             <?php if ($active_batch_reminders): ?>
                 <section class="active-batch-reminders" aria-label="Active batch reminders">
@@ -198,7 +213,14 @@ $active_batch_reminders = $inventory_workspace
                             </div>
                             <div class="notification-details">
                                 <div class="min-h-0 overflow-hidden">
-                                    <div class="notification-description p-5 sm:p-6"><p><?= htmlspecialchars($notif['message']) ?></p></div>
+                                    <div class="notification-description p-5 sm:p-6"><p><?= htmlspecialchars($notif['message']) ?></p><?php
+                                        $destination = $notif['attention_destination'];
+                                        if ($destination === null && $notif['reference_type'] === 'stock_issue') {
+                                            $destination = current_role() === 'cashier'
+                                                ? 'components/cashier/stock_issues.php'
+                                                : 'components/inventory_management/stock_issues.php';
+                                        }
+                                        ?><?php if (!empty($destination)): ?><a href="<?= htmlspecialchars(app_url((string)$destination)) ?>"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review condition' ?></a><?php endif; ?></div>
                                 </div>
                             </div>
                         </div>

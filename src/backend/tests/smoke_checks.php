@@ -294,7 +294,7 @@ $checks = [
     ],
     'Shared attention evaluation feeds scheduled notifications' => [
         'file' => 'src/backend/scripts/run_notifications.php',
-        'needles' => ['DatabaseAttentionSignalSource', 'AttentionRuleService', 'AttentionNotificationService', 'refreshResult', 'notify_email', 'newItems'],
+        'needles' => ['DatabaseAttentionSignalSource', 'AttentionRuleService', 'AttentionNotificationService', 'refreshResult', 'email_pending', 'checkAndNotifyForecasts'],
     ],
     'Daily job runs the Dormancy Policy runner' => [
         'file' => 'src/backend/scripts/run_notifications.php',

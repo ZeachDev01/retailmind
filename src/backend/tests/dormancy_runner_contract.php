@@ -85,6 +85,9 @@ try {
         created_at TEXT NULL
     )");
 
+    require_once __DIR__ . '/support/notification_schema.php';
+    notification_test_schema($pdo);
+
     $clock = new DormancyRunnerContractClock(new DateTimeImmutable('2026-09-24 12:00:00'));
     $at = static fn(int $days, int $seconds = 0): string =>
         (new DateTimeImmutable('2026-09-24 12:00:00'))

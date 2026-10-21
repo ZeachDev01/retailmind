@@ -65,9 +65,9 @@ try {
     $assert($active('2026-10-21', 5) === [] && $active('2026-10-21', 6) === []
         && $active('2026-10-21', 7) === [] && $active('2026-10-21', 8) === [],
         'Email-only, opted-out, inactive and Cashier accounts must not gain in-app expiry reminders');
-    $assert($active('2026-10-21', 1) === [1003], 'Administrator retains expiry oversight');
+    $assert($active('2026-10-21', 1) === [], 'Routine expiry stays out of Administrator workspace');
     $emails = $pdo->query("SELECT recipient FROM email_delivery_log WHERE subject='Expiry 5-Day Alert: Five-day Bread' ORDER BY recipient")->fetchAll(PDO::FETCH_COLUMN);
-    $assert($emails === ['admin@example.test','email-only@example.test'], 'Only opted-in eligible accounts receive the scheduled expiry email attempt');
+    $assert($emails === ['email-only@example.test'], 'Only opted-in eligible accounts receive the scheduled expiry email attempt');
     $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id)
         VALUES (102,'DAILY-DEFAULT','DAILY-DEFAULT','Default Bread',25,3,1)");
     $pdo->exec("INSERT INTO inventory (product_id,quantity_on_hand) VALUES (102,10)");
@@ -77,15 +77,15 @@ try {
     $pdo->exec('UPDATE inventory SET quantity_on_hand=30 WHERE product_id=100');
     $daily('2026-10-21T12:00:00+08:00');
     $assert($active('2026-10-21') === [1003,1004], 'Unset Product override retains default 60-day milestone beyond the removed fixed 30-day window');
-    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='admin@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 1,
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 1,
         'A repeated Manila-day check does not repeat email for a recipient using both channels');
-    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 2,
-        'The existing email-only repeated-invocation behavior is preserved');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 1,
+        'Email-only recipients deduplicate unchanged reruns');
     $pdo->exec("INSERT INTO store_settings (setting_key,setting_value) VALUES ('expiry_alert_days','7,3') ON DUPLICATE KEY UPDATE setting_value='7,3'");
     $daily('2026-10-22T12:00:00+08:00');
     $assert($active('2026-10-22') === [1003], 'Global governance applies only to unset overrides; two-day Product is still before its boundary');
-    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='admin@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 2,
-        'An email from the previous Manila day does not suppress the next daily email');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 1,
+        'An unchanged condition does not create another daily email');
     $daily('2026-10-23T12:00:00+08:00');
     $assert($active('2026-10-23') === [1001,1002,1003], 'Two-day Product qualifies October 23 with independent batches');
     $historyCount = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id=3 AND type='expiring_stock' AND reference_id IN (1001,1002,1003)")->fetchColumn();
@@ -123,7 +123,9 @@ try {
     $assert($pdo->query('SELECT product_id,quantity_on_hand FROM inventory WHERE product_id>=100 ORDER BY product_id')->fetchAll()
         === [['product_id'=>100,'quantity_on_hand'=>30],['product_id'=>101,'quantity_on_hand'=>10],['product_id'=>102,'quantity_on_hand'=>10]],
         'Daily evaluation never changes total stock');
-    $pdo->exec("DELETE FROM notifications WHERE user_id=3 AND type='expired_stock'");
+    $pdo->exec('UPDATE product_batches SET remaining_quantity=0 WHERE batch_id IN (1001,1002,1003)');
+    $daily('2026-10-27T12:00:00+08:00');
+    $pdo->exec('UPDATE product_batches SET remaining_quantity=10 WHERE batch_id IN (1001,1002,1003)');
     $pdo->exec("CREATE TRIGGER reject_daily_notification BEFORE INSERT ON notifications FOR EACH ROW
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Injected daily notification failure'");
     $failed = false;
@@ -136,6 +138,55 @@ try {
         $pdo->exec('DROP TRIGGER reject_daily_notification');
     }
     $assert($failed, 'An operational failure returns nonzero and never reports successful completion');
+
+    // Ticket #267: missing/invalid addresses, resolution and recurrence, technical details, unchanged reruns.
+    $pdo->exec("INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id,email,status,created_at,last_login_at) VALUES
+        (20,'Missing address','t267_missing','unused',3,1,NULL,'active','2026-10-19','2026-10-19'),
+        (21,'Valid address','t267_valid','unused',3,1,'ticket267-valid@example.test','active','2026-10-19','2026-10-19'),
+        (22,'Invalid address','t267_invalid','unused',3,1,'not-an-address','active','2026-10-19','2026-10-19'),
+        (23,'Super address','t267_super','unused',2,1,'ticket267-super@example.test','active','2026-10-19','2026-10-19')");
+    $pdo->exec("INSERT INTO notification_preferences (user_id,notify_inapp,notify_email,notify_low_stock) VALUES
+        (20,1,1,1),(21,1,1,1),(22,1,1,1),(23,1,1,1)");
+    $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES
+        (200,'T267-BLOCKED','T267-BLOCKED','Ticket 267 Blocked Bread',25,3,1),
+        (201,'T267-RECUR','T267-RECUR','Ticket 267 Recurrence Bread',25,3,1)");
+    $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (200,1),(201,5)');
+    $pdo->exec("INSERT INTO product_batches (batch_id,product_id,batch_number,quantity,remaining_quantity,expiration_date)
+        VALUES (2001,201,'T267-RECUR',5,5,'2026-11-05')");
+    $pdo->exec('UPDATE products SET warning_lead_time_days=10 WHERE product_id=201');
+    $daily('2026-10-28T12:00:00+08:00');
+    $assert($pdo->query("SELECT recipient FROM email_delivery_log WHERE subject='Low Stock Alert: Ticket 267 Blocked Bread' ORDER BY recipient")->fetchAll(PDO::FETCH_COLUMN)
+        === ['ticket267-valid@example.test'],
+        'A missing or invalid opted-in address is never emailed and does not block an eligible recipient');
+
+    $daily('2026-10-29T12:00:00+08:00');
+    $recurring = 'Expiry 10-Day Alert: Ticket 267 Recurrence Bread';
+    $expiringEmails = static fn(): int => (int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='{$recurring}'")->fetchColumn();
+    $assert($expiringEmails() === 1, 'A newly triggered expiring condition is emailed once');
+    $pdo->exec('UPDATE product_batches SET remaining_quantity=0 WHERE batch_id=2001');
+    $daily('2026-10-30T12:00:00+08:00');
+    $assert($expiringEmails() === 1, 'A resolved condition is not emailed while it remains resolved');
+    $pdo->exec('UPDATE product_batches SET remaining_quantity=5 WHERE batch_id=2001');
+    $daily('2026-10-31T12:00:00+08:00');
+    $assert($expiringEmails() === 2, 'A recurrence after actual resolution is emailed again');
+
+    $pdo->exec("INSERT INTO model_training_runs (model_name,model_version,status,started_at,error_message)
+        VALUES ('Random Forest','ticket267','failed','2026-11-01 08:00:00','ticket267 internal stack trace detail')");
+    $daily('2026-11-01T12:00:00+08:00');
+    $assert($pdo->query("SELECT recipient FROM email_delivery_log WHERE subject='Random Forest training failure' ORDER BY recipient")->fetchAll(PDO::FETCH_COLUMN)
+        === ['ticket267-super@example.test'],
+        'Technical model-training failure details are emailed only to the Super Administrator');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE reference_type='model_training' AND message LIKE '%ticket267 internal%' AND workspace='super_admin'")->fetchColumn() > 0,
+        'The Super Administrator receives the raw training failure detail');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE reference_type='model_training' AND message LIKE '%ticket267 internal%' AND workspace IN ('admin','inventory_manager','cashier')")->fetchColumn() === 0,
+        'Operational Workspaces never receive raw training failure detail');
+
+    $emailRows = (int)$pdo->query('SELECT COUNT(*) FROM email_delivery_log')->fetchColumn();
+    $daily('2026-11-01T12:00:00+08:00');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM email_delivery_log')->fetchColumn() === $emailRows,
+        'An unchanged rerun adds no new email delivery log rows');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE subject='Random Forest training failure'")->fetchColumn() === 1,
+        'An already-alerted condition is not emailed again on an unchanged rerun');
     echo "Daily expiry MySQL: passed\n";
 } finally {
     $pdo = null;

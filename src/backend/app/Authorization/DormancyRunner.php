@@ -136,11 +136,11 @@ final class DormancyRunner
 
         $insert = $this->pdo->prepare(
             'INSERT INTO notifications
-                (user_id, type, title, message, reference_id, reference_type, is_read, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, 0, ?)'
+                (user_id, type, title, message, reference_id, reference_type, is_read, created_at, workspace, email_pending)
+             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 1)'
         );
-        foreach ($this->warningRecipients($targetId) as $recipientId) {
-            $insert->execute([$recipientId, 'system', $title, $message, $targetId, self::WARN_REFERENCE_TYPE, $stamp]);
+        foreach ($this->warningRecipients($targetId) as $recipientId => $workspace) {
+            $insert->execute([$recipientId, 'system', $title, $message, $targetId, self::WARN_REFERENCE_TYPE, $stamp, $workspace]);
         }
 
         $this->notifier->notify(
@@ -165,20 +165,38 @@ final class DormancyRunner
         return $statement->fetchColumn() !== false;
     }
 
+    /** @return array<int,string> recipient user id => the alert Workspace to file the warning under */
     private function warningRecipients(int $targetId): array
     {
         $placeholders = implode(', ', array_fill(0, count(self::ALERT_ROLES), '?'));
         $statement = $this->pdo->prepare(
-            "SELECT u.user_id FROM users u
+            "SELECT u.user_id, r.role_name FROM users u
              JOIN roles r ON r.role_id = u.role_id
              WHERE u.status = 'active'
                AND u.is_recovery_account = 0
                AND u.user_id <> ?
                AND r.role_name IN ({$placeholders})
-             ORDER BY u.user_id"
+             UNION
+             SELECT ur.user_id, r.role_name FROM user_roles ur
+             JOIN roles r ON r.role_id = ur.role_id
+             JOIN users u ON u.user_id = ur.user_id
+             WHERE u.status = 'active'
+               AND u.is_recovery_account = 0
+               AND u.user_id <> ?
+               AND r.role_name IN ({$placeholders})"
         );
-        $statement->execute(array_merge([$targetId], self::ALERT_ROLES));
-        return array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
+        $statement->execute(array_merge([$targetId], self::ALERT_ROLES, [$targetId], self::ALERT_ROLES));
+        // A multi-role account is warned once, under its highest-priority Workspace.
+        $recipients = [];
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $userId = (int)$row['user_id'];
+            if (!isset($recipients[$userId])
+                || array_search($row['role_name'], self::ALERT_ROLES, true) < array_search($recipients[$userId], self::ALERT_ROLES, true)) {
+                $recipients[$userId] = (string)$row['role_name'];
+            }
+        }
+        ksort($recipients);
+        return $recipients;
     }
 
     private function policyDisable(array $account, int $days, DateTimeImmutable $now): void

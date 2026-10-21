@@ -84,6 +84,11 @@ final class DatabaseAttentionSignalSource
              FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id
              WHERE ia.status = 'pending'"
         );
+        $stockIssues = $this->rows("SELECT ia.adjustment_id, ia.reported_at,
+            ABS(ia.adjustment_qty) * p.cost_price AS risk_value
+            FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id WHERE ia.status = 'pending'");
+        foreach ($stockIssues as &$issue) $issue['age_hours'] = $this->ageHours($issue['reported_at']);
+        unset($issue);
         $fiscal = $this->row(
             "SELECT MIN(end_date) AS next_end FROM fiscal_periods WHERE status = 'open' AND end_date >= ?",
             [$now->format('Y-m-d')]
@@ -102,6 +107,7 @@ final class DatabaseAttentionSignalSource
             'max_discount_percent' => $this->signal((float)($discount['value'] ?? 0)),
             'cash_variance_amount' => $this->signal((float)($cash['value'] ?? 0)),
             // Stock Issues remain Inventory Manager decisions; administrators inspect them read-only.
+            'stock_issues' => $stockIssues,
             'inventory_escalated_count' => $this->signal((int)($inventory['item_count'] ?? 0), (int)($inventory['item_count'] ?? 0)),
             'oldest_inventory_risk_hours' => $this->signal($inventoryHours),
             'inventory_risk_value' => $this->signal((float)($inventory['risk_value'] ?? 0)),
@@ -141,6 +147,16 @@ final class DatabaseAttentionSignalSource
             $statement = $this->pdo->prepare($sql);
             $statement->execute($parameters);
             return $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $exception) {
+            error_log('Attention signal query skipped: ' . $exception->getMessage());
+            return [];
+        }
+    }
+
+    private function rows(string $sql): array
+    {
+        try {
+            return $this->pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $exception) {
             error_log('Attention signal query skipped: ' . $exception->getMessage());
             return [];

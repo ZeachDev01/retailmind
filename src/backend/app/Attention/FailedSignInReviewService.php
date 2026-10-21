@@ -91,9 +91,9 @@ final class FailedSignInReviewService
             $statement->execute([$actorId]);
             $statement = $this->pdo->prepare(
                 "UPDATE attention_states SET is_active = 0, resolved_at = ?
-                 WHERE attention_key = 'platform.security.failed-logins' AND is_active = 1"
+                 WHERE user_id = ? AND attention_key = 'platform.security.failed-logins' AND is_active = 1"
             );
-            $statement->execute([$this->clock->now()->format('Y-m-d H:i:s')]);
+            $statement->execute([$this->clock->now()->format('Y-m-d H:i:s'), $actorId]);
             if ($started) {
                 $this->pdo->commit();
             }

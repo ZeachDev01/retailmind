@@ -164,6 +164,8 @@ $pdo->exec('CREATE TABLE notifications (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )');
 
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 $quietNotifications = new class($pdo) extends NotificationService {
     public function checkAndNotifyLowStock(): void
     {

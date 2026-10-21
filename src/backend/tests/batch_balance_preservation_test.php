@@ -413,6 +413,8 @@ $assert($fefoActive['next_expiration_date'] === $tomorrowManila, 'Next expiratio
 
 // Sale A: Buy 7 units. Should take all 4 from Batch 1012 (tomorrow), then 3 from Batch 1013 (next week).
 $pdo->exec('ALTER TABLE products ADD COLUMN warning_lead_time_days INTEGER NULL');
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 $reminderService = new NotificationService($pdo);
 $reminderService->createNotification($managerId, 'expiring_stock', 'Expiry tomorrow', 'Four loaves', 1012, 'product_batch_expiry_7');
 $assert($reminderService->getBatchReminders($managerId, $tomorrowManila)[1012]['active'], 'Expiring batch is actionable before sale');

@@ -23,10 +23,8 @@ final class AttentionRuleService
         ['key' => 'store.sales.reversals', 'signal' => 'reversal_count', 'threshold' => 'reversal_count', 'severity' => 'warning', 'category' => 'sales', 'title' => 'Sales reversals require review', 'destination' => 'components/invoice/sales.php?tab=reversals'],
         ['key' => 'store.sales.unusual-discounts', 'signal' => 'max_discount_percent', 'threshold' => 'unusual_discount_percent', 'severity' => 'warning', 'category' => 'sales', 'title' => 'Unusual discounts require review', 'destination' => 'components/invoice/sales.php?tab=transactions'],
         ['key' => 'store.cash.variance', 'signal' => 'cash_variance_amount', 'threshold' => 'cash_variance_amount', 'severity' => 'critical', 'category' => 'cash', 'title' => 'Cash variance exceeds tolerance', 'destination' => 'components/report/report_generation.php', 'absolute' => true],
-        ['key' => 'store.inventory.escalated', 'signal' => 'inventory_escalated_count', 'threshold' => 'inventory_escalation_count', 'severity' => 'warning', 'category' => 'inventory', 'title' => 'Stock Issues await review', 'destination' => 'components/administrator/stock_issues.php'],
         ['key' => 'store.inventory.overdue', 'signal' => 'oldest_inventory_risk_hours', 'threshold' => 'inventory_overdue_hours', 'severity' => 'warning', 'category' => 'inventory', 'title' => 'Stock Issue review is overdue', 'destination' => 'components/administrator/stock_issues.php'],
         ['key' => 'store.inventory.high-value', 'signal' => 'inventory_risk_value', 'threshold' => 'inventory_high_value_amount', 'severity' => 'critical', 'category' => 'inventory', 'title' => 'High-value Stock Issue awaits review', 'destination' => 'components/administrator/stock_issues.php'],
-        ['key' => 'store.inventory.unresolved', 'signal' => 'oldest_unresolved_inventory_hours', 'threshold' => 'inventory_unresolved_hours', 'severity' => 'warning', 'category' => 'inventory', 'title' => 'Stock Issue remains unresolved', 'destination' => 'components/administrator/stock_issues.php'],
         ['key' => 'store.fiscal-period.closing', 'signal' => 'fiscal_period_days_remaining', 'threshold' => 'fiscal_period_days_to_close', 'severity' => 'warning', 'category' => 'fiscal_period', 'title' => 'Fiscal Period is approaching closure', 'destination' => 'components/system_administrator/fiscal_periods.php', 'comparison' => 'at_most'],
         ['key' => 'store.fiscal-period.overdue', 'signal' => 'fiscal_period_overdue_count', 'fixed_threshold' => 1.0, 'severity' => 'critical', 'category' => 'fiscal_period', 'title' => 'Fiscal Period action is overdue', 'destination' => 'components/system_administrator/fiscal_periods.php'],
     ];
@@ -42,6 +40,20 @@ final class AttentionRuleService
             : ($role === 'admin' ? self::STORE_RULES : []);
         $thresholds = $this->settings->thresholdsFor($role);
         $items = [];
+
+        if ($role === 'admin' && array_key_exists('stock_issues', $signals)) {
+            unset($signals['oldest_inventory_risk_hours'], $signals['inventory_risk_value']);
+            foreach ($signals['stock_issues'] as $issue) {
+                $highValue = (float)$issue['risk_value'] >= $thresholds['inventory_high_value_amount'];
+                if (!$highValue && (float)$issue['age_hours'] < $thresholds['inventory_overdue_hours']) continue;
+                $items[] = new AttentionItem('store.inventory.issue.' . $issue['adjustment_id'],
+                    $highValue ? 'critical' : 'warning', 'inventory',
+                    ($highValue ? 'High-value Stock Issue #' : 'Overdue Stock Issue #') . $issue['adjustment_id'],
+                    'Inventory Manager review is required. Administrator oversight is read-only. Report value: PHP '
+                        . $this->number((float)$issue['risk_value']) . '. Hours pending: ' . $this->number((float)$issue['age_hours']) . '.',
+                    $this->date($issue['reported_at']), 'components/administrator/stock_issues.php?detail=' . $issue['adjustment_id']);
+            }
+        }
 
         foreach ($rules as $rule) {
             if (!array_key_exists($rule['signal'], $signals)) {
@@ -72,7 +84,9 @@ final class AttentionRuleService
                     : $this->explanation($rule['signal'], $value, $threshold),
                 $this->date($signal['detected_at'] ?? null),
                 $rule['destination'],
-                array_key_exists('count', $signal) ? max(0, (int)$signal['count']) : null
+                array_key_exists('count', $signal) ? max(0, (int)$signal['count']) : null,
+                // Informational platform conditions stay optional; security and failure conditions are required.
+                !in_array($rule['key'], ['platform.settings.changed', 'platform.ml.stale-model'], true)
             );
         }
 

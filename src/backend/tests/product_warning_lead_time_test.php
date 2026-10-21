@@ -255,6 +255,8 @@ $pdo->exec("
     INSERT INTO notification_preferences (user_id) VALUES (1), (2);
 ");
 
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 $GLOBALS['pdo'] = $pdo;
 
 $_SESSION['user_id'] = 1;

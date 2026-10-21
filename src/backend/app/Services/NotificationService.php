@@ -12,63 +12,158 @@ class NotificationService
         $this->clock = $clock ?? new \App\Attention\SystemClock();
     }
 
+    /** Assigned roles are authoritative; legacy accounts without mappings use their primary role. */
+    public function recipients(string $role): array
+    {
+        $stmt = $this->pdo->prepare("SELECT np.*, u.* FROM users u
+            LEFT JOIN notification_preferences np ON np.user_id = u.user_id
+            WHERE u.status = 'active' AND EXISTS (
+                SELECT 1 FROM roles r WHERE r.role_name = ? AND (
+                    EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.user_id AND ur.role_id = r.role_id)
+                    OR (r.role_id = u.role_id AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.user_id))
+                ))");
+        $stmt->execute([$role]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function checkAndNotifyLowStock(): void
     {
-        $usersStmt = $this->pdo->query(
-            "SELECT u.user_id, np.low_stock_threshold
-             FROM users u
-             LEFT JOIN notification_preferences np ON np.user_id = u.user_id
-             WHERE COALESCE(np.notify_low_stock, 1) = 1"
-        );
-        $users = $usersStmt->fetchAll();
-
-        foreach ($users as $user) {
-            $threshold = isset($user['low_stock_threshold']) && (int)$user['low_stock_threshold'] > 0
-                ? (int)$user['low_stock_threshold']
-                : null;
-            $lowStock = $this->getLowStockProducts($threshold);
-
-            foreach ($lowStock as $product) {
-                $checkStmt = $this->pdo->prepare("SELECT notification_id FROM notifications 
-                                                WHERE user_id = ? AND type = 'low_stock' 
-                                                AND reference_id = ?
-                                                AND DATE(created_at) = CURDATE()");
-                $checkStmt->execute([$user['user_id'], $product['product_id']]);
-
-                if (!$checkStmt->fetch()) {
-                    $reorderTarget = $threshold !== null ? $threshold : $product['reorder_level'];
-                    $this->createNotification(
-                        $user['user_id'],
-                        'low_stock',
-                        'Low Stock Alert: ' . $product['product_name'],
-                        "Product {$product['product_name']} ({$product['sku']}) is at or below the threshold. Current: {$product['quantity_on_hand']}, Threshold: {$reorderTarget}",
-                        $product['product_id'],
-                        'product'
+        foreach (['inventory_manager', 'admin'] as $role) {
+            foreach ($this->recipients($role) as $user) {
+                $threshold = (int)($user['low_stock_threshold'] ?? 0) ?: null;
+                $items = [];
+                foreach ($this->getLowStockProducts($threshold) as $product) {
+                    $out = (int)$product['quantity_on_hand'] <= 0;
+                    if ($role === 'admin' && !$out) continue;
+                    $target = $threshold ?? $product['reorder_level'];
+                    $items[] = new \App\Attention\AttentionItem(
+                        ($role === 'admin' ? 'oversight' : 'inventory') . '.stock.' . $product['product_id'],
+                        $out ? 'critical' : 'warning', 'inventory',
+                        ($out ? 'Out of stock: ' : 'Low Stock Alert: ') . $product['product_name'],
+                        "Product {$product['product_name']} ({$product['sku']}) is at or below the threshold. Current: {$product['quantity_on_hand']}, Threshold: {$target}",
+                        $this->clock->now(), 'components/inventory_management/products.php?' . http_build_query(['q' => $product['sku']]),
+                        null, $role === 'admin', 'low_stock', (int)$product['product_id'], 'product'
                     );
                 }
+                $inApp = (bool)($user['notify_inapp'] ?? true) && (bool)($user['notify_low_stock'] ?? true);
+                $this->synchronize($user, $items, $inApp, ($role === 'admin' ? 'oversight' : 'inventory') . '.stock.');
             }
         }
     }
 
     public function checkAndNotifyExpiringStock(int $days = 30): void
     {
-        $users = $this->getInventoryNotificationUsers();
-        if (!$users) {
-            return;
-        }
-        foreach ($this->getEligibleExpiryReminders($days) as $reminder) {
-            foreach ($users as $user) {
-                $userId = (int)$user['user_id'];
-                $batchId = (int)$reminder['batch_id'];
-                $exists = $reminder['type'] === 'expired_stock'
-                    ? $this->hasBatchNotification($userId, 'expired_stock', $batchId)
-                    : $this->hasBatchThresholdNotification($userId, $batchId, $reminder['threshold']);
-                if (!$exists) {
-                    $this->createNotification($userId, $reminder['type'], $reminder['title'],
-                        $reminder['message'], $batchId, $reminder['reference_type']);
+        $reminders = $this->getEligibleExpiryReminders($days);
+        foreach (['inventory_manager', 'admin'] as $role) {
+            foreach ($this->recipients($role) as $user) {
+                $items = [];
+                foreach ($reminders as $reminder) {
+                    // Printed expiration dates remain saleable through the end of that Manila day.
+                    $overdueAt = new DateTimeImmutable($reminder['expiration_date'] . ' 00:00:00', new DateTimeZone('Asia/Manila'));
+                    $overdue = $this->clock->now() >= $overdueAt->modify('+2 days');
+                    if ($role === 'admin' && !$overdue) continue;
+                    $items[] = new \App\Attention\AttentionItem(
+                        ($role === 'admin' ? 'oversight' : 'inventory') . '.expiry.' . $reminder['batch_id'],
+                        $reminder['type'] === 'expired_stock' ? 'critical' : 'warning', 'inventory',
+                        ($role === 'admin' ? 'Overdue Supplier Pullout: ' . $reminder['product_name'] : $reminder['title']),
+                        $reminder['message'], $this->clock->now(),
+                        'components/inventory_management/supplier_pullouts.php?' . http_build_query(['product_id' => $reminder['product_id'], 'batch_id' => $reminder['batch_id']]),
+                        null, $role === 'admin', $reminder['type'], (int)$reminder['batch_id'], $reminder['reference_type']
+                    );
                 }
+                $this->synchronize($user, $items, (bool)($user['notify_inapp'] ?? true), ($role === 'admin' ? 'oversight' : 'inventory') . '.expiry.');
             }
         }
+    }
+
+    private function synchronize(array $user, array $items, bool $inApp, string $scope): void
+    {
+        (new \App\Attention\AttentionNotificationService($this->pdo, $this->clock))
+            ->synchronize((int)$user['user_id'], $items, $inApp, $scope);
+    }
+
+    public function checkAndNotifyForecasts(): void
+    {
+        $spikes = $this->pdo->query(
+            "SELECT p.product_id, p.product_name, sp.predicted_demand_next_7_days,
+                    COALESCE(hist.avg_weekly, 0) AS avg_weekly
+             FROM stock_predictions sp
+             JOIN products p ON p.product_id = sp.product_id
+             LEFT JOIN (
+                 SELECT si.product_id, SUM(si.quantity) / 4 AS avg_weekly
+                 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+                 WHERE s.sale_date >= DATE_SUB(NOW(), INTERVAL 28 DAY)
+                 GROUP BY si.product_id
+             ) hist ON hist.product_id = sp.product_id
+             WHERE sp.prediction_id = (
+                 SELECT sp2.prediction_id FROM stock_predictions sp2
+                 WHERE sp2.product_id = sp.product_id ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC LIMIT 1
+             )
+               AND hist.avg_weekly > 0
+               AND sp.predicted_demand_next_7_days >= hist.avg_weekly * 1.75"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        $demandItems = [];
+        foreach ($spikes as $spike) {
+            $demandItems[] = new \App\Attention\AttentionItem(
+                'inventory.demand.' . $spike['product_id'], 'warning', 'inventory',
+                'Unusual demand forecast: ' . $spike['product_name'],
+                sprintf('The 7-day forecast is %d units compared with a recent weekly average of %.1f units.',
+                    (int)$spike['predicted_demand_next_7_days'], (float)$spike['avg_weekly']),
+                $this->clock->now(), 'components/inventory_management/replenishment_queue.php',
+                null, false, 'system', (int)$spike['product_id'], 'product'
+            );
+        }
+        $conditionNotifications = new \App\Attention\AttentionNotificationService($this->pdo, $this->clock);
+        foreach ($this->recipients('inventory_manager') as $recipient) {
+            $conditionNotifications->synchronize((int)$recipient['user_id'], $demandItems,
+                (bool)($recipient['notify_inapp'] ?? true), 'inventory.demand.');
+        }
+        $failedRun = $this->pdo->query("SELECT training_run_id, error_message, started_at FROM model_training_runs
+            WHERE status = 'failed' AND started_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
+            ORDER BY started_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        $trainingItems = $failedRun ? [new \App\Attention\AttentionItem(
+            'platform-training.failure.' . $failedRun['training_run_id'], 'critical', 'ml_health',
+            'Random Forest training failure',
+            'The latest model training failed on ' . $failedRun['started_at'] . '. '
+                . mb_strimwidth((string)$failedRun['error_message'], 0, 500, '...'),
+            $this->clock->now(), 'components/system_administrator/ml_settings.php', null, true,
+            'system', (int)$failedRun['training_run_id'], 'model_training'
+        )] : [];
+        foreach ($this->recipients('super_admin') as $recipient) {
+            $conditionNotifications->synchronize((int)$recipient['user_id'], $trainingItems,
+                (bool)($recipient['notify_inapp'] ?? true), 'platform-training.');
+        }
+    }
+
+    /** True only while the account still holds the Workspace's role and is active. */
+    public function inWorkspace(int $userId, string $workspace): bool
+    {
+        return in_array($userId, array_map('intval', array_column($this->recipients($workspace), 'user_id')), true);
+    }
+
+    /** Live work remains actionable after its notification is read. */
+    public function requiredWork(int $userId, string $workspace): array
+    {
+        if (!$this->inWorkspace($userId, $workspace)) return [];
+        if (in_array($workspace, ['cashier', 'inventory_manager'], true)) {
+            $stmt = $this->pdo->prepare("SELECT adjustment_id, reason FROM inventory_adjustments
+                WHERE status = ?" . ($workspace === 'cashier' ? ' AND reported_by = ?' : '') . ' ORDER BY reported_at');
+            $stmt->execute($workspace === 'cashier' ? ['returned', $userId] : ['pending']);
+            return array_map(static fn(array $row): array => [
+                'title' => ($workspace === 'cashier' ? 'Returned Stock Issue #' : 'Pending Stock Issue #') . $row['adjustment_id'],
+                'message' => $row['reason'],
+                'destination' => 'components/' . ($workspace === 'cashier' ? 'cashier' : 'inventory_management') . '/stock_issues.php',
+            ], $stmt->fetchAll(PDO::FETCH_ASSOC));
+        }
+        $stmt = $this->pdo->prepare("SELECT n.title, n.message, n.attention_destination AS destination
+            FROM attention_states s JOIN notifications n ON n.user_id = s.user_id AND n.attention_key = s.attention_key
+            WHERE s.user_id = ? AND s.is_active = 1 AND n.workspace = ? AND n.inapp_enabled = 1
+                AND s.attention_key <> 'platform.settings.changed'
+                AND n.notification_id = (SELECT MAX(n2.notification_id) FROM notifications n2
+                    WHERE n2.user_id = n.user_id AND n2.attention_key = n.attention_key)
+            ORDER BY n.created_at DESC");
+        $stmt->execute([$userId, $workspace]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /** Shared eligibility and wording for transaction checks and scheduled delivery. */
@@ -123,6 +218,7 @@ class NotificationService
              JOIN product_batches pb ON pb.batch_id = n.reference_id
              JOIN products p ON p.product_id = pb.product_id
              WHERE n.user_id = ? AND (n.reference_type = 'product_batch' OR n.reference_type LIKE 'product_batch_expiry_%')
+               AND n.inapp_enabled = 1 AND n.workspace = 'inventory_manager'
                AND n.type IN ('expiring_stock', 'expired_stock', 'system')
              ORDER BY pb.expiration_date, pb.batch_id"
         );
@@ -164,10 +260,25 @@ class NotificationService
         return $thresholds;
     }
 
-    public function createNotification(int $userId, string $type, string $title, string $message, ?int $referenceId = null, ?string $referenceType = null): void
+    /** Optional-delivery preferences never suppress required-action in-app alerts. */
+    public function inAppEnabled(int $userId, string $preferenceKey = 'notify_inapp'): bool
     {
-        $stmt = $this->pdo->prepare("INSERT INTO notifications (user_id, type, title, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $type, $title, $message, $referenceId, $referenceType]);
+        if (!in_array($preferenceKey, ['notify_inapp', 'notify_low_stock', 'notify_adjustment'], true)) {
+            throw new InvalidArgumentException('Unknown notification preference.');
+        }
+        $stmt = $this->pdo->prepare('SELECT * FROM notification_preferences WHERE user_id = ?');
+        $stmt->execute([$userId]);
+        $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($prefs === false) {
+            return true;
+        }
+        return (bool)($prefs['notify_inapp'] ?? 1) && (bool)($prefs[$preferenceKey] ?? 1);
+    }
+
+    public function createNotification(int $userId, string $type, string $title, string $message, ?int $referenceId = null, ?string $referenceType = null, string $workspace = 'inventory_manager', bool $inApp = true): void
+    {
+        $stmt = $this->pdo->prepare("INSERT INTO notifications (user_id, type, title, message, reference_id, reference_type, workspace, inapp_enabled, email_pending) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)");
+        $stmt->execute([$userId, $type, $title, $message, $referenceId, $referenceType, $workspace, (int)$inApp]);
     }
 
     private function getLowStockProducts(?int $threshold = null): array
@@ -188,19 +299,6 @@ class NotificationService
         }));
     }
 
-    private function getInventoryNotificationUsers(): array
-    {
-        return $this->pdo->query(
-            "SELECT DISTINCT u.user_id
-             FROM users u
-             JOIN roles r ON r.role_id = u.role_id
-             LEFT JOIN notification_preferences np ON np.user_id = u.user_id
-             WHERE u.status = 'active'
-               AND COALESCE(np.notify_inapp, 1) = 1
-               AND r.role_name IN ('super_admin', 'admin', 'inventory_manager')"
-        )->fetchAll();
-    }
-
     private function getExpiringBatches(int $days, bool $expired): array
     {
         $today = $this->clock->now()->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d');
@@ -209,7 +307,7 @@ class NotificationService
         if ($driver === 'sqlite') {
             $diffExpr = "CAST(ROUND(julianday(pb.expiration_date) - julianday(?)) AS INTEGER)";
             if ($expired) {
-                $sql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
+                $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
                                {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
                         FROM product_batches pb
                         JOIN products p ON p.product_id = pb.product_id
@@ -222,7 +320,7 @@ class NotificationService
                 return $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
 
-            $sql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
+            $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
                            {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
                     FROM product_batches pb
                     JOIN products p ON p.product_id = pb.product_id
@@ -237,7 +335,7 @@ class NotificationService
         }
 
         if ($expired) {
-            $sql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
+            $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
                            DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
                     FROM product_batches pb
                     JOIN products p ON p.product_id = pb.product_id
@@ -250,7 +348,7 @@ class NotificationService
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        $sql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
+        $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
                        DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
                 FROM product_batches pb
                 JOIN products p ON p.product_id = pb.product_id
@@ -265,27 +363,4 @@ class NotificationService
     }
 
 
-    private function hasBatchThresholdNotification(int $userId, int $batchId, int $threshold): bool
-    {
-        $stmt = $this->pdo->prepare(
-            "SELECT notification_id FROM notifications
-             WHERE user_id=? AND type='expiring_stock' AND reference_id=? AND reference_type=? LIMIT 1"
-        );
-        $stmt->execute([$userId, $batchId, 'product_batch_expiry_' . $threshold]);
-        return (bool)$stmt->fetch();
-    }
-
-    private function hasBatchNotification(int $userId, string $type, int $batchId): bool
-    {
-        $stmt = $this->pdo->prepare(
-            "SELECT notification_id
-             FROM notifications
-             WHERE user_id = ?
-               AND type = ?
-               AND reference_id = ?
-               AND reference_type = 'product_batch' LIMIT 1"
-        );
-        $stmt->execute([$userId, $type, $batchId]);
-        return (bool)$stmt->fetch();
-    }
 }

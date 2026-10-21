@@ -496,7 +496,11 @@ $assert(str_contains($updateSql, '202610180004_supplier_pullouts'), 'update.sql 
 
 // A read alert follows the physical batch through partial and final collection.
 require_once __DIR__ . '/../app/Services/NotificationService.php';
+require_once __DIR__ . '/support/notification_schema.php';
 $pdo->exec('CREATE TABLE notification_preferences (user_id INTEGER PRIMARY KEY, notify_inapp INTEGER DEFAULT 1)');
+notification_test_schema($pdo);
+// Workspace-scoped inbox helpers need the signed-in Workspace, as they do in the web runtime.
+$_SESSION['role'] = 'inventory_manager';
 $pdo->exec('ALTER TABLE products ADD COLUMN warning_lead_time_days INTEGER NULL');
 $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, warning_lead_time_days) VALUES (3, 'BREAD-REMINDER', '10003', 'Reminder Bread', 2)");
 $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (3, 10)');

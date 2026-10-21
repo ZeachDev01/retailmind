@@ -14,16 +14,16 @@ final class AttentionNotificationService
     }
 
     /** @param AttentionItem[] $items */
-    public function synchronize(int $userId, array $items, bool $createInApp = true): AttentionRefreshResult
+    public function synchronize(int $userId, array $items, bool $createInApp = true, string $scope = ''): AttentionRefreshResult
     {
         if ($this->pdo->inTransaction()) {
-            return $this->synchronizeInTransaction($userId, $items, $createInApp);
+            return $this->synchronizeInTransaction($userId, $items, $createInApp, $scope);
         }
 
         for ($attempt = 0; $attempt < 2; $attempt++) {
             $this->pdo->beginTransaction();
             try {
-                $result = $this->synchronizeInTransaction($userId, $items, $createInApp);
+                $result = $this->synchronizeInTransaction($userId, $items, $createInApp, $scope);
                 $this->pdo->commit();
                 return $result;
             } catch (Throwable $exception) {
@@ -41,7 +41,7 @@ final class AttentionNotificationService
     }
 
     /** @param AttentionItem[] $items */
-    private function synchronizeInTransaction(int $userId, array $items, bool $createInApp): AttentionRefreshResult
+    private function synchronizeInTransaction(int $userId, array $items, bool $createInApp, string $scope): AttentionRefreshResult
     {
         $currentKeys = [];
         $dashboardItems = [];
@@ -56,19 +56,17 @@ final class AttentionNotificationService
             $fingerprint = $dashboardItem->fingerprint();
             $shouldNotify = $state === null
                 || !(bool)$state['is_active']
-                || !hash_equals((string)$state['fingerprint'], $fingerprint);
+                || $dashboardItem->notificationLevel() > (int)$state['notification_level'];
 
             if ($shouldNotify) {
-                if ($createInApp) {
-                    $this->notify($userId, $dashboardItem);
-                }
+                $this->notify($userId, $dashboardItem, $createInApp || $item->required);
                 $newItems[] = $dashboardItem;
             }
             $this->activate($userId, $dashboardItem, $fingerprint, $state);
             $dashboardItems[] = $dashboardItem;
         }
 
-        $this->resolveMissing($userId, $currentKeys);
+        $this->resolveMissing($userId, $currentKeys, $scope);
         return new AttentionRefreshResult($dashboardItems, $newItems);
     }
 
@@ -76,32 +74,35 @@ final class AttentionNotificationService
     {
         $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
         $statement = $this->pdo->prepare(
-            'SELECT fingerprint, is_active, first_detected_at FROM attention_states WHERE user_id = ? AND attention_key = ?' . $lock
+            'SELECT fingerprint, notification_level, is_active, first_detected_at FROM attention_states WHERE user_id = ? AND attention_key = ?' . $lock
         );
         $statement->execute([$userId, $key]);
         $state = $statement->fetch(PDO::FETCH_ASSOC);
         return $state ?: null;
     }
 
-    private function notify(int $userId, AttentionItem $item): void
+    private function notify(int $userId, AttentionItem $item, bool $inApp): void
     {
         $statement = $this->pdo->prepare(
             'INSERT INTO notifications
                 (user_id, type, title, message, reference_id, reference_type, attention_key,
-                 attention_severity, attention_count, attention_destination, is_read, created_at)
-             VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 0, ?)'
+                 attention_severity, attention_count, attention_destination, is_read, created_at, workspace, inapp_enabled, email_pending)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 1)'
         );
         $statement->execute([
             $userId,
-            'attention',
+            $item->notificationType,
             $item->title,
             $item->explanation,
-            'attention',
+            $item->referenceId,
+            $item->referenceType,
             $item->key,
             $item->severity,
             $item->count,
             $item->destination,
             $this->clock->now()->format('Y-m-d H:i:s'),
+            self::workspace($item->key),
+            (int)$inApp,
         ]);
     }
 
@@ -111,38 +112,58 @@ final class AttentionNotificationService
         $detectedAt = $item->detectedAt->format('Y-m-d H:i:s');
         if ($state !== null) {
             $firstDetected = (bool)$state['is_active'] ? (string)$state['first_detected_at'] : $detectedAt;
+            // Level memory only increases, so a condition that de-escalates and rises again re-alerts,
+            // while an unchanged peak never repeats an alert.
             $statement = $this->pdo->prepare(
                 'UPDATE attention_states
-                 SET fingerprint = ?, is_active = 1, first_detected_at = ?, last_detected_at = ?, resolved_at = NULL
+                 SET fingerprint = ?, is_active = 1, first_detected_at = ?, last_detected_at = ?, resolved_at = NULL,
+                     notification_level = CASE WHEN notification_level > ? THEN notification_level ELSE ? END
                  WHERE user_id = ? AND attention_key = ?'
             );
-            $statement->execute([$fingerprint, $firstDetected, $now, $userId, $item->key]);
+            $statement->execute([$fingerprint, $firstDetected, $now, $item->notificationLevel(),
+                $item->notificationLevel(), $userId, $item->key]);
             return;
         }
         $statement = $this->pdo->prepare(
             'INSERT INTO attention_states
-                (user_id, attention_key, fingerprint, is_active, first_detected_at, last_detected_at, resolved_at)
-             VALUES (?, ?, ?, 1, ?, ?, NULL)'
+                (user_id, attention_key, fingerprint, notification_level, is_active, first_detected_at, last_detected_at, resolved_at)
+             VALUES (?, ?, ?, ?, 1, ?, ?, NULL)'
         );
-        $statement->execute([$userId, $item->key, $fingerprint, $detectedAt, $now]);
+        $statement->execute([$userId, $item->key, $fingerprint, $item->notificationLevel(), $detectedAt, $now]);
     }
 
-    private function resolveMissing(int $userId, array $currentKeys): void
+    private function resolveMissing(int $userId, array $currentKeys, string $scope): void
     {
         $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
         $statement = $this->pdo->prepare(
-            'SELECT attention_key FROM attention_states WHERE user_id = ? AND is_active = 1' . $lock
+            'SELECT attention_key FROM attention_states WHERE user_id = ? AND is_active = 1 AND attention_key LIKE ?' . $lock
         );
-        $statement->execute([$userId]);
+        $statement->execute([$userId, $scope . '%']);
         $resolve = $this->pdo->prepare(
             'UPDATE attention_states SET is_active = 0, resolved_at = ? WHERE user_id = ? AND attention_key = ?'
+        );
+        // Resolved conditions are no longer new or escalated, so their queued daily email is dropped.
+        $unsend = $this->pdo->prepare(
+            'UPDATE notifications SET email_pending = 0 WHERE user_id = ? AND attention_key = ? AND email_pending = 1'
         );
         $now = $this->clock->now()->format('Y-m-d H:i:s');
         foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $key) {
             if (!in_array($key, $currentKeys, true)) {
                 $resolve->execute([$now, $userId, $key]);
+                $unsend->execute([$userId, $key]);
             }
         }
+    }
+
+    public static function workspace(string $key): string
+    {
+        return match (explode('.', $key)[0]) {
+            'platform', 'platform-training' => 'super_admin',
+            'store', 'oversight' => 'admin',
+            'inventory' => 'inventory_manager',
+            'cashier' => 'cashier',
+            default => throw new \InvalidArgumentException('Unknown notification condition scope.'),
+        };
     }
 
     private function isConstraintConflict(Throwable $exception): bool
