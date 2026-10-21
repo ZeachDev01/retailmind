@@ -1195,8 +1195,8 @@ foreach ($products as $product) {
                                 <tr>
                                     <th class="u-col-select"><input type="checkbox" id="select-all" aria-label="Select all visible products"></th>
                                     <th class="sortable" data-sort="name">Product <i class="bi bi-arrow-down-up"></i></th>
-                                    <th class="column-price sortable" data-sort="price">Selling Price <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="column-cost sortable" data-sort="cost">Cost Price <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="column-price sortable" data-sort="price">Selling Price <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="sortable" data-sort="stock">Current Stock <i class="bi bi-arrow-down-up"></i></th>
                                     <th>Status</th>
                                     <th class="u-text-right">Actions</th>
@@ -1243,8 +1243,8 @@ foreach ($products as $product) {
                                                 <span class="product-copy"><strong><?= htmlspecialchars($product['product_name']) ?></strong><span><?= htmlspecialchars($product['brand'] ?: 'No brand') ?><?= !empty($product['variant_label']) ? ' · ' . htmlspecialchars($product['variant_label']) : '' ?></span></span>
                                             </div>
                                         </td>
-                                        <td class="column-price mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
                                         <td class="column-cost mobile-hide">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
+                                        <td class="column-price mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
                                         <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small style="color:var(--text-muted);"><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php if (!empty($product['expired_sealed_packs']) || !empty($product['expired_loose_pieces'])): ?><br><small style="color:var(--danger, #dc2626);"><?= (int)($product['expired_sealed_packs'] ?? 0) ?> pk, <?= (int)($product['expired_loose_pieces'] ?? 0) ?> loose expired</small><?php endif; ?><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">
@@ -3206,7 +3206,6 @@ foreach ($products as $product) {
             productImageInput.value = '';
             imagePreviewContainer.hidden = true;
         });
-    }
     </script>
 </body>
 

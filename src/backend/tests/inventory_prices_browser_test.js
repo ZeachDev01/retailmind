@@ -41,10 +41,11 @@ const frontend = path.resolve(__dirname, '../../frontend');
             await page.setContent(markup);
             const headers = (await page.locator('thead th').allTextContents()).map(text => text.trim());
             const sellingIndex = headers.indexOf('Selling Price');
+            const costIndex = headers.indexOf('Cost Price');
             const productsPage = file === 'products.php';
-            assert.equal(headers[sellingIndex - (productsPage ? 1 : 4)], 'Product', 'Comparison columns follow Product and inventory status');
+            assert.equal(headers[productsPage ? costIndex - 1 : sellingIndex - 4], 'Product', 'Comparison columns follow Product and inventory status');
             assert.ok(sellingIndex >= 0, 'Selling Price remains visible');
-            assert.equal(headers[sellingIndex + 1], 'Cost Price', 'Cost Price appears immediately beside Selling Price');
+            assert.equal(costIndex, sellingIndex + (productsPage ? -1 : 1), 'Products shows Cost Price before Selling Price; Stock Overview keeps its order');
             if (productsPage) {
                 assert.ok(!headers.includes('SKU / Barcode'), 'Products table omits SKU / Barcode');
                 assert.ok(!headers.includes('Category'), 'Products table omits Category');
@@ -57,8 +58,8 @@ const frontend = path.resolve(__dirname, '../../frontend');
                 const cells = rows.nth(index).locator('td');
                 assert.equal(await cells.count(), headers.length, 'Price columns stay aligned with their headers');
                 assert.equal((await cells.nth(sellingIndex).innerText()).trim(), '₱1,500.00');
-                assert.equal((await cells.nth(sellingIndex + 1).innerText()).trim(), expectedCost);
-                assert.equal(await cells.nth(sellingIndex + 1).isVisible(), true);
+                assert.equal((await cells.nth(costIndex).innerText()).trim(), expectedCost);
+                assert.equal(await cells.nth(costIndex).isVisible(), true);
                 if (!productsPage) {
                     assert.equal((await cells.nth(headers.indexOf('Status')).innerText()).trim(), ['Available', 'Out of stock', 'Low stock'][index]);
                     assert.equal((await cells.nth(sellingIndex - 2).innerText()).replace(/\s+/g, ' ').trim(), `SKU-${index} 123456789${index}`);
@@ -90,7 +91,7 @@ const frontend = path.resolve(__dirname, '../../frontend');
             if (file === 'products.php') {
                 for (const width of [1440, 1024, 768, 390]) {
                     await page.setViewportSize({ width, height: 900 });
-                    for (const index of [sellingIndex - 1, sellingIndex, sellingIndex + 1]) {
+                    for (const index of [headers.indexOf('Product'), costIndex, sellingIndex]) {
                         assert.equal(await page.locator('thead th').nth(index).isVisible(), true, `${width}px: ${headers[index]} header visible`);
                         assert.equal(await rows.first().locator('td').nth(index).isVisible(), true, `${width}px: ${headers[index]} value visible`);
                     }
