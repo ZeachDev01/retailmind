@@ -68,6 +68,20 @@ Preserve the customer-facing details of new receipts when their transactions are
 - Generating a QR code or adding a new verification service; the existing verification code and URL remain.
 - Reconstructing original Store details for older transactions where those values were never saved.
 
+## Refund printing follow-up — 2026-10-21
+
+Confirmed requirement: show the receipt immediately after a completed refund. See the focused [Show Refund Receipt after a completed refund spec](show-receipt-after-refund.md) for acceptance, testing decisions, and the 2026-10-22 runtime verification results. The existing implementation supports this behavior and required no application change.
+
+Confirmed requirements:
+
+- A successful Cash Refund keeps the original Sale Receipt unchanged and provides a separate Refund Receipt.
+- Show the saved Refund Receipt immediately after recording a successful refund. Open the browser print dialog only when the Cashier clicks Print Refund Receipt, including on refreshes and history visits.
+- Each Refund Receipt includes only that refund's items and amount, linked to the original Sale Receipt. Later refunds have their own receipts.
+- Canceling printing leaves the refund completed and the receipt visible, with Print Refund Receipt available to retry. Printing never records another refund.
+- Keep the existing inline thermal preview, receipt fields, and configured paper width.
+
+The final manual-print decision replaces the earlier interview request for automatic printing and remains consistent with ADR-0006. No application change is required for these requirements; the completion flow was verified end to end on 2026-10-22.
+
 ## Further Notes
 
 The existing sale receipt is shared by the post-checkout page, saved transaction view, and receipt modal, but its print target currently uses full page width. The Cash Refund workflow has an internal history table and no customer-facing slip. The Store has not selected a thermal printer. A standard Windows driver and the browser print dialog are the first integration path; direct device printing can be considered later against a selected model. This spec follows the domain terms Sale Receipt, Refund Receipt, Cash Refund, Cashier Shift, and Register and the decision to preserve customer receipt details at transaction time.

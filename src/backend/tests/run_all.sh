@@ -75,6 +75,7 @@ php src/backend/tests/cash_refund_contract.php
 php src/backend/tests/cash_refund_concurrency_integration.php
 php src/backend/tests/legacy_reversal_transition_integration.php
 node src/backend/tests/safe_refund_browser_test.js
+node src/backend/tests/refund_completion_browser_test.js
 php src/backend/tests/cash_refund_schema_parity_contract.php
 php src/backend/tests/store_staff_availability_contract.php
 php src/backend/tests/store_staff_username_notice_contract.php

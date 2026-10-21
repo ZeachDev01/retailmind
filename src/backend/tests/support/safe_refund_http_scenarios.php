@@ -64,6 +64,9 @@ try {
     $assert((float)$packRefundRow['refund_amount']===80.0 && (int)$pdo->query('SELECT sealed_quantity FROM product_batches WHERE batch_id=201')->fetchColumn()===3 && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=20')->fetchColumn()===22,'HTTP sealed pack refund restores 1 sealed pack and 6 Base Units');
     [$status,$packReceiptBody]=$request(['refund_id'=>$packRefundRow['refund_id']],1,'cashier',false);
     $assert(str_contains($packReceiptBody,'Selling Form: Pack (6 pcs)'),'HTTP saved Refund Receipt renders Pack selling form');
+    if (getenv('RUN_REFUND_COMPLETION_BROWSER') === '1') {
+        require __DIR__.'/refund_completion_scenarios.php';
+    }
     echo "Cash Refund real HTTP narrow authorization and settlement: passed\n";
 } finally {
     if(is_resource($httpServer)){proc_terminate($httpServer);proc_close($httpServer);}
