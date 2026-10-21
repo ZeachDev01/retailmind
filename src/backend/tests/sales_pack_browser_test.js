@@ -84,7 +84,7 @@ const { chromium } = require('playwright');
             const previewText = await page.locator('#stock-sales-pack-calc-preview').textContent();
             assert.ok(previewText.includes('63'), 'Calc preview reflects 63 Base Units');
             assert.ok(previewText.includes('1 Sales Pack = 12'), 'Preview explains the Sales Pack size');
-            await page.getByLabel('Units per supplier box', { exact: true }).fill('144');
+            await page.getByLabel('Items per Receiving Package', { exact: true }).fill('144');
             assert.equal(await page.locator('#initial-stock-quantity').inputValue(), '63', 'Supplier box size stays separate');
 
             // Closing and reopening preserves explicit sealed and loose counts.

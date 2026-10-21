@@ -65,7 +65,7 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('[name="starting_stock_mode"]').count(), 0, 'Stock entry has no mode buttons');
             assert.equal(await page.getByLabel('Sales Packs', { exact: true }).isVisible(), false, 'Piece-only product hides pack counts');
             await page.getByLabel('Starting pieces', { exact: true }).fill('74');
-            await page.getByLabel('Units per supplier box', { exact: true }).fill('24');
+            await page.getByLabel('Items per Receiving Package', { exact: true }).fill('24');
             assert.equal(await page.locator('#initial-stock-quantity').inputValue(), '74', 'Supplier box size does not change starting stock');
             assert.equal(await page.getByLabel('Starting Stock Expiration', { exact: true }).isVisible(), true, 'Positive stock exposes opening batch expiration');
             await page.getByLabel('Starting Stock Expiration', { exact: true }).fill('2027-02-28');

@@ -1349,10 +1349,10 @@ foreach ($products as $product) {
                             <p class="section-description" id="add-product-scanner-result">Point the camera at a barcode.</p>
                         </div>
                         <div class="form-grid">
-                            <div class="form-group full"><label>Barcode</label>
+                            <div class="form-group full"><label for="create-barcode-input">Individual Item Barcode</label>
                                 <div class="u-flex-wrap"><input class="u-input-grow" name="barcode" id="create-barcode-input" maxlength="50" placeholder="Scan, enter, generate, or leave blank"><button type="button" class="btn btn-quiet" id="add-product-scan-btn"><i class="bi bi-camera"></i> Scan</button><button type="button" class="btn btn-warning" id="generate-barcode-btn"><i class="bi bi-upc"></i> Generate</button></div><small class="field-help">RetailMind automatically creates a unique internal barcode when this is blank.</small><small class="field-error">This barcode is already used by another product.</small>
                             </div>
-                            <div class="form-group"><label>Case / Package Barcode</label><input name="case_barcode" maxlength="80" placeholder="Optional outer-case barcode"></div>
+                            <div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout. If you receive the same Sales Pack you sell, enter its barcode only under Sales Pack Barcode.</small></div>
                             <div class="form-group"><label>Status</label><select name="status">
                                     <option value="active">Active</option>
                                     <option value="inactive">Inactive</option>
@@ -1393,23 +1393,23 @@ foreach ($products as $product) {
                                 </div>
                             </div>
                             <div class="form-group full" style="border-top:1px solid var(--border);padding-top:0.75rem;margin-top:0.5rem;">
-                                <strong style="font-size:0.9rem;display:block;margin-bottom:0.25rem;">Sales Pack Configuration (Optional)</strong>
-                                <small class="field-help" style="display:block;margin-bottom:0.5rem;">For products sold both individually and as a sealed multipack under a distinct barcode.</small>
+                                <strong style="font-size:0.9rem;display:block;margin-bottom:0.25rem;">Sales Packs — Sold at Checkout (optional)</strong>
+                                <small class="field-help" style="display:block;margin-bottom:0.5rem;">Complete all three fields only if you also sell sealed packs of this item. Otherwise, leave them blank.</small>
                             </div>
                             <div class="form-group">
-                                <label for="create-pack-size">Pack Size (Pieces per Pack)</label>
+                                <label for="create-pack-size">Items per Sales Pack</label>
                                 <input type="number" min="2" step="1" name="pack_size" id="create-pack-size" placeholder="e.g. 12">
-                                <small class="field-help">Whole number &gt; 1.</small>
+                                <small class="field-help">Number of individual items in one sealed pack, e.g. 6 bottles.</small>
                             </div>
                             <div class="form-group">
-                                <label for="create-pack-barcode">Pack Barcode</label>
+                                <label for="create-pack-barcode">Sales Pack Barcode</label>
                                 <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Distinct barcode for pack">
-                                <small class="field-help">Must differ from unit barcode, SKU, and case barcode.</small>
+                                <small class="field-help">Scanned at checkout to sell a whole pack. Must differ from the individual item barcode, SKU, and receiving package barcode.</small>
                             </div>
                             <div class="form-group">
-                                <label for="create-pack-price">Pack Selling Price (₱)</label>
+                                <label for="create-pack-price">Sales Pack Price (₱)</label>
                                 <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price" placeholder="Bundle price">
-                                <small class="field-help">Must be positive and &lt; Pack Size × Selling Price.</small>
+                                <small class="field-help">Price for one whole pack. Must be greater than zero and cheaper than buying its items individually.</small>
                             </div>
                         </div>
                     </section>
@@ -1440,7 +1440,7 @@ foreach ($products as $product) {
                             </div>
                             <div class="form-group full" id="starting-stock-expiration-group" hidden><label for="starting-stock-expiration">Starting Stock Expiration</label><input type="date" id="starting-stock-expiration" name="expiration_date"></div>
                             <h3 class="full planning-section-title">Restocking</h3>
-                            <div class="form-group"><label for="units-per-package">Units per supplier box</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1"></div>
+                            <div class="form-group"><label for="units-per-package">Items per Receiving Package</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1"><small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small></div>
                             <div class="form-group"><label>Minimum Order Quantity</label><input type="number" min="1" name="minimum_order_quantity" value="1"></div>
                             <div class="form-group"><label>Reorder Level</label><input type="number" min="0" name="reorder_level" value="10"></div>
                             <div class="form-group"><label>Safety Stock</label><input type="number" min="0" name="safety_stock" value="0"></div>
@@ -2020,12 +2020,12 @@ foreach ($products as $product) {
             const editBtn = document.getElementById('product-edit-btn');
             if (editBtn) editBtn.hidden = !canEditProduct || document.getElementById('product-panel-info').hidden;
             const packItems = product.pack_size && Number(product.pack_size) > 1 ? `
-        <div class="detail-item"><span>Pack Size</span><strong>${Number(product.pack_size)} pcs</strong></div><div class="detail-item"><span>Pack Barcode</span><strong>${escapeHtml(safe(product.pack_barcode, 'None'))}</strong></div>
-        <div class="detail-item"><span>Pack Price</span><strong>${product.pack_price ? formatMoney(product.pack_price) : '—'}</strong></div><div class="detail-item"><span>Sealed / Loose</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} pcs</strong></div>` : '';
+        <div class="detail-item"><span>Items per Sales Pack</span><strong>${Number(product.pack_size)} ${escapeHtml(product.base_unit || 'piece')}(s)</strong></div><div class="detail-item"><span>Sales Pack Barcode</span><strong>${escapeHtml(safe(product.pack_barcode, 'None'))}</strong></div>
+        <div class="detail-item"><span>Sales Pack Price</span><strong>${product.pack_price ? formatMoney(product.pack_price) : '—'}</strong></div><div class="detail-item"><span>Sealed / Loose</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} pcs</strong></div>` : '';
             document.getElementById('product-panel-info').innerHTML = `<div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
-        <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
+        <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
         <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
     </div>`;
@@ -2141,17 +2141,17 @@ foreach ($products as $product) {
                     <fieldset class="settings-fieldset product-edit-section"><legend>Sales Pack Configuration</legend>
                         <div class="form-grid">
                             <label class="form-field" for="edit-pack-size">
-                                <span>Pack Size (Pieces per Pack)</span>
+                                <span>Items per Sales Pack</span>
                                 <input type="number" step="1" min="2" max="2147483647" name="pack_size" id="edit-pack-size" value="${product.pack_size ? Number(product.pack_size) : ''}" placeholder="None" class="form-input" ${Number(product.physical_sealed_packs || 0) > 0 ? 'readonly title="Cannot change pack size while sealed pack inventory exists"' : ''}>
                                 ${Number(product.physical_sealed_packs || 0) > 0 ? `<small style="color:var(--warning-text, #b45309);">Cannot change pack size while ${product.physical_sealed_packs} sealed pack(s) exist. Reconcile stock first.</small>` : ''}
                             </label>
                             <label class="form-field" for="edit-pack-price">
-                                <span>Pack Selling Price (₱)</span>
+                                <span>Sales Pack Price (₱)</span>
                                 <input type="number" step="0.01" min="0.01" max="999999999.99" name="pack_price" id="edit-pack-price" value="${product.pack_price ? (Number(product.pack_price) || 0).toFixed(2) : ''}" placeholder="None" class="form-input">
                             </label>
                         </div>
                         <label class="form-field" for="edit-pack-barcode">
-                            <span>Pack Barcode</span>
+                            <span>Sales Pack Barcode</span>
                             <input type="text" name="pack_barcode" id="edit-pack-barcode" maxlength="50" value="${escapeHtml(product.pack_barcode || '')}" placeholder="None" class="form-input">
                         </label>
                     </fieldset>
@@ -2910,7 +2910,8 @@ foreach ($products as $product) {
                 ['Product', data.get('product_name')],
                 ['Brand', data.get('brand') || '—'],
                 ['Category', categoryText],
-                ['Barcode', data.get('barcode') || 'Generate automatically'],
+                ['Individual Item Barcode', data.get('barcode') || 'Generate automatically'],
+                ['Receiving Package Barcode', data.get('case_barcode') || 'None'],
                 ['Cost Price', formatMoney(data.get('cost_price'))],
                 ['Selling Price', formatMoney(data.get('selling_price'))],
                 ['Initial Quantity', `${data.get('initial_stock_quantity')} ${data.get('base_unit') || 'piece'}`],
@@ -2920,9 +2921,9 @@ foreach ($products as $product) {
             const initialQty = parseInt(data.get('initial_stock_quantity'), 10) || 0;
             if (data.get('pack_size') && parseInt(data.get('pack_size'), 10) > 1) {
                 items.push(['Starting Stock', `${data.get('starting_packs')} Sales Packs + ${data.get('starting_loose')} loose pieces`]);
-                items.push(['Sales Pack Size', `${data.get('pack_size')} pcs / pack`]);
-                items.push(['Pack Barcode', data.get('pack_barcode') || '—']);
-                items.push(['Pack Price', formatMoney(data.get('pack_price'))]);
+                items.push(['Items per Sales Pack', `${data.get('pack_size')} ${data.get('base_unit') || 'piece'}(s)`]);
+                items.push(['Sales Pack Barcode', data.get('pack_barcode') || '—']);
+                items.push(['Sales Pack Price', formatMoney(data.get('pack_price'))]);
             }
             if (initialQty > 0 && data.get('expiration_date')) {
                 items.push(['Starting Stock Expiration', data.get('expiration_date')]);
