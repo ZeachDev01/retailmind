@@ -88,7 +88,7 @@ $recordGroups = [
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="delete_product">
         <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
-        <div class="form-group"><label for="delete-product">Product</label><select id="delete-product" name="product_id" <?= !$products ? 'aria-describedby="delete-product-empty" ' : '' ?>required><option value="">Choose a product</option><?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= htmlspecialchars($product['product_name'] . ' — ' . $product['sku'] . ' (' . $product['status'] . ')') ?></option><?php endforeach; ?></select></div>
+        <div class="form-group"><label for="delete-product">Product</label><select data-search-dropdown id="delete-product" name="product_id" <?= !$products ? 'aria-describedby="delete-product-empty" ' : '' ?>required><option value="">Choose a product</option><?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= htmlspecialchars($product['product_name'] . ' — ' . $product['sku'] . ' (' . $product['status'] . ')') ?></option><?php endforeach; ?></select></div>
         <?php if (!$products): ?><p id="delete-product-empty" class="reset-note">No products to delete.</p><?php endif; ?>
         <div class="reset-fields">
             <div class="form-group"><label for="delete-password">Current password</label><input type="password" id="delete-password" name="current_password" autocomplete="current-password" required></div>

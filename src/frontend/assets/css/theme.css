@@ -1,4 +1,17 @@
 /* Shared display controls; paper widths stay owned by their stylesheets. */
+.rm-search-dropdown { position:relative; min-width:0; width:100%; }
+.rm-search-dropdown > input { box-sizing:border-box; width:100%; min-height:48px; padding:.75rem .9rem; border:1px solid var(--border,#cbd5e1); border-radius:10px; background:var(--card-bg,#fff); color:var(--text,#1f2937); font:inherit; }
+.rm-search-dropdown > input:focus-visible { outline:2px solid var(--primary,#2563eb); outline-offset:2px; }
+.rm-search-dropdown > select[hidden] { display:none !important; }
+.rm-search-popup { position:fixed; box-sizing:border-box; inset:auto; margin:0; padding:0; overflow:auto; border:1px solid var(--border,#cbd5e1); border-radius:10px; background:var(--card-bg,#fff); color:var(--text,#1f2937); box-shadow:0 8px 24px rgba(15,23,42,.12); font:inherit; }
+.rm-search-popup [role="listbox"] { max-height:240px; overflow-y:auto; }
+.rm-search-popup [role="option"], .rm-search-empty { min-height:44px; box-sizing:border-box; padding:.75rem .9rem; overflow-wrap:anywhere; }
+.rm-search-popup [role="option"] { cursor:pointer; }
+.rm-search-popup [role="option"]:hover, .rm-search-popup [aria-selected="true"] { background:var(--theme-info-surface,#dbeafe); color:var(--theme-info-text,#1d4ed8); }
+.rm-search-popup > button { width:100%; min-height:48px; margin:0; padding:.75rem .9rem; border:0; border-radius:0; background:var(--surface-soft,#e5e7eb); color:inherit; font:inherit; font-weight:600; cursor:pointer; }
+.rm-search-popup > button:focus-visible { outline:2px solid var(--primary,#2563eb); outline-offset:-3px; }
+.rm-search-popup > button[hidden] { display:none; }
+.rm-search-dropdown > .sr-only { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .theme-control { display:inline-flex; align-items:center; flex-shrink:0; font-size:.875rem; color:var(--text,#1f2937); }
 .theme-options { display:inline-flex; border:1px solid var(--border,#cbd5e1); border-radius:10px; overflow:hidden; }
 .theme-options button { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; min-height:40px; padding:.4rem .75rem; margin:0; border:0; border-right:1px solid var(--border,#cbd5e1); border-radius:0; background:var(--card-bg,#fff); color:inherit; font:inherit; cursor:pointer; }

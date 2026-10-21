@@ -1322,10 +1322,10 @@ foreach ($products as $product) {
                         <div class="form-grid">
                             <div class="form-group full"><label>Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
                             <div class="form-group"><label for="product-brand">Brand</label><input name="brand" id="product-brand" maxlength="120" list="product-brand-suggestions" autocomplete="off"><datalist id="product-brand-suggestions"><?php foreach ($brandSuggestions as $brand): ?><option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"></option><?php endforeach; ?></datalist></div>
-                            <div class="form-group"><label>Category *</label><select name="category_id" id="product-category" required>
+                            <div class="form-group"><label>Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
-                            <div class="form-group"><label>Parent Product Family</label><select name="parent_product_id">
+                            <div class="form-group"><label>Parent Product Family</label><select data-search-dropdown name="parent_product_id">
                                     <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
                                 </select></div>
                             <div class="form-group"><label>Variant Label</label><input name="variant_label" maxlength="100" placeholder="Example: 200 mL, Red, Large"></div>
@@ -1544,7 +1544,7 @@ foreach ($products as $product) {
             <form method="POST" id="bulk-category-form">
                 <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="bulk_category">
                     <div id="bulk-category-ids"></div>
-                    <div class="form-group"><label>New Category</label><select name="category_id" required>
+                    <div class="form-group"><label>New Category</label><select data-search-dropdown name="category_id" required>
                             <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                         </select></div>
                 </div>
@@ -2076,7 +2076,7 @@ foreach ($products as $product) {
                             </label>
                             <label class="form-field">
                                 <span>Category</span>
-                                <select name="category_id" id="edit-category-id" class="form-input">
+                                <select data-search-dropdown name="category_id" id="edit-category-id" class="form-input">
                                 <option value="">Uncategorized</option>
                                 ${categoryOptions}
                                 </select>
@@ -2183,6 +2183,7 @@ foreach ($products as $product) {
 
             document.getElementById('product-cancel-btn').addEventListener('click', cancelProductEdit);
             form.addEventListener('submit', saveProductCatalogDetails);
+            RetailMindUI.initSearchDropdowns();
         }
 
         async function cancelProductEdit() {

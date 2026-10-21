@@ -6,6 +6,18 @@ $allRegisters = [
 ];
 $availableCount = 1;
 $message = $messageClass = '';
+$failedAction = '';
+$failedRegisterId = 0;
+$submittedName = '';
+$submittedPaperWidth = '80';
+if (in_array($argv[1] ?? '', ['create', 'rename'], true)) {
+    $failedAction = $argv[1];
+    $failedRegisterId = 1;
+    $submittedName = '<Counter "&"> 🛒';
+    $submittedPaperWidth = '58';
+    $message = 'Another Register already uses that name.';
+    $messageClass = 'tag-warning';
+}
 function app_url(string $path): string { return '/'.$path; }
 function theme_url(string $path): string { return '/'.$path; }
 function csrf_field(): string { return '<input type="hidden" name="csrf_token" value="synthetic">'; }

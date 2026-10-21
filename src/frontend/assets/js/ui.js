@@ -265,6 +265,7 @@
   };
 
   RM.openOverlay = function (overlay) {
+    initSearchDropdowns();
     if (!overlay || overlay.classList.contains("open")) return;
     const zIndex = overlay.style.zIndex;
     const layers = openOverlays().map((node) => Number(getComputedStyle(node).zIndex) || 2000);
@@ -997,11 +998,194 @@
     });
   }
 
+  let searchDropdownId = 0;
+  const searchDropdowns = new WeakMap();
+  function closeSearchPopups(event) {
+    qsa('.rm-search-popup:popover-open').forEach(popup => {
+      if (!(event.target instanceof Node) || !popup.contains(event.target)) searchDropdowns.get(popup.parentElement.querySelector('input'))?.close();
+    });
+  }
+  window.addEventListener('resize', closeSearchPopups);
+  document.addEventListener('scroll', closeSearchPopups, true);
+  RM.showSearchDropdown = function (input) {
+    initSearchDropdowns();
+    searchDropdowns.get(input)?.render();
+  };
+  RM.closeSearchDropdown = input => searchDropdowns.get(input)?.close();
+  RM.initSearchDropdowns = initSearchDropdowns;
+  function initSearchDropdowns() {
+    qsa('select[data-search-dropdown], input[list]').forEach((field) => {
+      if (field.dataset.searchDropdownReady) return;
+      const isSelect = field.tagName === 'SELECT';
+      const source = isSelect ? field : field.list;
+      if (!source || field.multiple) return;
+      field.dataset.searchDropdownReady = '1';
+      const required = field.required;
+      const input = isSelect ? document.createElement('input') : field;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'rm-search-dropdown';
+      field.before(wrapper);
+      wrapper.append(field);
+      if (isSelect) {
+        input.type = 'search';
+        input.className = field.className;
+        input.id = (field.id || 'rm-search-' + ++searchDropdownId) + '-search';
+        input.required = required;
+        for (const name of ['aria-label', 'aria-labelledby', 'aria-describedby']) {
+          if (field.hasAttribute(name)) input.setAttribute(name, field.getAttribute(name));
+        }
+        const labelText = Array.from(field.labels, label => Array.from(label.childNodes)
+          .filter(node => node !== wrapper).map(node => node.textContent).join('').trim()).join(' ')
+          || field.closest('.form-group')?.querySelector('label')?.textContent.trim();
+        if (labelText) input.setAttribute('aria-label', labelText);
+        Array.from(field.labels).forEach(label => { label.htmlFor = input.id; });
+        field.hidden = true;
+        field.required = false;
+        wrapper.append(input);
+      } else {
+        input.removeAttribute('list');
+      }
+      input.autocomplete = 'off';
+      input.setAttribute('role', 'combobox');
+      input.setAttribute('aria-autocomplete', 'list');
+      input.setAttribute('aria-expanded', 'false');
+      const popup = document.createElement('div');
+      popup.className = 'rm-search-popup';
+      popup.setAttribute('popover', 'manual');
+      const list = document.createElement('div');
+      list.id = 'rm-search-results-' + ++searchDropdownId;
+      list.setAttribute('role', 'listbox');
+      list.setAttribute('aria-label', input.getAttribute('aria-label') || 'Matching choices');
+      input.setAttribute('aria-controls', list.id);
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'btn btn-secondary';
+      const status = document.createElement('span');
+      status.className = 'sr-only';
+      status.setAttribute('role', 'status');
+      popup.append(list, more);
+      wrapper.append(popup, status);
+      let active = -1;
+      function close() {
+        if (popup.matches(':popover-open')) popup.hidePopover();
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+        active = -1;
+      }
+      function sync() {
+        if (isSelect) {
+          input.disabled = field.disabled;
+          input.value = field.selectedOptions[0]?.value ? field.selectedOptions[0].textContent.trim() : '';
+          input.setCustomValidity(required && !field.value ? 'Choose a matching result.' : '');
+        }
+        close();
+      }
+      function render(all = false) {
+        const query = input.value.trim().toLocaleLowerCase();
+        const options = Array.from(source.options).filter(option =>
+          !option.disabled && !option.closest('optgroup[disabled]') &&
+          (!required || option.value) &&
+          (!query || (isSelect ? option.textContent : option.value + ' ' + option.label).toLocaleLowerCase().includes(query)));
+        active = -1;
+        input.removeAttribute('aria-activedescendant');
+        list.replaceChildren();
+        for (const option of all ? options : options.slice(0, 5)) {
+          const row = document.createElement('div');
+          row.id = list.id + '-' + list.children.length;
+          row.setAttribute('role', 'option');
+          row.setAttribute('aria-selected', 'false');
+          row.textContent = isSelect ? option.textContent.trim() : option.value;
+          row.addEventListener('click', () => {
+            if (isSelect) {
+              field.value = option.value;
+              field.dispatchEvent(new Event('change', {bubbles: true}));
+            } else {
+              input.value = option.value;
+              input.dispatchEvent(new CustomEvent('input', {bubbles: true, detail: 'search-dropdown'}));
+              input.dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            close();
+            input.focus();
+          });
+          list.append(row);
+        }
+        if (!options.length) {
+          const empty = document.createElement('div');
+          empty.className = 'rm-search-empty';
+          empty.textContent = source.dataset.emptyMessage || 'No matches found';
+          list.append(empty);
+        }
+        more.hidden = all || options.length <= 5;
+        more.textContent = 'Show all ' + options.length + ' matches';
+        status.textContent = options.length + ' matches';
+        const rect = input.getBoundingClientRect();
+        popup.style.width = rect.width + 'px';
+        popup.style.left = rect.left + 'px';
+        const below = window.innerHeight - rect.bottom - 12;
+        const above = rect.top - 12;
+        const upwards = below < 180 && above > below;
+        popup.style.top = upwards ? 'auto' : rect.bottom + 'px';
+        popup.style.bottom = upwards ? window.innerHeight - rect.top + 'px' : 'auto';
+        popup.style.maxHeight = Math.max(0, upwards ? above : below) + 'px';
+        if (!popup.matches(':popover-open')) popup.showPopover();
+        input.setAttribute('aria-expanded', 'true');
+      }
+      input.addEventListener('input', () => {
+        if (isSelect) {
+          if (!required && !input.value.trim()) {
+            field.value = '';
+            field.dispatchEvent(new Event('change', {bubbles: true}));
+          }
+          input.setCustomValidity(required || input.value.trim() ? 'Choose a matching result.' : '');
+        }
+        render();
+      });
+      input.addEventListener('click', () => render());
+      input.addEventListener('blur', event => {
+        if (!popup.contains(event.relatedTarget)) close();
+      });
+      popup.addEventListener('mousedown', event => event.preventDefault());
+      more.addEventListener('click', () => render(true));
+      more.addEventListener('blur', event => {
+        if (event.relatedTarget !== input) close();
+      });
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+        if (event.key === 'Enter' && popup.matches(':popover-open')) {
+          const row = list.querySelector('[aria-selected="true"]');
+          if (row || isSelect) event.preventDefault();
+          if (row) row.click();
+          return;
+        }
+        if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+        event.preventDefault();
+        if (!popup.matches(':popover-open')) render();
+        const rows = Array.from(list.querySelectorAll('[role="option"]'));
+        if (!rows.length) return;
+        active = active < 0 ? (event.key === 'ArrowDown' ? 0 : rows.length - 1)
+          : (active + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+        rows.forEach((row, index) => row.setAttribute('aria-selected', String(index === active)));
+        input.setAttribute('aria-activedescendant', rows[active].id);
+        rows[active].scrollIntoView({block: 'nearest'});
+      });
+      if (isSelect) {
+        field.addEventListener('change', sync);
+        new MutationObserver(sync).observe(field, {childList: true, subtree: true, attributes: true});
+      }
+      field.form?.addEventListener('reset', () => setTimeout(sync, 0));
+      field.closest('.rm-modal-overlay, .rm-drawer-overlay')?.addEventListener('retailmind:overlayopen', sync);
+      field.closest('.rm-modal-overlay, .rm-drawer-overlay')?.addEventListener('retailmind:overlayclose', close);
+      searchDropdowns.set(input, {render, close});
+      sync();
+    });
+  }
+
   RM.initPageContent = function () {
     initQueryToasts();
     initServerNotifications();
     initForms();
     initSmartTables();
+    initSearchDropdowns();
   };
 
   initDialogAccessibility();

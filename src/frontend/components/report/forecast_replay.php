@@ -70,7 +70,7 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
         </tr><?php endforeach; ?></tbody></table></div>
     </section>
     <section class="dashboard-section" aria-labelledby="replay-daily"><h2 id="replay-daily">Latest 28 test days: predicted vs simulated sales</h2>
-        <form method="get"><label for="replay-product">Product</label><select name="product_id" id="replay-product">
+        <form method="get"><label for="replay-product">Product</label><select data-search-dropdown name="product_id" id="replay-product">
             <?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>" <?= (int)$product['product_id'] === $productId ? 'selected' : '' ?>><?= htmlspecialchars($product['sku'] . ' — ' . $product['product_name']) ?></option><?php endforeach; ?>
         </select><button class="btn btn-secondary" type="submit">Compare product</button></form>
         <p>Actual units below come from the seeded simulated sales, including confirmed zero-sales days in this complete replay. Difference is predicted minus actual.</p>

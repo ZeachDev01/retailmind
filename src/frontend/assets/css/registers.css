@@ -16,9 +16,9 @@
 .register-count { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 
 .register-name-cell { min-width: 0; }
-.register-identity { display: grid; grid-template-columns: minmax(0, auto) 2rem; align-items: center; justify-content: start; gap: .25rem .5rem; margin: 0; overflow-wrap: anywhere; white-space: normal; }
+.register-identity { display: grid; grid-template-columns: minmax(0, auto) 44px; align-items: center; justify-content: start; gap: .25rem .5rem; margin: 0; overflow-wrap: anywhere; white-space: normal; }
 .register-identity strong { font-size: .95rem; }
-.register-edit-toggle { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.register-edit-toggle { display: inline-grid; place-items: center; width: 44px; height: 44px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
 .register-edit-toggle:hover, .register-edit-toggle:focus-visible { border-color: var(--border); background: var(--surface-soft); color: var(--text); }
 .register-identity .register-id { grid-column: 1 / -1; }
 .register-id { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -41,7 +41,6 @@
 .register-rename-form { margin-top: .75rem; }
 .register-rename-form[hidden] { display: none; }
 .registers-page td:nth-child(3) .inline-form select { flex: 0 1 7rem; }
-.registers-page td:nth-child(3) .inline-form .btn { display: none; }
 .registers-page .data-table :is(.tag-success, .tag-warning) { white-space: normal; }
 .register-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .register-actions .inline-form { flex: 0 1 auto; }
@@ -68,5 +67,6 @@
 
 @media (max-width: 640px) {
     .registers-page .form-grid { grid-template-columns: minmax(0, 1fr); }
+    .registers-page .form-grid :is(input, select) { font-size: 1rem; }
     .registers-page .form-grid > .form-group:last-child { justify-self: stretch; }
 }

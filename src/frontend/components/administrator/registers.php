@@ -21,6 +21,10 @@ $actorId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
 $message = '';
 $messageClass = '';
+$failedAction = '';
+$failedRegisterId = 0;
+$submittedName = '';
+$submittedPaperWidth = '80';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     csrf_verify();
@@ -53,6 +57,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $messageClass = 'tag-success';
         }
     } catch (Throwable $exception) {
+        $failedAction = $action;
+        $failedRegisterId = $registerId;
+        $submittedName = (string)($_POST['name'] ?? '');
+        $submittedPaperWidth = (string)($_POST['paper_width_mm'] ?? '80');
         $message = OperatorAlert::message(
             $exception,
             'The Register could not be saved. Check the name and try again. Tell your Administrator if this keeps happening.'
@@ -82,7 +90,7 @@ $allRegisters = $registers->all();
             </div>
         </header>
 
-        <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+        <?php if ($message): ?><div id="register-feedback" class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?>
 
         <section class="dashboard-section" aria-labelledby="add-register-heading">
             <h2 id="add-register-heading">Add a Register</h2>
@@ -91,13 +99,13 @@ $allRegisters = $registers->all();
                 <input type="hidden" name="action" value="create">
                 <div class="form-group">
                     <label for="register-name">Register name</label>
-                    <input id="register-name" type="text" name="name" maxlength="100" placeholder="Front Counter" required>
+                    <input id="register-name" type="text" name="name" maxlength="100" placeholder="Front Counter" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedName : '') ?>" <?= $failedAction === 'create' ? 'aria-describedby="register-feedback"' : '' ?> required>
                 </div>
                 <div class="form-group">
                     <label for="register-paper-width">Receipt paper width</label>
                     <select id="register-paper-width" name="paper_width_mm" required>
-                        <option value="80" selected>80 mm</option>
-                        <option value="58">58 mm</option>
+                        <option value="80" <?= $failedAction !== 'create' || $submittedPaperWidth !== '58' ? 'selected' : '' ?>>80 mm</option>
+                        <option value="58" <?= $failedAction === 'create' && $submittedPaperWidth === '58' ? 'selected' : '' ?>>58 mm</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -125,21 +133,24 @@ $allRegisters = $registers->all();
                     </thead>
                     <tbody>
                     <?php foreach ($allRegisters as $register): ?>
-                        <?php $isActive = $register['status'] === RegisterService::STATUS_ACTIVE; ?>
+                        <?php
+                        $isActive = $register['status'] === RegisterService::STATUS_ACTIVE;
+                        $renameFailed = $failedAction === 'rename' && $failedRegisterId === $register['register_id'];
+                        ?>
                         <tr>
                             <td class="register-name-cell">
                                 <div class="register-identity">
                                     <strong><?= htmlspecialchars($register['name']) ?></strong>
-                                    <button class="register-edit-toggle" type="button" aria-label="Edit <?= htmlspecialchars($register['name']) ?>" aria-expanded="false" aria-controls="rename-form-<?= (int)$register['register_id'] ?>">
+                                    <button class="register-edit-toggle" type="button" aria-label="Edit <?= htmlspecialchars($register['name']) ?>" aria-expanded="<?= $renameFailed ? 'true' : 'false' ?>" aria-controls="rename-form-<?= (int)$register['register_id'] ?>">
                                         <i class="bi bi-pencil" aria-hidden="true"></i>
                                     </button>
                                     <span class="register-id">Register ID #<?= (int)$register['register_id'] ?></span>
                                 </div>
-                                <form method="post" class="inline-form register-rename-form" id="rename-form-<?= (int)$register['register_id'] ?>" hidden>
+                                <form method="post" class="inline-form register-rename-form" id="rename-form-<?= (int)$register['register_id'] ?>" <?= $renameFailed ? '' : 'hidden' ?>>
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="rename">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
-                                    <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" value="<?= htmlspecialchars($register['name']) ?>" aria-label="Rename <?= htmlspecialchars($register['name']) ?>" required>
+                                    <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" value="<?= htmlspecialchars($renameFailed ? $submittedName : $register['name']) ?>" aria-label="Rename <?= htmlspecialchars($register['name']) ?>" <?= $renameFailed ? 'aria-describedby="register-feedback"' : '' ?> required>
                                     <button class="btn btn-secondary" type="submit" aria-label="Rename <?= htmlspecialchars($register['name']) ?>">Rename</button>
                                 </form>
                             </td>
@@ -155,7 +166,7 @@ $allRegisters = $registers->all();
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="set_paper_width">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
-                                    <select name="paper_width_mm" aria-label="Receipt paper width for <?= htmlspecialchars($register['name']) ?>" required onchange="this.form.requestSubmit()">
+                                    <select name="paper_width_mm" aria-label="Receipt paper width for <?= htmlspecialchars($register['name']) ?>" required>
                                         <option value="80" <?= $register['paper_width_mm'] === 80 ? 'selected' : '' ?>>80 mm</option>
                                         <option value="58" <?= $register['paper_width_mm'] === 58 ? 'selected' : '' ?>>58 mm</option>
                                     </select>
@@ -171,7 +182,7 @@ $allRegisters = $registers->all();
                                     <input type="hidden" name="status" value="<?= $isActive ? RegisterService::STATUS_DISABLED : RegisterService::STATUS_ACTIVE ?>">
                                     <button class="btn btn-secondary" type="submit" aria-label="<?= $isActive ? 'Disable' : 'Enable' ?> <?= htmlspecialchars($register['name']) ?>"><?= $isActive ? 'Disable' : 'Enable' ?></button>
                                 </form>
-                                <form method="post" class="inline-form">
+                                <form method="post" class="inline-form" data-confirm="<?= htmlspecialchars('Permanently delete Register “' . $register['name'] . '”? This cannot be undone.') ?>" data-confirm-title="Delete Register" data-confirm-button="Delete Register" data-confirm-danger="1">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">

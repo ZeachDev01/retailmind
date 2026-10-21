@@ -121,9 +121,13 @@ function render(canMutate) {
                 if (canMutate) {
                     await page.screenshot({path: path.join(screenshots, `${width}-history.png`)});
                     await history.press('Home');
-                    await page.locator('#product_id').selectOption('2');
+                    await page.getByRole('combobox', {name: 'Product *', exact: true}).fill('Pack product');
+                    await page.screenshot({path: path.join(screenshots, `${width}-product-dropdown.png`)});
+                    await page.getByRole('option', {name: /Pack product/}).click();
                     await page.waitForFunction(() => document.querySelectorAll('#batch_id option').length > 1);
-                    await page.locator('#batch_id').selectOption('20');
+                    await page.locator('#batch_id-search').fill('BATCH-PACK-20');
+                    await page.locator('#batch_id-search').press('ArrowDown');
+                    await page.locator('#batch_id-search').press('Enter');
                     assert.equal(await page.locator('#pullout-pack-group').isVisible(), true, 'Pack form controls become visible for pack-enabled product');
                     await page.locator('#pulled_packs').fill('2');
                     await page.locator('#pulled_loose').fill('3');

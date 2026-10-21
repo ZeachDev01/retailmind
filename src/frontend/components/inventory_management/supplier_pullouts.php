@@ -121,7 +121,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
 
                         <div class="min-w-0 md:col-span-2">
                             <label for="product_id"><strong>Product *</strong></label>
-                            <select name="product_id" id="product_id" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
+                            <select data-search-dropdown name="product_id" id="product_id" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
                                 <option value=""></option>
                                 <?php foreach ($products as $p): ?>
                                     <option value="<?= (int)$p['product_id'] ?>"
@@ -135,7 +135,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
 
                         <div class="min-w-0">
                             <label for="batch_id"><strong>Batch *</strong></label>
-                            <select name="batch_id" id="batch_id" aria-describedby="batch-help" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
+                            <select data-search-dropdown name="batch_id" id="batch_id" aria-describedby="batch-help" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
                                 <option value=""></option>
                                 <?php if ($prefillBatch): ?>
                                     <option value="<?= (int)$prefillBatch['batch_id'] ?>"

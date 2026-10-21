@@ -122,7 +122,8 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                             </div>
                             <div class="form-group">
                                 <label for="product-search">Search products</label>
-                                <input type="search" id="product-search" placeholder="Type at least one letter or number" autocomplete="off" <?= $openShift ? '' : 'disabled' ?>>
+                                <input type="search" id="product-search" list="stock-issue-products" placeholder="Type at least one letter or number" autocomplete="off" <?= $openShift ? '' : 'disabled' ?>>
+                                <datalist id="stock-issue-products"></datalist>
                             </div>
                         </div>
                         <div id="product-results" class="search-results" aria-live="polite"></div>
@@ -286,16 +287,8 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         const productIdField = document.getElementById('product_id');
         const selectedCard = document.getElementById('selected-product');
         let searchTimer = null;
-
-        function escapeHtml(value) {
-            return String(value ?? '').replace(/[&<>"']/g, char => ({
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            }[char]));
-        }
+        const productSuggestions = document.getElementById('stock-issue-products');
+        let matchingProducts = [];
 
         function updateFormSelect(packSize) {
             const formSelect = document.getElementById('form');
@@ -315,6 +308,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         }
 
         function selectProduct(product, scannedCode = '') {
+            RetailMindUI.closeSearchDropdown(searchInput);
             productIdField.value = product.product_id;
             document.getElementById('selected-product-name').textContent = product.name || product.product_name;
             document.getElementById('selected-product-code').textContent = product.sku || product.barcode || '';
@@ -341,22 +335,25 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         });
 
         function renderResults(products, emptyMessage) {
-            if (!products.length) {
-                resultsBox.innerHTML = '<div class="search-empty">' + escapeHtml(emptyMessage) + '</div>';
-                return;
-            }
-            resultsBox.innerHTML = products.map((product, index) => {
-                const code = product.sku || product.barcode || 'No code';
-                return '<article class="search-result" data-index="' + index + '">' +
-                    '<span><strong>' + escapeHtml(product.name) + '</strong>' +
-                    '<span class="search-result-meta"><span>' + escapeHtml(code) + '</span>' +
-                    '<span>Stock ' + Number(product.quantity_on_hand || 0) + '</span></span></span>' +
-                    '<button type="button" class="btn btn-small" data-index="' + index + '">Select</button></article>';
-            }).join('');
-            resultsBox.querySelectorAll('button[data-index]').forEach(button => {
-                button.addEventListener('click', () => selectProduct(products[Number(button.dataset.index)]));
+            matchingProducts = products;
+            productSuggestions.replaceChildren();
+            productSuggestions.dataset.emptyMessage = emptyMessage;
+            products.forEach(product => {
+                const option = document.createElement('option');
+                option.value = (product.sku || product.barcode || 'No code') + ' — ' + product.name + ' (Stock ' + Number(product.quantity_on_hand || 0) + ')';
+                option.label = [option.value, product.barcode, product.case_barcode, product.pack_barcode].filter(Boolean).join(' ');
+                productSuggestions.append(option);
             });
+            resultsBox.textContent = products.length ? '' : emptyMessage;
+            RetailMindUI.showSearchDropdown(searchInput);
         }
+
+        searchInput.addEventListener('change', () => {
+            const index = Array.from(productSuggestions.options).findIndex(option => option.value === searchInput.value);
+            if (index < 0) return;
+            clearTimeout(searchTimer);
+            selectProduct(matchingProducts[index]);
+        });
 
         let lookupAbortController = null;
         async function lookup(url, emptyMessage, selectMatch = false, scannedCode = '') {
@@ -377,6 +374,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         function scanStockIssueCode(code) {
             if (barcodeInput.disabled || !code) return;
             clearTimeout(searchTimer);
+            searchInput.value = '';
             productIdField.value = '';
             selectedCard.hidden = true;
             return lookup(productsApiUrl + '?code=' + encodeURIComponent(code) + '&limit=5', 'No active product with available stock matches that barcode.', true, code);
@@ -423,8 +421,13 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         window.addEventListener('blur', resetStockIssueBarcode);
         document.addEventListener('visibilitychange', resetStockIssueBarcode);
 
-        searchInput.addEventListener('input', () => {
+        searchInput.addEventListener('input', event => {
+            if (event.detail === 'search-dropdown') return;
             clearTimeout(searchTimer);
+            if (lookupAbortController) lookupAbortController.abort();
+            productSuggestions.replaceChildren();
+            productIdField.value = '';
+            selectedCard.hidden = true;
             searchTimer = setTimeout(() => {
                 const term = searchInput.value.trim();
                 if (term === '') {

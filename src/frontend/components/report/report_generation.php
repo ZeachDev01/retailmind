@@ -752,7 +752,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                 </div>
                 <div class="form-group">
                     <label for="product_id">Product</label>
-                    <select id="product_id" name="product_id">
+                    <select data-search-dropdown id="product_id" name="product_id">
                         <option value="0">All products</option>
                         <?php foreach ($products as $product): ?>
                             <option value="<?= (int)$product['product_id'] ?>" <?= $filters['product_id'] === (int)$product['product_id'] ? 'selected' : '' ?>>
@@ -763,7 +763,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                 </div>
                 <div class="form-group">
                     <label for="category_id">Category</label>
-                    <select id="category_id" name="category_id">
+                    <select data-search-dropdown id="category_id" name="category_id">
                         <option value="0">All categories</option>
                         <?php foreach ($categories as $category): ?>
                             <option value="<?= (int)$category['category_id'] ?>" <?= $filters['category_id'] === (int)$category['category_id'] ? 'selected' : '' ?>>

@@ -41,6 +41,10 @@ typography:
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
+  control:
+    fontFamily: '-apple-system, "Segoe UI", Roboto, Arial, sans-serif'
+    fontSize: "0.95rem"
+    lineHeight: 1.5
   label:
     fontFamily: '-apple-system, "Segoe UI", Roboto, Arial, sans-serif'
     fontSize: "0.72rem"
@@ -164,6 +168,7 @@ Success, warning, and danger colors are semantic controls, not decorative accent
 - **Headline** (700, `clamp(1.4rem, 2vw, 1.8rem)`, 1.2): Workspace page titles and primary section orientation.
 - **Title** (700, `1.05rem`, 1.3): Card, panel, and grouped-work headings.
 - **Body** (400, `1rem`, 1.5): Operational instructions, data context, and general interface copy.
+- **Control** (`0.95rem`, 1.5): Established shared form fields, buttons, and compact record names. Use regular weight for field values, 600 for actions, and 700 for emphasized record names. Mobile entry fields use the Body size to avoid focus zoom.
 - **Label** (700, `0.72rem`, `0.12em` tracking): Uppercase navigation groups, compact metadata, and structural labels.
 
 ### Named Rules

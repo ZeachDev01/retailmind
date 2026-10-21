@@ -36,6 +36,10 @@ _Avoid_: Reversal, Return (when referring to the transaction record)
 An operational period linked to a register and drawer where a cashier performs sales and refunds. It is separate from the cashier's authenticated access to RetailMind.
 _Avoid_: Work period, Session
 
+**Fiscal Period**:
+A date-bounded reporting and accounting window for the Store, governed by the Administrator. It is separate from a Cashier Shift.
+_Avoid_: Cashier Shift, work session, branch fiscal period
+
 **Store Reports**:
 Aggregated analytical summaries of business performance (e.g. daily/weekly revenue, category sales, product sales).
 _Avoid_: Sales (when referring to the receipt lookup page)

@@ -25,22 +25,70 @@ if (!fs.existsSync(chromium.executablePath())) {
     try {
         const adminHtml = execFileSync(process.env.PHP_BINARY || 'php',
             [path.join(__dirname, 'support/register_paper_fixture.php')], { encoding: 'utf8' });
-        const adminCss = ['style', 'global', 'forms', 'tables', 'admin', 'responsive'].map(name =>
+        const adminCss = ['style', 'registers'].map(name =>
             fs.readFileSync(path.join(root, `src/frontend/assets/css/${name}.css`), 'utf8')).join('\n');
         const adminPage = await browser.newPage();
         await adminPage.setContent(adminHtml);
         await adminPage.addStyleTag({ content: adminCss + '\n.main-content { margin: 0; padding: 16px; }' });
+        await adminPage.addStyleTag({ content: themeCss });
+        await adminPage.addScriptTag({ content: fs.readFileSync(path.join(root, 'src/frontend/assets/js/ui.js'), 'utf8') });
+        await adminPage.evaluate(() => {
+            window.RetailMindUI.initPageContent();
+            window.registerSubmissions = [];
+            window.addEventListener('submit', event => {
+                if (!event.defaultPrevented) window.registerSubmissions.push(new FormData(event.target).get('action'));
+                event.preventDefault();
+            });
+        });
         assert.equal(await adminPage.locator('#register-paper-width').inputValue(), '80', 'creation defaults to 80 mm');
         assert.deepEqual(await adminPage.locator('tbody select').evaluateAll(els => els.map(el => el.value)), ['80', '58'], 'both saved widths appear alongside Register details');
         await adminPage.locator('#register-paper-width').selectOption('58');
         assert.equal(await adminPage.locator('#register-paper-width').inputValue(), '58');
         const edit = adminPage.locator('tbody form').filter({ has: adminPage.locator('select') }).first();
         await edit.locator('select').selectOption('58');
+        assert.deepEqual(await adminPage.evaluate(() => window.registerSubmissions), [], 'choosing width does not save');
+        await edit.getByRole('button', { name: 'Save width for Front Counter', exact: true }).click();
+        assert.deepEqual(await adminPage.evaluate(() => window.registerSubmissions), ['set_paper_width'], 'explicit save submits width');
         assert.deepEqual(await edit.evaluate(form => Object.fromEntries(new FormData(form))),
             { csrf_token: 'synthetic', action: 'set_paper_width', register_id: '1', paper_width_mm: '58' }, 'editing posts width, identity, action and CSRF token');
-        for (const width of [1440, 390]) {
+        await adminPage.getByRole('button', { name: 'Delete Front Counter', exact: true }).click();
+        const confirmation = adminPage.getByRole('dialog', { name: 'Delete Register', exact: true });
+        assert.ok((await confirmation.innerText()).includes('Front Counter'), 'confirmation identifies the Register');
+        await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.deepEqual(await adminPage.evaluate(() => window.registerSubmissions), ['set_paper_width'], 'cancel never deletes');
+        await adminPage.getByRole('button', { name: 'Edit Front Counter', exact: true }).click();
+        assert.equal(await adminPage.locator('#rename-1').evaluate(el => el === document.activeElement), true, 'edit focuses name');
+        await adminPage.setContent(adminHtml);
+        await adminPage.addStyleTag({ content: adminCss + '\n.main-content { margin: 0; padding: 16px; }' });
+        await adminPage.addStyleTag({ content: themeCss });
+        const iconsPath = path.join(root, 'src/frontend/assets/vendor/bootstrap-icons');
+        const iconFont = fs.readFileSync(path.join(iconsPath, 'fonts/bootstrap-icons.woff2')).toString('base64');
+        await adminPage.addStyleTag({ content: fs.readFileSync(path.join(iconsPath, 'bootstrap-icons.min.css'), 'utf8')
+            .replace(/url\([^)]*\.woff2[^)]*\)/, `url(data:font/woff2;base64,${iconFont})`) });
+        await adminPage.getByRole('button', { name: 'Edit Front Counter', exact: true }).click();
+        for (const width of [1440, 768, 390]) {
             await adminPage.setViewportSize({ width, height: 900 });
-            await adminPage.screenshot({ path: path.join(output, `registers-${width}.png`), fullPage: true });
+            assert.equal(await adminPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'table overflow stays contained');
+            const target = await adminPage.locator('.register-edit-toggle').first().boundingBox();
+            assert.ok(target.width >= 44 && target.height >= 44, 'edit target is at least 44px');
+            for (const theme of ['light', 'dark']) {
+                await adminPage.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                await adminPage.screenshot({ path: path.join(output, `registers-${width}-${theme}.png`), fullPage: true, animations: 'disabled' });
+            }
+        }
+        for (const action of ['create', 'rename']) {
+            const failedHtml = execFileSync(process.env.PHP_BINARY || 'php',
+                [path.join(__dirname, 'support/register_paper_fixture.php'), action], { encoding: 'utf8' });
+            await adminPage.setContent(failedHtml);
+            const name = adminPage.locator(action === 'create' ? '#register-name' : '#rename-1');
+            assert.equal(await name.inputValue(), '<Counter "&"> 🛒', 'failed name survives safely escaped');
+            assert.equal(await name.getAttribute('aria-describedby'), 'register-feedback', 'failed field references feedback');
+            if (action === 'create') assert.equal(await adminPage.locator('#register-paper-width').inputValue(), '58', 'failed create retains width');
+            else {
+                assert.equal(await adminPage.locator('#rename-form-1').isVisible(), true, 'failed rename remains open');
+                assert.equal(await adminPage.getByRole('button', { name: 'Edit Front Counter', exact: true }).getAttribute('aria-expanded'), 'true');
+                assert.equal(await adminPage.locator('#rename-form-2').isVisible(), false, 'other rename stays closed');
+            }
         }
         await adminPage.close();
         // Exercise both retained legacy search entry points with the shipped helper.

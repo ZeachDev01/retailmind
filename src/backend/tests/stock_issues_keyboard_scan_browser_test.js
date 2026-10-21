@@ -11,12 +11,14 @@ const script = source.slice(start, source.indexOf('        function filterByStat
     try {
         const page = await browser.newPage();
         await page.setContent(`<button id="idle">Stock issues</button><form id="stock-issue-form">
-            <input id="barcode-input"><input id="product-search"><input id="product_id" type="hidden">
+            <input id="barcode-input"><input id="product-search" list="stock-issue-products"><datalist id="stock-issue-products"></datalist><input id="product_id" type="hidden">
             <input id="quantity" type="number"><textarea id="explanation"></textarea>
             <select id="category"><option value="damaged">Damaged</option></select><div id="type-info"></div>
             <div id="product-results"></div><div id="selected-product" hidden>
             <span id="selected-product-name"></span><span id="selected-product-code"></span>
             <span id="selected-product-stock"></span></div><button type="button" id="clear-product">Change</button></form>`);
+        await page.addScriptTag({path: 'src/frontend/assets/js/ui.js'});
+        await page.evaluate(() => RetailMindUI.initPageContent());
         await page.addScriptTag({ content: `
             let requests = [];
             window.fetch = async (url, options) => {
@@ -43,7 +45,10 @@ const script = source.slice(start, source.indexOf('        function filterByStat
         assert.match(await page.textContent('#product-results'), /No active product/);
         await scan('222222');
         assert.equal(await page.inputValue('#product_id'), '', 'ambiguous scan does not pick first match');
-        assert.equal(await page.locator('#product-results button').count(), 2);
+        assert.equal(await page.locator('.rm-search-popup [role="option"]').count(), 2);
+        await page.locator('.rm-search-popup [role="option"]').first().click();
+        assert.equal(await page.inputValue('#product_id'), '1', 'dropdown choice preserves product selection');
+        await page.focus('#idle');
         await scan('123456', 100);
         assert.equal(await page.evaluate(() => requests.length), 3, 'normal typing is ignored');
         await page.focus('#explanation');

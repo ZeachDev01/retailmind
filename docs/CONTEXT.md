@@ -147,8 +147,8 @@ A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Ot
 _Avoid_: Damage report, damage claim, reopen an approval
 
 **Fiscal Period**:
-A time-bounded operational accounting window for the Store. It is reviewed and governed from the Administrator workspace.
-_Avoid_: Branch fiscal period, system period
+A date-bounded reporting and accounting window for the Store, governed by the Administrator. It is separate from a Cashier Shift.
+_Avoid_: Cashier Shift, work session, branch fiscal period
 
 **Platform Setting**:
 A technical configuration affecting platform security, recovery, integrations, demand-forecasting model operation, or their attention thresholds. It is governed exclusively by the Super Administrator and may impose safety limits on Store Settings.
