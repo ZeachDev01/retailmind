@@ -292,6 +292,20 @@
     font-size: 1rem;
 }
 
+.cashier-shifts-page #movement-authorization {
+    margin: auto;
+    width: min(440px, calc(100% - 2rem));
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card-bg);
+    color: var(--text);
+}
+
+.cashier-shifts-page #movement-authorization::backdrop { background: rgb(0 0 0 / .55); }
+
 .cashier-shifts-page .dashboard-section form {
     display: flex;
     flex-direction: column;

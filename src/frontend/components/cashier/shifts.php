@@ -220,9 +220,17 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <?php endforeach; ?>
                             </select><label for="movement-note">Explanation (required for Other)</label><textarea id="movement-note" name="note" maxlength="255" rows="2"></textarea>
                             <p class="shift-help">Supplier payments and petty cash require Administrator approval of the amount and reason.</p>
-                            <label for="movement-approver">Authorizing Administrator username</label><input id="movement-approver" name="approver_username" autocomplete="off">
-                            <label for="movement-approval-password">Administrator password</label><input id="movement-approval-password" name="approver_password" type="password" autocomplete="new-password">
                             <button class="btn" type="submit">Record movement</button>
+                            <dialog id="movement-authorization" aria-labelledby="movement-authorization-title" aria-describedby="movement-authorization-summary">
+                                <h2 id="movement-authorization-title">Authorize drawer movement</h2>
+                                <p id="movement-authorization-summary" class="shift-help"></p>
+                                <label for="movement-approver">Authorizing Administrator username</label><input id="movement-approver" name="approver_username" autocomplete="off" required disabled autofocus>
+                                <label for="movement-approval-password">Administrator password</label><input id="movement-approval-password" name="approver_password" type="password" autocomplete="new-password" required disabled>
+                                <div class="modal-actions">
+                                    <button class="btn btn-secondary" type="button" id="movement-authorization-cancel">Cancel</button>
+                                    <button class="btn" type="submit">Authorize and record</button>
+                                </div>
+                            </dialog>
                         </form>
                     </section><?php endif; ?>
                 <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation">
@@ -330,6 +338,23 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
         const movementType = document.getElementById('movement-type');
         const movementReason = document.getElementById('movement-reason');
         if (movementType && movementReason) {
+            const authorization = document.getElementById('movement-authorization');
+            const credentials = authorization.querySelectorAll('input');
+            movementType.form.addEventListener('submit', event => {
+                const spending = movementType.value === 'cash_out' && ['petty_cash', 'supplier_payment'].includes(movementReason.value);
+                if (!spending || authorization.open) return;
+                event.preventDefault();
+                document.getElementById('movement-authorization-summary').textContent =
+                    movementReason.selectedOptions[0].textContent + ' · ₱' + Number(document.getElementById('movement-amount').value).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                credentials.forEach(input => { input.disabled = false; });
+                authorization.showModal();
+                window.RetailMindUI?.syncScrollLock?.();
+            });
+            document.getElementById('movement-authorization-cancel').addEventListener('click', () => authorization.close());
+            authorization.addEventListener('close', () => {
+                credentials.forEach(input => { input.value = ''; input.disabled = true; });
+                window.RetailMindUI?.syncScrollLock?.();
+            });
             const syncReasons = () => {
                 for (const option of movementReason.options) {
                     option.hidden = !option.dataset.types.split(' ').includes(movementType.value);
@@ -339,9 +364,6 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                     movementReason.selectedIndex = [...movementReason.options].findIndex(option => !option.disabled);
                 }
                 document.getElementById('movement-note').required = movementReason.value === 'other';
-                const spending = movementType.value === 'cash_out' && ['petty_cash', 'supplier_payment'].includes(movementReason.value);
-                document.getElementById('movement-approver').required = spending;
-                document.getElementById('movement-approval-password').required = spending;
             };
             movementType.addEventListener('change', syncReasons);
             movementReason.addEventListener('change', syncReasons);
