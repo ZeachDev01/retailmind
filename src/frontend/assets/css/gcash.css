@@ -141,3 +141,24 @@ dialog[id^="gcash-"] { margin: auto; }
 .gcash-preview-empty > .bi { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid var(--border); border-radius: 16px; font-size: 1.8rem; color: var(--muted); background: var(--theme-surface-soft, #f8fafc); }
 .gcash-preview-empty .gcash-preview-status { max-width: 28ch; margin: 0; font-size: 1rem; }
 @media (max-width: 600px) { #gcash-workspace .gcash-panel-header { padding: 1rem; gap: .5rem; } .gcash-entry-scroll, .gcash-exchange-review { padding: 1rem; } #gcash-workspace .gcash-submit-actions { padding: 1rem; } }
+
+#gcash-workspace .gcash-session-panel > .pos-panel-header,
+#gcash-workspace .gcash-session-panel .pos-panel-title { align-items: center; }
+#gcash-workspace .gcash-session-panel > .pos-panel-header { flex-wrap: wrap; }
+#gcash-workspace .gcash-field > .pos-field-label { margin-bottom: 0; }
+#gcash-workspace dialog form { display: grid; gap: 1rem; }
+#gcash-workspace dialog h2 { margin: 0; font-size: 1.25rem; line-height: 1.3; }
+#gcash-workspace dialog form > p { margin: 0; line-height: 1.5; }
+#gcash-workspace dialog .gcash-actions { margin: 0; padding-top: .5rem; }
+#gcash-workspace dialog textarea { resize: vertical; }
+#gcash-workspace .gcash-tab:focus-visible { outline-offset: -3px; }
+#gcash-workspace .gcash-card-value { line-height: 1.3; }
+#gcash-workspace .gcash-table-wrap th { background: var(--theme-surface-soft, #f8fafc); font-size: .875rem; font-weight: 600; }
+#gcash-workspace .gcash-table-wrap td { font-variant-numeric: tabular-nums; }
+@media (max-width: 380px) {
+    #gcash-workspace .gcash-balances-grid { grid-template-columns: minmax(0, 1fr); }
+    #gcash-workspace .gcash-card-balance { padding: .75rem .25rem; }
+    #gcash-workspace .gcash-card-balance + .gcash-card-balance { border-left: 0; border-top: 1px solid var(--border); }
+    #gcash-workspace .gcash-card-header { flex-direction: row; align-items: center; }
+    #gcash-workspace .gcash-submit-actions { grid-template-columns: minmax(0, 1fr); }
+}
