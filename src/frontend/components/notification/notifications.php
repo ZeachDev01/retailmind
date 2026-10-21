@@ -93,14 +93,24 @@ $active_batch_reminders = $inventory_workspace
             </header>
 
             <?php if ($required_work): ?>
-                <section aria-label="Required work">
-                    <h2>Action needed</h2>
+                <section class="notification-required-work" aria-labelledby="required-work-heading">
+                    <div class="notification-section-heading">
+                        <h2 id="required-work-heading">Action needed</h2>
+                        <span class="notification-required-count"><?= count($required_work) ?></span>
+                    </div>
+                    <div class="notification-list">
                     <?php foreach ($required_work as $work): ?>
-                        <article class="notification-priority">
-                            <h3><a href="<?= htmlspecialchars(app_url($work['destination'])) ?>"><?= htmlspecialchars($work['title']) ?></a></h3>
+                        <article class="notification-required-item">
+                            <span class="notification-category rounded-md px-3 py-1" hidden>Low stock</span>
+                            <h3><a href="<?= htmlspecialchars(app_url($work['destination'])) ?>"><?= htmlspecialchars($work['title']) ?><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></a></h3>
+                            <dl class="notification-quantities" hidden>
+                                <div><dt>Current</dt><dd class="notification-current"></dd></div>
+                                <div><dt>Threshold</dt><dd class="notification-threshold"></dd></div>
+                            </dl>
                             <p><?= htmlspecialchars($work['message']) ?></p>
                         </article>
                     <?php endforeach; ?>
+                    </div>
                 </section>
             <?php endif; ?>
 
@@ -238,14 +248,21 @@ $active_batch_reminders = $inventory_workspace
         </main>
     </div>
     <script>
-    document.querySelectorAll('.notifications-page [data-notification-type="low_stock"]').forEach(item => {
-        const description = item.querySelector('.notification-description p');
+    document.querySelectorAll('.notifications-page [data-notification-type="low_stock"], .notification-required-item').forEach(item => {
+        const description = item.querySelector('.notification-description p, :scope > p');
         const quantities = description.textContent.match(/Current: (-?\d+(?:\.\d+)?), Threshold: (-?\d+(?:\.\d+)?)\s*$/);
         if (quantities) {
+            if (item.classList.contains('notification-required-item')) {
+                const link = item.querySelector('h3 a');
+                const title = link.textContent.match(/^(?:Out of stock|Low Stock Alert): (.+)$/);
+                if (!title) return;
+                link.firstChild.textContent = title[1];
+                item.querySelector('.notification-category').hidden = false;
+            }
             item.querySelector('.notification-current').textContent = quantities[1];
             item.querySelector('.notification-threshold').textContent = quantities[2];
             item.querySelector('.notification-quantities').hidden = false;
-            item.querySelector('.notification-description').hidden = true;
+            (item.querySelector('.notification-description') || description).hidden = true;
             item.classList.add('notification-stock-row');
         }
     });

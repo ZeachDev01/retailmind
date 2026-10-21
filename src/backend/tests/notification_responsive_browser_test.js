@@ -72,6 +72,56 @@ const {chromium} = require('playwright');
         await page.setContent(`<style>${css}</style><main class="notifications-page"><section class="active-batch-reminders"><div class="notification-list">${priority}</div></section></main>`);
         assert(await page.getByRole('link', {name: 'Record Supplier Pullout', exact: true}).isVisible(), 'Pullout action is always visible');
         assert.equal(await page.locator('.notification-toggle, [inert]').count(), 0);
+        const required = extract('<article class="notification-required-item">');
+        await page.setContent(`<!doctype html><meta name="viewport" content="width=device-width"><style>${css}</style><div class="app-shell"><aside class="sidebar">Navigation</aside><main class="main-content notifications-page"><header class="notification-heading"><h1>Notifications</h1></header><section class="notification-required-work" aria-labelledby="required-work-heading"><div class="notification-section-heading"><h2 id="required-work-heading">Action needed</h2><span class="notification-required-count">12</span></div><div class="notification-list">${required.repeat(12)}</div></section><div class="notification-toolbar"><nav class="notification-views" aria-label="Notification view"><a href="#all" aria-current="page">All</a><a href="#unread">Unread <span class="notification-view-count">12</span></a></nav></div></main></div>`);
+        await page.locator('.notification-required-item').evaluateAll(items => items.forEach((item, i) => {
+            const title = ['Orange Soda 500ml', 'Tortilla Chips Nacho 200g', 'Instant Noodles Chicken 5 Pack', 'SKU-' + '0123456789'.repeat(12)][i % 4];
+            const link = item.querySelector('a');
+            link.prepend(document.createTextNode((i % 2 ? 'Low Stock Alert: ' : 'Out of stock: ') + title));
+            link.href = '#review-condition';
+            item.querySelector('p').textContent = `Product ${title} (SKU-BEV-005) is at or below the threshold. Current: 0, Threshold: 10`;
+        }));
+        await page.addScriptTag({content: script});
+        const firstCondition = page.locator('.notification-required-item').first();
+        assert.equal(await firstCondition.getByRole('link').innerText(), 'Orange Soda 500ml', 'Stock rows lead with the product name');
+        assert.equal(await firstCondition.getByText('Low stock', {exact: true}).count(), 1, 'Stock category stays explicit');
+        assert.equal(await firstCondition.locator('dt').allTextContents().then(labels => labels.join(', ')), 'Current, Threshold');
+        assert.equal(await firstCondition.locator('dd').allTextContents().then(values => values.join(', ')), '0, 10');
+        for (const theme of ['light', 'dark']) {
+            await page.locator('html').evaluate((el, theme) => { el.dataset.theme = theme; }, theme);
+            for (const width of [320, 390, 768, 1440]) {
+                await page.setViewportSize({width, height: 900});
+                assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Required work fits at ${width}px in ${theme}`);
+                const rows = page.locator('.notification-required-item');
+                assert.equal(await rows.count(), 12, 'Every active condition remains visible');
+                for (const row of await rows.all()) {
+                    assert(await row.getByText('Current', {exact: true}).isVisible(), 'Stock figures remain visible');
+                    assert((await row.locator('a').boundingBox()).height >= 44, 'Review links meet touch target size');
+                }
+                if ([390, 1440].includes(width)) {
+                    await page.screenshot({path: `${output}/required-${theme}-${width}.png`, fullPage: true});
+                }
+            }
+        }
+        const review = page.locator('.notification-required-item a').first();
+        await review.focus();
+        assert.equal(await review.evaluate(el => getComputedStyle(el.closest('article')).outlineStyle), 'solid', 'Keyboard focus outlines the row');
+        await review.press('Enter');
+        assert.equal(await page.evaluate(() => location.hash), '#review-condition', 'Review destination remains navigable');
+        await page.setContent(`<style>${css}</style><main class="notifications-page">${required}</main>`);
+        const fallback = page.locator('.notification-required-item');
+        for (const [title, message] of [
+            ['Pending Stock Issue #42', 'Review the reported damage.'],
+            ['Out of stock: Historical alert', 'Historical message without quantities'],
+            ['Review condition', 'Current: 0, Threshold: 10'],
+        ]) {
+            await fallback.locator('a').evaluate((el, title) => { el.textContent = title; }, title);
+            await fallback.locator('p').evaluate((el, message) => { el.textContent = message; }, message);
+            await page.addScriptTag({content: script});
+            assert.equal(await fallback.getByRole('link').innerText(), title, 'Other condition titles stay intact');
+            assert(await fallback.getByText(message, {exact: true}).isVisible(), 'Unrecognized conditions retain their complete message');
+            assert.equal(await fallback.locator('dl').isVisible(), false, 'Unrecognized conditions do not display stock figures');
+        }
         console.log('Notification rows: passed (320–1440px; field order, quantities, safe text, fallback messages, read actions, static reminders). Screenshots: ' + output);
     } finally {
         await browser.close();

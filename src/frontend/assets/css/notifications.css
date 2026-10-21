@@ -4,6 +4,29 @@
 .active-batch-reminders h3 { margin: 0; font-size: 1.05rem; line-height: 1.5; overflow-wrap: anywhere; }
 .notification-heading { margin-bottom: 1.5rem; }
 .notification-heading h1 { font-size: 1.8rem; line-height: 1.2; margin-bottom: .5rem; }
+.notification-required-work { --notification-action-ink: var(--theme-warning-text, #92400e); --notification-action-surface: var(--theme-warning-surface, #fef3c7); margin-bottom: 2rem; }
+.notification-section-heading { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; color: var(--text); }
+.notification-section-heading h2 { margin: 0; color: inherit; font-size: 1.4rem; line-height: 1.5; }
+.notification-required-count { padding: .15rem .5rem; border-radius: 6px; background: var(--notification-action-surface); color: var(--notification-action-ink); font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.notification-required-work .notification-list { background: color-mix(in srgb, var(--notification-action-surface) 18%, var(--theme-surface, var(--card-bg))); }
+.notification-required-item { position: relative; padding: 1rem 1.5rem; overflow-wrap: anywhere; }
+.notification-required-item + .notification-required-item { border-top: 1px solid var(--border); }
+.notification-required-item h3 { margin: 0; font-size: 1.05rem; line-height: 1.5; }
+.notifications-page .notification-required-item a { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 44px; color: var(--text); font-weight: 700; text-decoration: none; }
+.notification-required-item a::after { content: ''; position: absolute; inset: 0; }
+.notification-required-item svg { flex-shrink: 0; color: var(--muted); }
+.notification-required-item p { max-width: 72ch; margin: .25rem 2.25rem 0 0; color: var(--muted); font-size: 1rem; line-height: 1.5; }
+.notification-required-item:hover { background: color-mix(in srgb, var(--notification-action-surface) 35%, var(--theme-surface, var(--card-bg))); }
+.notifications-page .notification-required-item a:hover { color: var(--notification-action-ink); }
+.notification-required-work .notification-required-item .notification-category { background: var(--notification-action-surface); color: var(--notification-action-ink); font-weight: 600; }
+.notification-required-item .notification-quantities dt { color: var(--muted); }
+.notification-required-item .notification-quantities dd { color: var(--text); font-size: 1.4rem; font-weight: 700; }
+.notification-required-item:focus-within { outline: 2px solid var(--primary); outline-offset: -3px; }
+.notifications-page .notification-required-item a:focus-visible { outline: none; }
+.notification-required-item [hidden] { display: none; }
+.notification-required-item.notification-stock-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 5rem 5rem; align-items: center; gap: 1rem; padding: 1.5rem; }
+.notification-required-item.notification-stock-row h3 { grid-column: 2; }
+.notification-required-item.notification-stock-row svg { display: none; }
 .notification-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; margin-bottom: 1.5rem; }
 .notification-views { display: inline-flex; gap: .25rem; padding: .25rem; border: 1px solid var(--border); border-radius: 10px; background: var(--theme-surface, var(--card-bg)); }
 .notification-views a { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .5rem .875rem; border-radius: 6px; color: var(--muted); font-weight: 600; text-decoration: none; }
@@ -62,6 +85,8 @@ html[data-theme="dark"] .notifications-page .notification-views a[aria-current="
 .notifications-page :is(a, button, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; box-shadow: none; }
 .notifications-page ::selection { background: var(--primary-dark); color: #fff; }
 @media (max-width: 1100px) {
+    .notification-required-item.notification-stock-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .notification-required-item.notification-stock-row h3 { grid-column: 1 / -1; grid-row: 2; }
     .notification-toolbar { align-items: stretch; flex-direction: column; }
     .notification-views { align-self: flex-start; }
     .notifications-header { justify-content: space-between; margin-left: 0; }
@@ -79,6 +104,7 @@ html[data-theme="dark"] .notifications-page .notification-views a[aria-current="
     .notification-time { white-space: normal; }
 }
 @media (max-width: 400px) {
+    .notification-required-item, .notification-required-item.notification-stock-row { padding: 1rem; }
     .notification-filter label { flex-basis: 100%; }
     .notification-filter select { flex: 1; min-width: 0; }
 }
