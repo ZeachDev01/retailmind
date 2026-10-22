@@ -94,40 +94,73 @@ try {
     $pdo->exec("INSERT INTO promotions (promotion_name, discount_type, discount_value, scope, starts_at, ends_at, created_by) VALUES ('Fixture promotion', 'percentage', 20, 'all', DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 1 DAY), 3)");
     $refuse(static fn() => $save($quote), 'Review the final quote again');
     $quote = $review();
-    $assert($quote['total'] === 80.0 && count($quote['eligible_promotions']) === 1, 'Best eligible promotion is reviewed');
-    $pdo->exec("UPDATE promotions SET promotion_name='Renamed same amount' WHERE promotion_id=1");
-    $refuse(static fn() => $save($quote), 'Review the final quote again');
-    $manual = ['discount_type' => 'percentage', 'discount_value' => 15, 'discount_reason' => 'Fixture adjustment'];
-    $quote = $review($manual);
-    $saved = $save($quote, $manual);
-    $assert($saved['total'] === 80.0 && $saved['discount_amount'] === 20.0, 'A displaced above-threshold manual discount needs no approval and never stacks');
+    $assert($quote['total'] === 100.0 && count($quote['eligible_promotions']) === 1, 'Eligible promotions never apply automatically');
+    $selected = ['promotion_id' => 1];
+    $quote = $review($selected);
+    $assert($quote['total'] === 80.0, 'Explicit selection above 10% needs no approval');
+    $saved = $save($quote, $selected);
+    $assert($saved['discount_amount'] === 20.0, 'Selected promotion persists');
+    $receiptService = new App\Receipts\ReceiptDetailsService($pdo);
+    $pdo->exec("UPDATE promotions SET promotion_name='Changed after sale', discount_value=30 WHERE promotion_id=1");
+    $receipt = $receiptService->fetchSale((int)$saved['sale_id']);
+    $assert($receipt['promotion_name'] === 'Fixture promotion' && (float)$receipt['discount_amount'] === 20.0
+        && (float)$receipt['total_amount'] === 80.0, 'Recorded receipt retains original promotion and paid amount after rule changes');
+    $pdo->exec("UPDATE promotions SET promotion_name='Fixture promotion', discount_value=20 WHERE promotion_id=1");
+    $recalculated = $service->reviewQuote([['product_id' => 1, 'qty' => 2]], 1, 'cashier', $details + $selected);
+    $assert($recalculated['discount']['promotion_id'] === 1 && $recalculated['discount']['discount_amount'] === 10.0
+        && $recalculated['total'] === 40.0, 'Still-eligible selection recalculates after quantity changes');
+    $pdo->exec("INSERT INTO promotions (promotion_name, discount_type, discount_value, scope, starts_at, ends_at, created_by) VALUES ('Smaller discount', 'fixed', 5, 'all', NOW(), DATE_ADD(NOW(), INTERVAL 1 DAY), 3)");
+    $small = ['promotion_id' => 2];
+    $quote = $review($small);
+    $assert($quote['total'] === 95.0 && $quote['discount']['promotion_id'] === 2, 'Cashier choice beats larger eligible discount without stacking');
+    $refuse(static fn() => $save($quote, $selected), 'Review the final quote again');
+    $assert($review()['total'] === 100.0, 'Returning to no promotion removes discount');
+    foreach ([['discount_type' => 'fixed', 'discount_value' => 1], ['discount_reason' => 'forged'], ['discount_approver_password' => 'forged']] as $forged) {
+        $refuse(static fn() => $review($forged), 'Custom discounts');
+    }
+    foreach (['fake', -1, [1, 2], 999] as $id) $refuse(static fn() => $review(['promotion_id' => $id]), 'promotion');
+    $pdo->exec("UPDATE promotions SET status='inactive' WHERE promotion_id=2");
+    $refuse(static fn() => $save($quote, $small), 'no longer eligible');
+    $pdo->exec("UPDATE promotions SET status='active', ends_at=DATE_SUB(NOW(), INTERVAL 1 SECOND) WHERE promotion_id=2");
+    $refuse(static fn() => $review($small), 'no longer eligible');
+    $quote = $review($selected);
+    $pdo->exec("UPDATE promotions SET discount_value=21 WHERE promotion_id=1");
+    $refuse(static fn() => $save($quote, $selected), 'Review the final quote again');
+    $pdo->exec("INSERT INTO categories (category_id, category_name) VALUES (1, 'Eligible category'), (2, 'Other category')");
+    $pdo->exec('UPDATE products SET category_id=1 WHERE product_id=1');
+    $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, branch_id, category_id)
+        VALUES (2, 'OTHER-TEST', 'OTHER-TEST', 'Other item', 10, 5, 1, 2)");
+    $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 100)');
+    $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, date_received)
+        VALUES (2, 2, 'OTHER-BATCH', 100, 100, 0, 100, NOW())");
+    $pdo->exec("UPDATE promotions SET scope='product', product_id=1, minimum_quantity=5 WHERE promotion_id=1");
+    $refuse(static fn() => $review($selected), 'no longer eligible');
+    $quantityQuote = $service->reviewQuote([['product_id' => 1, 'qty' => 5]], 1, 'cashier', $details + $selected);
+    $assert($quantityQuote['total'] === 98.75, 'Minimum matching quantity is inclusive and percentage applies to matching subtotal');
+    $pdo->exec("UPDATE promotions SET minimum_quantity=1, discount_type='fixed', discount_value=150 WHERE promotion_id=1");
+    $mixedCart = [['product_id' => 1, 'qty' => 4], ['product_id' => 2, 'qty' => 1]];
+    $scopeQuote = $service->reviewQuote($mixedCart, 1, 'cashier', $details + $selected);
+    $assert($scopeQuote['total'] === 10.0 && $scopeQuote['discount']['discount_amount'] === 100.0,
+        'Product-scoped fixed discount is capped at matching subtotal');
+    $pdo->exec("UPDATE promotions SET scope='category', category_id=1 WHERE promotion_id=1");
+    $assert($service->reviewQuote($mixedCart, 1, 'cashier', $details + $selected)['total'] === 10.0,
+        'Category scope discounts only matching items');
+    $pdo->exec('UPDATE promotions SET category_id=2, minimum_quantity=2 WHERE promotion_id=1');
+    $refuse(static fn() => $service->reviewQuote($mixedCart, 1, 'cashier', $details + $selected), 'no longer eligible');
+    $pdo->exec("UPDATE promotions SET scope='all', minimum_quantity=1, discount_type='percentage', discount_value=33.33 WHERE promotion_id=1");
+    $roundedQuote = $service->reviewQuote([['product_id' => 1, 'qty' => 1]], 1, 'cashier', $details + $selected);
+    $assert($roundedQuote['discount']['discount_amount'] === 8.33 && $roundedQuote['total'] === 16.67,
+        'Percentage discount rounds to currency cents');
+    // Freeze this connection's database clock so inclusive boundaries cannot race a second rollover.
+    $pdo->exec('SET timestamp=UNIX_TIMESTAMP()');
+    $pdo->exec('UPDATE promotions SET starts_at=NOW(), ends_at=NOW() WHERE promotion_id=1');
+    $assert($review($selected)['discount']['promotion_id'] === 1, 'Promotion qualifies at both inclusive schedule boundaries');
+    $pdo->exec('UPDATE promotions SET starts_at=DATE_ADD(NOW(), INTERVAL 1 SECOND), ends_at=DATE_ADD(NOW(), INTERVAL 1 DAY) WHERE promotion_id=1');
+    $refuse(static fn() => $review($selected), 'no longer eligible');
+    $pdo->exec('UPDATE promotions SET starts_at=DATE_SUB(NOW(), INTERVAL 1 DAY), ends_at=DATE_SUB(NOW(), INTERVAL 1 SECOND) WHERE promotion_id=1');
+    $refuse(static fn() => $review($selected), 'no longer eligible');
+    $pdo->exec('SET timestamp=0');
     $pdo->exec("UPDATE promotions SET status='inactive'");
-    $boundary = array_replace($manual, ['discount_value' => 10]);
-    $quote = $review($boundary);
-    $assert($save($quote, $boundary)['total'] === 90.0, 'Exactly 10% requires no approval');
-    $above = array_replace($boundary, ['discount_value' => 10.01]);
-    $refuse(static fn() => $review($above), 'Administrator approval is required');
-    $approved = array_replace($above, ['discount_approver_username' => 'approver', 'discount_approver_password' => 'fixture-secret']);
-    $quote = $review($approved);
-    $changedInput = array_replace($approved, ['discount_reason' => 'Different sale reason']);
-    $refuse(static fn() => $save($quote, $changedInput), 'Review the final quote again');
-    $pdo->prepare('UPDATE users SET password_hash=? WHERE user_id=3')->execute([password_hash('changed-secret', PASSWORD_DEFAULT)]);
-    $refuse(static fn() => $save($quote, $approved), 'Administrator approval failed');
-    $changedPassword = array_replace($approved, ['discount_approver_password' => 'changed-secret']);
-    $refuse(static fn() => $save($quote, $changedPassword), 'Review the final quote again');
-    $quote = $review($changedPassword);
-    $pdo->exec("UPDATE users SET status='disabled' WHERE user_id=3");
-    $refuse(static fn() => $save($quote, $changedPassword), 'Administrator approval failed');
-    $pdo->exec("UPDATE users SET status='active' WHERE user_id=3");
-    $quote = $review($changedPassword);
-    $saved = $save($quote, $changedPassword);
-    $assert(abs($saved['total'] - 89.99) < 0.001, 'Applied approved manual discount recorded');
-    $assert((int)$pdo->query("SELECT COUNT(*) FROM activity_log WHERE action='Approved sale discount'")->fetchColumn() === 1, 'Approval is audited against saved sale and reviewed hash');
-    $technical = array_replace($above, ['discount_approver_username' => 'technical', 'discount_approver_password' => 'fixture-secret']);
-    $quote = $review($technical);
-    $save($quote, $technical);
-    $metadata = json_decode($pdo->query("SELECT metadata FROM activity_log ORDER BY log_id DESC LIMIT 1")->fetchColumn(), true);
-    $assert(isset($metadata['quote_hash'], $metadata['discount_amount']), 'Super Administrator discount approval records quote hash and discount amount');
     $quote = $review();
     $refuse(static fn() => $save($quote, ['cash_received' => 99.99]), 'less than the sale total');
     $refuse(static fn() => $save($quote, ['cash_received' => 'bad']), 'valid cash amount');
@@ -171,7 +204,7 @@ try {
     }
     $workers = [];
     $assert($outcomes[0] === $outcomes[1], 'Concurrent same-quote submissions return identical outcome after stock moves');
-    echo "Reviewed checkout integration: passed (price, physical/batch stock, promotions including same amount, boundaries, displaced manual, approval misuse/revocation/super_admin, cash/reference/verification, changed quote, lost-response retry, concurrent reviewed submission)\n";
+    echo "Reviewed checkout integration: passed (explicit promotion selection, no stacking, forged input, eligibility/scope/quantity/schedule, rounding/caps, receipt history, price/stock/rule changes, payment verification, lost-response retry, concurrent reviewed submission)\n";
 } catch (Throwable $e) { fwrite(STDERR, 'Reviewed checkout integration failed: ' . $e->getMessage() . "\n"); $failed = true; }
 finally {
     foreach ($workers as [$process, $pipes]) { foreach ($pipes as $pipe) if (is_resource($pipe)) fclose($pipe); proc_terminate($process); proc_close($process); }

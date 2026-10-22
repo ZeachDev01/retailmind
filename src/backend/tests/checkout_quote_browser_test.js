@@ -18,6 +18,7 @@ if (!fs.existsSync(chromium.executablePath())) {
         + pos.slice(pos.indexOf('function updatePaymentFields('), pos.indexOf('async function apiHeldSale('));
     const bindings = ['checkoutButton', 'confirmCheckoutButton'].map(name => pos.match(new RegExp(name + "\\.addEventListener\\('click', [^)]+\\);"))[0]).join('\n')
         + '\n' + ['checkoutSummary', 'cashQuick'].map(name => pos.match(new RegExp(name + "\\.addEventListener\\('click',[\\s\\S]*?\\n\\}\\);"))?.[0] || '').join('\n')
+        + '\n' + pos.match(/promotionSelect\.addEventListener\('change',[\s\S]*?\n\}\);/)[0]
         + '\n' + pos.match(/cashReceived\.addEventListener\('input', [^)]+\);/)[0];
     const editGuard = pos.slice(pos.indexOf('function cartChangesAllowed()'), pos.indexOf('function addToCart('));
     const source = fs.readFileSync('src/frontend/assets/js/ui.js', 'utf8')
@@ -30,6 +31,8 @@ if (!fs.existsSync(chromium.executablePath())) {
     let submissions = 0;
     let stale = true;
     let unavailable = false;
+    let eligible = true;
+    let delayQuote = 0;
     let quotedCart = null;
     const server = http.createServer((request, response) => {
         if (request.url === '/lost-response') { request.socket.destroy(); return; }
@@ -47,9 +50,12 @@ if (!fs.existsSync(chromium.executablePath())) {
                     quotedCart = JSON.parse(body.match(/name="cart"\r\n\r\n([^\r]+)/)[1]);
                     if (unavailable) { response.end('<p>Sign in again.</p>'); return; }
                     response.setHeader('Content-Type', 'application/json');
-                    response.end(JSON.stringify({token: 'server-quote', quote: {total: quoteTotal,
+                    const selected = body.match(/name="promotion_id"\r\n\r\n([^\r]*)/)?.[1] || '';
+                    if (selected && !eligible) { response.writeHead(409); response.end(JSON.stringify({message: 'The selected promotion is no longer eligible. Review the updated total.'})); return; }
+                    const total = selected === '1' ? quoteTotal : selected === '2' ? 95 : 100;
+                    setTimeout(() => response.end(JSON.stringify({token: 'server-quote', quote: {total,
                         sale: {total: 100, items: [{product_name: productName, quantity: 4, unit_price: 25, subtotal: 100}]},
-                        eligible_promotions: [{promotion_name: 'Best promotion'}], discount: {promotion_name: 'Best promotion', discount_amount: 100 - quoteTotal}}}));
+                        eligible_promotions: eligible ? [{promotion_id: 1, promotion_name: 'Best promotion', applied_amount: 100 - quoteTotal}, {promotion_id: 2, promotion_name: 'Smaller promotion', applied_amount: 5}] : [], discount: {promotion_name: selected ? (selected === '1' ? 'Best promotion' : 'Smaller promotion') : null, discount_amount: 100 - total}}})), delayQuote);
                 } else {
                     submissions++;
                     if (stale) { response.end('<p>Prices changed. Review the final quote again.</p>'); }
@@ -59,9 +65,9 @@ if (!fs.existsSync(chromium.executablePath())) {
         }
         response.setHeader('Content-Type', 'text/html; charset=utf-8');
         const breakdown = pos.match(/<div class="payment-breakdown"[\s\S]*?(?=<form method="POST" id="checkout-form")/)[0];
-        response.end(`<style>${styles}</style><body class="cashier-page">${breakdown}${form}${modal}<p id="message"></p><input id="sku"><script>${source}</script><script>
+        response.end(`<style>${styles}</style><body class="cashier-page">${breakdown}${form}${modal}<span id="cart-total"></span><p id="message"></p><input id="sku"><script>${source}</script><script>
             let cart = {1: {qty: 4, name: 'Cached Item', price: 25}};
-            let checkoutConfirmed = false, checkoutSubmitting = false;
+            let checkoutConfirmed = false, checkoutSubmitting = false, resumedHeldSaleId = 1, promotionRefreshTimer;
             const posShiftOpen = true;
             const checkoutForm = document.getElementById('checkout-form');
             const cartInput = document.getElementById('cart-input');
@@ -71,17 +77,18 @@ if (!fs.existsSync(chromium.executablePath())) {
             const changeDue = document.getElementById('change-due');
             const referenceField = document.getElementById('reference-field');
             const discountSummary = document.getElementById('discount-summary');
-            const supervisorFields = document.getElementById('supervisor-fields');
+            const promotionSelect = document.getElementById('promotion-id');
             const paymentReference = document.getElementById('payment-reference');
-            const discountReason = document.getElementById('discount-reason');
+
             const skuInput = document.getElementById('sku');
             const checkoutButton = document.getElementById('checkout-button');
             const confirmCheckoutButton = document.getElementById('confirm-checkout-button');
             const checkoutModal = document.getElementById('checkout-modal');
             const checkoutSummary = document.getElementById('checkout-summary');
-            function getNetTotal() { return 100; }
+            function getNetTotal() { return 100 - getDiscountAmount(); }
             function getCartTotal() { return 100; }
-            function getDiscountAmount() { return 0; }
+            function getCartItemCount() { return Object.values(cart).reduce((count, item) => count + item.qty, 0); }
+            function getDiscountAmount() { return Number(promotionSelect.selectedOptions[0]?.dataset.amount || 0); }
             function money(value) { return Number(value).toFixed(2); }
             function escapeHtml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'); }
             function showCartMessage(message) { document.getElementById('message').textContent = message; }
@@ -97,8 +104,12 @@ if (!fs.existsSync(chromium.executablePath())) {
     const browser = await chromium.launch({headless: true});
     try {
         const page = await browser.newPage();
+        page.setDefaultTimeout(5000);
+        const pageErrors = [];
+        page.on('pageerror', error => pageErrors.push(error.message));
         await page.goto(origin + '/pos'); await page.evaluate(() => loaded);
-        assert.equal(await page.evaluate(() => typeof checkoutNow), 'undefined', 'Scoped async handlers need bound listeners after partial navigation');
+        assert.equal(await page.getByRole('combobox', {name: 'Promotion', exact: true}).inputValue(), '', 'Promotion defaults to no promotion');
+        assert.equal(await page.locator('[name=discount_type]').count(), 0, 'Custom discount controls removed');
         assert.equal(await page.locator('#cash-received').evaluate(input => input.readOnly), false, 'Cashier can type cash received before quote review');
         const mainPresets = page.locator('#cash-field').getByRole('group', {name: 'Quick cash amounts'});
         assert.deepEqual(await mainPresets.getByRole('button').allTextContents(), ['Exact', '₱20', '₱50', '₱100']);
@@ -115,6 +126,57 @@ if (!fs.existsSync(chromium.executablePath())) {
         }
         await page.fill('#cash-received', '125.50');
         assert.equal(await page.locator('#change-due').inputValue(), '25.50', 'Typing cash updates displayed change');
+        await page.evaluate(() => { cartInput.value = JSON.stringify([{product_id: 1, qty: 4}]); return checkoutQuote.refreshPromotions(); });
+        const promotions = page.getByRole('combobox', {name: 'Promotion', exact: true});
+        assert.deepEqual(await promotions.locator('option').allTextContents(), ['No promotion', 'Best promotion · ₱20.00', 'Smaller promotion · ₱5.00']);
+        await promotions.selectOption('2');
+        await page.click('#checkout-button'); await page.waitForSelector('#review-cash');
+        assert.match(await page.locator('#checkout-summary').textContent(), /Total due: ₱95.00/, 'Smaller selection is honored');
+        await page.evaluate(() => closeCheckoutConfirm());
+        await page.evaluate(() => checkoutQuote.refreshPromotions());
+        assert.equal(await promotions.inputValue(), '2', 'Eligible selection survives cart refresh');
+        eligible = false;
+        await page.evaluate(() => checkoutQuote.refreshPromotions());
+        assert.equal(await promotions.inputValue(), '', 'Invalid selection clears');
+        assert.match(await page.locator('#promotion-status').textContent(), /Selection cleared.*review the updated total/i);
+        assert.equal(await page.locator('#quote-token-input').inputValue(), '', 'Refresh cannot authorize payment');
+        await page.evaluate(() => checkoutQuote.refreshPromotions());
+        assert.match(await page.locator('#promotion-status').textContent(), /No eligible promotions/);
+        unavailable = true;
+        await page.evaluate(() => checkoutQuote.refreshPromotions().catch(() => {}));
+        assert.match(await page.locator('#promotion-status').textContent(), /Promotions unavailable/, 'Failure is distinguished from empty eligibility');
+        unavailable = false; eligible = true; delayQuote = 150;
+        const refreshing = page.evaluate(() => checkoutQuote.refreshPromotions());
+        await page.waitForFunction(() => document.getElementById('promotion-status').textContent.includes('Loading'));
+        await refreshing; delayQuote = 0;
+        await promotions.selectOption('1');
+        quoteTotal = 70;
+        await page.evaluate(() => checkoutQuote.refreshPromotions());
+        assert.match(await promotions.locator('option:checked').textContent(), /30.00/, 'Retained promotion recalculates its amount');
+        quoteTotal = 80;
+        await page.evaluate(() => checkoutQuote.refreshPromotions());
+        await page.click('#checkout-button'); await page.waitForSelector('#review-cash');
+        eligible = false;
+        await page.click('#confirm-checkout-button');
+        await page.waitForFunction(() => document.getElementById('message').textContent.includes('no longer eligible'));
+        assert.equal(await promotions.inputValue(), '', 'Deactivation at payment clears selection');
+        assert.equal(submissions, 0, 'Invalid promotion never records payment');
+        await page.click('#checkout-button'); await page.waitForSelector('#review-cash');
+        assert.match(await page.locator('#checkout-summary').textContent(), /Total due: ₱100.00/, 'Cashier explicitly reviews total after invalidation');
+        await page.evaluate(() => closeCheckoutConfirm());
+        eligible = true;
+        await page.evaluate(() => checkoutQuote.refreshPromotions());
+        await promotions.selectOption('1');
+        await page.click('#checkout-button'); await page.waitForSelector('#review-cash');
+        quoteTotal = 70;
+        await page.click('#confirm-checkout-button');
+        await page.waitForFunction(() => document.getElementById('message').textContent.includes('Prices, stock or promotions changed'));
+        assert.equal(submissions, 0, 'Changed amount requires a fresh review, never silent payment');
+        quoteTotal = 80;
+        await promotions.selectOption('');
+        assert.equal(await page.evaluate(() => checkoutQuote.isCurrent()), false, 'Selection invalidates review');
+        await promotions.focus(); await page.keyboard.press('ArrowDown');
+        assert.equal(await promotions.inputValue(), '1', 'Promotion supports native keyboard selection');
         await page.evaluate(() => {
             window.cartWorkspace = {busy:false, context:{locked:false}};
             window.reviewCurrentCart = async () => {
@@ -166,6 +228,9 @@ if (!fs.existsSync(chromium.executablePath())) {
         for (const width of [320, 375, 1440]) {
             await page.setViewportSize({width, height: 900});
             assert(await items.evaluate(table => table.scrollWidth <= table.clientWidth), `Items, quantities and amounts fit together at ${width}px`);
+            if (process.env.CHECKOUT_SCREENSHOT_DIR && [320, 1440].includes(width)) {
+                await page.screenshot({path: require('node:path').join(process.env.CHECKOUT_SCREENSHOT_DIR, `checkout-${width}.png`), fullPage: true});
+            }
         }
         for (const [amount, change] of [[20, '0.00'], [50, '0.00'], [100, '20.00']]) {
             const preset = page.locator('#checkout-summary').getByRole('button', {name: `₱${amount}`, exact: true});
@@ -238,9 +303,10 @@ if (!fs.existsSync(chromium.executablePath())) {
         await insecure.waitForFunction(() => document.getElementById('message').textContent.includes('recovery'));
         assert.equal(submissions, 2, 'Unsupported context never submits payment');
         assert.equal(await insecure.evaluate(() => localStorage.getItem('retailmind.checkout.1')), null);
-        assert.match(await insecure.locator('#checkout-modal').textContent(), /HTTPS.*localhost/, 'Recovery refusal explains the browser requirement inside the visible payment dialog');
+        assert.match(await insecure.locator('#message').textContent(), /HTTPS.*localhost/, 'Recovery refusal explains the browser requirement');
         assert.equal(await insecure.locator('#confirm-checkout-button').isEnabled(), true);
         await insecure.close();
-        console.log('Reviewed quote browser: passed (review before tender, server totals/lines/promotions/change, changed cart refusal, stale quote review, lost outcome receipt recovery)');
+        assert.deepEqual(pageErrors, [], 'Checkout emits no browser errors');
+        console.log('Reviewed quote browser: passed (explicit dropdown/keyboard selection, retain/recalculate/clear, loading/empty/error, deactivation and repricing require review, cash/tender/responsive totals, lost outcome recovery)');
     } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exit(1); });

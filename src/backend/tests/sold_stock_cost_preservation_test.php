@@ -712,6 +712,13 @@ $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (209, 10
 $pdo->prepare("INSERT INTO product_batches (batch_id, product_id, quantity, remaining_quantity, cost_price, expiration_date, date_received)
                VALUES (2091, 209, 10, 10, 20.00, ?, ?)")->execute([$futureExpiry, $nowTime]);
 
+$pdo->exec("CREATE TABLE promotions (
+    promotion_id INTEGER PRIMARY KEY, promotion_name TEXT, status TEXT DEFAULT 'active', scope TEXT DEFAULT 'all',
+    minimum_quantity INTEGER DEFAULT 1, discount_type TEXT, discount_value REAL, starts_at TEXT, ends_at TEXT
+)");
+$pdo->exec("INSERT INTO promotions (promotion_id, promotion_name, discount_type, discount_value, starts_at, ends_at)
+    VALUES (1, 'Promotion Member', 'fixed', 8, '2000-01-01', '2099-01-01')");
+
 $sale8 = $salesWorkflow->checkout(
     [['product_id' => 209, 'qty' => 2]],
     $cashierId,
@@ -720,10 +727,7 @@ $sale8 = $salesWorkflow->checkout(
     [
         'cash_received' => 100.00,
         'tendered' => 100.00,
-        'discount_type' => 'fixed',
-        'discount_value' => 8.00,
-        'discount_amount' => 8.00,
-        'discount_reason' => 'Promotion Member'
+        'promotion_id' => 1
     ]
 );
 

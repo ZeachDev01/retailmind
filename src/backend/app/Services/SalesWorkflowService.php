@@ -53,7 +53,7 @@ use App\Receipts\ReceiptDetailsService;
  */
 class SalesWorkflowService
 {
-    public const QUOTE_CHANGED = 'Prices, stock, promotions or approval changed. Review the final quote again before recording payment.';
+    public const QUOTE_CHANGED = 'Prices, stock or promotions changed. Review the final quote again before recording payment.';
     private PDO $pdo;
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
@@ -99,6 +99,7 @@ class SalesWorkflowService
         // cannot sell is refused without beginning any Store write.
         $this->requireCashierWorkspace($actorRole);
 
+        $this->selectedPromotionId($paymentDetails);
         $attempt = $this->attemptIdentity($paymentDetails);
         $fingerprint = $this->attemptFingerprint($cleanCart, $paymentMethod, $paymentDetails);
         // Recovery remains available after a shift or fiscal period closes.
@@ -136,14 +137,6 @@ class SalesWorkflowService
             $netTotal = $quote['total'];
             $payment = $this->resolvePayment($paymentMethod, $paymentDetails, $netTotal);
             $saleId = $this->insertSale($userId, $attribution, $sale['total'], $netTotal, $paymentMethod, $payment, $discount);
-            if (!empty($discount['approval_state'])) {
-                $this->pdo->prepare("INSERT INTO activity_log (user_id, action, category, module, record_id, metadata) VALUES (?, 'Approved sale discount', 'store_operation', 'sales', ?, ?)")
-                    ->execute([$discount['discount_authorized_by'], $saleId, json_encode([
-                        'cashier_id' => $userId, 'quote_hash' => $quote['state_hash'],
-                        'discount_amount' => $discount['discount_amount'],
-                    ], JSON_THROW_ON_ERROR)]);
-            }
-
             $this->applyPackOpenings($sale['plans'] ?? [], $saleId, $userId);
 
             foreach ($sale['items'] as $item) {
@@ -247,31 +240,32 @@ class SalesWorkflowService
         }
     }
 
+    private function selectedPromotionId(array $details): int
+    {
+        foreach (['discount_type', 'discount_value', 'discount_reason', 'discount_amount', 'discount_authorized_by', 'discount_approver_username', 'discount_approver_password'] as $field) {
+            if (array_key_exists($field, $details)) throw new DomainException('Custom discounts are unavailable. Select an eligible promotion.');
+        }
+        $selected = $details['promotion_id'] ?? '';
+        if ($selected !== '' && $selected !== null && (filter_var($selected, FILTER_VALIDATE_INT) === false || (int)$selected < 1)) {
+            throw new DomainException('Choose a valid promotion.');
+        }
+        return (int)$selected;
+    }
+
     private function buildQuote(array $cart, int $userId, int $shiftId, array $details): array
     {
         $sale = $this->buildSalePayload($cart);
-        $manual = $this->resolveDiscount($userId, $sale['total'], $details);
-        $promotion = $this->resolveAutomaticPromotion($sale['items'], $sale['total']);
-        $discount = $promotion['discount_amount'] > $manual['discount_amount'] ? $promotion : $manual;
-        if ($discount['promotion_id'] === null && $discount['discount_amount'] > $sale['total'] * 0.10) {
-            $approval = $this->authorizeSupervisor(
-                trim((string)($details['discount_approver_username'] ?? '')),
-                (string)($details['discount_approver_password'] ?? '')
-            );
-            $discount['discount_authorized_by'] = (int)$approval['user_id'];
-            $discount['approval_state'] = $approval;
-        }
+        $selected = $this->selectedPromotionId($details);
+        $discount = $this->resolvePromotion($sale['items'], $sale['total'], $selected);
         $total = round(max(0, $sale['total'] - $discount['discount_amount']), 2);
         $inputs = [
             'payment_method' => (string)($details['payment_method'] ?? ''),
-            'discount_type' => (string)($details['discount_type'] ?? 'none'),
-            'discount_value' => (float)($details['discount_value'] ?? 0),
-            'discount_reason' => trim((string)($details['discount_reason'] ?? '')),
+            'promotion_id' => $details['promotion_id'] ?? '',
             'held_sale_id' => (int)($details['held_sale_id'] ?? 0),
         ];
         return ['sale' => $sale, 'discount' => $discount, 'total' => $total,
-            'eligible_promotions' => $promotion['eligible_promotions'],
-            'state_hash' => hash('sha256', json_encode([$userId, $shiftId, $inputs, $sale, $discount, $promotion['eligible_promotions']], JSON_THROW_ON_ERROR))];
+            'eligible_promotions' => $discount['eligible_promotions'],
+            'state_hash' => hash('sha256', json_encode([$userId, $shiftId, $inputs, $sale, $discount, $discount['eligible_promotions']], JSON_THROW_ON_ERROR))];
     }
 
     private function attemptIdentity(array $details): ?string
@@ -300,10 +294,7 @@ class SalesWorkflowService
         $payment = [
             'cash_received' => $method === 'cash' ? (float)($details['cash_received'] ?? 0) : null,
             'payment_reference' => $method === 'cash' ? null : trim((string)($details['payment_reference'] ?? '')),
-            'discount_type' => (string)($details['discount_type'] ?? 'none'),
-            'discount_value' => (float)($details['discount_value'] ?? 0),
-            'discount_reason' => trim((string)($details['discount_reason'] ?? '')),
-            'discount_approver_username' => trim((string)($details['discount_approver_username'] ?? '')),
+            'promotion_id' => $details['promotion_id'] ?? '',
             'held_sale_id' => (int)($details['held_sale_id'] ?? 0),
         ];
         return hash('sha256', json_encode([$quantities, $method, $payment], JSON_THROW_ON_ERROR));
@@ -916,52 +907,7 @@ class SalesWorkflowService
         return $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
     }
 
-    private function resolveDiscount(int $userId, float $grossTotal, array $details): array
-    {
-        $type = (string)($details['discount_type'] ?? 'none');
-        if (!in_array($type, ['none', 'percentage', 'fixed'], true)) {
-            $type = 'none';
-        }
-        $value = max(0, (float)($details['discount_value'] ?? 0));
-        if (!is_finite($value)) throw new DomainException('Enter a valid discount value.');
-        $reason = trim((string)($details['discount_reason'] ?? ''));
-        $amount = 0.0;
-        if ($type === 'percentage') {
-            if ($value > 100) {
-                throw new RuntimeException('Percentage discount cannot exceed 100%.');
-            }
-            $amount = round($grossTotal * ($value / 100), 2);
-        } elseif ($type === 'fixed') {
-            $amount = round(min($value, $grossTotal), 2);
-        }
-
-        if ($amount <= 0) {
-            return [
-                'discount_type' => 'none',
-                'discount_value' => 0,
-                'discount_amount' => 0,
-                'discount_reason' => null,
-                'discount_authorized_by' => null,
-                'promotion_id' => null,
-                'promotion_name' => null,
-            ];
-        }
-        if ($reason === '') {
-            throw new RuntimeException('A discount reason is required.');
-        }
-
-        return [
-            'discount_type' => $type,
-            'discount_value' => $value,
-            'discount_amount' => $amount,
-            'discount_reason' => $reason,
-            'discount_authorized_by' => $userId,
-            'promotion_id' => null,
-            'promotion_name' => null,
-        ];
-    }
-
-    private function resolveAutomaticPromotion(array $items, float $grossTotal): array
+    private function resolvePromotion(array $items, float $grossTotal, int $selected): array
     {
         $default = [
             'discount_type' => 'none', 'discount_value' => 0.0, 'discount_amount' => 0.0,
@@ -977,9 +923,10 @@ class SalesWorkflowService
             // Older isolated schemas predate promotions. A query/connection
             // failure must never silently remove a discount from a reviewed sale.
             if ((int)($e->errorInfo[1] ?? 0) !== 1146 && !str_contains($e->getMessage(), 'no such table: promotions')) throw $e;
+            if ($selected) throw new DomainException('The selected promotion is no longer eligible. Select another promotion or No promotion and review the updated total.');
             return $default;
         }
-        $best = $default;
+        $selection = $default;
         $eligiblePromotions = [];
         foreach ($promotions as $promotion) {
             $eligibleSubtotal = 0.0;
@@ -1002,39 +949,21 @@ class SalesWorkflowService
                 : round(min($eligibleSubtotal, $value), 2);
             $amount = min($amount, $grossTotal);
             $eligiblePromotions[] = $promotion + ['applied_amount' => $amount];
-            if ($amount > (float)$best['discount_amount']) {
-                $best = [
+            if ((int)$promotion['promotion_id'] === $selected) {
+                $selection = [
                     'discount_type' => (string)$promotion['discount_type'],
                     'discount_value' => $value,
                     'discount_amount' => $amount,
-                    'discount_reason' => 'Automatic promotion: ' . $promotion['promotion_name'],
+                    'discount_reason' => 'Promotion: ' . $promotion['promotion_name'],
                     'discount_authorized_by' => null,
                     'promotion_id' => (int)$promotion['promotion_id'],
                     'promotion_name' => (string)$promotion['promotion_name'],
                 ];
             }
         }
-        $best['eligible_promotions'] = $eligiblePromotions;
-        return $best;
-    }
-
-    private function authorizeSupervisor(string $username, string $password): array
-    {
-        if ($username === '' || $password === '') {
-            throw new RuntimeException('Administrator approval is required for an applied manual discount above 10%.');
-        }
-        $stmt = $this->pdo->prepare(
-            "SELECT u.user_id, u.password_hash, u.status, u.username, r.role_name
-             FROM users u JOIN roles r ON r.role_id = u.role_id
-             WHERE u.username = ? AND u.status = 'active' AND r.role_name IN ('admin','super_admin')
-             LIMIT 1" . $this->rowLock()
-        );
-        $stmt->execute([$username]);
-        $supervisor = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$supervisor || !password_verify($password, (string)$supervisor['password_hash'])) {
-            throw new RuntimeException('Administrator approval failed.');
-        }
-        return $supervisor;
+        if ($selected && $selection['promotion_id'] === null) throw new DomainException('The selected promotion is no longer eligible. Select another promotion or No promotion and review the updated total.');
+        $selection['eligible_promotions'] = $eligiblePromotions;
+        return $selection;
     }
 
     private function resolvePayment(string $paymentMethod, array $paymentDetails, float $total): array

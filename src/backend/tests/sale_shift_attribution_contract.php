@@ -556,13 +556,15 @@ try {
         'reading the ledger leaves an unlinked sale unchanged'
     );
 
+    $pdo->exec("INSERT INTO promotions (promotion_name, scope, discount_type, discount_value, starts_at, ends_at)
+        VALUES ('Loyalty', 'all', 'fixed', 5, '2000-01-01', '2099-01-01')");
+    $promotionId = (int)$pdo->lastInsertId();
     $discounted = $service->checkout($cart, $casey, 'cashier', 'ewallet', [
-        'payment_reference' => 'EW-102', 'discount_type' => 'fixed',
-        'discount_value' => 5, 'discount_reason' => 'Loyalty',
+        'payment_reference' => 'EW-102', 'promotion_id' => $promotionId,
     ]);
     $discountedReceipt = $receiptService->fetchSale((int)$discounted['sale_id'], 1);
     $assert((float)($discountedReceipt['discount_amount'] ?? 0) === 5.0
-        && ($discountedReceipt['discount_reason'] ?? null) === 'Loyalty'
+        && ($discountedReceipt['promotion_name'] ?? null) === 'Loyalty'
         && (float)($discountedReceipt['total_amount'] ?? 0) === 45.0
         && ($discountedReceipt['payment_method'] ?? null) === 'ewallet'
         && ($discountedReceipt['payment_reference'] ?? null) === 'EW-102',
