@@ -8,6 +8,22 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'audit_contract') {
+    $_ENV['DB_NAME'] = $_SERVER['DB_NAME'] = $database;
+    require __DIR__ . '/../audit_visibility_integration.php';
+    exit;
+}
+if ($argv[1] === 'audit_payload') {
+    $pdo->exec("USE `{$database}`");
+    $service = new App\Audit\ProtectedAuditRecordService($pdo, new App\Authorization\RoleCapabilityPolicy());
+    $result = [];
+    foreach ([1000, 25] as $limit) {
+        $rows = $service->records('super_admin', ['limit' => $limit]);
+        $result[$limit] = ['rows' => count($rows), 'bytes' => strlen(json_encode($rows, JSON_THROW_ON_ERROR))];
+    }
+    echo json_encode($result, JSON_THROW_ON_ERROR);
+    exit;
+}
 if ($argv[1] === 'audit') {
     $pdo->exec("USE `{$database}`");
     $insert = $pdo->prepare("INSERT INTO activity_log (user_id,action,category,module,record_id,new_value,ip_address) VALUES (2,?,'security','Authentication',?,?,'127.0.0.1')");
@@ -15,6 +31,11 @@ if ($argv[1] === 'audit') {
         $insert->execute(['Audit layout fixture ' . sprintf('%02d', $index), $index,
             json_encode(['review_note' => str_repeat('Long audit evidence remains readable. ', 12)])]);
     }
+    $pdo->beginTransaction();
+    foreach (range(1, 1005) as $index) {
+        $insert->execute(['Audit archive fixture ' . $index, $index, json_encode(['note' => 'Archive evidence'])]);
+    }
+    $pdo->commit();
     $pdo->exec("INSERT INTO login_attempts (username,ip_address) VALUES ('theme_super_admin','127.0.0.1'),('unrecognized_test_account','127.0.0.2')");
     exit;
 }
@@ -199,6 +220,7 @@ if ($fresh !== $upgraded) throw new RuntimeException('Fresh/upgrade appearance s
 if ((int)$pdo->query("SELECT COUNT(*) FROM users WHERE theme_preference='system'")->fetchColumn() !== count($roles)) {
     throw new RuntimeException('Existing accounts must default to System after upgrade.');
 }
+(new App\Database\MigrationRunner($pdo, __DIR__ . '/../../database/migrations'))->runPending();
 $pdo->exec("INSERT INTO registers (register_id,name) VALUES (1,'Theme Register')");
 $pdo->exec('INSERT INTO cashier_shifts (shift_id,cashier_id,register_id,opening_cash) VALUES (1,4,1,100)');
 $pdo->prepare('INSERT INTO held_sales (cashier_id,shift_id,reference_no,customer_label,cart_json,item_count,total_amount) VALUES (4,1,?,?,?,?,?)')
@@ -210,5 +232,4 @@ App\Store\StoreWriteGate::begin($pdo); $pdo->commit();
 $pdo->exec("INSERT INTO sales (sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES (1,4,1,25,'cash')");
 $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (1,1,1,1,25,25)');
 $pdo->beginTransaction(); (new App\Receipts\ReceiptDetailsService($pdo))->preserveSale(1); $pdo->commit();
-(new App\Database\MigrationRunner($pdo, __DIR__ . '/../../database/migrations'))->runPending();
 echo json_encode(['database'=>$database,'password'=>$password]);

@@ -109,6 +109,39 @@ if (!$failures) {
             'Super Administrator should receive every audit category'
         );
         $assert(count($service->exportRows('super_admin', $filters)) === 5, 'Super Administrator export should contain every permitted record');
+        $page = $service->records('super_admin', $filters + ['limit' => 2, 'offset' => 2]);
+        $assert(array_column($page, 'log_id') === array_column(array_slice($superRecords, 2, 2), 'log_id'), 'Pagination must retrieve the requested stable slice');
+        $assert($service->records('super_admin', $filters + ['limit' => 2, 'offset' => 5]) === [], 'Pagination past the end must be empty');
+        $crossColumn = $filters + ['search' => $marker . ' "System / Unknown"'];
+        $assert($service->count('super_admin', $crossColumn) === 5, 'Multi-word search must match words across action and displayed user columns');
+        $assert(count($service->exportRows('super_admin', $crossColumn)) === 5, 'Export and table search must have identical scope');
+        $assert($service->count('super_admin', $filters + ['search' => '%']) === 0, 'Search percent must be literal rather than an SQL wildcard');
+        $assert($service->count('super_admin', $filters + ['search' => '!']) === 0, 'LIKE escape characters must remain literal');
+        $columnFilters = $filters + ['columns' => [3 => ['columnControl' => ['search' => ['logic' => 'equal', 'value' => 'security']]]]];
+        $assert($service->count('super_admin', $columnFilters) === 1, 'ColumnControl equals must filter all permitted history');
+        $assert(count($service->exportRows('super_admin', $columnFilters)) === 1, 'ColumnControl filters must also constrain exports');
+        $assert($service->count('admin', $columnFilters) === 0, 'ColumnControl must not bypass role scope');
+        $emptyModule = ['columns' => [4 => ['columnControl' => ['search' => ['logic' => 'empty', 'value' => '']]]]];
+        $assert($service->count('super_admin', $filters + $emptyModule) === 0, 'ColumnControl empty must evaluate without an input value');
+        $sorted = $service->records('super_admin', $filters + ['order' => [['column' => 2, 'dir' => 'asc']]]);
+        $expectedActions = array_column($superRecords, 'action');
+        sort($expectedActions);
+        $assert(array_column($sorted, 'action') === $expectedActions, 'Column sorting must use the requested allowed column');
+        $assert(count($service->records('super_admin', $filters + ['order' => [['column' => '0; DROP TABLE activity_log', 'dir' => 'asc']]])) === 5, 'Untrusted sort columns must never become SQL');
+        $today = (string)$pdo->query('SELECT CURRENT_DATE()')->fetchColumn();
+        $assert($service->count('super_admin', $filters + ['columns' => [0 => ['columnControl' => ['search' => ['logic' => 'equal', 'value' => $today]]]]]) === 5, 'Date equality must include all times on the selected day');
+        $invalidDateRejected = false;
+        try {
+            $service->count('super_admin', $filters + ['columns' => [0 => ['columnControl' => ['search' => ['logic' => 'equal', 'value' => '2026-02-30']]]]]);
+        } catch (InvalidArgumentException $exception) {
+            $invalidDateRejected = true;
+        }
+        $assert($invalidDateRejected, 'Impossible dates must be rejected');
+        $pdo->prepare('UPDATE activity_log SET record_id = 2 WHERE log_id = ?')->execute([$superRecords[0]['log_id']]);
+        $pdo->prepare('UPDATE activity_log SET record_id = 10 WHERE log_id = ?')->execute([$superRecords[1]['log_id']]);
+        $numericFilter = $filters + ['columns' => [5 => ['columnControl' => ['search' => ['logic' => 'greater', 'value' => '2']]]]];
+        $assert($service->count('super_admin', $numericFilter) === 1, 'Record number comparisons must be numeric, so 10 is greater than 2');
+        $assert(count($service->exportRows('super_admin', $numericFilter)) === 1, 'Numeric column filters must apply to CSV exports');
 
         $assert($service->count('admin', $filters) === 1, 'Administrator count should include only Store-operational records');
         $adminRecords = $service->records('admin', $filters);

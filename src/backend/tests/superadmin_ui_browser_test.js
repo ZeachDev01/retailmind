@@ -100,7 +100,14 @@ const fixture = action => {
         for (const screen of screens.filter(screen => !process.env.UI_SCREENS || process.env.UI_SCREENS.split(',').includes(screen))) {
             console.log(label + ': ' + screen);
             const [route, query] = screen.split('?');
-            if (screen === 'system_administrator/audit_logs' && !admin && !inventory) fixture('audit');
+            if (screen === 'system_administrator/audit_logs' && !admin && !inventory) {
+                fixture('audit');
+                console.log(fixture('audit_contract').trim());
+                const payload = JSON.parse(fixture('audit_payload'));
+                assert.equal(payload[25].rows, 25);
+                assert.ok(payload[25].bytes < payload[1000].bytes / 20, 'One-page record payload is substantially smaller than the former 1000-row load');
+                console.log('Audit record payload bytes: ' + JSON.stringify(payload));
+            }
             const response = await page.goto(origin + '/components/' + route + '.php' + (query ? '?' + query : ''), {waitUntil: 'networkidle'});
             if (response.status() !== 200) {
                 checks.push({screen, issues: ['HTTP ' + response.status()]});
@@ -229,7 +236,10 @@ const fixture = action => {
                     await page.waitForURL(destination);
                     assert.equal(await page.locator('main h1').count(), 1, 'Issue opens its control page on touch');
                 }
-                if (screen === 'system_administrator/audit_logs' && liveCdn && !admin && !inventory) {
+                if (screen === 'system_administrator/audit_logs' && !admin && !inventory) {
+                    await page.waitForFunction(() => !document.querySelector('#auditLogExportForm button').disabled);
+                    assert.ok(Number(await page.locator('#matchingRecordsCount').textContent()) > 1000, 'Counts include history beyond the old cap');
+                    assert.equal(await page.locator('#auditLogsTable tbody tr').count(), 25, 'Only one page of details is rendered');
                     const statTops = await page.locator('.audit-log-stats .stat-card').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().top));
                     assert.equal(new Set(statTops).size, 1, 'Mobile audit counts stay in one compact row');
                     const search = page.locator('.dt-search input');
@@ -245,6 +255,15 @@ const fixture = action => {
                     await details.click();
                     assert.equal(await details.evaluate(el => el.parentElement.open), true, 'Record details expand');
                     assert.ok((await page.locator('.audit-details[open] dd').last().textContent()).includes('Long audit evidence'), 'Expanded details preserve long evidence');
+                    await search.fill('theme_super_admin "Audit layout fixture 01"');
+                    await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1' && !document.querySelector('#auditLogExportForm button').disabled && JSON.parse(document.getElementById('exportTableRequest').value).search.value.includes('theme_super_admin'));
+                    assert.match(await page.locator('#exportTableRequest').inputValue(), /theme_super_admin/, 'Export waits for the latest applied search');
+                    const [matchedDownload] = await Promise.all([
+                        page.waitForEvent('download'), page.getByRole('button', {name: 'Export CSV', exact: true}).click()
+                    ]);
+                    const matchedCsv = fs.readFileSync(await matchedDownload.path(), 'utf8');
+                    assert.ok(matchedCsv.includes('Audit layout fixture 01'), 'Cross-column multi-word search exports the matching record');
+                    assert.ok(!matchedCsv.includes('Audit layout fixture 02'), 'Export excludes records outside the applied search');
                     await search.fill('no-matching-audit-record-7921');
                     await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '0');
                     const [download] = await Promise.all([
@@ -252,7 +271,20 @@ const fixture = action => {
                     ]);
                     const csv = fs.readFileSync(await download.path(), 'utf8');
                     assert.equal(csv.trim().split(/\r?\n/).length, 1, 'Export with no matches contains only headers');
-                    assert.equal(await page.locator('[name="matched_log_ids"]').inputValue(), 'none', 'Export preserves the empty filter');
+                    assert.equal(JSON.parse(await page.locator('#exportTableRequest').inputValue()).search.value, 'no-matching-audit-record-7921', 'Export preserves the empty search');
+                    await search.fill('');
+                    await page.waitForFunction(() => Number(document.getElementById('matchingRecordsCount').textContent) > 1000 && !document.querySelector('#auditLogExportForm button').disabled);
+                    await page.locator('#auditLogsTable thead th').nth(2).locator('button').last().click();
+                    await page.locator('.dtcc-searchText input:visible').fill('Audit layout fixture 01');
+                    await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1' && !document.querySelector('#auditLogExportForm button').disabled);
+                    const columnRequest = JSON.parse(await page.locator('#exportTableRequest').inputValue());
+                    assert.equal(columnRequest.columns[2].columnControl.search.value, 'Audit layout fixture 01', 'Column popup sends its full-history filter to export');
+                    await page.keyboard.press('Escape');
+                    await page.route('**/audit_logs.php?*', route => new URL(route.request().url()).searchParams.get('table') === '1' ? route.abort() : route.continue());
+                    await search.fill('force-request-failure');
+                    await page.locator('#audit-table-error').waitFor({state: 'visible'});
+                    assert.equal(await page.getByRole('button', {name: 'Export CSV', exact: true}).isDisabled(), true, 'Failed searches cannot export stale results');
+                    await page.unroute('**/audit_logs.php?*');
                 }
                 if (screen === 'user_manager/user_manager') {
                     for (const opener of ['#openUserModal', '.open-user-drawer']) {

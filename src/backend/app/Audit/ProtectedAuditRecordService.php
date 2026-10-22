@@ -23,10 +23,20 @@ final class ProtectedAuditRecordService
                        CASE WHEN u.is_recovery_account = 1 THEN NULL ELSE u.username END AS username
                 FROM activity_log al
                 LEFT JOIN users u ON al.user_id = u.user_id
-                {$whereSql}
-                ORDER BY al.created_at DESC, al.log_id DESC";
+                {$whereSql}";
+        $order = [];
+        $columns = $this->tableColumns();
+        foreach (array_slice((array)($filters['order'] ?? []), 0, 6) as $item) {
+            $index = filter_var($item['column'] ?? null, FILTER_VALIDATE_INT);
+            if ($index !== false && $index !== null && isset($columns[$index]) && $index < 6) {
+                $direction = ($item['dir'] ?? '') === 'asc' ? 'ASC' : 'DESC';
+                $order[] = ($index === 5 ? 'al.record_id' : $columns[$index]) . ' ' . $direction;
+            }
+        }
+        $sql .= ' ORDER BY ' . ($order ? implode(', ', $order) : 'al.created_at DESC') . ', al.log_id DESC';
         if (isset($filters['limit'])) {
             $sql .= ' LIMIT ' . max(1, min(2000, (int)$filters['limit']));
+            $sql .= ' OFFSET ' . max(0, (int)($filters['offset'] ?? 0));
         }
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
@@ -85,10 +95,47 @@ final class ProtectedAuditRecordService
             $clauses[] = 'DATE(al.created_at) <= ?';
             $params[] = (string)$filters['date_to'];
         }
-        if (($filters['search'] ?? '') !== '') {
-            $search = '%' . (string)$filters['search'] . '%';
-            $clauses[] = '(al.action LIKE ? OR al.category LIKE ? OR REPLACE(al.category, \'_\', \' \') LIKE ? OR COALESCE(al.module, \'\') LIKE ? OR CAST(al.record_id AS CHAR) LIKE ? OR COALESCE(al.ip_address, \'\') LIKE ? OR CAST(al.created_at AS CHAR) LIKE ? OR COALESCE(al.previous_value, \'\') LIKE ? OR COALESCE(al.new_value, \'\') LIKE ? OR COALESCE(al.metadata, \'\') LIKE ? OR COALESCE(u.full_name, \'\') LIKE ? OR (COALESCE(u.is_recovery_account, 0) = 0 AND COALESCE(u.username, \'\') LIKE ?))';
-            array_push($params, $search, $search, $search, $search, $search, $search, $search, $search, $search, $search, $search, $search);
+        $columns = $this->tableColumns();
+        // Match each word across columns; quotes keep a multi-word phrase together.
+        preg_match_all('/"([^"]+)"|(\S+)/u', (string)($filters['search'] ?? ''), $terms, PREG_SET_ORDER);
+        foreach ($terms as $term) {
+            $search = '%' . $this->escapeLike($term[1] !== '' ? $term[1] : $term[2]) . '%';
+            $clauses[] = '(' . implode(' OR ', array_map(static fn(string $column): string => "{$column} LIKE ? ESCAPE '!'", $columns)) . ')';
+            array_push($params, ...array_fill(0, count($columns), $search));
+        }
+        foreach ($columns as $index => $column) {
+            $search = $filters['columns'][$index]['columnControl']['search'] ?? [];
+            $value = trim((string)($search['value'] ?? ''));
+            $logic = (string)($search['logic'] ?? 'contains');
+            if ($logic === 'empty' || $logic === 'notEmpty') {
+                $clauses[] = "{$column} " . ($logic === 'empty' ? "= ''" : "<> ''");
+            } elseif ($value !== '') {
+                if ($index === 0) {
+                    $column = 'DATE(al.created_at)';
+                    $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+                    if (!$date || $date->format('Y-m-d') !== $value) {
+                        throw new \InvalidArgumentException('Enter a valid date in YYYY-MM-DD format.');
+                    }
+                } elseif ($index === 5) {
+                    if (!is_numeric($value)) {
+                        throw new \InvalidArgumentException('Enter a valid record number.');
+                    }
+                    $column = 'al.record_id';
+                }
+                $operator = match ($logic) {
+                    'equal' => '=', 'notEqual' => '<>', 'greater' => '>', 'greaterOrEqual' => '>=',
+                    'less' => '<', 'lessOrEqual' => '<=', 'notContains' => 'NOT LIKE',
+                    'contains', 'starts', 'ends' => 'LIKE',
+                    default => throw new \InvalidArgumentException('Choose a supported search condition.'),
+                };
+                $clauses[] = "{$column} {$operator} ?" . (str_contains($operator, 'LIKE') ? " ESCAPE '!'" : '');
+                $params[] = match ($logic) {
+                    'contains', 'notContains' => '%' . $this->escapeLike($value) . '%',
+                    'starts' => $this->escapeLike($value) . '%',
+                    'ends' => '%' . $this->escapeLike($value),
+                    default => $value,
+                };
+            }
         }
         if (isset($filters['log_ids']) && is_array($filters['log_ids'])) {
             $validIds = array_values(array_unique(array_filter(array_map('intval', $filters['log_ids']), static fn(int $id): bool => $id > 0)));
@@ -117,6 +164,24 @@ final class ProtectedAuditRecordService
         }
         $clauses[] = "{$column} = ?";
         $params[] = $integer ? (int)$value : (string)$value;
+    }
+
+    private function tableColumns(): array
+    {
+        return [
+            "CAST(al.created_at AS CHAR)",
+            "CASE WHEN u.is_recovery_account = 1 THEN 'Recovery Account' WHEN al.user_id IS NULL THEN 'System / Unknown' ELSE CONCAT_WS(' ', u.full_name, u.username) END",
+            'al.action',
+            "REPLACE(al.category, '_', ' ')",
+            "COALESCE(al.module, '-')",
+            "COALESCE(CAST(al.record_id AS CHAR), '-')",
+            "CONCAT_WS(' ', al.ip_address, al.previous_value, al.new_value, CASE WHEN al.action IN ('Failed sign-ins reviewed', 'Application log acknowledged') THEN al.metadata END)",
+        ];
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $value);
     }
 
     private function likeFilter(array &$clauses, array &$params, string $column, $value): void

@@ -7,37 +7,13 @@ require_any_capability([
 ]);
 
 $actorRole = (string)current_role();
-$signInReviews = new \App\Attention\FailedSignInReviewService($pdo, new \App\Attention\SystemClock());
-$reviewMessage = (string)($_SESSION['sign_in_review_message'] ?? '');
-unset($_SESSION['sign_in_review_message']);
-$reviewError = '';
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'review_failed_sign_ins') {
-    verify_csrf_token($_POST['csrf_token'] ?? '');
-    try {
-        if (($_POST['review_confirmed'] ?? '') !== '1') {
-            throw new InvalidArgumentException('Confirm that you reviewed the listed attempts before clearing.');
-        }
-        $signInReviews->clearReviewed(
-            $actorRole, (int)$_SESSION['user_id'], (int)($_POST['through_attempt_id'] ?? 0),
-            (string)($_POST['review_result'] ?? ''), (string)($_POST['review_note'] ?? ''), get_client_ip_address()
-        );
-        $_SESSION['sign_in_review_message'] = 'Review saved. The listed attempts were cleared from the warning; their history is preserved. New or remaining attempts can still trigger a warning.';
-        header('Location: ' . app_url('components/system_administrator/audit_logs.php') . '#failed-sign-in-review');
-        exit;
-    } catch (Throwable $exception) {
-        $reviewError = \App\Support\OperatorAlert::message($exception, 'The review could not be saved. Reload the page and try again.');
-    }
-}
-$pendingSignIns = $actorRole === 'super_admin' ? $signInReviews->pendingAttempts($actorRole) : [];
-$pendingSignInCount = $actorRole === 'super_admin' ? $signInReviews->pendingCount() : 0;
-
 $userFilter = trim((string)($_GET['user_id'] ?? ''));
 $actionFilter = trim((string)($_GET['action'] ?? ''));
 $moduleFilter = trim((string)($_GET['module'] ?? ''));
 $dateFrom = trim((string)($_GET['date_from'] ?? ''));
 $dateTo = trim((string)($_GET['date_to'] ?? ''));
-$tableSearch = '';
-$matchedLogIds = null;
+$isTableRequest = ($_GET['table'] ?? '') === '1';
+$tableRequest = $isTableRequest ? $_GET : [];
 $isExport = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
     && ($_POST['action'] ?? '') === 'export_csv';
 
@@ -48,12 +24,9 @@ if ($isExport) {
     $moduleFilter = trim((string)($_POST['module'] ?? ''));
     $dateFrom = trim((string)($_POST['date_from'] ?? ''));
     $dateTo = trim((string)($_POST['date_to'] ?? ''));
-    $tableSearch = trim((string)($_POST['table_search'] ?? ''));
-    $rawMatchedIds = trim((string)($_POST['matched_log_ids'] ?? ''));
-    if ($rawMatchedIds === 'none') {
-        $matchedLogIds = [];
-    } elseif ($rawMatchedIds !== '') {
-        $matchedLogIds = array_values(array_filter(array_map('intval', explode(',', $rawMatchedIds)), static fn(int $id): bool => $id > 0));
+    $tableRequest = json_decode((string)($_POST['table_request'] ?? '{}'), true, 32, JSON_THROW_ON_ERROR);
+    if (!is_array($tableRequest)) {
+        throw new InvalidArgumentException('Reload the audit page and try the export again.');
     }
 }
 
@@ -64,11 +37,10 @@ $auditFilters = [
     'module' => $moduleFilter,
     'date_from' => $dateFrom,
     'date_to' => $dateTo,
-    'search' => $tableSearch,
+    'search' => (string)($tableRequest['search']['value'] ?? ''),
+    'columns' => $tableRequest['columns'] ?? [],
+    'order' => $tableRequest['order'] ?? [],
 ];
-if ($matchedLogIds !== null) {
-    $auditFilters['log_ids'] = $matchedLogIds;
-}
 
 function audit_log_display_value($value): string
 {
@@ -114,6 +86,48 @@ function audit_log_action_class(string $action): string
     return 'is-neutral';
 }
 
+function audit_log_table_cells(array $log): array
+{
+    $previousValue = audit_log_display_value($log['previous_value'] ?? null);
+    $newValue = audit_log_display_value($log['new_value'] ?? null);
+    $formattedTimestamp = format_display_datetime($log['created_at']);
+    $user = $log['user_id']
+        ? '<strong>' . htmlspecialchars((string)($log['full_name'] ?: $log['username'])) . '</strong><small>' . htmlspecialchars((string)$log['username']) . '</small>'
+        : '<em>System / Unknown</em>';
+    ob_start();
+    ?>
+    <details class="audit-details">
+        <summary aria-label="<?= htmlspecialchars('View details for ' . $log['action'] . ' at ' . $formattedTimestamp) ?>">View details</summary>
+        <dl class="audit-details-content">
+            <dt>IP address:</dt>
+            <dd class="audit-code"><?= htmlspecialchars((string)($log['ip_address'] ?? '-')) ?></dd>
+            <dt>Previous:</dt>
+            <dd class="<?= $previousValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($previousValue) ?></dd>
+            <dt>New:</dt>
+            <dd class="<?= $newValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($newValue) ?></dd>
+            <?php if ($log['action'] === \App\Attention\FailedSignInReviewService::ACTION): ?>
+                <dt>Reviewed evidence:</dt>
+                <dd><?= htmlspecialchars(audit_log_display_value($log['metadata'] ?? null)) ?></dd>
+            <?php endif; ?>
+            <?php if ($log['action'] === \App\Attention\ApplicationLogReviewService::ACTION): ?>
+                <dt>Reviewed log excerpt:</dt>
+                <dd><pre><?= htmlspecialchars((string)(json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-')) ?></pre></dd>
+            <?php endif; ?>
+        </dl>
+    </details>
+    <?php
+    $details = (string)ob_get_clean();
+    return [
+        htmlspecialchars($formattedTimestamp),
+        $user,
+        '<span class="audit-action-badge ' . audit_log_action_class((string)$log['action']) . '">' . htmlspecialchars((string)$log['action']) . '</span>',
+        htmlspecialchars(ucwords(str_replace('_', ' ', (string)$log['category']))),
+        htmlspecialchars((string)($log['module'] ?? '-')),
+        htmlspecialchars((string)($log['record_id'] ?? '-')),
+        $details,
+    ];
+}
+
 function audit_log_csv_value($value): string
 {
     $value = (string)$value;
@@ -133,9 +147,32 @@ function audit_log_send_csv(string $filename, array $rows): void
     exit;
 }
 
-$logs = $isExport
-    ? $protectedAuditRecords->exportRows($actorRole, $auditFilters)
-    : $protectedAuditRecords->records($actorRole, $auditFilters + ['limit' => 1000]);
+if ($isTableRequest) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    try {
+        $baseFilters = array_diff_key($auditFilters, array_flip(['search', 'columns', 'order']));
+        $total = $protectedAuditRecords->count($actorRole, $baseFilters);
+        $filtered = $protectedAuditRecords->count($actorRole, $auditFilters);
+        $logs = $protectedAuditRecords->records($actorRole, $auditFilters + [
+            'limit' => max(10, min(100, (int)($_GET['length'] ?? 25))),
+            'offset' => max(0, (int)($_GET['start'] ?? 0)),
+        ]);
+        echo json_encode([
+            'draw' => max(0, (int)($_GET['draw'] ?? 0)),
+            'recordsTotal' => $total,
+            'recordsFiltered' => $filtered,
+            'data' => array_map('audit_log_table_cells', $logs),
+        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+    } catch (Throwable $exception) {
+        error_log('Audit table request failed: ' . $exception->getMessage());
+        http_response_code($exception instanceof InvalidArgumentException ? 422 : 500);
+        echo json_encode(['error' => \App\Support\OperatorAlert::message($exception, 'Records could not be loaded. Reload the page and try again.')]);
+    }
+    exit;
+}
+
+$logs = $isExport ? $protectedAuditRecords->exportRows($actorRole, $auditFilters) : [];
 
 if ($isExport) {
     $rows = array_map(static function (array $log): array {
@@ -156,6 +193,31 @@ if ($isExport) {
     audit_log_send_csv('audit_log_' . date('Ymd_His') . '.csv', $rows);
 }
 
+$signInReviews = new \App\Attention\FailedSignInReviewService($pdo, new \App\Attention\SystemClock());
+$reviewMessage = (string)($_SESSION['sign_in_review_message'] ?? '');
+unset($_SESSION['sign_in_review_message']);
+$reviewError = '';
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'review_failed_sign_ins') {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
+    try {
+        if (($_POST['review_confirmed'] ?? '') !== '1') {
+            throw new InvalidArgumentException('Confirm that you reviewed the listed attempts before clearing.');
+        }
+        $signInReviews->clearReviewed(
+            $actorRole, (int)$_SESSION['user_id'], (int)($_POST['through_attempt_id'] ?? 0),
+            (string)($_POST['review_result'] ?? ''), (string)($_POST['review_note'] ?? ''), get_client_ip_address()
+        );
+        $_SESSION['sign_in_review_message'] = 'Review saved. The listed attempts were cleared from the warning; their history is preserved. New or remaining attempts can still trigger a warning.';
+        header('Location: ' . app_url('components/system_administrator/audit_logs.php') . '#failed-sign-in-review');
+        exit;
+    } catch (Throwable $exception) {
+        $reviewError = \App\Support\OperatorAlert::message($exception, 'The review could not be saved. Reload the page and try again.');
+    }
+}
+$pendingSignIns = $actorRole === 'super_admin' ? $signInReviews->pendingAttempts($actorRole) : [];
+$pendingSignInCount = $actorRole === 'super_admin' ? $signInReviews->pendingCount() : 0;
+
+$matchingRecordCount = $protectedAuditRecords->count($actorRole, $auditFilters);
 $activeUserCount = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status = 'active'")->fetchColumn();
 $modules = $protectedAuditRecords->modules($actorRole);
 $canViewPlatformAudit = has_capability(\App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT);
@@ -193,8 +255,7 @@ $emptyTableCopy = $canViewPlatformAudit
                     <input type="hidden" name="module" id="exportModuleFilter" value="<?= htmlspecialchars($moduleFilter) ?>">
                     <input type="hidden" name="date_from" id="exportDateFrom" value="<?= htmlspecialchars($dateFrom) ?>">
                     <input type="hidden" name="date_to" id="exportDateTo" value="<?= htmlspecialchars($dateTo) ?>">
-                    <input type="hidden" name="table_search" id="exportTableSearch" value="">
-                    <input type="hidden" name="matched_log_ids" id="exportMatchedLogIds" value="">
+                    <input type="hidden" name="table_request" id="exportTableRequest" value="{}">
                     <button type="submit" class="btn btn-quiet"><i class="bi bi-download" aria-hidden="true"></i> Export CSV</button>
                 </form>
             </div>
@@ -202,7 +263,7 @@ $emptyTableCopy = $canViewPlatformAudit
             <div class="audit-log-stats">
                 <div class="stat-card with-icon">
                     <span class="stat-icon" aria-hidden="true"><i class="bi bi-card-checklist"></i></span>
-                    <div class="value" id="matchingRecordsCount" aria-live="polite" aria-atomic="true"><?= count($logs) ?></div>
+                    <div class="value" id="matchingRecordsCount" aria-live="polite" aria-atomic="true"><?= $matchingRecordCount ?></div>
                     <div class="label">Matching Records</div>
                 </div>
                 <div class="stat-card with-icon success">
@@ -281,8 +342,11 @@ $emptyTableCopy = $canViewPlatformAudit
                         <h2 id="audit-table-title">Record history</h2>
                     </div>
                 </div>
+                <p class="section-description" id="audit-history-help">Search covers the full record history. Export CSV includes all matching records across every page.</p>
+                <p id="audit-table-error" class="alert tag-danger" role="alert" hidden></p>
+                <noscript><p>Enable JavaScript to search and browse record history. Export CSV remains available.</p></noscript>
                 <div class="table-wrap audit-log-table-wrap audit-history-wrap">
-                    <table id="auditLogsTable" class="audit-log-table display" data-no-smart-table>
+                    <table id="auditLogsTable" class="audit-log-table display" aria-describedby="audit-history-help" data-no-smart-table>
                         <thead>
                             <tr>
                                 <th>Date &amp; Time</th>
@@ -294,52 +358,7 @@ $emptyTableCopy = $canViewPlatformAudit
                                 <th>Details</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <?php foreach ($logs as $log): ?>
-                                <?php
-                                $previousValue = audit_log_display_value($log['previous_value'] ?? null);
-                                $newValue = audit_log_display_value($log['new_value'] ?? null);
-                                $timestamp = strtotime((string)$log['created_at']) ?: 0;
-                                $formattedTimestamp = format_display_datetime($log['created_at']);
-                                ?>
-                                <tr data-log-id="<?= (int)($log['log_id'] ?? 0) ?>">
-                                    <td data-order="<?= htmlspecialchars(date('Y-m-d\TH:i:s', $timestamp)) ?>" data-search="<?= htmlspecialchars(date('Y-m-d', $timestamp)) ?>"><?= htmlspecialchars($formattedTimestamp) ?></td>
-                                    <td data-search="<?= htmlspecialchars(trim((string)($log['full_name'] ?? '') . ' ' . (string)($log['username'] ?? ''))) ?>">
-                                        <?php if ($log['user_id']): ?>
-                                            <strong><?= htmlspecialchars((string)($log['full_name'] ?: $log['username'])) ?></strong>
-                                            <small><?= htmlspecialchars((string)$log['username']) ?></small>
-                                        <?php else: ?>
-                                            <em>System / Unknown</em>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><span class="audit-action-badge <?= audit_log_action_class((string)$log['action']) ?>" title="<?= htmlspecialchars((string)$log['action']) ?>"><?= htmlspecialchars($log['action']) ?></span></td>
-                                    <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string)$log['category']))) ?></td>
-                                    <td><?= htmlspecialchars((string)($log['module'] ?? '-')) ?></td>
-                                    <td><?= htmlspecialchars((string)($log['record_id'] ?? '-')) ?></td>
-                                    <td>
-                                        <details class="audit-details">
-                                            <summary aria-label="<?= htmlspecialchars('View details for ' . $log['action'] . ' at ' . $formattedTimestamp) ?>">View details</summary>
-                                            <dl class="audit-details-content">
-                                                <dt>IP address:</dt>
-                                                <dd class="audit-code"><?= htmlspecialchars((string)($log['ip_address'] ?? '-')) ?></dd>
-                                                <dt>Previous:</dt>
-                                                <dd class="<?= $previousValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($previousValue) ?></dd>
-                                                <dt>New:</dt>
-                                                <dd class="<?= $newValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($newValue) ?></dd>
-                                                <?php if ($log['action'] === \App\Attention\FailedSignInReviewService::ACTION): ?>
-                                                    <dt>Reviewed evidence:</dt>
-                                                    <dd><?= htmlspecialchars(audit_log_display_value($log['metadata'] ?? null)) ?></dd>
-                                                <?php endif; ?>
-                                                <?php if ($log['action'] === \App\Attention\ApplicationLogReviewService::ACTION): ?>
-                                                    <dt>Reviewed log excerpt:</dt>
-                                                    <dd><pre><?= htmlspecialchars((string)(json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-')) ?></pre></dd>
-                                                <?php endif; ?>
-                                            </dl>
-                                        </details>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
+                        <tbody></tbody>
                     </table>
                 </div>
             </section>
@@ -363,14 +382,43 @@ $emptyTableCopy = $canViewPlatformAudit
             }
 
             if (typeof DataTable === 'undefined') {
+                var unavailable = document.getElementById('audit-table-error');
+                unavailable.textContent = 'Record history could not be loaded. Reload the page and try again. Export CSV remains available.';
+                unavailable.hidden = false;
                 return;
             }
 
             var matchingRecords = document.getElementById('matchingRecordsCount');
             var exportForm = document.getElementById('auditLogExportForm');
-            var exportMatchedIds = document.getElementById('exportMatchedLogIds');
+            var exportRequest = document.getElementById('exportTableRequest');
+            var tableError = document.getElementById('audit-table-error');
+            var exportButton = exportForm.querySelector('button');
+            var lastRequest = {};
+            var tableReady = false;
+            exportButton.disabled = true;
+
+            function showAuditLoadError() {
+                table.processing(false);
+                tableReady = false;
+                exportButton.disabled = true;
+                matchingRecords.textContent = '-';
+                tableError.textContent = 'Records could not be loaded. Reload the page and try again.';
+                tableError.hidden = false;
+            }
 
             var table = new DataTable('#auditLogsTable', {
+                serverSide: true,
+                processing: true,
+                ajax: {
+                    url: <?= json_encode(app_url('components/system_administrator/audit_logs.php') . '?' . http_build_query(array_merge($_GET, ['table' => '1'])), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+                    // The bundled transport ignores network failures with status 0.
+                    beforeSend: function(request) {
+                        request.addEventListener('error', showAuditLoadError);
+                        request.addEventListener('timeout', showAuditLoadError);
+                        request.timeout = 30000;
+                    },
+                    error: showAuditLoadError
+                },
                 pageLength: 25,
                 lengthMenu: [10, 25, 50, 100],
                 order: [[0, 'desc']],
@@ -381,6 +429,8 @@ $emptyTableCopy = $canViewPlatformAudit
                 },
                 columnControl: ['order', ['search', 'orderAsc', 'orderDesc', 'orderClear']],
                 columnDefs: [
+                    { targets: [1, 2, 3, 4, 6], type: 'string' },
+                    { targets: 5, type: 'num' },
                     {
                         targets: 0,
                         type: 'date',
@@ -434,36 +484,31 @@ $emptyTableCopy = $canViewPlatformAudit
             tableViewport.setAttribute('role', 'region');
             tableViewport.setAttribute('aria-label', 'Record history table');
 
-            function syncExportFilters() {
-                document.getElementById('exportTableSearch').value = table.search();
-                if (!exportMatchedIds) {
-                    return;
-                }
-                var totalCount = table.rows().count();
-                var appliedRows = table.rows({ search: 'applied', order: 'applied' });
-                var appliedCount = appliedRows.count();
-                if (appliedCount === totalCount && table.search() === '') {
-                    exportMatchedIds.value = '';
-                    return;
-                }
-                if (appliedCount === 0) {
-                    exportMatchedIds.value = 'none';
-                    return;
-                }
-                var ids = [];
-                appliedRows.nodes().each(function(rowNode) {
-                    var logId = rowNode && rowNode.getAttribute ? rowNode.getAttribute('data-log-id') : '';
-                    if (logId) {
-                        ids.push(logId);
-                    }
-                });
-                exportMatchedIds.value = ids.join(',');
-            }
-            table.on('draw', function() {
-                matchingRecords.textContent = table.rows({ search: 'applied' }).count();
-                syncExportFilters();
+            document.querySelector('#auditLogsTable_wrapper .dt-search input').addEventListener('input', function() {
+                tableReady = false;
+                exportButton.disabled = true;
             });
-            exportForm.addEventListener('submit', syncExportFilters);
+            table.on('preXhr', function() {
+                tableReady = false;
+                exportButton.disabled = true;
+                tableError.hidden = true;
+            });
+            table.on('draw', function() {
+                var result = table.ajax.json();
+                if (!result || result.error) return;
+                matchingRecords.textContent = result.recordsFiltered;
+                lastRequest = table.ajax.params();
+                exportRequest.value = JSON.stringify(lastRequest);
+                tableReady = true;
+                exportButton.disabled = false;
+            });
+            exportForm.addEventListener('submit', function(event) {
+                if (!tableReady || table.search() !== lastRequest.search.value) {
+                    event.preventDefault();
+                    tableError.textContent = 'Wait for the search results before exporting.';
+                    tableError.hidden = false;
+                }
+            });
         });
     </script>
 </body>

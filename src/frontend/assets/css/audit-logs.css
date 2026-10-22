@@ -55,7 +55,7 @@
 
 .audit-log-page #failed-sign-in-review > p {
   max-width: 75ch;
-  font-size: 0.9rem;
+  font-size: 1rem;
   line-height: 1.6;
 }
 
@@ -489,7 +489,7 @@ html[data-theme="dark"] .audit-log-page .dt-datetime table td {
   }
 
   .audit-log-page .audit-log-stats .label {
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     line-height: 1.4;
   }
 
