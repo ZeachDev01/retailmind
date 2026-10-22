@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../Store/StoreWriteGate.php';
+
 /**
  * The single write boundary for Store fiscal periods.
  *
@@ -16,9 +18,10 @@ class FiscalPeriodGuardService
     public function assertOpenForDate(string $date, string $tableName, string $operationLabel = 'transaction'): void
     {
         $day = $this->effectiveDay($date);
+        $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
         $stmt = $this->pdo->prepare(
             'SELECT period_id, period_name, status FROM fiscal_periods
-             WHERE start_date <= ? AND end_date >= ? ORDER BY start_date DESC, period_id DESC LIMIT 1'
+             WHERE start_date <= ? AND end_date >= ? ORDER BY start_date DESC, period_id DESC LIMIT 1' . $lock
         );
         $stmt->execute([$day, $day]);
         $period = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -72,7 +75,7 @@ class FiscalPeriodGuardService
             throw new InvalidArgumentException('Start date must not be after end date.');
         }
 
-        $this->pdo->beginTransaction();
+        \App\Store\StoreWriteGate::begin($this->pdo);
         try {
             $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $periods = $this->pdo->query(
@@ -114,7 +117,7 @@ class FiscalPeriodGuardService
     public function closePeriod(int $periodId, int $actorId, ?string $today = null): void
     {
         $today = $this->date($today ?? date('Y-m-d'), 'current date');
-        $this->pdo->beginTransaction();
+        \App\Store\StoreWriteGate::begin($this->pdo);
         try {
             $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $stmt = $this->pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?' . $lock);
@@ -191,13 +194,25 @@ class FiscalPeriodGuardService
                 if ($end < $period['start_date']) {
                     throw new InvalidArgumentException('End date must not be before the start date.');
                 }
-                $next = $this->pdo->prepare(
+                $overlapCount = $this->pdo->prepare(
                     'SELECT COUNT(*) FROM fiscal_periods
                      WHERE period_id <> ? AND start_date <= ? AND end_date >= ?'
                 );
-                $next->execute([$periodId, $end, $end]);
-                if ((int)$next->fetchColumn() > 0) {
-                    throw new RuntimeException('The amended end date overlaps another fiscal period.');
+                $overlapCount->execute([$periodId, $end, $period['start_date']]);
+                if ((int)$overlapCount->fetchColumn() > 0) {
+                    throw new RuntimeException('The amended fiscal period interval overlaps another fiscal period.');
+                }
+                $successor = $this->pdo->prepare(
+                    'SELECT start_date FROM fiscal_periods
+                     WHERE period_id <> ? AND start_date > ? ORDER BY start_date, period_id LIMIT 1'
+                );
+                $successor->execute([$periodId, $period['start_date']]);
+                $successorStart = $successor->fetchColumn();
+                if ($successorStart !== false) {
+                    $expectedSuccessorStart = date('Y-m-d', strtotime($end . ' +1 day'));
+                    if ($successorStart !== $expectedSuccessorStart) {
+                        throw new RuntimeException('The amended fiscal period must end the day before its successor starts.');
+                    }
                 }
                 foreach (['sales' => 'sale_date', 'purchase_history' => 'purchase_date', 'stock_movements' => 'created_at'] as $table => $column) {
                     if (!$this->tableExists($table) || !$this->columnExists($table, $column)) {

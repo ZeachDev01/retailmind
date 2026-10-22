@@ -9,9 +9,18 @@ use PDO;
 use PDOException;
 use Throwable;
 
+require_once __DIR__ . '/FiscalPeriodGuardService.php';
+
 final class GCashTransactionService
 {
-    public function __construct(private ?PDO $pdo = null, private array $rules = []) {}
+    private ?\FiscalPeriodGuardService $fiscalPeriodGuard = null;
+
+    public function __construct(private ?PDO $pdo = null, private array $rules = [])
+    {
+        if ($pdo) {
+            $this->fiscalPeriodGuard = new \FiscalPeriodGuardService($pdo);
+        }
+    }
 
     private function pdo(): PDO
     {
@@ -19,6 +28,14 @@ final class GCashTransactionService
             throw new DomainException('Database connection required for this operation.');
         }
         return $this->pdo;
+    }
+
+    private function fiscalPeriodGuard(): \FiscalPeriodGuardService
+    {
+        if (!$this->fiscalPeriodGuard) {
+            $this->fiscalPeriodGuard = new \FiscalPeriodGuardService($this->pdo());
+        }
+        return $this->fiscalPeriodGuard;
     }
 
     public function calculateFee(mixed $principal): array
@@ -734,6 +751,7 @@ final class GCashTransactionService
         }
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_service_sessions', 'GCash session opening');
             $shiftService = new CashierShiftService($this->pdo());
             $shiftService->requireUnlockedRegister($cashierId);
             $shift = $shiftService->getOpenShift($cashierId);
@@ -777,6 +795,7 @@ final class GCashTransactionService
         }
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_service_sessions', 'GCash session closing');
             $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $stmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE status = 'open'" . $lock);
             $stmt->execute();
@@ -856,6 +875,7 @@ final class GCashTransactionService
         }
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_service_sessions', 'GCash session handover');
             $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $sessionStmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE status = 'open'" . $lock);
             $sessionStmt->execute();
@@ -1037,6 +1057,7 @@ final class GCashTransactionService
         }
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_transactions', 'GCash transaction');
             (new CashierShiftService($this->pdo()))->requireUnlockedRegister($cashierId);
 
             $session = $this->getCurrentSession();
@@ -1160,6 +1181,7 @@ final class GCashTransactionService
 
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_transactions', 'GCash Cash-In');
             $shiftService = new CashierShiftService($this->pdo());
             $shiftService->requireUnlockedRegister($cashierId);
             $shift = $shiftService->getOpenShift($cashierId);
@@ -1345,6 +1367,7 @@ final class GCashTransactionService
 
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_transactions', 'GCash Cash-Out');
             $shiftService = new CashierShiftService($this->pdo());
             $shiftService->requireUnlockedRegister($cashierId);
             $shift = $shiftService->getOpenShift($cashierId);
@@ -1507,6 +1530,7 @@ final class GCashTransactionService
 
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_funding_movements', 'GCash funding movement');
             $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $sessionStmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE status = 'open'" . $lock);
             $sessionStmt->execute();
@@ -1618,6 +1642,7 @@ final class GCashTransactionService
 
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_adjustments', 'GCash correction');
             $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $txStmt = $this->pdo()->prepare("SELECT * FROM gcash_transactions WHERE transaction_id = ?" . $lock);
             $txStmt->execute([$transactionId]);
@@ -1690,6 +1715,7 @@ final class GCashTransactionService
 
         try {
             StoreWriteGate::begin($this->pdo());
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_service_sessions', 'GCash emergency handover');
             $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $txStmt = $this->pdo()->prepare("SELECT * FROM gcash_transactions WHERE transaction_id = ?" . $lock);
             $txStmt->execute([$transactionId]);
@@ -1920,4 +1946,3 @@ final class GCashTransactionService
         }
     }
 }
-

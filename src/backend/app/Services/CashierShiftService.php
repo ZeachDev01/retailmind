@@ -19,6 +19,7 @@ require_once __DIR__ . '/../Audit/AuditRecordCategory.php';
 require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
 require_once __DIR__ . '/../Dashboard/StoreOperationsDashboardWorkspace.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
+require_once __DIR__ . '/FiscalPeriodGuardService.php';
 
 /**
  * Cashier Shifts (ticket #88).
@@ -68,10 +69,12 @@ class CashierShiftService
     public const LOCKED_MESSAGE = 'This Register is locked. Unlock it with your account password to resume your Cashier Shift.';
 
     private RoleCapabilityPolicy $policy;
+    private \FiscalPeriodGuardService $fiscalPeriodGuard;
 
     public function __construct(private PDO $pdo, ?RoleCapabilityPolicy $policy = null)
     {
         $this->policy = $policy ?? new RoleCapabilityPolicy();
+        $this->fiscalPeriodGuard = new \FiscalPeriodGuardService($pdo);
     }
 
     public function getOpenShift(int $cashierId): ?array
@@ -521,6 +524,7 @@ class CashierShiftService
             if (!empty($shift['locked_at'])) {
                 throw new DomainException(self::LOCKED_MESSAGE);
             }
+            $this->fiscalPeriodGuard->assertOpenNow('cash_drawer_movements', 'drawer cash movement');
             $shiftId = (int)$shift['shift_id'];
             $approval = null;
             if ($type === 'cash_out' && in_array($reason, ['petty_cash', 'supplier_payment'], true)) {

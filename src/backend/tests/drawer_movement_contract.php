@@ -24,6 +24,9 @@ try {
         INSERT INTO roles VALUES (1,'admin'),(2,'super_admin'),(3,'cashier');
         CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT);
         INSERT INTO registers VALUES (10, 'Front');
+        CREATE TABLE fiscal_periods (period_id INTEGER PRIMARY KEY, period_name TEXT, start_date TEXT, end_date TEXT, status TEXT);
+        INSERT INTO fiscal_periods VALUES (1, 'Test period', '2020-01-01', '2099-12-31', 'open');
+        CREATE TABLE fiscal_period_locks (lock_id INTEGER PRIMARY KEY, period_id INTEGER, table_name TEXT);
         CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, cashier_id INTEGER NOT NULL,
             register_id INTEGER, status TEXT NOT NULL, locked_at TEXT, opening_cash REAL NOT NULL,
             opened_at TEXT DEFAULT CURRENT_TIMESTAMP);
@@ -105,6 +108,12 @@ try {
     $service->addDrawerMovement(1,'cashier','cash_out',1,'supplier_payment',null,'owner','owner-password');
     $audit=json_decode($pdo->query('SELECT new_value FROM activity_log ORDER BY log_id DESC LIMIT 1')->fetchColumn(),true);
     $check($audit['authorization']['approved_by']===3 && $audit['amount']===1 && $audit['shift_id']===20 && $audit['reason']==='supplier_payment', 'Super Administrator approval binds identity, amount, reason and shift');
+    $pdo->exec("UPDATE fiscal_periods SET status='closed'");
+    try {
+        $service->addDrawerMovement(1, 'cashier', 'cash_in', 1, 'additional_float');
+        $failures[] = 'closed fiscal period accepts a drawer movement';
+    } catch (Throwable $expected) {
+    }
 } catch (Throwable $error) {
     $failures[] = $error->getMessage();
 }
