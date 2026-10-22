@@ -360,6 +360,11 @@ try {
     $damagedSaleId = (int)$damagedSale['sale_id'];
     $damagedTeaItemId = $lineIdOf($damagedSaleId, 2);
 
+    $pdo->exec("INSERT INTO promotions (promotion_id, promotion_name, scope, discount_type, discount_value, starts_at, ends_at)
+        VALUES (101, 'Five peso promotion', 'all', 'fixed', 5, '2000-01-01', '2099-01-01'),
+               (102, 'One cent promotion', 'all', 'fixed', 0.01, '2000-01-01', '2099-01-01'),
+               (103, 'Bundle promotion', 'all', 'fixed', 15, '2000-01-01', '2099-01-01')");
+
     // Sale D: 4 x water with a 5.00 discount, paid 95.00 — so the refundable
     // balance is what the customer actually paid, not the shelf price.
     $discounted = $sales->checkout(
@@ -367,7 +372,7 @@ try {
         $casey,
         'cashier',
         'cash',
-        ['cash_received' => 100, 'discount_type' => 'fixed', 'discount_value' => 5, 'discount_reason' => 'Goodwill']
+        ['cash_received' => 100, 'promotion_id' => 101]
     );
     $discountedSaleId = (int)$discounted['sale_id'];
     $discountedItemId = $lineIdOf($discountedSaleId, 1);
@@ -885,7 +890,7 @@ try {
     // the last cent. The same sale split into single-unit returns pays equally.
     foreach ([false, true] as $splitReturn) {
         $roundedSale = $sales->checkout([['product_id' => 1, 'qty' => 3]], $casey, 'cashier', 'cash',
-            ['cash_received' => 100, 'discount_type' => 'fixed', 'discount_value' => 0.01, 'discount_reason' => 'Goodwill']);
+            ['cash_received' => 100, 'promotion_id' => 102]);
         $roundedSaleId = (int)$roundedSale['sale_id'];
         $roundedItemId = $lineIdOf($roundedSaleId, 1);
         $amounts = [];
@@ -902,8 +907,7 @@ try {
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 30)');
     foreach ([false, true] as $splitLines) {
         $mixed = $sales->checkout([['product_id' => 1, 'qty' => 1], ['product_id' => 2, 'qty' => 1]],
-            $casey, 'cashier', 'cash', ['cash_received' => 100, 'discount_type' => 'fixed',
-                'discount_value' => 0.01, 'discount_reason' => 'Goodwill']);
+            $casey, 'cashier', 'cash', ['cash_received' => 100, 'promotion_id' => 102]);
         $mixedId = (int)$mixed['sale_id'];
         $beforeReturn = $saleRow($pdo, $mixedId);
         $waterReturn = $returnOf($lineIdOf($mixedId, 1), 1);
@@ -920,7 +924,7 @@ try {
 
     // Existing refunds retain the actual amount they paid before net pricing.
     $historical = $sales->checkout([['product_id' => 1, 'qty' => 4]], $casey, 'cashier', 'cash',
-        ['cash_received' => 100, 'discount_type' => 'fixed', 'discount_value' => 5, 'discount_reason' => 'Goodwill']);
+        ['cash_received' => 100, 'promotion_id' => 101]);
     $historicalId = (int)$historical['sale_id'];
     $historicalItem = $lineIdOf($historicalId, 1);
     $pdo->prepare("INSERT INTO cash_refunds (sale_id, shift_id, cashier_id, refund_amount, payment_method, reason)
@@ -936,8 +940,7 @@ try {
         'existing refund history remains immutable');
 
     $historicalMixed = $sales->checkout([['product_id' => 1, 'qty' => 1], ['product_id' => 2, 'qty' => 1]],
-        $casey, 'cashier', 'cash', ['cash_received' => 100, 'discount_type' => 'fixed',
-            'discount_value' => 5, 'discount_reason' => 'Goodwill']);
+        $casey, 'cashier', 'cash', ['cash_received' => 100, 'promotion_id' => 101]);
     $historicalMixedId = (int)$historicalMixed['sale_id'];
     $pdo->prepare("INSERT INTO cash_refunds (sale_id, shift_id, cashier_id, refund_amount, payment_method, reason)
         VALUES (?, ?, ?, 25, 'cash', 'customer_return')")->execute([$historicalMixedId, $caseyShiftId, $casey]);
@@ -965,9 +968,10 @@ try {
     // A steep discount can allocate zero cents to a returned unit. It still
     // consumes quantity and can be restocked after all cash has been repaid.
     $pdo->exec("INSERT INTO promotions (promotion_name, scope, discount_type, discount_value, starts_at, ends_at) VALUES ('Tiny remainder', 'all', 'fixed', 74.99, '2000-01-01', '2099-01-01')");
+    $tinyPromotionId = (int)$pdo->lastInsertId();
     $tiny = $sales->checkout([['product_id' => 1, 'qty' => 3]], $casey, 'cashier', 'cash',
-        ['cash_received' => 100]);
-    $pdo->exec("UPDATE promotions SET status = 'inactive'");
+        ['cash_received' => 100, 'promotion_id' => $tinyPromotionId]);
+    $pdo->exec("UPDATE promotions SET status = 'inactive' WHERE promotion_id = {$tinyPromotionId}");
     $tinyId = (int)$tiny['sale_id'];
     $tinyItem = $lineIdOf($tinyId, 1);
     foreach ([0.0, 0.01, 0.0] as $expectedAmount) {
@@ -1353,7 +1357,7 @@ try {
         $casey,
         'cashier',
         'cash',
-        ['cash_received' => 200, 'discount_type' => 'fixed', 'discount_value' => 15.00, 'discount_reason' => 'Bundle promo']
+        ['cash_received' => 200, 'promotion_id' => 103]
     );
     // Gross = 160 + 15 = 175.00, Discount = 15.00, Paid = 160.00.
     $discMixedSaleId = (int)$discMixedSale['sale_id'];

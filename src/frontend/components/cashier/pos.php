@@ -380,17 +380,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         'payment_reference' => $_POST['payment_reference'] ?? '',
         'payment_method' => $payment_method,
         'payment_verified' => ($_POST['payment_verified'] ?? '') === '1',
-        'discount_type' => $_POST['discount_type'] ?? 'none',
-        'discount_value' => $_POST['discount_value'] ?? 0,
-        'discount_reason' => $_POST['discount_reason'] ?? '',
-        'discount_approver_username' => $_POST['discount_approver_username'] ?? '',
-        'discount_approver_password' => $_POST['discount_approver_password'] ?? '',
+        'promotion_id' => $_POST['promotion_id'] ?? '',
         'reviewed_quote' => $_SESSION['checkout_quotes'][(string)($_POST['quote_token'] ?? '')]['state_hash'] ?? '',
         // Ticket #91: the cart the Cashier resumed, if any. The service settles it
         // against this Cashier and against the shift it already resolved for the
         // sale, so a value tampered with here completes nothing.
         'held_sale_id' => (int)($_POST['held_sale_id'] ?? 0),
     ];
+
+    foreach (['discount_type', 'discount_value', 'discount_reason', 'discount_amount', 'discount_authorized_by', 'discount_approver_username', 'discount_approver_password'] as $field) {
+        if (array_key_exists($field, $_POST)) $paymentDetails[$field] = $_POST[$field];
+    }
 
     try {
         if (($_POST['action'] ?? '') === 'review_quote') {
@@ -400,7 +400,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
             $token = bin2hex(random_bytes(24));
             $_SESSION['checkout_quotes'] = array_slice($_SESSION['checkout_quotes'] ?? [], -19, null, true);
             $_SESSION['checkout_quotes'][$token] = ['state_hash' => $quote['state_hash']];
-            unset($quote['state_hash'], $quote['discount']['approval_state']);
+            unset($quote['state_hash']);
             echo json_encode(['quote' => $quote, 'token' => $token], JSON_THROW_ON_ERROR);
             exit;
         }
@@ -744,19 +744,12 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         <input type="text" name="payment_reference" id="payment-reference" placeholder="Enter after quote review" readonly>
                     </div>
 
-                    <details class="payment-field" id="discount-panel">
-                        <summary class="pos-field-label">Discount or promotion</summary><p class="muted u-mt-05">Review the final server quote before collecting payment. Only the best eligible discount applies.</p>
-                        <div class="payment-grid u-mt-075">
-                            <div><label class="pos-field-label" for="discount-type">Discount type</label><select name="discount_type" id="discount-type" class="pos-select"><option value="none">No discount</option><option value="percentage">Percentage</option><option value="fixed">Fixed amount</option></select></div>
-                            <div><label class="pos-field-label" for="discount-value">Value</label><input type="number" min="0" step="0.01" name="discount_value" id="discount-value" value="0"></div>
-                        </div>
-                        <div class="payment-field"><label class="pos-field-label" for="discount-reason">Reason</label><input type="text" name="discount_reason" id="discount-reason" placeholder="Promotion, customer eligibility, or approved adjustment"></div>
-                        <div class="payment-grid hidden" id="supervisor-fields">
-                            <div><label class="pos-field-label" for="discount-approver-username">Administrator username</label><input type="text" name="discount_approver_username" id="discount-approver-username" autocomplete="off"></div>
-                            <div><label class="pos-field-label" for="discount-approver-password">Administrator password</label><input type="password" name="discount_approver_password" id="discount-approver-password" autocomplete="new-password"></div>
-                        </div>
-                        <small id="discount-summary" class="muted">No discount applied.</small>
-                    </details>
+                    <div class="payment-field" id="discount-panel">
+                        <label class="pos-field-label" for="promotion-id">Promotion</label>
+                        <select name="promotion_id" id="promotion-id" class="pos-select" aria-describedby="promotion-status"><option value="">No promotion</option></select>
+                        <small id="promotion-status" class="muted" role="status" aria-live="polite">Add items to see eligible promotions.</small>
+                        <small id="discount-summary" class="muted">No promotion applied.</small>
+                    </div>
 
                     <button class="btn btn-block checkout-primary" id="checkout-button" type="button" title="Checkout (Ctrl+Enter)" disabled>
                         <i class="bi bi-check2-circle" aria-hidden="true"></i>Review checkout
@@ -924,11 +917,9 @@ const holdSaleButton = document.getElementById('hold-sale-btn');
 const voidSaleButton = document.getElementById('void-sale-btn');
 const clearCartButton = document.getElementById('clear-cart-btn');
 const cashQuick = document.getElementById('cash-quick');
-const discountType = document.getElementById('discount-type');
-const discountValue = document.getElementById('discount-value');
-const discountReason = document.getElementById('discount-reason');
+const promotionSelect = document.getElementById('promotion-id');
+const checkoutQuote = new CheckoutQuote(checkoutForm);
 const discountSummary = document.getElementById('discount-summary');
-const supervisorFields = document.getElementById('supervisor-fields');
 const fullscreenToggle = document.getElementById('pos-fullscreen-toggle');
 const cashierClock = document.getElementById('cashier-clock');
 const quickCategoryFilters = document.getElementById('quick-category-filters');
@@ -1109,18 +1100,12 @@ function getCartTotal() {
 }
 
 function getDiscountAmount() {
-    const gross = getCartTotal();
-    const value = Math.max(0, Number(discountValue?.value || 0));
-    if (discountType?.value === 'percentage') {
-        return Math.min(gross, gross * Math.min(value, 100) / 100);
-    }
-    if (discountType?.value === 'fixed') {
-        return Math.min(gross, value);
-    }
-    return 0;
+    if (checkoutQuote.isCurrent()) return checkoutQuote.reviewed.discount.discount_amount;
+    return Number(promotionSelect.selectedOptions[0]?.dataset.amount || 0);
 }
 
 function getNetTotal() {
+    if (checkoutQuote.isCurrent()) return checkoutQuote.reviewed.total;
     return Math.max(0, getCartTotal() - getDiscountAmount());
 }
 
@@ -1699,22 +1684,40 @@ function resetPaymentState() {
     paymentMethod.value = 'cash';
     cashReceived.value = '';
     paymentReference.value = '';
-    discountType.value = 'none';
-    discountValue.value = '0';
-    discountReason.value = '';
+    promotionSelect.value = '';
     // Ticket #91: a cart that has been emptied or replaced is no longer a
     // resumed held sale, so the next checkout must not claim to complete one.
     // resumeHeldSale() sets this again once the cart is in place.
     resumedHeldSaleId = 0;
     resumedHeldSaleInput.value = '';
-    const approverUsername = document.getElementById('discount-approver-username');
-    const approverPassword = document.getElementById('discount-approver-password');
-    if (approverUsername) approverUsername.value = '';
-    if (approverPassword) approverPassword.value = '';
     updatePaymentFields();
 }
 
+let promotionRefreshTimer;
+function schedulePromotionRefresh() {
+    clearTimeout(promotionRefreshTimer);
+    ++checkoutQuote.refreshVersion;
+    checkoutQuote.invalidate();
+    if (Object.keys(cart).length) validateCheckout(false);
+    promotionRefreshTimer = setTimeout(async () => {
+        if (!Object.keys(cart).length) {
+            checkoutQuote.invalidate();
+            checkoutQuote.showPromotions([]);
+            updatePaymentFields();
+            return;
+        }
+        if (!validateCheckout(false)) return;
+        try {
+            await checkoutQuote.refreshPromotions();
+        } catch (error) {
+            showCartMessage(error.message, 'error');
+        }
+        updatePaymentFields();
+    }, 150);
+}
+
 function renderCart() {
+    schedulePromotionRefresh();
     const cartBody = document.getElementById('cart-body');
     let rows = '';
 
@@ -1772,7 +1775,7 @@ function renderCart() {
 
 function updatePaymentFields() {
     const total = getNetTotal();
-    const gross = getCartTotal();
+    const gross = checkoutQuote.isCurrent() ? checkoutQuote.reviewed.sale.total : getCartTotal();
     const discount = getDiscountAmount();
     const isCash = paymentMethod.value === 'cash';
 
@@ -1786,6 +1789,7 @@ function updatePaymentFields() {
     const receivedValue = Number(cashReceived.value);
     const received = Number.isFinite(receivedValue) && receivedValue >= 0 ? receivedValue : 0;
     changeDue.value = money(Math.max(0, received - total));
+    document.getElementById('cart-total').textContent = money(total);
     const cashAdded = isCash && getCartItemCount() > 0 ? Math.min(received, total) : 0;
     document.getElementById('drawer-cash-added').textContent = money(cashAdded);
     document.getElementById('summary-subtotal').textContent = money(gross);
@@ -1795,7 +1799,6 @@ function updatePaymentFields() {
     setTextIfPresent('snapshot-total', money(total));
     if (discountSummary) {
         discountSummary.textContent = discount > 0 ? `Gross ₱${money(gross)} · Discount ₱${money(discount)} · Net ₱${money(total)}` : 'No discount applied.';
-        supervisorFields.classList.toggle('hidden', !(discount > gross * 0.10));
     }
 }
 
@@ -1847,12 +1850,12 @@ function validateCheckout(requirePayment = true) {
     }
 
     if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before checkout.', 'error'); return false; }
-    if (getDiscountAmount() > 0 && discountReason.value.trim() === '') { showCartMessage('Enter a discount reason.', 'error'); discountReason.focus(); return false; }
     cartInput.value = JSON.stringify(payload);
     return true;
 }
 
 async function checkoutNow() {
+    clearTimeout(promotionRefreshTimer);
     if (checkoutSubmitting || !checkoutAttempt.ready || window.cartWorkspace?.busy) return;
     if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
         showCartMessage('Checkout requires an active internet connection. Please check your network and try again.', 'error');
@@ -1874,6 +1877,7 @@ async function checkoutNow() {
             showStockConflictModal(error.conflicts);
             return;
         }
+        updatePaymentFields();
         showCartMessage(error.message, 'error');
         return;
     } finally {
@@ -1901,7 +1905,6 @@ async function checkoutNow() {
             }).join('')}</tbody>
         </table>
         <div class="review-details">
-            <p><strong>Eligible promotions:</strong> ${quote.eligible_promotions.map(p => escapeHtml(p.promotion_name)).join(', ') || 'None'}</p>
             <p><strong>Selected discount:</strong> ${escapeHtml(quote.discount.promotion_name || quote.discount.discount_reason || 'None')} · ₱${money(quote.discount.discount_amount)}</p>
             <p><strong>Gross:</strong> ₱${money(quote.sale.total)} · <strong>Payment method:</strong> ${escapeHtml(methodLabel)}</p>
         </div>
@@ -1960,7 +1963,7 @@ async function submitConfirmedCheckout() {
     confirmCheckoutButton.disabled = true;
     confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
     try {
-        await checkoutQuote.review();
+        await checkoutQuote.review(true);
         await checkoutAttempt.save(cart);
         checkoutForm.submit();
     } catch (error) {
@@ -1969,6 +1972,7 @@ async function submitConfirmedCheckout() {
         confirmCheckoutButton.disabled = false;
         confirmCheckoutButton.textContent = 'Confirm payment';
         closeCheckoutConfirm();
+        updatePaymentFields();
         if (error.conflicts && error.conflicts.length) {
             showStockConflictModal(error.conflicts);
             return;
@@ -2322,8 +2326,10 @@ checkoutSummary.addEventListener('click', event => {
     document.getElementById('review-cash').value = money(button.dataset.cashAmount === 'exact' ? checkoutQuote.reviewed.total : button.dataset.cashAmount);
     updateReviewedPayment();
 });
-discountType.addEventListener('change', updatePaymentFields);
-discountValue.addEventListener('input', updatePaymentFields);
+promotionSelect.addEventListener('change', () => {
+    checkoutQuote.invalidate();
+    updatePaymentFields();
+});
 cashQuick.addEventListener('click', event => {
     const button = event.target.closest('[data-tender]');
     if (button) {
@@ -2386,8 +2392,7 @@ document.querySelectorAll('[data-pos-focus]').forEach(button => {
             updatePaymentFields();
             cashReceived.focus();
         } else if (target === 'discount') {
-            document.getElementById('discount-panel').open = true;
-            discountType.focus();
+            promotionSelect.focus();
         } else if (target === 'hold') {
             holdCurrentSale();
         }
@@ -2528,7 +2533,6 @@ const checkoutAttempt = new CheckoutAttempt(checkoutForm, <?= json_encode((strin
         showCartMessage('Unsuccessful checkout cancelled. You can edit or clear the cart.', 'info');
     }
 });
-const checkoutQuote = new CheckoutQuote(checkoutForm);
 document.getElementById('cancel-checkout-btn').addEventListener('click', async event => {
     if (cartWorkspace.busy || checkoutSubmitting) return;
     const button = event.currentTarget;

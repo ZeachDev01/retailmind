@@ -33,7 +33,13 @@ class CheckoutAttempt {
                 return;
             }
             for (const [name, value] of Object.entries(this.pending.fields)) {
-                if (this.form.elements[name]) this.form.elements[name].value = value;
+                const input = this.form.elements[name];
+                if (input) {
+                    if (name === 'promotion_id' && value && !Array.from(input.options).some(option => option.value === value)) {
+                        input.add(new Option('Previously selected promotion (refreshing)', value));
+                    }
+                    input.value = value;
+                }
             }
             this.options.restore(this.pending.cart);
             this.options.message('Previous checkout recovered for retry. No saved receipt yet. Do not collect payment again; retry the same checkout.', 'warning');
