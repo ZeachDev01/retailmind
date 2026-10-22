@@ -4,6 +4,14 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**Promotion**:
+An Administrator-created discount with defined eligibility conditions that a Cashier may explicitly select for a sale. Only one Promotion may apply to a sale.
+_Avoid_: Cashier-created discount, automatic discount
+
+**Eligible Promotion**:
+A Promotion that is active, within its scheduled dates, and satisfies its product, category, or entire-cart scope and minimum quantity for the current cart.
+_Avoid_: Any existing discount, expired promotion
+
 **GCash Service**:
 A customer cash-in or cash-out exchange handled by the Store, separate from a Product purchase or its payment.
 _Avoid_: Product sale, GCash product payment
