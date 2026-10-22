@@ -15,6 +15,7 @@ if (!fs.existsSync(chromium.executablePath())) {
         .replace(/<\?=[\s\S]*?\?>/g, '<input name="csrf_token" value="fixture">');
     const modal = pos.match(/<div id="checkout-modal"[\s\S]*?(?=<div id="void-modal")/)[0];
     const functions = pos.slice(pos.indexOf('function setTextIfPresent('), pos.indexOf('function quickProductMedia('))
+        + pos.slice(pos.indexOf('function schedulePromotionRefresh('), pos.indexOf('function renderCart('))
         + pos.slice(pos.indexOf('function updatePaymentFields('), pos.indexOf('async function apiHeldSale('));
     const bindings = ['checkoutButton', 'confirmCheckoutButton'].map(name => pos.match(new RegExp(name + "\\.addEventListener\\('click', [^)]+\\);"))[0]).join('\n')
         + '\n' + ['checkoutSummary', 'cashQuick'].map(name => pos.match(new RegExp(name + "\\.addEventListener\\('click',[\\s\\S]*?\\n\\}\\);"))?.[0] || '').join('\n')
@@ -32,6 +33,7 @@ if (!fs.existsSync(chromium.executablePath())) {
     let stale = true;
     let unavailable = false;
     let eligible = true;
+    let invalidPromotionId = '';
     let delayQuote = 0;
     let quotedCart = null;
     const server = http.createServer((request, response) => {
@@ -51,7 +53,7 @@ if (!fs.existsSync(chromium.executablePath())) {
                     if (unavailable) { response.end('<p>Sign in again.</p>'); return; }
                     response.setHeader('Content-Type', 'application/json');
                     const selected = body.match(/name="promotion_id"\r\n\r\n([^\r]*)/)?.[1] || '';
-                    if (selected && !eligible) { response.writeHead(409); response.end(JSON.stringify({message: 'The selected promotion is no longer eligible. Review the updated total.'})); return; }
+                    if (selected && (!eligible || selected === invalidPromotionId)) { response.writeHead(409); setTimeout(() => response.end(JSON.stringify({message: 'The selected promotion is no longer eligible. Review the updated total.'})), delayQuote); return; }
                     const total = selected === '1' ? quoteTotal : selected === '2' ? 95 : 100;
                     setTimeout(() => response.end(JSON.stringify({token: 'server-quote', quote: {total,
                         sale: {total: 100, items: [{product_name: productName, quantity: 4, unit_price: 25, subtotal: 100}]},
@@ -145,10 +147,22 @@ if (!fs.existsSync(chromium.executablePath())) {
         unavailable = true;
         await page.evaluate(() => checkoutQuote.refreshPromotions().catch(() => {}));
         assert.match(await page.locator('#promotion-status').textContent(), /Promotions unavailable/, 'Failure is distinguished from empty eligibility');
-        unavailable = false; eligible = true; delayQuote = 150;
+        unavailable = false; eligible = true;
+        await page.evaluate(() => checkoutQuote.refreshPromotions());
+        delayQuote = 150;
         const refreshing = page.evaluate(() => checkoutQuote.refreshPromotions());
         await page.waitForFunction(() => document.getElementById('promotion-status').textContent.includes('Loading'));
-        await refreshing; delayQuote = 0;
+        await promotions.selectOption('2');
+        await refreshing;
+        assert.match(await page.locator('#promotion-status').textContent(), /Choose one promotion/, 'Selection during refresh settles loading');
+        assert.equal(await promotions.inputValue(), '2', 'Delayed refresh preserves latest choice');
+        invalidPromotionId = '1';
+        await promotions.selectOption('1');
+        const staleReview = page.evaluate(() => checkoutQuote.review().catch(error => error.message));
+        await promotions.selectOption('2');
+        await staleReview;
+        assert.equal(await promotions.inputValue(), '2', 'Old ineligible response cannot clear newer selection');
+        invalidPromotionId = ''; delayQuote = 0;
         await promotions.selectOption('1');
         quoteTotal = 70;
         await page.evaluate(() => checkoutQuote.refreshPromotions());
@@ -183,11 +197,14 @@ if (!fs.existsSync(chromium.executablePath())) {
                 await new Promise(resolve => setTimeout(resolve, 50));
                 window.editRefusedDuringReview = !cartChangesAllowed();
                 if (cartChangesAllowed()) cart[1].qty = 99;
-                cart[1].qty = 2; return true;
+                cart[1].qty = 2; schedulePromotionRefresh(); return true;
             };
         });
         await page.click('#checkout-button');
         await page.waitForFunction(() => document.getElementById('checkout-modal').classList.contains('open'));
+        await page.waitForTimeout(250);
+        assert.equal(await page.evaluate(() => checkoutQuote.isCurrent()), true, 'Held-sale cart refresh cannot invalidate the open payment review');
+        await page.fill('#review-cash', '125.50');
         assert.equal(await page.locator('#review-cash').inputValue(), '125.50', 'Typed main cash amount carries into final quote review');
         assert.equal(await page.locator('#review-change').textContent(), '45.50', 'Change uses final reviewed total rather than cached total');
         assert(await page.locator('body').evaluate(body => body.classList.contains('no-scroll')), 'Checkout locks background scrolling');

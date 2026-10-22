@@ -7,8 +7,8 @@ class CheckoutQuote {
         this.refreshVersion = 0;
     }
 
-    inputSnapshot() {
-        return JSON.stringify(['cart', 'held_sale_id', 'payment_method', 'promotion_id']
+    inputSnapshot(includePromotion = true) {
+        return JSON.stringify(['cart', 'held_sale_id', 'payment_method', ...(includePromotion ? ['promotion_id'] : [])]
             .map(name => this.form.elements[name].value));
     }
 
@@ -58,14 +58,14 @@ class CheckoutQuote {
     async refreshPromotions() {
         const version = ++this.refreshVersion;
         this.invalidate();
-        const inputs = this.inputSnapshot();
+        const inputs = this.inputSnapshot(false);
         const data = new FormData(this.form);
         data.set('promotion_id', '');
         const status = this.form.querySelector('#promotion-status');
         status.textContent = 'Loading eligible promotions…';
         try {
             const outcome = await this.request(data);
-            if (version !== this.refreshVersion || inputs !== this.inputSnapshot()) return;
+            if (version !== this.refreshVersion || inputs !== this.inputSnapshot(false)) return;
             this.showPromotions(outcome.quote.eligible_promotions);
         } catch (error) {
             if (version === this.refreshVersion) status.textContent = 'Promotions unavailable. Review checkout to try again before collecting payment.';
@@ -82,7 +82,7 @@ class CheckoutQuote {
         try {
             outcome = await this.request(new FormData(this.form));
         } catch (error) {
-            if (error.message.includes('selected promotion is no longer eligible')) {
+            if (inputs === this.inputSnapshot() && error.message.includes('selected promotion is no longer eligible')) {
                 this.form.elements.promotion_id.value = '';
                 this.form.querySelector('#promotion-status').textContent = error.message + ' Selection cleared; review the updated total before payment.';
             }
