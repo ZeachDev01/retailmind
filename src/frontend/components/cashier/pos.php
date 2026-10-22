@@ -1870,6 +1870,7 @@ async function checkoutNow() {
     if (window.cartWorkspace) cartWorkspace.busy = true;
     try {
         if (window.cartWorkspace && resumedHeldSaleId && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
+        clearTimeout(promotionRefreshTimer);
         if (!validateCheckout(false)) return;
         quote = await checkoutQuote.review();
     } catch (error) {
