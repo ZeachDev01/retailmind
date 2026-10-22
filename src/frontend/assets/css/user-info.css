@@ -6,6 +6,12 @@
     margin-bottom: 1rem;
 }
 
+.user-info-page .page-heading,
+.user-info-page .alert,
+.user-info-layout {
+    max-width: 1120px;
+}
+
 .user-info-page .profile-avatar {
     position: relative;
     display: inline-grid;
@@ -27,7 +33,7 @@
 
 .user-info-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.8fr);
+    grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
     gap: 1.5rem;
     align-items: start;
 }
@@ -39,12 +45,12 @@
 }
 
 .user-info-page .section-header {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
 }
 
 .user-info-page .section-header h2 {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: 1.05rem;
 }
 
 .profile-picture-settings {
@@ -57,7 +63,27 @@
 .profile-picture-controls {
     display: grid;
     min-width: 0;
-    gap: 0.65rem;
+    gap: 1rem;
+}
+
+.profile-picture-copy {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.profile-picture-copy > div {
+    min-width: 0;
+}
+
+.user-info-page .profile-picture-avatar {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    background: var(--theme-info-surface, #dbeafe);
+    color: var(--theme-info-text, #1d4ed8);
+    font-size: 1.25rem;
 }
 
 .profile-picture-copy h3 {
@@ -68,21 +94,20 @@
 
 .profile-picture-copy p {
     color: var(--muted);
-    font-size: 0.8rem;
+    font-size: 0.875rem;
 }
 
 .profile-picture-form {
-    display: flex;
+    display: grid;
     min-width: 0;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    align-items: center;
+    gap: 0.75rem;
+    justify-items: start;
 }
 
 .profile-picture-picker {
     display: flex;
     min-width: 0;
-    flex: 1 1 260px;
+    width: 100%;
     align-items: center;
     gap: 0.65rem;
 }
@@ -110,24 +135,39 @@
     align-items: center;
     justify-content: center;
     gap: 0.42rem;
+    min-height: 44px;
+}
+
+.profile-picture-choose {
+    flex-shrink: 0;
 }
 
 .profile-picture-filename {
     min-width: 0;
     overflow: hidden;
     color: var(--muted);
-    font-size: 0.78rem;
+    font-size: 0.875rem;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .profile-picture-form .field-help {
-    flex: 1 0 100%;
-    margin-top: -0.1rem;
+    margin: 0;
+    font-size: 0.8125rem;
+}
+
+#profile-crop-error:empty {
+    display: none;
+}
+
+#profile-crop-error {
+    color: var(--danger);
 }
 
 .profile-picture-actions {
-    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
 }
 
 .profile-picture-actions [hidden] {
@@ -143,7 +183,7 @@
 }
 
 .profile-details-form {
-    gap: 1rem;
+    gap: 1.25rem;
 }
 
 .profile-details-form .form-group {
@@ -155,13 +195,30 @@
     padding-top: 0.25rem;
 }
 
+.profile-details-form input {
+    min-width: 0;
+}
+
+.account-detail-list {
+    margin: 0;
+}
+
 .account-detail-list > div {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.2fr);
     gap: 1rem;
-    padding-block: 0.65rem;
+    padding-block: 0.75rem;
     border-bottom: 1px solid var(--border);
     font-size: 0.875rem;
+}
+
+.account-detail-list > div:first-child {
+    padding-top: 0;
+}
+
+.account-detail-list > div:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
 }
 
 .account-detail-list dt,
@@ -173,6 +230,8 @@
     margin: 0;
     overflow-wrap: anywhere;
     font-weight: 600;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .account-status-value.is-active {
@@ -185,6 +244,8 @@
 
 .account-security {
     margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
 }
 
 .account-security h3 {
@@ -193,6 +254,7 @@
 }
 
 .account-security > p {
+    margin-bottom: 1rem;
     font-size: 0.875rem;
 }
 
@@ -205,6 +267,9 @@
     width: 100%;
     margin: 0;
     padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-soft);
 }
 
 #profile-crop-preview {
@@ -212,7 +277,14 @@
     width: min(100%, 256px);
     height: auto;
     margin-bottom: 0.75rem;
-    border: 1px solid #64748b;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+#profile-crop-editor legend {
+    padding-inline: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
 }
 
 #profile-crop-editor label,
@@ -225,7 +297,7 @@
     min-height: 44px;
 }
 
-@media (max-width: 1050px) {
+@media (max-width: 1180px) {
     .user-info-layout {
         grid-template-columns: 1fr;
     }
@@ -236,13 +308,12 @@
         padding: 1rem;
     }
 
-    .profile-picture-form {
-        align-items: stretch;
+    .profile-details-form input {
+        font-size: 1rem;
     }
 
     .profile-picture-picker {
-        flex-direction: column;
-        align-items: flex-start;
+        flex-wrap: wrap;
     }
 
     .profile-picture-filename {
@@ -250,9 +321,12 @@
     }
 
     .profile-picture-actions,
-    .profile-picture-actions .btn,
     .profile-picture-remove-form .btn,
     .profile-save-row .btn {
         width: 100%;
+    }
+
+    .profile-picture-actions .btn {
+        flex: 1;
     }
 }

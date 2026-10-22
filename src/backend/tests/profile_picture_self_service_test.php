@@ -125,7 +125,7 @@ foreach (['cashier', 'inventory_manager', 'admin', 'super_admin'] as $role) {
         $result = $request($role, $scenario);
         $assert(str_contains($result['html'], 'Save picture'), "{$role}: picture action must be available.");
         $assert(str_contains($result['html'], 'accept="image/jpeg,image/png,image/webp"') && str_contains($result['html'], 'Maximum 5 MB. No animation.') && str_contains($result['html'], 'value="5242880"'), "{$role}: picker, help text, and original-file limit must agree.");
-        $assert(substr_count($result['html'], 'profile-avatar-fallback">TP') === 1, "{$role}: account menu must show initials fallback.");
+        $assert(substr_count($result['html'], 'profile-avatar-fallback">TP') === 2, "{$role}: account menu and profile preview must show initials fallback.");
         $assert(!str_contains($result['html'], 'profile-avatar-image'), "{$role}: missing picture must not render a broken avatar image.");
     }
     foreach (['upload', 'replace'] as $scenario) {

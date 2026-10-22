@@ -198,8 +198,11 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                         <div class="profile-picture-settings">
                             <div class="profile-picture-controls">
                                 <div class="profile-picture-copy">
-                                    <h3>Profile picture</h3>
-                                    <p>Optional. Your initials appear when no picture is set.</p>
+                                    <?= profile_avatar_html((int)$account['user_id'], (string)$account['full_name'], $account['profile_image'] ?? null, 'profile-picture-avatar') ?>
+                                    <div>
+                                        <h3>Profile picture</h3>
+                                        <p>Optional. Your initials appear when no picture is set.</p>
+                                    </div>
                                 </div>
                                 <form method="POST" enctype="multipart/form-data" class="profile-picture-form" id="profile-picture-form"
                                       data-max-bytes="<?= ProfileImageStorage::MAX_BYTES ?>" data-max-dimension="<?= ProfileImageStorage::MAX_DIMENSION ?>" data-max-pixels="<?= ProfileImageStorage::MAX_PIXELS ?>">
