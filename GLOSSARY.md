@@ -68,6 +68,14 @@ _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
 _Avoid_: Automatic order, required purchase quantity
 
+**Replenishment Receipt**:
+A receipt issued by a supplier or larger retailer for goods the Store buys to replenish its inventory. It records the Store's purchases, rather than purchases made by the Store's customers.
+_Avoid_: Sale Receipt, customer demand record
+
+**Category Replenishment Forecast**:
+A prediction of which product categories the Store is likely to buy during a future period, based on its previous replenishment purchases. It supports the Inventory Manager's buying decisions and does not directly measure customer demand.
+_Avoid_: Customer demand forecast (when based only on replenishment receipts)
+
 **Reorder Level**:
 The stock quantity, measured in Base Units, at or below which the Store should buy more. It includes expected demand while waiting for new stock plus Safety Stock.
 _Avoid_: Order quantity, backup stock
