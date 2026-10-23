@@ -10,9 +10,10 @@ require_role(['admin', 'super_admin']);
 
 $service = new GCashTransactionService($pdo, require __DIR__ . '/../../../backend/config/gcash.php');
 
-$startDate = isset($_GET['start_date']) ? trim((string)$_GET['start_date']) : substr(PhilippineTime::today(), 0, 7) . '-01';
+$startDate = isset($_GET['start_date']) ? trim((string)$_GET['start_date']) : PhilippineTime::today();
 $endDate = isset($_GET['end_date']) ? trim((string)$_GET['end_date']) : PhilippineTime::today();
-$cashierId = !empty($_GET['cashier_id']) ? (int)$_GET['cashier_id'] : null;
+$cashierId = $_GET['cashier_id'] ?? null;
+$period = (string)($_GET['period'] ?? (isset($_GET['start_date']) || isset($_GET['end_date']) ? 'custom' : 'today'));
 $activeTab = in_array($_GET['tab'] ?? '', ['overview', 'transactions', 'reconciliation', 'unresolved'], true) ? $_GET['tab'] : 'overview';
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1;
 
@@ -24,25 +25,22 @@ $filters = [
     'search' => trim((string)($_GET['search'] ?? '')),
     'actor_role' => (string)current_role(),
     'actor_id' => (int)($_SESSION['user_id'] ?? 0),
-    'start_date' => $startDate !== '' ? $startDate : null,
-    'end_date' => $endDate !== '' ? $endDate : null,
+    'period' => $period,
+    'start_date' => $startDate,
+    'end_date' => $endDate,
     'cashier_id' => $cashierId,
     'page' => $page,
 ];
 
 try {
     $overview = $service->adminOverview($filters);
+    $startDate = $overview['filters']['start_date'];
+    $endDate = $overview['filters']['end_date'];
+    $cashierId = $overview['filters']['cashier_id'];
 } catch (DomainException $e) {
     $filterError = $e->getMessage();
-    // Fallback without date filters
-    try {
-        $overview = $service->adminOverview([
-            'actor_role' => (string)current_role(),
-            'actor_id' => (int)($_SESSION['user_id'] ?? 0),
-        ]);
-    } catch (Throwable) {
-        $overview = null;
-    }
+} catch (Throwable) {
+    $filterError = 'Unable to load GCash overview. Try again.';
 }
 
 // Export uses the same authorized query and walks every matching page.
@@ -149,7 +147,7 @@ function gcash_admin_money(mixed $val): string {
                     </div>
                 </div>
                 <span class="gcash-status <?= ($funds['session_status'] ?? '') === 'open' ? 'gcash-status-completed' : '' ?>" id="admin-session-status">
-                    <?= $funds === null ? 'Session unavailable' : ($funds['session_id'] === null ? 'No recorded session' : 'Session #' . (int)$funds['session_id'] . ' · ' . ucfirst($funds['session_status'])) ?>
+                    <?= $funds === null ? 'Session unavailable' : ($funds['session_id'] === null ? 'No recorded session' : 'Session #' . (int)$funds['session_id'] . ' / ' . ucfirst($funds['session_status'])) ?>
                 </span>
             </div>
             <div class="gcash-overview-grid gcash-balances-grid">
@@ -175,7 +173,51 @@ function gcash_admin_money(mixed $val): string {
             <p class="gcash-card-sub" id="admin-combined-funds">Combined recorded funds: <?= $funds === null ? 'Unavailable' : (($funds['service_cash'] === null || $funds['wallet_balance'] === null) ? 'Not recorded' : gcash_admin_money($funds['service_cash'] + $funds['wallet_balance'])) ?>. Assess each fund separately; the combined amount does not establish that either fund is sufficient.</p>
         </section>
 
+        <section class="pos-panel gcash-overview-section" id="gcash-reporting-scope" aria-label="Shared reporting scope" data-today="<?= gcash_admin_e(PhilippineTime::today()) ?>">
+            <form method="GET" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form" class="gcash-filter-bar">
+                <input type="hidden" name="tab" value="<?= gcash_admin_e($activeTab) ?>">
+                <div class="gcash-field">
+                    <label for="gcash-reporting-period" class="gcash-filter-label">Reporting period</label>
+                    <select id="gcash-reporting-period" name="period" class="form-control">
+                        <?php foreach (['today' => 'Today', 'month_to_date' => 'Month-to-date', 'custom' => 'Custom dates'] as $value => $label): ?>
+                            <option value="<?= $value ?>" <?= $period === $value ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="gcash-field gcash-filter-date">
+                    <label for="filter-start-date" class="gcash-filter-label">Start Date</label>
+                    <input type="date" id="filter-start-date" required name="start_date" class="form-control" value="<?= gcash_admin_e($startDate) ?>">
+                </div>
+                <div class="gcash-field gcash-filter-date">
+                    <label for="filter-end-date" class="gcash-filter-label">End Date</label>
+                    <input type="date" id="filter-end-date" required name="end_date" class="form-control" value="<?= gcash_admin_e($endDate) ?>">
+                </div>
+                <div class="gcash-field gcash-filter-cashier">
+                    <label for="filter-cashier-id" class="gcash-filter-label">Cashier</label>
+                    <select id="filter-cashier-id" name="cashier_id" class="form-control">
+                        <option value="">All Cashiers (Store-wide)</option>
+                        <?php foreach ($overview['cashiers'] ?? [] as $c): ?>
+                            <option value="<?= gcash_admin_e($c['user_id']) ?>" <?= $cashierId === (int)$c['user_id'] ? 'selected' : '' ?>>
+                                <?= gcash_admin_e($c['full_name'] ?: $c['username']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="gcash-actions gcash-filter-actions">
+                    <button type="submit" class="btn btn-primary" id="btn-apply-filters">
+                        <i class="bi bi-filter" aria-hidden="true"></i>Apply filters
+                    </button>
+                    <a href="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php?tab=transactions')) ?>" class="btn btn-secondary" id="btn-reset-filters">
+                        Reset
+                    </a>
+                </div>
+            </form>
+            <p id="gcash-selected-dates">Selected Philippine dates: <?= gcash_admin_e($startDate) ?> through <?= gcash_admin_e($endDate) ?>. Applies to completed activity and Transactions.</p>
+            <p id="gcash-filter-status" role="status" aria-live="polite"></p>
+        </section>
+
         <!-- SECTION 3: Filtered Activity Totals -->
+
         <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-outstanding-title" id="gcash-outstanding-reviews">
             <h2 id="gcash-outstanding-title">Outstanding reviews</h2>
             <p>Store-wide &middot; All dates &middot; All Cashiers. Reporting and transaction filters do not narrow these reviews.</p>
@@ -189,40 +231,41 @@ function gcash_admin_money(mixed $val): string {
             <?php endif; ?>
         </section>
 
-        <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-admin-metrics-title">
+        <section class="pos-panel gcash-overview-section" id="gcash-completed-activity" aria-labelledby="gcash-admin-metrics-title">
+
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
                     <div class="pos-panel-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
                     <div>
-                        <h2 id="gcash-admin-metrics-title">Filtered Activity Totals</h2>
-                        <p>Principal and gross fees for the selected period. These totals are not the current wallet balance.</p>
+                        <h2 id="gcash-admin-metrics-title">Completed Service Activity</h2>
+                        <p>Exchanged principal is not revenue. Gross service fees are before expenses, not net profit. Transaction search and type do not change these totals.</p>
                     </div>
                 </div>
                 <div>
                     <span class="gcash-badge gcash-total-badge" id="admin-total-tx-badge">
-                        Total Transactions: <strong id="admin-metric-total-tx"><?= (int)($overview['total_transactions'] ?? 0) ?></strong>
+                        Completed exchanges: <strong id="admin-metric-total-tx"><?= $overview === null ? 'Unavailable' : (int)$overview['completed_exchange_count'] ?></strong>
                     </span>
                 </div>
             </div>
             <div class="gcash-overview-grid gcash-metrics-grid">
                 <div class="gcash-card">
                     <span class="gcash-card-label">Cash-in principal</span>
-                    <div class="gcash-card-value" id="admin-metric-cash-in-principal"><?= gcash_admin_money($overview['cash_in_principal'] ?? 0) ?></div>
+                    <div class="gcash-card-value" id="admin-metric-cash-in-principal"><?= $overview === null ? 'Unavailable' : gcash_admin_money($overview['cash_in_principal']) ?></div>
                     <div class="gcash-card-sub">Completed customer deposits</div>
                 </div>
                 <div class="gcash-card">
                     <span class="gcash-card-label">Cash-out principal</span>
-                    <div class="gcash-card-value" id="admin-metric-cash-out-principal"><?= gcash_admin_money($overview['cash_out_principal'] ?? 0) ?></div>
+                    <div class="gcash-card-value" id="admin-metric-cash-out-principal"><?= $overview === null ? 'Unavailable' : gcash_admin_money($overview['cash_out_principal']) ?></div>
                     <div class="gcash-card-sub">Completed customer payouts</div>
                 </div>
                 <div class="gcash-card">
                     <span class="gcash-card-label">Gross Cash Fees</span>
-                    <div class="gcash-card-value" id="admin-metric-gross-fees-cash"><?= gcash_admin_money($overview['gross_fees_cash'] ?? 0) ?></div>
+                    <div class="gcash-card-value" id="admin-metric-gross-fees-cash"><?= $overview === null ? 'Unavailable' : gcash_admin_money($overview['gross_fees_cash']) ?></div>
                     <div class="gcash-card-sub">Collected in cash box</div>
                 </div>
                 <div class="gcash-card">
                     <span class="gcash-card-label">Gross Wallet Fees</span>
-                    <div class="gcash-card-value" id="admin-metric-gross-fees-wallet"><?= gcash_admin_money($overview['gross_fees_wallet'] ?? 0) ?></div>
+                    <div class="gcash-card-value" id="admin-metric-gross-fees-wallet"><?= $overview === null ? 'Unavailable' : gcash_admin_money($overview['gross_fees_wallet']) ?></div>
                     <div class="gcash-card-sub">Transferred into wallet</div>
                 </div>
             </div>
@@ -237,52 +280,21 @@ function gcash_admin_money(mixed $val): string {
                 <div class="pos-panel-title">
                     <div class="pos-panel-icon"><i class="bi bi-funnel" aria-hidden="true"></i></div>
                     <div>
-                        <h2 id="gcash-admin-filters-title">Activity Filters</h2>
-                        <p>Filter activity by Philippine reporting date and Cashier.</p>
+                        <h2 id="gcash-admin-filters-title">Transaction Filters</h2>
+                        <p>Search and type apply only to this transaction list.</p>
                     </div>
                 </div>
             </div>
-            <form method="GET" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form" class="gcash-filter-bar">
-                <input type="hidden" name="tab" value="transactions">
-                <div class="gcash-field gcash-filter-date">
-                    <label for="filter-start-date" class="gcash-filter-label">Start Date</label>
-                    <input type="date" id="filter-start-date" name="start_date" class="form-control" value="<?= gcash_admin_e($startDate) ?>">
-                </div>
-                <div class="gcash-field gcash-filter-date">
-                    <label for="filter-end-date" class="gcash-filter-label">End Date</label>
-                    <input type="date" id="filter-end-date" name="end_date" class="form-control" value="<?= gcash_admin_e($endDate) ?>">
-                </div>
-                <div class="gcash-field gcash-filter-cashier">
-                    <label for="filter-cashier-id" class="gcash-filter-label">Cashier</label>
-                    <select id="filter-cashier-id" name="cashier_id" class="form-control">
-                        <option value="">All Cashiers (Store-wide)</option>
-                        <?php foreach ($overview['cashiers'] ?? [] as $c): ?>
-                            <option value="<?= gcash_admin_e($c['user_id']) ?>" <?= $cashierId === (int)$c['user_id'] ? 'selected' : '' ?>>
-                                <?= gcash_admin_e($c['full_name'] ?: $c['username']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
                 <div class="gcash-field gcash-filter-search">
                     <label for="gcash-search" class="gcash-filter-label">Search transactions</label>
-                    <input type="search" id="gcash-search" name="search" maxlength="200" class="form-control" value="<?= gcash_admin_e($_GET['search'] ?? '') ?>" placeholder="Search reference, shift #, cashier...">
+                    <input type="search" id="gcash-search" name="search" form="gcash-admin-filter-form" maxlength="200" class="form-control" value="<?= gcash_admin_e($_GET['search'] ?? '') ?>" placeholder="Search reference, shift #, cashier...">
                 </div>
-                <input type="hidden" name="type" id="gcash-type-filter" value="<?= gcash_admin_e($_GET['type'] ?? 'all') ?>">
-                <div class="gcash-actions gcash-filter-actions">
-                    <button type="submit" class="btn btn-primary" id="btn-apply-filters">
-                        <i class="bi bi-filter" aria-hidden="true"></i>Apply filters
-                    </button>
-                    <a href="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php?tab=transactions')) ?>" class="btn btn-secondary" id="btn-reset-filters">
-                        Reset
-                    </a>
-                </div>
-            </form>
+                <input type="hidden" name="type" form="gcash-admin-filter-form" id="gcash-type-filter" value="<?= gcash_admin_e($_GET['type'] ?? 'all') ?>">
             <div class="gcash-type-pills" role="group" aria-label="Transaction type">
                 <?php foreach (['all' => ['All', 'all_count'], 'Cash-In' => ['Cash-In', 'cash_in_count'], 'Cash-Out' => ['Cash-Out', 'cash_out_count']] as $value => [$label, $countKey]): ?>
                     <button type="button" class="btn btn-secondary" data-type="<?= $value ?>" aria-pressed="<?= ($_GET['type'] ?? 'all') === $value ? 'true' : 'false' ?>"><?= $label ?> (<?= (int)($overview['type_counts'][$countKey] ?? 0) ?>)</button>
                 <?php endforeach; ?>
             </div>
-            <p id="gcash-filter-status" role="status" aria-live="polite"></p>
         </section>
 
         <!-- SECTION 6: Store-wide Transaction History -->

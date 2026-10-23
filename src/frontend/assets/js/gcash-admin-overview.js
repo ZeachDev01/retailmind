@@ -5,6 +5,10 @@
 
     const tabs = [...workspace.querySelectorAll('[role="tab"]')];
     function selectTab(tab, focus = false) {
+        const target = tab.getAttribute('aria-controls');
+        const scope = document.getElementById('gcash-reporting-scope');
+        if (target === 'tab-overview') document.getElementById('gcash-completed-activity').before(scope);
+        if (target === 'tab-transactions') document.getElementById(target).prepend(scope);
         tabs.forEach(item => {
             const selected = item === tab;
             item.setAttribute('aria-selected', String(selected));
@@ -14,6 +18,8 @@
         const url = new URL(location.href);
         url.searchParams.set('tab', tab.getAttribute('aria-controls').replace('tab-', ''));
         history.replaceState(null, '', url);
+        const tabInput = document.querySelector('#gcash-admin-filter-form [name="tab"]');
+        if (tabInput) tabInput.value = url.searchParams.get('tab');
         if (focus) tab.focus();
     }
     tabs.forEach((tab, index) => {
@@ -25,6 +31,7 @@
             selectTab(tabs[next], true);
         });
     });
+    selectTab(tabs.find(tab => tab.getAttribute('aria-selected') === 'true'));
 
     workspace.addEventListener('click', event => {
         const review = event.target.closest('[data-review-tab]');
@@ -75,6 +82,17 @@
     const filterForm = document.getElementById('gcash-admin-filter-form');
     const search = document.getElementById('gcash-search');
     const typeInput = document.getElementById('gcash-type-filter');
+    const periodInput = document.getElementById('gcash-reporting-period');
+    const startInput = document.getElementById('filter-start-date');
+    const endInput = document.getElementById('filter-end-date');
+    periodInput.addEventListener('change', () => {
+        const today = workspace.querySelector('[data-today]').dataset.today;
+        if (periodInput.value !== 'custom') {
+            startInput.value = periodInput.value === 'month_to_date' ? today.slice(0, 7) + '-01' : today;
+            endInput.value = today;
+        }
+    });
+    [startInput, endInput].forEach(input => input.addEventListener('change', () => { periodInput.value = 'custom'; }));
     let searchTimer;
     let filterRequest;
     async function filterTransactions() {
@@ -85,12 +103,14 @@
         const url = new URL(filterForm.action);
         url.search = new URLSearchParams(new FormData(filterForm)).toString();
         const status = document.getElementById('gcash-filter-status');
-        status.textContent = 'Loading transactions…';
+        status.textContent = 'Loading selected report…';
+        document.getElementById('gcash-completed-activity').setAttribute('aria-busy', 'true');
         document.getElementById('gcash-admin-history-table').setAttribute('aria-busy', 'true');
         try {
             const response = await fetch(url, {signal: controller.signal});
             if (!response.ok) throw new Error('Unable to load transactions. Try again.');
             const html = new DOMParser().parseFromString(await response.text(), 'text/html');
+            if (controller.signal.aborted || filterRequest !== controller) return false;
             const error = html.querySelector('.gcash-filter-error');
             if (error) throw new Error(error.textContent.trim());
             const body = html.getElementById('gcash-admin-history-body');
@@ -98,7 +118,10 @@
             document.getElementById('gcash-admin-history-body').replaceChildren(...body.childNodes);
             refreshReviews(html);
             workspace.querySelector('.gcash-pagination').replaceWith(html.querySelector('.gcash-pagination'));
-            document.getElementById('tab-overview').replaceChildren(...html.getElementById('tab-overview').childNodes);
+            for (const selector of ['#gcash-completed-activity', '[aria-labelledby="gcash-admin-balances-title"]']) {
+                workspace.querySelector(selector).replaceWith(html.querySelector(selector));
+            }
+            document.getElementById('gcash-selected-dates').textContent = html.getElementById('gcash-selected-dates').textContent;
             for (const button of workspace.querySelectorAll('[data-type]')) {
                 const incoming = html.querySelector(`[data-type="${button.dataset.type}"]`);
                 button.textContent = incoming.textContent;
@@ -110,15 +133,25 @@
             history.replaceState(null, '', url);
             document.getElementById('gcash-export').href = url + '&export=csv';
             status.textContent = `${badge.textContent} matching transactions`;
+            return true;
         } catch (error) {
-            if (error.name !== 'AbortError') {
-                status.textContent = error.message;
+            if (error.name !== 'AbortError' && filterRequest === controller) {
                 markReviewsUnavailable();
+                status.textContent = error.message + ' Report totals are unavailable for this selection.';
+                workspace.querySelectorAll('#gcash-completed-activity .gcash-card-value, #admin-metric-total-tx').forEach(value => { value.textContent = 'Unavailable'; });
             }
+            return false;
         } finally {
-            if (filterRequest === controller) document.getElementById('gcash-admin-history-table').removeAttribute('aria-busy');
+            if (filterRequest === controller) {
+                document.getElementById('gcash-admin-history-table').removeAttribute('aria-busy');
+                document.getElementById('gcash-completed-activity').removeAttribute('aria-busy');
+            }
         }
     }
+    filterForm.addEventListener('submit', event => {
+        event.preventDefault();
+        filterTransactions();
+    });
     search?.addEventListener('input', () => {
         clearTimeout(searchTimer);
         filterRequest?.abort();
