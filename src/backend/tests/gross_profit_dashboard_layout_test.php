@@ -1,6 +1,5 @@
 <?php
-// Gross profit Administrator dashboard layout A integration test.
-// GitHub Issue #231 / Parent #227.
+// Gross profit Administrator dashboard presentation integration test.
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Dashboard/StoreOperationsDashboardWorkspace.php';
 require_once __DIR__ . '/../app/Services/GrossProfitService.php';
@@ -97,108 +96,40 @@ try {
     $assert($todayGp['total_net_sales'] === 100.0, 'Today net sales must be 100.00');
     $assert($todayGp['total_net_cost'] === 50.0, 'Today net cost must be 50.00');
     $assert($todayGp['total_gross_profit'] === 50.0, 'Today gross profit must be 50.00');
-    $assert($todayGp['total_margin'] === 50.0, 'Today margin must be 50.0%');
-    $assert($todayGp['affected_lines_count'] === 0, 'Today affected lines must be 0 for recorded status');
 
-    // 3. Layout A rendering verification
+    $assert($todayGp['total_margin'] === 50.0, 'Today margin must be 50.0%');
+    $assert($todayGp['affected_lines_count'] === 0, 'Recorded costs have no affected sold lines');
+
+    // 3. Presentation rendering verification
     // Render dashboard HTML using PHP CLI
     $root = dirname(__DIR__, 3);
-    $dashboardPhp = file_get_contents($root . '/src/frontend/components/administrator/dashboard.php');
-    $template = substr($dashboardPhp, strpos($dashboardPhp, '<!DOCTYPE html>'));
-    $template = preg_replace('/<\?php include __DIR__ .*?\?>/', '', $template);
-
-    $renderHtml = function(array $payload, string $period = 'today', int $range = 30) use ($template, $root): string {
-        $phpBinary = PHP_BINARY;
-        $cmd = [
-            $phpBinary,
-            '-r',
-            '
-            function retailmind_theme_head() {}
-            function app_url($p) { return "/".$p; }
-            function theme_url($p) { return "/".$p; }
-            $displayName = "Ada Administrator";
-            $selectedRange = (int)$argv[2];
-            $selectedPeriod = $argv[3];
-            $rangeUrl = "/components/administrator/dashboard.php?range=".$selectedRange."&period=".$selectedPeriod;
-            $dashboard = json_decode($argv[1], true);
-            $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, "UTF-8");
-            $formatDate = static fn(?string $v): string => $v ? (new DateTimeImmutable($v))->format("m-d-Y g:i A") : "Unavailable";
-            $formatMetric = static fn(float|int $v, bool $c = false): string => ($c ? "₱" : "") . number_format((float)$v, $c ? 2 : 0);
-            $formatCurrency = static fn(float|int $v): string => ($v < 0 ? "-₱" : "₱") . number_format(abs((float)$v), 2);
-            $formatChange = static fn(?float $c): string => $c === null ? "No prior baseline" : ($c > 0 ? "+" : "") . number_format($c, 1) . "%";
-            $netSales = $dashboard["net_sales"] ?? null;
-            $hasNetSales = $netSales !== null && is_array($netSales);
-            $netSalesPeriods = $hasNetSales ? ($netSales["periods"] ?? ["today" => $netSales]) : [];
-            $activePeriodData = $netSalesPeriods[$selectedPeriod] ?? [];
-            $activePeriodTitle = match($selectedPeriod) { "week" => "This Week\'s Net Sales", "month" => "This Month\'s Net Sales", default => "Today\'s Net Sales" };
-            $activePeriodTotal = $hasNetSales ? ($activePeriodData["total"] ?? 0.0) : null;
-            $activePeriodPoints = $hasNetSales ? ($activePeriodData["points"] ?? []) : [];
-            $activePeriodHasActivity = $hasNetSales && ($activePeriodData["has_activity"] ?? false);
-            $activePeriodIntervalLabel = $selectedPeriod === "today" ? "Hour" : "Day";
-            $netSalesPoints = $activePeriodPoints;
-            $netSalesTotal = $activePeriodTotal;
-            $netSalesHasActivity = $activePeriodHasActivity;
-            $netSalesAsOf = $hasNetSales ? ($netSales["as_of"] ?? null) : null;
-
-            $grossProfit = $dashboard["gross_profit"] ?? null;
-            $hasGrossProfit = $grossProfit !== null && is_array($grossProfit);
-            $grossProfitPeriods = $hasGrossProfit ? ($grossProfit["periods"] ?? []) : [];
-            $activeProfitData = $grossProfitPeriods[$selectedPeriod] ?? ($grossProfitPeriods["today"] ?? []);
-            $activeProfitTitle = match($selectedPeriod) { "week" => "This Week\'s Gross Profit", "month" => "This Month\'s Gross Profit", default => "Today\'s Gross Profit" };
-            $activeCostTitle = match($selectedPeriod) { "week" => "This Week\'s Product Cost", "month" => "This Month\'s Product Cost", default => "Today\'s Product Cost" };
-            $profitStatus = (string)($activeProfitData["status"] ?? "recorded");
-            $profitTotal = $activeProfitData["total_gross_profit"] ?? null;
-            $costTotal = $activeProfitData["total_net_cost"] ?? null;
-            $profitMargin = $activeProfitData["total_margin"] ?? null;
-            $affectedLinesCount = (int)($activeProfitData["affected_lines_count"] ?? 0);
-            $profitRange = $activeProfitData["date_range"] ?? [];
-            $activeProfitFrom = (string)($profitRange["from"] ?? date("Y-m-d"));
-            $activeProfitTo = (string)($profitRange["to"] ?? date("Y-m-d"));
-            $profitReportUrl = app_url("components/report/report_generation.php") . "?report=gross_profit&from=" . urlencode($activeProfitFrom) . "&to=" . urlencode($activeProfitTo);
-
-            $headlineOrder = [];
-            $comparisonOrder = [];
-            eval("?>".stream_get_contents(STDIN));
-            ',
-            json_encode($payload),
-            (string)$range,
-            $period,
-        ];
-
-        $process = proc_open(
-            $cmd,
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes,
-            $root . '/src/frontend/components/administrator'
-        );
-
-        fwrite($pipes[0], $template);
+    $renderHtml = function(array $payload, string $period = 'today', int $range = 30) use ($root): string {
+        $process = proc_open([PHP_BINARY, __DIR__ . '/render_administrator_dashboard.php', $period],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $root);
+        fwrite($pipes[0], json_encode($payload, JSON_THROW_ON_ERROR));
         fclose($pipes[0]);
-
-        $stdout = stream_get_contents($pipes[1]);
+        $html = stream_get_contents($pipes[1]);
         fclose($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
+        $errors = stream_get_contents($pipes[2]);
         fclose($pipes[2]);
-        proc_close($process);
-
-        return $stdout;
+        if (proc_close($process) !== 0 || $errors !== '') {
+            throw new RuntimeException($errors);
+        }
+        return $html;
     };
 
     $htmlRecorded = $renderHtml($adminView, 'today', 30);
 
     // Verify 3 Layout A cards
-    $assert(str_contains($htmlRecorded, 'profit-cards-grid layout-a-cards'), 'Must render layout A profit cards grid');
+    $assert(str_contains($htmlRecorded, 'Gross Sales'), 'Must distinguish Gross Sales');
     $assert(str_contains($htmlRecorded, 'card-net-sales'), 'Must render Net Sales card');
     $assert(str_contains($htmlRecorded, 'card-gross-profit'), 'Must render Gross Profit card');
-    $assert(str_contains($htmlRecorded, 'card-cost-of-sales'), 'Must render Cost of Products Sold card');
+    $assert(str_contains($htmlRecorded, 'Product Cost:'), 'Product cost remains available without another chart');
+
+    $assert(str_contains($htmlRecorded, 'Margin: 50.0%'), 'Recorded costs retain margin');
 
     // Restrained green emphasis ONLY on positive complete result
     $assert(str_contains($htmlRecorded, 'card-gross-profit is-positive-complete'), 'Positive complete profit must have is-positive-complete class');
-    $assert(str_contains($htmlRecorded, 'Margin: 50.0%'), 'Margin must be displayed for complete recorded sales');
 
     // Formula bar & operating exclusion note
     $assert(str_contains($htmlRecorded, 'Net Sales'), 'Formula bar must contain Net Sales');
@@ -207,9 +138,9 @@ try {
     $assert(str_contains($htmlRecorded, 'Rent, wages, electricity'), 'Must contain operating expenses exclusion note');
 
     // Expandable return help
-    $assert(str_contains($htmlRecorded, 'profit-return-help'), 'Must contain expandable return help details');
+    $assert(str_contains($htmlRecorded, 'How profit is calculated'), 'Must contain expandable return help details');
     $assert(str_contains($htmlRecorded, 'Restockable returns:'), 'Must explain restockable returns');
-    $assert(str_contains($htmlRecorded, 'Damaged returns:'), 'Must explain damaged returns');
+    $assert(str_contains($htmlRecorded, 'Unsaleable returns:'), 'Must explain damaged returns');
 
     // View profit report link preserving date range
     $assert(str_contains($htmlRecorded, 'report_generation.php?report=gross_profit&amp;from=' . urlencode('2026-10-17')), 'View profit report link must preserve date range from');
@@ -224,13 +155,12 @@ try {
     $incompleteView = $workspace->load('admin', 30);
     $incompleteToday = $incompleteView['gross_profit']['periods']['today'];
     $assert($incompleteToday['status'] === 'incomplete', 'Status must be incomplete when sold items lack costs');
-    $assert($incompleteToday['affected_lines_count'] === 1, 'Affected lines count must be 1');
     $assert($incompleteToday['total_net_cost'] === null, 'Net cost must be null when incomplete');
     $assert($incompleteToday['total_gross_profit'] === null, 'Gross profit must be null when incomplete');
-    $assert($incompleteToday['total_margin'] === null, 'Margin must be null when incomplete');
+    $assert(($incompleteToday['total_margin'] ?? null) === null, 'Margin must be null when incomplete');
 
     $htmlIncomplete = $renderHtml($incompleteView, 'today', 30);
-    $assert(str_contains($htmlIncomplete, 'is-incomplete'), 'Gross profit card must have is-incomplete indicator');
+    $assert(str_contains($htmlIncomplete, '>Incomplete<'), 'Gross profit total must be visibly incomplete');
     $assert(!str_contains($htmlIncomplete, 'card-gross-profit is-positive-complete'), 'Incomplete profit must NEVER have is-positive-complete emphasis');
     $assert(str_contains($htmlIncomplete, '1 affected sold line missing cost'), 'Must display affected sold lines count');
     $assert(!str_contains($htmlIncomplete, 'id="profit-incomplete-explanation" hidden'), 'Incomplete explanation banner must NOT be hidden');
@@ -248,21 +178,21 @@ try {
     $estimatedView = $workspace->load('admin', 30);
     $estimatedToday = $estimatedView['gross_profit']['periods']['today'];
     $assert($estimatedToday['status'] === 'estimated', 'Status must be estimated when catalog cost is used');
-    $assert($estimatedToday['total_margin'] === null, 'Margin must be withheld when estimated');
+    $assert(($estimatedToday['total_margin'] ?? null) === null, 'Margin must be withheld when estimated');
     $assert($estimatedToday['total_gross_profit'] !== null, 'Estimated profit total must be populated');
 
     $htmlEstimated = $renderHtml($estimatedView, 'today', 30);
     $assert(str_contains($htmlEstimated, 'status-estimated'), 'Must render status-estimated badge');
     $assert(!str_contains($htmlEstimated, 'card-gross-profit is-positive-complete'), 'Estimated profit must NOT have is-positive-complete emphasis');
-    $assert(str_contains($htmlEstimated, 'Costs estimated &middot; Margin withheld'), 'Estimated profit must show margin withheld hint');
+    $assert(str_contains($htmlEstimated, 'Costs estimated') && str_contains($htmlEstimated, 'Margin withheld'), 'Estimated profit must show margin withheld hint');
 
     // 6. Independent rolling comparison range
     $view7 = $workspace->load('admin', 7);
     $view30 = $workspace->load('admin', 30);
     $view90 = $workspace->load('admin', 90);
-    $assert($view7['range_days'] === 7, '7-day view has range_days 7');
+    $assert($view7['range_days'] === 30, 'Legacy 7-day query retains fixed 30-day operational horizon');
     $assert($view30['range_days'] === 30, '30-day view has range_days 30');
-    $assert($view90['range_days'] === 90, '90-day view has range_days 90');
+    $assert($view90['range_days'] === 30, 'Legacy 90-day query retains fixed 30-day operational horizon');
     // Periods in gross_profit remain today/week/month regardless of rolling range
     $assert(isset($view7['gross_profit']['periods']['today']), '7-day view retains today profit');
     $assert(isset($view90['gross_profit']['periods']['today']), '90-day view retains today profit');

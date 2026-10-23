@@ -92,7 +92,7 @@ final class StoreOperationsDashboardWorkspace
         }
         if ($role === 'admin') {
             $gp = $entry['data']['gross_profit'] ?? null;
-            if (!is_array($gp) || !isset($gp['periods']['week'], $gp['periods']['month'], $gp['periods']['today'])) {
+            if (!array_key_exists('financial_history', $entry['data']) || !is_array($gp) || !isset($gp['periods']['week']['points'], $gp['periods']['month']['points'], $gp['periods']['today']['points'])) {
                 return false;
             }
         }
@@ -151,8 +151,8 @@ final class StoreOperationsDashboardWorkspace
             throw new DomainException('The Store-operations dashboard is available only to the Administrator.');
         }
 
-        $days = in_array($days, self::RANGES, true) ? $days : 30;
-        $now = $this->clock->now();
+        $days = 30;
+        $now = $this->clock->now()->setTimezone(new \DateTimeZone('Asia/Manila'));
 
         $cached = self::getCached($actorRole, $days, $now);
         if ($cached !== null) {
@@ -170,7 +170,9 @@ final class StoreOperationsDashboardWorkspace
             $exceptions = $this->exceptions($now, $days, $thresholds);
             $headline = $this->headline($now, $days, $thresholds);
             $netSales = $this->netSales($now);
-            $grossProfit = ($actorRole === 'admin') ? $this->grossProfit($now) : null;
+            $financial = $this->financials($now, $netSales);
+            $netSales = $financial['net_sales'];
+            $grossProfit = $financial['gross_profit'];
 
             $data = [
                 'role' => $actorRole,
@@ -186,6 +188,7 @@ final class StoreOperationsDashboardWorkspace
                 'inventory' => $this->inventory(),
                 'net_sales' => $netSales,
                 'gross_profit' => $grossProfit,
+                'financial_history' => $financial['history'],
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
                 'message' => $exceptions === [] ? 'No Store-operational exceptions currently require action.' : null,
@@ -209,6 +212,7 @@ final class StoreOperationsDashboardWorkspace
                 'inventory' => [],
                 'net_sales' => null,
                 'gross_profit' => null,
+                'financial_history' => null,
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
                 'message' => 'Current Store operations could not be loaded. Refresh to try again.',
@@ -459,6 +463,8 @@ final class StoreOperationsDashboardWorkspace
 
         $todayData = [
             'period' => 'today',
+            'period_start' => $todayStart->format('Y-m-d'),
+            'period_end' => $nowPh->format('Y-m-d'),
             'label' => "Today's Net Sales",
             'short_label' => 'Today',
             'interval_type' => 'hourly',
@@ -475,6 +481,8 @@ final class StoreOperationsDashboardWorkspace
 
         $weekData = [
             'period' => 'week',
+            'period_start' => $weekStart->format('Y-m-d'),
+            'period_end' => $nowPh->format('Y-m-d'),
             'label' => "This Week's Net Sales",
             'short_label' => 'This Week',
             'interval_type' => 'daily',
@@ -491,6 +499,8 @@ final class StoreOperationsDashboardWorkspace
 
         $monthData = [
             'period' => 'month',
+            'period_start' => $monthStart->format('Y-m-d'),
+            'period_end' => $nowPh->format('Y-m-d'),
             'label' => "This Month's Net Sales",
             'short_label' => 'This Month',
             'interval_type' => 'daily',
@@ -724,31 +734,90 @@ final class StoreOperationsDashboardWorkspace
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    private function grossProfit(DateTimeImmutable $now): ?array
+    private function financials(DateTimeImmutable $now, array $netSales): array
     {
         try {
-            $tz = new \DateTimeZone('Asia/Manila');
-            $asOfStr = $now->setTimezone($tz)->format('Y-m-d H:i:s');
+            $today = $now->setTime(0, 0);
+            $currentStart = $today->modify('-29 days');
+            $previousStart = $today->modify('-59 days');
             $service = new GrossProfitService($this->pdo);
-
-            $today = $service->calculate(['period' => 'today', 'as_of' => $now])['summary'];
-            $week = $service->calculate(['period' => 'week', 'as_of' => $now])['summary'];
-            $month = $service->calculate(['period' => 'month', 'as_of' => $now])['summary'];
-
+            $events = $service->calculate(['from' => $previousStart->format('Y-m-d'), 'to' => $today->format('Y-m-d'), 'as_of' => $now])['events'];
+            $periods = [];
+            foreach ($netSales['periods'] as $period => &$sales) {
+                $from = $service->resolveDateRange(['period' => $period, 'as_of' => $now]);
+                $result = $this->financialPeriod($events, $from['from'], $from['to'], $now, $period === 'today');
+                $periods[$period] = $result;
+                $sales['points'] = $result['points'];
+                $sales['total'] = $result['total_net_sales'];
+                $sales['total_gross_sales'] = $result['total_gross_sales'];
+                $sales['total_discounts'] = $result['total_discounts'];
+                $sales['sales_total'] = round($result['total_gross_sales'] - $result['total_discounts'], 2);
+                $sales['refunds_total'] = $result['total_refunds'];
+                $sales['has_activity'] = $result['total_gross_sales'] != 0 || $result['total_refunds'] != 0;
+                $sales['period_start'] = $from['from'];
+                $sales['period_end'] = $from['to'];
+            }
+            unset($sales);
+            $netSales = array_replace($netSales, $netSales['periods']['today']);
+            $current = $this->financialPeriod($events, $currentStart->format('Y-m-d'), $today->format('Y-m-d'), $now);
+            $previousEnd = $currentStart->modify('-1 day')->format('Y-m-d');
+            $previous = $this->financialPeriod($events, $previousStart->format('Y-m-d'), $previousEnd, $now);
             return [
-                'status' => 'ongoing',
-                'as_of' => $asOfStr,
-                'timezone' => 'Asia/Manila',
-                'periods' => [
-                    'today' => $today,
-                    'week' => $week,
-                    'month' => $month,
+                'net_sales' => $netSales,
+                'gross_profit' => ['status' => 'ongoing', 'as_of' => $now->format('Y-m-d H:i:s'), 'timezone' => 'Asia/Manila', 'periods' => $periods],
+                'history' => [
+                    'period_start' => $currentStart->format('Y-m-d'), 'period_end' => $today->format('Y-m-d'),
+                    'previous_start' => $previousStart->format('Y-m-d'), 'previous_end' => $previousEnd,
+                    'as_of' => $now->format('Y-m-d H:i:s'), 'points' => $current['points'],
+                    'net_sales' => $this->financialComparison($current['total_net_sales'], $previous['total_net_sales']),
+                    'gross_profit' => $this->financialComparison($current['total_gross_profit'], $previous['total_gross_profit']) + ['status' => $current['status'], 'previous_status' => $previous['status']],
                 ],
             ];
         } catch (Throwable $exception) {
-            error_log('Store-operations dashboard gross profit computation failed: ' . $exception->getMessage());
-            return null;
+            error_log('Store-operations dashboard financial computation failed: ' . $exception->getMessage());
+            return ['net_sales' => $netSales, 'gross_profit' => null, 'history' => null];
         }
     }
-}
 
+    private function financialComparison(?float $current, ?float $previous): array
+    {
+        return ['current' => $current, 'previous' => $previous, 'change_percent' => $current !== null && $previous !== null && $previous > 0 ? round(($current - $previous) / $previous * 100, 1) : null];
+    }
+
+    private function financialPeriod(array $events, string $from, string $to, DateTimeImmutable $now, bool $hourly = false): array
+    {
+        $points = [];
+        $start = new DateTimeImmutable($from, $now->getTimezone());
+        $end = $hourly ? $now : new DateTimeImmutable($to, $now->getTimezone());
+        for ($date = $start; $date <= $end; $date = $date->modify($hourly ? '+1 hour' : '+1 day')) {
+            $key = $date->format($hourly ? 'Y-m-d H' : 'Y-m-d');
+            $points[$key] = ['date' => $date->format('Y-m-d'), 'hour' => (int)$date->format('G'), 'label' => $date->format($hourly ? 'H:00' : 'M j'), 'gross_sales' => 0.0, 'discounts' => 0.0, 'refunds' => 0.0, 'net_cost' => 0.0, 'status' => 'recorded'];
+        }
+        $affectedLines = [];
+        foreach ($events as $event) {
+            $key = substr($event['occurred_at'], 0, $hourly ? 13 : 10);
+            if (!isset($points[$key])) { continue; }
+            if ($event['status'] === 'incomplete') { $affectedLines[$event['sale_item_id']] = true; }
+            foreach (['gross_sales', 'discounts', 'refunds', 'net_cost'] as $metric) {
+                if ($event[$metric] === null || $points[$key][$metric] === null) { $points[$key][$metric] = null; }
+                else { $points[$key][$metric] = round($points[$key][$metric] + $event[$metric], 2); }
+            }
+            if ($event['status'] === 'incomplete' || ($event['status'] === 'estimated' && $points[$key]['status'] === 'recorded')) { $points[$key]['status'] = $event['status']; }
+        }
+        $summary = ['date_range' => ['from' => $from, 'to' => $to], 'status' => 'recorded', 'total_gross_sales' => 0.0, 'total_discounts' => 0.0, 'total_refunds' => 0.0, 'total_net_sales' => 0.0, 'total_net_cost' => 0.0, 'total_gross_profit' => 0.0];
+        foreach ($points as &$point) {
+            $point['sales'] = round($point['gross_sales'] - $point['discounts'], 2);
+            $point['net_sales'] = round($point['sales'] - $point['refunds'], 2);
+            $point['gross_profit'] = $point['net_cost'] === null ? null : round($point['net_sales'] - $point['net_cost'], 2);
+            if ($point['status'] === 'incomplete' || ($point['status'] === 'estimated' && $summary['status'] === 'recorded')) { $summary['status'] = $point['status']; }
+            foreach (['gross_sales', 'discounts', 'refunds', 'net_sales', 'net_cost', 'gross_profit'] as $metric) {
+                if ($point[$metric] === null || $summary['total_' . $metric] === null) { $summary['total_' . $metric] = null; }
+                else { $summary['total_' . $metric] = round($summary['total_' . $metric] + $point[$metric], 2); }
+            }
+        }
+        unset($point);
+        $summary['total_margin'] = $summary['status'] === 'recorded' && $summary['total_net_sales'] > 0 ? round($summary['total_gross_profit'] / $summary['total_net_sales'] * 100, 2) : null;
+        $summary['affected_lines_count'] = count($affectedLines);
+        return $summary + ['points' => array_values($points)];
+    }
+}
