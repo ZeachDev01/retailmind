@@ -138,56 +138,41 @@ function gcash_admin_money(mixed $val): string {
         <?php endif; ?>
 
         <div id="tab-overview" role="tabpanel" aria-labelledby="gcash-tab-overview" tabindex="0" <?= $activeTab !== 'overview' ? 'hidden' : '' ?>>
-        <!-- SECTION 1: Current Store-wide Expected Balances (unaffected by historical date filters) -->
+        <?php $funds = $overview['recorded_balances'] ?? null; ?>
         <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-admin-balances-title">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
                     <div class="pos-panel-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></div>
                     <div>
-                        <h2 id="gcash-admin-balances-title">Current Expected Balances</h2>
-                        <p>Expected service cash and wallet funds from the current or latest counted session. Date filters do not change these balances.</p>
+                        <h2 id="gcash-admin-balances-title">Recorded Service Funds</h2>
+                        <p>Expected amounts follow recorded movements in an open session. Last counted amounts are closing actual counts. These are not a live GCash app balance; reporting and list filters do not change them.</p>
                     </div>
                 </div>
-                <div>
-                    <span class="gcash-status <?= ($overview['session_status'] ?? '') === 'open' ? 'gcash-status-completed' : '' ?>" id="admin-session-status">
-                        Session: <?= gcash_admin_e(ucfirst($overview['session_status'] ?? 'None')) ?>
-                    </span>
-                </div>
+                <span class="gcash-status <?= ($funds['session_status'] ?? '') === 'open' ? 'gcash-status-completed' : '' ?>" id="admin-session-status">
+                    <?= $funds === null ? 'Session unavailable' : ($funds['session_id'] === null ? 'No recorded session' : 'Session #' . (int)$funds['session_id'] . ' � ' . ucfirst($funds['session_status'])) ?>
+                </span>
             </div>
             <div class="gcash-overview-grid gcash-balances-grid">
+                <?php foreach (['cash' => ['GCash Service Cash', 'service_cash'], 'wallet' => ['GCash Service Wallet', 'wallet_balance']] as $key => [$label, $amountKey]):
+                    $amount = $funds[$amountKey] ?? null;
+                    $evidenceLabel = $funds === null ? 'Unavailable' : ($amount === null ? 'Not recorded' : ($funds['state'] === 'expected' ? 'Expected' : 'Last counted'));
+                ?>
                 <div class="gcash-card gcash-card-balance">
                     <div class="gcash-card-header">
-                        <span class="gcash-card-label">Physical Service Cash</span>
-                        <span class="gcash-badge gcash-badge-expected">Expected</span>
+                        <span class="gcash-card-label"><?= $label ?></span>
+                        <span class="gcash-badge gcash-badge-expected" id="admin-<?= $key ?>-state"><?= $evidenceLabel ?></span>
                     </div>
-                    <div class="gcash-card-value" id="admin-expected-cash"><?= gcash_admin_money($overview['current_expected_service_cash'] ?? 0) ?></div>
-                    <div class="gcash-card-sub" id="admin-cash-checked">
-                        Last check: <?= gcash_admin_e($overview['last_checked_formatted'] ?? '—') ?>
-                        <?php if (!empty($overview['controlling_cashier_name'])): ?>
-                            &middot; Controller: <?= gcash_admin_e($overview['controlling_cashier_name']) ?>
+                    <div class="gcash-card-value" id="admin-expected-<?= $key ?>"><?= $amount === null ? $evidenceLabel : gcash_admin_money($amount) ?></div>
+                    <div class="gcash-card-sub" id="admin-<?= $key ?>-checked">
+                        Last actual check: <?= gcash_admin_e($funds['checked_at_formatted'] ?? 'Not recorded') ?>
+                        <?php if (!empty($funds['cashier_name'])): ?>
+                            &middot; Responsible Cashier: <?= gcash_admin_e($funds['cashier_name']) ?>
                         <?php endif; ?>
                     </div>
                 </div>
-                <div class="gcash-card gcash-card-balance">
-                    <div class="gcash-card-header">
-                        <span class="gcash-card-label">GCash App Wallet</span>
-                        <span class="gcash-badge gcash-badge-expected">Expected</span>
-                    </div>
-                    <div class="gcash-card-value" id="admin-expected-wallet"><?= gcash_admin_money($overview['current_expected_wallet_balance'] ?? 0) ?></div>
-                    <div class="gcash-card-sub" id="admin-wallet-checked">
-                        Last check: <?= gcash_admin_e($overview['last_checked_formatted'] ?? '—') ?>
-                        <?php if (!empty($overview['controlling_cashier_name'])): ?>
-                            &middot; Controller: <?= gcash_admin_e($overview['controlling_cashier_name']) ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <div class="gcash-card gcash-card-balance gcash-card-combined">
-                    <div class="gcash-card-header"><span class="gcash-card-label">Combined Float Position</span><span class="gcash-badge">Expected</span></div>
-                    <div class="gcash-card-value"><?= gcash_admin_money(($overview['current_expected_service_cash'] ?? 0) + ($overview['current_expected_wallet_balance'] ?? 0)) ?></div>
-                    <div class="gcash-card-sub">Service cash + GCash Service Wallet</div>
-                    <div class="gcash-card-sub">Recorded funds; not a live GCash app sync.</div>
-                </div>
+                <?php endforeach; ?>
             </div>
+            <p class="gcash-card-sub" id="admin-combined-funds">Combined recorded funds: <?= $funds === null ? 'Unavailable' : (($funds['service_cash'] === null || $funds['wallet_balance'] === null) ? 'Not recorded' : gcash_admin_money($funds['service_cash'] + $funds['wallet_balance'])) ?>. Assess each fund separately; the combined amount does not establish that either fund is sufficient.</p>
         </section>
 
         <!-- SECTION 3: Filtered Activity Totals -->
