@@ -33,13 +33,13 @@ Reconciliation and unresolved activity explicitly cover every date and Cashier. 
 
 ## Adaptations and design comparison
 
-The pinned brief's emerald exchange semantics and dark combined-float card remain local adaptations, not new global palette rules. Recorded expected funds are labelled honestly: no live GCash app synchronization, invented balanced percentage or net session-fee claim. Dense inherited typography and the brief-pinned tones were detector advisories; neither was promoted into the global system.
+The incumbent emerald exchange semantics remain local, not new global palette rules. Combined funds are secondary text beneath the separate fund amounts. Recorded evidence is labelled honestly: no live GCash app synchronization, invented balanced percentage or net session-fee claim. Dense inherited typography and local tones remain detector advisories; neither was promoted into the global system.
 
 Finish review identified one scored fix: long tables made a 50-row page excessively tall. All three table regions now scroll within `55dvh`, expose keyboard-focusable labelled regions and sticky headings, with pagination outside. Reviewer reported the fix resolved and no regression across eight final recaptures; the ship disposition covers that scored fix only.
 
 ## Verification evidence
 
 - Parent-run checks passed: `gcash_browser_test.js`, MySQL service integration, PHP/JavaScript syntax and `git diff --check`.
-- Final focused `gcash_admin_overview_browser_test.js` passed: all 55 filtered CSV rows, page two, request race, bounded tables, keyboard tabs, details, authorization/CSRF, waiver and Verify & Clear.
+- Final focused `gcash_admin_overview_browser_test.js` passed: Today/Month-to-date/custom scopes, independent fund and review evidence, all 105 filtered CSV rows across three pages, safe legacy/formula content, an isolated HTTP staging failure returning 503 without an attachment, request races, bounded tables, keyboard tabs, linked-adjustment details, authorization/CSRF, waiver and Verify & Clear.
 - Final QA captures in `.impeccable/review/`: `desktop.png`, `mobile.png`, `desktop-transactions.png`, `mobile-transactions.png`, `desktop-reconciliation.png`, `mobile-reconciliation.png`, `desktop-unresolved.png`, `mobile-unresolved.png`. Desktop: 1440×1080; mobile: 390×1080. These are QA screenshots, not shipping rasters; raster provenance does not apply.
 - No claim of exhaustive screen-reader, dark-theme, cross-browser or external GCash synchronization verification. Detector ran once; its advisories did not authorize a global redesign.
