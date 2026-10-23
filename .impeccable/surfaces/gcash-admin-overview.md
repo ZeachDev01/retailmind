@@ -15,9 +15,9 @@ THESIS: Four task tabs replace stacked monitoring cards; current funds stay sepa
 
 OWN-WORLD: RetailMind navy shell, cool neutral panels, blue selected controls, emerald completed exchanges and amber review states. Retain system UI typography and theme variables.
 
-STORY: Read expected cash and wallet funds first; inspect filtered exchanges, then review session variances and unresolved exchanges through existing authorized workflows.
+STORY: Read separate recorded cash and wallet funds first, then Store-wide outstanding work and completed activity for the shared reporting period. Inspect filtered exchanges and retain audited review history.
 
-FIRST VIEWPORT: Existing sidebar and page header; compact right-aligned actions; horizontally scrollable tabs; three balances in one desktop row with a four-value period KPI strip underneath. Mobile stacks balances. Signature interaction: inspect both signed ledger movements together in a native transaction dialog.
+FIRST VIEWPORT: Existing sidebar and page header; compact right-aligned actions; horizontally scrollable tabs; two leading fund amounts with evidence labels and a secondary combined amount. Store-wide review links precede shared period/Cashier controls and completed activity. Mobile stacks funds and controls. Signature interaction: inspect signed ledger movements and linked adjustments together in a native transaction dialog.
 
 FORM: User-specified tabbed operational dashboard; code-led, pinned brief (no random seed). Keyboard tabs and native dialogs, server-backed filters above transaction rows, stable pagination and filtered CSV.
 
@@ -25,11 +25,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## Implementation evidence
 
-This extends the existing RetailMind world; `docs/DESIGN.md` and its sidecar remain unchanged. The shipped PHP, scoped stylesheet and JavaScript retain the navy shell, theme variables, system UI, blue controls, 14px panels, 10px fields and 18px native dialogs. Three expected balances precede four historical principal/gross-fee KPIs. Month-to-date defaults use Philippine reporting dates; current balances remain independent of those filters.
+This extends the existing RetailMind world; `docs/DESIGN.md` and its sidecar remain unchanged. The shipped PHP, scoped stylesheet and JavaScript retain the navy shell, theme variables, system UI, blue controls, 14px panels, 10px fields and 18px native dialogs. Open-session funds are Expected; closed-session amounts are Last counted; missing counts remain Not recorded. Today defaults use Philippine reporting dates, with Month-to-date and custom dates available. Recorded funds remain independent of all reporting and list filters.
 
-Four keyboard tabs support Arrow keys, Home and End. Transactions combine date, Cashier, server-side search and type filters with pagination and complete filtered CSV export. Native details show recorded signed cash and wallet movements; legacy records identify unavailable values. Aborted requests and active-tab URL preservation prevent stale filtering responses from changing the selected task.
+Four keyboard tabs support Arrow keys, Home and End. Shared dates and Cashier selection scope completed activity and transaction history. Search and type narrow only matching history records and complete filtered CSV export. Principal remains distinct from revenue, and gross fees from net profit. Native details show recorded signed cash and wallet movements; legacy records identify unavailable values. Aborted requests and active-tab URL preservation prevent stale filtering responses from changing the selected task.
 
-Reconciliation and unresolved activity explicitly cover all dates. Verify & Clear requires the reference, both physical-cash and wallet confirmations, CSRF and an audited service operation. The existing discrepancy waiver preserves counted variance. Record Exchange appears only for accounts assigned the Cashier workspace and uses the existing CSRF-protected POST workspace switch; Cashier Shift and GCash Service session authority remain required.
+Reconciliation and unresolved activity explicitly cover every date and Cashier. Pending discrepancy counts exclude waived records, while reconciliation history retains their variances and waiver attribution. Verify & Clear explains completion and remaining movements, and still requires the reference, both physical-cash and wallet confirmations, CSRF and an audited service operation. Record Exchange appears only for accounts assigned the Cashier workspace and uses the existing CSRF-protected POST workspace switch; Cashier Shift and GCash Service session authority remain required.
 
 ## Adaptations and design comparison
 
