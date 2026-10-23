@@ -88,6 +88,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#btn-apply-filters').click();
         await page.locator('#gcash-filter-status').filter({hasText: 'unavailable for this selection'}).waitFor();
         assert.equal(await page.locator('#admin-metric-total-tx').textContent(), 'Unavailable', 'A failed shared selection cannot display zero or stale totals');
+        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 0, 'Failed selections cannot retain rows from the previous selection');
+        assert.equal(await page.locator('#gcash-tab-transactions .gcash-badge').textContent(), 'Unavailable');
+        assert.equal((await page.locator('#gcash-session-status').textContent()).trim(), 'Unavailable');
         await page.unroute('**/gcash_overview.php?**');
         await page.locator('#btn-apply-filters').click();
         await page.waitForFunction(expected => document.getElementById('admin-metric-total-tx').textContent === expected, completedCount);
@@ -154,11 +157,15 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         // A superseded report must not replace the newer selection's rows or totals.
         let releaseObsolete;
         const obsoleteGate = new Promise(resolve => { releaseObsolete = resolve; });
+        let obsoleteFinished;
+        const obsoleteDone = new Promise(resolve => { obsoleteFinished = resolve; });
         await page.route('**/gcash_overview.php?**', async route => {
             if (new URL(route.request().url()).searchParams.get('search') !== 'no-such-gcash-reference') return route.continue();
             const response = await route.fetch();
             await obsoleteGate;
-            await route.fulfill({response});
+            try { await route.fulfill({response}); }
+            catch (error) { if (!route.request().failure()) throw error; }
+            finally { obsoleteFinished(); }
         });
         const obsoleteStarted = page.waitForRequest(request => request.url().includes('search=no-such-gcash-reference'));
         await search.fill('no-such-gcash-reference');
@@ -166,6 +173,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await search.fill('');
         await page.locator('#gcash-filter-status').filter({hasText: /[1-9][0-9]* matching transactions/}).waitFor();
         releaseObsolete();
+        await obsoleteDone;
         await page.unroute('**/gcash_overview.php?**');
         assert.ok(await page.locator('#gcash-admin-history-body tr[data-transaction]').count() > 0);
         assert.equal(await page.locator('#admin-metric-total-tx').textContent(), completedCount);
@@ -185,18 +193,83 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.ok(csv.includes('Cash-In'));
         assert.equal(csv.includes('Cash-Out'), false, 'Export respects type filter');
         await page.getByRole('button', {name: /^All \(/}).click();
+        await search.fill('0000000000301');
+        await page.getByRole('status').filter({hasText: '1 matching transactions'}).waitFor();
+        await page.getByRole('button', {name: 'Details', exact: true}).click();
+        assert.ok((await detail.textContent()).includes('Customer refunded 10 pesos fee overcharge'), 'Details preserve linked adjustment reason');
+        assert.ok((await detail.textContent()).includes('−₱10.00'), 'Details preserve signed linked adjustment');
+        await page.keyboard.press('Escape');
+        await page.locator('#filter-cashier-id').selectOption('4');
         await search.fill('888888888');
-        await page.getByRole('status').filter({hasText: '55 matching transactions'}).waitFor();
+        await page.getByRole('status').filter({hasText: '105 matching transactions'}).waitFor();
+        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').first().locator('td').nth(4).textContent(), 'Not recorded', 'Legacy history does not invent a zero fee');
         const allDownloadPromise = page.waitForEvent('download');
         await page.getByRole('link', {name: 'Export Report'}).click();
         const allDownload = await allDownloadPromise;
         const allCsv = fs.readFileSync(await allDownload.path(), 'utf8');
-        assert.equal(allCsv.trim().split('\n').length, 56, 'CSV exports all 55 matching rows plus the header');
+        assert.equal(allCsv.trim().split('\n').length, 106, 'CSV exports every matching row across the 100-row export boundary');
+        assert.ok(allCsv.includes('Legacy reference only'), 'CSV identifies reference-only history');
+        assert.ok(allCsv.includes('Not recorded'), 'CSV does not invent legacy fee or movement evidence');
+        assert.ok(allCsv.includes("'=GCASH_CSV_TEST"), 'CSV neutralizes formula-leading Cashier names');
+        const rejectedExport = await context.request.get(origin + '/components/administrator/gcash_overview.php?export=csv&cashier_id=invalid');
+        assert.equal(rejectedExport.status(), 400);
+        assert.equal(rejectedExport.headers()['content-disposition'], undefined, 'Rejected exports cannot become a partial attachment');
+        // Exercise real HTTP staging failure without a production-only test hook.
+        const failureListener = net.createServer();
+        await new Promise(resolve => failureListener.listen(0, '127.0.0.1', resolve));
+        const failurePort = failureListener.address().port;
+        await new Promise(resolve => failureListener.close(resolve));
+        const failureOrigin = 'http://127.0.0.1:' + failurePort;
+        const failureRouter = path.join(output, 'export-failure-router.php');
+        const realRouter = path.resolve('src/backend/tests/support/theme_router.php').replaceAll('\\', '/');
+        fs.writeFileSync(failureRouter, `<?php
+            class FailedExportStream {
+                public $context;
+                private int $writes = 0;
+                public function stream_open($path, $mode, $options, &$openedPath) { return $path === 'php://temp'; }
+                public function stream_write($data) { return ++$this->writes > 3 ? false : strlen($data); }
+            }
+            stream_wrapper_unregister('php');
+            stream_wrapper_register('php', FailedExportStream::class);
+            require '${realRouter}';`);
+        const failureServer = spawn(php, ['-S', '127.0.0.1:' + failurePort, '-t', 'src/frontend', failureRouter], {env: {...env, RM_THEME_TEST_DATABASE: database}, stdio: ['ignore', 'ignore', 'pipe']});
+        let failureLogs = '';
+        failureServer.stderr.on('data', chunk => { failureLogs += chunk; });
+        try {
+            for (let attempt = 0; attempt < 100; attempt++) {
+                try { if ((await fetch(failureOrigin + '/assets/js/gcash-admin-overview.js')).ok) break; } catch (_) {}
+                await new Promise(resolve => setTimeout(resolve, 50));
+                if (attempt === 99) throw new Error(failureLogs);
+            }
+            const cookie = (await context.cookies()).map(item => `${item.name}=${item.value}`).join('; ');
+            const failedExport = await fetch(failureOrigin + '/components/administrator/gcash_overview.php?export=csv', {headers: {Cookie: cookie}}).catch(error => { throw new Error(String(error.cause || error) + failureLogs.slice(-3000)); });
+            assert.equal(failedExport.status, 503, 'Staging failure returns a controlled failure');
+            assert.equal(failedExport.headers.get('content-disposition'), null, 'Staging failure cannot produce a CSV download');
+            assert.equal(await failedExport.text(), 'Unable to export the complete report. Try again.');
+        } finally {
+            const exited = new Promise(resolve => failureServer.once('exit', resolve));
+            failureServer.kill();
+            await exited;
+        }
+        const firstPageIds = await page.locator('tr[data-transaction]').evaluateAll(rows => rows.map(row => JSON.parse(row.dataset.transaction).transaction_id));
         await page.getByRole('link', {name: 'Next', exact: true}).click();
         await page.waitForURL(url => url.search.includes('page=2'));
+        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 50);
+        const secondPageIds = await page.locator('tr[data-transaction]').evaluateAll(rows => rows.map(row => JSON.parse(row.dataset.transaction).transaction_id));
+        assert.equal(firstPageIds.some(id => secondPageIds.includes(id)), false, 'Stable pagination has no repeated records');
+        assert.equal(new URL(page.url()).searchParams.get('search'), '888888888');
+        assert.equal(new URL(page.url()).searchParams.get('cashier_id'), '4', 'Pagination preserves shared Cashier scope');
+        assert.equal(new URL(page.url()).searchParams.get('start_date'), today, 'Pagination preserves shared reporting period');
+        await page.getByRole('link', {name: 'Next', exact: true}).click();
+        await page.waitForURL(url => url.search.includes('page=3'));
         assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 5);
+        await page.goto(origin + '/components/administrator/gcash_overview.php?tab=transactions&cashier_id=invalid');
+        assert.equal(await page.locator('#gcash-tab-transactions .gcash-badge').textContent(), 'Unavailable', 'Rejected initial scope cannot claim no matching history');
+        assert.equal((await page.locator('#gcash-session-status').textContent()).trim(), 'Unavailable');
+        assert.ok((await page.locator('#gcash-admin-history-body').textContent()).includes('unavailable'));
         await page.getByRole('link', {name: 'Reset', exact: true}).click();
         await page.waitForURL(url => !url.search.includes('search='));
+        await page.goto(origin + '/components/administrator/gcash_overview.php?tab=transactions');
         const historyRegion = page.getByRole('region', {name: 'Store-wide transaction history', exact: true});
         assert.equal(await historyRegion.evaluate(region => region.clientHeight <= 600 && region.scrollHeight > region.clientHeight), true, 'Long history scrolls within a bounded, keyboard-accessible region');
         assert.equal(await historyRegion.getAttribute('tabindex'), '0');

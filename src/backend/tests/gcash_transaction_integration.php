@@ -1246,11 +1246,11 @@ $check($afterWaiveOv['differences_count'] === $afterCloseOv['differences_count']
 $check(count($afterWaiveOv['reconciliation_differences']) === count($afterCloseOv['reconciliation_differences']), 'Waiver preserves history');
 
 // Enough public records to exercise search/pagination and full filtered CSV export.
-for ($index = 0; $index < 55; $index++) {
+for ($index = 0; $index < 105; $index++) {
     $service->save(4, '888888888' . str_pad((string)$index, 4, '0', STR_PAD_LEFT), '1', 'Payment');
 }
 $exportPage = $service->adminOverview(['actor_role' => 'admin', 'search' => '888888888', 'page' => 2]);
-$check($exportPage['total_transactions'] === 55 && count($exportPage['transactions']) === 5, 'Search matches across page boundaries');
+$check($exportPage['total_transactions'] === 105 && count($exportPage['transactions']) === 50, 'Search matches across page boundaries');
 
 // Reporting keeps the created-at Philippine day basis, even if completion happens later.
 $pdo->beginTransaction();
@@ -1286,5 +1286,6 @@ try {
     $pdo->exec("SET time_zone = '+08:00'");
 }
 
+$pdo->exec("UPDATE users SET full_name = '=GCASH_CSV_TEST' WHERE user_id = 4");
 echo "GCash MySQL integration: passed\n";
 

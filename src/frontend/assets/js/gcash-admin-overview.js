@@ -118,7 +118,7 @@
             document.getElementById('gcash-admin-history-body').replaceChildren(...body.childNodes);
             refreshReviews(html);
             workspace.querySelector('.gcash-pagination').replaceWith(html.querySelector('.gcash-pagination'));
-            for (const selector of ['#gcash-completed-activity', '[aria-labelledby="gcash-admin-balances-title"]']) {
+            for (const selector of ['#gcash-session-status', '#gcash-completed-activity', '[aria-labelledby="gcash-admin-balances-title"]']) {
                 workspace.querySelector(selector).replaceWith(html.querySelector(selector));
             }
             document.getElementById('gcash-selected-dates').textContent = html.getElementById('gcash-selected-dates').textContent;
@@ -129,6 +129,7 @@
             }
             const badge = workspace.querySelector('#gcash-tab-transactions .gcash-badge');
             badge.textContent = html.querySelector('#gcash-tab-transactions .gcash-badge').textContent;
+            document.getElementById('gcash-matching-record-count').textContent = badge.textContent;
             url.searchParams.set('tab', workspace.querySelector('[role="tab"][aria-selected="true"]').getAttribute('aria-controls').replace('tab-', ''));
             history.replaceState(null, '', url);
             document.getElementById('gcash-export').href = url + '&export=csv';
@@ -137,6 +138,20 @@
         } catch (error) {
             if (error.name !== 'AbortError' && filterRequest === controller) {
                 markReviewsUnavailable();
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 11;
+                cell.textContent = 'Transaction history unavailable for this selection. Try again.';
+                cell.setAttribute('role', 'alert');
+                row.append(cell);
+                document.getElementById('gcash-admin-history-body').replaceChildren(row);
+                workspace.querySelector('.gcash-pagination').replaceChildren();
+                workspace.querySelector('#gcash-tab-transactions .gcash-badge').textContent = 'Unavailable';
+                document.getElementById('gcash-matching-record-count').textContent = 'Unavailable';
+                document.getElementById('gcash-session-status').textContent = 'Unavailable';
+                document.getElementById('gcash-session-status').classList.remove('gcash-status-completed');
+                for (const button of workspace.querySelectorAll('[data-type]')) button.textContent = `${button.dataset.type === 'all' ? 'All' : button.dataset.type} (Unavailable)`;
+                workspace.querySelectorAll('#admin-expected-cash, #admin-expected-wallet, #admin-combined-funds').forEach(value => { value.textContent = 'Unavailable. Refresh to try again.'; });
                 status.textContent = error.message + ' Report totals are unavailable for this selection.';
                 workspace.querySelectorAll('#gcash-completed-activity .gcash-card-value, #admin-metric-total-tx').forEach(value => { value.textContent = 'Unavailable'; });
             }
@@ -209,6 +224,13 @@
             }
             fields.append(term, description);
         });
+        for (const adjustment of tx.adjustments || []) {
+            const term = document.createElement('dt');
+            const description = document.createElement('dd');
+            term.textContent = `Linked adjustment #${adjustment.adjustment_id}`;
+            description.textContent = `Service Cash ${signedMoney(adjustment.service_cash_delta)}; Service Wallet ${signedMoney(adjustment.wallet_delta)} — ${adjustment.reason}`;
+            fields.append(term, description);
+        }
         detailDialog.showModal();
     });
 
