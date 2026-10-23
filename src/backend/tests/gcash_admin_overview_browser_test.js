@@ -49,9 +49,63 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await target.locator('#landing-login-password').fill(data.password);
             await Promise.all([target.waitForURL(url => !url.search.includes('login=1')), target.getByRole('button', {name: 'Log in', exact: true}).click()]);
         };
-        assert.equal(run('src/backend/tests/gcash_transaction_integration.php', [database]).trim(), 'GCash MySQL integration: passed');
         await login(page, 'admin');
         await page.goto(origin + '/components/administrator/gcash_overview.php');
+        assert.equal(await page.locator('#admin-expected-cash').textContent(), 'Not recorded');
+        assert.equal(await page.locator('#admin-expected-wallet').textContent(), 'Not recorded');
+        const missingEvidence = (await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json()).recorded_balances;
+        assert.equal(missingEvidence.service_cash, null);
+        assert.equal(missingEvidence.wallet_balance, null);
+        const today = new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
+        assert.equal(await page.locator('#filter-start-date').inputValue(), today, 'Initial report defaults to Philippine Today');
+        assert.equal(run('src/backend/tests/gcash_transaction_integration.php', [database]).trim(), 'GCash MySQL integration: passed');
+        await page.reload();
+        assert.equal(await page.locator('#filter-start-date').isVisible(), true, 'Shared reporting controls are available beside headline activity');
+        await page.getByLabel('Reporting period', {exact: true}).selectOption('month_to_date');
+        await page.locator('#btn-apply-filters').click();
+        await page.waitForURL(url => url.searchParams.get('period') === 'month_to_date');
+        assert.equal(await page.locator('#filter-start-date').inputValue(), today.slice(0, 7) + '-01');
+        assert.equal(new URL(page.url()).searchParams.get('tab'), 'overview', 'Shared scope preserves active section');
+        const apiDefault = await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json();
+        assert.equal(apiDefault.filters.start_date, today, 'Overview API defaults to Today');
+        assert.equal(apiDefault.filters.end_date, today);
+        const apiMonth = await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php?period=month_to_date')).json();
+        assert.equal(apiMonth.filters.start_date, today.slice(0, 7) + '-01');
+        assert.equal((await context.request.get(origin + '/components/administrator/gcash_overview_api.php?cashier_id=abc')).status(), 400);
+        assert.equal((await context.request.get(origin + '/components/administrator/gcash_overview_api.php?start_date=2026-02-30&end_date=2026-03-01')).status(), 400);
+        await page.getByLabel('Reporting period', {exact: true}).selectOption('custom');
+        await page.locator('#filter-start-date').fill('2026-01-01');
+        await page.locator('#filter-end-date').fill('2026-01-02');
+        await page.locator('#btn-apply-filters').click();
+        await page.waitForURL(url => url.searchParams.get('period') === 'custom');
+        assert.equal(await page.locator('#admin-metric-total-tx').textContent(), '0');
+        assert.ok((await page.locator('#gcash-selected-dates').textContent()).includes('2026-01-01 through 2026-01-02'));
+        await page.getByLabel('Reporting period', {exact: true}).selectOption('today');
+        await page.locator('#btn-apply-filters').click();
+        await page.waitForURL(url => url.searchParams.get('period') === 'today');
+        const completedCount = await page.locator('#admin-metric-total-tx').textContent();
+        await page.route('**/gcash_overview.php?**', route => route.abort('failed'));
+        await page.locator('#btn-apply-filters').click();
+        await page.locator('#gcash-filter-status').filter({hasText: 'unavailable for this selection'}).waitFor();
+        assert.equal(await page.locator('#admin-metric-total-tx').textContent(), 'Unavailable', 'A failed shared selection cannot display zero or stale totals');
+        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 0, 'Failed selections cannot retain rows from the previous selection');
+        assert.equal(await page.locator('#gcash-tab-transactions .gcash-badge').textContent(), 'Unavailable');
+        assert.equal(await page.locator('#admin-nc-count').textContent(), 'Unavailable', 'Failed review refresh cannot retain a numeric pending count');
+        assert.equal((await page.locator('#gcash-session-status').textContent()).trim(), 'Unavailable');
+        await page.unroute('**/gcash_overview.php?**');
+        await page.locator('#btn-apply-filters').click();
+        await page.waitForFunction(expected => document.getElementById('admin-metric-total-tx').textContent === expected, completedCount);
+        await page.goto(origin + '/components/administrator/gcash_overview.php');
+        const evidence = (await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json()).recorded_balances;
+        assert.equal(evidence.state, 'last_counted');
+        assert.equal(evidence.session_status, 'closed');
+        assert.equal(evidence.cashier_id, 4);
+        assert.ok(evidence.checked_at);
+        assert.equal(await page.locator('#admin-cash-state').textContent(), 'Last counted');
+        assert.equal(await page.locator('#admin-wallet-state').textContent(), 'Last counted');
+        assert.ok((await page.locator('#admin-cash-checked').textContent()).includes(evidence.cashier_name));
+        assert.ok((await page.locator('#admin-cash-checked').textContent()).includes(evidence.checked_at_formatted));
+        const recordedCash = await page.locator('#admin-expected-cash').textContent();
         assert.equal(await page.getByRole('tab').count(), 4, 'Overview has four task tabs');
         const balances = page.getByRole('tab', {name: 'Balances & Summary'});
         assert.equal(await balances.getAttribute('aria-selected'), 'true');
@@ -63,11 +117,27 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#tab-unresolved').isVisible(), true);
         await page.keyboard.press('Home');
         assert.equal(await page.locator('#tab-overview').isVisible(), true);
+        const initialReviewCount = Number(await page.locator('#admin-nc-count').textContent());
+        const outstanding = page.getByRole('button', {name: /Review unresolved exchanges/});
+        assert.ok((await outstanding.textContent()).includes(String(initialReviewCount)));
+        await outstanding.click();
+        assert.equal(await page.locator('#tab-unresolved').isVisible(), true);
+        assert.ok((await page.locator('#tab-unresolved').textContent()).includes('All Cashiers'));
+        const legacyUnresolved = page.locator('#gcash-admin-nc-body tr').filter({hasText: '7990000000999'});
+        assert.equal((await legacyUnresolved.locator('td').nth(5).textContent()).trim(), 'Not recorded', 'Unresolved legacy reference has no recorded fee');
+        assert.ok((await legacyUnresolved.locator('td').nth(6).textContent()).includes('Cash: Not recorded'), 'Unresolved legacy reference has no recorded cash movement');
+        assert.ok((await legacyUnresolved.locator('td').nth(6).textContent()).includes('Wallet: Not recorded'), 'Unresolved legacy reference has no recorded wallet movement');
+        await page.goto(origin + '/components/administrator/gcash_overview.php?tab=unresolved&start_date=2020-01-01&end_date=2020-01-02&cashier_id=1&search=no-match&type=Cash-Out');
+        assert.equal(Number(await page.locator('#admin-nc-count').textContent()), initialReviewCount, 'Historic reporting and every list filter preserve Store-wide review count');
+        assert.ok((await page.locator('#gcash-admin-nc-table').textContent()).includes('Other cashier held item'), 'Historical other-Cashier unresolved record remains visible');
+        await page.goto(origin + '/components/administrator/gcash_overview.php');
         await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
         const search = page.getByRole('searchbox', {name: 'Search transactions'});
         await search.fill('no-such-gcash-reference');
         await page.getByText('No transactions found for the selected filter criteria.').waitFor();
         assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 0);
+        assert.equal(await page.locator('#admin-metric-total-tx').textContent(), completedCount, 'Local search preserves shared completed activity in the browser');
+        assert.equal(await page.locator('#admin-expected-cash').textContent(), recordedCash, 'Search does not change recorded funds');
         await search.fill('');
         await page.locator('#gcash-admin-history-body tr[data-transaction]').first().waitFor();
         // A delayed filter response preserves a tab chosen while it was loading.
@@ -89,6 +159,29 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
         await search.fill('');
         await page.locator('#gcash-admin-history-body tr[data-transaction]').first().waitFor();
+        // A superseded report must not replace the newer selection's rows or totals.
+        let releaseObsolete;
+        const obsoleteGate = new Promise(resolve => { releaseObsolete = resolve; });
+        let obsoleteFinished;
+        const obsoleteDone = new Promise(resolve => { obsoleteFinished = resolve; });
+        await page.route('**/gcash_overview.php?**', async route => {
+            if (new URL(route.request().url()).searchParams.get('search') !== 'no-such-gcash-reference') return route.continue();
+            const response = await route.fetch();
+            await obsoleteGate;
+            try { await route.fulfill({response}); }
+            catch (error) { if (!route.request().failure()) throw error; }
+            finally { obsoleteFinished(); }
+        });
+        const obsoleteStarted = page.waitForRequest(request => request.url().includes('search=no-such-gcash-reference'));
+        await search.fill('no-such-gcash-reference');
+        await obsoleteStarted;
+        await search.fill('');
+        await page.locator('#gcash-filter-status').filter({hasText: /[1-9][0-9]* matching transactions/}).waitFor();
+        releaseObsolete();
+        await obsoleteDone;
+        await page.unroute('**/gcash_overview.php?**');
+        assert.ok(await page.locator('#gcash-admin-history-body tr[data-transaction]').count() > 0);
+        assert.equal(await page.locator('#admin-metric-total-tx').textContent(), completedCount);
         await page.getByRole('button', {name: /^Cash-In \(/}).click();
         await page.waitForFunction(() => [...document.querySelectorAll('#gcash-admin-history-body tr[data-transaction]')].every(row => JSON.parse(row.dataset.transaction).transaction_type === 'Cash-In'));
         assert.ok(await page.locator('#gcash-admin-history-body tr[data-transaction]').count() > 0);
@@ -105,18 +198,83 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.ok(csv.includes('Cash-In'));
         assert.equal(csv.includes('Cash-Out'), false, 'Export respects type filter');
         await page.getByRole('button', {name: /^All \(/}).click();
+        await search.fill('0000000000301');
+        await page.getByRole('status').filter({hasText: '1 matching transactions'}).waitFor();
+        await page.getByRole('button', {name: 'Details', exact: true}).click();
+        assert.ok((await detail.textContent()).includes('Customer refunded 10 pesos fee overcharge'), 'Details preserve linked adjustment reason');
+        assert.ok((await detail.textContent()).includes('−₱10.00'), 'Details preserve signed linked adjustment');
+        await page.keyboard.press('Escape');
+        await page.locator('#filter-cashier-id').selectOption('4');
         await search.fill('888888888');
-        await page.getByRole('status').filter({hasText: '55 matching transactions'}).waitFor();
+        await page.getByRole('status').filter({hasText: '105 matching transactions'}).waitFor();
+        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').first().locator('td').nth(4).textContent(), 'Not recorded', 'Legacy history does not invent a zero fee');
         const allDownloadPromise = page.waitForEvent('download');
         await page.getByRole('link', {name: 'Export Report'}).click();
         const allDownload = await allDownloadPromise;
         const allCsv = fs.readFileSync(await allDownload.path(), 'utf8');
-        assert.equal(allCsv.trim().split('\n').length, 56, 'CSV exports all 55 matching rows plus the header');
+        assert.equal(allCsv.trim().split('\n').length, 106, 'CSV exports every matching row across the 100-row export boundary');
+        assert.ok(allCsv.includes('Legacy reference only'), 'CSV identifies reference-only history');
+        assert.ok(allCsv.includes('Not recorded'), 'CSV does not invent legacy fee or movement evidence');
+        assert.ok(allCsv.includes("'=GCASH_CSV_TEST"), 'CSV neutralizes formula-leading Cashier names');
+        const rejectedExport = await context.request.get(origin + '/components/administrator/gcash_overview.php?export=csv&cashier_id=invalid');
+        assert.equal(rejectedExport.status(), 400);
+        assert.equal(rejectedExport.headers()['content-disposition'], undefined, 'Rejected exports cannot become a partial attachment');
+        // Exercise real HTTP staging failure without a production-only test hook.
+        const failureListener = net.createServer();
+        await new Promise(resolve => failureListener.listen(0, '127.0.0.1', resolve));
+        const failurePort = failureListener.address().port;
+        await new Promise(resolve => failureListener.close(resolve));
+        const failureOrigin = 'http://127.0.0.1:' + failurePort;
+        const failureRouter = path.join(output, 'export-failure-router.php');
+        const realRouter = path.resolve('src/backend/tests/support/theme_router.php').replaceAll('\\', '/');
+        fs.writeFileSync(failureRouter, `<?php
+            class FailedExportStream {
+                public $context;
+                private int $writes = 0;
+                public function stream_open($path, $mode, $options, &$openedPath) { return $path === 'php://temp'; }
+                public function stream_write($data) { return ++$this->writes > 3 ? false : strlen($data); }
+            }
+            stream_wrapper_unregister('php');
+            stream_wrapper_register('php', FailedExportStream::class);
+            require '${realRouter}';`);
+        const failureServer = spawn(php, ['-S', '127.0.0.1:' + failurePort, '-t', 'src/frontend', failureRouter], {env: {...env, RM_THEME_TEST_DATABASE: database}, stdio: ['ignore', 'ignore', 'pipe']});
+        let failureLogs = '';
+        failureServer.stderr.on('data', chunk => { failureLogs += chunk; });
+        try {
+            for (let attempt = 0; attempt < 100; attempt++) {
+                try { if ((await fetch(failureOrigin + '/assets/js/gcash-admin-overview.js')).ok) break; } catch (_) {}
+                await new Promise(resolve => setTimeout(resolve, 50));
+                if (attempt === 99) throw new Error(failureLogs);
+            }
+            const cookie = (await context.cookies()).map(item => `${item.name}=${item.value}`).join('; ');
+            const failedExport = await fetch(failureOrigin + '/components/administrator/gcash_overview.php?export=csv', {headers: {Cookie: cookie}}).catch(error => { throw new Error(String(error.cause || error) + failureLogs.slice(-3000)); });
+            assert.equal(failedExport.status, 503, 'Staging failure returns a controlled failure');
+            assert.equal(failedExport.headers.get('content-disposition'), null, 'Staging failure cannot produce a CSV download');
+            assert.equal(await failedExport.text(), 'Unable to export the complete report. Try again.');
+        } finally {
+            const exited = new Promise(resolve => failureServer.once('exit', resolve));
+            failureServer.kill();
+            await exited;
+        }
+        const firstPageIds = await page.locator('tr[data-transaction]').evaluateAll(rows => rows.map(row => JSON.parse(row.dataset.transaction).transaction_id));
         await page.getByRole('link', {name: 'Next', exact: true}).click();
         await page.waitForURL(url => url.search.includes('page=2'));
+        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 50);
+        const secondPageIds = await page.locator('tr[data-transaction]').evaluateAll(rows => rows.map(row => JSON.parse(row.dataset.transaction).transaction_id));
+        assert.equal(firstPageIds.some(id => secondPageIds.includes(id)), false, 'Stable pagination has no repeated records');
+        assert.equal(new URL(page.url()).searchParams.get('search'), '888888888');
+        assert.equal(new URL(page.url()).searchParams.get('cashier_id'), '4', 'Pagination preserves shared Cashier scope');
+        assert.equal(new URL(page.url()).searchParams.get('start_date'), today, 'Pagination preserves shared reporting period');
+        await page.getByRole('link', {name: 'Next', exact: true}).click();
+        await page.waitForURL(url => url.search.includes('page=3'));
         assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 5);
+        await page.goto(origin + '/components/administrator/gcash_overview.php?tab=transactions&cashier_id=invalid');
+        assert.equal(await page.locator('#gcash-tab-transactions .gcash-badge').textContent(), 'Unavailable', 'Rejected initial scope cannot claim no matching history');
+        assert.equal((await page.locator('#gcash-session-status').textContent()).trim(), 'Unavailable');
+        assert.ok((await page.locator('#gcash-admin-history-body').textContent()).includes('unavailable'));
         await page.getByRole('link', {name: 'Reset', exact: true}).click();
         await page.waitForURL(url => !url.search.includes('search='));
+        await page.goto(origin + '/components/administrator/gcash_overview.php?tab=transactions');
         const historyRegion = page.getByRole('region', {name: 'Store-wide transaction history', exact: true});
         assert.equal(await historyRegion.evaluate(region => region.clientHeight <= 600 && region.scrollHeight > region.clientHeight), true, 'Long history scrolls within a bounded, keyboard-accessible region');
         assert.equal(await historyRegion.getAttribute('tabindex'), '0');
@@ -124,7 +282,10 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const token = await page.locator('#gcash-admin-workspace').getAttribute('data-csrf');
         assert.equal((await context.request.post(adminApi, {data: {action: 'resolve_exchange', transaction_id: 1}})).status(), 403, 'Resolution requires CSRF protection');
         assert.equal((await context.request.post(adminApi, {headers: {'X-CSRF-Token': token}, data: {action: 'resolve_exchange', transaction_id: 1, confirmed_wallet: false, confirmed_cash: true}})).status(), 400, 'Resolution requires both confirmations');
+        await search.fill('no-such-gcash-reference');
+        await page.getByRole('status').filter({hasText: '0 matching transactions'}).waitFor();
         await page.getByRole('tab', {name: 'Reconciliation Log'}).click();
+        const discrepancyBefore = Number((await page.locator('#gcash-tab-reconciliation .gcash-badge').textContent()).match(/\d+/)[0]);
         const waive = page.locator('.admin-btn-waive').first();
         await waive.click();
         const waiver = page.getByRole('dialog', {name: 'Waive Closing Discrepancy'});
@@ -132,11 +293,15 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await waiver.getByLabel('Reason for waiver (5–500 characters)').fill('Confirmed count reviewed by Administrator');
         await waiver.getByRole('button', {name: 'Confirm Waiver'}).click();
         await waiver.waitFor({state: 'hidden'});
+        await page.waitForFunction(previous => document.querySelector('#gcash-tab-reconciliation .gcash-badge').textContent === `Pending (${previous - 1})`, discrepancyBefore);
+        assert.ok((await page.locator('#gcash-admin-diff-body').textContent()).includes('Waived'));
+        assert.equal(await page.locator('#gcash-search').inputValue(), 'no-such-gcash-reference', 'Waiver refresh preserves local filter');
         await page.getByRole('tab', {name: 'Unresolved Activity'}).click();
         const verify = page.getByRole('button', {name: 'Verify & Clear', exact: true}).first();
         await verify.click();
         const resolve = page.getByRole('dialog', {name: 'Verify & Clear Exchange'});
         await resolve.waitFor();
+        assert.ok((await resolve.textContent()).includes('only the remaining movements'));
         await resolve.getByLabel('GCash reference number').fill('9999999999988');
         await resolve.getByLabel('Wallet transfer confirmed in the GCash app').check();
         await resolve.getByLabel('Physical service cash exchange confirmed').check();
@@ -145,6 +310,20 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await resolve.waitFor({state: 'hidden'});
         await page.waitForFunction(previous => Number(document.getElementById('admin-nc-count').textContent) < previous, pendingBefore);
         assert.equal(Number(await page.locator('#admin-nc-count').textContent()), pendingBefore - 1);
+        assert.equal(await page.locator('#gcash-search').inputValue(), 'no-such-gcash-reference', 'Verification refresh preserves local filter');
+        const remainingVerify = page.getByRole('button', {name: 'Verify & Clear', exact: true}).first();
+        await remainingVerify.click();
+        await resolve.waitFor();
+        await page.keyboard.press('Escape');
+        await page.route('**/gcash_overview.php?**', route => route.fulfill({status: 503, body: 'Unavailable'}));
+        await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        await search.fill('failed-load');
+        await page.locator('#gcash-filter-status').filter({hasText: 'Unable to load transactions'}).waitFor();
+        assert.equal(await page.locator('#gcash-tab-unresolved .gcash-badge').textContent(), 'Unavailable');
+        assert.ok((await page.locator('#gcash-admin-nc-table').textContent()).includes('Review data unavailable'));
+        await page.unroute('**/gcash_overview.php?**');
+        await search.fill('');
+        await page.getByRole('status').filter({hasText: /matching transactions/}).waitFor();
         await page.getByRole('tab', {name: 'Balances & Summary'}).click();
         fs.mkdirSync('.impeccable/review', {recursive: true});
         for (const [width, name] of [[1440, 'desktop'], [390, 'mobile']]) {
