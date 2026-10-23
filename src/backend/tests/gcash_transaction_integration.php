@@ -1287,5 +1287,6 @@ try {
 }
 
 $pdo->exec("UPDATE users SET full_name = '=GCASH_CSV_TEST' WHERE user_id = 4");
+$pdo->exec("INSERT INTO gcash_transactions (session_id, transaction_type, reference_number, amount, cashier_id, verification_status, notes) VALUES (NULL, 'Payment', '7990000000999', 50.00, 4, 'Needs checking', 'Legacy unresolved reference')");
 echo "GCash MySQL integration: passed\n";
 

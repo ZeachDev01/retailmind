@@ -90,6 +90,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#admin-metric-total-tx').textContent(), 'Unavailable', 'A failed shared selection cannot display zero or stale totals');
         assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 0, 'Failed selections cannot retain rows from the previous selection');
         assert.equal(await page.locator('#gcash-tab-transactions .gcash-badge').textContent(), 'Unavailable');
+        assert.equal(await page.locator('#admin-nc-count').textContent(), 'Unavailable', 'Failed review refresh cannot retain a numeric pending count');
         assert.equal((await page.locator('#gcash-session-status').textContent()).trim(), 'Unavailable');
         await page.unroute('**/gcash_overview.php?**');
         await page.locator('#btn-apply-filters').click();
@@ -122,6 +123,10 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await outstanding.click();
         assert.equal(await page.locator('#tab-unresolved').isVisible(), true);
         assert.ok((await page.locator('#tab-unresolved').textContent()).includes('All Cashiers'));
+        const legacyUnresolved = page.locator('#gcash-admin-nc-body tr').filter({hasText: '7990000000999'});
+        assert.equal((await legacyUnresolved.locator('td').nth(5).textContent()).trim(), 'Not recorded', 'Unresolved legacy reference has no recorded fee');
+        assert.ok((await legacyUnresolved.locator('td').nth(6).textContent()).includes('Cash: Not recorded'), 'Unresolved legacy reference has no recorded cash movement');
+        assert.ok((await legacyUnresolved.locator('td').nth(6).textContent()).includes('Wallet: Not recorded'), 'Unresolved legacy reference has no recorded wallet movement');
         await page.goto(origin + '/components/administrator/gcash_overview.php?tab=unresolved&start_date=2020-01-01&end_date=2020-01-02&cashier_id=1&search=no-match&type=Cash-Out');
         assert.equal(Number(await page.locator('#admin-nc-count').textContent()), initialReviewCount, 'Historic reporting and every list filter preserve Store-wide review count');
         assert.ok((await page.locator('#gcash-admin-nc-table').textContent()).includes('Other cashier held item'), 'Historical other-Cashier unresolved record remains visible');

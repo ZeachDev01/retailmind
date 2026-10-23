@@ -48,6 +48,7 @@
     }
 
     function markReviewsUnavailable() {
+        document.getElementById('admin-nc-count').textContent = 'Unavailable';
         for (const [id, columns] of [['gcash-admin-diff-body', 12], ['gcash-admin-nc-table tbody', 10]]) {
             const body = workspace.querySelector('#' + id);
             const row = document.createElement('tr');
