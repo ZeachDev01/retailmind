@@ -135,6 +135,11 @@ try {
     $assert($firstView['state'] === 'empty', 'Initial view should load cleanly');
     $assert($firstView['freshness']['refresh_seconds'] === StoreOperationsDashboardWorkspace::REFRESH_SECONDS, 'Refresh interval must be 300s');
     $assert($pdo->queryCount > 0, 'First load must execute database queries');
+    $assert(count($firstView['financial_history']['points'] ?? []) === 30, 'Cached financial history must contain 30 daily intervals');
+    $assert(($firstView['financial_history']['as_of'] ?? null) === $firstView['freshness']['generated_at'], 'Historical and main graphs must share the cached as-of time');
+    $assert(($firstView['financial_history']['period_start'] ?? null) === '2026-09-17', 'Current cached history must include today and the preceding 29 calendar days');
+    $assert(($firstView['financial_history']['previous_start'] ?? null) === '2026-08-18', 'Previous cached history must begin 30 complete days before the current window');
+    $assert(($firstView['financial_history']['previous_end'] ?? null) === '2026-09-16', 'Historical comparison windows must not overlap');
     $initialQueryCount = $pdo->queryCount;
 
     // 2. Repeat Load within 300 seconds: 0 database queries, <50ms latency
@@ -147,11 +152,12 @@ try {
     $assert($repeatLatency < 50.0, "Repeat load must respond in <50ms (took {$repeatLatency}ms)");
     $assert($repeatView === $firstView, 'Repeat load must return exact cached metrics payload');
 
-    // 3. Different range: cache key keyed by range (e.g. 7 vs 30)
+    // 3. Legacy range links cannot change the fixed operational horizon.
     $pdo->queryCount = 0;
     $range7View = $workspace->load('admin', 7);
-    $assert($pdo->queryCount > 0, 'Loading range 7 must be a cache miss when only range 30 was cached');
-    $assert($range7View['range_days'] === 7, 'Range 7 view must have range_days = 7');
+    $assert($pdo->queryCount === 0, 'Legacy range 7 must reuse the cached 30-day dashboard');
+    $assert($range7View['range_days'] === 30, 'Operational attention must retain its 30-day horizon');
+    $assert($range7View === $firstView, 'Legacy range links must preserve operational alerts and financial data');
 
     $pdo->queryCount = 0;
     $repeatRange7 = $workspace->load('admin', 7);
@@ -256,7 +262,7 @@ try {
 
     // 8. Stale prior-day calendar data cannot masquerade as Today (Issue #209 / Acceptance Criteria 6)
     // Prime cache near midnight: 23:59:00
-    $clock->set(new DateTimeImmutable('2026-10-16 23:59:00'));
+    $clock->set(new DateTimeImmutable('2026-10-16 15:59:00', new DateTimeZone('UTC')));
     $pdo->queryCount = 0;
     $nearMidnight = $workspace->load('admin', 30);
     $assert($nearMidnight['net_sales']['as_of'] === '2026-10-16 23:59:00', 'As-of time shares freshness time');
@@ -268,6 +274,9 @@ try {
     $afterMidnight = $workspace->load('admin', 30);
     $assert($pdo->queryCount > 0, 'Crossing calendar midnight must invalidate cache even if under 300s TTL (queries executed: ' . $pdo->queryCount . ')');
     $assert($afterMidnight['net_sales']['as_of'] === '2026-10-17 00:01:00', 'New calendar day must generate new Today payload');
+    $assert(($afterMidnight['financial_history']['period_start'] ?? null) === '2026-09-18', 'Crossing Philippine midnight must also advance the historical window');
+    $assert(($afterMidnight['financial_history']['period_end'] ?? null) === '2026-10-17', 'Cached historical dates must expire across Philippine midnight');
+    $assert(count($afterMidnight['gross_profit']['periods']['today']['points'] ?? []) === 1, 'New Philippine day must contain only its elapsed profit interval');
 
     // 9. Older cached payload without net_sales cannot break new view
     $clock->set(new DateTimeImmutable('2026-10-17 10:00:00'));

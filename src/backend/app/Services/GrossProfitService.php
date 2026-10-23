@@ -193,6 +193,7 @@ class GrossProfitService
 
         // Allocate discounts across lines for each sale in integer cents
         $settledSoldLines = [];
+        $saleDates = array_column($sales, 'sale_date', 'sale_id');
         foreach ($sales as $sale) {
             $sId = (int)$sale['sale_id'];
             $lines = $saleLinesBySale[$sId] ?? [];
@@ -425,6 +426,7 @@ class GrossProfitService
 
         // 4. Product Aggregation
         $productsMap = [];
+        $events = [];
         $affectedSoldLines = []; // sale_item_id => true for missing costs
 
         // Process settled sales
@@ -479,6 +481,16 @@ class GrossProfitService
                 $lineMissing = true;
             }
 
+            $events[] = [
+                'occurred_at' => $saleDates[$line['sale_id']],
+                'sale_item_id' => (int)$siId,
+                'gross_sales' => (float)$line['subtotal'],
+                'discounts' => (float)$line['discount_amount'],
+                'refunds' => 0.0,
+                'net_cost' => $lineMissing ? null : round($lineCost, 2),
+                'status' => $lineMissing ? self::STATUS_INCOMPLETE : ($lineEstimated ? self::STATUS_ESTIMATED : self::STATUS_RECORDED),
+            ];
+
             if ($lineMissing) {
                 $productsMap[$pId]['has_missing'] = true;
                 $affectedSoldLines[$siId] = true;
@@ -519,6 +531,16 @@ class GrossProfitService
                 'reversed_cost' => 0.0,
                 'status' => self::STATUS_RECORDED,
                 'sale_item_id' => (int)$rf['sale_item_id'],
+            ];
+
+            $events[] = [
+                'occurred_at' => $rf['created_at'],
+                'sale_item_id' => (int)$rf['sale_item_id'],
+                'gross_sales' => 0.0,
+                'discounts' => 0.0,
+                'refunds' => (float)$rf['subtotal'],
+                'net_cost' => $rev['status'] === self::STATUS_INCOMPLETE ? null : -(float)$rev['reversed_cost'],
+                'status' => $rev['status'],
             ];
 
             if ($rev['status'] === self::STATUS_INCOMPLETE) {
@@ -657,6 +679,7 @@ class GrossProfitService
         return [
             'summary' => $summary,
             'rows' => $rows,
+            'events' => $events,
         ];
     }
 
