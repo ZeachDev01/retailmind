@@ -202,6 +202,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#filter-cashier-id').selectOption('4');
         await search.fill('888888888');
         await page.getByRole('status').filter({hasText: '105 matching transactions'}).waitFor();
+        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').first().locator('td').nth(4).textContent(), 'Not recorded', 'Legacy history does not invent a zero fee');
         const allDownloadPromise = page.waitForEvent('download');
         await page.getByRole('link', {name: 'Export Report'}).click();
         const allDownload = await allDownloadPromise;

@@ -347,7 +347,7 @@ function gcash_admin_money(mixed $val): string {
                                     <td><code><?= gcash_admin_e($tx['reference_number'] ?: '—') ?></code></td>
                                     <td><?= gcash_admin_e($tx['transaction_type']) ?></td>
                                     <td><?= gcash_admin_money($tx['principal_amount']) ?></td>
-                                    <td><?= gcash_admin_money($tx['gross_fee']) ?></td>
+                                    <td><?= $tx['is_legacy'] ? 'Not recorded' : gcash_admin_money($tx['gross_fee']) ?></td>
                                     <td>
                                         <?php if (!empty($tx['fee_location'])): ?>
                                             <?= gcash_admin_e(ucfirst($tx['fee_location'])) ?>

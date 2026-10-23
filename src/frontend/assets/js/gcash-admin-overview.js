@@ -149,6 +149,7 @@
                 workspace.querySelector('#gcash-tab-transactions .gcash-badge').textContent = 'Unavailable';
                 document.getElementById('gcash-matching-record-count').textContent = 'Unavailable';
                 document.getElementById('gcash-session-status').textContent = 'Unavailable';
+                document.getElementById('gcash-session-status').classList.remove('gcash-status-completed');
                 for (const button of workspace.querySelectorAll('[data-type]')) button.textContent = `${button.dataset.type === 'all' ? 'All' : button.dataset.type} (Unavailable)`;
                 workspace.querySelectorAll('#admin-expected-cash, #admin-expected-wallet, #admin-combined-funds').forEach(value => { value.textContent = 'Unavailable. Refresh to try again.'; });
                 status.textContent = error.message + ' Report totals are unavailable for this selection.';
