@@ -457,14 +457,9 @@ final class GCashTransactionService
                   FROM gcash_transactions t
                   JOIN users u ON t.cashier_id = u.user_id
                   WHERE t.verification_status = 'Needs checking'";
-        $ncParams = [];
-        if ($cashierId !== null) {
-            $ncSql .= " AND t.cashier_id = ?";
-            $ncParams[] = $cashierId;
-        }
         $ncSql .= " ORDER BY t.transaction_id DESC";
         $ncStmt = $this->pdo()->prepare($ncSql);
-        $ncStmt->execute($ncParams);
+        $ncStmt->execute();
         $unresolved = [];
         foreach ($ncStmt->fetchAll(PDO::FETCH_ASSOC) as $nc) {
             $isLegacy = ($nc['session_id'] === null);
@@ -501,14 +496,9 @@ final class GCashTransactionService
                     LEFT JOIN users wb ON s.waived_by = wb.user_id
                     WHERE s.status = 'closed'
                       AND (s.cash_variance != 0 OR s.wallet_variance != 0)";
-        $diffParams = [];
-        if ($cashierId !== null) {
-            $diffSql .= " AND s.cashier_id = ?";
-            $diffParams[] = $cashierId;
-        }
         $diffSql .= " ORDER BY s.session_id DESC";
         $diffStmt = $this->pdo()->prepare($diffSql);
-        $diffStmt->execute($diffParams);
+        $diffStmt->execute();
         $differences = [];
         foreach ($diffStmt->fetchAll(PDO::FETCH_ASSOC) as $d) {
             $differences[] = [
@@ -663,7 +653,7 @@ final class GCashTransactionService
             'needs_checking_count' => count($unresolved),
 
             'reconciliation_differences' => $differences,
-            'differences_count' => count($differences),
+            'differences_count' => count(array_filter($differences, static fn(array $difference): bool => !$difference['is_waived'])),
 
             'transactions' => $txs,
             'has_next' => $hasNext,
