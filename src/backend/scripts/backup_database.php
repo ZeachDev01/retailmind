@@ -1,5 +1,5 @@
 <?php
-// Scheduled Database Backup uses the same unencrypted SQL capture as both roles.
+// Scheduled Database Backup uses the same encrypted Store capture as both roles.
 // Copy the resulting private temporary file to your own archive before cleanup.
 require_once dirname(__DIR__) . '/bootstrap/app.php';
 require_once dirname(__DIR__) . '/config/db.php';
@@ -10,9 +10,12 @@ use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\DatabaseBackupService;
 
 $service = new DatabaseBackupService($pdo, new RoleCapabilityPolicy());
-$filename = 'scheduled-' . date('m-d-Y-His') . '.sql';
+$filename = 'scheduled-' . date('m-d-Y-His') . '.rmpkg';
 try {
-    $result = $service->createForSystem();
+    // Supply the independent package passphrase through a protected pipe, never an argument or URL.
+    $passphrase = rtrim((string)fgets(STDIN, 1026), "\r\n");
+    $result = $service->createForSystem($passphrase);
+    unset($passphrase);
     if (($result['status'] ?? '') !== DatabaseBackupService::OUTCOME_READY) {
         fwrite(STDERR, ($result['message'] ?? 'A backup is already in progress.') . PHP_EOL);
         exit(2);

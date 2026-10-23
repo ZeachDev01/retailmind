@@ -26,7 +26,8 @@ final class DatabaseBackupService
         private PDO $pdo,
         private RoleCapabilityPolicy $policy,
         private ?string $artifactDirectory = null,
-        private ?PDO $coordinationConnection = null
+        private ?PDO $coordinationConnection = null,
+        private ?string $uploadDirectory = null
     ) {
     }
 
@@ -36,26 +37,28 @@ final class DatabaseBackupService
     }
 
     /**
-     * Create one consistent, unencrypted SQL Database Backup and leave a private
+     * Create one consistent, encrypted database and uploads package and leave a private
      * temporary artifact ready for the requester's download.
      */
-    public function create(int $actorUserId, string $actorRole): array
+    public function create(int $actorUserId, string $actorRole, #[\SensitiveParameter] string $passphrase, $requestLease = null): array
     {
-        $this->authorize($actorRole);
-        return $this->capture($actorUserId, $actorRole);
+        $this->authorizeActor($actorUserId, $actorRole);
+        return $this->capture($actorUserId, $actorRole, $passphrase, $requestLease);
     }
 
     /**
      * The existing scheduled script shares the same capture, coordination, and
-     * SQL format instead of keeping a second exporter.
+     * encrypted package format instead of keeping a second exporter.
      */
-    public function createForSystem(): array
+    public function createForSystem(#[\SensitiveParameter] string $passphrase): array
     {
-        return $this->capture(null, null);
+        return $this->capture(null, null, $passphrase);
     }
 
-    private function capture(?int $actorUserId, ?string $actorRole): array
+    private function capture(?int $actorUserId, ?string $actorRole, #[\SensitiveParameter] string $passphrase, $requestLease = null): array
     {
+        StorePackageFormat::assertRuntime();
+        StorePackageFormat::assertPassphrase($passphrase);
         if (RecoveryStore::isPaused()) {
             throw new DomainException('Database recovery is in progress. Finish recovery before creating another backup.');
         }
@@ -71,55 +74,123 @@ final class DatabaseBackupService
 
         $token = bin2hex(random_bytes(24));
         $filename = self::downloadFilename();
-        $artifactPath = $coordinator->artifactDirectory() . '/' . $token . '.sql';
+        $artifactPath = $coordinator->artifactDirectory() . '/' . $token . '.rmpkg';
         $snapshotAt = gmdate('Y-m-d H:i:s');
+        $sqlPath = $coordinator->artifactDirectory() . '/' . $token . '.capture';
+        $requestLock = null;
 
         try {
+            // Drain HTTP writers, including uploaded-file mutations outside the SQL gate.
+            if ($requestLease !== null) {
+                if (!is_resource($requestLease) || get_resource_type($requestLease) !== 'stream'
+                    || realpath((string)(stream_get_meta_data($requestLease)['uri'] ?? '')) !== realpath(RecoveryStore::path('requests.lock'))
+                    || !flock($requestLease, LOCK_EX | LOCK_NB)) {
+                    throw new DomainException('The existing Store write pause is invalid.');
+                }
+            } else { $requestLock = RecoveryStore::exclusive(); }
             $coordinator->beginCapture((int)$actorUserId);
+            if (\App\Database\Schema::tableExists($this->pdo, 'ml_jobs')
+                && $this->pdo->query("SELECT 1 FROM ml_jobs WHERE status IN ('queued','running') LIMIT 1")->fetchColumn()) {
+                throw new DomainException('Stop and drain forecasting/background workers before capturing a Store package.');
+            }
             $capture = (new DatabaseSnapshotWriter($this->pdo, static function () use ($coordinator, $operationKey): void {
                 $coordinator->heartbeat($operationKey);
-            }))->write($artifactPath);
-            $snapshotAt = gmdate('Y-m-d H:i:s');
+            }))->write($sqlPath, StorePackageFormat::MAX_CONTENT_BYTES, ['backup_operations', 'store_write_gate']);
+            $available = disk_free_space(dirname($sqlPath));
+            if ($available === false || $available < 2 * StorePackageFormat::MAX_BYTES) {
+                throw new DomainException('Private backup storage needs at least 96 MB of free disk space.');
+            }
+            $schema = SqlBackupFormat::schema($this->pdo);
+            $sql = (string)file_get_contents($sqlPath);
+            $files = [];
+            $storage = $this->uploadDirectory ?? dirname(__DIR__, 2) . '/storage';
+            $references = StorePackageFormat::references(SqlBackupFormat::rows($sql, $schema));
+            if (count($references) > StorePackageFormat::MAX_FILES || is_link($storage)) {
+                throw new DomainException('The upload collection exceeds the supported count or uses linked storage.');
+            }
+            $contentBytes = strlen($sql);
+            foreach ($references as $reference) {
+                $path = $storage . '/' . $reference;
+                $directory = realpath($storage . '/' . dirname($reference));
+                $real = realpath($path);
+                if ($real === false || $directory === false || is_link($path) || is_link(dirname($path))
+                    || dirname($real) !== $directory || !is_file($real) || filesize($real) > StorePackageFormat::MAX_IMAGE_BYTES) {
+                    throw new DomainException('A required upload is missing or unsafe: ' . $reference);
+                }
+                $contentBytes += (int)filesize($real);
+                if ($contentBytes > StorePackageFormat::MAX_CONTENT_BYTES) {
+                    throw new DomainException('The database and required uploads exceed the 32 MB content limit.');
+                }
+                $files[$reference] = (string)file_get_contents($real);
+            }
+            $originPath = RecoveryStore::path('installation-id');
+            if (!is_file($originPath)) RecoveryStore::write('installation-id', bin2hex(random_bytes(16)));
+            $package = StorePackageFormat::encode($sql, $files, $schema, $passphrase, trim((string)file_get_contents($originPath)), (string)$this->pdo->getAttribute(PDO::ATTR_SERVER_VERSION));
+            $handle = fopen($artifactPath, 'xb');
+            if ($handle === false) throw new DomainException('The encrypted package could not be opened.');
+            chmod($artifactPath, 0600);
+            try {
+                if (fwrite($handle, $package) !== strlen($package) || !fflush($handle) || !fsync($handle)) {
+                    throw new DomainException('The encrypted package could not be saved completely.');
+                }
+            } finally { fclose($handle); }
+            $capture['size'] = strlen($package);
+            $capture['files'] = count($files);
+            unset($package, $sql, $files);
+            $verified = StorePackageFormat::decode((string)file_get_contents($artifactPath), $passphrase, $schema);
+            $snapshotAt = $verified['manifest']['snapshot_at'];
+            unset($verified);
+            $coordinator->discard($sqlPath);
             $coordinator->releaseCapture();
         } catch (Throwable $exception) {
             $coordinator->abortCapture();
             $coordinator->discard($artifactPath);
+            $coordinator->discard($sqlPath);
             $coordinator->fail($operationKey, $exception->getMessage());
+            throw $exception;
+        } finally {
+            if (is_resource($requestLock)) fclose($requestLock);
+        }
+
+        try {
+            $coordinator->markCaptured(
+                $operationKey,
+                $token,
+                $artifactPath,
+                $filename,
+                (int)$capture['size'],
+                StorePackageFormat::VERSION,
+                StorePackageFormat::CIPHER,
+                $snapshotAt
+            );
+            $coordinator->complete($operationKey);
+
+            $backupId = $this->recordHistory(
+                $filename,
+                $actorUserId === null ? 'scheduled' : 'manual',
+                (int)$capture['size'],
+                'completed',
+                $actorUserId,
+                sprintf(
+                    'Encrypted Store package captured. %d table(s), %d record(s). Browser delivery is not confirmed.',
+                    (int)$capture['tables'],
+                    (int)$capture['rows']
+                ),
+                $snapshotAt,
+                StorePackageFormat::VERSION,
+                StorePackageFormat::CIPHER,
+                $actorRole
+            );
+
+        } catch (Throwable $exception) {
+            $coordinator->discard($artifactPath);
+            $coordinator->fail($operationKey, 'The encrypted package could not be published.');
             throw $exception;
         }
 
-        $coordinator->markCaptured(
-            $operationKey,
-            $token,
-            $artifactPath,
-            $filename,
-            (int)$capture['size'],
-            SqlBackupFormat::VERSION,
-            'none',
-            $snapshotAt
-        );
-        $coordinator->complete($operationKey);
-
-        $backupId = $this->recordHistory(
-            $filename,
-            $actorUserId === null ? 'scheduled' : 'manual',
-            (int)$capture['size'],
-            'completed',
-            $actorUserId,
-            sprintf(
-                'SQL Database Backup created. %d table(s), %d record(s).',
-                (int)$capture['tables'],
-                (int)$capture['rows']
-            ),
-            $snapshotAt,
-            SqlBackupFormat::VERSION,
-            'none',
-            $actorRole
-        );
-
         return [
             'status' => self::OUTCOME_READY,
-            'message' => 'Your SQL backup is ready to download.',
+            'message' => 'Your encrypted Store package is ready to download. Save it and keep its passphrase separately off-server.',
             'backup_id' => $backupId,
             'filename' => $filename,
             'token' => $token,
@@ -128,7 +199,7 @@ final class DatabaseBackupService
             'snapshot_at' => $snapshotAt,
             'tables' => (int)$capture['tables'],
             'rows' => (int)$capture['rows'],
-            'cipher' => 'none',
+            'cipher' => StorePackageFormat::CIPHER,
         ];
     }
 
@@ -139,7 +210,7 @@ final class DatabaseBackupService
      */
     public function resolveDownload(string $token, int $actorUserId, string $actorRole): array
     {
-        $this->authorize($actorRole);
+        $this->authorizeActor($actorUserId, $actorRole);
         $token = trim($token);
         if ($token === '' || preg_match('/^[0-9a-f]{48}$/', $token) !== 1) {
             throw new DomainException('That backup download is no longer available. Create a new backup to download it again.');
@@ -161,7 +232,7 @@ final class DatabaseBackupService
         }
 
         $path = (string)$row['artifact_path'];
-        $expectedPath = $this->coordinator()->artifactDirectory() . '/' . $token . '.sql';
+        $expectedPath = $this->coordinator()->artifactDirectory() . '/' . $token . '.rmpkg';
         if (!is_file($path) || realpath($path) !== realpath($expectedPath)) {
             throw new DomainException('That backup download is no longer available. Create a new backup to download it again.');
         }
@@ -218,9 +289,11 @@ final class DatabaseBackupService
                 'snapshot_at' => $row['snapshot_at'] === null ? null : (string)$row['snapshot_at'],
                 'requested_by' => (string)($row['full_name'] ?? 'Scheduled task'),
                 'requested_by_role' => (string)($row['requested_by_role'] ?? ''),
-                'format' => $row['envelope_version'] === SqlBackupFormat::VERSION
+                'format' => $row['envelope_version'] === StorePackageFormat::VERSION
+                    ? 'Encrypted Store package'
+                    : ($row['envelope_version'] === SqlBackupFormat::VERSION
                     ? 'SQL (unencrypted)'
-                    : ($row['envelope_version'] === null ? 'Plain SQL (legacy)' : 'Encrypted (legacy)'),
+                    : ($row['envelope_version'] === null ? 'Plain SQL (legacy)' : 'Encrypted (legacy)')),
                 // Restricted recovery detail stays with the Super Administrator,
                 // and a completed row never claims the file was retained on the
                 // owner's device.
@@ -276,6 +349,24 @@ final class DatabaseBackupService
         );
     }
 
+    public function authorizeActor(int $actorUserId, string $actorRole): array
+    {
+        $this->authorize($actorRole);
+        $stmt = $this->pdo->prepare('SELECT u.*, r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.user_id=?');
+        $stmt->execute([$actorUserId]);
+        $actor = $stmt->fetch(PDO::FETCH_ASSOC);
+        $roles = $actor ? [(string)$actor['role_name']] : [];
+        if ($actor && \App\Database\Schema::tableExists($this->pdo, 'user_roles')) {
+            $stmt = $this->pdo->prepare('SELECT r.role_name FROM user_roles ur JOIN roles r ON r.role_id=ur.role_id WHERE ur.user_id=?');
+            $stmt->execute([$actorUserId]);
+            $roles = array_merge($roles, $stmt->fetchAll(PDO::FETCH_COLUMN));
+        }
+        if (!$actor || $actor['status'] !== 'active' || !in_array($actorRole, $roles, true)) {
+            throw new DomainException('An active account in the selected administrator Workspace is required.');
+        }
+        return $actor;
+    }
+
     public function authorize(string $actorRole): void
     {
         if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP)) {
@@ -285,7 +376,7 @@ final class DatabaseBackupService
 
     public static function downloadFilename(): string
     {
-        return 'retailmind-backup-' . date('m-d-Y-His') . '-' . bin2hex(random_bytes(3)) . '.sql';
+        return 'retailmind-backup-' . date('m-d-Y-His') . '-' . bin2hex(random_bytes(3)) . '.rmpkg';
     }
 
     /**
