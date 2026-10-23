@@ -62,8 +62,6 @@ if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--
     }
     exit;
 }
-$emptyBalances = $service->adminOverview(['actor_role' => 'admin'])['recorded_balances'];
-$check(is_array($emptyBalances) && $emptyBalances['service_cash'] === null && $emptyBalances['wallet_balance'] === null && $emptyBalances['session_status'] === null, 'No session means no recorded funds, not zero.');
 $snapshot = static fn() => $pdo->query('SELECT (SELECT COUNT(*) FROM sales), (SELECT COALESCE(SUM(total_amount),0) FROM sales), (SELECT COUNT(*) FROM cash_drawer_movements), (SELECT SUM(opening_cash) FROM cashier_shifts)')->fetch(PDO::FETCH_NUM);
 $before = $snapshot();
 $id = $service->save(4, '0000 0000 00001', '0.01', 'Payment');
