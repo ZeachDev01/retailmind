@@ -382,20 +382,6 @@ $rangeUrl = $currentUrl;
                     </div>
                 </section>
 
-                <section class="dashboard-section staff-shifts-section" aria-labelledby="staff-shifts-title">
-                    <div class="section-header">
-                        <div>
-                            <h2 id="staff-shifts-title"><i class="bi bi-people" aria-hidden="true"></i> Staff &amp; cashier shifts</h2>
-                        </div>
-                    </div>
-                    <div class="indicator-list">
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-check" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Cashiers</strong></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_cashiers'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Active Inventory Managers</strong></span><b class="indicator-value"><?= (int)$dashboard['staff']['active_inventory_managers'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-person-x" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Disabled Accounts</strong></span><b class="indicator-value"><?= (int)$dashboard['staff']['disabled_staff'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Open cashier shifts</strong></span><b class="indicator-value"><?= (int)$dashboard['shifts']['open'] ?></b></div>
-                        <div class="indicator-item"><span class="indicator-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span><span class="indicator-copy"><strong>Cash variances awaiting review</strong></span><b class="indicator-value"><?= (int)$dashboard['shifts']['unreviewed_variances'] ?></b></div>
-                    </div>
-                </section>
             <?php endif; ?>
         </main>
     </div>

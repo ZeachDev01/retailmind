@@ -4,6 +4,18 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**Gross Sales**:
+The Store's completed Product sales before discounts and Cash Refunds. Gross Sales does not deduct product costs or operating expenses.
+_Avoid_: Net Sales, Gross Profit, earnings
+
+**Net Sales**:
+The Store's completed Product sales after discounts, minus issued Cash Refunds. Net Sales does not deduct product costs or operating expenses and is not profit.
+_Avoid_: Gross Sales, Gross Profit, Net Profit, earnings
+
+**Gross Profit**:
+Net Sales minus the corresponding cost of products sold, adjusted for returns. Gross Profit excludes operating expenses and is not Net Profit or take-home earnings.
+_Avoid_: Net Sales, Gross Sales, Net Profit, take-home earnings
+
 **Promotion**:
 An Administrator-created discount with defined eligibility conditions that a Cashier may explicitly select for a sale. Only one Promotion may apply to a sale.
 _Avoid_: Cashier-created discount, automatic discount
