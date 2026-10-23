@@ -49,9 +49,25 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await target.locator('#landing-login-password').fill(data.password);
             await Promise.all([target.waitForURL(url => !url.search.includes('login=1')), target.getByRole('button', {name: 'Log in', exact: true}).click()]);
         };
-        assert.equal(run('src/backend/tests/gcash_transaction_integration.php', [database]).trim(), 'GCash MySQL integration: passed');
         await login(page, 'admin');
         await page.goto(origin + '/components/administrator/gcash_overview.php');
+        assert.equal(await page.locator('#admin-expected-cash').textContent(), 'Not recorded');
+        assert.equal(await page.locator('#admin-expected-wallet').textContent(), 'Not recorded');
+        const missingEvidence = (await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json()).recorded_balances;
+        assert.equal(missingEvidence.service_cash, null);
+        assert.equal(missingEvidence.wallet_balance, null);
+        assert.equal(run('src/backend/tests/gcash_transaction_integration.php', [database]).trim(), 'GCash MySQL integration: passed');
+        await page.goto(origin + '/components/administrator/gcash_overview.php');
+        const evidence = (await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json()).recorded_balances;
+        assert.equal(evidence.state, 'last_counted');
+        assert.equal(evidence.session_status, 'closed');
+        assert.equal(evidence.cashier_id, 4);
+        assert.ok(evidence.checked_at);
+        assert.equal(await page.locator('#admin-cash-state').textContent(), 'Last counted');
+        assert.equal(await page.locator('#admin-wallet-state').textContent(), 'Last counted');
+        assert.ok((await page.locator('#admin-cash-checked').textContent()).includes(evidence.cashier_name));
+        assert.ok((await page.locator('#admin-cash-checked').textContent()).includes(evidence.checked_at_formatted));
+        const recordedCash = await page.locator('#admin-expected-cash').textContent();
         assert.equal(await page.getByRole('tab').count(), 4, 'Overview has four task tabs');
         const balances = page.getByRole('tab', {name: 'Balances & Summary'});
         assert.equal(await balances.getAttribute('aria-selected'), 'true');
@@ -68,6 +84,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await search.fill('no-such-gcash-reference');
         await page.getByText('No transactions found for the selected filter criteria.').waitFor();
         assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 0);
+        assert.equal(await page.locator('#admin-expected-cash').textContent(), recordedCash, 'Search does not change recorded funds');
         await search.fill('');
         await page.locator('#gcash-admin-history-body tr[data-transaction]').first().waitFor();
         // A delayed filter response preserves a tab chosen while it was loading.
