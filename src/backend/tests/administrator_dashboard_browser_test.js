@@ -53,10 +53,10 @@ function render(period, data = payload) {
             assert.equal(await page.locator('#gross-sales-card-value').innerText(), `₱${100 + i}.00`);
             assert.equal(await page.locator('#net-sales-card-value').innerText(), `₱${80 + i}.00`);
             assert.equal(await page.locator('#gross-profit-card-value').innerText(), `₱${30 + i}.00`);
-            assert.match(await page.locator('#financial-period-dates').innerText(), new RegExp(['2026-10-23','2026-10-19','2026-10-01'][i]));
+            assert.match(await page.locator('#financial-period-dates').textContent(), new RegExp(['2026-10-23','2026-10-19','2026-10-01'][i]));
             assert.match(await page.locator('#viewProfitReportBtn').getAttribute('href'), new RegExp(`from=${['2026-10-23','2026-10-19','2026-10-01'][i]}`));
             assert.equal(await page.locator('#financial-history').innerText(), history);
-            assert.match(await page.locator('.store-attention-queue').innerText(), /30 days/);
+            assert.equal(await page.locator('.store-attention-queue .section-description').count(), 0);
             const charts = await page.evaluate(() => Object.values(window.testCharts).map(chart => chart.data.datasets.map(series => series.label)));
             assert.deepEqual(charts, [['Gross Sales','Net Sales'], ['Gross Profit'], ['Net Sales','Gross Profit']]);
         }
