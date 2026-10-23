@@ -16,11 +16,12 @@ try {
             'search' => trim((string)($_GET['search'] ?? '')),
             'actor_role' => (string)current_role(),
             'actor_id' => (int)($_SESSION['user_id'] ?? 0),
-            'start_date' => !empty($_GET['start_date']) ? (string)$_GET['start_date'] : null,
-            'end_date' => !empty($_GET['end_date']) ? (string)$_GET['end_date'] : null,
-            'cashier_id' => !empty($_GET['cashier_id']) ? (int)$_GET['cashier_id'] : null,
+            'start_date' => isset($_GET['start_date']) ? (string)$_GET['start_date'] : null,
+            'end_date' => isset($_GET['end_date']) ? (string)$_GET['end_date'] : null,
+            'cashier_id' => $_GET['cashier_id'] ?? null,
             'page' => filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1,
         ];
+        if (isset($_GET['period'])) $filters['period'] = (string)$_GET['period'];
         $result = $service->adminOverview($filters);
         echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
     } elseif ($method === 'POST') {

@@ -1110,6 +1110,8 @@ $check($adminOv['controlling_cashier_id'] === 4, 'Controlling cashier id matches
 // Search/type filters apply before pagination and leave current funds unchanged.
 $searchEmpty = $service->adminOverview(['actor_role' => 'admin', 'search' => 'no-such-gcash-reference']);
 $check($searchEmpty['total_transactions'] === 0 && $searchEmpty['transactions'] === [], 'Unknown reference returns no matching transactions');
+$check($searchEmpty['completed_exchange_count'] > 0 && $searchEmpty['completed_exchange_count'] === $adminOv['completed_exchange_count'], 'Local search leaves the completed exchange headline unchanged');
+$check($searchEmpty['cash_in_principal'] === $adminOv['cash_in_principal'] && $searchEmpty['gross_fees_cash'] === $adminOv['gross_fees_cash'], 'Local search leaves shared principal and fees unchanged');
 $searchLiteral = $service->adminOverview(['actor_role' => 'admin', 'search' => '%']);
 $check($searchLiteral['total_transactions'] === 0, 'Search treats SQL wildcards as literal text');
 $cashInOnly = $service->adminOverview(['actor_role' => 'admin', 'type' => 'Cash-In', 'limit' => 10]);
@@ -1217,6 +1219,40 @@ for ($index = 0; $index < 55; $index++) {
 }
 $exportPage = $service->adminOverview(['actor_role' => 'admin', 'search' => '888888888', 'page' => 2]);
 $check($exportPage['total_transactions'] === 55 && count($exportPage['transactions']) === 5, 'Search matches across page boundaries');
+
+// Reporting keeps the created-at Philippine day basis, even if completion happens later.
+$pdo->beginTransaction();
+try {
+    $pdo->exec("SET time_zone = '+00:00'");
+    $reportRow = $pdo->prepare("INSERT INTO gcash_transactions
+        (session_id, cashier_id, transaction_type, reference_number, amount, principal_amount, gross_fee, fee_method, verification_status, created_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '2027-03-05 00:00:00')");
+    $reportRows = [
+        [$sess10, 4, 'Cash-In', '7900000000001', 1000, 1000, 10, 'cash', 'Completed', '2027-02-28 16:00:00'],
+        [$sess10, 4, 'Cash-Out', '7900000000002', 2000, 2000, 20, 'wallet', 'Completed', '2027-03-01 04:00:00'],
+        [$sess10, 4, 'Cash-Out', '7900000000003', 350, 350, 5, 'cash', 'Completed', '2027-03-01 15:59:59'],
+        [$sess10, $newUserId, 'Cash-In', '7900000000004', 600, 600, 10, 'cash', 'Completed', '2027-03-01 04:00:00'],
+        [$sess10, 4, 'Cash-In', '7900000000005', 9000, 9000, 90, 'cash', 'Completed', '2027-02-28 15:59:59'],
+        [$sess10, 4, 'Cash-In', '7900000000006', 8000, 8000, 80, 'cash', 'Completed', '2027-03-01 16:00:00'],
+        [$sess10, 4, 'Cash-In', '7900000000007', 7000, 7000, 70, 'cash', 'Needs checking', '2027-03-01 04:00:00'],
+        [null, 4, 'Cash-In', '7900000000008', 6000, 6000, 60, 'cash', 'Completed', '2027-03-01 04:00:00'],
+        [$sess10, 4, 'Cash-Out', '7900000000009', 5000, 5000, 50, 'wallet', 'Rejected', '2027-03-01 04:00:00'],
+    ];
+    foreach ($reportRows as $reportFixture) $reportRow->execute($reportFixture);
+    $pdo->exec("SET time_zone = '+08:00'");
+    $reportScope = ['actor_role' => 'admin', 'start_date' => '2027-03-01', 'end_date' => '2027-03-01'];
+    $report = $service->adminOverview($reportScope);
+    $check($report['completed_exchange_count'] === 4 && $report['matching_record_count'] === 7, 'Completed exchange count excludes held, rejected and legacy records; matching count retains them');
+    $check($report['cash_in_principal'] === 1600.0 && $report['cash_out_principal'] === 2350.0 && $report['gross_fees_cash'] === 25.0 && $report['gross_fees_wallet'] === 20.0, 'Philippine month/day boundaries yield exact shared principal and gross fees');
+    $cashierReport = $service->adminOverview($reportScope + ['cashier_id' => 4, 'type' => 'Cash-Out', 'search' => '7900000000002']);
+    $check($cashierReport['completed_exchange_count'] === 3 && $cashierReport['matching_record_count'] === 1, 'Cashier scopes shared totals; local type/search only narrow matching records');
+    $check($cashierReport['cash_in_principal'] === 1000.0 && $cashierReport['cash_out_principal'] === 2350.0 && $cashierReport['gross_fees_cash'] === 15.0 && $cashierReport['gross_fees_wallet'] === 20.0, 'Cashier shared principal and fees remain independent of local transaction filters');
+    $refuse(fn() => $service->adminOverview($reportScope + ['cashier_id' => 'invalid']));
+    $refuse(fn() => $service->adminOverview(['actor_role' => 'admin', 'start_date' => '2027-02-29', 'end_date' => '2027-03-01']));
+} finally {
+    $pdo->rollBack();
+    $pdo->exec("SET time_zone = '+08:00'");
+}
 
 echo "GCash MySQL integration: passed\n";
 
