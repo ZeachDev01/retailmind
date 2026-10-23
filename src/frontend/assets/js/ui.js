@@ -367,8 +367,9 @@
   function initServerNotifications() {
     const flash = qs("#rm-flash-messages");
     if (flash && flash.dataset.loginSuccess) {
-      RM.toast(flash.dataset.loginSuccess, "success").classList.add("rm-toast-centered");
+      const message = flash.dataset.loginSuccess;
       delete flash.dataset.loginSuccess;
+      setTimeout(() => RM.toast(message, "success", undefined, 2000).classList.add("rm-toast-centered"), 500);
     }
     const notices = [];
     if (flash) {

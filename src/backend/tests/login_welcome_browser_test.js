@@ -17,6 +17,8 @@ const { chromium } = require('playwright');
     await page.evaluate(() => {
       document.querySelector('#rm-flash-messages').dataset.loginSuccess = 'Login successful! Welcome, <img src=x onerror=alert(1)>!';
     });
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
     await page.addScriptTag({ content: `
       const qs = (selector, root = document) => root.querySelector(selector);
       const qsa = selector => [...document.querySelectorAll(selector)];
@@ -26,6 +28,10 @@ const { chromium } = require('playwright');
       initServerNotifications();
       initServerNotifications();
     ` });
+    assert.equal(await page.locator('.rm-toast').count(), 0, 'Welcome does not appear immediately');
+    await page.clock.runFor(499);
+    assert.equal(await page.locator('.rm-toast').count(), 0, 'Welcome waits half a second');
+    await page.clock.runFor(1);
     assert.equal(await page.locator('.rm-toast.success').count(), 1, 'Welcome appears once even if initialization repeats');
     assert.equal(await page.locator('.rm-toast-copy span').textContent(), 'Login successful! Welcome, <img src=x onerror=alert(1)>!');
     assert.equal(await page.locator('.rm-toast img').count(), 0, 'Username is rendered as text');
@@ -50,10 +56,7 @@ const { chromium } = require('playwright');
       { message: 'warning notice', kind: 'warning' },
       { message: 'info notice', kind: 'info' },
     ], 'Persistent sidebar flash messages appear once across page initializations');
-    await page.locator('.rm-toast').evaluate(async node => {
-      await new Promise(requestAnimationFrame);
-      await Promise.all(node.getAnimations().map(animation => animation.finished));
-    });
+    await page.clock.runFor(300);
     for (const viewport of [{ width: 1280, height: 720 }, { width: 375, height: 667 }]) {
       await page.setViewportSize(viewport);
       const bounds = await page.locator('.rm-toast').boundingBox();
@@ -61,10 +64,17 @@ const { chromium } = require('playwright');
       assert.ok(Math.abs(bounds.x + bounds.width / 2 - visibleWidth / 2) < 1, 'Welcome is horizontally centered');
       assert.ok(Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2) < 1, 'Welcome is vertically centered');
     }
-    await page.getByRole('button', { name: 'Dismiss notification' }).click();
-    await page.locator('.rm-toast').waitFor({ state: 'detached' });
+    await page.clock.runFor(1699);
+    assert.equal(await page.locator('.rm-toast.show').count(), 1, 'Welcome stays visible for two seconds');
+    await page.clock.runFor(1);
+    assert.equal(await page.locator('.rm-toast.show').count(), 0, 'Welcome closes after two seconds');
+    await page.clock.runFor(250);
+    assert.equal(await page.locator('.rm-toast').count(), 0, 'Welcome is removed after its exit transition');
     await page.evaluate(() => RM.toast('Login successful! Welcome, cashier!', 'success'));
-    await page.locator('.rm-toast').waitFor({ state: 'detached', timeout: 7000 });
+    await page.clock.runFor(300);
+    await page.getByRole('button', { name: 'Dismiss notification' }).click();
+    await page.clock.runFor(250);
+    assert.equal(await page.locator('.rm-toast').count(), 0, 'Welcome can still be dismissed manually');
     console.log('Login welcome toast: passed');
   } finally {
     await browser.close();
