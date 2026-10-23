@@ -337,11 +337,16 @@ final class GCashTransactionService
         $controllingCashierId = null;
         $controllingCashierName = null;
         $sessionStatus = 'closed';
+        $balanceSession = $openSession ?: null;
+        $recordedCash = null;
+        $recordedWallet = null;
 
         if ($openSession) {
             $expected = $this->calculateSessionExpected((int)$openSession['session_id']);
             $currentExpectedCash = (float)$expected['expected_service_cash'];
             $currentExpectedWallet = (float)$expected['expected_wallet_balance'];
+            $recordedCash = $currentExpectedCash;
+            $recordedWallet = $currentExpectedWallet;
             $lastCheckedAt = $openSession['opened_at'];
             $lastCheckedFormatted = PhilippineTime::format($openSession['opened_at']);
             $controllingCashierId = (int)$openSession['cashier_id'];
@@ -359,9 +364,14 @@ final class GCashTransactionService
             $closedStmt->execute();
             $latestClosed = $closedStmt->fetch(PDO::FETCH_ASSOC);
             if ($latestClosed) {
+                $balanceSession = $latestClosed;
+                $recordedCash = $latestClosed['closing_service_cash'] !== null ? (float)$latestClosed['closing_service_cash'] : null;
+                $recordedWallet = $latestClosed['closing_wallet_balance'] !== null ? (float)$latestClosed['closing_wallet_balance'] : null;
+                $controllingCashierId = (int)$latestClosed['cashier_id'];
+                $controllingCashierName = $latestClosed['cashier_name'] ?: $latestClosed['cashier_username'];
                 $currentExpectedCash = (float)($latestClosed['closing_service_cash'] ?? $latestClosed['expected_service_cash'] ?? 0.0);
                 $currentExpectedWallet = (float)($latestClosed['closing_wallet_balance'] ?? $latestClosed['expected_wallet_balance'] ?? 0.0);
-                $lastCheckedAt = $latestClosed['closed_at'] ?? $latestClosed['opened_at'];
+                $lastCheckedAt = $latestClosed['closed_at'];
                 $lastCheckedFormatted = PhilippineTime::format($lastCheckedAt);
                 $sessionStatus = 'closed';
             }
@@ -457,14 +467,9 @@ final class GCashTransactionService
                   FROM gcash_transactions t
                   JOIN users u ON t.cashier_id = u.user_id
                   WHERE t.verification_status = 'Needs checking'";
-        $ncParams = [];
-        if ($cashierId !== null) {
-            $ncSql .= " AND t.cashier_id = ?";
-            $ncParams[] = $cashierId;
-        }
         $ncSql .= " ORDER BY t.transaction_id DESC";
         $ncStmt = $this->pdo()->prepare($ncSql);
-        $ncStmt->execute($ncParams);
+        $ncStmt->execute();
         $unresolved = [];
         foreach ($ncStmt->fetchAll(PDO::FETCH_ASSOC) as $nc) {
             $isLegacy = ($nc['session_id'] === null);
@@ -501,14 +506,9 @@ final class GCashTransactionService
                     LEFT JOIN users wb ON s.waived_by = wb.user_id
                     WHERE s.status = 'closed'
                       AND (s.cash_variance != 0 OR s.wallet_variance != 0)";
-        $diffParams = [];
-        if ($cashierId !== null) {
-            $diffSql .= " AND s.cashier_id = ?";
-            $diffParams[] = $cashierId;
-        }
         $diffSql .= " ORDER BY s.session_id DESC";
         $diffStmt = $this->pdo()->prepare($diffSql);
-        $diffStmt->execute($diffParams);
+        $diffStmt->execute();
         $differences = [];
         foreach ($diffStmt->fetchAll(PDO::FETCH_ASSOC) as $d) {
             $differences[] = [
@@ -609,6 +609,17 @@ final class GCashTransactionService
         } catch (Throwable) {}
 
         return [
+            'recorded_balances' => [
+                'service_cash' => $recordedCash,
+                'wallet_balance' => $recordedWallet,
+                'state' => $balanceSession ? ($openSession ? 'expected' : 'last_counted') : 'not_recorded',
+                'session_id' => $balanceSession ? (int)$balanceSession['session_id'] : null,
+                'session_status' => $balanceSession ? $balanceSession['status'] : null,
+                'cashier_id' => $controllingCashierId,
+                'cashier_name' => $controllingCashierName,
+                'checked_at' => $lastCheckedAt,
+                'checked_at_formatted' => $lastCheckedAt ? PhilippineTime::format($lastCheckedAt) : null,
+            ],
             'current_expected_balances' => [
                 'expected_service_cash' => $currentExpectedCash,
                 'expected_wallet_balance' => $currentExpectedWallet,
@@ -655,7 +666,7 @@ final class GCashTransactionService
             'needs_checking_count' => count($unresolved),
 
             'reconciliation_differences' => $differences,
-            'differences_count' => count($differences),
+            'differences_count' => count(array_filter($differences, static fn(array $difference): bool => !$difference['is_waived'])),
 
             'transactions' => $txs,
             'has_next' => $hasNext,

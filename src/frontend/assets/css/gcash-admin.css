@@ -61,7 +61,7 @@
 #gcash-admin-workspace section:has(#gcash-admin-filters-title), #gcash-admin-workspace section:has(#gcash-admin-metrics-title) { border: 1px solid var(--border); border-radius: 14px; margin-bottom: 1.5rem; }
 
 #gcash-admin-workspace .gcash-topbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
-#gcash-admin-workspace .gcash-balances-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; border: 0; }
+#gcash-admin-workspace .gcash-balances-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; border: 0; }
 #gcash-admin-workspace .gcash-balances-grid .gcash-card-balance { padding: 1.2rem; border: 1px solid var(--border); border-top: 2px solid var(--success, #059669); border-radius: 14px; }
 #gcash-admin-workspace .gcash-card-balance:nth-child(2) { border-top-color: var(--primary); }
 #gcash-admin-workspace .gcash-card-combined { background: linear-gradient(135deg, #0f172a, #1e293b); border-color: #1e293b; color: #fff; }

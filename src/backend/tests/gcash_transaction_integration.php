@@ -62,6 +62,8 @@ if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--
     }
     exit;
 }
+$emptyBalances = $service->adminOverview(['actor_role' => 'admin'])['recorded_balances'];
+$check(is_array($emptyBalances) && $emptyBalances['service_cash'] === null && $emptyBalances['wallet_balance'] === null && $emptyBalances['session_status'] === null, 'No session means no recorded funds, not zero.');
 $snapshot = static fn() => $pdo->query('SELECT (SELECT COUNT(*) FROM sales), (SELECT COALESCE(SUM(total_amount),0) FROM sales), (SELECT COUNT(*) FROM cash_drawer_movements), (SELECT SUM(opening_cash) FROM cashier_shifts)')->fetch(PDO::FETCH_NUM);
 $before = $snapshot();
 $id = $service->save(4, '0000 0000 00001', '0.01', 'Payment');
@@ -898,6 +900,10 @@ $exp8 = $service->calculateSessionExpected($sess8);
 $check($exp8['expected_service_cash'] === 4000.00, 'Expected cash reflects completed payout: 4000.00');
 $check($exp8['expected_wallet_balance'] === 14510.00, 'Expected wallet: 14510.00');
 
+$check(str_contains($resRowA['notes'], 'Customer sent 510 wallet, cash payout delayed'), 'Completion preserves partial-exchange notes');
+$completionAudit = $pdo->query("SELECT user_id FROM activity_log WHERE action = 'GCash Needs checking resolved completed' AND record_id = {$ncCoTxId}")->fetchColumn();
+$check((int)$completionAudit === 4, 'Completion persists resolving actor audit attribution');
+
 // Cannot resolve again once completed
 $refuse(fn() => $service->resolveNeedsChecking(4, $ncCoTxId, 'complete', ['notes' => 'Duplicate completion']));
 
@@ -1099,8 +1105,16 @@ $refuse(static fn() => $service->adminOverview(['actor_role' => 'cashier']));
 $refuse(static fn() => $service->adminOverview(['actor_role' => 'inventory_manager']));
 $refuse(static fn() => $service->adminOverview([]));
 
+$pdo->exec("UPDATE gcash_transactions SET created_at = '2020-01-01 09:00:00' WHERE verification_status = 'Needs checking' AND cashier_id = {$newUserId}");
+
 // 2. Admin access granted and current expected balances computed
 $adminOv = $service->adminOverview(['actor_role' => 'admin']);
+$funds = $adminOv['recorded_balances'];
+$check($funds['state'] === 'expected' && $funds['service_cash'] === $adminOv['current_expected_service_cash'] && $funds['cashier_id'] === 4 && $funds['checked_at'] !== null, 'Open recorded funds derive from movements and retain the opening actual check.');
+foreach ([['search' => 'missing'], ['type' => 'Cash-Out'], ['cashier_id' => 1], ['start_date' => '2020-01-01', 'end_date' => '2020-01-02']] as $selection) {
+    $check($service->adminOverview(['actor_role' => 'admin'] + $selection)['recorded_balances'] === $funds, 'Recorded evidence is independent of every reporting/list filter.');
+}
+
 $superOv = $service->adminOverview(['actor_role' => 'super_admin']);
 $check($adminOv['current_expected_balances']['expected_service_cash'] > 0, 'Current expected service cash computed');
 $check($adminOv['current_expected_balances']['expected_wallet_balance'] > 0, 'Current expected wallet balance computed');
@@ -1133,7 +1147,7 @@ $expectedTotals = $pdo->query(
         COALESCE(SUM(CASE WHEN transaction_type = 'Cash-Out' AND verification_status = 'Completed' THEN principal_amount ELSE 0 END), 0) AS cash_out_principal,
         COALESCE(SUM(CASE WHEN fee_method = 'cash' AND verification_status = 'Completed' THEN gross_fee ELSE 0 END), 0) AS gross_fees_cash,
         COALESCE(SUM(CASE WHEN fee_method = 'wallet' AND verification_status = 'Completed' THEN gross_fee ELSE 0 END), 0) AS gross_fees_wallet
-    FROM gcash_transactions"
+    FROM gcash_transactions WHERE DATE(created_at) = CURRENT_DATE()"
 )->fetch(PDO::FETCH_ASSOC);
 
 $check((float)$adminOv['cash_in_principal'] === (float)$expectedTotals['cash_in_principal'], 'Store cash in principal');
@@ -1167,7 +1181,10 @@ $cashier4Filtered = $service->adminOverview(['actor_role' => 'admin', 'cashier_i
 $check((float)$cashier4Filtered['cash_in_principal'] === (float)$expectedTotals['cash_in_principal'], 'Cashier 4 filter matches');
 $otherFiltered = $service->adminOverview(['actor_role' => 'admin', 'cashier_id' => $newUserId]);
 $check((float)$otherFiltered['cash_in_principal'] === 0.00, 'Other cashier has zero completed cash-in');
-$check($otherFiltered['unresolved_count'] === 1, 'Other cashier unresolved isolated when cashier filtered');
+$check($otherFiltered['unresolved_count'] === $adminOv['unresolved_count'], 'Cashier selection cannot hide Store-wide unresolved exchanges');
+$scopedReview = $service->adminOverview(['actor_role' => 'admin', 'cashier_id' => $newUserId, 'start_date' => '2020-01-01', 'end_date' => '2020-01-02', 'search' => 'no-match', 'type' => 'Cash-Out']);
+$check($scopedReview['unresolved_activity'] === $adminOv['unresolved_activity'], 'All filters leave unresolved review records intact');
+$check($scopedReview['reconciliation_differences'] === $adminOv['reconciliation_differences'], 'All filters leave reconciliation history intact');
 
 // 7. Legacy reference exclusion from financial totals
 $legacyFoundInAdmin = false;
@@ -1185,11 +1202,23 @@ $check($legacyFoundInAdmin, 'Legacy transaction present in admin history');
 
 // 8. Close session 10 with non-zero variance and verify reconciliation differences & waiver
 $exp10 = $service->calculateSessionExpected($sess10);
-$closeResult = $service->closeSession(4, (float)$exp10['expected_service_cash'] - 20.00, (float)$exp10['expected_wallet_balance'], 'Session 10 test close with variance', 1);
+$closeResult = $service->closeSession(4, (float)$exp10['expected_service_cash'] - 20.00, (float)$exp10['expected_wallet_balance'] + 20.00, 'Session 10 test close with variance', 1);
 $check((float)$closeResult['cash_variance'] === -20.00, 'Session 10 closed with cash variance');
 
 $afterCloseOv = $service->adminOverview(['actor_role' => 'admin']);
 $check($afterCloseOv['session_status'] === 'closed', 'Session status now closed');
+$evidence = $afterCloseOv['recorded_balances'];
+$check($evidence['state'] === 'last_counted' && $evidence['service_cash'] === (float)$closeResult['closing_service_cash'] && $evidence['cashier_id'] === 4 && $evidence['session_id'] === $sess10 && $evidence['checked_at'] !== null, 'Closed funds retain counted amounts, session responsibility and closing time.');
+$pdo->beginTransaction();
+try {
+    $pdo->exec("UPDATE gcash_service_sessions SET closing_service_cash = NULL, closing_wallet_balance = 0 WHERE session_id = {$sess10}");
+    $partial = $service->adminOverview(['actor_role' => 'admin'])['recorded_balances'];
+    $check($partial['service_cash'] === null && $partial['wallet_balance'] === 0.0 && $partial['checked_at'] === $evidence['checked_at'], 'Missing cash never falls back to expected; genuine counted wallet zero retains its evidence.');
+    $pdo->exec("UPDATE gcash_service_sessions SET closing_service_cash = 0, closing_wallet_balance = NULL WHERE session_id = {$sess10}");
+    $partial = $service->adminOverview(['actor_role' => 'admin'])['recorded_balances'];
+    $check($partial['service_cash'] === 0.0 && $partial['wallet_balance'] === null, 'Missing wallet and counted cash zero remain independent.');
+} finally { $pdo->rollBack(); }
+
 $check($afterCloseOv['differences_count'] >= 1, 'Reconciliation differences tracked');
 $sess10Diff = null;
 foreach ($afterCloseOv['reconciliation_differences'] as $diff) {
@@ -1197,6 +1226,7 @@ foreach ($afterCloseOv['reconciliation_differences'] as $diff) {
 }
 $check($sess10Diff !== null, 'Session 10 variance found in reconciliation differences');
 $check((float)$sess10Diff['cash_variance'] === -20.00, 'Session 10 cash variance matches');
+$check($sess10Diff['wallet_variance'] === 20.00, 'Offsetting wallet excess remains a separate signed variance');
 $check($sess10Diff['is_waived'] === false, 'Session 10 variance initially not waived');
 
 // Waive discrepancy
@@ -1212,6 +1242,10 @@ foreach ($afterWaiveOv['reconciliation_differences'] as $diff) {
     }
 }
 $check($waivedFound, 'Waived session verified in reconciliation differences');
+$waiverAudit = $pdo->query("SELECT user_id, new_value FROM activity_log WHERE action = 'GCash discrepancy waived' AND record_id = {$sess10} ORDER BY log_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$check((int)$waiverAudit['user_id'] === 1 && str_contains($waiverAudit['new_value'], 'Approved manager variance waiver'), 'Waiver audit preserves Administrator identity and reason');
+$check($afterWaiveOv['differences_count'] === $afterCloseOv['differences_count'] - 1, 'Waiver removes only pending work from discrepancy count');
+$check(count($afterWaiveOv['reconciliation_differences']) === count($afterCloseOv['reconciliation_differences']), 'Waiver preserves history');
 
 // Enough public records to exercise search/pagination and full filtered CSV export.
 for ($index = 0; $index < 55; $index++) {

@@ -33,6 +33,38 @@
     });
     selectTab(tabs.find(tab => tab.getAttribute('aria-selected') === 'true'));
 
+    workspace.addEventListener('click', event => {
+        const review = event.target.closest('[data-review-tab]');
+        if (review) selectTab(document.getElementById('gcash-tab-' + review.dataset.reviewTab), true);
+    });
+
+    function refreshReviews(html) {
+        document.getElementById('gcash-outstanding-reviews').replaceWith(html.getElementById('gcash-outstanding-reviews').cloneNode(true));
+        for (const section of ['reconciliation', 'unresolved']) {
+            document.getElementById('tab-' + section).replaceChildren(...html.getElementById('tab-' + section).childNodes);
+            const badge = '#gcash-tab-' + section + ' .gcash-badge';
+            workspace.querySelector(badge).textContent = html.querySelector(badge).textContent;
+        }
+    }
+
+    function markReviewsUnavailable() {
+        for (const [id, columns] of [['gcash-admin-diff-body', 12], ['gcash-admin-nc-table tbody', 10]]) {
+            const body = workspace.querySelector('#' + id);
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = columns;
+            cell.textContent = 'Review data unavailable. Refresh to try again.';
+            cell.setAttribute('role', 'alert');
+            row.append(cell);
+            body.replaceChildren(row);
+        }
+        for (const section of ['reconciliation', 'unresolved']) workspace.querySelector('#gcash-tab-' + section + ' .gcash-badge').textContent = 'Unavailable';
+        for (const alert of workspace.querySelectorAll('[data-review-tab]')) {
+            alert.textContent = 'Review data unavailable. Refresh to try again';
+            alert.disabled = true;
+        }
+    }
+
     const api = workspace.dataset.api;
     const csrf = workspace.dataset.csrf;
     const waiverDialog = document.getElementById('gcash-admin-waiver-dialog');
@@ -84,6 +116,7 @@
             const body = html.getElementById('gcash-admin-history-body');
             if (!body) throw new Error('Unable to load transactions. Reload the page and try again.');
             document.getElementById('gcash-admin-history-body').replaceChildren(...body.childNodes);
+            refreshReviews(html);
             workspace.querySelector('.gcash-pagination').replaceWith(html.querySelector('.gcash-pagination'));
             for (const selector of ['#gcash-completed-activity', '[aria-labelledby="gcash-admin-balances-title"]']) {
                 workspace.querySelector(selector).replaceWith(html.querySelector(selector));
@@ -103,6 +136,7 @@
             return true;
         } catch (error) {
             if (error.name !== 'AbortError' && filterRequest === controller) {
+                markReviewsUnavailable();
                 status.textContent = error.message + ' Report totals are unavailable for this selection.';
                 workspace.querySelectorAll('#gcash-completed-activity .gcash-card-value, #admin-metric-total-tx').forEach(value => { value.textContent = 'Unavailable'; });
             }
@@ -180,14 +214,16 @@
 
     const verifyDialog = document.getElementById('gcash-verify-dialog');
     const verifyForm = document.getElementById('gcash-verify-form');
-    workspace.querySelectorAll('.gcash-verify').forEach(button => button.addEventListener('click', () => {
+    workspace.addEventListener('click', event => {
+        const button = event.target.closest('.gcash-verify');
+        if (!button) return;
         verifyForm.reset();
         document.getElementById('gcash-verify-tx').value = button.dataset.transactionId;
         document.getElementById('gcash-verify-id').textContent = button.dataset.transactionId;
         document.getElementById('gcash-verify-reference').value = button.dataset.reference;
         document.getElementById('gcash-verify-error').textContent = '';
         verifyDialog.showModal();
-    }));
+    });
     verifyForm.addEventListener('submit', async event => {
         event.preventDefault();
         const button = verifyForm.querySelector('[type="submit"]');
@@ -200,7 +236,9 @@
             });
             const result = await response.json();
             if (!response.ok || result.error) throw new Error(result.error || 'Unable to verify the exchange. Try again.');
-            location.reload();
+            verifyDialog.close();
+            await filterTransactions();
+            button.disabled = false;
         } catch (error) {
             document.getElementById('gcash-verify-error').textContent = error.message;
             button.disabled = false;
@@ -208,8 +246,9 @@
     });
 
     // Attach waiver dialog openers
-    document.querySelectorAll('.admin-btn-waive').forEach(btn => {
-        btn.addEventListener('click', () => {
+    workspace.addEventListener('click', event => {
+            const btn = event.target.closest('.admin-btn-waive');
+            if (!btn) return;
             if (!waiverDialog) return;
             const sessId = btn.dataset.sessionId;
             const cashier = btn.dataset.cashier;
@@ -230,7 +269,6 @@
 
             waiverDialog.showModal();
             waiverNotes.focus();
-        });
     });
 
     if (waiverCancelBtn && waiverDialog) {
@@ -277,8 +315,7 @@
 
                 waiverDialog.close();
 
-                // Reload to refresh the tables and audit records
-                window.location.reload();
+                await filterTransactions();
             } catch (err) {
                 if (waiverError) {
                     waiverError.textContent = err.message || 'An unexpected error occurred.';

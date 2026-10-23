@@ -123,8 +123,8 @@ function gcash_admin_money(mixed $val): string {
                 <button type="button" role="tab" id="gcash-tab-<?= $key ?>" aria-controls="tab-<?= $key ?>" aria-selected="<?= $key === $activeTab ? 'true' : 'false' ?>" tabindex="<?= $key === $activeTab ? '0' : '-1' ?>">
                     <?= $label ?>
                     <?php if ($key === 'transactions'): ?><span class="gcash-badge"><?= (int)($overview['total_transactions'] ?? 0) ?></span><?php endif; ?>
-                    <?php if ($key === 'reconciliation'): ?><span class="gcash-badge"><?= empty($overview['differences_count']) ? 'Clean (0)' : 'Discrepancy (' . (int)$overview['differences_count'] . ')' ?></span><?php endif; ?>
-                    <?php if ($key === 'unresolved'): ?><span class="gcash-badge <?= !empty($overview['unresolved_count']) ? 'gcash-status-needs-checking' : '' ?>"><?= (int)($overview['unresolved_count'] ?? 0) ?></span><?php endif; ?>
+                    <?php if ($key === 'reconciliation'): ?><span class="gcash-badge"><?= $overview === null ? 'Unavailable' : 'Pending (' . (int)$overview['differences_count'] . ')' ?></span><?php endif; ?>
+                    <?php if ($key === 'unresolved'): ?><span class="gcash-badge <?= !empty($overview['unresolved_count']) ? 'gcash-status-needs-checking' : '' ?>"><?= $overview === null ? 'Unavailable' : (int)$overview['unresolved_count'] ?></span><?php endif; ?>
                 </button>
             <?php endforeach; ?>
         </nav>
@@ -136,56 +136,41 @@ function gcash_admin_money(mixed $val): string {
         <?php endif; ?>
 
         <div id="tab-overview" role="tabpanel" aria-labelledby="gcash-tab-overview" tabindex="0" <?= $activeTab !== 'overview' ? 'hidden' : '' ?>>
-        <!-- SECTION 1: Current Store-wide Expected Balances (unaffected by historical date filters) -->
+        <?php $funds = $overview['recorded_balances'] ?? null; ?>
         <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-admin-balances-title">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
                     <div class="pos-panel-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></div>
                     <div>
-                        <h2 id="gcash-admin-balances-title">Current Expected Balances</h2>
-                        <p>Expected service cash and wallet funds from the current or latest counted session. Date filters do not change these balances.</p>
+                        <h2 id="gcash-admin-balances-title">Recorded Service Funds</h2>
+                        <p>Expected amounts follow recorded movements in an open session. Last counted amounts are closing actual counts. These are not a live GCash app balance; reporting and list filters do not change them.</p>
                     </div>
                 </div>
-                <div>
-                    <span class="gcash-status <?= ($overview['session_status'] ?? '') === 'open' ? 'gcash-status-completed' : '' ?>" id="admin-session-status">
-                        Session: <?= gcash_admin_e(ucfirst($overview['session_status'] ?? 'None')) ?>
-                    </span>
-                </div>
+                <span class="gcash-status <?= ($funds['session_status'] ?? '') === 'open' ? 'gcash-status-completed' : '' ?>" id="admin-session-status">
+                    <?= $funds === null ? 'Session unavailable' : ($funds['session_id'] === null ? 'No recorded session' : 'Session #' . (int)$funds['session_id'] . ' / ' . ucfirst($funds['session_status'])) ?>
+                </span>
             </div>
             <div class="gcash-overview-grid gcash-balances-grid">
+                <?php foreach (['cash' => ['GCash Service Cash', 'service_cash'], 'wallet' => ['GCash Service Wallet', 'wallet_balance']] as $key => [$label, $amountKey]):
+                    $amount = $funds[$amountKey] ?? null;
+                    $evidenceLabel = $funds === null ? 'Unavailable' : ($amount === null ? 'Not recorded' : ($funds['state'] === 'expected' ? 'Expected' : 'Last counted'));
+                ?>
                 <div class="gcash-card gcash-card-balance">
                     <div class="gcash-card-header">
-                        <span class="gcash-card-label">Physical Service Cash</span>
-                        <span class="gcash-badge gcash-badge-expected">Expected</span>
+                        <span class="gcash-card-label"><?= $label ?></span>
+                        <span class="gcash-badge gcash-badge-expected" id="admin-<?= $key ?>-state"><?= $evidenceLabel ?></span>
                     </div>
-                    <div class="gcash-card-value" id="admin-expected-cash"><?= gcash_admin_money($overview['current_expected_service_cash'] ?? 0) ?></div>
-                    <div class="gcash-card-sub" id="admin-cash-checked">
-                        Last check: <?= gcash_admin_e($overview['last_checked_formatted'] ?? '—') ?>
-                        <?php if (!empty($overview['controlling_cashier_name'])): ?>
-                            &middot; Controller: <?= gcash_admin_e($overview['controlling_cashier_name']) ?>
+                    <div class="gcash-card-value" id="admin-expected-<?= $key ?>"><?= $amount === null ? $evidenceLabel : gcash_admin_money($amount) ?></div>
+                    <div class="gcash-card-sub" id="admin-<?= $key ?>-checked">
+                        Last actual check: <?= gcash_admin_e($funds['checked_at_formatted'] ?? 'Not recorded') ?>
+                        <?php if (!empty($funds['cashier_name'])): ?>
+                            &middot; Responsible Cashier: <?= gcash_admin_e($funds['cashier_name']) ?>
                         <?php endif; ?>
                     </div>
                 </div>
-                <div class="gcash-card gcash-card-balance">
-                    <div class="gcash-card-header">
-                        <span class="gcash-card-label">GCash App Wallet</span>
-                        <span class="gcash-badge gcash-badge-expected">Expected</span>
-                    </div>
-                    <div class="gcash-card-value" id="admin-expected-wallet"><?= gcash_admin_money($overview['current_expected_wallet_balance'] ?? 0) ?></div>
-                    <div class="gcash-card-sub" id="admin-wallet-checked">
-                        Last check: <?= gcash_admin_e($overview['last_checked_formatted'] ?? '—') ?>
-                        <?php if (!empty($overview['controlling_cashier_name'])): ?>
-                            &middot; Controller: <?= gcash_admin_e($overview['controlling_cashier_name']) ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <div class="gcash-card gcash-card-balance gcash-card-combined">
-                    <div class="gcash-card-header"><span class="gcash-card-label">Combined Float Position</span><span class="gcash-badge">Expected</span></div>
-                    <div class="gcash-card-value"><?= gcash_admin_money(($overview['current_expected_service_cash'] ?? 0) + ($overview['current_expected_wallet_balance'] ?? 0)) ?></div>
-                    <div class="gcash-card-sub">Service cash + GCash Service Wallet</div>
-                    <div class="gcash-card-sub">Recorded funds; not a live GCash app sync.</div>
-                </div>
+                <?php endforeach; ?>
             </div>
+            <p class="gcash-card-sub" id="admin-combined-funds">Combined recorded funds: <?= $funds === null ? 'Unavailable' : (($funds['service_cash'] === null || $funds['wallet_balance'] === null) ? 'Not recorded' : gcash_admin_money($funds['service_cash'] + $funds['wallet_balance'])) ?>. Assess each fund separately; the combined amount does not establish that either fund is sufficient.</p>
         </section>
 
         <section class="pos-panel gcash-overview-section" id="gcash-reporting-scope" aria-label="Shared reporting scope" data-today="<?= gcash_admin_e(PhilippineTime::today()) ?>">
@@ -232,7 +217,22 @@ function gcash_admin_money(mixed $val): string {
         </section>
 
         <!-- SECTION 3: Filtered Activity Totals -->
+
+        <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-outstanding-title" id="gcash-outstanding-reviews">
+            <h2 id="gcash-outstanding-title">Outstanding reviews</h2>
+            <p>Store-wide &middot; All dates &middot; All Cashiers. Reporting and transaction filters do not narrow these reviews.</p>
+            <?php if ($overview === null): ?>
+                <p role="alert">Outstanding reviews unavailable. Refresh to try again.</p>
+            <?php else: ?>
+                <div class="gcash-actions">
+                    <button type="button" class="btn btn-secondary" data-review-tab="unresolved">Review unresolved exchanges (<?= (int)$overview['unresolved_count'] ?>)</button>
+                    <button type="button" class="btn btn-secondary" data-review-tab="reconciliation">Review closing discrepancies (<?= (int)$overview['differences_count'] ?> pending)</button>
+                </div>
+            <?php endif; ?>
+        </section>
+
         <section class="pos-panel gcash-overview-section" id="gcash-completed-activity" aria-labelledby="gcash-admin-metrics-title">
+
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
                     <div class="pos-panel-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
@@ -405,7 +405,7 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-diff-title">Reconciliation Differences</h2>
-                        <p>Closed sessions across all dates with cash or wallet variances. Waiving a discrepancy does not change the recorded variance.</p>
+                        <p>Store-wide &middot; All dates &middot; All Cashiers. Closed sessions with cash or wallet variances. Waiving a discrepancy does not change the recorded variance.</p>
                     </div>
                 </div>
             </div>
@@ -428,7 +428,9 @@ function gcash_admin_money(mixed $val): string {
                         </tr>
                     </thead>
                     <tbody id="gcash-admin-diff-body">
-                        <?php if (empty($overview['reconciliation_differences'])): ?>
+                        <?php if ($overview === null): ?>
+                            <tr><td colspan="12" role="alert">Reconciliation history unavailable. Refresh to try again.</td></tr>
+                        <?php elseif (empty($overview['reconciliation_differences'])): ?>
                             <tr>
                                 <td colspan="12" class="gcash-empty-msg gcash-empty-cell">No Reconciliation Differences Recorded. All recorded sessions have zero variance.</td>
                             </tr>
@@ -437,7 +439,7 @@ function gcash_admin_money(mixed $val): string {
                                 <tr data-session-id="<?= gcash_admin_e($diff['session_id']) ?>">
                                     <td><strong>#<?= gcash_admin_e($diff['session_id']) ?></strong> (Shift #<?= gcash_admin_e($diff['shift_id']) ?>)</td>
                                     <td><?= gcash_admin_e($diff['cashier_name']) ?></td>
-                                    <td><?= gcash_admin_e($diff['closed_at_formatted'] ?: $diff['closed_at']) ?></td>
+                                    <td><?= gcash_admin_e($diff['closed_at_formatted'] ?: $diff['closed_at']) ?><small>Closed by <?= gcash_admin_e($diff['closed_by_name'] ?? 'Not recorded') ?></small></td>
                                     <td><?= gcash_admin_money($diff['expected_service_cash']) ?></td>
                                     <td><?= gcash_admin_money($diff['closing_service_cash']) ?></td>
                                     <td class="<?= $diff['cash_variance'] > 0 ? 'gcash-variance-positive' : ($diff['cash_variance'] < 0 ? 'gcash-variance-negative' : 'gcash-variance-zero') ?>">
@@ -488,12 +490,12 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-nc-title">Unresolved Activity (Needs Checking)</h2>
-                        <p>Open exchanges across all dates that need confirmation or resolution. Expected balances include recorded partial movements.</p>
+                        <p>Store-wide &middot; All dates &middot; All Cashiers. Open exchanges that need confirmation or resolution. Expected balances include recorded partial movements.</p>
                     </div>
                 </div>
                 <div>
                     <span class="gcash-badge <?= !empty($overview['unresolved_activity']) ? 'gcash-status-needs-checking' : '' ?>" id="admin-nc-count-badge">
-                        Pending: <strong id="admin-nc-count"><?= (int)($overview['unresolved_count'] ?? 0) ?></strong>
+                        Pending: <strong id="admin-nc-count"><?= $overview === null ? 'Unavailable' : (int)$overview['unresolved_count'] ?></strong>
                     </span>
                 </div>
             </div>
@@ -514,7 +516,9 @@ function gcash_admin_money(mixed $val): string {
                         </tr>
                     </thead>
                     <tbody id="gcash-admin-nc-body">
-                        <?php if (empty($overview['unresolved_activity'])): ?>
+                        <?php if ($overview === null): ?>
+                            <tr><td colspan="10" role="alert">Unresolved activity unavailable. Refresh to try again.</td></tr>
+                        <?php elseif (empty($overview['unresolved_activity'])): ?>
                             <tr>
                                 <td colspan="10" class="gcash-empty-msg gcash-empty-cell">No Unresolved Activity Pending.</td>
                             </tr>
@@ -562,7 +566,7 @@ function gcash_admin_money(mixed $val): string {
 
         <dialog id="gcash-verify-dialog" aria-labelledby="gcash-verify-title">
             <h2 id="gcash-verify-title">Verify &amp; Clear Exchange</h2>
-            <p>Confirm the actual exchange against the GCash app and service cash before completing transaction #<strong id="gcash-verify-id"></strong>. This books the remaining ledger movement and creates an audit record.</p>
+            <p>Confirm the actual exchange against the GCash app and service cash before completing transaction #<strong id="gcash-verify-id"></strong>. This completes the exchange, posts only the remaining movements, and creates an audit record. Previously posted partial movements stay recorded and are not posted again.</p>
             <form id="gcash-verify-form">
                 <input type="hidden" id="gcash-verify-tx">
                 <div class="gcash-field"><label for="gcash-verify-reference">GCash reference number</label><input class="form-control" id="gcash-verify-reference" required inputmode="numeric" pattern="[0-9]{13}" minlength="13" maxlength="13"></div>
