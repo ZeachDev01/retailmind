@@ -43,3 +43,7 @@ Finish review identified one scored fix: long tables made a 50-row page excessiv
 - Final focused `gcash_admin_overview_browser_test.js` passed: Today/Month-to-date/custom scopes, independent fund and review evidence, all 105 filtered CSV rows across three pages, safe legacy/formula content, an isolated HTTP staging failure returning 503 without an attachment, request races, bounded tables, keyboard tabs, linked-adjustment details, authorization/CSRF, waiver and Verify & Clear.
 - Final QA captures in `.impeccable/review/`: `desktop.png`, `mobile.png`, `desktop-transactions.png`, `mobile-transactions.png`, `desktop-reconciliation.png`, `mobile-reconciliation.png`, `desktop-unresolved.png`, `mobile-unresolved.png`. Desktop: 1440×1080; mobile: 390×1080. These are QA screenshots, not shipping rasters; raster provenance does not apply.
 - No claim of exhaustive screen-reader, dark-theme, cross-browser or external GCash synchronization verification. Detector ran once; its advisories did not authorize a global redesign.
+
+## Specification #276 finish
+
+Disposition: ship. Desktop and mobile captures retain the four task sections, separate fund evidence, shared controls and bounded review tables. Standards review found no material issues. Both specification findings were fixed and verified: legacy unresolved fees/movements remain Not recorded, and failed review loads clear the inner pending count to Unavailable. Final Administrator and Cashier browser suites, each with disposable MySQL integration, passed after those fixes.
