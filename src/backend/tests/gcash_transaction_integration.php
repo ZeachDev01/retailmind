@@ -62,6 +62,8 @@ if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--
     }
     exit;
 }
+$emptyBalances = $service->adminOverview(['actor_role' => 'admin'])['recorded_balances'];
+$check(is_array($emptyBalances) && $emptyBalances['service_cash'] === null && $emptyBalances['wallet_balance'] === null && $emptyBalances['session_status'] === null, 'No session means no recorded funds, not zero.');
 $snapshot = static fn() => $pdo->query('SELECT (SELECT COUNT(*) FROM sales), (SELECT COALESCE(SUM(total_amount),0) FROM sales), (SELECT COUNT(*) FROM cash_drawer_movements), (SELECT SUM(opening_cash) FROM cashier_shifts)')->fetch(PDO::FETCH_NUM);
 $before = $snapshot();
 $id = $service->save(4, '0000 0000 00001', '0.01', 'Payment');
@@ -1101,6 +1103,12 @@ $refuse(static fn() => $service->adminOverview([]));
 
 // 2. Admin access granted and current expected balances computed
 $adminOv = $service->adminOverview(['actor_role' => 'admin']);
+$funds = $adminOv['recorded_balances'];
+$check($funds['state'] === 'expected' && $funds['service_cash'] === $adminOv['current_expected_service_cash'] && $funds['cashier_id'] === 4 && $funds['checked_at'] !== null, 'Open recorded funds derive from movements and retain the opening actual check.');
+foreach ([['search' => 'missing'], ['type' => 'Cash-Out'], ['cashier_id' => 1], ['start_date' => '2020-01-01', 'end_date' => '2020-01-02']] as $selection) {
+    $check($service->adminOverview(['actor_role' => 'admin'] + $selection)['recorded_balances'] === $funds, 'Recorded evidence is independent of every reporting/list filter.');
+}
+
 $superOv = $service->adminOverview(['actor_role' => 'super_admin']);
 $check($adminOv['current_expected_balances']['expected_service_cash'] > 0, 'Current expected service cash computed');
 $check($adminOv['current_expected_balances']['expected_wallet_balance'] > 0, 'Current expected wallet balance computed');
@@ -1188,6 +1196,18 @@ $check((float)$closeResult['cash_variance'] === -20.00, 'Session 10 closed with 
 
 $afterCloseOv = $service->adminOverview(['actor_role' => 'admin']);
 $check($afterCloseOv['session_status'] === 'closed', 'Session status now closed');
+$evidence = $afterCloseOv['recorded_balances'];
+$check($evidence['state'] === 'last_counted' && $evidence['service_cash'] === (float)$closeResult['closing_service_cash'] && $evidence['cashier_id'] === 4 && $evidence['session_id'] === $sess10 && $evidence['checked_at'] !== null, 'Closed funds retain counted amounts, session responsibility and closing time.');
+$pdo->beginTransaction();
+try {
+    $pdo->exec("UPDATE gcash_service_sessions SET closing_service_cash = NULL, closing_wallet_balance = 0 WHERE session_id = {$sess10}");
+    $partial = $service->adminOverview(['actor_role' => 'admin'])['recorded_balances'];
+    $check($partial['service_cash'] === null && $partial['wallet_balance'] === 0.0 && $partial['checked_at'] === $evidence['checked_at'], 'Missing cash never falls back to expected; genuine counted wallet zero retains its evidence.');
+    $pdo->exec("UPDATE gcash_service_sessions SET closing_service_cash = 0, closing_wallet_balance = NULL WHERE session_id = {$sess10}");
+    $partial = $service->adminOverview(['actor_role' => 'admin'])['recorded_balances'];
+    $check($partial['service_cash'] === 0.0 && $partial['wallet_balance'] === null, 'Missing wallet and counted cash zero remain independent.');
+} finally { $pdo->rollBack(); }
+
 $check($afterCloseOv['differences_count'] >= 1, 'Reconciliation differences tracked');
 $sess10Diff = null;
 foreach ($afterCloseOv['reconciliation_differences'] as $diff) {
