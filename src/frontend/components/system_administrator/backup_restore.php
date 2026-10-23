@@ -1,10 +1,8 @@
 <?php
 // Super Administrator Database Backup and Database Restore (ticket #69).
 //
-// This page keeps the whole platform recovery surface: the shared SQL
-// Database Backup workflow, the destructive Database Restore that only the
-// Super Administrator may run, and the full backup history including the
-// restricted recovery rows.
+// Shared encrypted capture, read-only Super Administrator package preflight,
+// and restricted backup history. Package replacement is a separate workflow.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
@@ -45,37 +43,20 @@ $invalidField = '';
 // Operator Alert boundary lines. The full exception text always goes to the log and the
 // Protected Audit Record trail; the operator only ever sees these easy sentences.
 $backupFailureLine = 'The backup could not be created. Check free space and your connection, then try again. Tell your Super Administrator if this keeps happening.';
-$restoreFailureLine = 'The restore could not be completed. Check the backup file and try again. Tell your Super Administrator if this keeps happening.';
 $download = null;
+$preflight = null;
 $service = new DatabaseBackupService($pdo, role_capability_policy());
 $restorer = new DatabaseRestoreService($pdo, role_capability_policy(), $service);
 $actorUserId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
 $maxUploadBytes = $restorer->supportedUploadBytes();
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-$renderStandalonePage = static function (string $title, string $heading, string $bodyHtml) use ($escape): void {
-    header('Content-Type: text/html; charset=utf-8');
-    $stylesheetUrl = $escape(theme_url('assets/css/style.css'));
-    $restoreStylesheetUrl = $escape(app_url('assets/css/backup_restore.css'));
-    echo '<!doctype html><html lang="en"><head>';
-    require_once __DIR__ . '/../../../backend/includes/theme.php';
-    retailmind_theme_head();
-    echo '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-        . '<title>' . $escape($title) . '</title>'
-        . '<link rel="stylesheet" href="' . $stylesheetUrl . '">'
-        . '<link rel="stylesheet" href="' . $restoreStylesheetUrl . '"></head>'
-        . '<body class="database-backup-page database-restore-page"><main class="main-content recovery-standalone">'
-        . '<section class="dashboard-section"><h1>' . $escape($heading) . '</h1>'
-        . $bodyHtml
-        . '</section></main></body></html>';
-};
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $action = (string)($_POST['action'] ?? '');
     if ($action === 'backup') {
         try {
-            $result = $service->create($actorUserId, $actorRole);
+            $result = $service->create($actorUserId, $actorRole, (string)($_POST['backup_passphrase'] ?? ''));
             if (($result['status'] ?? '') === DatabaseBackupService::OUTCOME_IN_PROGRESS) {
                 $message = DatabaseBackupService::IN_PROGRESS_LINE;
                 $messageClass = 'tag-warning';
@@ -85,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'size' => (int)$result['size'],
                     'snapshot_at' => (string)$result['snapshot_at'],
                 ]);
-                $message = 'Your SQL backup is ready. Download it and keep it somewhere other than the application server.';
+                $message = 'Your encrypted backup is ready. Download it and keep it somewhere other than the application server.';
                 $messageClass = 'tag-success';
                 $download = [
                     'filename' => (string)$result['filename'],
@@ -99,51 +80,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageClass = 'tag-warning';
         }
     }
-    if ($action === 'restore') {
+    if ($action === 'preflight' || $action === 'restore') {
         $file = $_FILES['backup_file'] ?? null;
-        if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
-            $message = 'Select a valid RetailMind SQL backup file.';
+        if (!$file || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file((string)$file['tmp_name'])) {
+            $message = 'Select a valid encrypted RetailMind package (.rmpkg). ' . $restorer->supportedSizeLine();
             $messageClass = 'tag-warning';
             $invalidField = 'file';
         } elseif ((int)$file['size'] > $maxUploadBytes) {
-            $message = 'The restore file is larger than this server accepts. ' . $restorer->supportedSizeLine();
+            $message = 'The package is larger than this server accepts. ' . $restorer->supportedSizeLine();
             $messageClass = 'tag-warning';
             $invalidField = 'file';
         } else {
-            $filename = basename((string)$file['name']);
             try {
-                $outcome = $restorer->restore($actorUserId, $actorRole, (string)$file['tmp_name'], $filename, (string)($_POST['restore_password'] ?? ''));
-                \App\Core\Session::destroy();
-                $renderStandalonePage(
-                    'Database restored',
-                    'Database restored',
-                    '<p class="recovery-intro" role="status">' . $escape($outcome['message']) . '</p>'
-                    . '<p class="recovery-standalone-actions"><a class="btn btn-primary" href="' . $escape(app_url('?login=1')) . '">Sign in</a></p>'
-                );
-                exit;
-            } catch (Throwable $e) {
-                if (RecoveryStore::isPaused()) {
-                    error_log('Incomplete restore: ' . $e->getMessage());
-                    http_response_code(503);
-                    $renderStandalonePage(
-                        'Database recovery required',
-                        'Database recovery required',
-                        '<div class="alert tag-warning" role="alert">Restoration stopped before completion. Store access remains blocked. Use the offline restore command to recover with the retained safety backup. See docs/BACKUP_RECOVERY.md.</div>'
-                    );
-                    exit;
-                }
-                if (!RecoveryStore::admitRequest()) {
-                    http_response_code(503);
-                    $renderStandalonePage(
-                        'Database recovery in progress',
-                        'Database recovery in progress',
-                        '<div class="alert tag-warning" role="alert">Database recovery is in progress. Try again later.</div>'
-                    );
-                    exit;
-                }
-                $message = \App\Support\OperatorAlert::message($e, $restoreFailureLine);
+                $preflight = $restorer->preflight($actorUserId, $actorRole, (string)$file['tmp_name'],
+                    (string)$file['name'], (string)($_POST['restore_password'] ?? ''), (string)($_POST['backup_passphrase'] ?? ''));
+                $message = (string)$preflight['message'];
+                $messageClass = $preflight['valid'] ? 'tag-success' : 'tag-warning';
+            } catch (DomainException $e) {
+                $message = $e->getMessage();
                 $messageClass = 'tag-warning';
                 $invalidField = 'restore';
+            } catch (Throwable $e) {
+                $message = \App\Support\OperatorAlert::message($e, 'The package could not be validated. No Store records or files were replaced.');
+                $messageClass = 'tag-warning';
             }
         }
     }
@@ -192,22 +151,24 @@ try {
                     <div class="recovery-panel-heading">
                         <h2 id="create-title">Create backup</h2>
                     </div>
-                    <form method="post" class="backup-create-form"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn btn-primary" data-backup-create>Create SQL backup</button></form>
-                    <div class="backup-storage-note"><strong>Unencrypted:</strong> includes password hashes and restricted audit history. Keep private on separate storage.</div>
-                    <details class="restore-details"><summary>Backup details</summary><ul class="backup-guidance"><li>Copies all Store records, accounts, settings, and audit history at one point in time.</li><li>Saving pauses briefly during capture, then resumes.</li><li>Completed means created; it does not confirm the file was safely stored. Download and verify it separately.</li></ul></details>
+                    <form method="post" class="backup-create-form"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><div class="form-group"><label for="backup-passphrase">New backup passphrase</label><input id="backup-passphrase" type="password" name="backup_passphrase" autocomplete="new-password" minlength="16" maxlength="1024" required></div><button type="submit" class="btn btn-primary" data-backup-create>Create encrypted backup</button></form>
+                    <div class="backup-storage-note"><strong>Encrypted package:</strong> includes all records and uploaded Product/profile images. Keep the package and passphrase off-server, in separate safe places.</div>
+                    <details class="restore-details"><summary>Backup details</summary><ul class="backup-guidance"><li>Copies Store records and required uploaded images at one point in time.</li><li>Saving pauses briefly during capture, then resumes.</li><li>Losing every passphrase copy makes this package unusable; changing a login password cannot recover it.</li><li>Completed means created; it does not confirm the file was safely stored. Download and verify it separately.</li></ul></details>
                     <?php if (is_file(RecoveryStore::path('latest-safety.sql'))): ?>
                         <div class="backup-safety"><a href="<?= $escape(app_url('components/backup/safety_download.php')) ?>">Download latest pre-restore safety backup</a></div>
                     <?php endif; ?>
                 </section>
                 <section class="dashboard-section backup-restore-panel" aria-labelledby="restore-title">
-                    <div class="recovery-panel-heading"><h2 id="restore-title">Restore backup</h2></div>
-                    <div class="restore-warning" id="restore-warning"><strong>This replaces the entire database, including accounts, passwords, settings, and audit history.</strong><p>Newer records are lost. Undo requires another restore.</p></div>
-                    <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="restore">
-                        <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>"><label for="backup-file">Trusted RetailMind SQL backup</label><p class="restore-file-hint" id="backup-file-hint">Max <?= number_format($maxUploadBytes / 1048576, 1) ?> MB</p><div class="restore-file-field"><input id="backup-file" type="file" name="backup_file" accept=".sql" aria-describedby="backup-file-hint<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required></div></div>
-                        <div class="form-group<?= $invalidField === 'restore' ? ' invalid' : '' ?>"><label for="restore-password">Current password</label><input id="restore-password" type="password" name="restore_password" autocomplete="current-password"<?= $invalidField === 'restore' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required></div>
-                        <button type="submit" class="btn btn-danger" data-backup-restore aria-describedby="restore-warning">Restore database</button>
+                    <div class="recovery-panel-heading"><h2 id="restore-title">Validate backup</h2></div>
+                    <div class="restore-warning" id="restore-warning"><strong>Read-only package validation. No records or uploaded files are replaced.</strong><p>Validation does not authorize replacement. Plaintext SQL and old encrypted formats are not accepted here. Keep old recovery copies privately.</p></div>
+                    <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="preflight">
+                        <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>"><label for="backup-file">Trusted encrypted RetailMind package</label><p class="restore-file-hint" id="backup-file-hint">.rmpkg only · Max <?= number_format($maxUploadBytes / 1048576, 1) ?> MB</p><div class="restore-file-field"><input id="backup-file" type="file" name="backup_file" accept=".rmpkg" aria-describedby="backup-file-hint<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required></div></div>
+                        <div class="form-group"><label for="restore-password">Current destination login password</label><input id="restore-password" type="password" name="restore_password" autocomplete="current-password"<?= $invalidField === 'restore' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required></div>
+                        <div class="form-group"><label for="restore-passphrase">This package's original backup passphrase</label><input id="restore-passphrase" type="password" name="backup_passphrase" autocomplete="off" maxlength="1024"<?= $invalidField === 'restore' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required></div>
+                        <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning">Validate package</button>
                     </form>
-                    <details class="restore-details"><summary>Restore details</summary><ul class="backup-guidance"><li>Only trusted RetailMind .sql files are supported; older .rmbak files cannot be restored.</li><li>A safety backup is saved before replacement.</li><li>Store access is blocked during replacement.</li><li>Everyone signs in again with the backup's credentials.</li><li>A failed restore blocks Store access until offline recovery.</li></ul></details>
+                    <?php if ($preflight): ?><div class="preflight-result" role="status"><p><?= (int)$preflight['files'] ?> uploaded files · <?= number_format((int)$preflight['bytes'] / 1048576, 1) ?> MB · Snapshot <?= $escape($preflight['snapshot_at']) ?></p><?php if ($preflight['conflicts']): ?><h3>Identity conflicts to resolve before replacement</h3><ul><?php foreach ($preflight['conflicts'] as $conflict): ?><li><?= $escape($conflict['kind']) ?>: source user <?= (int)$conflict['source_id'] ?>, destination user <?= (int)$conflict['destination_id'] ?> — <?= $escape($conflict['message']) ?></li><?php endforeach; ?></ul><?php endif; ?><p>No Store records or files were replaced.</p></div><?php endif; ?>
+                    <details class="restore-details"><summary>Passphrase custody</summary><p>Keep an independent passphrase recovery copy outside both servers. Losing all copies makes this package unusable; changing a login password cannot decrypt it.</p></details>
                 </section>
             </div>
 

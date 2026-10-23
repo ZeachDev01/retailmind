@@ -5,7 +5,7 @@ require_once __DIR__ . '/../../../includes/auth.php';
 use App\Authorization\RoleCapabilityPolicy;
 
 require_capability(RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'restore') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['restore', 'preflight'], true)) {
     require_capability(RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 }
 

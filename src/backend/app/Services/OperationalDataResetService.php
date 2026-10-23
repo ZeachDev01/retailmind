@@ -106,7 +106,7 @@ final class OperationalDataResetService
         }
     }
 
-    public function reset(int $actorId, string $role, string $password, string $confirmation): array
+    public function reset(int $actorId, string $role, string $password, string $confirmation, #[\SensitiveParameter] string $backupPassphrase): array
     {
         if (!$this->policy->allows($role, RoleCapabilityPolicy::RESET_OPERATIONAL_DATA)) {
             throw new DomainException('Only a Super Administrator can reset data.');
@@ -132,7 +132,7 @@ final class OperationalDataResetService
             if (!$forecastLock) throw new DomainException('Forecast training is running. Wait for it to finish, then try again.');
             $blockers = $this->blockers();
             if ($blockers) throw new DomainException(implode(' ', $blockers));
-            $backup = (new DatabaseBackupService($this->pdo, $this->policy))->create($actorId, $role);
+            $backup = (new DatabaseBackupService($this->pdo, $this->policy))->create($actorId, $role, $backupPassphrase, $requestLock);
             if ($backup['status'] !== DatabaseBackupService::OUTCOME_READY) {
                 throw new DomainException('A backup is already running. Wait for it to finish before resetting data.');
             }

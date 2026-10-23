@@ -1,8 +1,8 @@
 <?php
 // Administrator Database Backup (ticket #69).
 //
-// The Administrator may download the complete readable database. In-app history
-// stays limited; restoration and platform governance remain Super Administrator-only.
+// Both administrator roles capture encrypted Store packages. In-app history
+// stays limited; this screen does not authorize replacement.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
     if ($action === 'backup') {
         try {
-            $result = $service->create($actorUserId, $actorRole);
+            $result = $service->create($actorUserId, $actorRole, (string)($_POST['backup_passphrase'] ?? ''));
             if (($result['status'] ?? '') === DatabaseBackupService::OUTCOME_IN_PROGRESS) {
                 $message = DatabaseBackupService::IN_PROGRESS_LINE;
                 $messageClass = 'tag-warning';
@@ -81,7 +81,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
                     <h2 id="backup-ready-title">Your backup is ready</h2>
-                    <p class="section-description">Download <?= $escape($download['filename']) ?> and store it separately. A completed download does not confirm it was saved.</p>
+                    <p class="section-description">Download <?= $escape($download['filename']) ?> and store it separately. Creation does not confirm the file was saved on your device.</p>
                     <p><a class="btn" href="<?= $escape($download['url']) ?>" data-backup-download>Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
                 </section>
             <?php endif; ?>
@@ -90,17 +90,17 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 <section class="dashboard-section">
                     <h2>Create backup</h2>
                     <p class="section-description">Saving pauses briefly while RetailMind creates a consistent copy.</p>
-                    <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button type="submit" class="btn" data-backup-create>Create backup</button></form>
+                    <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><div class="form-group"><label for="backup-passphrase">New backup passphrase</label><input id="backup-passphrase" type="password" name="backup_passphrase" autocomplete="new-password" minlength="16" maxlength="1024" required></div><button type="submit" class="btn" data-backup-create>Create backup</button></form>
                 </section>
                 <section class="dashboard-section">
                     <h2>Keeping your copy safe</h2>
                     <ul class="backup-guidance">
-                        <li>Unencrypted: contains all records, password hashes, and restricted audit history. Keep private.</li>
-                        <li>Store outside this server, such as removable storage or private cloud.</li>
-                        <li>Only your Super Administrator may restore it.</li>
+                        <li>Encrypted package: includes all records and uploaded Product/profile images. Keep private.</li>
+                        <li>Keep a separate passphrase recovery copy outside both servers. Losing every copy makes this package unusable; resetting your login password cannot recover it.</li>
+                        <li>The Super Administrator can validate packages before replacement.</li>
                     </ul>
                     <?php if (!$restoreCapability): ?>
-                        <p class="backup-hint">Ask your Super Administrator to restore a backup.</p>
+                        <p class="backup-hint">Ask your Super Administrator to validate a backup.</p>
                     <?php endif; ?>
                 </section>
             </div>
