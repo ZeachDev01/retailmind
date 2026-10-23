@@ -541,15 +541,15 @@ function gcash_admin_money(mixed $val): string {
                                     <td><strong><?= gcash_admin_e($nc['transaction_type']) ?></strong></td>
                                     <td><?= gcash_admin_money($nc['principal_amount']) ?></td>
                                     <td>
-                                        <?= gcash_admin_money($nc['gross_fee']) ?>
+                                        <?= $nc['is_legacy'] ? 'Not recorded' : gcash_admin_money($nc['gross_fee']) ?>
                                         <?php if (!empty($nc['fee_location'])): ?>
                                             <small>(<?= gcash_admin_e(ucfirst($nc['fee_location'])) ?>)</small>
                                         <?php endif; ?>
                                     </td>
                                     <td>
                                         <small>
-                                            Cash: <?= ($nc['service_cash_delta'] > 0 ? '+' : '') . gcash_admin_money($nc['service_cash_delta']) ?><br>
-                                            Wallet: <?= ($nc['wallet_delta'] > 0 ? '+' : '') . gcash_admin_money($nc['wallet_delta']) ?>
+                                            Cash: <?= $nc['is_legacy'] ? 'Not recorded' : ($nc['service_cash_delta'] > 0 ? '+' : '') . gcash_admin_money($nc['service_cash_delta']) ?><br>
+                                            Wallet: <?= $nc['is_legacy'] ? 'Not recorded' : ($nc['wallet_delta'] > 0 ? '+' : '') . gcash_admin_money($nc['wallet_delta']) ?>
                                         </small>
                                     </td>
                                     <td><code><?= gcash_admin_e($nc['reference_number'] ?: '—') ?></code></td>
