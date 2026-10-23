@@ -35,6 +35,15 @@
 .sale-receipt .receipt-url { margin: 1mm 0 0; font-size: 10px; color: var(--theme-ink, #111); }
 .sale-receipt-footer { text-align: center; margin-top: 3mm; }
 .receipt-print-root { display: none; }
+.checkout-complete-banner { display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:1rem;align-items:center;padding:1rem 1.15rem;margin-bottom:1rem;border:1px solid #86efac;border-radius:14px;background:var(--theme-surface-soft, #f0fdf4);color: var(--theme-success-text, #166534); }
+.checkout-complete-icon { width:48px;height:48px;display:grid;place-items:center;border-radius:50%;background:var(--theme-success-surface, #dcfce7);font-size:1.5rem; }
+.checkout-complete-copy strong,.checkout-complete-copy span,.checkout-complete-change span,.checkout-complete-change strong { display:block; }
+.checkout-complete-copy strong { font-size:1.05rem; }
+.checkout-complete-copy span,.checkout-complete-change span { font-size:.8rem;color: var(--theme-success-text, #4d7c5b); }
+.checkout-complete-change { text-align:right; }
+.checkout-complete-change strong { font-size:1.45rem; }
+.receipt-actions .btn { display:inline-flex;align-items:center;gap:.4rem; }
+@media(max-width:640px){.checkout-complete-banner{grid-template-columns:auto 1fr}.checkout-complete-change{grid-column:1/-1;text-align:left;padding-top:.65rem;border-top:1px solid #bbf7d0}.receipt-actions{align-items:stretch;flex-direction:column}.receipt-actions .btn{justify-content:center}}
 .sale-receipt-dialog { width: min(600px, calc(100% - 24px)); max-width: calc(100% - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 0; border: 0; border-radius: 18px; color: var(--theme-ink, #1f2937); background: var(--theme-surface, #fff); box-shadow: 0 24px 64px rgba(15, 23, 42, .24); overflow-y: auto; }
 .sale-receipt-dialog::backdrop { background: rgba(15, 23, 42, .55); }
 .sale-receipt-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; position: sticky; top: 0; z-index: 1; background: var(--theme-surface, #fff); border-bottom: 1px solid var(--theme-border, #e5e7eb); }

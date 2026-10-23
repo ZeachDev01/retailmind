@@ -6,7 +6,7 @@ After completing a Cash Refund, the Cashier needs to see the customer's Refund R
 
 ## Solution
 
-Immediately show the saved Refund Receipt inline after a successful Cash Refund. Keep the original Sale Receipt unchanged. Provide a Print Refund Receipt button that opens the browser print dialog only when clicked. Retain the existing receipt fields, thermal preview, and configured paper width.
+Immediately show the saved Refund Receipt in a modal matching POS checkout after a successful Cash Refund. Keep the original Sale Receipt unchanged. Provide a Print Refund Receipt button that opens the browser print dialog only when clicked. Retain the existing receipt fields, thermal preview, and configured paper width.
 
 ## User Stories
 
@@ -41,7 +41,7 @@ Immediately show the saved Refund Receipt inline after a successful Cash Refund.
 - Canceling or retrying printing must not repeat the refund. Refreshes and reprints retrieve an existing receipt without creating another transaction.
 - Preserve existing receipt fields, exclusion of internal notes and stock classifications, saved transaction-time details, and current 80 mm or 58 mm paper-width behavior.
 - Preserve Cashier, Store, Cashier Shift, Register lock, and receipt authorization rules.
-- No new schema, public API, dependency, modal, or separate browser tab is required by this spec. Remain consistent with ADR-0006.
+- Reuse the POS checkout receipt dialog styling and behavior, including keyboard focus, Close, and Escape. Closing removes the saved receipt selection so refreshing keeps it dismissed; history can reopen it. No new schema, public API, dependency, or separate browser tab is required. Remain consistent with ADR-0006.
 
 ## Testing Decisions
 
@@ -58,7 +58,7 @@ Immediately show the saved Refund Receipt inline after a successful Cash Refund.
 
 - Automatic or silent printing, direct printer integration, printer purchase, and device-specific feed or cutter controls.
 - Replacement or edited Sale Receipts, cumulative refund summaries, or retained-item receipts.
-- Receipt redesign, new fields, new navigation, a receipt modal, or opening another browser tab.
+- Receipt paper redesign, new fields, new navigation, or opening another browser tab.
 - Changes to refund eligibility, approval, settlement, inventory, or accounting rules.
 - Changes to Sale Receipt behavior after checkout.
 
@@ -67,6 +67,14 @@ Immediately show the saved Refund Receipt inline after a successful Cash Refund.
 The final requirement is to show the receipt automatically, not print automatically. This supersedes the earlier interview answer requesting an automatic print dialog.
 
 Code inspection indicates that the existing implementation already redirects a completed refund to its saved inline Refund Receipt. End-to-end runtime behavior has been verified through the production completion flow, with one repair to the persistent-shell navigation described below.
+
+## Modal update — 2026-10-23
+
+The latest requirement replaces the inline receipt surface with a modal matching POS checkout. The existing completion GET and saved receipt remain unchanged. The refund page now uses the shared receipt dialog script and styles, with focus returning to receipt lookup after dismissal. Dialog initialization precedes the print script so a failed print-script load still leaves the saved receipt visible.
+
+The modal also reuses checkout's success banner and print-button treatment: “Refund completed”, the saved Refund Receipt number, and “Amount refunded” replace payment/change messaging. The banner is screen-only; the customer receipt paper remains unchanged. The completion browser test verifies the banner and amount for full and partial refunds.
+
+`refund_completion_browser_test.js` covers the real completion flow for full and partial refunds at both paper widths, modal focus, Close/Escape, refresh after dismissal, manual print retry, history reopening, and desktop/mobile sizing. The original inline verification below records the earlier behavior.
 
 ## Verification — 2026-10-22
 

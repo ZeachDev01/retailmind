@@ -1,5 +1,28 @@
 # GCash service design discussion
 
+## Administrator overview discovery (2026-10-23)
+
+Confirmed decisions:
+
+- Put current expected Service Cash and Service Wallet, responsible Cashier, session status, last actual check, and visible unresolved/variance alerts before historical performance.
+- Default activity reporting to Today in Philippine time, with Month-to-date and custom dates available. Keep current balances and outstanding issues clearly separate from historical activity filters.
+- Retain existing role boundaries: Administrator monitoring and audited Verify & Clear/discrepancy waivers; recording exchanges remains in the Cashier workspace under its existing authority checks.
+- Distinguish balance states: open session = Expected; closed session = Last counted with closing time; no recorded count = Not recorded, never an assumed zero. Show Service Cash and Service Wallet separately.
+- Landing alerts cover all dates and all Cashiers: unresolved exchanges and unwaived closing discrepancies only. Link each alert to its review section. Historical activity filters cannot narrow these alerts; waived discrepancies stay visible in history.
+- Put Today, Month-to-date, custom dates, Cashier selection, and a selected-period label beside summary totals. Period and Cashier selections also apply to Transactions. Search and transaction-type filters affect only transaction rows and their matching-record count, not headline activity totals.
+
+Complete brief confirmed by the user on 2026-10-23:
+
+- Preserve the existing four sections: Balances & Summary, Transactions & Filters, Reconciliation Log, and Unresolved Activity. In the landing section, show separate funds and outstanding alerts first, followed by period activity. A combined total remains secondary and must not imply either fund has enough money for an exchange.
+- Period activity shows completed exchange count, Cash-In principal, Cash-Out principal, and gross fees split between cash and wallet. Label the transaction list's count as matching records across its included statuses; do not mix that count with the completed-only summary. Principal is not revenue; gross fees are not net profit.
+- Preserve transaction details, references, Cashier/shift attribution, statuses, recorded cash/wallet movements, linked adjustments, legacy labels, pagination, and CSV export. Export follows the transaction list's filters.
+- Review views remain all-date, Store-wide records, independent of summary/list filters. Reconciliation keeps counted versus expected cash and wallet, separate signed variances, and waiver attribution/reason. Unresolved exchanges retain recorded partial movements and notes. Verify & Clear must explain that confirmation completes the exchange and records its remaining movements; a waiver never removes the variance.
+- Preserve the existing RetailMind styling, responsive four-section layout, keyboard access, native dialogs, authorization, confirmations, CSRF protection, and audit trail. Failed or unavailable data must not appear as zero balances or an all-clear state. No new live GCash synchronization, low-fund thresholds, funding workflows, or net-profit reporting.
+
+Shared understanding is confirmed. No application changes are authorized by this discovery record alone; implementation requires a subsequent instruction.
+
+The confirmed overview design and test approach are captured in the [Administrator overview specification](specs/administrator-gcash-overview.md), published as [GitHub issue #276](https://github.com/ZeachDev01/retailmind/issues/276) with `ready-for-agent`.
+
 ## Cashier balance visibility (confirmed 2026-10-21)
 
 - On Cashier → GCash → New Transaction, show Physical Service Cash and GCash App Wallet above the form, each with an Expected badge and last-check time. Keep the section visible when closed or unavailable, using dashes and an explanatory message. Any Cashier can see an open session's recorded balances; only its responsible Cashier can transact.

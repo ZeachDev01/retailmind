@@ -135,6 +135,7 @@ if ($receiptId > 0 && $receipt === null) {
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier-pages.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/refunds.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/refunds.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/sale-receipt.css')) ?>">
+    <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>" defer></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 </head>
 
@@ -150,12 +151,26 @@ if ($receiptId > 0 && $receipt === null) {
             <?php if ($registerLocked): ?><div class="message error" role="note" data-rm-alert-processed="1"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?></div><?php endif; ?>
 
             <?php if ($receipt !== null): ?>
-            <section class="dashboard-section receipt-container" aria-label="Completed Refund Receipt">
-                <h2>Refund Receipt</h2>
-                <p class="no-print">Review the receipt, then choose Print to select your printer.</p>
-                <button class="btn no-print" type="button" onclick="printReceiptSection(this)">Print Refund Receipt</button>
-                <?php \App\Receipts\RefundReceiptPresentation::render($receipt, $paperWidthMm); ?>
-            </section>
+            <dialog id="receiptModal" class="sale-receipt-dialog" aria-labelledby="saleReceiptTitle"
+                data-receipt-param="refund_id" data-initial-receipt="1">
+                <div class="sale-receipt-dialog-header">
+                    <h2 id="saleReceiptTitle" tabindex="-1">Refund Receipt #<?= (int)$receipt['refund']['refund_id'] ?></h2>
+                    <button type="button" class="btn btn-secondary" data-close-receipt aria-label="Close Refund Receipt">Close</button>
+                </div>
+                <div id="receiptContent">
+                    <section class="receipt-container" aria-label="Completed Refund Receipt">
+                        <div class="checkout-complete-banner no-print" role="status">
+                            <div class="checkout-complete-icon"><i class="bi bi-check2-circle" aria-hidden="true"></i></div>
+                            <div class="checkout-complete-copy"><strong>Refund completed</strong><span>Refund Receipt #<?= (int)$receipt['refund']['refund_id'] ?> was saved successfully.</span></div>
+                            <div class="checkout-complete-change"><span>Amount refunded</span><strong><?= htmlspecialchars($receipt['store']['currency_symbol']) . number_format((float)$receipt['refund']['refund_amount'], 2) ?></strong></div>
+                        </div>
+                        <div class="receipt-actions no-print">
+                            <button class="btn btn-secondary" type="button" onclick="printReceiptSection(this)"><i class="bi bi-printer" aria-hidden="true"></i> Print Refund Receipt</button>
+                        </div>
+                        <?php \App\Receipts\RefundReceiptPresentation::render($receipt, $paperWidthMm); ?>
+                    </section>
+                </div>
+            </dialog>
             <?php elseif ($receiptId > 0): ?>
             <div class="message warning">Refund Receipt not found or unavailable for your account.</div>
             <?php endif; ?>

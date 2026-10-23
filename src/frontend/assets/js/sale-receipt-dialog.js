@@ -8,7 +8,7 @@
         let returnFocus = null;
         let pending = null;
         function open(trigger) {
-            returnFocus = trigger || document.getElementById('receipt-table-title') || document.getElementById('sku-input');
+            returnFocus = trigger || document.getElementById('receipt-table-title') || document.getElementById('sku-input') || document.getElementById('sale_id');
             if (!dialog.open) dialog.showModal();
             window.RetailMindUI?.syncScrollLock?.();
             const warning = document.querySelector('.theme-save-alert');
@@ -42,7 +42,7 @@
             // Refreshing a historical view must never repeat a payment announcement.
             const url = new URL(window.location.href);
             url.searchParams.delete('checkout');
-            url.searchParams.delete('sale_id');
+            url.searchParams.delete(dialog.dataset.receiptParam || 'sale_id');
             if (window.location.protocol.startsWith('http')) history.replaceState(null, '', url);
         });
         window.closeReceiptModal = close;

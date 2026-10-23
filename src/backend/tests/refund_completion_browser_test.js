@@ -1,5 +1,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 const { execFileSync } = require('node:child_process');
 const { chromium } = require('playwright');
 
@@ -14,6 +16,8 @@ const { chromium } = require('playwright');
     const [, , , origin, saleIdArg, widthArg] = process.argv;
     const saleId = Number(saleIdArg);
     const width = Number(widthArg);
+    const output = path.join(os.tmpdir(), 'retailmind-refund-completion');
+    fs.mkdirSync(output, { recursive: true });
     const browser = await chromium.launch({ headless: true });
     try {
         const page = await browser.newPage({ serviceWorkers: 'block' });
@@ -51,6 +55,12 @@ const { chromium } = require('playwright');
             await form.getByRole('button', { name: 'Record refund', exact: true }).click();
             await page.locator('.rm-modal-overlay[data-rm-confirm] .rm-accept').click();
             await page.waitForURL('**/refunds.php?refund_id=*');
+            await page.locator('#receiptModal[open]').waitFor();
+            assert.equal(await page.locator('#receiptModal[open]').count(), 1,
+                'successful refund opens the same receipt modal as POS checkout');
+            assert.equal(await page.locator('#receiptModal').evaluate(el => el.matches(':modal')), true);
+            assert.equal(await page.locator('#saleReceiptTitle').evaluate(el => document.activeElement === el), true,
+                'focus enters the refund receipt modal');
             await page.waitForFunction(() => window.scrollY === 0);
             const receiptBox = await receipt.boundingBox();
             assert.ok(receiptBox && receiptBox.y >= 0 && receiptBox.y < await page.evaluate(() => innerHeight),
@@ -59,6 +69,11 @@ const { chromium } = require('playwright');
             assert.ok(refundId > 0 && !refundIds.includes(refundId), 'each completion opens a distinct saved receipt');
             refundIds.push(refundId);
             assert.equal(await receipt.isVisible(), true);
+            const completion = receipt.getByRole('status');
+            assert.equal(await completion.isVisible(), true, 'completed refund shows a success banner');
+            assert.ok((await completion.innerText()).includes('Refund completed'));
+            assert.ok((await completion.innerText()).includes(`Refund Receipt #${refundId} was saved successfully.`));
+            assert.ok((await completion.innerText()).includes(`Amount refunded\n₱${amount}`));
             const preview = receipt.locator('.receipt-print-area');
             const text = await preview.innerText();
             receipts.push(text);
@@ -73,6 +88,15 @@ const { chromium } = require('playwright');
             assert.equal(await preview.getAttribute('data-paper-width-mm'), String(width));
             assert.ok(Math.abs(await preview.evaluate(el => el.getBoundingClientRect().width) - width * 96 / 25.4) < 1);
             assert.equal(await page.evaluate(() => window.printCalls), 0, 'completion never auto-prints');
+            if (refundIds.length === 1) {
+                for (const viewport of [1440, 390]) {
+                    await page.setViewportSize({ width: viewport, height: 900 });
+                    await page.screenshot({ path: path.join(output, `${width}mm-${viewport}.png`) });
+                    assert.equal(await page.locator('#receiptModal').evaluate(el => el.scrollWidth > el.clientWidth + 1), false,
+                        'receipt modal fits desktop and mobile');
+                }
+                await page.setViewportSize({ width: 1280, height: 720 });
+            }
             for (let attempt = 1; attempt <= 2; attempt++) {
                 await receipt.getByRole('button', { name: 'Print Refund Receipt', exact: true }).click();
                 assert.equal(await page.evaluate(() => window.printCalls), attempt, 'clicking Print invokes the browser print action');
@@ -86,6 +110,15 @@ const { chromium } = require('playwright');
             await page.reload();
             assert.equal(await preview.innerText(), text);
             assert.equal(await page.evaluate(() => window.printCalls), 0, 'refresh never auto-prints');
+            await page.locator('#receiptModal[open]').waitFor();
+            if (refundIds.length === 1) await page.keyboard.press('Escape');
+            else await page.getByRole('button', { name: 'Close Refund Receipt', exact: true }).click();
+            await page.waitForFunction(() => !document.getElementById('receiptModal').open
+                && !new URL(location.href).searchParams.has('refund_id'));
+            assert.equal(await page.locator('#sale_id').evaluate(el => document.activeElement === el), true,
+                'closing returns focus to refund lookup');
+            await page.reload();
+            assert.equal(await page.locator('#receiptModal[open]').count(), 0, 'refresh keeps a dismissed receipt closed');
         }
         // A completed refund must still reveal its receipt when a page script fails.
         const failedSaleId = Number(process.argv[6]);

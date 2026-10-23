@@ -97,6 +97,7 @@ try {
     $pdo->exec("INSERT INTO roles (role_id, role_name) VALUES (1, 'cashier')");
     $pdo->exec("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id)
         VALUES (1, 'Test Cashier', 'refund-test', 'unused', 1, 1)");
+    $pdo->prepare("INSERT INTO fiscal_periods(period_id,period_name,start_date,end_date,status,created_by) VALUES (2,'Today',?,?,'open',1)")->execute([date('Y-m-d'),date('Y-m-d')]);
     $pdo->exec("INSERT INTO registers (register_id, name) VALUES (1, 'Test Register')");
     $pdo->exec('INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash) VALUES (1, 1, 1, 100)');
     $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, branch_id) VALUES (1, 'REFUND-TEST', 'REFUND-TEST', 'Test item', 25, 10, 1)");

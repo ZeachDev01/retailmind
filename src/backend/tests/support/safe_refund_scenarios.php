@@ -34,7 +34,6 @@ $pdo->exec('UPDATE users SET must_change_password=0 WHERE user_id=1');
 $pdo->exec("INSERT INTO registers(register_id,name) VALUES (2,'Other Till')");
 $pdo->exec('INSERT INTO cashier_shifts(shift_id,cashier_id,register_id,opening_cash) VALUES (2,5,2,100)');
 $pdo->exec("INSERT INTO fiscal_periods(period_id,period_name,start_date,end_date,status,created_by) VALUES (1,'Historical','2020-01-01','2020-01-31','closed',2)");
-$pdo->prepare("INSERT INTO fiscal_periods(period_id,period_name,start_date,end_date,status,created_by) VALUES (2,'Today',?,?,'open',2)")->execute([date('Y-m-d'),date('Y-m-d')]);
 $pdo->exec("INSERT INTO sales(sale_id,cashier_id,total_amount,payment_method,sale_date) VALUES
  (10,1,74.99,'card','2020-01-15 10:00:00'),(11,3,50,'cash','2020-01-16 10:00:00'),
  (12,3,25,'ewallet','2020-01-16 11:00:00'),(13,1,25,'card','2020-01-17 11:00:00'),(14,1,74.99,'card','2020-01-18 11:00:00')");
