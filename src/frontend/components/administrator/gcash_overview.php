@@ -51,25 +51,33 @@ if (($_GET['export'] ?? '') === 'csv') {
     }
     $exportFilters = array_merge($filters, ['page' => 1, 'limit' => 100]);
     // Stage the complete report before sending headers so failures cannot produce partial downloads.
-    $csv = fopen('php://temp', 'w+');
-    fwrite($csv, "\xEF\xBB\xBF");
-    fputcsv($csv, ['Date / Time', 'Reference No.', 'Type', 'Principal', 'Fee', 'Fee Location', 'Status', 'Cashier', 'Shift', 'Service Cash Movement', 'Wallet Movement'], ',', '"', '');
-    do {
-        $batch = $service->adminOverview($exportFilters);
-        foreach ($batch['transactions'] as $row) {
-            $cells = [$row['time_formatted'], $row['reference_number'], $row['transaction_type'], $row['principal_amount'], $row['gross_fee'], $row['fee_location'], $row['verification_status'], $row['cashier_name'] ?: $row['cashier_username'], $row['shift_id'], $row['is_legacy'] ? null : $row['service_cash_delta'], $row['is_legacy'] ? null : $row['wallet_delta']];
-            foreach ($cells as &$cell) {
-                if (is_string($cell) && preg_match('/^[\x00-\x20]*[=+@\-\t\r\n]/', $cell)) $cell = "'" . $cell;
+    $csv = null;
+    try {
+        $csv = fopen('php://temp', 'w+');
+        if ($csv === false) throw new RuntimeException('Unable to stage export.');
+        if (fwrite($csv, "\xEF\xBB\xBF") !== 3) throw new RuntimeException('Unable to stage export.');
+        if (fputcsv($csv, ['Date / Time', 'Reference No.', 'Type', 'Principal', 'Fee', 'Fee Location', 'Status', 'Cashier', 'Shift', 'Service Cash Movement', 'Wallet Movement', 'Record Basis', 'Legacy Reference Amount'], ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
+        do {
+            $batch = $service->adminOverview($exportFilters);
+            foreach ($batch['transactions'] as $row) {
+                $cells = [$row['time_formatted'], $row['reference_number'], $row['transaction_type'], $row['is_legacy'] ? 'Not recorded' : $row['principal_amount'], $row['is_legacy'] ? 'Not recorded' : $row['gross_fee'], $row['fee_location'] ?? 'Not recorded', $row['verification_status'], $row['cashier_name'] ?: $row['cashier_username'], $row['shift_id'] ?? 'Not recorded', $row['is_legacy'] ? 'Not recorded' : $row['service_cash_delta'], $row['is_legacy'] ? 'Not recorded' : $row['wallet_delta'], $row['is_legacy'] ? 'Legacy reference only' : 'Service exchange', $row['is_legacy'] ? $row['amount'] : null];
+                foreach ($cells as &$cell) {
+                    if (is_string($cell) && preg_match('/^[\x00-\x20]*[=+@\-\t\r\n]/', $cell)) $cell = "'" . $cell;
+                }
+                unset($cell);
+                if (fputcsv($csv, $cells, ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
             }
-            unset($cell);
-            fputcsv($csv, $cells, ',', '"', '');
-        }
-        $exportFilters['page']++;
-    } while ($batch['has_next']);
+            $exportFilters['page']++;
+        } while ($batch['has_next']);
+        if (!rewind($csv)) throw new RuntimeException('Unable to stage export.');
+    } catch (Throwable) {
+        if (is_resource($csv)) fclose($csv);
+        http_response_code(503);
+        exit('Unable to export the complete report. Try again.');
+    }
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="gcash-transactions.csv"');
     header('Cache-Control: no-store');
-    rewind($csv);
     fpassthru($csv);
     fclose($csv);
     exit;
@@ -104,8 +112,8 @@ function gcash_admin_money(mixed $val): string {
                 <p class="page-subtitle">Review Store-wide GCash balances, reconciliation differences, and transaction history.</p>
             </div>
             <div class="gcash-topbar-actions">
-                <span class="gcash-status <?= ($overview['session_status'] ?? '') === 'open' ? 'gcash-status-completed' : '' ?>">
-                    <?= !empty($overview['session_id']) ? 'Active Session #' . (int)$overview['session_id'] . ' (Open)' : 'No active session' ?>
+                <span id="gcash-session-status" class="gcash-status <?= ($overview['session_status'] ?? '') === 'open' ? 'gcash-status-completed' : '' ?>">
+                    <?= $overview === null ? 'Unavailable' : (!empty($overview['session_id']) ? 'Active Session #' . (int)$overview['session_id'] . ' (Open)' : 'No active session') ?>
                 </span>
                 <button type="button" class="btn btn-secondary" id="gcash-refresh">Refresh</button>
                 <a class="btn btn-secondary" id="gcash-export" href="?<?= gcash_admin_e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>">Export Report</a>
@@ -122,7 +130,7 @@ function gcash_admin_money(mixed $val): string {
             <?php foreach (['overview' => 'Balances & Summary', 'transactions' => 'Transactions & Filters', 'reconciliation' => 'Reconciliation Log', 'unresolved' => 'Unresolved Activity'] as $key => $label): ?>
                 <button type="button" role="tab" id="gcash-tab-<?= $key ?>" aria-controls="tab-<?= $key ?>" aria-selected="<?= $key === $activeTab ? 'true' : 'false' ?>" tabindex="<?= $key === $activeTab ? '0' : '-1' ?>">
                     <?= $label ?>
-                    <?php if ($key === 'transactions'): ?><span class="gcash-badge"><?= (int)($overview['total_transactions'] ?? 0) ?></span><?php endif; ?>
+                    <?php if ($key === 'transactions'): ?><span class="gcash-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['matching_record_count'] ?></span><?php endif; ?>
                     <?php if ($key === 'reconciliation'): ?><span class="gcash-badge"><?= $overview === null ? 'Unavailable' : 'Pending (' . (int)$overview['differences_count'] . ')' ?></span><?php endif; ?>
                     <?php if ($key === 'unresolved'): ?><span class="gcash-badge <?= !empty($overview['unresolved_count']) ? 'gcash-status-needs-checking' : '' ?>"><?= $overview === null ? 'Unavailable' : (int)$overview['unresolved_count'] ?></span><?php endif; ?>
                 </button>
@@ -292,7 +300,7 @@ function gcash_admin_money(mixed $val): string {
                 <input type="hidden" name="type" form="gcash-admin-filter-form" id="gcash-type-filter" value="<?= gcash_admin_e($_GET['type'] ?? 'all') ?>">
             <div class="gcash-type-pills" role="group" aria-label="Transaction type">
                 <?php foreach (['all' => ['All', 'all_count'], 'Cash-In' => ['Cash-In', 'cash_in_count'], 'Cash-Out' => ['Cash-Out', 'cash_out_count']] as $value => [$label, $countKey]): ?>
-                    <button type="button" class="btn btn-secondary" data-type="<?= $value ?>" aria-pressed="<?= ($_GET['type'] ?? 'all') === $value ? 'true' : 'false' ?>"><?= $label ?> (<?= (int)($overview['type_counts'][$countKey] ?? 0) ?>)</button>
+                    <button type="button" class="btn btn-secondary" data-type="<?= $value ?>" aria-pressed="<?= ($_GET['type'] ?? 'all') === $value ? 'true' : 'false' ?>"><?= $label ?> (<?= $overview === null ? 'Unavailable' : (int)$overview['type_counts'][$countKey] ?>)</button>
                 <?php endforeach; ?>
             </div>
         </section>
@@ -304,7 +312,7 @@ function gcash_admin_money(mixed $val): string {
                     <div class="pos-panel-icon"><i class="bi bi-list-columns-reverse" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-history-title">Store-wide Transaction History</h2>
-                        <p>All Cashier activity, including legacy reference records.</p>
+                        <p>Matching records: <strong id="gcash-matching-record-count"><?= $overview === null ? 'Unavailable' : (int)$overview['matching_record_count'] ?></strong>. Shared period and Cashier scope, narrowed by search and type. Includes all statuses and legacy references.</p>
                     </div>
                 </div>
             </div>
@@ -326,7 +334,9 @@ function gcash_admin_money(mixed $val): string {
                         </tr>
                     </thead>
                     <tbody id="gcash-admin-history-body">
-                        <?php if (empty($overview['transactions'])): ?>
+                        <?php if ($overview === null): ?>
+                            <tr><td colspan="11" role="alert">Transaction history unavailable for this selection. Try again.</td></tr>
+                        <?php elseif (empty($overview['transactions'])): ?>
                             <tr>
                                 <td colspan="11" class="gcash-empty-msg gcash-empty-cell">No transactions found for the selected filter criteria.</td>
                             </tr>
