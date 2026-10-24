@@ -21,6 +21,7 @@
         const tabInput = document.querySelector('#gcash-admin-filter-form [name="tab"]');
         if (tabInput) tabInput.value = url.searchParams.get('tab');
         if (focus) tab.focus();
+        tab.scrollIntoView({block: 'nearest', inline: 'nearest'});
     }
     tabs.forEach((tab, index) => {
         tab.addEventListener('click', () => selectTab(tab));
@@ -122,7 +123,6 @@
             for (const selector of ['#gcash-session-status', '#gcash-completed-activity', '[aria-labelledby="gcash-admin-balances-title"]']) {
                 workspace.querySelector(selector).replaceWith(html.querySelector(selector));
             }
-            document.getElementById('gcash-selected-dates').textContent = html.getElementById('gcash-selected-dates').textContent;
             for (const button of workspace.querySelectorAll('[data-type]')) {
                 const incoming = html.querySelector(`[data-type="${button.dataset.type}"]`);
                 button.textContent = incoming.textContent;
@@ -152,7 +152,7 @@
                 document.getElementById('gcash-session-status').textContent = 'Unavailable';
                 document.getElementById('gcash-session-status').classList.remove('gcash-status-completed');
                 for (const button of workspace.querySelectorAll('[data-type]')) button.textContent = `${button.dataset.type === 'all' ? 'All' : button.dataset.type} (Unavailable)`;
-                workspace.querySelectorAll('#admin-expected-cash, #admin-expected-wallet, #admin-combined-funds').forEach(value => { value.textContent = 'Unavailable. Refresh to try again.'; });
+                workspace.querySelectorAll('#admin-expected-cash, #admin-expected-wallet').forEach(value => { value.textContent = 'Unavailable. Refresh to try again.'; });
                 status.textContent = error.message + ' Report totals are unavailable for this selection.';
                 workspace.querySelectorAll('#gcash-completed-activity .gcash-card-value, #admin-metric-total-tx').forEach(value => { value.textContent = 'Unavailable'; });
             }

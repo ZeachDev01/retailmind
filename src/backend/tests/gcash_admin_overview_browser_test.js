@@ -104,7 +104,8 @@ const csvRows = bytes => {
         await page.locator('#btn-apply-filters').click();
         await page.waitForURL(url => url.searchParams.get('period') === 'custom');
         assert.equal(await page.locator('#admin-metric-total-tx').textContent(), '0');
-        assert.ok((await page.locator('#gcash-selected-dates').textContent()).includes('2026-01-01 through 2026-01-02'));
+        assert.equal(await page.locator('#filter-start-date').inputValue(), '2026-01-01');
+        assert.equal(await page.locator('#filter-end-date').inputValue(), '2026-01-02');
         await page.getByLabel('Reporting period', {exact: true}).selectOption('today');
         await page.locator('#btn-apply-filters').click();
         await page.waitForURL(url => url.searchParams.get('period') === 'today');
@@ -130,6 +131,11 @@ const csvRows = bytes => {
         assert.equal(await page.locator('#admin-wallet-state').textContent(), 'Last counted');
         assert.ok((await page.locator('#admin-cash-checked').textContent()).includes(evidence.cashier_name));
         assert.ok((await page.locator('#admin-cash-checked').textContent()).includes(evidence.checked_at_formatted));
+        assert.equal(await page.locator('#admin-cash-checked').isVisible(), false, 'Fund metadata stays collapsed by default');
+        await page.getByText('Fund details', {exact: true}).click();
+        assert.equal(await page.locator('#admin-cash-checked').isVisible(), true, 'Fund metadata remains accessible');
+        await page.getByText('Fund details', {exact: true}).click();
+        assert.equal(await page.locator('.page-subtitle, #tab-overview .gcash-card-sub, #tab-overview .pos-panel-title p').count(), 0, 'Overview omits explanatory subtext');
         const recordedCash = await page.locator('#admin-expected-cash').textContent();
         assert.equal(await page.getByRole('tab').count(), 4, 'Overview has four task tabs');
         const balances = page.getByRole('tab', {name: 'Balances & Summary'});
@@ -159,7 +165,7 @@ const csvRows = bytes => {
         await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
         const search = page.getByRole('searchbox', {name: 'Search transactions'});
         await search.fill('no-such-gcash-reference');
-        await page.getByText('No transactions found for the selected filter criteria.').waitFor();
+        await page.getByText('No transactions match these filters.').waitFor();
         assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').count(), 0);
         assert.equal(await page.locator('#admin-metric-total-tx').textContent(), completedCount, 'Local search preserves shared completed activity in the browser');
         assert.equal(await page.locator('#admin-expected-cash').textContent(), recordedCash, 'Search does not change recorded funds');
@@ -449,15 +455,50 @@ const csvRows = bytes => {
         await search.fill('');
         await page.getByRole('status').filter({hasText: /matching transactions/}).waitFor();
         await page.getByRole('tab', {name: 'Balances & Summary'}).click();
+        await page.emulateMedia({reducedMotion: 'reduce'});
+        const capture = async name => {
+            await page.evaluate(async () => {
+                document.querySelector('[role="tab"][aria-selected="true"]').scrollIntoView({block: 'nearest', inline: 'center', behavior: 'instant'});
+                document.querySelectorAll('.gcash-table-wrap').forEach(element => element.scrollTo({left: 0, top: 0, behavior: 'instant'}));
+                window.scrollTo({top: 0, left: 0, behavior: 'instant'});
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            });
+            assert.equal(await page.locator('[role="tab"][aria-selected="true"]').evaluate(element => {
+                const tab = element.getBoundingClientRect();
+                const nav = element.parentElement.getBoundingClientRect();
+                return tab.left >= nav.left && tab.right <= nav.right;
+            }), true, name + ' captures the complete selected tab');
+            // Full-document Chromium captures can shift a horizontally scrolled tab strip; retain viewport evidence too.
+            await page.screenshot({path: '.impeccable/review/' + name + '-viewport.png'});
+            await page.screenshot({path: '.impeccable/review/' + name + '.png', fullPage: true});
+        };
         fs.mkdirSync('.impeccable/review', {recursive: true});
         for (const [width, name] of [[1440, 'desktop'], [390, 'mobile']]) {
             await page.setViewportSize({width, height: 1080});
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' has no page overflow');
-            await page.screenshot({path: '.impeccable/review/' + name + '.png', fullPage: true});
+            assert.equal(await page.locator('.gcash-topbar-actions').evaluate(element => getComputedStyle(element).flexDirection), 'row', name + ' header actions remain in a compact row');
+            await capture(name);
             for (const [tabName, suffix] of [['Transactions & Filters', 'transactions'], ['Reconciliation Log', 'reconciliation'], ['Unresolved Activity', 'unresolved']]) {
                 await page.getByRole('tab', {name: tabName}).click();
+                const panel = page.locator('#tab-' + suffix);
+                assert.equal(await panel.locator('small, .pos-panel-title p').count(), 0, name + ' ' + suffix + ' has no secondary row captions');
+                if (suffix !== 'transactions') {
+                    assert.equal(await panel.getByText('All dates · All Cashiers', {exact: true}).isVisible(), true, name + ' review scope remains visible');
+                    const details = panel.locator('.gcash-row-details').first();
+                    assert.equal(await details.getAttribute('open'), null, 'Secondary record details start collapsed');
+                    await details.locator('summary').click();
+                    assert.equal(await details.evaluate(element => element.open), true, 'Record details remain accessible');
+                    assert.ok((await details.innerText()).trim().length > (await details.locator('summary').innerText()).trim().length, 'Expanded details retain record content');
+                    await details.locator('summary').click();
+                    await panel.locator('.gcash-table-wrap').evaluate(element => element.scrollLeft = 0);
+                }
+                assert.equal(await page.getByRole('tab', {name: tabName}).evaluate(element => {
+                    const tab = element.getBoundingClientRect();
+                    const nav = element.parentElement.getBoundingClientRect();
+                    return tab.left >= nav.left && tab.right <= nav.right;
+                }), true, name + ' selected task tab stays visible');
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' ' + suffix + ' has no page overflow');
-                await page.screenshot({path: '.impeccable/review/' + name + '-' + suffix + '.png', fullPage: true});
+                await capture(name + '-' + suffix);
             }
             await page.getByRole('tab', {name: 'Balances & Summary'}).click();
         }
