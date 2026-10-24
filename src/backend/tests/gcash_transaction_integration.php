@@ -995,6 +995,7 @@ $resB = $service->resolveNeedsChecking(4, $ncCiTxId, 'cancel', [
     'approver_password' => 'ThemeTest@2026',
 ]);
 $check($resB['verification_status'] === 'Rejected', 'Resolved to Rejected');
+$check(!isset($resB['receipt_id']) && $receipts->fetch($ncCiTxId, 4, 'cashier') === null, 'Canceled resolution produces no receipt');
 $resRowB = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id = ' . $ncCiTxId)->fetch(PDO::FETCH_ASSOC);
 $check($resRowB['verification_status'] === 'Rejected', 'Status updated to Rejected');
 
@@ -1367,6 +1368,36 @@ $walletCentavoReceipt = $receipts->fetch($walletCentavoId, 4, 'cashier');
 $check($walletCentavoReceipt['fee_amount'] === '123.45' && $walletCentavoReceipt['wallet_received'] === '12468.45' && $walletCentavoReceipt['cash_paid_out'] === '12345.00', 'Wallet fee Cash-Out retains exact centavos and gross payout');
 $service->recordLinkedCorrection(1, 'admin', $coCkId, -10.00, 0.00, 'Refund Cash-Out fee through audited correction');
 $check($receipts->fetch($coCkId, 4, 'cashier') === $cashOutCashReceipt, 'Linked correction preserves original Cash-Out saved receipt');
+
+// Later completion uses the actual completed fee and original Cashier/Register identity.
+foreach ([['Cash-In', 'cash'], ['Cash-Out', 'wallet'], ['Cash-Out', 'cash']] as $index => [$kind, $method]) {
+    $input = ['principal' => 1000, 'fee_method' => $method === 'wallet' ? 'Fee via GCash' : 'Fee in cash', 'outcome' => 'Needs checking', 'confirmed_cash' => false, 'confirmed_wallet' => false, 'notes' => 'Receipt later completion verification'];
+    $pendingId = $kind === 'Cash-In' ? $service->recordCashIn(4, $input) : $service->recordCashOut(4, $input);
+    $check($receipts->fetch($pendingId, 4, 'cashier') === null, 'Needs checking has no completed receipt');
+    $beforeResolution = $service->calculateSessionExpected((int)$service->getCurrentSession()['session_id']);
+    $refuse(fn() => $service->resolveNeedsChecking(1, $pendingId, 'complete', ['reference' => 'invalid']));
+    $check($receipts->fetch($pendingId, 1, 'admin') === null, 'Failed resolution produces no receipt');
+    if ($index === 0) {
+        $pdo->exec("UPDATE gcash_transactions SET fee_amount = 99 WHERE transaction_id = {$pendingId}");
+        $pdo->exec("CREATE TRIGGER gcash_resolution_audit_fail BEFORE INSERT ON activity_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Resolution audit injection fail'");
+        try {
+            $auditFailed = false;
+            try { $service->resolveNeedsChecking(1, $pendingId, 'complete', ['reference' => '0000000000900']); } catch (PDOException $e) { $auditFailed = true; }
+            $check($auditFailed && $receipts->fetch($pendingId, 1, 'admin') === null, 'Protected audit failure rolls back later receipt');
+            $check($service->calculateSessionExpected((int)$service->getCurrentSession()['session_id']) === $beforeResolution, 'Failed later resolution leaves financial effects unchanged');
+        } finally { $pdo->exec('DROP TRIGGER gcash_resolution_audit_fail'); }
+    }
+    $resolved = $service->resolveNeedsChecking(1, $pendingId, 'complete', ['reference' => '000000000090' . $index]);
+    $saved = $receipts->fetch($pendingId, 4, 'cashier');
+    $check($resolved['receipt_id'] === $pendingId && $saved['cashier_id'] === 4 && $saved['register_name'] === $longReceipt['register_name'], 'Administrator resolution preserves original Cashier and Register');
+    $check($saved['fee_amount'] === '10.00' && $saved['reference_number'] === '000000000090' . $index, 'Later receipt preserves final fee and complete reference');
+    $check($saved['cash_collected'] === ($kind === 'Cash-In' ? '1010.00' : ($method === 'cash' ? '10.00' : '0.00')) && $saved['cash_paid_out'] === ($kind === 'Cash-In' ? '0.00' : '1000.00') && $saved['wallet_received'] === ($kind === 'Cash-In' ? '0.00' : ($method === 'wallet' ? '1010.00' : '1000.00')), 'Later receipt labels actual customer cash and wallet amounts');
+    $completedBalance = $service->calculateSessionExpected((int)$service->getCurrentSession()['session_id']);
+    $refuse(fn() => $service->resolveNeedsChecking(1, $pendingId, 'complete', ['reference' => '000000000090' . $index]));
+    $check($receipts->fetch($pendingId, 4, 'cashier') === $saved && $service->calculateSessionExpected((int)$service->getCurrentSession()['session_id']) === $completedBalance, 'Repeated resolution neither replaces receipt nor duplicates movements');
+    $service->recordLinkedCorrection(1, 'admin', $pendingId, -1, 0, 'Later receipt correction remains separate');
+    $check($receipts->fetch($pendingId, 1, 'admin') === $saved && $receipts->fetch($pendingId, 5, 'cashier') === null, 'Later receipt stays immutable and own-only after linked correction');
+}
 
 $pdo->prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE user_id=5")->execute([password_hash('ThemeTest@2026', PASSWORD_DEFAULT)]);
 $service->closeSession(4, 1113.45, 50123.45, 'Receipt verification complete');

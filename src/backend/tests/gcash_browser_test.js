@@ -733,12 +733,24 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         // Resolve Needs checking via dialog -> complete
         await s2NcRow.getByRole('button', {name: 'Resolve', exact: true}).click();
         await page.locator('#gcash-resolve-dialog').waitFor();
+        assert.equal(await page.locator('#gcash-resolve-dialog').getByLabel('Print receipt automatically', {exact: true}).isChecked(), false, 'Resolution print defaults unchecked');
+        await page.locator('#gcash-resolve-dialog').getByLabel('Print receipt automatically', {exact: true}).check();
         await page.locator('#gcash-resolve-action').selectOption('complete');
         await page.locator('#gcash-resolve-reference').fill('0012345678999');
         await page.locator('#gcash-resolve-notes').fill('Wallet transfer confirmed in terminal');
+        await page.route('**/gcash_api.php', route => route.request().method() === 'POST' ? route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({success: false, message: 'Resolution unavailable'})}) : route.continue());
+        await page.locator('#gcash-resolve-submit').click();
+        await page.locator('.rm-toast.error').filter({hasText: 'Resolution unavailable'}).waitFor();
+        assert.equal(await page.evaluate(() => window.receiptPrints), 4, 'Failed Cashier resolution never prints');
+        await page.unroute('**/gcash_api.php');
         await page.locator('#gcash-resolve-submit').click();
         await page.locator('#gcash-resolve-dialog').waitFor({state: 'hidden'});
         await s2NcRow.locator('.gcash-status-completed').waitFor();
+        await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        await page.waitForFunction(() => window.receiptPrints === 5);
+        assert.match(await page.locator('#receiptModal').innerText(), /0012345678999/);
+        await page.getByRole('button', {name: 'Close GCash Service Receipt'}).click();
+        assert.equal(await page.locator('#tab-history').evaluate(node => node === document.activeElement), true, 'Resolution receipt Close focuses history tab');
 
         // 3. Linked Correction on completed transaction (-5 cash delta)
         await s2NcRow.getByRole('button', {name: 'Correct', exact: true}).click();

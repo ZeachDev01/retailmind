@@ -29,7 +29,7 @@ final class GCashReceiptService
             return;
         }
         $principal = (int)round((float)$tx['principal_amount'] * 100);
-        $fee = (int)round((float)$tx['fee_amount'] * 100);
+        $fee = (int)round((float)$tx['gross_fee'] * 100);
         $cashIn = $tx['transaction_type'] === 'Cash-In';
         $cashFee = $tx['fee_method'] === 'cash';
         $decimal = static fn(int $centavos): string => number_format($centavos / 100, 2, '.', '');
