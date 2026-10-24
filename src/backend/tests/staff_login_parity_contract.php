@@ -79,6 +79,7 @@ try {
     )");
     $pdo->exec('CREATE TABLE products (product_id INTEGER PRIMARY KEY AUTOINCREMENT, branch_id INTEGER NULL)');
     $pdo->exec('CREATE TABLE roles (role_id INTEGER PRIMARY KEY AUTOINCREMENT, role_name TEXT NOT NULL UNIQUE)');
+    $pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER)');
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         full_name TEXT NOT NULL,
