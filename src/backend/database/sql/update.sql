@@ -1550,3 +1550,22 @@ SELECT 'RetailMind SQL update completed through 202610180006_historical_sale_cos
 ALTER TABLE notifications MODIFY COLUMN type
     ENUM('low_stock','replenishment','adjustment','system','fiscal_period','expiring_stock','expired_stock','attention') NOT NULL;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610190001_attention_notification_type','Allow shared attention notifications in the daily operational check') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202610240001_gcash_receipt_details: Preserve completed GCash Service Receipts
+SET @rm_sql = IF(
+    NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = 'gcash_transactions'
+          AND column_name = 'receipt_details_json'
+    ),
+    'ALTER TABLE `gcash_transactions` ADD COLUMN `receipt_details_json` LONGTEXT NULL AFTER `reviewed_at`',
+    'DO 0'
+);
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description)
+VALUES ('202610240001_gcash_receipt_details','Preserve completed GCash Service Receipts')
+ON DUPLICATE KEY UPDATE description=VALUES(description);

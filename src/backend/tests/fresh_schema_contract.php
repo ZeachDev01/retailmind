@@ -27,6 +27,7 @@ $assertMatches('/attention_severity\s+VARCHAR\(20\)(?:\s+DEFAULT)?\s+NULL/i', 'n
 $assertMatches('/attention_count\s+INT(?:\(11\))?(?:\s+DEFAULT)?\s+NULL/i', 'notifications.attention_count is missing');
 $assertMatches('/attention_destination\s+VARCHAR\(255\)(?:\s+DEFAULT)?\s+NULL/i', 'notifications.attention_destination is missing');
 $assertMatches('/(?:INDEX|KEY)\s+idx_notifications_attention\s*\(user_id,\s*attention_key,\s*created_at\)/i', 'notifications attention index is missing');
+$assertMatches('/CREATE TABLE gcash_transactions.*\breceipt_details_json\s+LONGTEXT\s+DEFAULT\s+NULL/i', 'gcash_transactions.receipt_details_json is missing');
 
 if (preg_match_all('/CONSTRAINT\s+`?([^`\s]+)`?\s+CHECK\s*\(/i', $schema, $checkConstraintMatches)) {
     $constraintNames = array_map('strtolower', $checkConstraintMatches[1]);
