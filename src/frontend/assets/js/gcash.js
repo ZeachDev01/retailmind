@@ -447,7 +447,7 @@
                 duplicate = false;
                 scanStatus('Cash-In completed successfully.');
                 notify('GCash Cash-In #' + data.id + ' completed.', 'success');
-                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('complete-cash-in'), autoPrint);
+                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'), autoPrint);
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
