@@ -159,6 +159,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
             $message = 'User account updated successfully.';
             $messageClass = 'tag-success';
+        } elseif ($action === 'delete') {
+            $lifecycle->delete($actorId, $actorRole, (int)($_POST['user_id'] ?? 0), ($_POST['confirm_delete'] ?? '') === '1');
+            $message = 'User permanently deleted. Credentials and access have been removed.';
+            $messageClass = 'tag-success';
         } elseif ($action === 'toggle') {
             $userId = (int)($_POST['user_id'] ?? 0);
             $target = $lifecycle->get($userId);
@@ -173,9 +177,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } catch (PDOException $exception) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         if (!empty($newProfileImage)) profile_image_storage()->delete($newProfileImage);
-        $message = \App\Support\OperatorAlert::message($exception, $action === 'remove_profile_image'
+        $message = \App\Support\OperatorAlert::message($exception, $action === 'delete'
+            ? 'The account could not be deleted. No account changes were saved. Try again or disable it where permitted.'
+            : ($action === 'remove_profile_image'
             ? 'The profile picture could not be removed. Please try again. Tell your Administrator if this keeps happening.'
-            : 'Unable to save the account. Username or email may already exist. Tell your Administrator if this keeps happening.');
+            : 'Unable to save the account. Username or email may already exist. Tell your Administrator if this keeps happening.'));
         $messageClass = 'tag-warning';
     } catch (Throwable $exception) {
         if ($pdo->inTransaction()) $pdo->rollBack();
@@ -249,6 +255,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                         $isSelf = (int)$user['user_id'] === $actorId;
                         $isSuper = in_array('super_admin', array_merge([$user['role_name']], $pictureTarget['roles']), true);
                         $isLastAdministrator = (int)$user['user_id'] === $lastAdministratorId;
+                        $deletionRestriction = $canManage ? $lifecycle->deletionRestriction($actorId, $actorRole, (int)$user['user_id']) : '';
                         $hasImage = !empty($user['profile_image']) && profile_image_storage()->exists((string)$user['profile_image']);
                         $canViewImage = $hasImage && $lifecycle->canViewPicture($actorId, $actorRole, $pictureTarget);
                         $statusView = $dormancyStatusTab->view($user);
@@ -275,6 +282,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                                         data-role-ids="<?= htmlspecialchars((string)($user['assigned_role_ids'] ?? $user['role_id']), ENT_QUOTES, 'UTF-8') ?>"
                                         data-status="<?= htmlspecialchars((string)$user['status']) ?>"
                                         data-is-last-administrator="<?= $isLastAdministrator ? '1' : '0' ?>"
+                                        data-deletion-restriction="<?= htmlspecialchars((string)$deletionRestriction, ENT_QUOTES, 'UTF-8') ?>"
                                         data-last-login="<?= htmlspecialchars($statusView['last_login'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-auto-disable-date="<?= htmlspecialchars((string)($statusView['auto_disable_date'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-policy-disabled="<?= htmlspecialchars((string)($statusView['policy_disabled_line'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
@@ -380,6 +388,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const parts = (button.dataset.fullName || '').trim().split(/\s+/).filter(Boolean);
         document.getElementById('drawerUserId').value = button.dataset.userId || '';
         document.getElementById('drawerRevokeUserId').value = button.dataset.userId || '';
+        document.getElementById('drawerDeleteUserId').value = button.dataset.userId || '';
+        document.getElementById('drawerDeleteConfirmed').value = '';
+        document.getElementById('drawerDeleteButton').disabled = Boolean(button.dataset.deletionRestriction);
+        document.getElementById('drawerDeleteHelp').textContent = button.dataset.deletionRestriction || 'Permanently removes this account, credentials, preferences and notices. This cannot be undone.';
         document.getElementById('drawerUsername').value = button.dataset.username || '';
         document.getElementById('drawerFirstName').value = parts.shift() || '';
         document.getElementById('drawerLastName').value = parts.join(' ');
@@ -443,6 +455,12 @@ document.addEventListener('DOMContentLoaded', function () {
         selectDrawerTab('user');
         setOpen(drawerOverlay, true);
     }));
+
+    document.getElementById('drawerDeleteForm').addEventListener('submit', event => {
+        const confirmed = window.confirm('Permanently delete @' + document.getElementById('drawerUsername').value + '? This removes the account and its access. This cannot be undone.');
+        document.getElementById('drawerDeleteConfirmed').value = confirmed ? '1' : '';
+        if (!confirmed) event.preventDefault();
+    });
 
     document.querySelectorAll('[data-password-toggle]').forEach(button => button.addEventListener('click', function () {
         const input = document.getElementById(button.dataset.passwordToggle);

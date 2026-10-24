@@ -128,6 +128,7 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
                 {action: 'update', user_id: '100', first_name: 'Forbidden', username: 'minimum_primary', new_password: 'ForbiddenPassword123', 'role_ids[]': '4'},
                 {action: 'toggle', user_id: '100'},
                 {action: 'revoke_sessions', user_id: '100'},
+                {action: 'delete', user_id: '100', confirm_delete: '1'},
             ]) {
                 const response = await other.request.post(route, {form: {...form, csrf_token: csrf}, maxRedirects: 0});
                 assert.equal(response.status(), 403, role + ' Workspace denies Users mutations despite assigned Administrator access');

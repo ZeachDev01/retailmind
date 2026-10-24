@@ -51,9 +51,11 @@ php src/backend/tests/cashier_workspace_authorization_contract.php
 php src/backend/tests/store_scope_contract.php
 php src/backend/tests/inventory_load_contract.php
 php src/backend/tests/user_lifecycle_contract.php
+php src/backend/tests/user_deletion_mysql_test.php
 php src/backend/tests/administrator_minimum_mysql_test.php
 node src/backend/tests/administrator_minimum_browser_test.js
 node src/backend/tests/administrator_management_browser_test.js
+node src/backend/tests/user_deletion_browser_test.js
 php src/backend/tests/register_administration_contract.php
 php src/backend/tests/register_schema_parity_contract.php
 php src/backend/tests/register_legacy_upgrade_integration.php

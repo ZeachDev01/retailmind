@@ -4,8 +4,8 @@ if (getenv('RUN_DB_TESTS') !== '1') { echo "Administrator minimum MySQL: skipped
 require_once __DIR__ . '/../bootstrap/app.php';
 set_exception_handler(static function (Throwable $e): void { fwrite(STDERR, (string)$e); exit(1); });
 $database = 'retailmind_theme_test_' . bin2hex(random_bytes(6));
-$command = static function (string $file, string $action) use ($database): string {
-    $process = proc_open([PHP_BINARY, __DIR__ . '/support/' . $file, $action, $database], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+$command = static function (string $file, string $action, int $first = 100) use ($database): string {
+    $process = proc_open([PHP_BINARY, __DIR__ . '/support/' . $file, $action, $database, (string)$first], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
     $output = stream_get_contents($pipes[1]); $errors = stream_get_contents($pipes[2]);
     fclose($pipes[1]); fclose($pipes[2]);
     if (proc_close($process) !== 0) throw new RuntimeException($errors . $output);
@@ -17,21 +17,25 @@ try {
     $command('theme_fixture.php', 'create');
     $config = require __DIR__ . '/../config/database.php';
     $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$database};charset=utf8mb4", $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    foreach ([['disable', 'disable'], ['demote', 'demote'], ['dormancy', 'dormancy'], ['disable', 'demote'], ['disable', 'dormancy'], ['demote', 'dormancy']] as [$first, $second]) {
-        $command('administrator_minimum_fixture.php', 'seed');
+    $base = 98;
+    foreach ([['disable', 'disable'], ['demote', 'demote'], ['dormancy', 'dormancy'], ['disable', 'demote'], ['disable', 'dormancy'], ['demote', 'dormancy'],
+        ['delete', 'disable'], ['delete', 'demote'], ['delete', 'delete'], ['delete', 'dormancy']] as [$first, $second]) {
+        $base += 2; $next = $base + 1;
+        $command('administrator_minimum_fixture.php', 'seed', $base);
+        $historyBefore = $pdo->query('SELECT * FROM activity_log ORDER BY log_id')->fetchAll(PDO::FETCH_ASSOC);
         $connections = [];
         foreach ([$first, $second] as $index => $action) {
             // Each runner discovers a different target in its old snapshot.
             // Its locked eligibility/count recheck must see both active accounts below.
-            $pdo->exec("UPDATE users SET status = IF(user_id = " . (100 + $index) . ", 'active', 'disabled') WHERE user_id IN (100, 101)");
-            $process = proc_open([PHP_BINARY, __DIR__ . '/support/administrator_minimum_fixture.php', $action, $database, (string)(100 + $index)],
+            $pdo->exec("UPDATE users SET status = IF(user_id = " . ($base + $index) . ", 'active', 'disabled') WHERE user_id IN ($base, $next)");
+            $process = proc_open([PHP_BINARY, __DIR__ . '/support/administrator_minimum_fixture.php', $action, $database, (string)($base + $index)],
                 [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
             $children[] = [$process, $pipes];
             $ready = trim((string)fgets($pipes[1]));
             $assert(preg_match('/^READY (\d+)$/', $ready, $match) === 1, 'Independent worker must establish its snapshot');
             $connections[] = (int)$match[1];
         }
-        $pdo->exec("UPDATE users SET status = 'active' WHERE user_id IN (100, 101)");
+        $pdo->exec("UPDATE users SET status = 'active' WHERE user_id IN ($base, $next)");
         $pdo->beginTransaction();
         (new App\Authorization\AdministratorAccessMinimum($pdo))->lock();
         foreach ($children as [$process, $pipes]) {
@@ -63,9 +67,9 @@ try {
         foreach ([$first, $second] as $index => $action) {
             if ($action !== 'dormancy') continue;
             $visited = array_merge($outcomes[$index]['disabled'], $outcomes[$index]['skipped_last_admin']);
-            $assert($visited === [100 + $index], 'Each dormancy worker must act on its distinct snapshot target');
+            $assert($visited === [$base + $index], 'Each dormancy worker must act on its distinct snapshot target');
         }
-        $state = json_decode($command('administrator_minimum_fixture.php', 'state'), true, 512, JSON_THROW_ON_ERROR);
+        $state = json_decode($command('administrator_minimum_fixture.php', 'state', $base), true, 512, JSON_THROW_ON_ERROR);
         $qualifying = array_filter($state['users'], static fn(array $user): bool => $user['status'] === 'active' && in_array('admin', $user['roles'], true));
         $assert(count($qualifying) === 1, "$first/$second must persist one ordinary Administrator: " . json_encode($outcomes));
         $removals = array_filter($state['audit'], static function (array $audit): bool {
@@ -73,6 +77,8 @@ try {
             return ($before['has_admin'] ?? false) || in_array('admin', $before['roles'] ?? [], true);
         });
         $assert(count($removals) === 1, "$first/$second must audit only one committed Administrator removal");
+        $historyAfter = $pdo->query('SELECT * FROM activity_log ORDER BY log_id')->fetchAll(PDO::FETCH_ASSOC);
+        $assert(array_slice($historyAfter, 0, count($historyBefore)) === $historyBefore, 'Concurrent mutations preserve all earlier audit records');
         echo "$first/$second: passed\n";
     }
 } finally {

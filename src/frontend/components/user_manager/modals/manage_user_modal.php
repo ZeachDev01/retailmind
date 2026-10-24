@@ -81,6 +81,14 @@
                 <input type="hidden" name="user_id" id="drawerRevokeUserId">
                 <button type="submit" class="btn btn-secondary" id="drawerRevokeButton"><i class="bi bi-door-closed" aria-hidden="true"></i> Revoke Sessions</button>
             </form>
+            <form method="POST" class="drawer-modal-actions" id="drawerDeleteForm">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="user_id" id="drawerDeleteUserId">
+                <input type="hidden" name="confirm_delete" id="drawerDeleteConfirmed" value="">
+                <p class="field-help" id="drawerDeleteHelp"></p>
+                <button type="submit" class="btn btn-danger" id="drawerDeleteButton" aria-describedby="drawerDeleteHelp" disabled>Permanently Delete Account</button>
+            </form>
         </div>
     </aside>
 </div>

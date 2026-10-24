@@ -20,24 +20,35 @@ $notifier = new class extends UserAccountNotifier {
 };
 $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo), $notifier);
 if ($argv[1] === 'seed') {
-    $pdo->exec('DELETE FROM activity_log WHERE record_id IN (100, 101)');
-    $pdo->exec("DELETE FROM notifications WHERE reference_type = 'dormancy_warn'");
+    $first = (int)($argv[3] ?? 100);
+    $second = $first + 1;
     $pdo->exec("UPDATE users SET created_at = NOW(), last_login_at = NOW(), email = NULL");
-    $pdo->exec("DELETE FROM user_roles WHERE user_id IN (100, 101)");
-    $pdo->exec("DELETE FROM users WHERE user_id IN (100, 101)");
     $pdo->exec("UPDATE users SET status = 'disabled' WHERE user_id <> 2");
     $pdo->exec("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id, status, must_change_password, created_at, last_login_at) VALUES
-        (100, 'Minimum Primary', 'minimum_primary', 'unused', 1, 1, 'active', 0, '2026-01-01', '2026-01-01'),
-        (101, 'Minimum Additional', 'minimum_additional', 'unused', 4, 1, 'active', 0, '2026-01-01', '2026-01-01')");
-    $pdo->exec('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (100, 1, 1), (101, 4, 1), (101, 1, 0)');
+        ($first, 'Minimum Primary', 'minimum_primary_$first', 'unused', 1, 1, 'active', 0, '2026-01-01', '2026-01-01'),
+        ($second, 'Minimum Additional', 'minimum_additional_$second', 'unused', 4, 1, 'active', 0, '2026-01-01', '2026-01-01')");
+    $pdo->exec("INSERT INTO user_roles (user_id, role_id, is_primary) VALUES ($first, 1, 1), ($second, 4, 1), ($second, 1, 0)");
 } elseif ($argv[1] === 'management') {
     $pdo->exec("UPDATE users SET status = 'active', email = NULL, last_login_at = NOW() WHERE user_id IN (1, 3, 4)");
     $pdo->exec('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (3, 1, 0), (4, 1, 0)');
 } elseif ($argv[1] === 'one') {
     $pdo->exec("UPDATE users SET status = 'disabled' WHERE user_id = 100");
+} elseif ($argv[1] === 'deletion') {
+    $pdo->exec("UPDATE users SET status = 'active', last_login_at = NOW() WHERE user_id = 1");
+    $pdo->exec("UPDATE users SET status = 'disabled' WHERE user_id = 101");
+    $pdo->prepare('UPDATE users SET password_hash = ? WHERE user_id = 100')->execute([password_hash('ImportedPassword123', PASSWORD_DEFAULT)]);
+    $pdo->prepare('INSERT INTO password_reset_tokens (user_id,token_hash,expires_at) VALUES (100,?,DATE_ADD(NOW(),INTERVAL 1 HOUR))')->execute([hash('sha256', 'imported-reset-token')]);
+} elseif ($argv[1] === 'legacy_session') {
+    App\Core\Session::start();
+    $_SESSION = ['user_id' => 100, 'role' => 'admin', 'roles' => ['admin'], 'session_version' => 1,
+        '_authenticated_at' => time(), '_last_activity' => time(), '_restore_epoch' => App\Backup\RecoveryStore::epoch()];
+    echo json_encode(['name' => session_name(), 'value' => session_id()]);
+    session_write_close();
 } elseif ($argv[1] === 'state') {
-    echo json_encode(['users' => [$service->get(100), $service->get(101)],
-        'audit' => $pdo->query('SELECT * FROM activity_log WHERE record_id IN (100, 101) ORDER BY log_id')->fetchAll()]);
+    $first = (int)($argv[3] ?? 100); $second = $first + 1;
+    $ids = $pdo->query("SELECT user_id FROM users WHERE user_id IN ($first, $second) ORDER BY user_id")->fetchAll(PDO::FETCH_COLUMN);
+    echo json_encode(['users' => array_map(fn($id) => $service->get((int)$id), $ids),
+        'audit' => $pdo->query("SELECT * FROM activity_log WHERE record_id IN ($first, $second) ORDER BY log_id")->fetchAll()]);
 } else {
     // Establish an old repeatable-read snapshot before the parent releases the mutex.
     $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
@@ -49,6 +60,7 @@ if ($argv[1] === 'seed') {
     try {
         $id = (int)($argv[3] ?? 100);
         if ($argv[1] === 'disable') $service->setStatus(2, 'super_admin', $id, 'disabled');
+        elseif ($argv[1] === 'delete') $service->delete(2, 'super_admin', $id, true);
         elseif ($argv[1] === 'demote') $service->update(2, 'super_admin', $id, array_replace($service->get($id), ['roles' => ['cashier']]));
         elseif ($argv[1] === 'dormancy') {
             $clock = new class implements Clock {
