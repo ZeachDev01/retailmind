@@ -2010,6 +2010,7 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202610010003_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610040001_user_theme','Personal display theme for every Staff account') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610180003_product_warning_lead_time','Optional warning_lead_time_days on products (ticket #223)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610190004_gcash_funding_and_corrections','GCash service funding movements, linked corrections, and discrepancy waiver') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610240001_gcash_receipt_details','Preserve completed GCash Service Receipts') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- Forecast defaults; retain any configured values.
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('minimum_history_days','30');
@@ -2107,6 +2108,7 @@ CREATE TABLE `gcash_transactions` (
   `verified_by` int DEFAULT NULL,
   `verification_note` varchar(500) DEFAULT NULL,
   `reviewed_at` datetime DEFAULT NULL,
+  `receipt_details_json` longtext DEFAULT NULL,
   `completed_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`transaction_id`),
