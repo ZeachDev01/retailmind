@@ -32,6 +32,10 @@ _Avoid_: Any existing discount, expired promotion
 A customer cash-in or cash-out exchange handled by the Store, separate from a Product purchase or its payment.
 _Avoid_: Product sale, GCash product payment
 
+**GCash Service Receipt**:
+The customer-facing record of a completed GCash cash-in or cash-out exchange, identifying its principal, service fee, money exchanged, and GCash reference. An unfinished exchange does not qualify for this receipt.
+_Avoid_: Sale Receipt, payment verification
+
 **GCash Service Cash**:
 The physical money kept in a dedicated cash box or pouch for GCash Services, separate from the product-sale drawer.
 _Avoid_: Product-sale cash, wallet balance
