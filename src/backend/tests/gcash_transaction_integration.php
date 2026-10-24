@@ -1309,11 +1309,64 @@ $check($afterWaiveOv['differences_count'] === $afterCloseOv['differences_count']
 $check(count($afterWaiveOv['reconciliation_differences']) === count($afterCloseOv['reconciliation_differences']), 'Waiver preserves history');
 
 // Enough public records to exercise search/pagination and full filtered CSV export.
+$traversalIds = [];
 for ($index = 0; $index < 105; $index++) {
-    $service->save(4, '888888888' . str_pad((string)$index, 4, '0', STR_PAD_LEFT), '1', 'Payment');
+    $traversalIds[] = $service->save(4, '888888888' . str_pad((string)$index, 4, '0', STR_PAD_LEFT), '1', 'Payment');
 }
 $exportPage = $service->adminOverview(['actor_role' => 'admin', 'search' => '888888888', 'page' => 2]);
 $check($exportPage['total_transactions'] === 105 && count($exportPage['transactions']) === 50, 'Search matches across page boundaries');
+
+// Public reporting operations agree for empty, single-record and larger stable selections.
+foreach ([
+    ['absent-traversal-reference', []],
+    ['8888888880000', [$traversalIds[0]]],
+    ['88888888800', array_reverse(array_slice($traversalIds, 0, 100))],
+    ['888888888', array_reverse($traversalIds)],
+] as [$search, $expectedIds]) {
+    $scope = ['actor_role' => 'admin', 'search' => $search];
+    $traversed = iterator_to_array($service->adminTransactions($scope + ['page' => 99, 'limit' => 10]), false);
+    $check(array_map('intval', array_column($traversed, 'transaction_id')) === $expectedIds, 'Traversal returns every selected record once in descending order and ignores presentation pagination');
+    $overviewRows = [];
+    $page = 1;
+    do {
+        $overviewPage = $service->adminOverview($scope + ['page' => $page++, 'limit' => 100]);
+        array_push($overviewRows, ...$overviewPage['transactions']);
+    } while ($overviewPage['has_next']);
+    $check($overviewPage['matching_record_count'] === count($expectedIds) && $overviewRows === $traversed, 'Overview pagination and complete traversal agree on count, order and interpretation');
+}
+
+foreach (['cashier', 'inventory_manager', 'invalid', null] as $role) {
+    $refuse(fn() => iterator_to_array($service->adminTransactions(['actor_role' => $role])));
+}
+$savedSession = $_SESSION ?? [];
+try {
+    $_SESSION['role'] = 'cashier';
+    $_SESSION['roles'] = ['cashier', 'admin', 'super_admin'];
+    $refuse(fn() => iterator_to_array($service->adminTransactions(['actor_role' => 'admin'])));
+    $refuse(fn() => iterator_to_array($service->adminTransactions(['actor_role' => 'super_admin', 'approver_username' => 'theme_admin', 'approver_password' => 'ThemeTest@2026'])));
+    foreach (['admin', 'super_admin'] as $role) {
+        $_SESSION['role'] = $role;
+        $check(count(iterator_to_array($service->adminTransactions(['search' => '888888888']))) === 105, 'Authorized active Administrator and Super Administrator workspaces can traverse history');
+    }
+} finally { $_SESSION = $savedSession; }
+foreach ([
+    ['period' => 'invalid'], ['cashier_id' => 'invalid'], ['type' => 'Payment'],
+    ['search' => str_repeat('x', 201)],
+    ['start_date' => '2027-02-29', 'end_date' => '2027-03-01'],
+    ['start_date' => '2027-03-02', 'end_date' => '2027-03-01'],
+] as $invalid) {
+    $refuse(fn() => iterator_to_array($service->adminTransactions(['actor_role' => 'admin'] + $invalid)));
+}
+foreach ([[], ['period' => 'month_to_date'], ['cashier_id' => $newUserId], ['type' => 'Cash-Out'], ['search' => '%'], ['search' => '_'], ['search' => '!'], ['search' => '#' . $cashInOnly['transactions'][0]['shift_id']]] as $selection) {
+    $scope = ['actor_role' => 'admin'] + $selection;
+    $overviewRows = [];
+    $page = 1;
+    do {
+        $overviewPage = $service->adminOverview($scope + ['page' => $page++, 'limit' => 100]);
+        array_push($overviewRows, ...$overviewPage['transactions']);
+    } while ($overviewPage['has_next']);
+    $check(iterator_to_array($service->adminTransactions($scope), false) === $overviewRows, 'Today, Month-to-date, Cashier, type and literal search selections agree');
+}
 
 // Reporting keeps the created-at Philippine day basis, even if completion happens later.
 $pdo->beginTransaction();
@@ -1337,6 +1390,9 @@ try {
     $pdo->exec("SET time_zone = '+08:00'");
     $reportScope = ['actor_role' => 'admin', 'start_date' => '2027-03-01', 'end_date' => '2027-03-01'];
     $report = $service->adminOverview($reportScope);
+    $check(iterator_to_array($service->adminTransactions($reportScope), false) === $report['transactions'], 'Traversal agrees with overview selection and record interpretation');
+    $check(array_column($report['transactions'], 'reference_number') === ['7900000000009', '7900000000008', '7900000000007', '7900000000004', '7900000000003', '7900000000002', '7900000000001'], 'Traversal selection preserves inclusive Philippine dates, historical statuses and existing transaction order');
+
     $check($report['completed_exchange_count'] === 4 && $report['matching_record_count'] === 7, 'Completed exchange count excludes held, rejected and legacy records; matching count retains them');
     $check($report['cash_in_principal'] === 1600.0 && $report['cash_out_principal'] === 2350.0 && $report['gross_fees_cash'] === 25.0 && $report['gross_fees_wallet'] === 20.0, 'Philippine month/day boundaries yield exact shared principal and gross fees');
     foreach ($report['transactions'] as $unpreserved) {
@@ -1344,10 +1400,20 @@ try {
         $check($receipts->fetch((int)$unpreserved['transaction_id'], 1, 'admin') === null, 'Direct retrieval never reconstructs unpreserved history');
     }
     $cashierReport = $service->adminOverview($reportScope + ['cashier_id' => 4, 'type' => 'Cash-Out', 'search' => '7900000000002']);
+    $check(iterator_to_array($service->adminTransactions($reportScope + ['cashier_id' => 4, 'type' => 'Cash-Out', 'search' => '7900000000002']), false) === $cashierReport['transactions'], 'Combined period, Cashier, reference and exchange type agree');
     $check($cashierReport['completed_exchange_count'] === 3 && $cashierReport['matching_record_count'] === 1, 'Cashier scopes shared totals; local type/search only narrow matching records');
     $check($cashierReport['cash_in_principal'] === 1000.0 && $cashierReport['cash_out_principal'] === 2350.0 && $cashierReport['gross_fees_cash'] === 15.0 && $cashierReport['gross_fees_wallet'] === 20.0, 'Cashier shared principal and fees remain independent of local transaction filters');
     $refuse(fn() => $service->adminOverview($reportScope + ['cashier_id' => 'invalid']));
     $refuse(fn() => $service->adminOverview(['actor_role' => 'admin', 'start_date' => '2027-02-29', 'end_date' => '2027-03-01']));
+    $pdo->exec("UPDATE users SET full_name = 'Traversal!_%Cashier', username = 'traversal!_%cashier' WHERE user_id = 4");
+    $pdo->exec("UPDATE users SET full_name = 'Traversal!ABCashier', username = 'traversal!ABcashier' WHERE user_id = {$newUserId}");
+    foreach (['Traversal!_%Cashier', 'traversal!_%cashier'] as $literalName) {
+        $literalScope = $reportScope + ['search' => $literalName];
+        $literalRows = iterator_to_array($service->adminTransactions($literalScope), false);
+        $check(array_column($literalRows, 'reference_number') === ['7900000000009', '7900000000008', '7900000000007', '7900000000003', '7900000000002', '7900000000001'], 'Cashier names and usernames preserve literal percent, underscore and escape characters');
+        $check($literalRows === $service->adminOverview($literalScope)['transactions'], 'Literal Cashier searches agree across reporting operations');
+    }
+
 } finally {
     $pdo->rollBack();
     $pdo->exec("SET time_zone = '+08:00'");
@@ -1409,6 +1475,10 @@ $pdo->prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE us
 $service->closeSession(4, 1113.45, 50123.45, 'Receipt verification complete');
 $pdo->exec("UPDATE cashier_shifts SET status='closed' WHERE cashier_id=4");
 $check($receipts->fetch($cashInTxId, 4, 'cashier') === $receipt, 'Receipt retrieval remains read-only and available after shift closes');
+
+$exactReference = iterator_to_array($service->adminTransactions(['actor_role' => 'admin', 'search' => '00000000000000000000000000123456']), false);
+$check(count($exactReference) === 1 && $exactReference[0]['reference_number'] === '00000000000000000000000000123456' && $exactReference[0]['has_receipt'] === true, 'Traversal retains complete leading-zero references and saved-receipt availability');
+$check($exactReference === $service->adminOverview(['actor_role' => 'admin', 'search' => '00000000000000000000000000123456'])['transactions'], 'Saved-receipt record interpretation agrees');
 
 echo "GCash MySQL integration: passed\n";
 
