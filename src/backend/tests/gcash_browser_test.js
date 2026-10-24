@@ -828,7 +828,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         fixture('gcash_legacy');
         await tabHistory.click();
         assert.equal(await page.locator('#gcash-refresh').count(), 0, 'History omits only the Refresh button');
-        assert.equal(await page.locator('#gcash-history-title').textContent(), 'Your transaction history');
+        assert.equal(await page.locator('#gcash-history-title').textContent(), 'Transaction history');
         await page.locator('#gcash-history-action-cash-out').click();
         assert.equal(await page.locator('#gcash-type').inputValue(), 'Cash-Out');
         await tabHistory.click();

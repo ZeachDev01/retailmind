@@ -158,7 +158,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <div class="topbar shift-topbar">
                 <div>
                     <h1>Cashier Shifts</h1>
-                    <p class="page-subtitle">All times in Philippine time.</p>
+                    <p class="page-subtitle"><?= $isCashier ? 'Open your shift, record drawer cash, and count up before closing.' : 'Review cashier shifts and drawer reconciliation.' ?></p>
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
             </div>
             <?php foreach ([[$message, 'success'], [$error, 'error']] as [$notice, $noticeType]): ?>
@@ -170,12 +170,12 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </section><?php endif; ?>
             <div class="shift-grid">
                 <section class="dashboard-section shift-overview">
-                    <div class="shift-section-heading"><h2><?= $openShift ? 'Open shift' : 'Open a shift' ?></h2><?php if ($openShift): ?><span class="shift-status shift-status--open">Open</span><?php endif; ?></div>
+                    <div class="shift-section-heading"><h2><?= $openShift ? 'Current shift' : ($isCashier ? 'Open a shift' : 'No open shift') ?></h2><?php if ($openShift): ?><span class="shift-status shift-status--open">Open</span><?php endif; ?></div>
                     <?php if (!$isCashier): ?><p class="shift-help"><?= $actorRole === 'admin' ? 'Review or close an abandoned shift.' : 'Review Cashier Shifts here.' ?> Only Cashiers can open their own shifts.</p><?php endif; ?>
                     <?php if (!$openShift && $isCashier && !$availableRegisters): ?><p>No Register is available. Ask your Administrator for help.</p><?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
                             <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($availableRegisters as $register): ?><option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option><?php endforeach; ?></select></div>
-                            <div><label for="opening-float">Starting cash</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required></div>
-                        </div><button class="btn" type="submit">Open shift</button></form><?php elseif ($openShift): ?>
+                            <div><label for="opening-float">Starting cash (₱)</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required aria-describedby="opening-help"></div>
+                        </div><p class="shift-help" id="opening-help">Enter the cash in your drawer before your first sale.</p><button class="btn" type="submit">Open shift</button></form><?php elseif ($openShift): ?>
                         <div class="shift-overview-content">
                             <dl class="shift-details">
                                 <div><dt>Shift</dt><dd>#<?= (int)$openShift['shift_id'] ?></dd></div>
@@ -202,13 +202,13 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         </div></div><?php endif; ?>
                 </section>
                 <?php if ($openShift && $isCashier && !$ownRegisterLocked && !$countPreview): ?><section class="dashboard-section shift-movement">
-                        <h2>Drawer movement</h2>
+                        <h2>Record drawer cash</h2>
                         <p class="shift-help">Check physical cash before payouts; add and record float first if needed. Record refunds only in <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a>.</p>
                         <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="movement">
                             <div class="form-row">
-                                <div><label for="movement-type">Type</label><select id="movement-type" name="movement_type">
+                                <div><label for="movement-type">Cash movement</label><select id="movement-type" name="movement_type">
                                         <?php foreach (CashierShiftService::DRAWER_REASONS as $type => $reasons): ?>
-                                            <option value="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars(['cash_in' => 'Float addition / cash returned', 'cash_out' => 'Cash removal / spending', 'safe_drop' => 'Safe drop'][$type]) ?></option>
+                                            <option value="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars(['cash_in' => 'Cash in', 'cash_out' => 'Cash out', 'safe_drop' => 'Safe drop'][$type]) ?></option>
                                         <?php endforeach; ?>
                                     </select></div>
                                 <div><label for="movement-amount">Amount (₱)</label><input id="movement-amount" type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required></div>
@@ -220,7 +220,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <?php endforeach; ?>
                             </select><label for="movement-note">Explanation (required for Other)</label><textarea id="movement-note" name="note" maxlength="255" rows="2"></textarea>
                             <p class="shift-help">Supplier payments and petty cash require Administrator approval of the amount and reason.</p>
-                            <button class="btn" type="submit">Record movement</button>
+                            <button class="btn btn-secondary" type="submit">Record movement</button>
                             <dialog id="movement-authorization" aria-labelledby="movement-authorization-title" aria-describedby="movement-authorization-summary">
                                 <h2 id="movement-authorization-title">Authorize drawer movement</h2>
                                 <p id="movement-authorization-summary" class="shift-help"></p>
@@ -234,7 +234,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         </form>
                     </section><?php endif; ?>
                 <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation">
-                        <h2>Count cash and close shift</h2>
+                        <h2><?= $countPreview ? 'Review count and close shift' : 'Count cash to close shift' ?></h2>
                         <?php if (!$isCashier): ?><p>Intervention for <?= htmlspecialchars($openShift['full_name']) ?> on <?= htmlspecialchars($openShift['register_name'] ?? 'Unassigned Register') ?>. Count the drawer before viewing its expected balance.</p><?php endif; ?>
                         <?php if ($unresolvedHeldSales): ?><div class="message error" role="note" data-rm-alert-processed="1">
                             This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
@@ -270,7 +270,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <button class="btn" type="submit">Close shift</button>
                             </form>
                         <?php else: ?>
-                            <p class="shift-help" id="count-help">Enter the quantity of each bill and coin.</p>
+                            <p class="shift-help" id="count-help">Enter how many of each bill and coin are in the drawer. Review the totals before closing.</p>
                             <?php require __DIR__ . '/../../../backend/app/Views/cash_drawer_counter.php'; ?>
                         <?php endif; ?>
                     </section><?php endif; ?>
@@ -302,32 +302,28 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </section><?php endif; ?>
             <section class="dashboard-section shift-history">
                 <div class="shift-section-heading"><h2 id="recent-shifts-heading">Recent shifts</h2><span class="shift-history-count"><?= count($recent) ?> shift<?= count($recent) === 1 ? '' : 's' ?></span></div>
+                <p class="shift-help">All times in Philippine time.</p>
                 <?php if ($recent): ?><div class="table-wrap" role="region" aria-labelledby="recent-shifts-heading" tabindex="0">
                     <table class="shift-history-table">
                         <thead><tr>
-                            <th>Cashier</th>
-                            <th>Register</th>
+                            <th>Cashier / register</th>
                             <th>Opened</th>
                             <th>Closed</th>
-                            <th>Closed by</th>
-                            <th>Intervention reason</th>
                             <th>Status</th>
-                            <th>Review</th>
-                            <th>Expected</th>
-                            <th>Actual</th>
-                            <th>Variance</th>
+                            <th>Expected cash</th>
+                            <th>Counted cash</th>
+                            <th>Difference</th>
                         </tr></thead><tbody><?php foreach ($recent as $r): ?><tr>
-                                <td data-label="Cashier"><?= htmlspecialchars($r['full_name']) ?></td>
-                                <td data-label="Register"><?= htmlspecialchars($r['register_name'] ?? 'Unassigned') ?></td>
+                                <td data-label="Cashier / register"><?= htmlspecialchars($r['full_name']) ?><span class="shift-history-meta"><?= htmlspecialchars($r['register_name'] ?? 'Unassigned') ?></span></td>
                                 <td data-label="Opened" class="shift-date"><?= htmlspecialchars(format_display_datetime($r['opened_at'])) ?></td>
-                                <td data-label="Closed" class="shift-date"><?= $r['closed_at'] ? htmlspecialchars(format_display_datetime($r['closed_at'])) : '—' ?></td>
-                                <td data-label="Closed by"><?= htmlspecialchars($r['closing_actor_name'] ?? '-') ?></td>
-                                <td data-label="Intervention reason"><?= htmlspecialchars($r['intervention_reason'] ?? '-') ?></td>
-                                <td data-label="Status"><span class="shift-status <?= $r['status'] === 'open' ? 'shift-status--open' : 'shift-status--closed' ?>"><?= htmlspecialchars(ucfirst($r['status'])) ?></span></td>
-                                <td data-label="Review"><?= !empty($r['variance_review_required']) ? 'Administrator review needed' : '-' ?></td>
-                                <td data-label="Expected"><?= $r['expected_cash'] !== null ? '₱' . number_format((float)$r['expected_cash'], 2) : '-' ?></td>
-                                <td data-label="Actual"><?= $r['actual_cash'] !== null ? '₱' . number_format((float)$r['actual_cash'], 2) : '-' ?></td>
-                                <td data-label="Variance" class="<?= (float)($r['cash_variance'] ?? 0) >= 0 ? 'positive' : 'negative' ?>"><?= $r['cash_variance'] !== null ? '₱' . number_format((float)$r['cash_variance'], 2) : '-' ?></td>
+                                <td data-label="Closed" class="shift-date"><?= $r['closed_at'] ? htmlspecialchars(format_display_datetime($r['closed_at'])) : '—' ?>
+                                    <?php if ($r['closing_actor_name']): ?><span class="shift-history-meta">By <?= htmlspecialchars($r['closing_actor_name']) ?></span><?php endif; ?>
+                                    <?php if ($r['intervention_reason']): ?><details class="shift-intervention"><summary>Intervention reason</summary><p><?= htmlspecialchars($r['intervention_reason']) ?></p></details><?php endif; ?>
+                                </td>
+                                <td data-label="Status"><span class="shift-status <?= $r['status'] === 'open' ? 'shift-status--open' : 'shift-status--closed' ?>"><?= htmlspecialchars(ucfirst($r['status'])) ?></span><?php if (!empty($r['variance_review_required'])): ?><span class="shift-history-meta">Administrator review needed</span><?php endif; ?></td>
+                                <td data-label="Expected cash"><?= $r['expected_cash'] !== null ? '₱' . number_format((float)$r['expected_cash'], 2) : '—' ?></td>
+                                <td data-label="Counted cash"><?= $r['actual_cash'] !== null ? '₱' . number_format((float)$r['actual_cash'], 2) : '—' ?></td>
+                                <td data-label="Difference" class="<?= $r['cash_variance'] === null ? '' : ((float)$r['cash_variance'] >= 0 ? 'positive' : 'negative') ?>"><?= $r['cash_variance'] !== null ? '₱' . number_format((float)$r['cash_variance'], 2) : '—' ?></td>
                             </tr><?php endforeach; ?></tbody>
                     </table>
                 </div><?php else: ?><p class="shift-empty">No shifts yet.</p><?php endif; ?>

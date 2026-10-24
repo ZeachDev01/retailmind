@@ -47,9 +47,14 @@ const {chromium} = require('playwright');
         assert.match(await row.locator('details').innerText(), /Checked <reference>/);
         assert.equal(await row.locator('example, reference').count(), 0, 'Details escape user text');
         await row.locator('summary').click();
-        for (const width of [1440, 390]) {
+        for (const width of [1440, 1024, 390]) {
             await page.setViewportSize({width, height: 900});
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Table scroll stays inside page');
+            assert.equal(await page.locator('.gcash-history table').evaluate(table => getComputedStyle(table).display), 'table', 'One scroll container preserves table layout on mobile');
+            assert.equal(await row.locator('td').nth(3).evaluate(cell => getComputedStyle(cell).textAlign), 'right', 'Principal aligns with its column heading');
+            const date = await row.locator('td').first().boundingBox();
+            const region = await page.locator('.gcash-table-wrap').boundingBox();
+            assert.ok(date.x >= region.x && date.x + date.width <= region.x + region.width, 'Full date column is visible at the start of history');
             await page.screenshot({path: path.join(output, `history-${width}.png`), fullPage: true});
         }
         await page.evaluate(async () => { window.historyFixtures = []; await loadHistory(); });

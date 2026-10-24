@@ -236,13 +236,13 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <table>
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Reference</th>
-                                <th>Type</th>
-                                <th>Principal</th>
-                                <th>Fee</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Reference</th>
+                                <th scope="col">Type</th>
+                                <th scope="col">Principal</th>
+                                <th scope="col">Fee</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="gcash-history-body"></tbody>

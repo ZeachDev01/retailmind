@@ -32,6 +32,6 @@ use App\Services\CashDenominationCounter;
     </div>
     <div class="money-counter-actions">
         <button type="button" class="btn btn-secondary" id="reset-cash-count">Start over</button>
-        <button type="submit" class="btn" <?= $unresolvedHeldSales ? 'disabled' : '' ?>>Check my cash</button>
+        <button type="submit" class="btn" <?= $unresolvedHeldSales ? 'disabled' : '' ?>>Review cash count</button>
     </div>
 </form>

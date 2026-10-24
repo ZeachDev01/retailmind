@@ -32,16 +32,17 @@
 }
 
 .cashier-shifts-page .money-counter-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1rem; }
-.cashier-shifts-page .money-counter-group { min-width: 0; margin: 0; padding: .75rem; border: 1px solid var(--border); border-radius: 12px; }
-.cashier-shifts-page .money-counter-group legend { padding: 0 .4rem; font-size: 1rem; font-weight: 700; }
+.cashier-shifts-page .money-counter-group { min-width: 0; margin: 0; padding: 0; border: 0; }
+.cashier-shifts-page .money-counter-group legend { padding: 0 0 .75rem; font-size: 1rem; font-weight: 700; }
 .cashier-shifts-page :is(.money-counter-row, .money-counter-head) { display: grid; grid-template-columns: minmax(3.5rem, 1fr) 144px minmax(4.5rem, 1fr); align-items: center; gap: .4rem; }
 .cashier-shifts-page .money-counter-head { color: var(--muted); font-size: .875rem; line-height: 1.4; padding-bottom: .5rem; }
 .cashier-shifts-page .money-counter-row { padding: .5rem 0; border-top: 1px solid var(--border); transition: background .2s ease; }
 .cashier-shifts-page .money-counter-row.has-cash { background: var(--theme-info-surface, var(--card-bg)); }
 .cashier-shifts-page .money-counter-row label { margin: 0; font-size: .875rem; }
-.cashier-shifts-page .money-counter-stepper { display: grid; grid-template-columns: 40px 64px 40px; }
+.cashier-shifts-page .money-counter-stepper { display: grid; grid-template-columns: 44px 56px 44px; }
 .cashier-shifts-page #cash-drawer-counter .money-counter-stepper :is(button, input) { width: 100%; min-width: 0; min-height: 44px; padding: .3rem; margin: 0; border: 1px solid var(--border); border-radius: 0; background: var(--card-bg); color: var(--text); font: inherit; text-align: center; }
 .cashier-shifts-page .money-counter-stepper button { cursor: pointer; }
+.cashier-shifts-page #cash-drawer-counter .money-counter-stepper button:not(:disabled):hover { background: var(--theme-surface-soft, #f8fafc); }
 .cashier-shifts-page #cash-drawer-counter .money-counter-stepper button:first-child { border-radius: 8px 0 0 8px; }
 .cashier-shifts-page #cash-drawer-counter .money-counter-stepper button:last-child { border-radius: 0 8px 8px 0; }
 .cashier-shifts-page .money-counter-stepper input { appearance: textfield; }
@@ -56,14 +57,15 @@
 .cashier-shifts-page .shift-reconciliation { grid-column: 1 / -1; }
 .cashier-shifts-page .money-counter-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; }
 .cashier-shifts-page .money-count-breakdown { margin: 1rem 0; }
+.cashier-shifts-page .money-count-breakdown summary { display: list-item; min-height: 44px; padding: .65rem 0; cursor: pointer; }
+.cashier-shifts-page .count-match { margin: 1rem 0; font-weight: 600; }
 .cashier-shifts-page .money-count-breakdown dl > div { display: flex; justify-content: space-between; gap: 1rem; }
 .cashier-shifts-page .rm-toast-stack { top: auto; bottom: max(1rem, env(safe-area-inset-bottom)); right: 1rem; width: min(360px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; z-index: 20010; pointer-events: none; }
 .cashier-shifts-page .rm-toast { background: var(--card-bg); color: var(--text); pointer-events: auto; }
 .cashier-shifts-page .rm-toast-close { min-height: 44px; min-width: 44px; }
 @media (max-width: 380px) {
-    .cashier-shifts-page .money-counter-group { padding: .5rem; }
     .cashier-shifts-page :is(.money-counter-row, .money-counter-head) { grid-template-columns: minmax(0, 1fr) 136px minmax(0, 1fr); gap: .2rem; }
-    .cashier-shifts-page .money-counter-stepper { grid-template-columns: 36px 64px 36px; }
+    .cashier-shifts-page .money-counter-stepper { grid-template-columns: 44px 48px 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
     .cashier-shifts-page :is(.money-counter-row, .rm-toast) { transition: none; }
@@ -186,22 +188,24 @@
 .cashier-shifts-page .shift-topbar .btn { flex: 0 0 auto; white-space: nowrap; }
 .cashier-shifts-page .shift-topbar h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); line-height: 1.2; letter-spacing: -.02em; text-wrap: balance; }
 .cashier-shifts-page .shift-topbar .page-subtitle { max-width: 65ch; font-size: .875rem; line-height: 1.5; }
-.cashier-shifts-page .dashboard-section { border: 1px solid var(--border); border-radius: 16px; }
+.cashier-shifts-page .dashboard-section { border: 1px solid var(--border); border-radius: 14px; }
 .cashier-shifts-page .shift-overview { background: var(--theme-surface-soft, #f8fafc); }
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) { padding: 0 0 1.25rem; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
 .cashier-shifts-page .shift-details { margin: 0; }
 .cashier-shifts-page .shift-details > div { min-width: 0; }
 .cashier-shifts-page .shift-details dd { margin-left: 0; overflow-wrap: anywhere; }
 .cashier-shifts-page .form-row > div { min-width: 0; }
 .cashier-shifts-page .dashboard-section :is(input, select, textarea) { min-width: 0; max-width: 100%; }
 .cashier-shifts-page :is(.money-counter-row, .money-counter-head) > * { min-width: 0; }
-.cashier-shifts-page .money-counter-totals { margin-top: 1rem; padding: 1rem; border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); }
+.cashier-shifts-page .money-counter-totals { margin-top: 1rem; border-top: 1px solid var(--border); }
 .cashier-shifts-page .money-counter-total label { margin: 0; }
 .cashier-shifts-page .dashboard-section #actual-cash { margin-bottom: 0; }
 .cashier-shifts-page .shift-help { line-height: 1.6; }
 .cashier-shifts-page .main-content { line-height: 1.5; }
 .cashier-shifts-page .main-content :is(input, select, textarea, button) { font-family: inherit; }
 .cashier-shifts-page :is(input[type="number"], .money-counter-row label, .money-counter-totals strong, .money-count-breakdown dd, .metric, .shift-details dd, .shift-movement-table td[data-label="Amount"]) { font-variant-numeric: tabular-nums; }
-.cashier-shifts-page .shift-help a { text-underline-offset: .2em; }
+.cashier-shifts-page .shift-help a { color: var(--theme-info-text, #1d4ed8); text-underline-offset: .2em; }
+.cashier-shifts-page .shift-help a:hover { text-decoration-thickness: 2px; }
 .cashier-shifts-page .money-counter-subtotal { font-size: 1rem; line-height: 1.5; }
 
 .cashier-shifts-page .shift-overview {
@@ -302,7 +306,7 @@
     overflow-y: auto;
     padding: 1.5rem;
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 18px;
     background: var(--card-bg);
     color: var(--text);
 }
@@ -419,7 +423,7 @@
     font-size: .875rem;
     line-height: 1.5;
     overflow-wrap: anywhere;
-    vertical-align: middle;
+    vertical-align: top;
 }
 
 .cashier-shifts-page .shift-history-table th {
@@ -432,6 +436,12 @@
 .cashier-shifts-page .shift-history-table td:first-child {
     font-weight: 600;
 }
+
+.cashier-shifts-page .shift-history-meta { display: block; margin-top: .25rem; color: var(--muted); font-weight: 400; }
+.cashier-shifts-page .shift-intervention summary { min-height: 44px; padding: .65rem 0; cursor: pointer; color: var(--theme-info-text, #1d4ed8); }
+.cashier-shifts-page :is(.shift-intervention, .money-count-breakdown) summary:hover { text-decoration: underline; text-underline-offset: .2em; }
+.cashier-shifts-page .shift-intervention p { margin: 0; font-weight: 400; }
+.cashier-shifts-page :is(summary, button, a, [tabindex]):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 
 .cashier-shifts-page .shift-date {
     font-variant-numeric: tabular-nums;
@@ -470,6 +480,7 @@
     .cashier-shifts-page :is(.shift-history-table, .shift-movement-table) tbody { display: block; min-width: 0; }
     .cashier-shifts-page :is(.shift-history-table, .shift-movement-table) tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; padding: 1rem; margin-bottom: .75rem; border: 1px solid var(--border); border-radius: 12px; }
     .cashier-shifts-page :is(.shift-history-table, .shift-movement-table) tbody td { display: block; min-width: 0; padding: 0; border: 0; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+    .cashier-shifts-page .shift-history-table :is(th, td):nth-last-child(-n+3) { text-align: left; }
     .cashier-shifts-page td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: var(--muted); font-size: .875rem; font-weight: 600; }
     .cashier-shifts-page .table-wrap { border: 0; box-shadow: none; }
 }
@@ -504,6 +515,8 @@
     .cashier-shifts-page .shift-details > :last-child {
         grid-column: 1 / -1;
     }
+
+    .cashier-shifts-page .shift-overview-content { display: grid; gap: 1rem; }
 }
 
 .cashier-history-page .history-pagination [aria-disabled="true"] { opacity: .5; cursor: default; }

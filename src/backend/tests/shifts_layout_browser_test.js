@@ -50,13 +50,22 @@ const {chromium} = require('playwright');
                 assert(await page.locator('.shift-grid').evaluate(el => el.scrollWidth <= el.clientWidth), `${variant}: grid fits at ${width}`);
                 assert(await page.locator('.shift-history .table-wrap').evaluate(el => el.scrollWidth <= el.clientWidth), `${variant}: history fits at ${width}`);
                 if (variant === 'open') {
+                    assert(await page.locator('.money-counter-stepper button').evaluateAll(buttons => buttons.every(button => {
+                        const rect = button.getBoundingClientRect();
+                        return rect.width >= 44 && rect.height >= 44;
+                    })), `Cash counter touch targets are at least 44px at ${width}`);
                     const movement = await page.locator('.shift-movement').boundingBox();
                     const reconciliation = await page.locator('.shift-reconciliation').boundingBox();
                     assert(width > 1200 ? Math.abs(movement.y - reconciliation.y) < 2 : reconciliation.y >= movement.y + movement.height,
                         `Panels use the expected grid at ${width}`);
                 }
             }
-            assert.equal(await page.locator('.shift-history td[data-label]').count(), 11);
+            assert.equal(await page.locator('.shift-history td[data-label]').count(), 7);
+            const intervention = page.locator('.shift-intervention');
+            assert.equal(await intervention.locator('p').isVisible(), false, 'Long intervention reason starts collapsed');
+            await intervention.locator('summary').click();
+            assert.match(await intervention.locator('p').innerText(), /Long shift explanation/, 'Full intervention reason remains available');
+            await intervention.locator('summary').click();
             if (variant === 'open') {
                 const username = page.locator('#movement-approver');
                 const password = page.locator('#movement-approval-password');
