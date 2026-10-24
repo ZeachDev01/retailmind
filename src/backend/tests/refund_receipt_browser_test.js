@@ -29,7 +29,8 @@ const { chromium } = require('playwright');
                 assert.equal(await page.evaluate(() => window.printCalls), 0, 'successful refund never auto-prints');
                 assert.equal(await page.locator('.receipt-print-area').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(21, 34, 56)', 'Receipt preview follows dark appearance');
                 const text = await page.locator('.receipt-print-area').innerText();
-                for (const content of ['Refund #105', 'Original Sale Receipt #103', 'Other', 'Total refunded', 'Original payment method', 'Selling Form: Pack (6 pcs)', 'Selling Form: Piece']) assert.ok(text.includes(content));
+                for (const content of ['Refund #105', 'Original Sale Receipt #103', 'Other', 'Total refunded', 'Original payment method', 'SKU:']) assert.ok(text.includes(content));
+                assert.ok(!text.includes('Selling Form:'), 'selling form is omitted from the refund customer copy');
                 for (const secret of ['PRIVATE-REFUND-NOTE', 'damaged', 'restockable']) assert.ok(!text.includes(secret));
                 for (const viewport of [1440, 390]) {
                     await page.setViewportSize({ width: viewport, height: 900 });
@@ -46,6 +47,10 @@ const { chromium } = require('playwright');
                 assert.equal(await page.locator('.receipt-print-root .receipt-print-area').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(255, 255, 255)', 'Thermal paper remains light');
                 assert.equal(await page.locator('main').isVisible(), false);
                 assert.equal(await page.locator('.receipt-print-root button').count(), 0);
+                if (variant === 'short') {
+                    const heightMm = await page.locator('.receipt-print-root .receipt-print-area').evaluate(el => el.getBoundingClientRect().height * 25.4 / 96);
+                    assert.ok(heightMm < 125, 'two-item refund fits within 125 mm with all details');
+                }
                 const overflow = await page.locator('.receipt-print-root .receipt-print-area').evaluate(el =>
                     Array.from(el.querySelectorAll('*')).filter(child => child.scrollWidth > child.clientWidth + 1).map(child => child.className));
                 assert.deepEqual(overflow, [], 'print values fit');

@@ -87,7 +87,6 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale, b
     $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
         ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
-    $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
     ?>
     <div class="receipt-container">
         <?php if ($announcePayment): ?>
@@ -105,7 +104,7 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale, b
             <?php endif; ?>
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer"></i> Print Receipt</button>
         </div>
-        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
+        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $paperWidthMm); ?>
     </div>
     <?php
 }

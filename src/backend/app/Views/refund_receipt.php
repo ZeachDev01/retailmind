@@ -11,7 +11,7 @@
         <div class="receipt-meta">
             <div><strong>Refund #<?= (int)$refund['refund_id'] ?></strong></div>
             <div>Original Sale Receipt #<?= (int)$refund['sale_id'] ?></div>
-            <div>Date/Time: <?= $escape(\App\Services\PhilippineTime::format($refund['created_at'])) ?> Philippine time</div>
+            <div>Date/Time: <?= $escape(\App\Services\PhilippineTime::format($refund['created_at'])) ?></div>
             <div>Cashier: <?= $escape($refund['cashier_name']) ?></div>
             <div>Register: <?= $escape($refund['register_name'] ?: 'Legacy / Unassigned') ?></div>
             <div>Reason: <?= $escape($refund['reason']) ?></div>
@@ -22,7 +22,6 @@
         <div class="sale-receipt-item">
             <strong class="sale-receipt-item-name"><?= $escape($item['product_name']) ?></strong>
             <div class="sale-receipt-sku">SKU: <?= $escape($item['sku']) ?></div>
-            <div class="sale-receipt-pack-info">Selling Form: <?= $escape(\App\Services\CashRefundService::formatSellingForm((string)($item['selling_form'] ?? 'piece'), !empty($item['pack_size']) ? (int)$item['pack_size'] : null)) ?></div>
             <div class="sale-receipt-line"><span>Quantity: <?= (int)$item['quantity'] ?></span><strong class="sale-receipt-money"><?= $money($item['subtotal']) ?></strong></div>
         </div>
         <?php endforeach; ?>

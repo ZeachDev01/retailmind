@@ -20,7 +20,6 @@
                 <div class="sale-receipt-item">
                     <strong class="sale-receipt-item-name"><?= $escape($item['product_name']) ?></strong>
                     <div class="sale-receipt-sku">SKU: <?= $escape($item['sku']) ?></div>
-                    <div class="sale-receipt-pack-info">Selling Form: <?= ($item['selling_form'] ?? 'piece') === 'pack' ? 'Pack' . (!empty($item['pack_size']) ? ' (' . (int)$item['pack_size'] . ' pcs)' : '') : 'Piece' ?></div>
                     <div class="sale-receipt-line"><span><?= (int)$item['quantity'] ?> × <?= $money($item['unit_price']) ?></span><strong class="sale-receipt-money"><?= $money($item['subtotal']) ?></strong></div>
                 </div>
                 <?php endforeach; ?>
@@ -38,11 +37,6 @@
                     <?php if (!empty($sale['payment_reference'])): ?>
                     <div><span>Payment Reference</span><strong><?= $escape($sale['payment_reference']) ?></strong></div>
                     <?php endif; ?>
-                </div>
-                <div class="sale-receipt-verification">
-                    <div class="sale-receipt-code" aria-label="Receipt verification code"><?= $escape($verificationCode) ?></div>
-                    <div class="receipt-store-line">Verification Code</div>
-                    <div class="receipt-url"><?= $escape($receiptUrl) ?></div>
                 </div>
             </div>
             <div class="sale-receipt-footer"><?= $escape($store['footer']) ?></div>

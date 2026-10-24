@@ -81,14 +81,13 @@ function receipt_render_details(array $sale, array $items): void {
     $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
         ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
-    $receiptUrl = app_url($sale['verification_url'] ?? 'components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id']);
     ?>
     <div class="receipt-container">
         <div class="receipt-actions no-print">
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)">Print</button>
             <button type="button" class="btn" onclick="exportReceiptPdf(this)">PDF</button>
         </div>
-        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $receiptUrl, $paperWidthMm); ?>
+        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $paperWidthMm); ?>
     </div>
     <?php
 }

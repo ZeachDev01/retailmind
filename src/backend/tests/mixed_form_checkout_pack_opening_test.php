@@ -605,19 +605,19 @@ $assert((float)$packItemsAfter[0]['unit_price'] === 100.00, 'Historical price (1
 
 // Test Receipt HTML rendering distinguishes pack and pack contents
 ob_start();
-SaleReceiptPresentation::render($packReceiptAfterEdit, $packItemsAfter, $packReceiptAfterEdit['receipt_store'] ?? $receiptService->storeInfo(), 'https://example.test/receipt');
+SaleReceiptPresentation::render($packReceiptAfterEdit, $packItemsAfter, $packReceiptAfterEdit['receipt_store'] ?? $receiptService->storeInfo());
 $renderedHtml = ob_get_clean();
 
-$assert(str_contains($renderedHtml, 'Selling Form: Pack (12 pcs)'),
-    'Receipt display renders Selling Form: Pack (12 pcs)');
+$assert(!str_contains($renderedHtml, 'Selling Form:') && !str_contains($renderedHtml, 'Pack (12 pcs)'),
+    'Receipt display omits selling form and pack size');
 $assert(str_contains($renderedHtml, '100.00'), 'Receipt displays charged pack price');
 
 // Check piece line receipt rendering
 $pieceReceipt = $receiptService->fetchSale($resultReplay1['sale_id']);
 ob_start();
-SaleReceiptPresentation::render($pieceReceipt, $pieceReceipt['receipt_items'], $pieceReceipt['receipt_store'] ?? $receiptService->storeInfo(), 'https://example.test/receipt');
+SaleReceiptPresentation::render($pieceReceipt, $pieceReceipt['receipt_items'], $pieceReceipt['receipt_store'] ?? $receiptService->storeInfo());
 $pieceHtml = ob_get_clean();
-$assert(str_contains($pieceHtml, 'Selling Form: Piece'), 'Receipt display renders Selling Form: Piece');
+$assert(!str_contains($pieceHtml, 'Selling Form: Piece'), 'Receipt display omits Piece selling form');
 
 // =========================================================================
 // SECTION 10: Guarded depletion conflict mapping (SQLite simulation)

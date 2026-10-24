@@ -122,6 +122,13 @@ if (!fs.existsSync(chromium.executablePath())) {
                 await page.evaluate(() => { window.printCalls = 0; window.print = () => { window.printCalls++; }; });
                 await page.addScriptTag({ content: script });
                 assert.equal(await page.evaluate(() => window.printCalls), 0, 'loading completed receipt never prints');
+                const receiptText = await page.locator('.sale-receipt').innerText();
+                assert.ok(!receiptText.includes('SALE-103-EXAMPLE'), 'saved verification code is omitted from customer copy');
+                assert.equal(await page.locator('.sale-receipt-verification, .receipt-url').count(), 0, 'verification block and link are omitted');
+                assert.ok(!receiptText.includes('Selling Form:'), 'selling form is omitted from customer copy');
+                for (const content of ['SKU:', 'Total Quantity', 'Payment Method', 'Subtotal', 'Discount', 'Total Amount', 'Cash Received', 'Change']) {
+                    assert.ok(receiptText.includes(content), `${content} remains on the compact receipt`);
+                }
                 for (const width of [1440, 390, 320]) {
                     await page.setViewportSize({ width, height: 900 });
                     // Incumbent shell mobile margins are absent in this fixture.
@@ -148,6 +155,21 @@ if (!fs.existsSync(chromium.executablePath())) {
                 assert.equal(await page.locator('.app-shell').isVisible(), false, 'application frame is excluded');
                 assert.equal(await page.locator('.receipt-print-root button').count(), 0, 'controls are excluded');
                 assert.equal(await page.locator('.receipt-print-root .sale-receipt').isVisible(), true);
+                const scale = await page.locator('.receipt-print-root .sale-receipt').evaluate(el => {
+                    el.style.maxWidth = 'none';
+                    const original = el.getBoundingClientRect().height;
+                    el.style.zoom = '1';
+                    const unscaled = el.getBoundingClientRect().height;
+                    el.style.removeProperty('zoom');
+                    el.style.removeProperty('max-width');
+                    return original / unscaled;
+                });
+                assert.ok(Math.abs(scale - 0.8) < 0.01, 'receipt content defaults to 80% scale');
+                assert.equal(await page.locator('.receipt-print-root .sale-receipt').innerText(), receiptText, 'print retains all preview details');
+                if (variant === 'short') {
+                    const heightMm = await page.locator('.receipt-print-root .sale-receipt').evaluate(el => el.getBoundingClientRect().height * 25.4 / 96);
+                    assert.ok(heightMm < 150, 'two-item sale fits within 150 mm without verification or excess gaps');
+                }
                 assert.ok(Math.abs(await page.locator('.receipt-print-root .sale-receipt').evaluate(el => el.getBoundingClientRect().width) - paperWidthMm * 96 / 25.4) < 1, 'print copy retains selected paper width');
                 const printOverflow = await page.locator('.receipt-print-root .sale-receipt').evaluate(el =>
                     Array.from(el.querySelectorAll('*')).filter(child => child.scrollWidth > child.clientWidth + 1).map(child => child.className));
@@ -158,14 +180,15 @@ if (!fs.existsSync(chromium.executablePath())) {
                 assert.equal(await page.locator('.receipt-print-root').count(), 0, 'print cancellation cleans only print copy');
                 await page.emulateMedia({ media: 'screen' });
                 assert.equal(await page.locator('.sale-receipt').count(), 1, 'completed receipt survives cancellation');
-                assert.ok((await page.locator('.sale-receipt').innerText()).includes('Receipt #103'));
+                assert.ok((await page.locator('.sale-receipt').innerText()).includes('Transaction #103'));
+                assert.ok(!(await page.locator('.sale-receipt').innerText()).includes('Receipt #103'), 'duplicate receipt number stays omitted');
                 // Another receipt on the page must not be selected by a modal's action.
                 await page.evaluate(() => {
                     const modal = document.createElement('div');
                     modal.className = 'modal active';
                     modal.innerHTML = '<div class="modal-content">' + document.querySelector('.receipt-container').outerHTML + '</div>';
                     document.body.appendChild(modal);
-                    modal.querySelector('.sale-receipt-code').textContent = 'MODAL-SELECTED';
+                    modal.querySelector('.sale-receipt-item-name').textContent = 'MODAL-SELECTED';
                     modal.querySelector('button').click();
                 });
                 assert.ok((await page.locator('.receipt-print-root').innerText()).includes('MODAL-SELECTED'), 'modal prints its selected receipt');

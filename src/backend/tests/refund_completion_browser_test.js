@@ -100,7 +100,7 @@ const { chromium } = require('playwright');
             assert.ok(text.includes('Returned item') && text.includes(`Quantity: ${quantity}`));
             assert.ok(!text.includes('Kept item') && !text.includes('INTERNAL-NOTE-269') && !text.includes('Damaged'));
             assert.equal(await preview.locator('.sale-receipt-grand-total strong').innerText(), `₱${amount}`);
-            for (const field of ['Date/Time:', 'Philippine time', 'Cashier:', 'Register:', 'Reason:', 'CASH']) {
+            for (const field of ['Date/Time:', 'Cashier:', 'Register:', 'Reason:', 'CASH']) {
                 assert.ok(text.includes(field), `retains ${field}`);
             }
             assert.equal(await preview.getAttribute('data-paper-width-mm'), String(width));

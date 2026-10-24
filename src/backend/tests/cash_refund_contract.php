@@ -1243,7 +1243,7 @@ try {
     ob_start();
     \App\Receipts\RefundReceiptPresentation::render($packReceipt, 80);
     $packReceiptHtml = ob_get_clean();
-    $assert(str_contains($packReceiptHtml, 'Selling Form: Pack (6 pcs)'), 'Refund Receipt renders historical Pack selling form and pack size');
+    $assert(!str_contains($packReceiptHtml, 'Selling Form:') && !str_contains($packReceiptHtml, 'Pack (6 pcs)'), 'Refund Receipt omits selling form and pack size');
 
     // 2) Damaged (or opened/incomplete) pack return refunds 80.00 and consumes refundable pack count without creating saleable stock.
     $packRefund2 = $refundService->refund(

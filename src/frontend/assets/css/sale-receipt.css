@@ -14,39 +14,38 @@
 }
 .sale-receipt {
     box-sizing: border-box;
-    width: var(--receipt-paper-width, 80mm);
+    /* Compensate for 80% content scaling to keep the configured roll width. */
+    zoom: 0.8;
+    width: calc(var(--receipt-paper-width, 80mm) / 0.8);
     max-width: 100%;
     margin: 1rem auto;
-    padding: 4mm;
+    padding: 1mm 2mm;
     background: var(--theme-surface, #fff);
     color: var(--theme-ink, #111);
-    font: 12px/1.4 Arial, sans-serif;
+    font: 12px/1.2 Arial, sans-serif;
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
     border: 1px solid var(--theme-border, #d1d5db);
 }
 .sale-receipt *, .sale-receipt *::before, .sale-receipt *::after { box-sizing: border-box; }
-.sale-receipt .receipt-header { display: block; margin: 0; padding: 0 0 3mm; border-bottom: 1px dashed #555; }
+.sale-receipt .receipt-header { display: block; margin: 0; padding: 0 0 1mm; border-bottom: 1px dashed #555; }
 .sale-receipt .receipt-brand { text-align: center; }
 .sale-receipt .receipt-brand :is(h1, h3) { margin: 0 0 1mm; font-size: 16px; line-height: 1.2; }
 .sale-receipt .receipt-store-line, .sale-receipt .receipt-brand div { color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }
-.sale-receipt .receipt-meta { margin-top: 3mm; text-align: left; color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }
+.sale-receipt .receipt-meta { margin-top: 1mm; text-align: left; color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }
 .sale-receipt .receipt-historical-notice { margin: 0 0 3mm; font-size: 11px; }
-.sale-receipt-items { padding: 1mm 0; border-bottom: 1px dashed #555; margin-bottom: 2mm; }
-.sale-receipt-item { padding: 2mm 0; break-inside: avoid; }
+.sale-receipt-items { padding: 0; border-bottom: 1px dashed #555; margin-bottom: 1mm; }
+.sale-receipt-item { padding: 1mm 0; break-inside: avoid; }
 .sale-receipt-item-name { display: block; }
 .sale-receipt-sku { font-size: 11px; }
 .sale-receipt-line, .sale-receipt-totals > div { display: flex; justify-content: space-between; align-items: baseline; gap: 2mm; }
 .sale-receipt-line > span, .sale-receipt-totals > div > span { min-width: 0; }
 .sale-receipt-money { flex-shrink: 0; white-space: nowrap; text-align: right; }
-.sale-receipt-totals { margin-top: 2mm; }
-.sale-receipt-totals > div { margin: 1mm 0; break-inside: avoid; }
+.sale-receipt-totals { margin-top: 1mm; }
+.sale-receipt-totals > div { margin: 0.5mm 0; break-inside: avoid; }
 .sale-receipt-totals > div > strong { min-width: 0; max-width: 60%; text-align: right; }
-.sale-receipt-grand-total { padding: 2mm 0; border-top: 1px dashed #555; border-bottom: 1px dashed #555; font-size: 14px; }
-.sale-receipt-verification { padding-top: 3mm; margin-top: 3mm; border-top: 1px dashed #555; text-align: center; break-inside: avoid; }
-.sale-receipt-code { font-weight: 700; }
-.sale-receipt .receipt-url { margin: 1mm 0 0; font-size: 10px; color: var(--theme-ink, #111); }
-.sale-receipt-footer { text-align: center; margin-top: 3mm; }
+.sale-receipt-grand-total { padding: 1mm 0; border-top: 1px dashed #555; border-bottom: 1px dashed #555; font-size: 14px; }
+.sale-receipt-footer { text-align: center; margin-top: 1mm; }
 .receipt-print-root { display: none; }
 .checkout-complete-banner { display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:1rem;align-items:center;padding:1rem 1.15rem;margin-bottom:1rem;border:1px solid #86efac;border-radius:14px;background:var(--theme-surface-soft, #f0fdf4);color: var(--theme-success-text, #166534); }
 .checkout-complete-icon { width:48px;height:48px;display:grid;place-items:center;border-radius:50%;background:var(--theme-success-surface, #dcfce7);font-size:1.5rem; }
@@ -74,7 +73,7 @@
     body.sale-receipt-printing { margin: 0 !important; padding: 0 !important; background: var(--theme-surface, #fff) !important; }
     body.sale-receipt-printing > :not(.receipt-print-root) { display: none !important; }
     body.sale-receipt-printing > .receipt-print-root { display: block !important; }
-    .receipt-print-root .sale-receipt { width: var(--receipt-paper-width, 80mm); max-width: 100%; margin: 0; border: 0; }
+    .receipt-print-root .sale-receipt { margin: 0; border: 0; }
     .receipt-print-root .no-print { display: none !important; }
     .sale-receipt-dialog { display: none !important; }
 }

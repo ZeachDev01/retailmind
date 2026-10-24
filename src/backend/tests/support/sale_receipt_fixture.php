@@ -26,6 +26,5 @@ $sale = ['sale_id' => 103, 'sale_date' => '2026-09-30 10:11:12',
     'payment_reference' => $long ? 'NONCASH-REFERENCE-' . str_repeat('0123456789', 15) : null,
     'verification_code' => 'SALE-103-EXAMPLE'];
 echo '<div class="receipt-container"><div class="no-print">Payment completed — synthetic example</div><button type="button" class="no-print" onclick="printReceiptSection(this)">Print Receipt</button>';
-App\Receipts\SaleReceiptPresentation::render($sale, $items, $store,
-    'https://example.test/retailmind/components/invoice/sales.php?tab=transactions&sale_id=103&example=' . str_repeat('1234567890', $long ? 20 : 1), $paperWidthMm);
+App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $paperWidthMm);
 echo '</div>';

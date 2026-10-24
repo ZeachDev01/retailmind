@@ -28,7 +28,7 @@ Preserve the customer-facing details of new receipts when their transactions are
 10. As a Cashier, I want every sold item's SKU, name, quantity, unit price, and line total readable on narrow paper, so that the customer can check the purchase.
 11. As a Cashier, I want long item names and payment references to wrap without clipping amounts, so that 58 mm receipts remain legible.
 12. As a Cashier, I want the existing quantity, subtotal, discount, promotion or discount reason, total, payment method, cash received, change, and payment reference retained when applicable, so that the thermal layout loses no sale information.
-13. As a Cashier, I want the existing verification code and receipt URL retained in a readable compact format, so that the existing verification information remains available.
+13. As a Cashier, I want the verification code and receipt URL omitted from the customer receipt, so that they do not consume thermal paper.
 14. As an Administrator, I want to set each Register's paper width to 80 mm or 58 mm, so that the preview and print layout match that till's roll.
 15. As an Administrator, I want newly created and upgraded Registers to default to 80 mm, so that no setup is required for the common initial configuration.
 16. As a Cashier, I want an 80 mm receipt to fit a 58 mm printer when reprinted from a Register configured for 58 mm, so that I can use the printer available now.
@@ -49,7 +49,9 @@ Preserve the customer-facing details of new receipts when their transactions are
 - Render all Sale Receipt entry points from one receipt presentation seam and all Refund Receipt entry points from one refund presentation seam. Reuse shared thermal styling and print behavior for both types.
 - Add a paper-width setting to each Register, restricted to 80 mm or 58 mm, with 80 mm as the default. The Administrator maintains it alongside Register details. When a receipt is reopened, use the current printing Register's width; use 80 mm if no current Register can be resolved.
 - Use single-column receipt composition, compact type, clear separators, right-aligned money, and multi-line item rows. The on-screen paper preview and print styles use the same content and width. The screen may frame the paper within the application, but that framing and action buttons do not print.
-- Keep the existing Sale Receipt content, including verification code and URL, while reorganizing it for thermal width. Do not silently drop long values; wrap them without clipping numeric totals.
+- Keep the Sale Receipt purchase and payment details while reorganizing them for thermal width. Omit the verification code and URL from both preview and print; existing saved verification data remains unchanged. Do not silently drop long values; wrap them without clipping numeric totals.
+- Compact layout confirmed on 2026-10-24: share tighter spacing between sale/refund previews and print copies. Default receipt content to 80% scale while retaining the configured roll width; the 12 px base body text renders at 9.6 px. Show SKU but omit the Selling Form label and Piece/Pack values, including pack size. Stored selling form and pack size remain unchanged for accounting and refunds. Base paper padding is 1 mm vertically and 2 mm horizontally, scaled with the content. Printer driver margins and feed require a physical check and are not changed by this layout. Leave the browser print dialog at 100% to avoid scaling twice.
+- Sale Receipt numbering uses a single Transaction # line in preview and print. It identifies the receipt; omit the redundant Receipt # line with the same value. Refund Receipts retain their refund number and original sale reference.
 - Show a Refund Receipt after a successful Cash Refund and link each entry in My refunds to its saved receipt. Keep access scoped to the Cashier who issued the refund, matching the existing Cash Refund visibility rule.
 - Show a clear historical notice on pre-feature Sale Receipts lacking preserved Store details. Do not claim that reconstructed current settings are the original values.
 - Use the browser print dialog and installed printer driver. Do not add direct device access or automatic printing. The cashier or printer setup selects the target printer and matching paper profile. The app provides width-aware print CSS; the physical driver controls feed, cutting, and device-specific settings.
@@ -69,7 +71,7 @@ Preserve the customer-facing details of new receipts when their transactions are
 - Selecting or purchasing a printer model.
 - Silent printing, automatic printing after checkout or refund, ESC/POS commands, cash drawer opening, cutter control, or a local printer bridge.
 - Changing sale, refund, inventory, or payment accounting rules.
-- Generating a QR code or adding a new verification service; the existing verification code and URL remain.
+- Generating a QR code, adding a new verification service, or deleting existing saved verification data.
 - Reconstructing original Store details for older transactions where those values were never saved.
 
 ## Refund printing follow-up — 2026-10-21
