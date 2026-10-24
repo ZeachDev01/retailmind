@@ -67,6 +67,7 @@
     function renderSessionStatus() {
         renderBalances();
         const banner = el('session-banner');
+        banner.hidden = Boolean(currentSession?.is_controlling_cashier);
         const statusPill = el('session-status');
         const msg = el('session-message');
         const openBtn = el('open-session-btn');
@@ -89,7 +90,7 @@
                 waiveBtn.hidden = !hasVariance;
             }
             disableTransactionForm(true);
-            scanStatus('Open GCash responsibility before recording transactions.');
+            scanStatus('');
             return;
         }
 
@@ -105,7 +106,7 @@
             handoverBtn.hidden = false;
             if (fundingBtn) fundingBtn.hidden = false;
             disableTransactionForm(false);
-            scanStatus(duplicate ? 'Duplicate reference. Save blocked.' : 'Ready for manual entry or USB scanner.');
+            scanStatus(duplicate ? 'Duplicate reference. Save blocked.' : '');
             return;
         }
 
@@ -281,7 +282,6 @@
             el('expected-wallet').textContent = '—';
             el('expected-cash').textContent = '—';
             el('cash-checked').textContent = 'Last check: —';
-            el('wallet-checked').textContent = 'Last check: —';
             el('balances-message').textContent = 'Open GCash to view the wallet and service cash balances.';
             return;
         }
@@ -294,8 +294,7 @@
             timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
         });
         el('cash-checked').textContent = 'Last check: ' + checked;
-        el('wallet-checked').textContent = 'Last check: ' + checked;
-        el('balances-message').textContent = 'Expected funds from recorded movements; service cash is separate from the POS drawer. Check actual funds before exchanging money.';
+        el('balances-message').textContent = '';
         if (!active || principal === null) return;
 
         const preview = calculatePreview(el('type').value, principal, el('fee-method').value);
@@ -744,39 +743,44 @@
             el('history-body').replaceChildren();
             for (const transaction of rows) {
                 const row = document.createElement('tr');
-                const id = cell(row, '#' + transaction.transaction_id);
-                const date = document.createElement('small');
-                date.textContent = transaction.time_formatted || transaction.created_at;
-                id.append(date);
-
-                const shiftCashierCell = cell(row, transaction.shift_id ? ('Shift #' + transaction.shift_id) : '—');
+                cell(row, transaction.time_formatted || transaction.created_at);
+                const details = document.createElement('details');
+                details.className = 'gcash-history-details';
+                const summary = document.createElement('summary');
+                summary.textContent = 'Details';
+                details.append(summary);
+                const identity = document.createElement('small');
+                identity.textContent = '#' + transaction.transaction_id + ' · ' + (transaction.shift_id ? 'Shift #' + transaction.shift_id : 'No shift');
+                details.append(identity);
                 const cashierInfo = document.createElement('small');
                 cashierInfo.textContent = transaction.cashier_name || ('Cashier #' + transaction.cashier_id);
-                shiftCashierCell.append(cashierInfo);
+                details.append(cashierInfo);
 
                 cell(row, transaction.reference_number || '—');
                 cell(row, transaction.transaction_type);
 
                 const amountCell = cell(row, '');
+                const feeCell = cell(row, '—');
                 if (transaction.is_legacy) {
                     amountCell.textContent = formatPhp(transaction.amount);
                     const legInfo = document.createElement('small');
                     legInfo.textContent = 'Legacy reference record';
-                    amountCell.append(legInfo);
+                    details.append(legInfo);
                 } else {
                     amountCell.textContent = formatPhp(transaction.principal_amount || transaction.amount);
                     const feeInfo = document.createElement('small');
                     const fee = formatPhp(transaction.gross_fee || transaction.fee_amount || 0);
+                    feeCell.textContent = fee;
                     const feeMethod = transaction.fee_method || 'cash';
                     feeInfo.textContent = `Fee: ${fee} (${feeMethod})`;
-                    amountCell.append(feeInfo);
+                    details.append(feeInfo);
 
                     if (Number(transaction.service_cash_delta || 0) !== 0 || Number(transaction.wallet_delta || 0) !== 0) {
                         const deltas = document.createElement('small');
                         const cashDelta = formatPhp(Number(transaction.service_cash_delta || 0), true);
                         const walletDelta = formatPhp(Number(transaction.wallet_delta || 0), true);
                         deltas.textContent = `Cash: ${cashDelta} · Wallet: ${walletDelta}`;
-                        amountCell.append(deltas);
+                        details.append(deltas);
                     }
                 }
                 if (transaction.adjustments && transaction.adjustments.length > 0) {
@@ -784,7 +788,7 @@
                         const adjInfo = document.createElement('small');
                         adjInfo.style.color = 'var(--color-warning, #d97706)';
                         adjInfo.textContent = `Adj #${adj.adjustment_id}: Cash ${formatPhp(adj.service_cash_delta, true)} · Wallet ${formatPhp(adj.wallet_delta, true)} (${adj.reason})`;
-                        amountCell.append(adjInfo);
+                        details.append(adjInfo);
                     }
                 }
 
@@ -803,14 +807,17 @@
                 if (transaction.notes) {
                     const note = document.createElement('small');
                     note.textContent = transaction.notes;
-                    statusCell.append(note);
+                    details.append(note);
                 }
                 if (transaction.verification_note) {
                     const note = document.createElement('small');
                     note.textContent = transaction.verification_note + ' · ' + (transaction.reviewed_at_formatted || transaction.reviewed_at);
-                    statusCell.append(note);
+                    details.append(note);
                 }
-                const actions = cell(row, '');
+                const actionCell = cell(row, '');
+                const actions = document.createElement('div');
+                actions.className = 'gcash-history-row-actions';
+                actionCell.append(actions, details);
                 if (transaction.has_receipt) {
                     const button = document.createElement('button');
                     button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = 'Receipt';
@@ -848,7 +855,7 @@
                 } else { actions.textContent = 'Reviewed'; }
                 el('history-body').append(row);
             }
-            el('history-status').textContent = rows.length ? rows.length + ' transactions on this page.' : 'No transactions on this page.';
+            el('history-status').textContent = rows.length ? '' : 'No transactions on this page.';
             el('page').textContent = 'Page ' + requestedPage;
             el('prev').disabled = requestedPage <= 1;
             el('next').disabled = !data.has_next;

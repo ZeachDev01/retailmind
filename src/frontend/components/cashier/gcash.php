@@ -58,7 +58,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                             <span class="gcash-status">Expected</span>
                         </div>
                         <strong class="gcash-card-value" id="gcash-expected-cash">—</strong>
-                        <span class="gcash-card-sub" id="gcash-cash-checked">Last check: —</span>
                     </div>
                     <div class="gcash-card gcash-card-balance">
                         <div class="gcash-card-header">
@@ -66,9 +65,13 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                             <span class="gcash-status">Expected</span>
                         </div>
                         <strong class="gcash-card-value" id="gcash-expected-wallet">—</strong>
-                        <span class="gcash-card-sub" id="gcash-wallet-checked">Last check: —</span>
                     </div>
                 </div>
+                <details class="gcash-balance-details">
+                    <summary>About these balances</summary>
+                    <p class="gcash-help">Expected funds from recorded movements. Service cash is separate from the POS drawer. Check actual funds before exchanging money.</p>
+                    <p class="gcash-card-sub" id="gcash-cash-checked">Last check: —</p>
+                </details>
                 <p class="gcash-help" id="gcash-balances-message" role="status">Loading recorded balances…</p>
             </section>
             <form id="gcash-form" class="gcash-form">
@@ -92,8 +95,8 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </div>
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-amount">Principal amount (PHP)</label>
-                        <input class="pos-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000" aria-describedby="gcash-amount-help">
-                        <small id="gcash-amount-help">₱1–₱50,000 in whole pesos, excluding the service fee.</small>
+                        <input class="pos-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000 · whole pesos" aria-describedby="gcash-amount-help">
+                        <small id="gcash-amount-help" class="sr-only">₱1–₱50,000 in whole pesos, excluding the service fee.</small>
                     </div>
                     <div class="gcash-field" id="gcash-fee-method-group" hidden>
                         <label class="pos-field-label" for="gcash-fee-method"><i class="bi bi-receipt" aria-hidden="true"></i> Fee payment method</label>
@@ -105,7 +108,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <div class="gcash-field gcash-reference-field">
                         <label class="pos-field-label" for="gcash-reference">GCash reference number</label>
                         <input class="pos-input" id="gcash-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="2048" inputmode="numeric" required aria-describedby="gcash-scan-status gcash-duplicate">
-                        <span id="gcash-scan-status" role="status" aria-live="polite">Ready for manual entry or USB scanner.</span>
+                        <span id="gcash-scan-status" role="status" aria-live="polite"></span>
                         <span id="gcash-duplicate" role="alert" hidden>This reference has already been recorded. Check transaction history before proceeding.</span>
                         <div class="gcash-reference-tools">
                             <button class="btn btn-secondary" type="button" id="gcash-manual"><i class="bi bi-upc-scan" aria-hidden="true"></i> Use USB scanner</button>
@@ -220,7 +223,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="pos-panel-header">
                     <div class="pos-panel-title">
                         <div>
-                            <h2 id="gcash-history-title">Your transaction history</h2>
+                            <h2 id="gcash-history-title">Transaction history</h2>
                         </div>
                     </div>
                     <div class="gcash-history-header-actions">
@@ -233,12 +236,12 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <table>
                         <thead>
                             <tr>
-                                <th>ID / Date</th>
-                                <th>Shift / Cashier</th>
+                                <th>Date</th>
                                 <th>Reference</th>
                                 <th>Type</th>
-                                <th>Principal &amp; Fee</th>
-                                <th>Status / Notes</th>
+                                <th>Principal</th>
+                                <th>Fee</th>
+                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>

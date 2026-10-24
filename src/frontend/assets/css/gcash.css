@@ -13,6 +13,9 @@
 #gcash-workspace .gcash-session-banner.locked { color: var(--theme-danger-text, #b91c1c); }
 .gcash-session-logo { display: block; flex-shrink: 0; width: 88px; height: auto; }
 #gcash-session-message { margin: 0; }
+#gcash-scan-status:empty, #gcash-balances-message:empty { display: none; }
+#gcash-history-status:empty { display: none; }
+#gcash-workspace .gcash-session-panel > .pos-panel-header { margin-bottom: 0; }
 #gcash-workspace .gcash-field small, #gcash-scan-status { font-size: .875rem; line-height: 1.5; }
 #gcash-workspace input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--cashier-blue); }
 #gcash-workspace .gcash-confirm { margin: 0; padding: .75rem 0; }
@@ -33,6 +36,14 @@
 .gcash-table-wrap table { width: 100%; border-collapse: collapse; min-width: 640px; }
 .gcash-table-wrap th, .gcash-table-wrap td { padding: .75rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
 .gcash-table-wrap small { display: block; color: var(--muted); margin-top: .25rem; max-width: 260px; overflow-wrap: anywhere; }
+#gcash-workspace .gcash-history table { min-width: 960px; }
+#gcash-workspace .gcash-history td { vertical-align: middle; }
+#gcash-workspace .gcash-history td:nth-child(n+2):nth-child(-n+6) { white-space: nowrap; }
+.gcash-history-row-actions { display: flex; gap: .5rem; }
+#gcash-workspace .gcash-history-row-actions .btn { padding: .5rem .75rem; font-size: .875rem; }
+.gcash-history-details { margin-top: .25rem; }
+.gcash-history-details summary { display: list-item; width: fit-content; padding: .5rem 0; color: var(--cashier-blue); cursor: pointer; }
+.gcash-history-details summary:focus-visible { outline: 2px solid var(--cashier-blue); outline-offset: 2px; }
 .gcash-status { display: inline-block; padding: .2rem .55rem; border-radius: 999px; background: var(--cashier-blue-soft); font-weight: 600; }
 .gcash-status-verified, .gcash-status-completed { color: var(--theme-success-text, #15803d); background: var(--theme-success-surface, #f0fdf4); }
 .gcash-status-rejected { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }

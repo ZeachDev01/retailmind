@@ -141,6 +141,12 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#gcash-expected-cash').textContent(), '₱1,000.00');
         assert.equal(await page.locator('#gcash-expected-wallet').textContent(), '₱5,000.00');
         assert.equal(await page.locator('#gcash-balances').isVisible(), true);
+        assert.equal(await page.locator('#gcash-session-banner').isVisible(), false, 'Active status does not repeat responsibility instructions');
+        assert.equal(await page.locator('#gcash-scan-status').isVisible(), false, 'Idle scanner has no helper text');
+        assert.equal(await page.locator('#gcash-cash-checked').isVisible(), false, 'Balance notes are collapsed initially');
+        await page.getByText('About these balances', {exact: true}).click();
+        assert.equal(await page.locator('#gcash-cash-checked').isVisible(), true, 'Balance check time remains available');
+        await page.getByText('About these balances', {exact: true}).click();
         assert.match(await page.locator('#gcash-balances').textContent(), /Physical Service Cash/);
         assert.match(await page.locator('#gcash-balances').textContent(), /GCash App Wallet/);
         assert.doesNotMatch(await page.locator('#gcash-cash-checked').textContent(), /Invalid Date|Last check: —/);
