@@ -811,6 +811,12 @@
                     statusCell.append(note);
                 }
                 const actions = cell(row, '');
+                if (transaction.has_receipt) {
+                    const button = document.createElement('button');
+                    button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = 'Receipt';
+                    button.addEventListener('click', () => window.viewReceipt(transaction.transaction_id, button));
+                    actions.append(button);
+                }
                 if (transaction.verification_status === 'Pending') {
                     const button = document.createElement('button');
                     button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = 'Verify / Reject';

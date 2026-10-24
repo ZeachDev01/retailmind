@@ -196,6 +196,11 @@
     });
     const detailDialog = document.getElementById('txDetailModal');
     workspace.addEventListener('click', event => {
+        const receipt = event.target.closest('.gcash-receipt');
+        if (receipt) {
+            window.viewReceipt(receipt.dataset.transactionId, receipt);
+            return;
+        }
         const row = event.target.closest('tr[data-transaction]');
         if (!row || event.target.closest('a')) return;
         const tx = JSON.parse(row.dataset.transaction);

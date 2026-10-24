@@ -298,6 +298,8 @@ final class GCashTransactionService
                 $adjsByTx[$adj['transaction_id']][] = $adj;
             }
             foreach ($txs as &$tx) {
+                $tx['has_receipt'] = $tx['verification_status'] === 'Completed' && $tx['receipt_details_json'] !== null;
+                unset($tx['receipt_details_json']);
                 $tx['adjustments'] = $adjsByTx[$tx['transaction_id']] ?? [];
                 $isLegacy = ($tx['session_id'] === null);
                 $tx['is_legacy'] = $isLegacy;
@@ -562,6 +564,8 @@ final class GCashTransactionService
                 $adjsByTx[$adj['transaction_id']][] = $adj;
             }
             foreach ($txs as &$tx) {
+                $tx['has_receipt'] = $tx['verification_status'] === 'Completed' && $tx['receipt_details_json'] !== null;
+                unset($tx['receipt_details_json']);
                 $tx['adjustments'] = $adjsByTx[$tx['transaction_id']] ?? [];
                 $isLegacy = ($tx['session_id'] === null);
                 $tx['is_legacy'] = $isLegacy;
