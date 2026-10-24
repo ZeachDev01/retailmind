@@ -549,7 +549,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
     </main>
 </div>
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>"></script>
-<script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>"></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/sale-receipt-dialog.js')) ?>"></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/gcash-reference.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/gcash-reference.js')) ?>"></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/gcash.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/gcash.js')) ?>"></script>
 </body>
