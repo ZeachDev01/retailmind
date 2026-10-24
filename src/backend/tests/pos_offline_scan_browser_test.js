@@ -19,7 +19,7 @@ function between(start, end) {
         res.setHeader('Content-Type', 'text/html');
         res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"></head>
         <body class="cashier-page cashier-pos-page">
-            <div id="recent-scan"></div>
+            <div id="recent-scan"></div><p id="catalog-status" hidden></p>
             <input id="sku-input" autocomplete="off">
             <input id="search">
             <input id="payment" type="number">
@@ -184,8 +184,8 @@ function between(start, end) {
 
         assert.ok(scanDuration < 50, `Offline scan took ${scanDuration}ms (must be < 50ms)`);
         assert.equal(requests.length, 0, 'Zero network requests made during cart construction');
-        assert.equal(await page.evaluate(() => cart[1].qty), 1, 'Scanned product added to cart with qty 1');
-        assert.equal(await page.evaluate(() => cart[1].price), 12.00, 'Scanned product has correct price');
+        assert.equal(await page.evaluate(() => cart['1:piece'].qty), 1, 'Scanned product added to cart with qty 1');
+        assert.equal(await page.evaluate(() => cart['1:piece'].price), 12.00, 'Scanned product has correct price');
         assert.equal(await page.evaluate(() => window.getLocalStock(1)), 2, 'Local in-memory quantity on hand decremented to 2');
 
         // 4. SKU typing resolves against IndexedDB with zero network requests
@@ -198,36 +198,78 @@ function between(start, end) {
 
         assert.ok(skuDuration < 50, `SKU typing took ${skuDuration}ms (must be < 50ms)`);
         assert.equal(requests.length, 0, 'Zero network requests on SKU typing');
-        assert.equal(await page.evaluate(() => cart[2].qty), 1, 'Bread added to cart with qty 1');
-        assert.equal(await page.evaluate(() => cart[2].price), 8.50, 'Bread has correct price');
+        assert.equal(await page.evaluate(() => cart['2:piece'].qty), 1, 'Bread added to cart with qty 1');
+        assert.equal(await page.evaluate(() => cart['2:piece'].price), 8.50, 'Bread has correct price');
         assert.equal(await page.evaluate(() => window.getLocalStock(2)), 4, 'Bread local stock decremented to 4');
 
-        // 5. Case barcode scan resolves against IndexedDB
+        // Case codes belong to receiving, not point-of-sale piece scans.
         await page.focus('#idle');
         await scan('CASE-123456');
         await page.evaluate(() => scanQueue);
-        assert.equal(await page.evaluate(() => cart[1].qty), 2, 'Case barcode scan added another Milk');
+        assert.equal(await page.evaluate(() => cart['1:piece'].qty), 1, 'Receiving case barcode must not ring up a piece');
+        await scan('123456');
+        assert.equal(await page.evaluate(() => cart['1:piece'].qty), 2, 'Second piece scan added another Milk');
         assert.equal(await page.evaluate(() => window.getLocalStock(1)), 1, 'Milk local stock decremented to 1');
 
         // 6. 3rd Milk scan decrements stock to 0
         await scan('123456');
         await page.evaluate(() => scanQueue);
-        assert.equal(await page.evaluate(() => cart[1].qty), 3, '3rd Milk scan increments cart to 3');
+        assert.equal(await page.evaluate(() => cart['1:piece'].qty), 3, '3rd Milk scan increments cart to 3');
         assert.equal(await page.evaluate(() => window.getLocalStock(1)), 0, 'Milk local stock decremented to 0');
 
         // 7. 4th Milk scan exceeds local stock -> immediately warns cashier, preserves cart
         await scan('123456');
         await page.evaluate(() => scanQueue);
-        assert.equal(await page.evaluate(() => cart[1].qty), 3, 'Cart quantity preserved when exceeding stock');
+        assert.equal(await page.evaluate(() => cart['1:piece'].qty), 3, 'Cart quantity preserved when exceeding stock');
         assert.match(await page.evaluate(() => messages.at(-1).message), /Insufficient stock/, 'Cashier immediately warned');
         assert.equal(requests.length, 0, 'Still zero network requests after stock warning');
 
         // 8. Decrementing / removing item restores in-memory stock
-        await page.evaluate(() => updateCartQty(1, 2));
+        await page.evaluate(() => updateCartQty('1:piece', 2));
         assert.equal(await page.evaluate(() => window.getLocalStock(1)), 1, 'Reducing cart qty to 2 restores local stock to 1');
 
-        await page.evaluate(() => removeFromCart(1));
+        await page.evaluate(() => removeFromCart('1:piece'));
         assert.equal(await page.evaluate(() => window.getLocalStock(1)), 3, 'Removing item from cart restores local stock to 3');
+
+        await context.setOffline(false);
+        let catalog = [{ ...testCatalog[0], unit_price: 15, quantity_on_hand: 9 }];
+        let syncRequests = 0;
+        await page.route('**/pos-api?**', async route => {
+            syncRequests++;
+            await route.fulfill({ contentType: 'application/json', headers: { ETag: '"fixture-' + syncRequests + '"' },
+                body: JSON.stringify({ success: true, delta: false, catalog }) });
+        });
+        await page.evaluate(() => window.syncCatalog());
+        assert.equal(await page.evaluate(() => window.catalogProductMap.get(1).unit_price), 15, 'Refresh updates prices');
+        assert.equal(await page.evaluate(() => window.getLocalStock(1)), 9, 'Refresh updates stock');
+        assert.equal(await page.evaluate(() => window.lookupProductInIndexedDB('BREAD-SKU')), null, 'Removed products leave IndexedDB');
+        assert.equal(await page.evaluate(() => window.catalogProductMap.has(2)), false, 'Removed products leave memory');
+        const beforeFocus = syncRequests;
+        catalog[0].unit_price = 18;
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+        await page.waitForFunction(() => window.catalogProductMap.get(1)?.unit_price === 18);
+        assert.equal(syncRequests, beforeFocus + 1, 'Returning to POS refreshes before the five-minute timer');
+        const savedEtag = await page.evaluate(() => currentCatalogEtag);
+        await page.evaluate(() => posDb.close());
+        catalog[0].unit_price = 21;
+        assert.equal((await page.evaluate(() => window.syncCatalog())).success, false, 'Failed local writes must reject the refresh');
+        assert.equal(await page.evaluate(() => currentCatalogEtag), savedEtag, 'A failed local write must not acknowledge the new ETag');
+        assert.equal(await page.evaluate(() => window.catalogProductMap.get(1).unit_price), 18, 'Failed writes keep the last committed memory snapshot');
+        await page.evaluate(items => window.initPosCatalogDb(items), testCatalog);
+        await page.evaluate(() => window.syncCatalog());
+        assert.equal(await page.evaluate(() => window.catalogProductMap.get(1).unit_price), 21, 'Retry applies the previously unacknowledged change');
+        await context.setOffline(true);
+        await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+        assert.match(await page.locator('#catalog-status').textContent(), /Offline.*outdated/);
+        assert.equal(await page.locator('#catalog-status').isVisible(), true, 'Offline status stays visible');
+        await context.setOffline(false);
+        catalog = [];
+        await page.evaluate(() => window.syncCatalog());
+        assert.equal(await page.evaluate(() => window.catalogProductMap.size), 0, 'Empty server snapshot removes old stock');
+        assert.equal(await page.evaluate(() => window.lookupProductInIndexedDB('MILK-SKU')), null);
+        await page.evaluate(items => window.initPosCatalogDb(items), testCatalog);
+        await page.evaluate(() => window.initPosCatalogDb([]));
+        assert.equal(await page.evaluate(() => window.lookupProductInIndexedDB('MILK-SKU')), null, 'Empty page preload never restores a previous account catalog');
 
         console.log('POS offline scan browser test: passed');
     } finally {

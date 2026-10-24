@@ -72,6 +72,17 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             }
             assert.equal(await page.locator('#overviewStatusChart').count(), 0, 'Offline charts present their fallback');
             assert.equal(await page.locator('.overview-chart-fallback').first().isVisible(), true, 'Charts remain visible');
+            const returnRefreshes = await page.evaluate(() => {
+                let calls = 0;
+                window.RetailMindNavigation = {navigate(url, options) {
+                    if (url === location.href && options.history === 'none') calls++;
+                }};
+                window.dispatchEvent(new Event('blur'));
+                window.dispatchEvent(new Event('focus'));
+                window.dispatchEvent(new Event('focus'));
+                return calls;
+            });
+            assert.equal(returnRefreshes, 1, 'Returning to inventory fetches a fresh view once without adding history');
             assert.deepEqual(errors, []);
             await page.close();
         }

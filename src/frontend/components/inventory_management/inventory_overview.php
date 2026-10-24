@@ -146,7 +146,7 @@ $chartDataJson = json_encode([
 <title>Stock Overview</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 </head>
 <body class="inventory-overview-page">
 <div class="app-shell">
@@ -489,6 +489,28 @@ function getChartThemeColors() {
 let statusChartInstance = null;
 let categoryChartInstance = null;
 let forecastChartInstance = null;
+let overviewNeedsRefresh = false;
+function refreshInventoryOnReturn() {
+    if (!overviewNeedsRefresh || document.visibilityState !== 'visible') return;
+    overviewNeedsRefresh = false;
+    if (window.RetailMindNavigation) {
+        window.RetailMindNavigation.navigate(location.href, {history: 'none'});
+    } else {
+        location.reload();
+    }
+}
+window.addEventListener('blur', () => { overviewNeedsRefresh = true; });
+window.addEventListener('focus', refreshInventoryOnReturn);
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) overviewNeedsRefresh = true;
+    else refreshInventoryOnReturn();
+});
+window.addEventListener('pageshow', event => {
+    if (event.persisted) {
+        overviewNeedsRefresh = true;
+        refreshInventoryOnReturn();
+    }
+});
 
 function initInventoryCharts() {
     if (typeof Chart === 'undefined') {

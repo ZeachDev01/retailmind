@@ -82,48 +82,33 @@ $posShiftOpen = $openShift !== null;
 $posRegisterLocked = $shiftService->isRegisterLocked($cashierId);
 
 [$catalogScope, $catalogParams] = store_product_scope('p');
-$catalogProducts = [];
-$catalogEtag = null;
-if ($posShiftOpen && !$posRegisterLocked) {
-    try {
-        $etagStmt = $pdo->prepare(
-            "SELECT COUNT(p.product_id) AS total_count,
-                    COALESCE(MAX(p.created_at), '') AS max_product_created,
-                    COALESCE(MAX(i.last_updated), '') AS max_inventory_updated,
-                    COALESCE(SUM(i.quantity_on_hand), 0) AS total_stock,
-                    COALESCE(SUM(p.unit_price), 0) AS total_price
-             FROM products p
-             LEFT JOIN inventory i ON i.product_id = p.product_id
-             WHERE p.status = 'active'{$catalogScope}"
-        );
-        $etagStmt->execute($catalogParams);
-        $meta = $etagStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        $rawHash = implode(':', [
-            $meta['total_count'] ?? 0,
-            $meta['max_product_created'] ?? '',
-            $meta['max_inventory_updated'] ?? '',
-            $meta['total_stock'] ?? 0,
-            $meta['total_price'] ?? 0,
-        ]);
-        $catalogEtag = '"' . md5($rawHash) . '"';
-    } catch (Throwable) {
-        $catalogEtag = null;
-    }
-}
-
 $loadCatalogProducts = static function () use ($pdo, $catalogScope, $catalogParams): array {
+    static $products = null;
+    if ($products !== null) return $products;
     $catalogStmt = $pdo->prepare(
         "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.product_name, p.unit_price,
+                p.pack_barcode, p.pack_size, p.pack_price, p.variant_label, p.category_id, c.category_name,
+                p.product_image, COALESCE(p.quantity_sold, 0) AS quantity_sold,
+                COALESCE((SELECT SUM(pb.sealed_quantity) FROM product_batches pb
+                          WHERE pb.product_id = p.product_id AND pb.remaining_quantity > 0
+                            AND (pb.expiration_date IS NULL OR pb.expiration_date >= ?)), 0) AS sealed_packs,
                 COALESCE(p.reorder_level, 0) AS reorder_level,
                 COALESCE(p.safety_stock, 0) AS safety_stock,
                 COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
          FROM products p
          LEFT JOIN inventory i ON i.product_id = p.product_id
+         LEFT JOIN categories c ON c.category_id = p.category_id
          WHERE p.status = 'active'{$catalogScope}
          ORDER BY p.product_id ASC"
     );
-    $catalogStmt->execute($catalogParams);
-    return array_map(static function (array $row): array {
+    $catalogStmt->execute(array_merge([\App\Services\PhilippineTime::today()], $catalogParams));
+    return $products = array_map(static function (array $row): array {
+        $image = trim((string)($row['product_image'] ?? ''));
+        if ($image !== '' && !preg_match('#^(?:https?://|data:image/|/)#i', $image)) {
+            $image = strpos($image, 'storage/images/') === 0
+                ? rtrim(dirname(app_base_url()), '/') . '/backend/' . $image
+                : app_url($image);
+        }
         return [
             'product_id' => (int)$row['product_id'],
             'sku' => (string)($row['sku'] ?? ''),
@@ -131,6 +116,15 @@ $loadCatalogProducts = static function () use ($pdo, $catalogScope, $catalogPara
             'case_barcode' => (string)($row['case_barcode'] ?? ''),
             'product_name' => (string)$row['product_name'],
             'unit_price' => (float)$row['unit_price'],
+            'product_image' => $image,
+            'quantity_sold' => (int)$row['quantity_sold'],
+            'pack_barcode' => (string)($row['pack_barcode'] ?? ''),
+            'pack_size' => $row['pack_size'] === null ? null : (int)$row['pack_size'],
+            'pack_price' => $row['pack_price'] === null ? null : (float)$row['pack_price'],
+            'sealed_packs' => (int)$row['sealed_packs'],
+            'variant_label' => (string)($row['variant_label'] ?? ''),
+            'category_id' => (int)($row['category_id'] ?? 0),
+            'category_name' => (string)($row['category_name'] ?? 'Uncategorized'),
             'reorder_level' => (int)$row['reorder_level'],
             'safety_stock' => (int)$row['safety_stock'],
             'quantity_on_hand' => (int)$row['quantity_on_hand'],
@@ -146,6 +140,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && in_array(($_GET['action'] ?? ''), ['
         exit;
     }
 
+    $responseProducts = $loadCatalogProducts();
+    $catalogEtag = '"' . hash('sha256', json_encode($responseProducts, JSON_THROW_ON_ERROR)) . '"';
     $clientEtag = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? $_GET['if_none_match'] ?? $_GET['etag'] ?? '');
     $clientEtag = trim($clientEtag, '"');
     $serverEtag = trim((string)$catalogEtag, '"');
@@ -157,44 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && in_array(($_GET['action'] ?? ''), ['
         exit;
     }
 
-    $since = trim((string)($_GET['since'] ?? ''));
-    $deltaProducts = null;
-    if ($since !== '') {
-        try {
-            $deltaStmt = $pdo->prepare(
-                "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.product_name, p.unit_price,
-                        COALESCE(p.reorder_level, 0) AS reorder_level,
-                        COALESCE(p.safety_stock, 0) AS safety_stock,
-                        COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
-                 FROM products p
-                 LEFT JOIN inventory i ON i.product_id = p.product_id
-                 WHERE p.status = 'active'{$catalogScope}
-                   AND (i.last_updated > ? OR p.created_at > ?)
-                 ORDER BY p.product_id ASC"
-            );
-            $deltaParams = array_merge($catalogParams, [$since, $since]);
-            $deltaStmt->execute($deltaParams);
-            $deltaProducts = array_map(static function (array $row): array {
-                return [
-                    'product_id' => (int)$row['product_id'],
-                    'sku' => (string)($row['sku'] ?? ''),
-                    'barcode' => (string)($row['barcode'] ?? ''),
-                    'case_barcode' => (string)($row['case_barcode'] ?? ''),
-                    'product_name' => (string)$row['product_name'],
-                    'unit_price' => (float)$row['unit_price'],
-                    'reorder_level' => (int)$row['reorder_level'],
-                    'safety_stock' => (int)$row['safety_stock'],
-                    'quantity_on_hand' => (int)$row['quantity_on_hand'],
-                ];
-            }, $deltaStmt->fetchAll(PDO::FETCH_ASSOC));
-        } catch (Throwable) {
-            $deltaProducts = null;
-        }
-    }
-
-    $isDelta = $deltaProducts !== null;
-    $responseProducts = $isDelta ? $deltaProducts : $loadCatalogProducts();
-
+    // shortcut: changed catalogs send full snapshots; use revisioned deltas if measured catalog transfer becomes costly.
     header('Content-Type: application/json');
     header('Cache-Control: no-cache');
     if ($catalogEtag !== null) {
@@ -204,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && in_array(($_GET['action'] ?? ''), ['
         'success' => true,
         'etag' => $catalogEtag,
         'server_time' => date('Y-m-d H:i:s'),
-        'delta' => $isDelta,
+        'delta' => false,
         'catalog' => $responseProducts
     ], JSON_THROW_ON_ERROR);
     exit;
@@ -468,30 +427,9 @@ $heldSaleDiscardReasons = \App\Services\HeldSaleService::DISCARD_REASONS;
 
 require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
 $todayManila = \App\Services\PhilippineTime::today();
-[$quickProductScope, $quickProductParams] = store_product_scope('p');
-$quickProductStmt = $pdo->prepare(
-    "SELECT p.product_id, p.sku, p.barcode, p.pack_barcode, p.pack_size, p.pack_price, p.product_name, p.variant_label, p.unit_price,
-            p.product_image, p.category_id, c.category_name,
-            COALESCE(p.reorder_level, 0) AS reorder_level,
-            COALESCE(p.safety_stock, 0) AS safety_stock,
-            COALESCE(p.quantity_sold, 0) AS quantity_sold,
-            COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
-            COALESCE(batch_packs.sealed_packs, 0) AS sealed_packs
-     FROM products p
-     LEFT JOIN inventory i ON i.product_id = p.product_id
-     LEFT JOIN categories c ON c.category_id = p.category_id
-     LEFT JOIN (
-         SELECT product_id, SUM(sealed_quantity) AS sealed_packs
-         FROM product_batches
-         WHERE remaining_quantity > 0
-           AND (expiration_date IS NULL OR expiration_date >= ?)
-         GROUP BY product_id
-     ) batch_packs ON batch_packs.product_id = p.product_id
-     WHERE p.status = 'active'{$quickProductScope}
-     ORDER BY COALESCE(p.quantity_sold, 0) DESC, p.product_name
-     LIMIT 120"
-);
-$quickProductStmt->execute(array_merge([$todayManila], $quickProductParams));
+$quickProductRows = ($posShiftOpen && !$posRegisterLocked) ? $loadCatalogProducts() : [];
+usort($quickProductRows, static fn(array $left, array $right): int =>
+    ($right['quantity_sold'] <=> $left['quantity_sold']) ?: strcasecmp($left['product_name'], $right['product_name']));
 $quickProducts = array_map(static function (array $product): array {
     $image = trim((string)($product['product_image'] ?? ''));
     if ($image !== '' && !preg_match('#^(?:https?://|data:image/|/)#i', $image)) {
@@ -518,7 +456,7 @@ $quickProducts = array_map(static function (array $product): array {
         'category_name' => (string)($product['category_name'] ?: 'Uncategorized'),
         'product_image' => $image,
     ];
-}, $quickProductStmt->fetchAll(PDO::FETCH_ASSOC));
+}, array_slice($quickProductRows, 0, 120));
 
 $quickCategories = [];
 foreach ($quickProducts as $product) {
@@ -624,6 +562,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         </div>
                     </div>
 
+                    <p id="catalog-status" class="tag-warning" role="status" hidden></p>
                     <label class="scan-label" for="sku-input">Scan or search products</label>
                     <div class="scan-row">
                         <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU" autocomplete="off" autofocus inputmode="search">
@@ -891,9 +830,12 @@ let posAudioContext = null;
 
 const quickProducts = <?= json_encode($quickProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const quickProductById = new Map(quickProducts.map(product => [Number(product.product_id), product]));
-const posCatalogPreload = <?= json_encode(($posShiftOpen && !$posRegisterLocked) ? $loadCatalogProducts() : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+<?php
+$catalogProducts = ($posShiftOpen && !$posRegisterLocked) ? $loadCatalogProducts() : [];
+$catalogEtag = '"' . hash('sha256', json_encode($catalogProducts, JSON_THROW_ON_ERROR)) . '"';
+?>
+const posCatalogPreload = <?= json_encode($catalogProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const posCatalogEtag = <?= json_encode($catalogEtag) ?>;
-const posCatalogServerTime = <?= json_encode(date('Y-m-d H:i:s')) ?>;
 const skuInput = document.getElementById('sku-input');
 const recentScan = document.getElementById('recent-scan');
 const addCodeBtn = document.getElementById('add-code-btn');
@@ -1175,6 +1117,9 @@ let posDb = null;
 const catalogProductMap = new Map();
 
 function initPosCatalogDb(items = []) {
+    catalogProductMap.clear();
+    if (posDb) posDb.close();
+    posDb = window.posDb = null;
     return new Promise((resolve) => {
         if (typeof indexedDB === 'undefined') return resolve(null);
         const req = indexedDB.open(POS_CATALOG_DB_NAME, POS_CATALOG_DB_VERSION);
@@ -1187,53 +1132,15 @@ function initPosCatalogDb(items = []) {
                 store.createIndex('case_barcode', 'case_barcode', { unique: false });
             }
         };
-        req.onsuccess = event => {
-            posDb = event.target.result;
-            window.posDb = posDb;
-            if (Array.isArray(items) && items.length > 0) {
-                try {
-                    const tx = posDb.transaction(POS_CATALOG_STORE, 'readwrite');
-                    const store = tx.objectStore(POS_CATALOG_STORE);
-                    store.clear();
-                    for (const item of items) {
-                        store.put(item);
-                        catalogProductMap.set(Number(item.product_id), {
-                            ...item,
-                            initial_stock: Number(item.quantity_on_hand)
-                        });
-                    }
-                    tx.oncomplete = () => {
-                        syncAllCatalogStock();
-                        resolve(posDb);
-                    };
-                    tx.onerror = () => resolve(posDb);
-                } catch (e) {
-                    resolve(posDb);
-                }
-            } else {
-                try {
-                    const tx = posDb.transaction(POS_CATALOG_STORE, 'readonly');
-                    const store = tx.objectStore(POS_CATALOG_STORE);
-                    const getAllReq = store.getAll();
-                    getAllReq.onsuccess = () => {
-                        if (Array.isArray(getAllReq.result)) {
-                            for (const item of getAllReq.result) {
-                                catalogProductMap.set(Number(item.product_id), {
-                                    ...item,
-                                    initial_stock: Number(item.quantity_on_hand)
-                                });
-                            }
-                        }
-                        syncAllCatalogStock();
-                        resolve(posDb);
-                    };
-                    getAllReq.onerror = () => resolve(posDb);
-                } catch (e) {
-                    resolve(posDb);
-                }
+        req.onsuccess = async event => {
+            posDb = window.posDb = event.target.result;
+            if (!await applyCatalogDelta(items, true)) {
+                posDb.close();
+                posDb = window.posDb = null;
             }
+            resolve(posDb);
         };
-        req.onerror = () => resolve(null);
+        req.onerror = req.onblocked = () => resolve(null);
     });
 }
 
@@ -1312,57 +1219,75 @@ function getLocalStock(productId) {
 const CATALOG_SYNC_INTERVAL_MS = 300000;
 let catalogSyncTimer = null;
 let currentCatalogEtag = typeof posCatalogEtag !== 'undefined' ? (posCatalogEtag || '') : '';
-let lastCatalogSyncTime = typeof posCatalogServerTime !== 'undefined' ? (posCatalogServerTime || '') : '';
+let catalogSyncPromise = null;
 
-function applyCatalogDelta(items = []) {
+function setCatalogStatus(message = '') {
+    const status = document.getElementById('catalog-status');
+    if (status) {
+        status.textContent = message;
+        status.hidden = !message;
+    }
+}
+
+function applyCatalogDelta(items = [], replace = false) {
     return new Promise((resolve) => {
-        const db = (typeof posDb !== 'undefined' ? posDb : (window.posDb || null));
-        if (!db || !Array.isArray(items) || items.length === 0) {
-            return resolve(false);
-        }
+        const db = posDb;
+        if (!db || !Array.isArray(items)) return resolve(false);
         try {
             const tx = db.transaction(POS_CATALOG_STORE, 'readwrite');
             const store = tx.objectStore(POS_CATALOG_STORE);
-            for (const item of items) {
-                store.put(item);
-                const id = Number(item.product_id);
-                const map = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap);
-                if (map) {
-                    const existing = map.get(id);
-                    map.set(id, {
-                        ...(existing || {}),
-                        ...item,
-                        initial_stock: Number(item.quantity_on_hand)
-                    });
-                    if (typeof syncCatalogStock === 'function') syncCatalogStock(id);
-                }
-                if (typeof quickProductById !== 'undefined' && quickProductById && quickProductById.has(id)) {
-                    const qp = quickProductById.get(id);
-                    if (item.unit_price !== undefined) qp.price = Number(item.unit_price);
-                    if (item.quantity_on_hand !== undefined) qp.quantity_on_hand = Number(item.quantity_on_hand);
-                }
-            }
+            if (replace) store.clear();
+            for (const item of items) store.put(item);
             tx.oncomplete = () => {
+                if (replace) catalogProductMap.clear();
+                for (const item of items) {
+                    const id = Number(item.product_id);
+                    catalogProductMap.set(id, { ...item, initial_stock: Number(item.quantity_on_hand) });
+                    syncCatalogStock(id);
+                    if (typeof quickProductById !== 'undefined') {
+                        const product = quickProductById.get(id) || {product_image: ''};
+                        Object.assign(product, item, {
+                            name: item.product_name + (item.variant_label ? ' - ' + item.variant_label : ''),
+                            price: Number(item.unit_price)
+                        });
+                        if (!quickProductById.has(id) && quickProducts.length < 120) {
+                            quickProductById.set(id, product);
+                            quickProducts.push(product);
+                        }
+                    }
+                }
+                if (replace && typeof quickProducts !== 'undefined') {
+                    for (let i = quickProducts.length - 1; i >= 0; i--) {
+                        if (!catalogProductMap.has(Number(quickProducts[i].product_id))) {
+                            quickProductById.delete(Number(quickProducts[i].product_id));
+                            quickProducts.splice(i, 1);
+                        }
+                    }
+                }
                 if (typeof renderQuickProducts === 'function') renderQuickProducts();
                 resolve(true);
             };
-            tx.onerror = () => resolve(false);
+            tx.onabort = tx.onerror = () => resolve(false);
         } catch (e) {
             resolve(false);
         }
     });
 }
 
-async function syncCatalog(isManual = false) {
+function syncCatalog(isManual = false) {
+    if (!catalogSyncPromise) {
+        catalogSyncPromise = refreshCatalog(isManual).finally(() => { catalogSyncPromise = null; });
+    }
+    return catalogSyncPromise;
+}
+
+async function refreshCatalog(isManual = false) {
     if (!posShiftOpen || (typeof cartWorkspace !== 'undefined' && cartWorkspace.context?.locked)) {
         return { success: false, reason: 'Shift closed or locked' };
     }
     const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : 'http://127.0.0.1';
     const url = new URL(barcodeApiUrl, origin);
     url.searchParams.set('action', 'catalog_sync');
-    if (lastCatalogSyncTime) {
-        url.searchParams.set('since', lastCatalogSyncTime);
-    }
     if (currentCatalogEtag) {
         url.searchParams.set('if_none_match', currentCatalogEtag);
     }
@@ -1373,8 +1298,14 @@ async function syncCatalog(isManual = false) {
     }
 
     try {
-        const res = await fetch(url.toString(), { headers });
+        const res = await fetch(url.toString(), { headers, cache: 'no-store' });
+        if (res.redirected || res.status === 401 || res.status === 403) {
+            await applyCatalogDelta([], true);
+            location.reload();
+            return {success: false};
+        }
         if (res.status === 304) {
+            setCatalogStatus();
             if (isManual) {
                 showCartMessage('Catalog is already up to date.', 'info');
             }
@@ -1385,12 +1316,13 @@ async function syncCatalog(isManual = false) {
             const data = await res.json();
             if (data.success && Array.isArray(data.catalog)) {
                 const etag = res.headers?.get ? res.headers.get('ETag') : data.etag;
-                if (etag) currentCatalogEtag = etag;
-                if (data.server_time) lastCatalogSyncTime = data.server_time;
-
-                if (data.catalog.length > 0) {
-                    await applyCatalogDelta(data.catalog);
+                if (!await applyCatalogDelta(data.catalog, data.delta !== true)) {
+                    setCatalogStatus('Cached stock and prices may be outdated. Refresh catalog to retry.');
+                    showCartMessage('Catalog refresh failed. Cached stock and prices may be outdated.', 'warning');
+                    return { success: false };
                 }
+                if (etag) currentCatalogEtag = etag;
+                setCatalogStatus();
                 if (isManual) {
                     const count = data.catalog.length;
                     showCartMessage(count > 0 ? `Catalog refreshed with ${count} products.` : 'Catalog is already up to date.', 'success');
@@ -1399,14 +1331,12 @@ async function syncCatalog(isManual = false) {
             }
         }
 
-        if (isManual) {
-            showCartMessage('Failed to refresh catalog.', 'warning');
-        }
+        setCatalogStatus('Cached stock and prices may be outdated. Refresh catalog to retry.');
+        if (isManual) showCartMessage('Catalog refresh failed. Cached stock and prices may be outdated.', 'warning');
         return { success: false };
     } catch (err) {
-        if (isManual) {
-            showCartMessage('Could not reach server to refresh catalog.', 'warning');
-        }
+        setCatalogStatus('Offline: cached stock and prices may be outdated. Checkout requires a connection.');
+        if (isManual) showCartMessage('Could not reach server to refresh catalog.', 'warning');
         return { success: false, error: err };
     }
 }
@@ -1427,6 +1357,26 @@ function startCatalogSyncLoop() {
         }
     }, CATALOG_SYNC_INTERVAL_MS);
 }
+
+window.addEventListener('pagehide', () => {
+    clearInterval(catalogSyncTimer);
+    if (posDb) posDb.close();
+    posDb = window.posDb = null;
+    catalogProductMap.clear();
+});
+window.addEventListener('focus', () => {
+    if (posDb && document.visibilityState === 'visible') syncCatalog(false);
+});
+document.addEventListener('visibilitychange', () => {
+    if (posDb && document.visibilityState === 'visible') syncCatalog(false);
+});
+window.addEventListener('online', () => syncCatalog(false));
+window.addEventListener('pageshow', event => {
+    if (event.persisted) location.reload();
+});
+window.addEventListener('offline', () => {
+    setCatalogStatus('Offline: cached stock and prices may be outdated. Checkout requires a connection.');
+});
 
 window.initPosCatalogDb = initPosCatalogDb;
 window.lookupProductInIndexedDB = lookupProductInIndexedDB;

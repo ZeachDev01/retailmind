@@ -200,6 +200,8 @@
         try {
             const url = new URL(urlHref, location.href);
             if (!eligible(url) || !url.pathname.endsWith('.php')) return;
+            // Stock and checkout state must be fetched when the user opens the page.
+            if (/\/(?:pos|inventory_overview)\.php$/.test(url.pathname)) return;
             if (url.pathname === location.pathname && url.search === location.search) return;
             if (url.searchParams.has('slow') || url.pathname.includes('slow') || url.pathname.includes('error')) return;
             const key = url.href;

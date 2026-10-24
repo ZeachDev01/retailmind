@@ -23,6 +23,7 @@ function between(start, end) {
             function showCartMessage(message, type) { messages.push({ message, type }); }
             function showRecentScan(product, code) { scans.push({ product, code }); }
             function renderCart() { renders++; }
+            window.RetailMindUI = { toast() {} };
             function getLowStockThreshold() { return 0; }
             function escapeHtml(value) { return value; }
             window.fetch = async (url, options) => {

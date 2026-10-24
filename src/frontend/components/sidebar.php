@@ -93,7 +93,7 @@ function sidebar_icon(string $name, string $class = ''): string
 {
     return '<img class="navigation-icon ' . sidebar_e($class) . '" src="'
         . sidebar_e(app_url('assets/img/navigation/' . $name . '.svg'))
-        . '" alt="" aria-hidden="true" width="22" height="22">';
+        . '" alt="" aria-hidden="true" width="22" height="22" loading="lazy">';
 }
 
 function sidebar_item_paths(array $items): array
@@ -111,7 +111,7 @@ function sidebar_item_paths(array $items): array
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
 ?>
-    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><?php if (!empty($item['image'])): ?><img class="sidebar-nav-icon" src="<?= sidebar_e(app_url($item['image'])) ?>" alt="" width="22" height="22"><?php else: ?><?= sidebar_icon($item['icon']) ?><?php endif; ?><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
+    <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><?php if (!empty($item['image'])): ?><img class="sidebar-nav-icon" src="<?= sidebar_e(app_url($item['image'])) ?>" alt="" width="22" height="22" loading="lazy"><?php else: ?><?= sidebar_icon($item['icon']) ?><?php endif; ?><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
 <?php
 }
 

@@ -57,6 +57,7 @@ const fixture = action => {
                 await page.reload();
                 assert.equal(await page.locator('.sidebar-theme-control [data-theme-current]').getAttribute('data-theme-current'), mode);
                 await page.waitForFunction(() => [...document.querySelectorAll('.navigation-icon, .sidebar-nav-icon')]
+                    .filter(icon => icon.getClientRects().length > 0)
                     .every(icon => icon.complete && icon.naturalWidth > 0));
                 assert.equal(await page.locator('.sidebar-nav a:not(:has(img)), .sidebar-nav .dropbtn:not(:has(img))').count(), 0);
                 assert.equal(await page.locator('.sidebar-nav i, .sidebar-nav svg').count(), 0);
@@ -108,7 +109,9 @@ const fixture = action => {
             await page.locator('#menuToggle').click();
             assert.equal(await page.locator('#menuToggle').getAttribute('aria-expanded'), 'true');
             assert((await page.locator('#menuToggle img').getAttribute('src')).endsWith('/close.svg'));
-            await page.waitForFunction(() => [...document.querySelectorAll('.navigation-icon')].every(icon => icon.complete && icon.naturalWidth > 0));
+            await page.waitForFunction(() => [...document.querySelectorAll('.navigation-icon')]
+                .filter(icon => icon.getClientRects().length > 0)
+                .every(icon => icon.complete && icon.naturalWidth > 0));
             await page.waitForFunction(() => document.querySelector('#appSidebar').getBoundingClientRect().left >= -1);
             await page.screenshot({path: path.join(screenshots, role + '-mobile.png'), animations: 'disabled'});
             await page.keyboard.press('Escape');

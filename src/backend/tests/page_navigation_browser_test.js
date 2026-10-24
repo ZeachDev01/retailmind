@@ -72,6 +72,16 @@ const render = (html, partial) => {
                     await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
                     page.on('pageerror', error => errors.push(error.message));
                     await page.goto(origin + '/first.php');
+                    const stockPrefetches = [];
+                    page.on('request', request => {
+                        if (/\/(?:pos|inventory_overview)\.php$/.test(new URL(request.url()).pathname)) stockPrefetches.push(request.url());
+                    });
+                    await page.evaluate(() => {
+                        RetailMindNavigation.prefetch('/components/cashier/pos.php');
+                        RetailMindNavigation.prefetch('/components/inventory_management/inventory_overview.php');
+                    });
+                    await page.waitForTimeout(100);
+                    assert.deepEqual(stockPrefetches, [], 'Stock pages must fetch current data on open, without reusing speculative snapshots');
                     await page.addStyleTag({content: fs.readFileSync('src/frontend/assets/css/theme.css', 'utf8')});
                     const theme = fallback ? 'dark' : 'light';
                     await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);

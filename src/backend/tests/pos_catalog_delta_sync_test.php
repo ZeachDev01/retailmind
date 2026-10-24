@@ -207,8 +207,38 @@ PHP;
     $res8 = $httpRequest('/?action=catalog_sync&since=' . urlencode($pastTime));
     $assert($res8['status'] === 200, "Delta sync returned status {$res8['status']} (expected 200)");
     $json8 = json_decode($res8['body'], true);
-    $assert($json8['delta'] === true, 'Response indicates delta updates');
+    $assert($json8['delta'] === false, 'Changed catalogs return authoritative snapshots, including when since is provided');
     $assert(count($json8['catalog']) >= 1, 'Delta updates contain updated products');
+
+    // Existing products can change price without touching creation/inventory timestamps.
+    $pdo->exec("UPDATE products SET created_at = '2020-01-01', unit_price = 19.25 WHERE product_id = 1;
+        UPDATE inventory SET last_updated = '2020-01-01' WHERE product_id = 1");
+    $priceSync = $httpRequest('/?action=catalog_sync&since=' . urlencode(date('Y-m-d H:i:s')));
+    $priceData = json_decode($priceSync['body'], true);
+    $prices = array_column($priceData['catalog'], 'unit_price', 'product_id');
+    $assert(($prices[1] ?? null) === 19.25, 'Price edits must reach cached products even when timestamps are unchanged');
+
+    $etagBeforeSwap = $priceSync['headers']['etag'];
+    $pdo->exec('UPDATE products SET unit_price = CASE product_id WHEN 1 THEN 8.00 ELSE 19.25 END');
+    $swapped = $httpRequest('/?action=catalog_sync', ['If-None-Match' => $etagBeforeSwap]);
+    $assert($swapped['status'] === 200, 'Equal-total price swaps must invalidate the catalog ETag');
+
+    $pdo->exec('UPDATE inventory SET quantity_on_hand = 74 WHERE product_id = 1');
+    $saleSync = $httpRequest('/?action=catalog_sync', ['If-None-Match' => $swapped['headers']['etag']]);
+    $saleData = json_decode($saleSync['body'], true);
+    $assert($saleSync['status'] === 200 && $saleData['catalog'][0]['quantity_on_hand'] === 74,
+        'Stock decrements must refresh even when the inventory timestamp does not advance');
+
+    $pdo->exec("UPDATE products SET pack_size = 6, pack_price = 40.00, pack_barcode = 'PACK-01' WHERE product_id = 1");
+    $packSync = $httpRequest('/?action=catalog_sync', ['If-None-Match' => $swapped['headers']['etag']]);
+    $packData = json_decode($packSync['body'], true);
+    $assert($packSync['status'] === 200 && $packData['catalog'][0]['pack_price'] === 40,
+        'Pack price edits must invalidate cached product cards');
+    $pdo->exec("UPDATE products SET status = 'inactive'");
+    $emptySync = $httpRequest('/?action=catalog_sync', ['If-None-Match' => $packSync['headers']['etag']]);
+    $emptyData = json_decode($emptySync['body'], true);
+    $assert($emptySync['status'] === 200 && $emptyData['catalog'] === [] && $emptyData['delta'] === false,
+        'Deactivating the last products must return an authoritative empty snapshot');
 
     echo "POS catalog delta sync test: passed\n";
 } finally {

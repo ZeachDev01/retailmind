@@ -42,13 +42,13 @@ $fixture = static function (int $storeId): InventoryLoadPdo {
     $connection->sqliteCreateFunction('CURDATE', static fn(): string => '2026-10-09', 0);
     $connection->exec("CREATE TABLE branches (branch_id INTEGER PRIMARY KEY, branch_name TEXT, branch_code TEXT, status TEXT);
         CREATE TABLE users (user_id INTEGER PRIMARY KEY, branch_id INTEGER);
-        CREATE TABLE products (product_id INTEGER PRIMARY KEY, branch_id INTEGER, product_name TEXT, sku TEXT, reorder_level INTEGER);
+        CREATE TABLE products (product_id INTEGER PRIMARY KEY, branch_id INTEGER, product_name TEXT, sku TEXT, reorder_level INTEGER, warning_lead_time_days INTEGER);
         CREATE TABLE inventory (product_id INTEGER PRIMARY KEY, quantity_on_hand INTEGER);
         CREATE TABLE product_batches (batch_id INTEGER PRIMARY KEY, product_id INTEGER, batch_number TEXT,
             remaining_quantity INTEGER, expiration_date TEXT, date_received TEXT, supplier TEXT);
         INSERT INTO branches VALUES ({$storeId}, 'Store', 'STORE', 'active');
         INSERT INTO users VALUES (1, {$storeId});
-        INSERT INTO products VALUES (1, {$storeId}, 'Alpha', 'A', 10), (2, {$storeId}, 'Zulu', 'Z', 10),
+        INSERT INTO products (product_id, branch_id, product_name, sku, reorder_level) VALUES (1, {$storeId}, 'Alpha', 'A', 10), (2, {$storeId}, 'Zulu', 'Z', 10),
             (3, {$storeId}, 'No inventory', 'N', 10), (4, 9999, 'Foreign', 'F', 10);
         INSERT INTO inventory VALUES (1, 8), (2, 0), (4, 50)");
     return $connection;
@@ -83,16 +83,16 @@ for ($id = 4; $id <= 11; $id++) {
 
 $inventory = new InventoryService($pdo);
 $assert(count($inventory->getLowStockProducts()) === 2, 'Low-stock list must keep zero-stock products and exclude foreign products');
-$assert(count($inventory->getExpiringSoonBatches(30)) === 11, 'Expiring list must keep eligible in-Store dated batches');
-$assert(array_column($inventory->getExpiredBatches(), 'batch_id') === [20], 'Expired list must retain the expired in-Store batch');
+$assert(count($inventory->getExpiringSoonBatches(30, '2026-10-09')) === 11, 'Expiring list must keep eligible in-Store dated batches');
+$assert(array_column($inventory->getExpiredBatches('2026-10-09'), 'batch_id') === [20], 'Expired list must retain the expired in-Store batch');
 $readsBeforeSummary = $pdo->preparedReads;
 $summary = $inventory->getInventorySummary();
 $assert($summary === ['total_products' => 3, 'current_stock' => 8], 'Summary must count inventory-less products and keep scoped stock totals');
 $assert($pdo->preparedReads - $readsBeforeSummary === 2, 'Summary must run only the two totals queries, without repeating loaded lists');
-$assert(array_column($inventory->getFefoRecommendations(), 'batch_id') === [3, 2, 1, 4, 5, 6, 7, 8, 9, 10],
+$assert(array_column($inventory->getFefoRecommendations('2026-10-09'), 'batch_id') === [3, 2, 1, 4, 5, 6, 7, 8, 9, 10],
     'FEFO must fetch only the first ten eligible batches, ordered by expiry, receipt date, then product name');
 $pdo->exec('DELETE FROM product_batches WHERE batch_id BETWEEN 4 AND 11');
-$assert(array_column($inventory->getFefoRecommendations(), 'batch_id') === [3, 2, 1, 12],
+$assert(array_column($inventory->getFefoRecommendations('2026-10-09'), 'batch_id') === [3, 2, 1, 12],
     'Undated batches must follow dated stock; expired, empty, and foreign batches must stay excluded');
 $assert($pdo->scopeReads === 1, 'All inventory reads and aliases must reuse one Store preflight per connection');
 

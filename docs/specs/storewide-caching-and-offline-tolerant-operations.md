@@ -13,8 +13,8 @@ RetailMind operations frequently run on slow, high-latency, or metered mobile ce
 ## Solution
 
 A cohesive, prioritized caching architecture that keeps daily store operations fast, reliable, and bandwidth-efficient:
-1. **P1 — POS Offline Catalog Preload & Idempotent Checkout**: Sellable items and prices preload into browser client-side storage at Cashier Shift opening. Barcode scanning resolves locally in under 2ms with zero data consumption. Checkout requires an active online connection protected by client-generated idempotency keys to prevent duplicate sales. When checkout detects low stock, the cart is kept intact and displays remaining stock in a decision modal. Catalog freshness is maintained via 5-minute lightweight conditional HTTP checks (`304 Not Modified`) and a manual POS refresh button.
-2. **P2 — Root Service Worker App Shell**: A unified Service Worker caches static stylesheets, scripts, fonts, and core layouts with silent background updates and non-blocking update notifications.
+1. **P1 — POS Offline Catalog Preload & Idempotent Checkout**: Sellable items and prices preload into browser client-side storage at Cashier Shift opening. Barcode scanning resolves locally in under 2ms with zero data consumption. Checkout requires an active online connection protected by client-generated idempotency keys to prevent duplicate sales. When checkout detects low stock, the cart is kept intact and displays remaining stock in a decision modal. Catalog freshness is maintained via conditional HTTP checks every 5 minutes, on tab return, on reconnection, and through a manual POS refresh button. Unchanged catalogs return `304 Not Modified`; changed catalogs replace the saved snapshot.
+2. **P2 — Root Service Worker App Shell**: A unified Service Worker caches same-origin static stylesheets, scripts, and fonts with non-blocking update notifications. Session HTML always comes from the server.
 3. **P3 — Administrator Dashboard Metrics Cache**: 300-second transient server caching for heavy aggregate metrics, automatically invalidated upon state-changing events (Cashier Shift close, Cash Refund, Stock Issue decision).
 4. **P4 — Immutable Receipt History Caching**: 24-hour browser HTTP caching for finalized customer Sale Receipts.
 5. **P5 — Replenishment Recommendations Snapshot Caching**: Session caching for stock recommendations during aisle audits, refreshing upon new Stock Receiving or manual trigger.
@@ -48,12 +48,14 @@ A cohesive, prioritized caching architecture that keeps daily store operations f
 - Barcode scanning, SKU entry, and product search in POS resolve directly against the local `IndexedDB` index.
 - Product scan lookups run with zero network roundtrips during cart construction.
 
-### 2. Catalog Freshness Protocol (ETag / 304 Delta Sync)
-- A background sync loop fires every 5 minutes while the Cashier Shift is open and unlocked.
-- The sync request transmits an HTTP `If-None-Match` header holding a catalog state hash (derived from max modification timestamps of products and inventory).
-- If the catalog is unchanged, the server returns HTTP `304 Not Modified` with empty body (<100 bytes).
-- If changed, the server returns only modified/added product records, updating the local `IndexedDB` store.
-- A manual "Refresh Catalog" action on the POS header triggers an immediate conditional check.
+### 2. Catalog Freshness Protocol (ETag / Snapshot Sync)
+- Background checks run every 5 minutes while the Cashier Shift is open and unlocked, and immediately on tab return or reconnection. Overlapping checks share one request.
+- HTTP `If-None-Match` carries a hash of the complete sellable catalog payload, including individual prices, codes, pack information, and stock.
+- An unchanged catalog returns HTTP `304 Not Modified` with an empty body. Total response/header size depends on hosting and session headers.
+- A changed catalog returns an authoritative snapshot (`delta: false`), including an empty catalog when all products are deactivated. Legacy `since` parameters do not filter away price edits or removals.
+- IndexedDB and memory replace stale records, and the client advances its ETag only after storage commits. A new page's empty preload never restores another account's previous catalog.
+- Manual refresh triggers the same conditional check. Offline or failed refreshes leave a persistent stale-data notice; checkout still requires online validation.
+- The page uses one request-local catalog read for the initial product grid, preload, and ETag instead of independently reading each.
 
 ### 3. Idempotent Online Checkout Contract
 - Checkout requires an active network connection to commit financial and stock changes.
@@ -66,7 +68,7 @@ A cohesive, prioritized caching architecture that keeps daily store operations f
 ### 4. Root Service Worker & App Shell Caching
 - A unified Service Worker is registered at the application root, covering Cashier, Inventory Management, and Administrative workspaces.
 - Versioned static assets (CSS, JS, WebFonts, SVGs) are cached using a Cache-First strategy.
-- Application HTML shells are served via Stale-While-Revalidate.
+- Session HTML and navigation use network requests with `no-store`; they are never replayed by the service worker. POS and Stock Overview also skip speculative page prefetching. Stock Overview refreshes on tab return.
 - When new service worker assets are activated, a floating banner announces "Update available — Tap to reload" without forcing a reload during active transactions.
 
 ### 5. Administrator Dashboard Server Transient Cache

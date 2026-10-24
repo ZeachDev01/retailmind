@@ -10,10 +10,10 @@ Instead of full offline-first checkout (which causes inventory drift, stock over
   - The active sellable catalog preloads into browser `IndexedDB` when a Cashier Shift opens. Barcode lookups resolve locally in <2ms with zero cellular data consumption.
   - Final checkout requires an active internet connection. Requests carry a client-generated UUID idempotency key; connection drops during payment can be retried without duplicate sales or duplicate Sale Receipts.
   - When checkout detects insufficient live stock, the cart remains intact and displays the live remaining stock in a modal for the Cashier to manually adjust or remove items.
-  - Catalog freshness checks run every 5 minutes in the background using HTTP `ETag` / `If-None-Match` conditional headers (returning `304 Not Modified` at ~100 bytes), supplemented by a manual "Refresh" button on the POS screen.
+  - Catalog freshness checks run every 5 minutes, when returning to the POS tab, and on reconnection, supplemented by a manual "Refresh" button. A content-derived `ETag` returns `304 Not Modified` with an empty body when unchanged. Changed catalogs return complete snapshots so price edits, deactivations, and same-second stock changes cannot fall through timestamp filters. The browser acknowledges a new ETag only after its local write commits; offline or failed refreshes show a persistent stale-data notice.
 
 - **P2: Unified Root Service Worker & App Shell Caching**:
-  - A root Service Worker caches application stylesheets, JavaScript bundles, icons, and page layouts using a Stale-While-Revalidate strategy.
+  - A root Service Worker caches same-origin static stylesheets, JavaScript bundles, fonts, and icons using Cache-First. Session HTML and navigation remain network-fresh with `no-store` because they contain account state and CSRF tokens. POS and Stock Overview bypass speculative HTML prefetching; Stock Overview refreshes when the operator returns to its tab.
   - Asset updates install in the background and surface a non-blocking notification banner ("Update available — Tap to reload") rather than interrupting an active Cashier Shift.
 
 - **P3: Administrator Dashboard Transient Metrics Caching**:
@@ -26,3 +26,7 @@ Instead of full offline-first checkout (which causes inventory drift, stock over
 - **P5: Replenishment Recommendations Snapshot Caching**:
   - AI demand forecasts and replenishment suggestions cache in device session storage for the duration of the Inventory Manager's active review, refreshing only when Stock Receiving is recorded or when the user triggers a manual recalculation.
 
+
+## Freshness clarification - 2026-10-25
+
+The operator chose fresh stock and prices on the next page open or tab return over reuse of a five-minute-old catalog. Full changed snapshots trade additional transfer for reliable removals and edits without introducing a revision log. Unchanged catalogs retain conditional responses. This supersedes the original cached-layout and timestamp-delta wording; checkout remains online and server-validated. See [load performance scope and evidence](../specs/login-pos-inventory-performance.md).

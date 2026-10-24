@@ -155,7 +155,7 @@ unset($_SESSION['_login_username']);
             </div>
             <figure class="landing-hero__visual">
                 <div class="landing-hero__image">
-                    <img src="<?= $heroImageUrl ?>" alt="Stocked Store shelves beside a barcode scanner and incoming inventory">
+                    <img <?= $shouldOpenLogin ? 'data-src' : 'src' ?>="<?= $heroImageUrl ?>" alt="Stocked Store shelves beside a barcode scanner and incoming inventory">
                     <figcaption>Stock visibility from shelf to receiving</figcaption>
                 </div>
                 <div class="landing-preview" aria-label="RetailMind operational flow">
@@ -325,9 +325,9 @@ unset($_SESSION['_login_username']);
     </div>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
     <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
-    <script src="<?= htmlspecialchars(landing_app_url('assets/js/ui.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
+    <script src="<?= htmlspecialchars(landing_app_url('assets/js/ui.js?v=' . filemtime(__DIR__ . '/assets/js/ui.js')), ENT_QUOTES, 'UTF-8') ?>" defer></script>
     <script>
         (function() {
             var modal = document.getElementById('loginModal');
@@ -429,6 +429,10 @@ unset($_SESSION['_login_username']);
             }
 
             function closeModal() {
+                document.querySelectorAll('img[data-src]').forEach(function(image) {
+                    image.src = image.dataset.src;
+                    image.removeAttribute('data-src');
+                });
                 if (viewFocusTimer !== null) {
                     window.clearTimeout(viewFocusTimer);
                     viewFocusTimer = null;
