@@ -33,7 +33,7 @@ if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--
                 $service->recordCashOut((int)$argv[3], [
                     'principal' => 100,
                     'fee_method' => 'Fee via GCash',
-                    'reference' => '0000000000888',
+                    'reference' => '0000000000887',
                     'confirmed_wallet' => true,
                     'confirmed_cash' => true,
                 ]);
@@ -554,6 +554,8 @@ $coGkId = $service->recordCashOut(4, [
     'net_wallet' => 1010.00,
 ]);
 $check($coGkId > 0, 'Cash-Out Fee via GCash recorded successfully');
+$cashOutWalletReceipt = (new \App\Receipts\GCashReceiptService($pdo))->fetch($coGkId, 4, 'cashier');
+$check($cashOutWalletReceipt !== null && $cashOutWalletReceipt['wallet_received'] === '1010.00' && $cashOutWalletReceipt['cash_paid_out'] === '1000.00' && $cashOutWalletReceipt['cash_collected'] === '0.00', 'Cash-Out wallet fee receipt preserves actual customer transfers');
 
 $posSnapshotAfter = $snapshot();
 $check($posSnapshotBefore === $posSnapshotAfter, 'Product sales, inventory, and POS cash drawer totals must remain unchanged');
@@ -593,6 +595,16 @@ $coCkId = $service->recordCashOut(4, [
     'net_wallet' => 1000.00,
 ]);
 $check($coCkId > 0, 'Cash-Out Fee in cash recorded successfully');
+$cashOutCashReceipt = $receipts->fetch($coCkId, 4, 'cashier');
+$check($cashOutCashReceipt['wallet_received'] === '1000.00' && $cashOutCashReceipt['cash_collected'] === '10.00' && $cashOutCashReceipt['cash_paid_out'] === '1000.00' && $cashOutCashReceipt['fee_method'] === 'Fee in cash', 'Cash fee receipt separates cash collection from gross payout');
+$check($receipts->fetch($coCkId, 5, 'cashier') === null && $receipts->fetch($coGkId, 5, 'cashier') === null, 'Cash-Out saved receipts remain own-only for Cashiers');
+$pdo->beginTransaction();
+try {
+    $pdo->exec("UPDATE store_settings SET setting_value='Later receipt settings' WHERE setting_key IN ('store_name', 'store_address', 'receipt_footer', 'gcash_fee_percentage')");
+    $pdo->exec("UPDATE users SET full_name='Later Cashier' WHERE user_id=4");
+    $pdo->exec("UPDATE registers SET name='Later Register' WHERE register_id=1");
+    $check($receipts->fetch($coGkId, 4, 'cashier') === $cashOutWalletReceipt && $receipts->fetch($coCkId, 4, 'cashier') === $cashOutCashReceipt, 'Both Cash-Out fee receipts retain completion-time details after settings changes');
+} finally { $pdo->rollBack(); }
 
 $coCkRow = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id=' . $coCkId)->fetch(PDO::FETCH_ASSOC);
 $check((float)$coCkRow['principal_amount'] === 1000.00, 'Principal preserved');
@@ -642,6 +654,8 @@ $check((float)$co12kRow['fee_amount'] === 123.45, '123.45 centavo fee');
 $check((float)$co12kRow['service_cash_delta'] === -12221.55, 'Service cash delta -12221.55');
 $check((float)$co12kRow['wallet_delta'] === 12345.00, 'Wallet delta +12345.00');
 $check((float)$co12kRow['gross_fee'] === 123.45, 'Gross fee 123.45');
+$centavoReceipt = $receipts->fetch($co12kId, 4, 'cashier');
+$check($centavoReceipt['fee_amount'] === '123.45' && $centavoReceipt['cash_collected'] === '123.45' && $centavoReceipt['cash_paid_out'] === '12345.00' && $centavoReceipt['wallet_received'] === '12345.00', 'Cash-Out receipt preserves exact centavo fee without netting gross payout');
 
 $expSess7 = $service->calculateSessionExpected($sess7);
 $check($expSess7['expected_service_cash'] === 7778.45, 'Expected service cash: 7778.45');
@@ -697,13 +711,16 @@ $expAfterNC2 = $service->calculateSessionExpected($sess7);
 $check($expAfterNC2['expected_service_cash'] === 7288.45, 'Expected service cash: 7288.45');
 $check($expAfterNC2['expected_wallet_balance'] === 23355.00, 'Expected wallet: 23355.00');
 
+$check($receipts->fetch($ncTxId1, 4, 'cashier') === null && $receipts->fetch($ncTxId2, 4, 'cashier') === null, 'Needs checking Cash-Out never exposes a completed receipt');
 // Audit failure rollback for Cash-Out
+$cashOutBalanceBeforeFailure = $service->calculateSessionExpected($sess7);
+$cashOutSnapshotsBeforeFailure = (int)$pdo->query('SELECT COUNT(*) FROM gcash_transactions WHERE receipt_details_json IS NOT NULL')->fetchColumn();
 $pdo->exec("CREATE TRIGGER gcash_cash_out_audit_fail BEFORE INSERT ON activity_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Audit injection fail'");
 try {
     $auditFailThrew = false;
     try {
         $service->recordCashOut(4, [
-            'principal' => 200,
+            'principal' => 100,
             'fee_method' => 'Fee via GCash',
             'reference' => '0000000000887',
             'confirmed_wallet' => true,
@@ -711,6 +728,8 @@ try {
         ]);
     } catch (PDOException $e) { $auditFailThrew = true; }
     $check($auditFailThrew, 'Cash-Out must throw on audit failure');
+    $check($service->calculateSessionExpected($sess7) === $cashOutBalanceBeforeFailure, 'Cash-Out audit failure leaves balances unchanged');
+    $check((int)$pdo->query('SELECT COUNT(*) FROM gcash_transactions WHERE receipt_details_json IS NOT NULL')->fetchColumn() === $cashOutSnapshotsBeforeFailure, 'Cash-Out audit failure leaves no snapshot');
     $check((int)$pdo->query("SELECT COUNT(*) FROM gcash_transactions WHERE reference_number='0000000000887'")->fetchColumn() === 0, 'Audit failure must roll back cash out record');
 } finally {
     $pdo->exec('DROP TRIGGER gcash_cash_out_audit_fail');
@@ -733,6 +752,8 @@ foreach ($cashOutRaceProcesses as [$proc, $pipes]) {
 }
 sort($cashOutRaceOutcomes);
 $check($cashOutRaceOutcomes === ['accepted', 'duplicate'], 'Concurrent cash out must accept exactly one reference');
+$check((int)$pdo->query("SELECT COUNT(*) FROM gcash_transactions WHERE reference_number='0000000000887' AND receipt_details_json IS NOT NULL")->fetchColumn() === 1, 'Concurrent Cash-Out retries preserve exactly one saved receipt');
+
 
 $service->closeSession(4, 7288.45, 23355.00, 'Closing session 7', 2);
 
@@ -1338,8 +1359,14 @@ $longId = $wideReferenceService->recordCashIn(4, ['principal' => 12345, 'referen
 $longReceipt = $receipts->fetch($longId, 4, 'cashier');
 $check($longReceipt['fee_amount'] === '123.45' && $longReceipt['cash_collected'] === '12468.45' && $longReceipt['reference_number'] === '00000000000000000000000000123456', 'Centavo fee and complete 32 digit reference persist exactly');
 
+$walletCentavoId = $wideReferenceService->recordCashOut(4, ['principal' => 12345, 'fee_method' => 'Fee via GCash', 'reference' => '00000000000000000000000000123457', 'confirmed_wallet' => true, 'confirmed_cash' => true]);
+$walletCentavoReceipt = $receipts->fetch($walletCentavoId, 4, 'cashier');
+$check($walletCentavoReceipt['fee_amount'] === '123.45' && $walletCentavoReceipt['wallet_received'] === '12468.45' && $walletCentavoReceipt['cash_paid_out'] === '12345.00', 'Wallet fee Cash-Out retains exact centavos and gross payout');
+$service->recordLinkedCorrection(1, 'admin', $coCkId, -10.00, 0.00, 'Refund Cash-Out fee through audited correction');
+$check($receipts->fetch($coCkId, 4, 'cashier') === $cashOutCashReceipt, 'Linked correction preserves original Cash-Out saved receipt');
+
 $pdo->prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE user_id=5")->execute([password_hash('ThemeTest@2026', PASSWORD_DEFAULT)]);
-$service->closeSession(4, 13468.45, 37655.00, 'Receipt verification complete');
+$service->closeSession(4, 1113.45, 50123.45, 'Receipt verification complete');
 $pdo->exec("UPDATE cashier_shifts SET status='closed' WHERE cashier_id=4");
 $check($receipts->fetch($cashInTxId, 4, 'cashier') === $receipt, 'Receipt retrieval remains read-only and available after shift closes');
 

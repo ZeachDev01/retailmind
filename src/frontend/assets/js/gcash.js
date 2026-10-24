@@ -447,7 +447,7 @@
                 duplicate = false;
                 scanStatus('Cash-In completed successfully.');
                 notify('GCash Cash-In #' + data.id + ' completed.', 'success');
-                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('complete-cash-in'), autoPrint);
+                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'), autoPrint);
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
@@ -500,6 +500,7 @@
                     net_service_cash: preview.netServiceCash,
                     net_wallet: preview.netWallet,
                 };
+                const autoPrint = el('print-receipt')?.checked === true;
                 for (const input of el('form').elements) input.disabled = true;
                 const data = await request(null, body);
                 el('form').reset();
@@ -509,6 +510,7 @@
                 duplicate = false;
                 scanStatus('Cash-Out completed successfully.');
                 notify('GCash Cash-Out #' + data.id + ' completed.', 'success');
+                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'), autoPrint);
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
