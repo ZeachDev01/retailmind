@@ -409,6 +409,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.evaluate(() => window.receiptPrints), 2, 'Manual retry remains available');
         await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
         await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#gcash-amount').evaluate(el => el === document.activeElement), true, 'Close returns focus to ready GCash input');
         assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Next completion starts unchecked');
         const exchangeBeforeReopen = await (await context.request.get(api + '?action=overview')).json();
         await page.evaluate(id => window.viewReceipt(id), completedReceiptId);
