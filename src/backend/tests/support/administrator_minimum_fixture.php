@@ -30,6 +30,9 @@ if ($argv[1] === 'seed') {
         (100, 'Minimum Primary', 'minimum_primary', 'unused', 1, 1, 'active', 0, '2026-01-01', '2026-01-01'),
         (101, 'Minimum Additional', 'minimum_additional', 'unused', 4, 1, 'active', 0, '2026-01-01', '2026-01-01')");
     $pdo->exec('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (100, 1, 1), (101, 4, 1), (101, 1, 0)');
+} elseif ($argv[1] === 'management') {
+    $pdo->exec("UPDATE users SET status = 'active', email = NULL, last_login_at = NOW() WHERE user_id IN (1, 3, 4)");
+    $pdo->exec('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (3, 1, 0), (4, 1, 0)');
 } elseif ($argv[1] === 'one') {
     $pdo->exec("UPDATE users SET status = 'disabled' WHERE user_id = 100");
 } elseif ($argv[1] === 'state') {

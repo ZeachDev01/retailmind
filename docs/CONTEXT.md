@@ -47,7 +47,7 @@ The single retail location operated through RetailMind. RetailMind does not divi
 _Avoid_: Branch, location assignment, tenant
 
 **Super Administrator**:
-The single technical owner responsible for platform security, Platform Settings, recovery, access policy, system health, and demand-forecasting model operation. It owns privileged-account lifecycle and may create, maintain, secure, or revoke any user account. One primary account is used routinely; a sealed Recovery Account exists only for lockout or disaster recovery. While in the Super Administrator workspace it may inspect Store operations for oversight but does not perform operational mutations; stepping into Store administration, inventory execution, or point-of-sale work requires switching into the corresponding active workspace.
+The single technical owner responsible for platform security, Platform Settings, recovery, access policy, system health, and demand-forecasting model operation. It governs technical access policy and Super Administrator identity protection; ordinary Administrator lifecycle is shared with the Administrator Workspace. Other accounts cannot manage a Super Administrator identity, and Recovery Account management stays outside ordinary Users workflows. One primary account is used routinely; a sealed Recovery Account exists only for lockout or disaster recovery. While in the Super Administrator workspace it may inspect Store operations for oversight but does not perform operational mutations; stepping into Store administration, inventory execution, or point-of-sale work requires switching into the corresponding active workspace.
 _Avoid_: Superadmin, unrestricted operator, Store operator
 
 **Recovery Account**:
@@ -55,7 +55,7 @@ A sealed privileged identity used only when the primary Super Administrator cann
 _Avoid_: Backup administrator, shared admin account, routine login
 
 **Administrator**:
-The operational owner responsible for Store performance, staff, approvals, compliance, Fiscal Periods, Store Settings, and operational exceptions. It has delegated authority to create, edit, disable, reset passwords for, and revoke sessions from Cashiers and Inventory Managers. It assigns only fixed operational role templates defined by the Super Administrator; it cannot create privileged administrators or arbitrary privilege combinations. It may create a Database Backup alongside the Super Administrator. Routine inventory execution belongs to the Inventory Manager; platform security, recovery, and technical model controls belong to the Super Administrator.
+The operational owner responsible for Store performance, staff, approvals, compliance, Fiscal Periods, Store Settings, and operational exceptions. It has delegated authority to create, edit, disable, reset passwords for, and revoke sessions from other ordinary Administrators, Cashiers, and Inventory Managers, including accounts with additional Administrator access. It may promote staff using only the fixed Administrator, Cashier, and Inventory Manager role templates; it cannot assign Super Administrator, arbitrary privileges, or technical governance. Manual changes preserve at least one active ordinary account with assigned Administrator access, without a Super Administrator bypass; self-disable and self-demotion remain forbidden. Account management requires the active Administrator Workspace. It may create a Database Backup alongside the Super Administrator. Routine inventory execution belongs to the Inventory Manager; platform security, recovery, and technical model controls belong to the Super Administrator.
 _Avoid_: System administrator, global administrator, inventory manager
 
 **Database Backup**:
@@ -211,7 +211,7 @@ A record of a security-sensitive or operational action that application users ca
 _Avoid_: Editable log, activity note
 
 **Temporary Password**:
-An Administrator-issued credential for a Cashier or Inventory Manager that must be replaced by the holder before Store access. Creating Store staff and resetting a staff password both issue one; completing a Mandatory Password Change or an email-link reset clears it.
+An administrator-issued credential for an ordinary Administrator, Cashier, or Inventory Manager that must be replaced by the holder before Store access. Creating an ordinary Store account and resetting its password both issue one; completing a Mandatory Password Change or an email-link reset clears it.
 _Avoid_: Default password, live credential
 
 **Mandatory Password Change**:
@@ -223,5 +223,5 @@ A Profile-initiated password rotation available at any time when no Temporary Pa
 _Avoid_: Forced reset, recovery flow
 
 **Administrator Password Reset**:
-The Administrator action that issues a Temporary Password for a Cashier or Inventory Manager, revokes the holder's other sessions, and forces replacement on next login. It is recorded as a Protected Audit Record.
+The authorized Administrator or Super Administrator Workspace action that issues a Temporary Password for an ordinary Administrator, Cashier, or Inventory Manager, revokes the holder's other sessions, and forces replacement on next login. It is recorded as a Protected Audit Record.
 _Avoid_: Self-service reset, Recovery Account rotation

@@ -215,13 +215,48 @@ try {
     );
     $service->setStatus($adminId, 'admin', $noEmailId, 'active');
 
-    $expectDenied(
-        fn() => $service->create($adminId, 'admin', [
-            'full_name' => 'Another Admin', 'username' => 'another_admin', 'email' => null,
-            'password_hash' => password_hash('AnotherPassword123', PASSWORD_DEFAULT), 'role' => 'admin',
-        ]),
-        'Administrator must not create privileged accounts'
-    );
+    $ordinaryAdminId = $service->create($adminId, 'admin', [
+        'full_name' => 'Another Admin', 'username' => 'another_admin', 'email' => 'ordinary_admin@example.test',
+        'password_hash' => password_hash('AnotherPassword123', PASSWORD_DEFAULT), 'role' => 'admin',
+    ]);
+    $assert($service->get($ordinaryAdminId)['role_name'] === 'admin', 'Administrator creates ordinary Administrators');
+    $beforeAdditional = $service->get($cashierId);
+    $promoted = $service->update($adminId, 'admin', $cashierId,
+        array_replace($beforeAdditional, ['roles' => ['cashier', 'admin']]));
+    $assert($promoted['roles'] === ['cashier', 'admin'], 'Administrator promotes staff through additional access');
+    $assert((int)$promoted['session_version'] === (int)$beforeAdditional['session_version'] + 1,
+        'Adding Administrator access revokes existing sessions even when the primary role stays Cashier');
+    $service->resetPassword($adminId, 'admin', $cashierId, password_hash('AdminResetPassword123', PASSWORD_DEFAULT));
+    $resetAudit = $pdo->query("SELECT category FROM activity_log WHERE action = 'Password reset' ORDER BY log_id DESC LIMIT 1")->fetchColumn();
+    $assert($resetAudit === 'security', 'Additional Administrator password resets remain Protected Audit Records');
+    $adminNoticeBefore = count($notifier->delivered);
+    foreach (['active', 'disabled'] as $status) {
+        $service->setStatus($adminId, 'admin', $ordinaryAdminId, $status);
+        $before = $service->get($ordinaryAdminId);
+        $updated = $service->update($adminId, 'admin', $ordinaryAdminId,
+            array_replace($before, ['full_name' => 'Updated Administrator', 'roles' => ['admin', 'inventory_manager']]));
+        $service->resetPassword($adminId, 'admin', $ordinaryAdminId, password_hash('ReplacementPassword123', PASSWORD_DEFAULT));
+        $after = $service->get($ordinaryAdminId);
+        $assert($after['status'] === $status && $updated['full_name'] === 'Updated Administrator', 'Active and disabled Administrator profiles remain manageable');
+        $assert(password_verify('ReplacementPassword123', $after['password_hash']) && (int)$after['must_change_password'] === 1,
+            'Administrator reset replaces password and requires holder change');
+    }
+    $service->setStatus($adminId, 'admin', $ordinaryAdminId, 'active');
+    $assert(count($notifier->delivered) === $adminNoticeBefore + 2, 'Administrator disable and re-enable notify the holder through the injected notifier');
+    $beforeRemoval = $service->get($cashierId);
+    $demoted = $service->update($adminId, 'admin', $cashierId,
+        array_replace($beforeRemoval, ['roles' => ['cashier']]));
+    $assert((int)$demoted['session_version'] === (int)$beforeRemoval['session_version'] + 1,
+        'Removing additional Administrator access revokes stale sessions');
+    foreach (['super_admin', 'platform_governance', 'unknown'] as $role) {
+        $expectDenied(fn() => $service->update($adminId, 'admin', $ordinaryAdminId,
+            array_replace($service->get($ordinaryAdminId), ['roles' => [$role]])), 'Administrator cannot assign forbidden authority');
+    }
+    foreach (['cashier', 'inventory_manager'] as $workspace) {
+        $expectDenied(fn() => $service->update($adminId, $workspace, $ordinaryAdminId,
+            $service->get($ordinaryAdminId)), 'Additional Administrator access does not elevate the active Workspace');
+        $expectDenied(fn() => $service->resetPassword($adminId, $workspace, $ordinaryAdminId, 'unused'), 'Unauthorized Workspace cannot reset passwords');
+    }
     $expectDenied(fn() => $service->setStatus($adminId, 'admin', $superId, 'disabled'), 'Administrator must not manage the Super Administrator');
 
     $privilegedId = $service->create($superId, 'super_admin', [
@@ -294,7 +329,7 @@ try {
         $expectDenied(fn() => $service->setStatus($privilegedId, 'admin', $privilegedId, 'disabled'), 'Self-disable stays forbidden');
         $expectDenied(fn() => $service->update($privilegedId, 'admin', $privilegedId,
             array_replace($before, ['roles' => ['cashier']])), 'Self-demotion stays forbidden');
-        $expectDenied(fn() => $service->setStatus($adminId, 'admin', $privilegedId, 'disabled'), 'Administrator delegation remains restricted');
+        $expectDenied(fn() => $service->setStatus($adminId, 'admin', $privilegedId, 'disabled'), 'Administrator actors also respect the minimum');
         $service->update($superId, 'super_admin', $privilegedId, array_replace($before, ['roles' => ['cashier', 'admin', 'inventory_manager']]));
         $service->update($superId, 'super_admin', $privilegedId, array_replace($before, ['roles' => ['admin', 'cashier']]));
         $assert(in_array('admin', $service->get($privilegedId)['roles'], true), 'Retained Administrator access permits primary changes and unrelated removal');

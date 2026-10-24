@@ -162,7 +162,7 @@ final class UserLifecycleService
                 $parts[] = 'profile_image = ?';
                 $params[] = $this->nullableString($account['profile_image']);
             }
-            if ($targetRole !== $before['role_name']) {
+            if ($targetRole !== $before['role_name'] || $targetRoles !== $before['roles']) {
                 $parts[] = 'session_version = session_version + 1';
             }
             $params[] = $userId;
@@ -232,6 +232,7 @@ final class UserLifecycleService
             $statement->execute([$passwordHash, $userId]);
             $this->audit($actorId, $actorRole, 'Password reset', $userId, null, [
                 'target_role' => $before['role_name'],
+                'roles' => $before['roles'],
                 'sessions_revoked' => true,
                 'password_change_required' => true,
             ]);
@@ -246,6 +247,7 @@ final class UserLifecycleService
             $this->pdo->prepare('UPDATE users SET session_version = session_version + 1 WHERE user_id = ?')->execute([$userId]);
             $this->audit($actorId, $actorRole, 'Sessions revoked', $userId, null, [
                 'target_role' => $target['role_name'],
+                'roles' => $target['roles'],
                 'sessions_revoked' => true,
             ]);
         });

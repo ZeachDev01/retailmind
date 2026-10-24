@@ -60,11 +60,11 @@ foreach ($expected as $role => $decisions) {
     }
 }
 
-foreach (['inventory_manager', 'cashier'] as $targetRole) {
+foreach (['admin', 'inventory_manager', 'cashier'] as $targetRole) {
     $assert($policy->allows('admin', RoleCapabilityPolicy::MANAGE_USERS, $targetRole), "Administrator should manage {$targetRole} accounts");
     $assert($policy->allows('admin', RoleCapabilityPolicy::ASSIGN_ROLES, $targetRole), "Administrator should assign the {$targetRole} template");
 }
-foreach (['admin', 'super_admin'] as $targetRole) {
+foreach (['super_admin', 'seller', 'unknown'] as $targetRole) {
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::MANAGE_USERS, $targetRole), "Administrator must not manage {$targetRole} accounts");
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::ASSIGN_ROLES, $targetRole), "Administrator must not assign the {$targetRole} role");
 }

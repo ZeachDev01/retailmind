@@ -86,7 +86,7 @@ final class RoleCapabilityPolicy
         ],
     ];
 
-    private const ADMIN_DELEGATED_ROLES = ['inventory_manager', 'cashier'];
+    private const ADMIN_DELEGATED_ROLES = ['admin', 'inventory_manager', 'cashier'];
 
     public function allows(
         string $actorRole,

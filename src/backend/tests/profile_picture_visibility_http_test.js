@@ -31,7 +31,7 @@ const {chromium} = require('playwright');
         for (const actor of [0, 1, 2, 3, 4, 6]) {
             for (let target = 1; target <= 8; target++) {
                 const allowed = actor > 0 && actor !== 6 && (actor === target
-                    || (actor === 3 && [1, 2].includes(target))
+                    || (actor === 3 && [1, 2, 3, 7].includes(target))
                     || (actor === 4 && [1, 2, 3, 7].includes(target)));
                 const response = await fetch(`${origin}/profile_image.php?actor=${actor}&user_id=${target}&v=old`);
                 assert.equal(response.status, actor === 0 ? 401 : allowed ? 200 : 403, `read actor ${actor} -> ${target}`);
