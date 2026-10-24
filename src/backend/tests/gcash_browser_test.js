@@ -404,6 +404,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#receiptModal .gcash-receipt-reference svg').getAttribute('aria-label'), 'Barcode 0012345678910');
         assert.equal(await page.locator('#saleReceiptTitle').evaluate(el => el === document.activeElement), true, 'Receipt heading receives focus');
         await page.locator('.rm-toast').filter({hasText: 'Printing could not start'}).waitFor();
+        const reprintWrites = [];
+        const recordReprintWrite = request => { if (request.method() === 'POST') reprintWrites.push(request.url()); };
+        page.on('request', recordReprintWrite);
         await page.evaluate(() => { window.print = () => { window.receiptPrints++; }; });
         await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
         assert.equal(await page.evaluate(() => window.receiptPrints), 2, 'Manual retry remains available');
@@ -411,10 +414,17 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.keyboard.press('Escape');
         assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Next completion starts unchecked');
         const exchangeBeforeReopen = await (await context.request.get(api + '?action=overview')).json();
-        await page.evaluate(id => window.viewReceipt(id), completedReceiptId);
+        await tabHistory.click();
+        const historyReceipt = page.locator('#gcash-history-body tr', {hasText: '0012345678910'}).getByRole('button', {name: 'Receipt', exact: true});
+        await historyReceipt.click();
+        await page.locator('#receiptModal .gcash-service-receipt').waitFor();
         assert.equal(await page.locator('#receiptModal .gcash-service-receipt').innerText(), savedPaper, 'Reopening reads the same saved receipt');
         assert.equal(await page.evaluate(() => window.receiptPrints), 2, 'Reopening never automatically prints');
         await page.getByRole('button', {name: 'Return to GCash', exact: true}).click();
+        assert.equal(await historyReceipt.evaluate(button => document.activeElement === button), true, 'Closing returns focus to originating history receipt action');
+        assert.equal(await tabHistory.getAttribute('aria-selected'), 'true');
+        page.off('request', recordReprintWrite);
+        assert.deepEqual(reprintWrites, [], 'History retrieval and printing never call a write endpoint');
         assert.deepEqual(await (await context.request.get(api + '?action=overview')).json(), exchangeBeforeReopen, 'Receipt reopening/printing never repost financial movements');
 
         await tabHistory.click();
@@ -757,6 +767,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await tabHistory.click();
         const legacyRow = page.locator('#gcash-history-body tr', {hasText: '0012345678990'});
         await legacyRow.waitFor();
+        assert.equal(await legacyRow.getByRole('button', {name: 'Receipt', exact: true}).count(), 0, 'Reference-only history has no receipt action');
         assert.equal(await legacyRow.locator('.gcash-badge-legacy').textContent(), 'Legacy Reference');
         assert.equal((await legacyRow.textContent()).includes('Legacy reference record'), true);
 
@@ -884,6 +895,16 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await login(inventoryPage, 'inventory_manager');
         assert.equal((await inventoryContext.request.get(receiptUrl)).status(), 403, 'Active inventory Workspace cannot retrieve a receipt');
         await inventoryContext.close();
+        const multiRoleContext = await browser.newContext();
+        const multiRolePage = await multiRoleContext.newPage();
+        await login(multiRolePage, 'super_admin');
+        for (const [workspace, status] of [['admin', 200], ['cashier', 404], ['inventory_manager', 403]]) {
+            await multiRolePage.goto(origin + '/components/auth/workspace.php');
+            const csrf = await multiRolePage.locator('input[name="csrf_token"]').first().inputValue();
+            await multiRoleContext.request.post(origin + '/components/auth/workspace.php', {form: {workspace, csrf_token: csrf}});
+            assert.equal((await multiRoleContext.request.get(receiptUrl)).status(), status, 'Receipt permission uses only active ' + workspace + ' Workspace on a multi-role account');
+        }
+        await multiRoleContext.close();
         const anonymous = await browser.newContext();
         assert.equal((await anonymous.request.get(receiptUrl, {maxRedirects: 0})).status(), 302, 'Receipt requires authentication');
         await anonymous.close();

@@ -101,6 +101,7 @@ function gcash_admin_money(mixed $val): string {
     <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/cashier.css')) ?>">
     <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/gcash.css')) ?>">
     <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/gcash-admin.css')) ?>">
+    <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/sale-receipt.css')) ?>">
 </head>
 <body class="admin-page">
 <div class="app-shell">
@@ -382,7 +383,12 @@ function gcash_admin_money(mixed $val): string {
                                             </small>
                                         <?php endif; ?>
                                     </td>
-                                    <td><button type="button" class="btn btn-secondary btn-sm gcash-tx-details">Details</button></td>
+                                    <td>
+                                        <button type="button" class="btn btn-secondary btn-sm gcash-tx-details">Details</button>
+                                        <?php if ($tx['has_receipt']): ?>
+                                            <button type="button" class="btn btn-secondary btn-sm gcash-receipt" data-transaction-id="<?= (int)$tx['transaction_id'] ?>">Receipt</button>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -622,8 +628,11 @@ function gcash_admin_money(mixed $val): string {
                 </div>
             </form>
         </dialog>
+        <?php require __DIR__ . '/../../../backend/app/Views/gcash_receipt_dialog.php'; ?>
     </main>
 </div>
+<script src="<?= gcash_admin_e(app_url('assets/js/sale-receipt.js')) ?>"></script>
+<script src="<?= gcash_admin_e(app_url('assets/js/sale-receipt-dialog.js')) ?>"></script>
 <script src="<?= gcash_admin_e(app_url('assets/js/gcash-admin-overview.js')) ?>"></script>
 </body>
 </html>
