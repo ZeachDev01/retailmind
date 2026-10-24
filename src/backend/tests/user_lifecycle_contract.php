@@ -258,6 +258,61 @@ try {
         count(array_filter($auditRows, static fn(array $row): bool => $row['category'] === 'security')) > 0,
         'privileged-account lifecycle records should be categorized as security'
     );
+    // Primary and additional access are the same minimum, independently of Workspace.
+    foreach ([['admin'], ['cashier', 'admin']] as $targetRoles) {
+        $pdo->beginTransaction();
+        $pdo->exec("UPDATE users SET status = 'disabled' WHERE role_id = 2");
+        $pdo->prepare("UPDATE users SET status = 'active' WHERE user_id = ?")->execute([$privilegedId]);
+        $target = $service->get($privilegedId);
+        $target['roles'] = $targetRoles;
+        $service->update($superId, 'super_admin', $privilegedId, $target);
+        // Neither a Super Administrator with Administrator access nor Recovery counts.
+        $pdo->prepare('INSERT OR IGNORE INTO user_roles VALUES (?, 2, 0)')->execute([$superId]);
+        $recoveryId = $insertActor('Recovery Minimum', 'cashier');
+        $pdo->prepare('UPDATE users SET is_recovery_account = 1 WHERE user_id = ?')->execute([$recoveryId]);
+        $pdo->prepare('INSERT INTO user_roles VALUES (?, 2, 0)')->execute([$recoveryId]);
+        $additionalSuperId = $insertActor('Additional Super Minimum', 'cashier');
+        $pdo->prepare('INSERT INTO user_roles VALUES (?, 1, 0), (?, 2, 0)')->execute([$additionalSuperId, $additionalSuperId]);
+        $before = $service->get($privilegedId);
+        $auditsBefore = (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn();
+        $mailBefore = count($notifier->delivered);
+        foreach ([
+            fn() => $service->setStatus($superId, 'super_admin', $privilegedId, 'disabled'),
+            fn() => $service->update($superId, 'super_admin', $privilegedId,
+                array_replace($before, ['full_name' => 'Must roll back', 'roles' => ['cashier']])),
+        ] as $operation) {
+            try {
+                $operation();
+                $assert(false, 'Last ordinary Administrator removal must be rejected');
+            } catch (DomainException $exception) {
+                $assert(str_contains($exception->getMessage(), 'at least one active'), 'Minimum rejection explains the restriction');
+            }
+            $assert($service->get($privilegedId) === $before, 'Denied removal preserves the whole account and roles');
+            $assert((int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn() === $auditsBefore, 'Denied removal adds no audit');
+            $assert(count($notifier->delivered) === $mailBefore, 'Denied removal sends no notification');
+        }
+        $expectDenied(fn() => $service->setStatus($privilegedId, 'admin', $privilegedId, 'disabled'), 'Self-disable stays forbidden');
+        $expectDenied(fn() => $service->update($privilegedId, 'admin', $privilegedId,
+            array_replace($before, ['roles' => ['cashier']])), 'Self-demotion stays forbidden');
+        $expectDenied(fn() => $service->setStatus($adminId, 'admin', $privilegedId, 'disabled'), 'Administrator delegation remains restricted');
+        $service->update($superId, 'super_admin', $privilegedId, array_replace($before, ['roles' => ['cashier', 'admin', 'inventory_manager']]));
+        $service->update($superId, 'super_admin', $privilegedId, array_replace($before, ['roles' => ['admin', 'cashier']]));
+        $assert(in_array('admin', $service->get($privilegedId)['roles'], true), 'Retained Administrator access permits primary changes and unrelated removal');
+        $pdo->prepare("UPDATE users SET status = 'disabled' WHERE user_id = ?")->execute([$privilegedId]);
+        $service->update($superId, 'super_admin', $privilegedId, array_replace($before, ['roles' => ['cashier']]));
+        $assert($service->get($privilegedId)['roles'] === ['cashier'], 'Disabled targets are outside the minimum');
+        $pdo->rollBack();
+    }
+    $beforeFailure = $service->get($privilegedId);
+    $auditCount = (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn();
+    $pdo->exec("CREATE TRIGGER reject_minimum_role BEFORE INSERT ON user_roles BEGIN SELECT RAISE(ABORT, 'Injected role failure'); END");
+    try {
+        $service->update($superId, 'super_admin', $privilegedId, array_replace($beforeFailure, ['full_name' => 'Must roll back', 'roles' => ['cashier']]));
+        $assert(false, 'Role sync failure must be propagated');
+    } catch (PDOException) {
+        $assert($service->get($privilegedId) === $beforeFailure, 'Role failure rolls back profile, primary role, mappings and sessions');
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn() === $auditCount, 'Role failure leaves no audit');
+    }
 } catch (Throwable $exception) {
     $failures[] = 'User lifecycle contract threw: ' . $exception->getMessage();
 }

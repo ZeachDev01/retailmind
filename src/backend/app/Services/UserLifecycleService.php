@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Audit\AuditRecordCategory;
+use App\Authorization\AdministratorAccessMinimum;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Store\StoreScope;
 use DomainException;
@@ -36,7 +37,7 @@ final class UserLifecycleService
         if (!$user) {
             throw new InvalidArgumentException('User not found.');
         }
-        $user['roles'] = $this->roleNamesForUser($userId, (string)$user['role_name']);
+        $user['roles'] = $this->roleNamesForUser($userId, (string)$user['role_name'], $lock);
         return $user;
     }
 
@@ -119,11 +120,13 @@ final class UserLifecycleService
     public function update(int $actorId, string $actorRole, int $userId, array $account): array
     {
         return $this->transaction(function () use ($actorId, $actorRole, $userId, $account): array {
-            $before = $this->get($userId);
+            $minimum = new AdministratorAccessMinimum($this->pdo);
+            $minimum->lock();
+            $before = $this->get($userId, true);
             $this->requireManageable($actorId, $actorRole, $before, true);
 
             $targetRoles = $account['roles'] ?? ($account['role'] ?? $before['roles']);
-            if ($before['role_name'] === 'super_admin') {
+            if (in_array('super_admin', array_merge([$before['role_name']], $before['roles']), true)) {
                 $targetRole = 'super_admin';
                 $optionalRoles = array_values(array_diff((array)$targetRoles, ['super_admin']));
                 $targetRoles = array_merge(['super_admin'], $optionalRoles === []
@@ -134,6 +137,9 @@ final class UserLifecycleService
                 if ($actorId === $userId && $targetRoles !== $before['roles']) {
                     throw new DomainException('You cannot change your own role access.');
                 }
+            }
+            if (!in_array('admin', $targetRoles, true)) {
+                $minimum->requireRemovable($userId);
             }
             $fullName = trim((string)($account['full_name'] ?? ''));
             $username = trim((string)($account['username'] ?? ''));
@@ -177,9 +183,14 @@ final class UserLifecycleService
         }
 
         return $this->transaction(function () use ($actorId, $actorRole, $userId, $status): array {
-            $before = $this->get($userId);
+            $minimum = new AdministratorAccessMinimum($this->pdo);
+            $minimum->lock();
+            $before = $this->get($userId, true);
             $this->requireManageable($actorId, $actorRole, $before, false);
             $changed = $before['status'] !== $status;
+            if ($changed && $status === 'disabled') {
+                $minimum->requireRemovable($userId);
+            }
             if ($changed) {
                 if ($status === 'disabled') {
                     $statement = $this->pdo->prepare(
@@ -335,7 +346,7 @@ final class UserLifecycleService
         return $roleId;
     }
 
-    private function roleNamesForUser(int $userId, string $fallbackRole): array
+    private function roleNamesForUser(int $userId, string $fallbackRole, bool $lock = false): array
     {
         try {
             $statement = $this->pdo->prepare(
@@ -343,30 +354,27 @@ final class UserLifecycleService
                  FROM user_roles ur
                  JOIN roles r ON r.role_id = ur.role_id
                  WHERE ur.user_id = ? AND r.role_name <> 'seller'
-                 ORDER BY ur.is_primary DESC, r.role_id"
+                 ORDER BY ur.is_primary DESC, r.role_id" . ($lock && $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '')
             );
             $statement->execute([$userId]);
             $roles = array_values(array_unique(array_map('strval', $statement->fetchAll(PDO::FETCH_COLUMN))));
             if ($roles !== []) {
                 return $roles;
             }
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            if ($lock) throw $exception;
         }
         return [$fallbackRole];
     }
 
     private function syncUserRoles(int $userId, array $roles, string $primaryRole): void
     {
-        try {
-            $this->pdo->prepare('DELETE FROM user_roles WHERE user_id = ?')->execute([$userId]);
-            $statement = $this->pdo->prepare(
-                'INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, ?)'
-            );
-            foreach ($roles as $role) {
-                $statement->execute([$userId, $this->roleId($role), $role === $primaryRole ? 1 : 0]);
-            }
-        } catch (Throwable $exception) {
-            error_log('User role mapping sync skipped: ' . $exception->getMessage());
+        $this->pdo->prepare('DELETE FROM user_roles WHERE user_id = ?')->execute([$userId]);
+        $statement = $this->pdo->prepare(
+            'INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, ?)'
+        );
+        foreach ($roles as $role) {
+            $statement->execute([$userId, $this->roleId($role), $role === $primaryRole ? 1 : 0]);
         }
     }
 

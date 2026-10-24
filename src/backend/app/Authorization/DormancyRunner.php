@@ -40,52 +40,65 @@ final class DormancyRunner
             'skipped_last_admin' => [],
         ];
 
-        foreach ($this->activeInScopeAccounts() as $account) {
-            $reference = $this->referenceTime($account);
-            if ($reference === null) {
-                continue;
-            }
-            $days = $this->daysDormant($reference, $now);
-            if ($days < $thresholds['warn_days']) {
-                continue;
-            }
-
-            if ($days >= $thresholds['disable_days']) {
-                $userId = (int)$account['user_id'];
-                if ($account['role_name'] === 'admin' && !$this->anotherActiveAdministrator($userId)) {
-                    $result['skipped_last_admin'][] = $userId;
-                    if ($this->warn($account, $days, $thresholds['disable_days'], $now)) {
-                        $result['warned'][] = $userId;
-                    }
-                    continue;
+        foreach ($this->activeInScopeAccounts() as $candidate) {
+            $this->transaction(function () use ($candidate, $thresholds, $now, &$result): void {
+                $minimum = new AdministratorAccessMinimum($this->pdo);
+                $minimum->lock();
+                $account = $this->activeInScopeAccounts((int)$candidate['user_id'])[0] ?? null;
+                if ($account === null) {
+                    return;
                 }
-                $this->policyDisable($account, $days, $now);
-                $result['disabled'][] = $userId;
-                continue;
-            }
+                $reference = $this->referenceTime($account);
+                if ($reference === null) {
+                    return;
+                }
+                $days = $this->daysDormant($reference, $now);
+                if ($days < $thresholds['warn_days']) {
+                    return;
+                }
 
-            if ($this->warn($account, $days, $thresholds['disable_days'], $now)) {
-                $result['warned'][] = (int)$account['user_id'];
-            }
+                if ($days >= $thresholds['disable_days']) {
+                    $userId = (int)$account['user_id'];
+                    if ($minimum->lastAdministratorId() === $userId) {
+                        $result['skipped_last_admin'][] = $userId;
+                        if ($this->warn($account, $days, $thresholds['disable_days'], $now)) {
+                            $result['warned'][] = $userId;
+                        }
+                        return;
+                    }
+                    $this->policyDisable($account, $days, $now);
+                    $result['disabled'][] = $userId;
+                    return;
+                }
+
+                if ($this->warn($account, $days, $thresholds['disable_days'], $now)) {
+                    $result['warned'][] = (int)$account['user_id'];
+                }
+            });
         }
 
         return $result;
     }
 
-    private function activeInScopeAccounts(): array
+    private function activeInScopeAccounts(?int $userId = null): array
     {
         $placeholders = implode(', ', array_fill(0, count(self::SCOPE_ROLES), '?'));
+        $lock = $userId !== null && $this->pdo->inTransaction() && $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
         $statement = $this->pdo->prepare(
             "SELECT u.user_id, u.full_name, u.username, u.email, u.status, u.session_version,
-                    u.branch_id, u.is_recovery_account, u.last_login_at, u.created_at, r.role_name
+                    u.branch_id, u.is_recovery_account, u.last_login_at, u.created_at, r.role_name,
+                    EXISTS (SELECT 1 FROM user_roles ur JOIN roles ar ON ar.role_id = ur.role_id
+                            WHERE ur.user_id = u.user_id AND ar.role_name = 'admin'{$lock}) AS has_admin
              FROM users u
              JOIN roles r ON r.role_id = u.role_id
              WHERE u.status = 'active'
                AND u.is_recovery_account = 0
                AND r.role_name IN ({$placeholders})
-             ORDER BY u.user_id"
+               AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles sr ON sr.role_id = ur.role_id
+                               WHERE ur.user_id = u.user_id AND sr.role_name = 'super_admin'{$lock})"
+               . ($userId === null ? '' : ' AND u.user_id = ?') . " ORDER BY u.user_id{$lock}"
         );
-        $statement->execute(self::SCOPE_ROLES);
+        $statement->execute(array_merge(self::SCOPE_ROLES, $userId === null ? [] : [$userId]));
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -104,20 +117,6 @@ final class DormancyRunner
     {
         $elapsed = $now->getTimestamp() - $reference->getTimestamp();
         return $elapsed > 0 ? intdiv($elapsed, 86400) : 0;
-    }
-
-    private function anotherActiveAdministrator(int $userId): bool
-    {
-        $statement = $this->pdo->prepare(
-            "SELECT COUNT(*) FROM users u
-             JOIN roles r ON r.role_id = u.role_id
-             WHERE r.role_name = 'admin'
-               AND u.status = 'active'
-               AND u.is_recovery_account = 0
-               AND u.user_id <> ?"
-        );
-        $statement->execute([$userId]);
-        return (int)$statement->fetchColumn() > 0;
     }
 
     private function warn(array $account, int $days, int $disableDays, DateTimeImmutable $now): bool
@@ -226,6 +225,7 @@ final class DormancyRunner
             'user_id' => (int)$account['user_id'],
             'username' => (string)$account['username'],
             'role' => (string)$account['role_name'],
+            'has_admin' => $account['role_name'] === 'admin' || (bool)$account['has_admin'],
             'status' => $status,
             'store_id' => $branchId !== null && $branchId !== '' ? (int)$branchId : null,
         ];
@@ -238,7 +238,7 @@ final class DormancyRunner
         $payload['actor_role'] = 'system';
         $payload['disabled_by'] = 'dormancy_policy';
         $payload['dormant_days'] = $days;
-        $category = in_array($after['role'], ['super_admin', 'admin'], true)
+        $category = $after['has_admin']
             ? AuditRecordCategory::SECURITY
             : AuditRecordCategory::STORE_OPERATION;
 

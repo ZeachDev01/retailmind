@@ -5,6 +5,7 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_USERS);
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Authorization\DormancyStatusTab;
+use App\Authorization\AdministratorAccessMinimum;
 use App\Services\UserLifecycleService;
 use App\Store\StoreScope;
 
@@ -110,6 +111,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $messageClass = 'tag-success';
             $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
         } elseif ($action === 'update') {
+            $pdo->beginTransaction();
+            (new AdministratorAccessMinimum($pdo))->lock();
             $userId = (int)($_POST['user_id'] ?? 0);
             $before = $lifecycle->get($userId);
             $firstName = trim((string)($_POST['first_name'] ?? ''));
@@ -137,21 +140,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             } elseif (isset($_POST['remove_profile_image'])) {
                 throw new InvalidArgumentException('Use Remove picture to remove the current picture separately.');
             }
-            try {
-                $after = $lifecycle->update($actorId, $actorRole, $userId, $account);
-            } catch (Throwable $exception) {
-                if ($newProfileImage !== null) profile_image_storage()->delete($newProfileImage);
-                throw $exception;
-            }
-            if (array_key_exists('profile_image', $account) && !empty($before['profile_image']) && $before['profile_image'] !== ($after['profile_image'] ?? null)) {
-                profile_image_storage()->delete((string)$before['profile_image']);
-            }
+            $after = $lifecycle->update($actorId, $actorRole, $userId, $account);
             if ($newPassword !== '') {
                 $lifecycle->resetPassword($actorId, $actorRole, $userId, password_hash($newPassword, PASSWORD_DEFAULT));
             }
             $requestedStatus = (string)($_POST['status'] ?? $before['status']);
             if ($requestedStatus !== $before['status']) {
                 $lifecycle->setStatus($actorId, $actorRole, $userId, $requestedStatus);
+            }
+            $pdo->commit();
+            $newProfileImage = null;
+            if (array_key_exists('profile_image', $account) && !empty($before['profile_image']) && $before['profile_image'] !== ($after['profile_image'] ?? null)) {
+                profile_image_storage()->delete((string)$before['profile_image']);
             }
             if ($userId === $actorId) {
                 $_SESSION['full_name'] = $after['full_name'];
@@ -171,11 +171,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $messageClass = 'tag-success';
         }
     } catch (PDOException $exception) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        if (!empty($newProfileImage)) profile_image_storage()->delete($newProfileImage);
         $message = \App\Support\OperatorAlert::message($exception, $action === 'remove_profile_image'
             ? 'The profile picture could not be removed. Please try again. Tell your Administrator if this keeps happening.'
             : 'Unable to save the account. Username or email may already exist. Tell your Administrator if this keeps happening.');
         $messageClass = 'tag-warning';
     } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        if (!empty($newProfileImage)) profile_image_storage()->delete($newProfileImage);
         $message = \App\Support\OperatorAlert::message($exception, 'The account could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
         $messageClass = 'tag-warning';
     }
@@ -200,6 +204,7 @@ $users = $pdo->query(
 )->fetchAll(PDO::FETCH_ASSOC);
 $activeCount = count(array_filter($users, static fn(array $user): bool => $user['status'] === 'active'));
 $disabledCount = count($users) - $activeCount;
+$lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministratorId();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -242,7 +247,8 @@ $disabledCount = count($users) - $activeCount;
                         $canManage = !(bool)($_SESSION['is_recovery_account'] ?? false)
                             && $lifecycle->canManageAccount($actorId, $actorRole, $pictureTarget);
                         $isSelf = (int)$user['user_id'] === $actorId;
-                        $isSuper = $user['role_name'] === 'super_admin';
+                        $isSuper = in_array('super_admin', array_merge([$user['role_name']], $pictureTarget['roles']), true);
+                        $isLastAdministrator = (int)$user['user_id'] === $lastAdministratorId;
                         $hasImage = !empty($user['profile_image']) && profile_image_storage()->exists((string)$user['profile_image']);
                         $canViewImage = $hasImage && $lifecycle->canViewPicture($actorId, $actorRole, $pictureTarget);
                         $statusView = $dormancyStatusTab->view($user);
@@ -255,6 +261,7 @@ $disabledCount = count($users) - $activeCount;
                             <td><span class="<?= $user['status'] === 'active' ? 'tag-success' : 'tag-warning' ?>"><?= htmlspecialchars(display_label((string)$user['status'])) ?></span></td>
                             <td><?= ((int)($user['must_change_password'] ?? 0) === 1) ? '<span class="tag-warning">Change required</span>' : '<span class="tag-success">Current</span>' ?></td>
                             <td class="action-cell">
+                                <?php if ($isLastAdministrator): ?><span class="field-help">Last active Administrator</span><?php endif; ?>
                                 <?php if (!$canManage): ?>
                                     <span class="user-protected-label"><i class="bi bi-lock-fill" aria-hidden="true"></i> Protected</span>
                                 <?php else: ?>
@@ -267,6 +274,7 @@ $disabledCount = count($users) - $activeCount;
                                         data-role-id="<?= (int)$user['role_id'] ?>"
                                         data-role-ids="<?= htmlspecialchars((string)($user['assigned_role_ids'] ?? $user['role_id']), ENT_QUOTES, 'UTF-8') ?>"
                                         data-status="<?= htmlspecialchars((string)$user['status']) ?>"
+                                        data-is-last-administrator="<?= $isLastAdministrator ? '1' : '0' ?>"
                                         data-last-login="<?= htmlspecialchars($statusView['last_login'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-auto-disable-date="<?= htmlspecialchars((string)($statusView['auto_disable_date'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-policy-disabled="<?= htmlspecialchars((string)($statusView['policy_disabled_line'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
@@ -417,9 +425,17 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('userDrawerMeta').textContent = '@' + (button.dataset.username || '');
         const isSelf = button.dataset.isSelf === '1';
         const isSuper = button.dataset.isSuperAdmin === '1';
+        const isLastAdministrator = button.dataset.isLastAdministrator === '1';
+        document.getElementById('drawerAdministratorMinimumHelp').hidden = !isLastAdministrator;
         const canEditOwnSuperRoles = isSelf && isSuper && <?= json_encode($actorRole === 'super_admin') ?>;
         document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => { input.disabled = (isSelf || isSuper) && !canEditOwnSuperRoles; });
         document.getElementById('drawerStatus').disabled = isSelf || isSuper;
+        document.querySelector('#drawerStatus option[value="disabled"]').disabled = isLastAdministrator;
+        document.querySelectorAll('#drawerRoles input[data-role="admin"]').forEach(input => {
+            if (isLastAdministrator) input.disabled = true;
+        });
+        const retainedAdministrator = document.getElementById('drawerRetainedAdministrator');
+        retainedAdministrator.disabled = !isLastAdministrator;
         document.getElementById('drawerStatusButton').disabled = (isSelf || isSuper) && !canEditOwnSuperRoles;
         document.getElementById('drawerRevokeButton').disabled = isSelf || isSuper;
         const remove = document.getElementById('drawerRemoveProfileImage');

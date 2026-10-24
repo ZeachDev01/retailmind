@@ -45,6 +45,7 @@ try {
     $pdo->exec('CREATE TABLE roles (role_id INTEGER PRIMARY KEY AUTOINCREMENT, role_name TEXT NOT NULL UNIQUE)');
     $pdo->exec("INSERT INTO roles (role_id, role_name) VALUES
         (1, 'super_admin'), (2, 'admin'), (3, 'inventory_manager'), (4, 'cashier')");
+    $pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER)');
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         full_name TEXT NOT NULL,
@@ -395,6 +396,35 @@ try {
         'holder emails must not repeat within one Dormant Account period'
     );
     $assert($user(2)['status'] === 'disabled', 'an already-disabled account must stay untouched on a repeated run');
+    $pdo->exec("UPDATE users SET role_id = 4 WHERE user_id = 11");
+    $pdo->exec('INSERT INTO user_roles VALUES (11, 4, 1), (11, 2, 0), (9, 2, 0), (10, 2, 0), (1, 4, 1)');
+    $additional = $runner->run();
+    $assert($additional['skipped_last_admin'] === [11] && $user(11)['status'] === 'active',
+        'Additional Administrator access counts; primary Super identity and Recovery with admin do not count');
+    $pdo->exec("UPDATE users SET status = 'active', role_id = 4 WHERE user_id = 2");
+    $pdo->exec('INSERT INTO user_roles VALUES (2, 2, 0)');
+    $remaining = $runner->run();
+    $assert($remaining['disabled'] === [11] && $user(2)['status'] === 'active', 'Another additional Administrator permits dormancy disable');
+    $assert($pdo->query("SELECT category FROM activity_log WHERE record_id = 11 ORDER BY log_id DESC LIMIT 1")->fetchColumn() === 'security',
+        'Additional Administrator disable keeps security audit classification');
+    $pdo->exec("UPDATE users SET status = 'active', role_id = 4 WHERE user_id = 11");
+    $pdo->exec('INSERT INTO user_roles VALUES (11, 1, 0)');
+    $excluded = $runner->run();
+    $assert(!in_array(11, $excluded['disabled'], true) && !in_array(11, $excluded['warned'], true),
+        'Super Administrator identity in additional roles is excluded from dormancy');
+    $pdo->exec('DELETE FROM user_roles WHERE user_id = 11 AND role_id = 1');
+    $beforeFailure = $user(11);
+    $mailCount = count($notifier->delivered);
+    $auditCount = (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn();
+    $pdo->exec("CREATE TRIGGER reject_dormancy_audit BEFORE INSERT ON activity_log BEGIN SELECT RAISE(ABORT, 'Injected audit failure'); END");
+    try {
+        $runner->run();
+        $assert(false, 'Dormancy audit failure must propagate');
+    } catch (PDOException) {
+        $assert($user(11) === $beforeFailure, 'Dormancy failure rolls back disable timestamp and session invalidation');
+        $assert(count($notifier->delivered) === $mailCount, 'Failed dormancy disable sends no notification');
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn() === $auditCount, 'Failed dormancy disable leaves no audit');
+    }
 } catch (Throwable $exception) {
     $failures[] = 'Dormancy runner contract threw: ' . $exception->getMessage();
 }

@@ -122,6 +122,7 @@ try {
     $service->activate('offline-activation-secret-0001');
     $assert($service->publicStatus()['status'] === 'active', 'Offline activation should enable the Recovery Account');
 
+    $pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER)');
     $lifecycle = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo));
     foreach ([
         static fn() => $lifecycle->update($userId, 'super_admin', $userId, ['full_name' => 'Changed', 'username' => 'changed', 'role' => 'super_admin']),

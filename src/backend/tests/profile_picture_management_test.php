@@ -39,6 +39,7 @@ if (($argv[1] ?? '') === 'request') {
             previous_value TEXT, new_value TEXT, ip_address TEXT)");
     $pdo->prepare("INSERT INTO users VALUES (1, 'Actor', 'actor', NULL, NULL, 'hash', 'active', NULL, 1, 0, 0, ?, 1)")
         ->execute([$role === 'super_admin' ? 2 : 1]);
+    $pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER)');
     $before = $pdo->query('SELECT * FROM users')->fetchAll(PDO::FETCH_ASSOC);
     $_SESSION = ['user_id' => 1, 'role' => $role, 'csrf_token' => 'valid-token'];
     $_SERVER['REQUEST_METHOD'] = 'POST';

@@ -83,6 +83,7 @@ try {
         disabled_at TEXT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
+    $pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER)');
     $pdo->exec("CREATE TABLE activity_log (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NULL,
