@@ -5,9 +5,53 @@
 - User-reported printer: Xprinter / Xinye XP-58IID, 58 mm paper.
 - Cashier device: Windows, Chrome or Edge.
 - Initial connection: USB. Bluetooth can be tested separately.
-- Flow: complete checkout, review Sale Receipt, click Print Receipt, confirm the browser print dialog.
+- Default flow: complete checkout or refund, review the saved receipt, and print manually.
+- Optional flow: select **Print receipt automatically** before confirming payment
+  or recording a refund. Both checkboxes start unchecked for every transaction.
 
-This uses the existing receipt flow and Register paper-width setting. No application code or direct device integration is needed for this approach. It follows [the thermal receipt spec](specs/thermal-customer-receipts.md).
+This uses the existing receipt flow and Register paper-width setting, with no direct
+device integration. See [opt-in receipt printing](specs/opt-in-receipt-printing.md).
+
+## Seamless printing on this cashier PC
+
+A **RetailMind POS** shortcut was created on Mike's Desktop on 2026-10-24. Open it
+and sign in to RetailMind. It uses a separate Chrome profile, so an existing login
+in normal Chrome is not copied. Keep this window for Store work.
+
+The shortcut opens the local POS with these options:
+
+```text
+--no-first-run --no-default-browser-check --kiosk-printing --use-system-default-printer --user-data-dir="C:\Users\Mike\AppData\Local\RetailMind\ChromePOS" "http://localhost/retailmind/src/frontend/components/cashier/pos.php"
+```
+
+Chrome's [kiosk printing option](https://chromium.googlesource.com/chromium/src/+/ca9fc3f47b7e6cb6f914ad7d1835046b076aac68/chrome/common/chrome_switches.cc)
+automatically accepts print preview.
+The [system default printer option](https://chromium.googlesource.com/chromium/src/+/refs/tags/133.0.6928.0/chrome/common/chrome_switches.cc)
+selects the Windows default printer. Use both options only in this dedicated
+profile; printing other pages in that window also prints without confirmation.
+Normal Chrome windows retain their regular printing behavior.
+
+At setup, **Xprinter XP-58** was the Windows default printer, using driver
+**Xprinter XP-58** on **USB001**, and both RetailMind Registers were set to 58 mm.
+Windows reports the printer online; that does not prove paper output. Its driver
+reports a custom page with 48 mm width, so inspect the actual result before changing
+the existing paper calibration. No driver or Register settings were changed.
+
+Test first by opening an existing saved receipt in the shortcut and clicking Print;
+this prints paper without creating a new sale. Then, during a normal sale/refund,
+check **Print receipt automatically** before confirming. The saved receipt opens
+and printing starts once. Unchecked transactions do not print. Refresh/history do
+not print again. A brief print-preview flash can occur.
+
+To return to print confirmation, close the dedicated POS window and use normal
+Chrome, or remove `--kiosk-printing` from the shortcut's Properties before reopening
+it. Do not open the dedicated profile simultaneously with different launch options.
+If the default printer changes, silent output follows that printer; verify the
+Windows default after replacing or reconnecting hardware.
+
+The alternative `SilentPrintingEnabled` browser policy requires access to protected
+registry keys on this PC. An attempted user-level change was denied; no policy was
+changed. The shortcut avoids needing that policy or administrator access.
 
 ## Setup
 
@@ -27,4 +71,8 @@ For Bluetooth, first verify that the particular unit supports it and can print a
 
 ## Verification status
 
-Code inspection confirms manual browser printing and the existing 58 mm Register setting. Driver installation, Windows test printing, Bluetooth operation, and physical receipt output have not been verified.
+Automated checks cover unchecked defaults, opted-in sale/refund printing, manual
+retry, refresh/history, failed refunds, and 58/80 mm receipt layouts. The shortcut's
+saved target and launch options were read back and verified. Physical receipt
+output, silent-mode behavior in the installed browser, driver calibration, and
+Bluetooth operation still require a device test.

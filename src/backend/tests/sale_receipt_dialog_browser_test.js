@@ -61,6 +61,25 @@ const { chromium } = require('playwright');
         assert.equal(await freshPage.evaluate(() => decisions), 1, 'refresh does not replay New Sale intent on new work');
         assert.equal(await freshPage.evaluate(() => cart[1].qty), 3);
         await freshPage.close();
+        for (const order of [['sale-receipt', 'sale-receipt-dialog'], ['sale-receipt-dialog', 'sale-receipt']]) {
+            const page = await browser.newPage();
+            const dialog = execFileSync(process.env.PHP_BINARY || 'php', [path.join(__dirname, 'support/sale_receipt_dialog_fixture.php'), 'long', '58'], {encoding: 'utf8'});
+            await page.setContent(dialog.replace('data-initial-receipt="1"', 'data-initial-receipt="1" data-auto-print="1"'));
+            await page.evaluate(() => { window.printCalls = 0; window.print = () => window.printCalls++; });
+            await page.addScriptTag({content: fs.readFileSync(path.join(root, `src/frontend/assets/js/${order[0]}.js`), 'utf8')});
+            // Yield two frames so printing cannot depend on scripts arriving together.
+            await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+            await page.addScriptTag({content: fs.readFileSync(path.join(root, `src/frontend/assets/js/${order[1]}.js`), 'utf8')});
+            await page.waitForFunction(() => window.printCalls === 1);
+            await page.evaluate(() => {
+                window.dispatchEvent(new Event('afterprint'));
+                const receipt = document.getElementById('receiptModal');
+                receipt.close(); receipt.showModal();
+                receipt.dispatchEvent(new Event('retailmind:receiptopen'));
+            });
+            assert.equal(await page.evaluate(() => window.printCalls), 1, 'script load order and reopening never duplicate printing');
+            await page.close();
+        }
         for (const width of [58, 80]) {
             const dialog = execFileSync(process.env.PHP_BINARY || 'php', [path.join(__dirname, 'support/sale_receipt_dialog_fixture.php'), 'long', String(width)], {encoding: 'utf8'});
             const page = await browser.newPage({timezoneId: 'America/New_York'});

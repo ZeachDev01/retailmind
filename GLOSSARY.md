@@ -4,6 +4,10 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**Store Migration**:
+The transfer of the Store's recorded state and uploaded files to another RetailMind installation, which becomes its sole active installation after verification. It supports movement between a local host and web hosting.
+_Avoid_: Synchronization, merging Stores
+
 **Gross Sales**:
 The Store's completed Product sales before discounts and Cash Refunds. Gross Sales does not deduct product costs or operating expenses.
 _Avoid_: Net Sales, Gross Profit, earnings

@@ -1,5 +1,9 @@
 # Show Refund Receipt after a completed refund
 
+Printing update, 2026-10-24: [opt-in receipt printing](opt-in-receipt-printing.md)
+supersedes the manual-only printing requirement and assertions below. Unchecked
+completion, refresh, and history continue to avoid automatic printing.
+
 ## Problem Statement
 
 After completing a Cash Refund, the Cashier needs to see the customer's Refund Receipt immediately, without searching refund history. The Cashier must be able to review and print it without opening the print dialog automatically or risking another refund.

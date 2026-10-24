@@ -321,6 +321,16 @@
         opts.danger ? "error" : "warning",
       );
       qs(".rm-modal-body", overlay).textContent = cleanBody.message;
+      let printCheckbox;
+      if (opts.printReceipt) {
+        opts.printReceipt.value = '0';
+        const label = document.createElement('label');
+        label.className = 'receipt-auto-print';
+        printCheckbox = document.createElement('input');
+        printCheckbox.type = 'checkbox';
+        label.append(printCheckbox, ' Print receipt automatically');
+        qs('.rm-modal-body', overlay).appendChild(label);
+      }
       const accept = qs(".rm-accept", overlay);
       accept.textContent = opts.confirmText || "Confirm";
       if (opts.danger) accept.classList.add("btn-danger");
@@ -328,6 +338,7 @@
       const finish = (value) => {
         if (settled) return;
         settled = true;
+        if (opts.printReceipt) opts.printReceipt.value = value && printCheckbox.checked ? '1' : '0';
         RM.closeOverlay(overlay);
         setTimeout(() => overlay.remove(), 200);
         resolve(value);
@@ -875,6 +886,7 @@
           message: form.dataset.confirm || "Continue with this action?",
           confirmText: form.dataset.confirmButton || "Continue",
           danger: form.dataset.confirmDanger === "1",
+          printReceipt: form.elements.auto_print_receipt,
         });
         confirming = false;
         if (ok && form.isConnected) {

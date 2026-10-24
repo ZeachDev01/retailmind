@@ -1,5 +1,9 @@
 # Thermal Sale and Refund Receipts
 
+Printing update, 2026-10-24: [opt-in receipt printing](opt-in-receipt-printing.md)
+supersedes this specification's manual-only printing requirement. Direct device
+integration, ESC/POS, feed, drawer, and cutter control remain outside scope.
+
 ## Problem Statement
 
 Cashiers currently see a wide, desktop-style Sale Receipt after checkout. Its print layout fills the page instead of matching thermal paper, so the on-screen result does not resemble what a customer receives. Cash Refunds have no customer-facing receipt. Reopening a Sale Receipt also uses current Store and Register information, which can change the apparent history of an earlier transaction. The Store wants a practical path to printing on a chosen thermal printer without selecting a printer model now.

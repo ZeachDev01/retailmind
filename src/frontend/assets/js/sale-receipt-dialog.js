@@ -14,6 +14,7 @@
             const warning = document.querySelector('.theme-save-alert');
             if (warning) dialog.querySelector('.sale-receipt-dialog-header').append(warning);
             title.focus();
+            dialog.dispatchEvent(new Event('retailmind:receiptopen'));
         }
         function close() {
             pending?.abort();
@@ -42,6 +43,7 @@
             // Refreshing a historical view must never repeat a payment announcement.
             const url = new URL(window.location.href);
             url.searchParams.delete('checkout');
+            url.searchParams.delete('print_receipt');
             url.searchParams.delete(dialog.dataset.receiptParam || 'sale_id');
             if (window.location.protocol.startsWith('http')) history.replaceState(null, '', url);
         });
