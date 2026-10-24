@@ -331,6 +331,10 @@ $receipt = $receipts->fetch($cashInTxId, 4, 'cashier');
 $check($receipt['reference_number'] === '0000000000101' && $receipt['principal_amount'] === '1000.00' && $receipt['cash_collected'] === '1010.00' && $receipt['wallet_sent'] === '1000.00', 'Saved Cash-In receipt preserves exact customer exchange and leading zeroes');
 $check($receipts->fetch($cashInTxId, 5, 'cashier') === null && $receipts->fetch($cashInTxId, 1, 'inventory_manager') === null, 'Receipt access follows active Workspace and cashier ownership');
 $check($receipts->fetch($cashInTxId, 1, 'admin') === $receipt, 'Administrator can read saved Store-wide receipt');
+$cashierReceiptRow = $service->history(4, 1)['transactions'][0];
+$adminReceiptRow = $service->adminOverview(['actor_role' => 'admin', 'search' => '0000000000101'])['transactions'][0];
+$check($cashierReceiptRow['has_receipt'] === true && $adminReceiptRow['has_receipt'] === true, 'Both GCash history contexts expose a saved receipt action');
+$check(!array_key_exists('receipt_details_json', $cashierReceiptRow) && !array_key_exists('receipt_details_json', $adminReceiptRow), 'History lists expose receipt availability without duplicating saved customer details');
 $pdo->beginTransaction();
 try {
     $pdo->exec("UPDATE store_settings SET setting_value='Changed receipt settings' WHERE setting_key IN ('store_name', 'store_address', 'receipt_footer', 'currency_symbol')");
@@ -1331,6 +1335,10 @@ try {
     $report = $service->adminOverview($reportScope);
     $check($report['completed_exchange_count'] === 4 && $report['matching_record_count'] === 7, 'Completed exchange count excludes held, rejected and legacy records; matching count retains them');
     $check($report['cash_in_principal'] === 1600.0 && $report['cash_out_principal'] === 2350.0 && $report['gross_fees_cash'] === 25.0 && $report['gross_fees_wallet'] === 20.0, 'Philippine month/day boundaries yield exact shared principal and gross fees');
+    foreach ($report['transactions'] as $unpreserved) {
+        $check($unpreserved['has_receipt'] === false, 'Completed and unresolved records without persisted snapshots have no receipt action');
+        $check($receipts->fetch((int)$unpreserved['transaction_id'], 1, 'admin') === null, 'Direct retrieval never reconstructs unpreserved history');
+    }
     $cashierReport = $service->adminOverview($reportScope + ['cashier_id' => 4, 'type' => 'Cash-Out', 'search' => '7900000000002']);
     $check($cashierReport['completed_exchange_count'] === 3 && $cashierReport['matching_record_count'] === 1, 'Cashier scopes shared totals; local type/search only narrow matching records');
     $check($cashierReport['cash_in_principal'] === 1000.0 && $cashierReport['cash_out_principal'] === 2350.0 && $cashierReport['gross_fees_cash'] === 15.0 && $cashierReport['gross_fees_wallet'] === 20.0, 'Cashier shared principal and fees remain independent of local transaction filters');
