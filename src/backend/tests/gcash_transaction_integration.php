@@ -946,6 +946,9 @@ $refuse(fn() => $service->recordLinkedCorrection(1, 'admin', $ncCoTxId, -5.00, 0
 // Complete the transaction
 $resA = $service->resolveNeedsChecking(4, $ncCoTxId, 'complete', ['notes' => 'Cash handed over 500 pesos']);
 $check($resA['verification_status'] === 'Completed', 'Resolved to Completed');
+$check(($resA['receipt_id'] ?? null) === $ncCoTxId, 'Later completion returns saved receipt locator');
+$resolvedReceipt = $receipts->fetch($ncCoTxId, 4, 'cashier');
+$check($resolvedReceipt !== null && $resolvedReceipt['cash_paid_out'] === '500.00' && $resolvedReceipt['wallet_received'] === '510.00', 'Later completion preserves gross payout and wallet fee receipt');
 $resRowA = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id = ' . $ncCoTxId)->fetch(PDO::FETCH_ASSOC);
 $check($resRowA['verification_status'] === 'Completed' && (int)$resRowA['confirmed_cash'] === 1, 'Transaction updated to Completed with confirmed_cash = 1');
 $check((float)$resRowA['service_cash_delta'] === -500.00 && (float)$resRowA['gross_fee'] === 10.00, 'Cash delta -500 and gross fee 10 set');
