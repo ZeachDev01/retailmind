@@ -82,3 +82,7 @@
 .sale-receipt[data-paper-width-mm="58"] .sale-receipt-line,
 .sale-receipt[data-paper-width-mm="58"] .sale-receipt-totals > div { flex-wrap: wrap; }
 .sale-receipt[data-paper-width-mm="58"] .sale-receipt-money { max-width: 100%; margin-left: auto; }
+
+.gcash-receipt-reference { margin: 3mm auto 1mm; text-align: center; break-inside: avoid; }
+.gcash-receipt-reference .barcode-svg { display: block; width: 100%; height: 16mm; margin: 1mm auto; background: #fff; }
+.gcash-receipt-digits { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
