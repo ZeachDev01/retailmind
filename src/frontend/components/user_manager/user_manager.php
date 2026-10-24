@@ -175,13 +175,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $messageClass = 'tag-success';
         }
     } catch (PDOException $exception) {
+        $accountFailureMessage = $action === 'delete'
+            ? 'The account could not be deleted. No account changes were saved. Try again or disable it where permitted.'
+            : 'Unable to save the account. Username or email may already exist. Tell your Administrator if this keeps happening.';
         if ($pdo->inTransaction()) $pdo->rollBack();
         if (!empty($newProfileImage)) profile_image_storage()->delete($newProfileImage);
-        $message = \App\Support\OperatorAlert::message($exception, $action === 'delete'
-            ? 'The account could not be deleted. No account changes were saved. Try again or disable it where permitted.'
-            : ($action === 'remove_profile_image'
+        $message = \App\Support\OperatorAlert::message($exception, $action === 'remove_profile_image'
             ? 'The profile picture could not be removed. Please try again. Tell your Administrator if this keeps happening.'
-            : 'Unable to save the account. Username or email may already exist. Tell your Administrator if this keeps happening.'));
+            : $accountFailureMessage);
         $messageClass = 'tag-warning';
     } catch (Throwable $exception) {
         if ($pdo->inTransaction()) $pdo->rollBack();
