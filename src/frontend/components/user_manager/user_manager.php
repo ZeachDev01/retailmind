@@ -389,6 +389,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('drawerUserId').value = button.dataset.userId || '';
         document.getElementById('drawerRevokeUserId').value = button.dataset.userId || '';
         document.getElementById('drawerDeleteUserId').value = button.dataset.userId || '';
+        document.getElementById('drawerDeleteForm').dataset.username = button.dataset.username || '';
         document.getElementById('drawerDeleteConfirmed').value = '';
         document.getElementById('drawerDeleteButton').disabled = Boolean(button.dataset.deletionRestriction);
         document.getElementById('drawerDeleteHelp').textContent = button.dataset.deletionRestriction || 'Permanently removes this account, credentials, preferences and notices. This cannot be undone.';
@@ -457,7 +458,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }));
 
     document.getElementById('drawerDeleteForm').addEventListener('submit', event => {
-        const confirmed = window.confirm('Permanently delete @' + document.getElementById('drawerUsername').value + '? This removes the account and its access. This cannot be undone.');
+        const confirmed = window.confirm('Permanently delete @' + event.currentTarget.dataset.username + '? This removes the account and its access. This cannot be undone.');
         document.getElementById('drawerDeleteConfirmed').value = confirmed ? '1' : '';
         if (!confirmed) event.preventDefault();
     });

@@ -62,7 +62,8 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         await open('Minimum Primary');
         assert(await page.locator('#drawerDeleteButton').isEnabled(), 'Ordinary Administrator target is eligible');
         const before = state();
-        page.once('dialog', async dialog => { assert.match(dialog.message(), /imported|minimum_primary_100/); await dialog.dismiss(); });
+        await page.locator('#drawerUsername').fill('unsaved_other_identity');
+        page.once('dialog', async dialog => { assert.match(dialog.message(), /minimum_primary_100/); assert.doesNotMatch(dialog.message(), /unsaved_other_identity/); await dialog.dismiss(); });
         await page.locator('#drawerDeleteButton').click();
         assert.deepEqual(state(), before, 'Cancelling deletion preserves account and audits');
         for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) {

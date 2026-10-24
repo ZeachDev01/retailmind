@@ -9,16 +9,16 @@ Sources: `database/sql/schema.sql`, all PHP migrations through
 
 | Area | Tables and identity columns |
 | --- | --- |
-| Sales and checkout | `sales.cashier_id`; `checkout_attempts.cashier_id`; `held_sales.cashier_id, discarded_by`; `sale_reversals.requested_by, approved_by` |
+| Sales and checkout | `sales.cashier_id, discount_authorized_by` (discount authorizer is logical, no FK); `checkout_attempts.cashier_id`; `held_sales.cashier_id, discarded_by`; `sale_reversals.requested_by, approved_by` |
 | Cashier Shifts and drawer | `cashier_shifts.cashier_id, reviewed_by, closed_by`; `cash_drawer_movements.cashier_id, recorded_by` |
 | Cash Refunds | `cash_refunds.cashier_id, original_cashier_id, approved_by`; `cash_refund_exception_access.cashier_id, approved_by` |
 | GCash | `gcash_transactions.cashier_id, verified_by`; `gcash_service_sessions.cashier_id, closed_by, waived_by`; `gcash_funding_movements.authorized_by, recorded_by`; `gcash_adjustments.authorized_by` |
 | Stock and catalog | `products.created_by`; `stock_receiving.received_by`; `stock_receiving_groups.received_by`; `stock_movements.moved_by`; `supplier_pullouts.pulled_by`; `inventory_adjustments.reported_by, approved_by`; `inventory_counts.counted_by, approved_by`; `inventory_adjustment_revisions.actor_id` (logical, no FK) |
 | Other Store operations | `promotions.created_by`; `cycle_count_schedules.assigned_to, created_by`; `purchase_history.recorded_by`; `fiscal_periods.created_by, closed_by`; `registers.created_by`; `store_calendar.recorded_by`; `branches.created_by` (logical) |
 | Forecasting/imports | `forecast_decisions.decided_by`; `csv_import_logs.imported_by`; `forecast_sales_imports.imported_by`; `ml_jobs.requester_id` |
-| Settings attribution | `attention_settings.updated_by`; `ml_settings.updated_by`; `store_settings.updated_by`; `platform_settings.updated_by` |
+| Settings attribution | `attention_settings.updated_by`; `ml_settings.updated_by`; `store_settings.updated_by`; `platform_settings.updated_by`; forecasting review/activation/rollback/suspension identities in `platform_settings.setting_value` JSON |
 | Backups | `backup_history.performed_by`; `backup_operations.requested_by` and `store_write_gate.paused_by` (logical); private `restore-log.jsonl.actor_id`, `restore-state.json.actor_id` |
-| Protected Audit Records | `activity_log.user_id` (actor); `record_id` for `User Access`, legacy `Users`, `Authentication`, `Recovery Account`; identity IDs and username/email in `previous_value`, `new_value`, `metadata`, including nested cashier/actor IDs. Creation, edits, password resets, dormancy, login and profile audits all count. |
+| Protected Audit Records | `activity_log.user_id` (actor); `record_id` for `User Access`, legacy `Users`, `Recovery Account`, and Authentication `Login success`/`Login failure` (other Authentication record IDs can identify attempts, not users); identity IDs, canonical `identity: user:<id>`, and username/email in `previous_value`, `new_value`, `metadata`, including nested cashier/actor IDs. Creation, edits, password resets, dormancy, login and profile audits all count. Stock revision `old_values/new_values` also retain logical identity snapshots. |
 | Authentication/delivery evidence | `login_attempts.username` (legacy normalized username/email; current `user:<id>` or `unknown:<normalized identifier>` throttle keys); `email_delivery_log.recipient` (email) |
 | Barcode devices | `barcode_pairings.created_by`; linked `barcode_scans` remain retained through the pairing, despite its existing cascading user FK |
 | Recovery identity | `recovery_accounts.user_id`, as well as `users.is_recovery_account`; never eligible |

@@ -56,16 +56,21 @@ try {
     $history = App\Services\UserLifecycleService::DELETION_HISTORY_MESSAGE;
     foreach ([
         'sale' => 'UPDATE sales SET cashier_id = ? WHERE sale_id = 1',
+        'logical discount authorizer' => 'UPDATE sales SET discount_authorized_by = ? WHERE sale_id = 1',
         'shift reviewer (SET NULL)' => 'UPDATE cashier_shifts SET reviewed_by = ? WHERE shift_id = 1',
         'stock' => 'UPDATE inventory_adjustments SET approved_by = ? WHERE adjustment_id = 1',
         'logical branch creator' => 'UPDATE branches SET created_by = ? WHERE branch_id = 1',
         'GCash' => "INSERT INTO gcash_transactions (cashier_id,transaction_type,amount,reference_number) VALUES (?,'Cash-In',100,'DELETE-HISTORY')",
         'refund' => "INSERT INTO cash_refunds (sale_id,shift_id,cashier_id,refund_amount,reason) VALUES (1,1,?,1,'Deletion test')",
         'logical correction actor' => "INSERT INTO inventory_adjustment_revisions (adjustment_id,actor_id,action) VALUES (1,?,'correct')",
+        'logical correction snapshot' => "INSERT INTO inventory_adjustment_revisions (adjustment_id,actor_id,action,old_values) VALUES (1,1,'correct',CONCAT('{\"reported_by\":', ?, '}'))",
         'backup requester' => "INSERT INTO backup_operations (operation_key,requested_by) VALUES ('delete-history',?)",
         'audit actor' => "INSERT INTO activity_log (user_id,action,category) VALUES (?,'Evidence','security')",
         'audit target' => "INSERT INTO activity_log (user_id,action,category,module,record_id) VALUES (1,'User creation','security','Users',?)",
         'audit nested identity' => "INSERT INTO activity_log (user_id,action,category,metadata) VALUES (1,'Evidence','security', CONCAT('{\"nested\":{\"incoming_cashier_id\":', ?, '}}'))",
+        'audit reporter identity' => "INSERT INTO activity_log (user_id,action,category,metadata) VALUES (1,'Evidence','security', CONCAT('{\"reported_by\":', ?, '}'))",
+        'reviewed canonical login identity' => "INSERT INTO activity_log (user_id,action,category,metadata) VALUES (1,'Evidence','security', CONCAT('{\"attempts\":[{\"identity\":\"user:', ?, '\",\"username\":\"previous_username\"}]}'))",
+        'review snapshot identity' => "INSERT INTO platform_settings (setting_key,setting_value,updated_by) VALUES ('ml_review_operational_imported', CONCAT('{\"reviewed_by\":', ?, '}'),1)",
     ] as $label => $sql) {
         $id = $seed();
         $pdo->beginTransaction();
@@ -138,6 +143,10 @@ try {
         $assert((int)$pdo->query("SELECT COUNT(*) FROM notification_preferences WHERE user_id = $id")->fetchColumn() === 1, 'Audit failure restores disposable state');
     }
     $pdo->exec('DROP TRIGGER reject_delete_audit');
+    $id = $seed();
+    $pdo->exec("INSERT INTO activity_log (user_id,action,category,module,record_id) VALUES (1,'Failed sign-in attempts reviewed','security','Authentication',$id)");
+    $assert($service->deletionRestriction(1, 'admin', $id) === null, 'An unrelated login-attempt ID is not a target user ID');
+    $service->delete(1, 'admin', $id, true);
     try { $pdo->exec('DELETE FROM users WHERE user_id = 4'); throw new RuntimeException('Restrictive FK must prevent history deletion'); }
     catch (PDOException $e) { $assert($e->getCode() === '23000', 'Existing restrictive foreign keys remain intact'); }
     echo "User deletion MySQL: passed\n";

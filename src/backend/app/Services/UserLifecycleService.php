@@ -326,6 +326,7 @@ final class UserLifecycleService
                 UNION SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE() AND (
                     (TABLE_NAME = 'branches' AND COLUMN_NAME = 'created_by') OR
+                    (TABLE_NAME = 'sales' AND COLUMN_NAME = 'discount_authorized_by') OR
                     (TABLE_NAME = 'inventory_adjustment_revisions' AND COLUMN_NAME = 'actor_id') OR
                     (TABLE_NAME = 'backup_operations' AND COLUMN_NAME = 'requested_by') OR
                     (TABLE_NAME = 'store_write_gate' AND COLUMN_NAME = 'paused_by'))")->fetchAll(PDO::FETCH_ASSOC);
@@ -340,17 +341,24 @@ final class UserLifecycleService
             if ($statement->fetchColumn() !== false) return true;
         }
         // Audit payloads contain logical identities, including nested shift/GCash actors.
-        $idPattern = '"([a-z_]*(user_id|cashier_id|actor_id)|created_by|updated_by|approved_by|reviewed_by|recorded_by|requested_by|assigned_to|decided_by|received_by|counted_by|moved_by|pulled_by|performed_by|verified_by|closed_by|discarded_by|authorized_by|waived_by)"[[:space:]]*:[[:space:]]*"?'
+        $idPattern = '"([a-z_]*(user_id|cashier_id|actor_id)|created_by|updated_by|reported_by|approved_by|reviewed_by|recorded_by|requested_by|assigned_to|decided_by|received_by|counted_by|moved_by|pulled_by|performed_by|verified_by|closed_by|discarded_by|[a-z_]*authorized_by|waived_by|activated_by|rolled_back_by|suspended_by)"[[:space:]]*:[[:space:]]*"?'
             . (int)$target['user_id'] . '"?([,}[:space:]]|$)';
         $identityPatterns = [];
         foreach (array_filter([$target['username'], $target['email']]) as $identity) {
             $identityPatterns[] = '"(username|email)"[[:space:]]*:[[:space:]]*' . preg_quote(json_encode($identity, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), '~');
         }
-        $pattern = $idPattern . '|' . implode('|', $identityPatterns);
+        $pattern = $idPattern . '|"identity"[[:space:]]*:[[:space:]]*"user:' . (int)$target['user_id'] . '"|' . implode('|', $identityPatterns);
         $statement = $this->pdo->prepare("SELECT 1 FROM activity_log
-            WHERE (module IN ('User Access', 'Users', 'Authentication', 'Recovery Account') AND record_id = ?)
+            WHERE ((module IN ('User Access', 'Users', 'Recovery Account')
+                    OR (module = 'Authentication' AND action IN ('Login success', 'Login failure'))) AND record_id = ?)
                 OR previous_value REGEXP ? OR new_value REGEXP ? OR metadata REGEXP ? LIMIT 1{$suffix}");
         $statement->execute([(int)$target['user_id'], $pattern, $pattern, $pattern]);
+        if ($statement->fetchColumn() !== false) return true;
+        $statement = $this->pdo->prepare("SELECT 1 FROM platform_settings WHERE setting_value REGEXP ? LIMIT 1{$suffix}");
+        $statement->execute([$pattern]);
+        if ($statement->fetchColumn() !== false) return true;
+        $statement = $this->pdo->prepare("SELECT 1 FROM inventory_adjustment_revisions WHERE old_values REGEXP ? OR new_values REGEXP ? LIMIT 1{$suffix}");
+        $statement->execute([$pattern, $pattern]);
         if ($statement->fetchColumn() !== false) return true;
         $statement = $this->pdo->prepare("SELECT 1 FROM login_attempts WHERE LOWER(TRIM(username)) IN (LOWER(?), LOWER(?), ?, LOWER(?), LOWER(?)) LIMIT 1{$suffix}");
         $statement->execute([$target['username'], $target['email'], 'user:' . $target['user_id'], 'unknown:' . $target['username'], $target['email'] ? 'unknown:' . $target['email'] : null]);
@@ -358,19 +366,21 @@ final class UserLifecycleService
         $statement = $this->pdo->prepare("SELECT 1 FROM email_delivery_log WHERE LOWER(TRIM(recipient)) = LOWER(?) LIMIT 1{$suffix}");
         $statement->execute([$target['email']]);
         if ($statement->fetchColumn() !== false) return true;
-        if (\App\Backup\RecoveryStore::isAvailable()) {
-            foreach (['restore-log.jsonl', 'restore-state.json'] as $name) {
-                $path = \App\Backup\RecoveryStore::path($name);
-                if (!is_file($path)) continue;
-                $handle = fopen($path, 'rb');
-                if ($handle === false) throw new DomainException('Recovery audit history cannot be checked. Try again later.');
-                try {
-                    while (($line = fgets($handle)) !== false) {
-                        $record = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
-                        if ((int)($record['actor_id'] ?? 0) === (int)$target['user_id']) return true;
-                    }
-                } finally { fclose($handle); }
-            }
+        if (!\App\Backup\RecoveryStore::isAvailable()) {
+            throw new DomainException('Recovery audit history cannot be checked on this hosting plan. Permanent deletion is unavailable.');
+        }
+        foreach (['restore-log.jsonl', 'restore-state.json'] as $name) {
+            $path = \App\Backup\RecoveryStore::path($name);
+            if (!is_file($path)) continue;
+            $handle = fopen($path, 'rb');
+            if ($handle === false) throw new DomainException('Recovery audit history cannot be checked. Try again later.');
+            try {
+                while (($line = fgets($handle)) !== false) {
+                    $record = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+                    if ((int)($record['actor_id'] ?? 0) === (int)$target['user_id']) return true;
+                }
+                if (!feof($handle)) throw new DomainException('Recovery audit history cannot be checked. Try again later.');
+            } finally { fclose($handle); }
         }
         return false;
     }
