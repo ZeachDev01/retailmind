@@ -477,6 +477,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         <input class="pos-input" id="gcash-resolve-password" name="approver_password" type="password" autocomplete="new-password">
                     </div>
                 </div>
+                <label class="gcash-confirmation" id="gcash-resolve-print-choice"><input type="checkbox" id="gcash-resolve-print-receipt"> Print receipt automatically</label>
                 <div class="gcash-actions">
                     <button class="btn" type="submit" id="gcash-resolve-submit">Confirm Resolution</button>
                     <button class="btn btn-secondary" type="button" id="gcash-resolve-cancel">Cancel</button>

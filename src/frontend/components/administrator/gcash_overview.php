@@ -588,6 +588,7 @@ function gcash_admin_money(mixed $val): string {
                 <div class="gcash-field"><label for="gcash-verify-reference">GCash reference number</label><input class="form-control" id="gcash-verify-reference" required inputmode="numeric" pattern="[0-9]{13}" minlength="13" maxlength="13"></div>
                 <label class="gcash-confirmation"><input type="checkbox" id="gcash-verify-wallet" required> Wallet transfer confirmed in the GCash app</label>
                 <label class="gcash-confirmation"><input type="checkbox" id="gcash-verify-cash" required> Physical service cash exchange confirmed</label>
+                <label class="gcash-confirmation"><input type="checkbox" id="gcash-verify-print-receipt"> Print receipt automatically</label>
                 <p id="gcash-verify-error" role="alert"></p>
                 <div class="gcash-actions"><button type="button" class="btn btn-secondary" data-close-dialog>Cancel</button><button type="submit" class="btn btn-primary">Verify &amp; Clear</button></div>
             </form>

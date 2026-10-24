@@ -1836,10 +1836,13 @@ final class GCashTransactionService
                     AuditRecordCategory::STORE_OPERATION
                 );
 
+                (new \App\Receipts\GCashReceiptService($this->pdo()))->preserve($transactionId);
+
                 $this->pdo()->commit();
                 return [
                     'transaction_id' => $transactionId,
                     'status' => 'Completed',
+                    'receipt_id' => $transactionId,
                     'verification_status' => 'Completed',
                 ];
             } else {

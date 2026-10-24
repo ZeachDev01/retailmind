@@ -1156,6 +1156,7 @@
         el('resolve-form').reset();
         el('resolve-summary').textContent = `#${tx.transaction_id} · ${tx.transaction_type} · PHP ${tx.amount} (Cash delta: ${tx.service_cash_delta}, Wallet delta: ${tx.wallet_delta})`;
         el('resolve-ref-group').hidden = false;
+        el('resolve-print-choice').hidden = false;
         el('resolve-auth-group').hidden = true;
         el('resolve-action').value = 'complete';
         el('resolve-reference').value = tx.reference_number || '';
@@ -1165,6 +1166,7 @@
         const isCancel = el('resolve-action').value === 'cancel';
         const hadMoney = resolveTx && (Number(resolveTx.service_cash_delta || 0) !== 0 || Number(resolveTx.wallet_delta || 0) !== 0);
         el('resolve-ref-group').hidden = isCancel;
+        el('resolve-print-choice').hidden = isCancel;
         el('resolve-auth-group').hidden = !isCancel || !hadMoney;
         el('resolve-approver').required = isCancel && hadMoney;
         el('resolve-password').required = isCancel && hadMoney;
@@ -1186,11 +1188,13 @@
                 approver_username: form.approver_username.value,
                 approver_password: form.approver_password.value,
             };
-            await request(null, body);
+            const autoPrint = el('resolve-print-receipt').checked;
+            const result = await request(null, body);
             el('resolve-dialog').close();
             notify('Transaction #' + resolveTx.transaction_id + ' resolved.', 'success');
             await loadSessionStatus();
             await loadHistory();
+            if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.getElementById('tab-history'), autoPrint);
         } catch (err) {
             notify(err.message, 'error');
         } finally {
