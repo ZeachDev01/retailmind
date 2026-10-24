@@ -387,7 +387,36 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.setViewportSize({width: 1440, height: 900});
 
 
+        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Automatic printing defaults unchecked');
+        await page.evaluate(() => { window.receiptPrints = 0; window.print = () => { window.receiptPrints++; throw new Error('Printer unavailable'); }; });
+        await page.locator('#gcash-print-receipt').check();
+        const completionResponse = page.waitForResponse(response => response.url().includes('gcash_api.php') && response.request().method() === 'POST');
         await completeBtn.click();
+        const completedReceiptId = (await (await completionResponse).json()).receipt_id;
+        assert.ok(completedReceiptId, 'Completion returns saved-receipt locator');
+        await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        await page.waitForFunction(() => window.receiptPrints === 1);
+        const savedPaper = await page.locator('#receiptModal .gcash-service-receipt').innerText();
+        assert.match(savedPaper, /Cash collected\s+₱1,010.00/);
+        assert.match(savedPaper, /Wallet sent to customer\s+₱1,000.00/);
+        assert.match(savedPaper, /0012345678910/);
+        assert.doesNotMatch(savedPaper, /Change due|Service cash|Wallet balance|notes/i);
+        assert.equal(await page.locator('#receiptModal .gcash-receipt-reference svg').getAttribute('aria-label'), 'Barcode 0012345678910');
+        assert.equal(await page.locator('#saleReceiptTitle').evaluate(el => el === document.activeElement), true, 'Receipt heading receives focus');
+        await page.locator('.rm-toast').filter({hasText: 'Printing could not start'}).waitFor();
+        await page.evaluate(() => { window.print = () => { window.receiptPrints++; }; });
+        await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
+        assert.equal(await page.evaluate(() => window.receiptPrints), 2, 'Manual retry remains available');
+        await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Next completion starts unchecked');
+        const exchangeBeforeReopen = await (await context.request.get(api + '?action=overview')).json();
+        await page.evaluate(id => window.viewReceipt(id), completedReceiptId);
+        assert.equal(await page.locator('#receiptModal .gcash-service-receipt').innerText(), savedPaper, 'Reopening reads the same saved receipt');
+        assert.equal(await page.evaluate(() => window.receiptPrints), 2, 'Reopening never automatically prints');
+        await page.getByRole('button', {name: 'Return to GCash', exact: true}).click();
+        assert.deepEqual(await (await context.request.get(api + '?action=overview')).json(), exchangeBeforeReopen, 'Receipt reopening/printing never repost financial movements');
+
         await tabHistory.click();
         await page.locator('#gcash-history-body .gcash-status-completed').waitFor();
 
@@ -454,6 +483,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             confirmed_cash: true
         });
         assert.equal(dupRefApi.status(), 409, 'Duplicate reference rejected');
+        assert.equal(await page.evaluate(() => window.receiptPrints), 2, 'Failed completions never print');
 
         // Ticket #241: Cash-Out Fee via GCash in browser
         await tabNewTx.click();
@@ -835,6 +865,29 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const integration = run('src/backend/tests/gcash_transaction_integration.php', [database]).trim();
         assert.equal(integration, 'GCash MySQL integration: passed');
         console.log(integration);
+        const receiptUrl = origin + '/components/cashier/gcash_receipt.php?transaction_id=' + completedReceiptId;
+        const reopened = await context.request.get(receiptUrl);
+        assert.equal(reopened.status(), 200, 'Own saved receipt accessible after Cashier Shift closes');
+        assert.match(await reopened.text(), /data-paper-width-mm="80"/, 'Closed shift uses existing 80 mm fallback');
+        assert.equal((await adminContext.request.get(receiptUrl)).status(), 200, 'Administrator reads Store-wide saved receipts');
+        assert.equal((await context.request.get(origin + '/components/cashier/gcash_receipt.php?transaction_id=999999999')).status(), 404);
+        const otherContext = await browser.newContext();
+        const otherPage = await otherContext.newPage();
+        await otherPage.goto(origin + '/?login=1');
+        await otherPage.locator('#landing-login-username').fill('cashier2');
+        await otherPage.locator('#landing-login-password').fill(data.password);
+        await Promise.all([otherPage.waitForURL(url => !url.search.includes('login=1')), otherPage.getByRole('button', {name: 'Log in', exact: true}).click()]);
+        assert.equal((await otherContext.request.get(receiptUrl)).status(), 404, 'Cashier cannot directly retrieve another Cashier receipt');
+        await otherContext.close();
+        const inventoryContext = await browser.newContext();
+        const inventoryPage = await inventoryContext.newPage();
+        await login(inventoryPage, 'inventory_manager');
+        assert.equal((await inventoryContext.request.get(receiptUrl)).status(), 403, 'Active inventory Workspace cannot retrieve a receipt');
+        await inventoryContext.close();
+        const anonymous = await browser.newContext();
+        assert.equal((await anonymous.request.get(receiptUrl, {maxRedirects: 0})).status(), 302, 'Receipt requires authentication');
+        await anonymous.close();
+
         console.log('GCash browser: passed (Cashier workflow, Administrator oversight, date filtering, differences, responsive layout)');
         console.log('Screenshots: ' + path.join(output, 'gcash.png') + ', ' + path.join(output, 'gcash-admin-overview.png'));
     } finally {

@@ -14,6 +14,7 @@ return [
             verified_by INT NULL,
             verification_note VARCHAR(500) NULL,
             reviewed_at DATETIME NULL,
+            receipt_details_json LONGTEXT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uq_gcash_reference (reference_number),
             KEY idx_gcash_cashier_history (cashier_id, transaction_id),

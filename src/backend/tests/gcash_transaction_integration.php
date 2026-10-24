@@ -326,6 +326,22 @@ $cashInTxId = $service->recordCashIn(4, [
     'preview_wallet_transfer' => 1000.00,
 ]);
 $check($cashInTxId > 0, 'Cash-In recorded successfully');
+$receipts = new App\Receipts\GCashReceiptService($pdo);
+$receipt = $receipts->fetch($cashInTxId, 4, 'cashier');
+$check($receipt['reference_number'] === '0000000000101' && $receipt['principal_amount'] === '1000.00' && $receipt['cash_collected'] === '1010.00' && $receipt['wallet_sent'] === '1000.00', 'Saved Cash-In receipt preserves exact customer exchange and leading zeroes');
+$check($receipts->fetch($cashInTxId, 5, 'cashier') === null && $receipts->fetch($cashInTxId, 1, 'inventory_manager') === null, 'Receipt access follows active Workspace and cashier ownership');
+$check($receipts->fetch($cashInTxId, 1, 'admin') === $receipt, 'Administrator can read saved Store-wide receipt');
+$pdo->beginTransaction();
+try {
+    $pdo->exec("UPDATE store_settings SET setting_value='Changed receipt settings' WHERE setting_key IN ('store_name', 'store_address', 'receipt_footer', 'currency_symbol')");
+    $pdo->exec("UPDATE users SET full_name='Changed cashier display' WHERE user_id=4");
+    $pdo->exec("UPDATE registers SET name='Changed Register display', paper_width_mm='58' WHERE register_id=1");
+    $check($receipts->fetch($cashInTxId, 4, 'cashier') === $receipt, 'Reprint retains completion-time Store, footer, Cashier and Register');
+    $check((new App\Receipts\ReceiptPaperService($pdo))->currentWidth(4, 'cashier') === 58, 'Only receipt paper follows current printing Register');
+} finally { $pdo->rollBack(); }
+$check($receipts->fetch($id2, 4, 'cashier') === null, 'Historical record is not reconstructed as a saved receipt');
+
+
 
 $posSnapshotAfter = $snapshot();
 $check($posSnapshotBefore === $posSnapshotAfter, 'Product sales, inventory, and POS cash drawer totals must remain unchanged');
@@ -383,6 +399,8 @@ $expAfterNC = $service->calculateSessionExpected($sess5);
 $check($expAfterNC['expected_service_cash'] === 2520.00, 'Expected service cash reflects partial cash collection (2520.00)');
 $check($expAfterNC['expected_wallet_balance'] === 4000.00, 'Expected wallet balance unaffected by unsent wallet (4000.00)');
 
+$check($receipts->fetch($ncTxId, 4, 'cashier') === null, 'Needs checking has no completed receipt');
+
 // Audit failure rollback for Cash-In
 $pdo->exec("CREATE TRIGGER gcash_cash_in_audit_fail BEFORE INSERT ON activity_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Audit injection fail'");
 try {
@@ -398,6 +416,20 @@ try {
     $check($auditFailThrew, 'Cash-In must throw on audit failure');
     $check((int)$pdo->query("SELECT COUNT(*) FROM gcash_transactions WHERE reference_number='0000000000102'")->fetchColumn() === 0, 'Audit failure must roll back cash in record');
 } finally { $pdo->exec('DROP TRIGGER gcash_cash_in_audit_fail'); }
+
+// A receipt write failure must also roll back the financial movement and protected audit.
+$stateBeforeReceiptFailure = $service->calculateSessionExpected($sess5);
+$pdo->exec("CREATE TRIGGER gcash_receipt_failure BEFORE UPDATE ON gcash_transactions FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Receipt snapshot injection fail'");
+try {
+    $failed = false;
+    try { $service->recordCashIn(4, ['principal' => 200, 'reference' => '0000000000102', 'confirmed_wallet' => true, 'confirmed_cash' => true]); }
+    catch (PDOException $e) { $failed = true; }
+    $check($failed && !$service->exists('0000000000102') && $service->calculateSessionExpected($sess5) === $stateBeforeReceiptFailure, 'Receipt failure leaves no exchange, snapshot or money posting');
+} finally { $pdo->exec('DROP TRIGGER gcash_receipt_failure'); }
+$retriedId = $service->recordCashIn(4, ['principal' => 200, 'reference' => '0000000000102', 'confirmed_wallet' => true, 'confirmed_cash' => true]);
+$check($receipts->fetch($retriedId, 4, 'cashier')['cash_collected'] === '205.00', 'Retry after rollback saves exactly one completed receipt');
+// Remove this extra fixture exchange so existing worked balance examples remain unchanged.
+$pdo->exec('DELETE FROM gcash_transactions WHERE transaction_id=' . $retriedId);
 
 // Concurrent Cash-In race on same reference
 $cashInRaceProcesses = [];
@@ -847,8 +879,10 @@ $refuse(fn() => $service->recordLinkedCorrection(1, 'admin', $ciTxId, 0.00, 0.00
 $refuse(fn() => $service->recordLinkedCorrection(1, 'admin', $ciTxId, -10.00, 0.00, 'Tiny'));
 
 // Valid linked correction: -10 cash delta (fee refund)
+$receiptBeforeCorrection = $receipts->fetch($ciTxId, 4, 'cashier');
 $adjId1 = $service->recordLinkedCorrection(1, 'admin', $ciTxId, -10.00, 0.00, 'Customer refunded 10 pesos fee overcharge');
 $check($adjId1 > 0, 'Linked correction recorded');
+$check($receipts->fetch($ciTxId, 4, 'cashier') === $receiptBeforeCorrection, 'Linked audited correction leaves original receipt unchanged');
 
 // Verify original transaction row is strictly immutable
 $ciRow = $pdo->query('SELECT * FROM gcash_transactions WHERE transaction_id = ' . $ciTxId)->fetch(PDO::FETCH_ASSOC);
@@ -1288,5 +1322,18 @@ try {
 
 $pdo->exec("UPDATE users SET full_name = '=GCASH_CSV_TEST' WHERE user_id = 4");
 $pdo->exec("INSERT INTO gcash_transactions (session_id, transaction_type, reference_number, amount, cashier_id, verification_status, notes) VALUES (NULL, 'Payment', '7990000000999', 50.00, 4, 'Needs checking', 'Legacy unresolved reference')");
+// Maximum configured reference and centavo fee preserved through the completion boundary.
+$pdo->exec("UPDATE gcash_service_sessions SET status='closed' WHERE status='open'");
+$service->openSession(4, 1000.00, 50000.00);
+$wideReferenceService = new GCashTransactionService($pdo, ['min_length' => 6, 'max_length' => 32]);
+$longId = $wideReferenceService->recordCashIn(4, ['principal' => 12345, 'reference' => '00000000000000000000000000123456', 'confirmed_wallet' => true, 'confirmed_cash' => true]);
+$longReceipt = $receipts->fetch($longId, 4, 'cashier');
+$check($longReceipt['fee_amount'] === '123.45' && $longReceipt['cash_collected'] === '12468.45' && $longReceipt['reference_number'] === '00000000000000000000000000123456', 'Centavo fee and complete 32 digit reference persist exactly');
+
+$pdo->prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE user_id=5")->execute([password_hash('ThemeTest@2026', PASSWORD_DEFAULT)]);
+$service->closeSession(4, 13468.45, 37655.00, 'Receipt verification complete');
+$pdo->exec("UPDATE cashier_shifts SET status='closed' WHERE cashier_id=4");
+$check($receipts->fetch($cashInTxId, 4, 'cashier') === $receipt, 'Receipt retrieval remains read-only and available after shift closes');
+
 echo "GCash MySQL integration: passed\n";
 

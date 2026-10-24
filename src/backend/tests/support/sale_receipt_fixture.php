@@ -9,6 +9,16 @@ $store = ['name' => $long ? 'Synthetic Store with a very long customer-facing na
     'tagline' => 'Sale Receipt', 'address' => '123 Example Street, Tangub City',
     'contact' => '555-0100 • example@example.test', 'tin' => 'TIN: EXAMPLE-123',
     'currency_symbol' => '₱', 'footer' => 'Thank you for shopping with us.'];
+if (($argv[1] ?? '') === 'gcash') {
+    require_once __DIR__ . '/../../bootstrap/app.php';
+    $store['name'] = str_repeat('Long Store name ', 7);
+    $store['address'] = str_repeat('Long address ', 10);
+    $receipt = ['store' => $store, 'transaction_id' => 103, 'cashier_name' => str_repeat('Long Cashier ', 10), 'register_name' => str_repeat('Long Register ', 10),
+        'completed_at' => '2026-10-24 10:11:12', 'transaction_type' => 'Cash-In', 'principal_amount' => '12345.00', 'fee_amount' => '123.45', 'fee_method' => 'Fee in cash',
+        'cash_collected' => '12468.45', 'wallet_sent' => '12345.00', 'cash_paid_out' => '0.00', 'wallet_received' => '0.00', 'reference_number' => '00000000000000000000000000123456'];
+    App\Receipts\GCashReceiptPresentation::render($receipt, $paperWidthMm);
+    exit;
+}
 $items = [];
 for ($i = 1; $i <= ($long ? 40 : 2); $i++) {
     $items[] = ['sku' => $long ? 'LONG-SKU-' . str_repeat('1234567890', 6) . '-' . $i : 'TEST-' . $i,

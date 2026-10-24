@@ -58,6 +58,7 @@
         if (el('fee-method')) el('fee-method').disabled = disabled;
         if (el('confirm-wallet')) el('confirm-wallet').disabled = disabled;
         if (el('confirm-cash')) el('confirm-cash').disabled = disabled;
+        if (el('print-receipt')) el('print-receipt').disabled = disabled;
         el('manual').disabled = disabled;
         el('camera-open').disabled = disabled;
         updateSave();
@@ -308,6 +309,7 @@
         renderBalances();
         el('confirm-wallet').checked = false;
         el('confirm-cash').checked = false;
+        if (el('print-receipt')) el('print-receipt').checked = false;
         const type = el('type')?.value || 'Cash-In';
         const feeMethodGroup = el('fee-method-group');
         const isCashOut = type === 'Cash-Out';
@@ -435,6 +437,7 @@
                     preview_counter_collect: preview.counterCollect,
                     preview_wallet_transfer: preview.walletTransfer,
                 };
+                const autoPrint = el('print-receipt')?.checked === true;
                 for (const input of el('form').elements) input.disabled = true;
                 const data = await request(null, body);
                 el('form').reset();
@@ -444,6 +447,7 @@
                 duplicate = false;
                 scanStatus('Cash-In completed successfully.');
                 notify('GCash Cash-In #' + data.id + ' completed.', 'success');
+                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('complete-cash-in'), autoPrint);
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();

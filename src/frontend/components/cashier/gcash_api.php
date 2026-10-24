@@ -61,7 +61,7 @@ try {
         $cashierId = (int)$_SESSION['user_id'];
         if (($input['action'] ?? '') === 'record_cash_in') {
             $id = $service->recordCashIn($cashierId, $input);
-            $result = ['id' => $id, 'transaction_id' => $id];
+            $result = ['id' => $id, 'transaction_id' => $id, 'receipt_id' => (new \App\Receipts\GCashReceiptService($pdo))->fetch($id, $cashierId, 'cashier') ? $id : null];
         } elseif (($input['action'] ?? '') === 'record_cash_out') {
             $id = $service->recordCashOut($cashierId, $input);
             $result = ['id' => $id, 'transaction_id' => $id];

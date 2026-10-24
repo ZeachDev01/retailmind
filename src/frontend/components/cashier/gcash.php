@@ -13,6 +13,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/gcash.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/gcash.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css')) ?>">
 </head>
 <body class="cashier-page">
 <div class="app-shell">
@@ -197,6 +198,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                             <input type="checkbox" id="gcash-confirm-wallet" name="confirmed_wallet">
                             <span id="gcash-confirm-wallet-text">I confirmed the wallet transfer of PHP 0.00 in the authorized GCash app</span>
                         </label>
+                        <label class="receipt-auto-print"><input type="checkbox" id="gcash-print-receipt"> Print receipt automatically</label>
                         <label class="gcash-confirm" id="gcash-confirm-cash-label">
                             <input type="checkbox" id="gcash-confirm-cash" name="confirmed_cash">
                             <span id="gcash-confirm-cash-text">I confirmed receipt of PHP 0.00 physical cash at the counter</span>
@@ -542,8 +544,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
             </form>
         </dialog>
+        <?php require __DIR__ . '/../../../backend/app/Views/gcash_receipt_dialog.php'; ?>
     </main>
 </div>
+<script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>"></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>"></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/gcash-reference.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/gcash-reference.js')) ?>"></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/gcash.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/gcash.js')) ?>"></script>
 </body>

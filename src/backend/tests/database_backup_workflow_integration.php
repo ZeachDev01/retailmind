@@ -174,12 +174,15 @@ try {
     $full->prepare('INSERT INTO users (full_name, username, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, 0)')
         ->execute(['Full schema fixture', 'sql_roundtrip_fixture', password_hash('Full-schema-password', PASSWORD_DEFAULT), $superRole]);
     $fullActor = (int)$full->lastInsertId();
+    $receiptSentinel = '{"reference_number":"00000000000000000000000000123456","fee_amount":"123.45","store":{"name":"Saved Store","footer":"Saved footer"}}';
+    $full->prepare("INSERT INTO gcash_transactions (transaction_type,reference_number,amount,cashier_id,verification_status,receipt_details_json) VALUES ('Cash-In','00000000000000000000000000123456',12345,?,'Completed',?)")->execute([$fullActor, $receiptSentinel]);
     $fullBackups = new DatabaseBackupService($full, $policy, $private . '/full-downloads', $full);
     $fullBackup = $fullBackups->create($fullActor, 'super_admin');
     $full->prepare('UPDATE users SET full_name=? WHERE user_id=?')->execute(['Changed since snapshot', $fullActor]);
     $fullRestorer = new DatabaseRestoreService($full, $policy, $fullBackups);
     $fullRestorer->restore($fullActor, 'super_admin', $fullBackup['path'], $fullBackup['filename'], 'Full-schema-password');
     $assert($full->query('SELECT full_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Full schema fixture', 'Complete migrated application schema must round-trip');
+    $assert($full->query("SELECT receipt_details_json FROM gcash_transactions WHERE reference_number='00000000000000000000000000123456'")->fetchColumn() === $receiptSentinel, 'GCash receipt snapshot survives full backup and restore byte for byte');
     $full->exec('CREATE VIEW unsupported_fixture_view AS SELECT user_id FROM users');
     $reject(fn() => $fullBackups->create($fullActor, 'super_admin'), 'Unsupported custom objects must fail rather than produce an incomplete backup');
     $assert(!$fullBackups->status()['paused'], 'Failed unsupported capture releases the write gate');
