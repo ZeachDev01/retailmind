@@ -98,7 +98,6 @@ CREATE TABLE IF NOT EXISTS model_training_runs (
     eligible_products INT DEFAULT 0,
     metrics_json LONGTEXT NULL,
     error_message TEXT NULL,
-    host_name VARCHAR(150) NULL,
     INDEX idx_model_training_runs_started_at (started_at),
     INDEX idx_model_training_runs_status (status)
 );
@@ -107,9 +106,6 @@ CREATE TABLE IF NOT EXISTS forecast_evaluations (
     evaluation_id INT AUTO_INCREMENT PRIMARY KEY,
     training_run_id INT NULL,
     product_id INT NOT NULL,
-    evaluation_records INT NOT NULL DEFAULT 0,
-    actual_total DECIMAL(14,2) NOT NULL DEFAULT 0,
-    predicted_total DECIMAL(14,2) NOT NULL DEFAULT 0,
     mae DECIMAL(14,4) NULL,
     rmse DECIMAL(14,4) NULL,
     wape DECIMAL(10,4) NULL,

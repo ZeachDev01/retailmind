@@ -17,6 +17,25 @@ $names = ['rm_sql_php_' . bin2hex(random_bytes(6)), 'rm_sql_update_' . bin2hex(r
 $assert = static function (bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
 };
+$retiredTables = ['user_privileges', 'role_privileges', 'privileges', 'restore_preserved_activity', 'emergency_access_sessions'];
+$retiredColumns = [
+    'csv_import_logs' => ['error_details'],
+    'forecast_evaluations' => ['evaluation_records', 'actual_total', 'predicted_total'],
+    'model_training_runs' => ['host_name'],
+    'sale_reversals' => ['exchange_details'],
+];
+$assertRetired = static function (PDO $db) use ($assert, $retiredTables, $retiredColumns): void {
+    foreach ($retiredTables as $table) {
+        $assert(!App\Database\Schema::tableExists($db, $table), "Retired table reappeared: {$table}");
+    }
+    foreach ($retiredColumns as $table => $columns) {
+        foreach ($columns as $column) {
+            $assert(!App\Database\Schema::columnExists($db, $table, $column), "Unused column reappeared: {$table}.{$column}");
+        }
+    }
+    $assert((int)$db->query("SELECT COUNT(*) FROM platform_settings WHERE setting_key='emergency_access_duration_minutes'")->fetchColumn() === 0,
+        'Retired Emergency Access setting reappeared');
+};
 $import = static function (PDO $db, string $file): void {
     // The dump's versioned comments contain executable session settings.
     $sql = preg_replace('/\/\*!\d{5}\s*(.*?)\*\//s', '$1', file_get_contents($file));
@@ -50,13 +69,22 @@ try {
         $db->exec("SET time_zone='+08:00'");
         $db->exec("SET timestamp=1791417600");
         $import($db, __DIR__ . '/../database/sql/schema.sql');
+        $assertRetired($db);
         $runner = new App\Database\MigrationRunner($db, __DIR__ . '/../database/migrations');
         $runner->runPending();
+        $assertRetired($db);
         $assert($runner->pending() === [], 'Fresh import plus migrations leaves pending migrations');
         $assert((int)$db->query('SELECT COUNT(*) FROM user_roles')->fetchColumn() > 0, 'Fresh import lacks assigned roles');
 
+        // Legacy installs still carry these fields; both upgrade paths must remove them.
+        foreach ($retiredColumns as $table => $columns) {
+            foreach ($columns as $column) {
+                $db->exec("ALTER TABLE `{$table}` ADD COLUMN `{$column}` TEXT NULL");
+            }
+        }
+
         // Reproduce an import whose ledger says applied but required structures are missing.
-        foreach (['user_roles', 'backup_operations', 'restore_preserved_activity', 'store_write_gate'] as $table) {
+        foreach (['user_roles', 'backup_operations', 'store_write_gate'] as $table) {
             $db->exec("DROP TABLE `{$table}`");
         }
         foreach (['snapshot_at', 'envelope_version', 'cipher', 'requested_by_role'] as $column) {
@@ -108,6 +136,8 @@ try {
         App\Database\Schema::addColumnIfMissing($php, 'stock_predictions', $column, $type);
     }
     $import($sql, __DIR__ . '/../database/sql/update.sql');
+    $assertRetired($php);
+    $assertRetired($sql);
     $assert($structures($php) === $structures($sql), 'SQL and PHP migration schemas differ');
     foreach (array_keys($structures($php)) as $table) {
         $assert($records($php, $table) === $records($sql, $table), "SQL and PHP migration records differ: {$table}");
@@ -126,6 +156,7 @@ try {
     $rows = [];
     foreach (array_keys($before) as $table) $rows[$table] = $records($sql, $table);
     $import($sql, __DIR__ . '/../database/sql/update.sql');
+    $assertRetired($sql);
     $assert($before === $structures($sql), 'Second import changed schema');
     foreach ($rows as $table => $data) $assert($data === $records($sql, $table), "Second import changed records: {$table}");
 

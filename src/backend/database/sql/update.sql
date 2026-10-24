@@ -1199,7 +1199,6 @@ CREATE TABLE IF NOT EXISTS `model_training_runs` (
   `eligible_products` int(11) DEFAULT 0,
   `metrics_json` longtext DEFAULT NULL,
   `error_message` text DEFAULT NULL,
-  `host_name` varchar(150) DEFAULT NULL,
   PRIMARY KEY (`training_run_id`),
   KEY `idx_model_training_runs_started_at` (`started_at`),
   KEY `idx_model_training_runs_status` (`status`)
@@ -1208,9 +1207,6 @@ CREATE TABLE IF NOT EXISTS `forecast_evaluations` (
   `evaluation_id` int(11) NOT NULL AUTO_INCREMENT,
   `training_run_id` int(11) DEFAULT NULL,
   `product_id` int(11) NOT NULL,
-  `evaluation_records` int(11) NOT NULL DEFAULT 0,
-  `actual_total` decimal(14,2) NOT NULL DEFAULT 0.00,
-  `predicted_total` decimal(14,2) NOT NULL DEFAULT 0.00,
   `mae` decimal(14,4) DEFAULT NULL,
   `rmse` decimal(14,4) DEFAULT NULL,
   `wape` decimal(10,4) DEFAULT NULL,
@@ -1568,4 +1564,46 @@ EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description)
 VALUES ('202610240001_gcash_receipt_details','Preserve completed GCash Service Receipts')
+ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202610250001_retire_unused_storage: Remove obsolete storage after historical backfills.
+DROP TABLE IF EXISTS `user_privileges`;
+DROP TABLE IF EXISTS `role_privileges`;
+DROP TABLE IF EXISTS `privileges`;
+DROP TABLE IF EXISTS `restore_preserved_activity`;
+DROP TABLE IF EXISTS `emergency_access_sessions`;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='csv_import_logs' AND column_name='error_details'), 'ALTER TABLE `csv_import_logs` DROP COLUMN `error_details`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='forecast_evaluations' AND column_name='evaluation_records'), 'ALTER TABLE `forecast_evaluations` DROP COLUMN `evaluation_records`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='forecast_evaluations' AND column_name='actual_total'), 'ALTER TABLE `forecast_evaluations` DROP COLUMN `actual_total`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='forecast_evaluations' AND column_name='predicted_total'), 'ALTER TABLE `forecast_evaluations` DROP COLUMN `predicted_total`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='model_training_runs' AND column_name='host_name'), 'ALTER TABLE `model_training_runs` DROP COLUMN `host_name`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sale_reversals' AND column_name='exchange_details'), 'ALTER TABLE `sale_reversals` DROP COLUMN `exchange_details`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+
+DELETE FROM platform_settings WHERE setting_key = 'emergency_access_duration_minutes';
+INSERT INTO schema_migrations (migration_key,description)
+VALUES ('202610250001_retire_unused_storage','Remove retired tables, unused columns, and Emergency Access setting')
 ON DUPLICATE KEY UPDATE description=VALUES(description);

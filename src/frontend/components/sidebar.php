@@ -202,9 +202,9 @@ $administratorSections = [
         'title' => 'Store Operations',
         'items' => [
             ['path' => 'components/administrator/dashboard.php', 'icon' => 'shop', 'label' => 'Store Overview'],
+            ['path' => 'components/administrator/gcash_overview.php', 'image' => 'assets/img/gcash-brandmark.svg', 'label' => 'GCash Overview'],
             ['icon' => 'business', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
             ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
-            ['path' => 'components/administrator/gcash_overview.php', 'image' => 'assets/img/gcash-brandmark.svg', 'label' => 'GCash Overview'],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'advertising', 'label' => 'Promotions'],
             ['path' => 'components/administrator/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Oversight'],
             ['icon' => 'statistics', 'label' => 'Store Reports', 'items' => $administratorReportItems],

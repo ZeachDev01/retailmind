@@ -65,3 +65,9 @@ Final desktop and mobile captures for all four tabs are in `.impeccable/review/g
 Removed page and section introductions, repeated metric captions, duplicate date summaries and the combined-funds aside. Fund check metadata is available once through native Fund details. Compact scope badges preserve All dates / All Cashiers for reviews, while matching counts, evidence states, error recovery and financial confirmation consequences remain available. No workflow or financial calculation changed.
 
 PHP and JavaScript syntax, `git diff --check`, and the focused Administrator browser suite with disposable MySQL integration passed. The suite also checks collapsed/expanded fund metadata and absence of overview subtext. Desktop and mobile captures for all four tabs are in `output/gcash-distill/`; overview captures were visually inspected. Existing review captures and unrelated working changes were preserved. Dark-theme, screen-reader and cross-browser checks were not repeated.
+
+### All-tab extension
+
+Transactions show signed ledger movements as regular table data; redundant legacy captions and adjustment counts defer to the existing Transaction Breakdown. Reconciliation keeps amounts and waiver state visible, with closing attribution, closing notes and waiver reasons in native details. Unresolved activity shows fees and their location inline, keeps movements visible, and replaces repeated Needs checking captions with expandable notes. Scope badges sit beside headings; empty states use concise copy. No financial data, authorization, confirmation or export behavior changed.
+
+The focused Administrator suite covers the three tabs at desktop and mobile widths, including collapsed/expanded record details and retained content. Captures are in `output/gcash-tabs-distill/`; desktop and mobile views of all three tabs were visually inspected. Existing unrelated test files and earlier captures were preserved.

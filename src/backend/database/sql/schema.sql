@@ -366,7 +366,6 @@ CREATE TABLE `csv_import_logs` (
   `failed_rows` int(11) DEFAULT NULL,
   `import_date` timestamp NOT NULL DEFAULT current_timestamp(),
   `status` enum('completed','failed') DEFAULT 'completed',
-  `error_details` text DEFAULT NULL,
   PRIMARY KEY (`import_id`),
   KEY `imported_by` (`imported_by`),
   CONSTRAINT `csv_import_logs_ibfk_1` FOREIGN KEY (`imported_by`) REFERENCES `users` (`user_id`)
@@ -422,31 +421,6 @@ CREATE TABLE `email_delivery_log` (
   KEY `idx_email_delivery_log_created_at` (`created_at`),
   KEY `idx_email_delivery_log_status` (`status`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `emergency_access_sessions`
---
-
-DROP TABLE IF EXISTS `emergency_access_sessions`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `emergency_access_sessions` (
-  `session_id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `actor_user_id` int(11) NOT NULL,
-  `reason` varchar(500) NOT NULL,
-  `activated_at` datetime NOT NULL,
-  `expires_at` datetime NOT NULL,
-  `duration_minutes` smallint(5) unsigned NOT NULL,
-  `status` enum('active','expired','revoked') NOT NULL DEFAULT 'active',
-  `revoked_at` datetime DEFAULT NULL,
-  `revoked_by` int(11) DEFAULT NULL,
-  PRIMARY KEY (`session_id`),
-  KEY `idx_emergency_actor_status` (`actor_user_id`,`status`,`expires_at`),
-  KEY `fk_emergency_revoker` (`revoked_by`),
-  CONSTRAINT `fk_emergency_actor` FOREIGN KEY (`actor_user_id`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `fk_emergency_revoker` FOREIGN KEY (`revoked_by`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -537,9 +511,6 @@ CREATE TABLE `forecast_evaluations` (
   `evaluation_id` int(11) NOT NULL AUTO_INCREMENT,
   `training_run_id` int(11) DEFAULT NULL,
   `product_id` int(11) NOT NULL,
-  `evaluation_records` int(11) NOT NULL DEFAULT 0,
-  `actual_total` decimal(14,2) NOT NULL DEFAULT 0.00,
-  `predicted_total` decimal(14,2) NOT NULL DEFAULT 0.00,
   `mae` decimal(14,4) DEFAULT NULL,
   `rmse` decimal(14,4) DEFAULT NULL,
   `wape` decimal(10,4) DEFAULT NULL,
@@ -812,7 +783,6 @@ CREATE TABLE `model_training_runs` (
   `eligible_products` int(11) DEFAULT 0,
   `metrics_json` longtext DEFAULT NULL,
   `error_message` text DEFAULT NULL,
-  `host_name` varchar(150) DEFAULT NULL,
   PRIMARY KEY (`training_run_id`),
   KEY `idx_model_training_runs_started_at` (`started_at`),
   KEY `idx_model_training_runs_status` (`status`)
@@ -912,23 +882,6 @@ CREATE TABLE `platform_settings` (
   KEY `fk_platform_settings_updated_by` (`updated_by`),
   CONSTRAINT `fk_platform_settings_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `privileges`
---
-
-DROP TABLE IF EXISTS `privileges`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `privileges` (
-  `privilege_id` int(11) NOT NULL AUTO_INCREMENT,
-  `privilege_key` varchar(80) NOT NULL,
-  `privilege_name` varchar(120) NOT NULL,
-  PRIMARY KEY (`privilege_id`),
-  UNIQUE KEY `privilege_key` (`privilege_key`),
-  UNIQUE KEY `privilege_name` (`privilege_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1122,23 +1075,6 @@ CREATE TABLE `registers` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `role_privileges`
---
-
-DROP TABLE IF EXISTS `role_privileges`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `role_privileges` (
-  `role_id` int(11) NOT NULL,
-  `privilege_id` int(11) NOT NULL,
-  PRIMARY KEY (`role_id`,`privilege_id`),
-  KEY `privilege_id` (`privilege_id`),
-  CONSTRAINT `role_privileges_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`) ON DELETE CASCADE,
-  CONSTRAINT `role_privileges_ibfk_2` FOREIGN KEY (`privilege_id`) REFERENCES `privileges` (`privilege_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `roles`
 --
 
@@ -1254,7 +1190,6 @@ CREATE TABLE `sale_reversals` (
   `reason` text NOT NULL,
   `settlement_method` enum('none','cash','card','ewallet','exchange') NOT NULL DEFAULT 'none',
   `refund_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
-  `exchange_details` text DEFAULT NULL,
   `requested_by` int(11) NOT NULL,
   `approved_by` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -1552,24 +1487,6 @@ CREATE TABLE `store_settings` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `user_privileges`
---
-
-DROP TABLE IF EXISTS `user_privileges`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `user_privileges` (
-  `user_id` int(11) NOT NULL,
-  `privilege_id` int(11) NOT NULL,
-  `allowed` tinyint(1) NOT NULL DEFAULT 1,
-  PRIMARY KEY (`user_id`,`privilege_id`),
-  KEY `privilege_id` (`privilege_id`),
-  CONSTRAINT `user_privileges_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  CONSTRAINT `user_privileges_ibfk_2` FOREIGN KEY (`privilege_id`) REFERENCES `privileges` (`privilege_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `users`
 --
 
@@ -1637,25 +1554,6 @@ CREATE TABLE `backup_operations` (
   PRIMARY KEY (`operation_key`),
   UNIQUE KEY `uq_backup_operations_active` (`active_slot`),
   KEY `idx_backup_operations_started` (`started_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-DROP TABLE IF EXISTS `restore_preserved_activity`;
-CREATE TABLE `restore_preserved_activity` (
-  `log_id` int NOT NULL AUTO_INCREMENT,
-  `user_id` int DEFAULT NULL,
-  `action` varchar(255) NOT NULL,
-  `category` enum('store_operation','security','recovery','platform_setting','recovery_account') NOT NULL,
-  `module` varchar(100) DEFAULT NULL,
-  `record_id` int DEFAULT NULL,
-  `previous_value` text COLLATE utf8mb4_unicode_ci,
-  `new_value` text COLLATE utf8mb4_unicode_ci,
-  `metadata` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
-  `ip_address` varchar(45) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`log_id`),
-  KEY `user_id` (`user_id`),
-  KEY `idx_activity_log_category_created` (`category`,`created_at`),
-  CONSTRAINT `restore_preserved_activity_chk_1` CHECK (json_valid(`metadata`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `store_write_gate`;
@@ -1728,26 +1626,6 @@ INSERT INTO `roles` (`role_id`, `role_name`) VALUES (2,'admin'),(4,'cashier'),(3
 UNLOCK TABLES;
 
 --
--- Dumping data for table `privileges`
---
-
-LOCK TABLES `privileges` WRITE;
-/*!40000 ALTER TABLE `privileges` DISABLE KEYS */;
-INSERT INTO `privileges` (`privilege_id`, `privilege_key`, `privilege_name`) VALUES (1,'manage_users','Manage user accounts'),(2,'manage_roles','Assign user roles'),(3,'manage_privileges','Manage user privileges'),(4,'manage_branches','Create and manage branches'),(5,'manage_inventory','Manage branch inventory'),(6,'view_inventory','View branch inventory');
-/*!40000 ALTER TABLE `privileges` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
--- Dumping data for table `role_privileges`
---
-
-LOCK TABLES `role_privileges` WRITE;
-/*!40000 ALTER TABLE `role_privileges` DISABLE KEYS */;
-INSERT INTO `role_privileges` (`role_id`, `privilege_id`) VALUES (1,1),(1,2),(1,3),(1,4),(1,6),(2,1),(2,2),(2,3),(2,4),(2,6),(3,5),(3,6),(4,6);
-/*!40000 ALTER TABLE `role_privileges` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
 -- Dumping data for table `users`
 --
 
@@ -1755,15 +1633,6 @@ LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
 INSERT INTO `users` (`user_id`, `full_name`, `username`, `email`, `profile_image`, `password_hash`, `role_id`, `status`, `failed_login_attempts`, `locked_until`, `last_login_at`, `session_version`, `password_changed_at`, `must_change_password`, `branch_id`, `is_recovery_account`, `created_at`) VALUES (1,'Super Admin','superadmin','superadmin@inventory.local','b8603d0f10c1be3fc3c819919e417a58429f910bcb825a291689da684886960d.png','$2y$10$jyoib.jrVfRdSWBvxaKT9eBEqBXT7a9YIuxfSAmpzp9hemBttdO4y',1,'active',0,NULL,'2026-09-18 14:14:22',2,'2026-09-14 15:30:05',0,NULL,0,'2026-09-14 07:29:33'),(2,'MIKE SORDILLA','Mike','sordillamike1@gmail.com',NULL,'$2y$10$SeRPHt6JdMTWd7EnxPfCBe/Z8HapmxoUHOEOwI93YNne042BIPeiy',2,'active',0,NULL,'2026-09-17 21:33:41',5,'2026-09-17 21:37:42',0,1,0,'2026-09-14 22:27:46'),(9,'RetailMind Sales Trend Seed','rm_seed_sales_trend','rm-seed-sales-trend@example.test',NULL,'$2y$12$8epqsnlICawcEEQb5rgyt.m5e9/rLuvicEGJNJMH.XRAYWXFPB4..',4,'disabled',0,NULL,NULL,1,NULL,1,1,0,'2026-09-17 00:39:26'),(11,'RetailMind Sales Seed Receiver','rm_seed_sales_receiver','rm-seed-sales-receiver@example.test','b1e1ee08e88abf5c8f0eda5f2e4352ac6f64c3db035d22e3ac8b6751dfa882f7.png','$2y$12$x9KFvnz7f2g8.dy827WKI.fb0SRc2QxFW2jJUkbwlHuKz0IiV9PMq',2,'disabled',0,NULL,NULL,1,NULL,1,1,0,'2026-09-17 00:43:42');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
--- Dumping data for table `user_privileges`
---
-
-LOCK TABLES `user_privileges` WRITE;
-/*!40000 ALTER TABLE `user_privileges` DISABLE KEYS */;
-/*!40000 ALTER TABLE `user_privileges` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -1851,7 +1720,7 @@ UNLOCK TABLES;
 
 LOCK TABLES `platform_settings` WRITE;
 /*!40000 ALTER TABLE `platform_settings` DISABLE KEYS */;
-INSERT INTO `platform_settings` (`setting_key`, `setting_value`, `updated_by`, `updated_at`) VALUES ('emergency_access_duration_minutes','15',NULL,'2026-09-18 06:13:38'),('dormancy_disable_days','45',NULL,'2026-09-24 00:00:00'),('dormancy_warn_days','30',NULL,'2026-09-24 00:00:00');
+INSERT INTO `platform_settings` (`setting_key`, `setting_value`, `updated_by`, `updated_at`) VALUES ('dormancy_disable_days','45',NULL,'2026-09-24 00:00:00'),('dormancy_warn_days','30',NULL,'2026-09-24 00:00:00');
 /*!40000 ALTER TABLE `platform_settings` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1969,7 +1838,7 @@ UPDATE `users` SET `password_hash` = '$2y$12$pmB8fB3r3Br3bBIzEE2v9.RgnbJxZCjCCMq
 -- Required migration backfills and defaults for fresh installations.
 INSERT IGNORE INTO user_roles (user_id,role_id,is_primary) SELECT user_id,role_id,1 FROM users WHERE role_id IS NOT NULL;
 INSERT IGNORE INTO store_write_gate (gate_key) VALUES ('store_writes');
-INSERT IGNORE INTO platform_settings (setting_key,setting_value) VALUES ('emergency_access_duration_minutes','15'),('dormancy_disable_days','45'),('dormancy_warn_days','30');
+INSERT IGNORE INTO platform_settings (setting_key,setting_value) VALUES ('dormancy_disable_days','45'),('dormancy_warn_days','30');
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040001_auth_security','Authentication security tables and mandatory password-change support') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040002_operational_updates','Operational workflow tables and columns') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases') ON DUPLICATE KEY UPDATE description=VALUES(description);

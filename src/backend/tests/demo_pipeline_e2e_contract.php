@@ -100,8 +100,7 @@ try {
             sales_records_used INTEGER,
             eligible_products INTEGER,
             metrics_json TEXT,
-            error_message TEXT,
-            host_name TEXT
+            error_message TEXT
         );
         CREATE TABLE ml_model_evaluations (
             evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,

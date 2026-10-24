@@ -6,5 +6,5 @@ The Super Administrator steps into Store administration, inventory execution, or
 
 - Emergency Access UI, attention signals, and `EmergencyAccessService` capability elevation are removed from the application.
 - Signed-in Store, inventory, and Legacy Reversal mutations require the corresponding active workspace (`admin` or `inventory_manager`), while in-person register supervisor prompts accept active `admin` or `super_admin` credentials directly.
-- The `emergency_access_sessions` table remains in the database schema for historical and migration compatibility.
+- The development storage cleanup on 2026-10-25 removes the retired `emergency_access_sessions` table and duration setting. This replaces the earlier choice to retain them for historical and migration compatibility; pre-cleanup backups require the pre-cleanup schema to restore.
 
