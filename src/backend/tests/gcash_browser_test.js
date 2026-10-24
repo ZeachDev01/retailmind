@@ -503,7 +503,27 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-confirm-cash').check();
         assert.equal(await completeOutBtn.isDisabled(), false);
 
+        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Cash-Out print option starts unchecked');
+        await page.locator('#gcash-print-receipt').check();
+        const cashOutResponse = page.waitForResponse(response => response.url().includes('gcash_api.php') && response.request().method() === 'POST');
         await completeOutBtn.click();
+        const cashOutReceiptId = (await (await cashOutResponse).json()).receipt_id;
+        assert.ok(cashOutReceiptId, 'Cash-Out returns saved-receipt locator');
+        await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        await page.waitForFunction(() => window.receiptPrints === 3);
+        const walletFeePaper = await page.locator('#receiptModal .gcash-service-receipt').innerText();
+        assert.match(walletFeePaper, /Wallet received from customer\s+₱1,010.00/);
+        assert.match(walletFeePaper, /Cash paid out\s+₱1,000.00/);
+        assert.match(walletFeePaper, /Fee via GCash/);
+        await page.screenshot({path: path.join(os.tmpdir(), 'retailmind-291-cash-out-receipt.png'), fullPage: true});
+        assert.doesNotMatch(walletFeePaper, /Cash collected|Change due|Service cash|Wallet balance|notes/i);
+        await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Next Cash-Out starts unchecked');
+        await page.evaluate(id => window.viewReceipt(id), cashOutReceiptId);
+        assert.equal(await page.evaluate(() => window.receiptPrints), 3, 'Cash-Out reopening never prints');
+        assert.equal(await page.locator('#receiptModal .gcash-service-receipt').innerText(), walletFeePaper);
+        await page.keyboard.press('Escape');
         await tabHistory.click();
         const coGkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678920'});
         await coGkRow.waitFor();
@@ -526,7 +546,20 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
 
         await page.locator('#gcash-confirm-wallet').check();
         await page.locator('#gcash-confirm-cash').check();
+        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Cash fee completion starts unchecked');
         await completeOutBtn.click();
+        await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        const cashFeePaper = await page.locator('#receiptModal .gcash-service-receipt').innerText();
+        assert.match(cashFeePaper, /Wallet received from customer\s+₱1,000.00/);
+        assert.match(cashFeePaper, /Cash collected\s+₱10.00/);
+        assert.match(cashFeePaper, /Cash paid out\s+₱1,000.00/);
+        assert.match(cashFeePaper, /Fee in cash/);
+        assert.doesNotMatch(cashFeePaper, /990.00|Service cash|Wallet balance|notes/i);
+        assert.equal(await page.evaluate(() => window.receiptPrints), 3, 'Unchecked Cash-Out completion does not print');
+        await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
+        assert.equal(await page.evaluate(() => window.receiptPrints), 4, 'Cash-Out manual print remains available');
+        await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+        await page.keyboard.press('Escape');
         await tabHistory.click();
         const coCkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678921'});
         await coCkRow.waitFor();
