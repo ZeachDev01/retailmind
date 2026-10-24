@@ -32,24 +32,8 @@ $filters = [
     'page' => $page,
 ];
 
-try {
-    $overview = $service->adminOverview($filters);
-    $startDate = $overview['filters']['start_date'];
-    $endDate = $overview['filters']['end_date'];
-    $cashierId = $overview['filters']['cashier_id'];
-} catch (DomainException $e) {
-    $filterError = $e->getMessage();
-} catch (Throwable) {
-    $filterError = 'Unable to load GCash overview. Try again.';
-}
-
-// Export uses the same authorized query and walks every matching page.
+// Reporting owns authorized selection and complete traversal.
 if (($_GET['export'] ?? '') === 'csv') {
-    if ($filterError || $overview === null) {
-        http_response_code(400);
-        exit('Unable to export. Check the filters and try again.');
-    }
-    $exportFilters = array_merge($filters, ['page' => 1, 'limit' => 100]);
     // Stage the complete report before sending headers so failures cannot produce partial downloads.
     $csv = null;
     try {
@@ -57,19 +41,19 @@ if (($_GET['export'] ?? '') === 'csv') {
         if ($csv === false) throw new RuntimeException('Unable to stage export.');
         if (fwrite($csv, "\xEF\xBB\xBF") !== 3) throw new RuntimeException('Unable to stage export.');
         if (fputcsv($csv, ['Date / Time', 'Reference No.', 'Type', 'Principal', 'Fee', 'Fee Location', 'Status', 'Cashier', 'Shift', 'Service Cash Movement', 'Wallet Movement', 'Record Basis', 'Legacy Reference Amount'], ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
-        do {
-            $batch = $service->adminOverview($exportFilters);
-            foreach ($batch['transactions'] as $row) {
-                $cells = [$row['time_formatted'], $row['reference_number'], $row['transaction_type'], $row['is_legacy'] ? 'Not recorded' : $row['principal_amount'], $row['is_legacy'] ? 'Not recorded' : $row['gross_fee'], $row['fee_location'] ?? 'Not recorded', $row['verification_status'], $row['cashier_name'] ?: $row['cashier_username'], $row['shift_id'] ?? 'Not recorded', $row['is_legacy'] ? 'Not recorded' : $row['service_cash_delta'], $row['is_legacy'] ? 'Not recorded' : $row['wallet_delta'], $row['is_legacy'] ? 'Legacy reference only' : 'Service exchange', $row['is_legacy'] ? $row['amount'] : null];
-                foreach ($cells as &$cell) {
-                    if (is_string($cell) && preg_match('/^[\x00-\x20]*[=+@\-\t\r\n]/', $cell)) $cell = "'" . $cell;
-                }
-                unset($cell);
-                if (fputcsv($csv, $cells, ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
+        foreach ($service->adminTransactions($filters) as $row) {
+            $cells = [$row['time_formatted'], $row['reference_number'], $row['transaction_type'], $row['is_legacy'] ? 'Not recorded' : $row['principal_amount'], $row['is_legacy'] ? 'Not recorded' : $row['gross_fee'], $row['fee_location'] ?? 'Not recorded', $row['verification_status'], $row['cashier_name'] ?: $row['cashier_username'], $row['shift_id'] ?? 'Not recorded', $row['is_legacy'] ? 'Not recorded' : $row['service_cash_delta'], $row['is_legacy'] ? 'Not recorded' : $row['wallet_delta'], $row['is_legacy'] ? 'Legacy reference only' : 'Service exchange', $row['is_legacy'] ? $row['amount'] : null];
+            foreach ($cells as &$cell) {
+                if (is_string($cell) && preg_match('/^[\x00-\x20]*[=+@\-\t\r\n]/', $cell)) $cell = "'" . $cell;
             }
-            $exportFilters['page']++;
-        } while ($batch['has_next']);
+            unset($cell);
+            if (fputcsv($csv, $cells, ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
+        }
         if (!rewind($csv)) throw new RuntimeException('Unable to stage export.');
+    } catch (DomainException) {
+        if (is_resource($csv)) fclose($csv);
+        http_response_code(400);
+        exit('Unable to export. Check the filters and try again.');
     } catch (Throwable) {
         if (is_resource($csv)) fclose($csv);
         http_response_code(503);
@@ -81,6 +65,17 @@ if (($_GET['export'] ?? '') === 'csv') {
     fpassthru($csv);
     fclose($csv);
     exit;
+}
+
+try {
+    $overview = $service->adminOverview($filters);
+    $startDate = $overview['filters']['start_date'];
+    $endDate = $overview['filters']['end_date'];
+    $cashierId = $overview['filters']['cashier_id'];
+} catch (DomainException $e) {
+    $filterError = $e->getMessage();
+} catch (Throwable) {
+    $filterError = 'Unable to load GCash overview. Try again.';
 }
 
 function gcash_admin_e(mixed $val): string {

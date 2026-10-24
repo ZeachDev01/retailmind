@@ -18,6 +18,12 @@ const run = (file, args) => {
     return result.stdout;
 };
 const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php', [action, database]);
+const csvRows = bytes => {
+    assert.deepEqual([...bytes.subarray(0, 3)], [239, 187, 191], 'CSV retains UTF-8 BOM');
+    const parsed = spawnSync(php, ['-r', '$rows = []; while (($row = fgetcsv(STDIN, null, ",", "\\\"", "")) !== false) $rows[] = $row; echo json_encode($rows, JSON_THROW_ON_ERROR);'], {input: bytes.subarray(3), encoding: 'utf8'});
+    assert.equal(parsed.status, 0, parsed.stderr);
+    return JSON.parse(parsed.stdout);
+};
 (async () => {
     let server, browser;
     try {
@@ -47,7 +53,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await target.goto(origin + '/?login=1');
             await target.locator('#landing-login-username').fill('theme_' + role);
             await target.locator('#landing-login-password').fill(data.password);
-            await Promise.all([target.waitForURL(url => !url.search.includes('login=1')), target.getByRole('button', {name: 'Log in', exact: true}).click()]);
+            await Promise.all([target.waitForURL(url => !url.search.includes('login=1')), target.getByRole('button', {name: 'Log in', exact: true}).click()]).catch(async error => { throw new Error(error.message + '\n' + await target.locator('body').innerText() + '\n' + logs.slice(-3000)); });
         };
         await login(page, 'admin');
         await page.goto(origin + '/components/administrator/gcash_overview.php');
@@ -232,10 +238,38 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.getByRole('link', {name: 'Export Report'}).click();
         const allDownload = await allDownloadPromise;
         const allCsv = fs.readFileSync(await allDownload.path(), 'utf8');
-        assert.equal(allCsv.trim().split('\n').length, 106, 'CSV exports every matching row across the 100-row export boundary');
+        assert.deepEqual(csvRows(Buffer.from(allCsv)).slice(1).map(row => row[1]), Array.from({length: 105}, (_, index) => '888888888' + String(104 - index).padStart(4, '0')), 'CSV exports the complete ordered selection without duplicates');
         assert.ok(allCsv.includes('Legacy reference only'), 'CSV identifies reference-only history');
         assert.ok(allCsv.includes('Not recorded'), 'CSV does not invent legacy fee or movement evidence');
         assert.ok(allCsv.includes("'=GCASH_CSV_TEST"), 'CSV neutralizes formula-leading Cashier names');
+        const exportRows = async (selection, requestContext = context) => {
+            const response = await requestContext.request.get(origin + '/components/administrator/gcash_overview.php?' + new URLSearchParams({...selection, export: 'csv', page: 99}));
+            assert.equal(response.status(), 200);
+            assert.equal(response.headers()['content-type'], 'text/csv; charset=utf-8');
+            assert.equal(response.headers()['content-disposition'], 'attachment; filename="gcash-transactions.csv"');
+            assert.equal(response.headers()['cache-control'], 'no-store');
+            const [heading, ...rows] = csvRows(await response.body());
+            assert.deepEqual(heading, ['Date / Time', 'Reference No.', 'Type', 'Principal', 'Fee', 'Fee Location', 'Status', 'Cashier', 'Shift', 'Service Cash Movement', 'Wallet Movement', 'Record Basis', 'Legacy Reference Amount']);
+            assert.ok(rows.every(row => row.length === heading.length));
+            return rows;
+        };
+        for (const [searchTerm, count] of [['absent-traversal-reference', 0], ['8888888880000', 1], ['88888888800', 100], ['888888888', 105]]) {
+            const rows = await exportRows({search: searchTerm});
+            assert.deepEqual(rows.map(row => row[1]), Array.from({length: count}, (_, index) => '888888888' + String(count - 1 - index).padStart(4, '0')), 'Empty, one-record and larger exports preserve every expected ordered reference');
+            if (count === 1) assert.deepEqual(rows[0].slice(1), ['8888888880000', 'Payment', 'Not recorded', 'Not recorded', 'Not recorded', 'Pending', "'=GCASH_CSV_TEST", 'Not recorded', 'Not recorded', 'Not recorded', 'Legacy reference only', '1.00']);
+        }
+        const shiftSearch = '#' + beforeReprint.transactions.find(row => row.shift_id !== null).shift_id;
+        for (const selection of [{}, {period: 'month_to_date'}, {start_date: today, end_date: today}, {start_date: '2020-01-01', end_date: today}, {cashier_id: 4}, {type: 'Cash-Out'}, {search: '00000000000000000000000000123456'}, {search: '=GCASH_CSV_TEST'}, {search: '%'}, {search: '_'}, {search: '!'}, {search: shiftSearch}, {cashier_id: 4, type: 'Cash-In', start_date: today, end_date: today}]) {
+            const listed = [];
+            let listPage = 1, report;
+            do {
+                report = await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php?' + new URLSearchParams({...selection, page: listPage++}))).json();
+                listed.push(...report.transactions);
+            } while (report.has_next);
+            const rows = await exportRows(selection);
+            assert.deepEqual(rows.map(row => row[1]), listed.map(row => row.reference_number ?? ''), 'Export and paginated list agree for ' + JSON.stringify(selection));
+            assert.deepEqual(rows.map(row => row[6]), listed.map(row => row.verification_status), 'Export preserves historical statuses');
+        }
         const rejectedExport = await context.request.get(origin + '/components/administrator/gcash_overview.php?export=csv&cashier_id=invalid');
         assert.equal(rejectedExport.status(), 400);
         assert.equal(rejectedExport.headers()['content-disposition'], undefined, 'Rejected exports cannot become a partial attachment');
@@ -248,6 +282,31 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const failureRouter = path.join(output, 'export-failure-router.php');
         const realRouter = path.resolve('src/backend/tests/support/theme_router.php').replaceAll('\\', '/');
         fs.writeFileSync(failureRouter, `<?php
+            require '${path.resolve('src/backend/bootstrap/app.php').replaceAll('\\', '/')}';
+            $_ENV['DB_NAME'] = $_SERVER['DB_NAME'] = getenv('RM_THEME_TEST_DATABASE');
+            require '${path.resolve('src/backend/includes/auth.php').replaceAll('\\', '/')}';
+            class UnavailableOverviewStatement extends PDOStatement {
+                private static bool $returnedHistory = false;
+                public function fetch(int $mode = PDO::FETCH_DEFAULT, int $orientation = PDO::FETCH_ORI_NEXT, int $offset = 0): mixed {
+                    $row = parent::fetch($mode, $orientation, $offset);
+                    if (is_array($row) && array_key_exists('opening_service_cash', $row)) throw new RuntimeException('Overview funds unavailable');
+                    return $row;
+                }
+                public function fetchAll(int $mode = PDO::FETCH_DEFAULT, mixed ...$args): array {
+                    $rows = parent::fetchAll($mode, ...$args);
+                    if (($_GET['failure'] ?? '') === 'retrieval' && isset($rows[0]['reference_number'], $rows[0]['transaction_id'])) {
+                        if (self::$returnedHistory) throw new RuntimeException('History retrieval interrupted');
+                        self::$returnedHistory = true;
+                        file_put_contents('${path.join(output, 'retrieved.json').replaceAll('\\', '/')}', json_encode(array_column($rows, 'reference_number')));
+                    }
+                    return $rows;
+                }
+            }
+            if (in_array($_GET['failure'] ?? '', ['overview', 'retrieval'], true)) {
+                $pdo->setAttribute(PDO::ATTR_STATEMENT_CLASS, [UnavailableOverviewStatement::class]);
+                require '${realRouter}';
+                exit;
+            }
             class FailedExportStream {
                 public $context;
                 private int $writes = 0;
@@ -267,6 +326,17 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
                 if (attempt === 99) throw new Error(failureLogs);
             }
             const cookie = (await context.cookies()).map(item => `${item.name}=${item.value}`).join('; ');
+            const independentExport = await fetch(failureOrigin + '/components/administrator/gcash_overview.php?export=csv&failure=overview&search=888888888', {headers: {Cookie: cookie}});
+            assert.equal(independentExport.status, 200, 'Matching rows export when overview-only retrieval is unavailable');
+            assert.equal(Buffer.from(await independentExport.arrayBuffer()).toString('utf8'), allCsv);
+            const unavailableOverview = await fetch(failureOrigin + '/components/administrator/gcash_overview_api.php?failure=overview', {headers: {Cookie: cookie}});
+            assert.equal(unavailableOverview.status, 500, 'Failure fixture actually prevents full Overview retrieval');
+            const interruptedExport = await fetch(failureOrigin + '/components/administrator/gcash_overview.php?export=csv&failure=retrieval&search=888888888', {headers: {Cookie: cookie}});
+            assert.equal(interruptedExport.status, 503);
+            assert.equal(interruptedExport.headers.get('content-disposition'), null, 'Retrieval failure after initial progress cannot deliver a partial attachment');
+            assert.equal(await interruptedExport.text(), 'Unable to export the complete report. Try again.');
+            const retrieved = JSON.parse(fs.readFileSync(path.join(output, 'retrieved.json'), 'utf8'));
+            assert.ok(retrieved.length > 0 && retrieved.length < 105, 'Retrieval failed after an initial portion of the matching history');
             const failedExport = await fetch(failureOrigin + '/components/administrator/gcash_overview.php?export=csv', {headers: {Cookie: cookie}}).catch(error => { throw new Error(String(error.cause || error) + failureLogs.slice(-3000)); });
             assert.equal(failedExport.status, 503, 'Staging failure returns a controlled failure');
             assert.equal(failedExport.headers.get('content-disposition'), null, 'Staging failure cannot produce a CSV download');
@@ -392,6 +462,25 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await page.getByRole('tab', {name: 'Balances & Summary'}).click();
         }
         assert.deepEqual(errors, []);
+        const privilegedContext = await browser.newContext();
+        await privilegedContext.route('https://**/*', route => route.fulfill({status: 200, body: ''}));
+        const privilegedPage = await privilegedContext.newPage();
+        await login(privilegedPage, 'super_admin');
+        assert.equal((await exportRows({search: '8888888880000'}, privilegedContext)).length, 1, 'Active Super Administrator can export');
+        await privilegedPage.goto(origin + '/components/auth/workspace.php');
+        await Promise.all([privilegedPage.waitForURL('**/cashier/pos.php'), privilegedPage.locator('form', {has: privilegedPage.locator('input[value="cashier"]')}).getByRole('button', {name: 'Open', exact: true}).click()]);
+        const wrongWorkspace = await privilegedContext.request.get(origin + '/components/administrator/gcash_overview.php?export=csv', {maxRedirects: 0});
+        assert.equal(wrongWorkspace.status(), 403, 'Assigned Administrator privileges cannot bypass the active Cashier Workspace');
+        assert.equal(wrongWorkspace.headers()['content-disposition'], undefined);
+        await privilegedContext.close();
+        const cashierContext = await browser.newContext();
+        await cashierContext.route('https://**/*', route => route.fulfill({status: 200, body: ''}));
+        const cashierPage = await cashierContext.newPage();
+        await login(cashierPage, 'cashier');
+        const unauthorizedExport = await cashierContext.request.get(origin + '/components/administrator/gcash_overview.php?export=csv', {maxRedirects: 0});
+        assert.equal(unauthorizedExport.status(), 403, 'Cashier cannot export Administrator history');
+        assert.equal(unauthorizedExport.headers()['content-disposition'], undefined);
+        await cashierContext.close();
         console.log('GCash overview browser: passed');
     } finally {
         if (browser) await browser.close();
