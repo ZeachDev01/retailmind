@@ -1386,6 +1386,12 @@ foreach ([['Cash-In', 'cash'], ['Cash-Out', 'wallet'], ['Cash-Out', 'cash']] as 
             $check($auditFailed && $receipts->fetch($pendingId, 1, 'admin') === null, 'Protected audit failure rolls back later receipt');
             $check($service->calculateSessionExpected((int)$service->getCurrentSession()['session_id']) === $beforeResolution, 'Failed later resolution leaves financial effects unchanged');
         } finally { $pdo->exec('DROP TRIGGER gcash_resolution_audit_fail'); }
+        $pdo->exec("CREATE TRIGGER gcash_resolution_snapshot_fail BEFORE UPDATE ON gcash_transactions FOR EACH ROW BEGIN IF NEW.receipt_details_json IS NOT NULL AND OLD.receipt_details_json IS NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Snapshot injection fail'; END IF; END");
+        try {
+            $snapshotFailed = false;
+            try { $service->resolveNeedsChecking(1, $pendingId, 'complete', ['reference' => '0000000000900']); } catch (PDOException $e) { $snapshotFailed = true; }
+            $check($snapshotFailed && $receipts->fetch($pendingId, 1, 'admin') === null && $service->calculateSessionExpected((int)$service->getCurrentSession()['session_id']) === $beforeResolution, 'Snapshot failure rolls back both later completion and financial effects');
+        } finally { $pdo->exec('DROP TRIGGER gcash_resolution_snapshot_fail'); }
     }
     $resolved = $service->resolveNeedsChecking(1, $pendingId, 'complete', ['reference' => '000000000090' . $index]);
     $saved = $receipts->fetch($pendingId, 4, 'cashier');
