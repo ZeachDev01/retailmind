@@ -67,6 +67,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.evaluate(() => { window.receiptPrints = 0; window.print = () => { window.receiptPrints++; }; });
         await receiptAction.click();
         await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        assert.equal(await page.locator('#receiptModal').evaluate(dialog => getComputedStyle(dialog).padding), '0px', 'Receipt retains shared POS modal shell without Overview dialog padding');
         assert.equal(await page.locator('#txDetailModal').evaluate(dialog => dialog.open), false, 'Receipt action does not also open transaction breakdown');
         assert.equal(await page.locator('#saleReceiptTitle').evaluate(title => title === document.activeElement), true);
         assert.match(await page.locator('#receiptModal').innerText(), /00000000000000000000000000123456/);

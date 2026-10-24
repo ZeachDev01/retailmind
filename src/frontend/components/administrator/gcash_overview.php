@@ -628,8 +628,8 @@ function gcash_admin_money(mixed $val): string {
                 </div>
             </form>
         </dialog>
-        <?php require __DIR__ . '/../../../backend/app/Views/gcash_receipt_dialog.php'; ?>
     </main>
+    <?php require __DIR__ . '/../../../backend/app/Views/gcash_receipt_dialog.php'; ?>
 </div>
 <script src="<?= gcash_admin_e(app_url('assets/js/sale-receipt.js')) ?>"></script>
 <script src="<?= gcash_admin_e(app_url('assets/js/sale-receipt-dialog.js')) ?>"></script>

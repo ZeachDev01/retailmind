@@ -531,13 +531,14 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
         await page.keyboard.press('Escape');
         assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Next Cash-Out starts unchecked');
-        await page.evaluate(id => window.viewReceipt(id), cashOutReceiptId);
-        assert.equal(await page.evaluate(() => window.receiptPrints), 3, 'Cash-Out reopening never prints');
-        assert.equal(await page.locator('#receiptModal .gcash-service-receipt').innerText(), walletFeePaper);
-        await page.keyboard.press('Escape');
         await tabHistory.click();
         const coGkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678920'});
         await coGkRow.waitFor();
+        await coGkRow.getByRole('button', {name: 'Receipt', exact: true}).click();
+        await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        assert.equal(await page.evaluate(() => window.receiptPrints), 3, 'Cash-Out history reopening never prints');
+        assert.equal(await page.locator('#receiptModal .gcash-service-receipt').innerText(), walletFeePaper);
+        await page.keyboard.press('Escape');
         assert.equal((await coGkRow.textContent()).includes('Fee: ₱10.00 (wallet)'), true);
         assert.equal((await coGkRow.textContent()).includes('Cash: -₱1,000.00 · Wallet: +₱1,010.00'), true);
 
@@ -574,6 +575,11 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await tabHistory.click();
         const coCkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678921'});
         await coCkRow.waitFor();
+        await coCkRow.getByRole('button', {name: 'Receipt', exact: true}).click();
+        await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        assert.equal(await page.locator('#receiptModal .gcash-service-receipt').innerText(), cashFeePaper);
+        assert.equal(await page.evaluate(() => window.receiptPrints), 4, 'Cash-fee history reopening never prints');
+        await page.keyboard.press('Escape');
         assert.equal((await coCkRow.textContent()).includes('Fee: ₱10.00 (cash)'), true);
         assert.equal((await coCkRow.textContent()).includes('Cash: -₱990.00 · Wallet: +₱1,000.00'), true);
 
