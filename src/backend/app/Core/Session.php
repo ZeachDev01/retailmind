@@ -144,11 +144,15 @@ final class Session
         }
     }
 
-    private static function shouldUseSecureCookie(): bool
+    public static function shouldUseSecureCookie(): bool
     {
         $configured = Environment::get('SESSION_SECURE_COOKIE', null);
         if ($configured !== null) {
             return filter_var($configured, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        if (RemoteIngress::isRemote()) {
+            return true;
         }
 
         return !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
