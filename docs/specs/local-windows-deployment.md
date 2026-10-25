@@ -1,5 +1,7 @@
 # Local Windows deployment with private remote access
 
+The remote-access requirements below are superseded by [Owner remote monitoring through Cloudflare](owner-remote-monitoring-cloudflare.md): owner-only, browser-based, and read-only. The local hosting, checkout, backup, and recovery requirements still apply.
+
 ## Problem Statement
 
 The Store owner wants RetailMind to run on an existing dedicated Windows PC with one wired barcode scanner and one thermal printer. Cashiers must be able to sell when the Store's internet connection is unavailable, and the application must start whenever Windows starts without someone launching Laragon or dismissing its popup.

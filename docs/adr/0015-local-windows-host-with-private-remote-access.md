@@ -4,6 +4,8 @@ status: proposed
 
 # Local Windows hosting with private remote access
 
+Remote-access scope was later narrowed to owner-only read-only monitoring through Cloudflare; see [ADR-0019](0019-owner-only-remote-monitoring-through-cloudflare.md). The local hosting, offline checkout, and recovery decisions below still apply.
+
 The owner confirmed a dedicated Windows Store PC as RetailMind's host, continued local selling during internet outages, and remote access limited to the owner and approved staff. Keep the application and primary database on that PC so local operations can continue while the Store's internet connection is unavailable; remote access depends on the host's power and internet connectivity.
 
 The user confirmed installing a private-access app on remote devices and limiting cashier sales and refunds to the Store. Remote use initially covers reports, inventory, and administration. One daily backup replaces the initially discussed one-hour data-loss target: the user accepts potential loss of roughly a day of sales and inventory changes after drive failure. Retain 30 daily recovery copies, subject to storage capacity. Automatic backups must be copied off the host; scheduling a backup alone does not establish recoverability.

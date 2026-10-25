@@ -155,3 +155,7 @@ _Avoid_: Feature tour, production workflow
 **Workspace**:
 The active role context through which a user accesses RetailMind. A multi-role user switches Workspace to perform each role's permitted tasks; assigned privileges are not combined.
 _Avoid_: Combined permissions, role bundle
+
+**Owner Remote Monitoring**:
+The Store owner's read-only access to Store activity while away from the Store. It does not authorize remote operational or administrative changes.
+_Avoid_: Remote administration, staff remote access
