@@ -53,6 +53,163 @@ final class RemoteIngress
         return $provided !== '' && hash_equals($requiredEmail, $provided);
     }
 
+    public static function isAccessTokenRequired(): bool
+    {
+        if (self::isTrue(Environment::get('RETAILMIND_REQUIRE_ACCESS_TOKEN'))
+            || self::isTrue($_SERVER['RETAILMIND_REQUIRE_ACCESS_TOKEN'] ?? null)) {
+            return true;
+        }
+
+        $expectedAud = trim((string)Environment::get('RETAILMIND_CF_ACCESS_AUD', ''));
+        if ($expectedAud === '') {
+            $expectedAud = trim((string)($_SERVER['RETAILMIND_CF_ACCESS_AUD'] ?? ''));
+        }
+
+        return $expectedAud !== '';
+    }
+
+    public static function base64UrlDecode(string $input): string|false
+    {
+        $remainder = strlen($input) % 4;
+        if ($remainder) {
+            $padlen = 4 - $remainder;
+            $input .= str_repeat('=', $padlen);
+        }
+        return base64_decode(strtr($input, '-_', '+/'), true);
+    }
+
+    public static function base64UrlEncode(string $input): string
+    {
+        return rtrim(strtr(base64_encode($input), '+/', '-_'), '=');
+    }
+
+    public static function parseJwt(?string $jwt): ?array
+    {
+        if ($jwt === null || trim($jwt) === '') {
+            return null;
+        }
+
+        $parts = explode('.', trim($jwt));
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        $headerJson = self::base64UrlDecode($parts[0]);
+        $payloadJson = self::base64UrlDecode($parts[1]);
+        if ($headerJson === false || $payloadJson === false) {
+            return null;
+        }
+
+        $header = json_decode($headerJson, true);
+        $payload = json_decode($payloadJson, true);
+        if (!is_array($header) || !is_array($payload)) {
+            return null;
+        }
+
+        return [
+            'header' => $header,
+            'payload' => $payload,
+            'signature' => $parts[2],
+            'raw_header' => $parts[0],
+            'raw_payload' => $parts[1],
+        ];
+    }
+
+    public static function isAccessTokenValid(?string $rawJwt = null): bool
+    {
+        $required = self::isAccessTokenRequired();
+        $jwt = $rawJwt ?? (string)($_SERVER['HTTP_CF_ACCESS_JWT_ASSERTION'] ?? $_COOKIE['CF_Authorization'] ?? '');
+        $jwt = trim($jwt);
+
+        if ($jwt === '') {
+            return !$required;
+        }
+
+        $parsed = self::parseJwt($jwt);
+        if ($parsed === null) {
+            return false;
+        }
+
+        $payload = $parsed['payload'];
+        $now = time();
+
+        if (isset($payload['exp']) && is_numeric($payload['exp'])) {
+            if ((int)$payload['exp'] < ($now - 30)) {
+                return false;
+            }
+        } elseif ($required) {
+            return false;
+        }
+
+        if (isset($payload['nbf']) && is_numeric($payload['nbf'])) {
+            if ((int)$payload['nbf'] > ($now + 60)) {
+                return false;
+            }
+        }
+
+        $expectedAud = trim((string)Environment::get('RETAILMIND_CF_ACCESS_AUD', ''));
+        if ($expectedAud === '') {
+            $expectedAud = trim((string)($_SERVER['RETAILMIND_CF_ACCESS_AUD'] ?? ''));
+        }
+        if ($expectedAud !== '') {
+            $audClaim = $payload['aud'] ?? null;
+            if (is_array($audClaim)) {
+                if (!in_array($expectedAud, $audClaim, true)) {
+                    return false;
+                }
+            } elseif (is_string($audClaim)) {
+                if (!hash_equals($expectedAud, $audClaim)) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        $expectedTeam = trim((string)Environment::get('RETAILMIND_CF_ACCESS_TEAM', ''));
+        if ($expectedTeam === '') {
+            $expectedTeam = trim((string)($_SERVER['RETAILMIND_CF_ACCESS_TEAM'] ?? ''));
+        }
+        if ($expectedTeam !== '') {
+            $iss = (string)($payload['iss'] ?? '');
+            $expectedIss = 'https://' . strtolower($expectedTeam) . '.cloudflareaccess.com';
+            if (strtolower(rtrim($iss, '/')) !== strtolower($expectedIss)) {
+                return false;
+            }
+        }
+
+        $requiredEmail = strtolower(trim((string)Environment::get('RETAILMIND_REMOTE_OWNER_EMAIL', '')));
+        if ($requiredEmail !== '') {
+            $tokenEmail = strtolower(trim((string)($payload['email'] ?? '')));
+            if ($tokenEmail === '' || !hash_equals($requiredEmail, $tokenEmail)) {
+                return false;
+            }
+
+            $headerEmail = strtolower(trim((string)($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'] ?? '')));
+            if ($headerEmail !== '' && !hash_equals($headerEmail, $tokenEmail)) {
+                return false;
+            }
+        }
+
+        $publicKey = Environment::get('RETAILMIND_CF_ACCESS_PUBKEY');
+        if ($publicKey === null || $publicKey === '') {
+            $publicKey = $_SERVER['RETAILMIND_CF_ACCESS_PUBKEY'] ?? null;
+        }
+        if ($publicKey !== null && trim((string)$publicKey) !== '') {
+            $sig = self::base64UrlDecode($parsed['signature']);
+            if ($sig === false) {
+                return false;
+            }
+            $data = $parsed['raw_header'] . '.' . $parsed['raw_payload'];
+            $verify = @openssl_verify($data, $sig, (string)$publicKey, OPENSSL_ALGO_SHA256);
+            if ($verify !== 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public static function isExportRequest(): bool
     {
         $action = strtolower(trim((string)($_POST['action'] ?? $_GET['action'] ?? '')));
@@ -163,6 +320,10 @@ final class RemoteIngress
 
         if (!self::isOwnerEmailAllowed()) {
             self::deny('Access denied: unapproved owner identity on remote ingress.');
+        }
+
+        if (!self::isAccessTokenValid()) {
+            self::deny('Access denied: missing or invalid Cloudflare Access token on remote ingress.');
         }
 
         if (!self::isApprovedRoute()) {

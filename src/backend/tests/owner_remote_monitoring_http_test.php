@@ -33,6 +33,12 @@ $_ENV["BACKUP_STORAGE_PATH"] = ' . $backupDirExport . ';
 $_ENV["RETAILMIND_REMOTE_HOST"] = "monitor.retailmind.store";
 $_ENV["RETAILMIND_TUNNEL_SECRET"] = "expected-tunnel-token-999";
 $_ENV["RETAILMIND_REMOTE_OWNER_EMAIL"] = "owner@retailmind.store";
+if (!empty($_SERVER["HTTP_X_REQUIRE_ACCESS_TOKEN"])) {
+    $_ENV["RETAILMIND_REQUIRE_ACCESS_TOKEN"] = "1";
+}
+if (!empty($_SERVER["HTTP_X_CF_ACCESS_AUD"])) {
+    $_ENV["RETAILMIND_CF_ACCESS_AUD"] = (string)$_SERVER["HTTP_X_CF_ACCESS_AUD"];
+}
 
 require ' . $bootstrapPath . ';
 
@@ -179,7 +185,7 @@ require $file;
         $assert($code === 403, "Direct request to {$deniedEndpoint} must be denied with 403, got {$code}");
     }
 
-    // 2. Owner Access email check
+    // 2. Owner Access email and JWT assertion checks
     [$code, $body] = $request('/components/administrator/dashboard.php', [
         'Host' => 'monitor.retailmind.store',
         'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
@@ -188,6 +194,63 @@ require $file;
     ]);
     $assert($code === 403, 'Mismatched Access email must be denied with 403, got ' . $code);
     $assert(str_contains($body, 'unapproved owner identity'), 'Denial message explains unapproved email');
+
+    // Reject missing token when token is required
+    [$code, $body] = $request('/components/administrator/dashboard.php', [
+        'Host' => 'monitor.retailmind.store',
+        'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
+        'Cf-Access-Authenticated-User-Email' => 'owner@retailmind.store',
+        'X-Fixture-User' => 'owner',
+        'X-Require-Access-Token' => '1',
+    ]);
+    $assert($code === 403, 'Missing Access token when required must be denied with 403, got ' . $code);
+    $assert(str_contains($body, 'missing or invalid Cloudflare Access token'), 'Denial message explains missing token');
+
+    // Reject malformed or expired JWT assertion
+    $b64u = static fn(string $v): string => rtrim(strtr(base64_encode($v), '+/', '-_'), '=');
+    $expiredJwt = $b64u(json_encode(['alg' => 'RS256', 'typ' => 'JWT'])) . '.'
+        . $b64u(json_encode(['email' => 'owner@retailmind.store', 'aud' => ['aud-test-123'], 'exp' => time() - 3600]))
+        . '.sig';
+
+    [$code, $body] = $request('/components/administrator/dashboard.php', [
+        'Host' => 'monitor.retailmind.store',
+        'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
+        'Cf-Access-Authenticated-User-Email' => 'owner@retailmind.store',
+        'Cf-Access-Jwt-Assertion' => $expiredJwt,
+        'X-Fixture-User' => 'owner',
+    ]);
+    $assert($code === 403, 'Expired JWT assertion must be denied with 403, got ' . $code);
+    $assert(str_contains($body, 'missing or invalid Cloudflare Access token'), 'Denial message explains expired token');
+
+    // Reject mismatched token email
+    $mismatchedJwt = $b64u(json_encode(['alg' => 'RS256', 'typ' => 'JWT'])) . '.'
+        . $b64u(json_encode(['email' => 'intruder@retailmind.store', 'aud' => ['aud-test-123'], 'exp' => time() + 3600]))
+        . '.sig';
+
+    [$code, $body] = $request('/components/administrator/dashboard.php', [
+        'Host' => 'monitor.retailmind.store',
+        'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
+        'Cf-Access-Authenticated-User-Email' => 'owner@retailmind.store',
+        'Cf-Access-Jwt-Assertion' => $mismatchedJwt,
+        'X-Fixture-User' => 'owner',
+    ]);
+    $assert($code === 403, 'Mismatched token email must be denied with 403, got ' . $code);
+
+    // Accept valid JWT assertion
+    $validJwt = $b64u(json_encode(['alg' => 'RS256', 'typ' => 'JWT'])) . '.'
+        . $b64u(json_encode(['email' => 'owner@retailmind.store', 'aud' => ['aud-test-123'], 'exp' => time() + 3600]))
+        . '.sig';
+
+    [$code, $body] = $request('/components/administrator/dashboard.php', [
+        'Host' => 'monitor.retailmind.store',
+        'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
+        'Cf-Access-Authenticated-User-Email' => 'owner@retailmind.store',
+        'Cf-Access-Jwt-Assertion' => $validJwt,
+        'X-Fixture-User' => 'owner',
+        'X-Require-Access-Token' => '1',
+        'X-Cf-Access-Aud' => 'aud-test-123',
+    ]);
+    $assert($code === 200, 'Valid Access token and matching owner email pass boundary with 200, got ' . $code);
 
     // 3. Approved monitoring screens load for authenticated owner
     [$code, $body, $remoteHeadersList] = $request('/components/administrator/dashboard.php', $remoteHeaders);
