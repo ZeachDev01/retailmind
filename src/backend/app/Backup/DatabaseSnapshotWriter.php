@@ -16,7 +16,7 @@ final class DatabaseSnapshotWriter
         $this->heartbeat = $heartbeat ?? static function (): void {};
     }
 
-    public function write(string $destinationPath): array
+    public function write(string $destinationPath, ?int $maxBytes = null, array $omitRows = []): array
     {
         $this->assertSupportedObjects();
         $schema = SqlBackupFormat::schema($this->pdo);
@@ -35,7 +35,10 @@ final class DatabaseSnapshotWriter
         $hash = hash_init('sha256');
         $rows = 0;
         try {
-            $write = static function (string $text) use ($handle, $hash): void {
+            $written = 0;
+            $write = static function (string $text) use ($handle, $hash, $maxBytes, &$written): void {
+                $written += strlen($text);
+                if ($maxBytes !== null && $written + 80 > $maxBytes) throw new RuntimeException('The database snapshot exceeds the package content limit.');
                 if (fwrite($handle, $text) !== strlen($text)) {
                     throw new RuntimeException('The backup file could not be written completely.');
                 }
@@ -48,6 +51,7 @@ final class DatabaseSnapshotWriter
                 $quoted = self::identifier($table);
                 $ddl = $this->pdo->query('SHOW CREATE TABLE ' . $quoted)->fetch(PDO::FETCH_NUM);
                 $write("DROP TABLE IF EXISTS {$quoted};\n{$ddl[1]};\n");
+                if (in_array($table, $omitRows, true)) continue;
                 $columns = $definition['columns'];
                 $columnSql = implode(', ', array_map([self::class, 'identifier'], $columns));
                 $statement = $this->pdo->query("SELECT {$columnSql} FROM {$quoted}");

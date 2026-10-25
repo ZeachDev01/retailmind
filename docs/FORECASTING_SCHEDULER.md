@@ -63,7 +63,7 @@ On a Linux server, the scheduler relies on cron and the Python virtual environme
 ## Backup & Restore of Metadata and Artifacts
 
 - **Artifacts:** The trained models are stored in `src/backend/storage/ml_models/`. These `*.joblib` files are portable and backward-compatible with the same scikit-learn version.
-- **Metadata:** Training metadata, job statuses, and evaluation metrics are safely stored in the `ml_jobs` and `model_training_runs` database tables. These are included in standard RetailMind SQL backups.
+- **Metadata:** Training metadata, job statuses, and evaluation metrics are safely stored in the `ml_jobs` and `model_training_runs` database tables. These are included in encrypted RetailMind Store packages.
 - **Restore:** Simply copy the `ml_models` folder to the new host and restore the SQL database. The worker will cleanly resume from the last known state.
 
 ## Security & HTTPS

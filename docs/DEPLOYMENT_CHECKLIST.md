@@ -10,7 +10,7 @@
 - Test SMTP from System Settings.
 - Schedule `src/backend/scripts/run_maintenance.bat` or `src/backend/scripts/run_maintenance.sh` daily.
 - For hosted releases, configure the independent [daily notification job](DAILY_NOTIFICATIONS.md); scheduling `run_scheduler.php` alone does not evaluate expiry reminders. Verify the installed job and its successful completion log.
-- Schedule `src/backend/scripts/backup_database.php` weekly and copy backups to protected external storage.
+- The existing `src/backend/scripts/backup_database.php` exporter requires the independent backup passphrase through protected standard input and PHP 512 MB memory. Preserve encrypted packages and separate off-server passphrase custody; review [package runtime limits](STORE_PACKAGE_FORMAT.md) before scheduling existing capture.
 - Confirm Apache denies direct access to `.env`, `backend`, old root-level backend paths, logs, SQL files, and model artifacts.
 - Change the initial super administrator password.
 - Enable HTTPS and set `SESSION_SECURE_COOKIE=true`.

@@ -8,6 +8,19 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'backup_package_contents') {
+    require_once __DIR__ . '/../../includes/backup.php';
+    $pdo->exec("USE `{$database}`");
+    $package = App\Backup\StorePackageFormat::decode((string)file_get_contents($argv[3]),
+        rtrim((string)fgets(STDIN), "\r\n"), App\Backup\SqlBackupFormat::schema($pdo));
+    echo json_encode(array_map('count', $package['rows']), JSON_THROW_ON_ERROR);
+    exit;
+}
+if ($argv[1] === 'backup_stale_session') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec('UPDATE users SET session_version = session_version + 1 WHERE user_id = 1');
+    exit;
+}
 if ($argv[1] === 'audit_contract') {
     $_ENV['DB_NAME'] = $_SERVER['DB_NAME'] = $database;
     require __DIR__ . '/../audit_visibility_integration.php';

@@ -59,7 +59,7 @@ The operational owner responsible for Store performance, staff, approvals, compl
 _Avoid_: System administrator, global administrator, inventory manager
 
 **Database Backup**:
-A complete, readable copy of the Store's database representing a consistent point in time, which either the Administrator or Super Administrator may create and download. Possession exposes all captured records, including credentials and restricted audit history.
+An encrypted, consistent package of the Store database and required uploaded Product/profile images, which either administrator role may create and download using a separate backup passphrase. A decrypted complete package includes restricted captured records. See STORE_PACKAGE_FORMAT.md for the current capture/preflight boundary.
 _Avoid_: Parallel backup, report export
 
 **Database Restore**:

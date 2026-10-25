@@ -5,7 +5,7 @@
 // This contract makes sure a service-level permission cannot hide an unguarded
 // page: every create, download, history, and restore route must authorize on
 // its own, keep session validation and CSRF for state-changing requests, and
-// expose plaintext only through authorized downloads, and verify restore passwords.
+// expose encrypted packages through authorized downloads, and verify preflight credentials.
 $root = dirname(__DIR__, 3);
 $read = static function (string $path) use ($root): string {
     $contents = @file_get_contents($root . '/' . $path);
@@ -82,15 +82,15 @@ foreach (['Administrator page' => $administratorPage, 'Super Administrator page'
     $assert(str_contains($source, 'csrf_field()'), ucfirst($name) . ' must render the CSRF field');
 }
 
-// --- plaintext download uses a guarded endpoint, without encryption keys ---
+// --- encrypted download uses a guarded endpoint, with independent passphrase ---
 $backupPages = ['Administrator page' => $administratorPage, 'Super Administrator page' => $superAdministratorPage];
 foreach ($backupPages as $name => $source) {
     $assert(!str_contains($source, 'application/sql'), ucfirst($name) . ' must not offer a plain SQL download');
     $assert(!str_contains($source, 'readfile('), ucfirst($name) . ' must not stream a readable copy directly');
     $assert(!str_contains($source, 'BACKUP_ENCRYPTION_KEY'), ucfirst($name) . ' must never surface key configuration to the operator');
     $assert(
-        str_contains($source, 'SQL') && !str_contains($source, 'keyStatus()'),
-        ucfirst($name) . ' must use SQL without key configuration'
+        str_contains($source, 'backup_passphrase') && !str_contains($source, 'keyStatus()'),
+        ucfirst($name) . ' must require an independent backup passphrase'
     );
     $assert(
         str_contains($source, 'does not confirm the file') || str_contains($source, 'it does not confirm'),
@@ -98,25 +98,22 @@ foreach ($backupPages as $name => $source) {
     );
 }
 $assert(
-    str_contains($downloadEndpoint, 'application/sql'),
-    'The download must be delivered as SQL'
+    str_contains($downloadEndpoint, 'application/octet-stream'),
+    'The download must be delivered as an encrypted package'
 );
 $assert(
     str_contains($sharedModule, 'DatabaseSnapshotWriter'),
     'The shared module must reuse the single snapshot writer'
 );
 $assert(
-    str_contains($scheduledScript, 'createForSystem()'),
-    'The scheduled script must share the SQL workflow instead of a second exporter'
+    str_contains($scheduledScript, 'createForSystem($passphrase)'),
+    'The scheduled script must share the encrypted workflow instead of a second exporter'
 );
 $assert(
     !str_contains($scheduledScript, 'create_database_backup'),
     'The scheduled script must not keep a separate plaintext exporter'
 );
-$assert(
-    str_contains($envExample, 'BACKUP_STORAGE_PATH=') && !str_contains($envExample, 'BACKUP_ENCRYPTION_KEY='),
-    'The deployment template must document private storage, not require encryption keys'
-);
+
 
 // --- Administrator-facing navigation: backup yes, restoration no -------------
 $assert(
@@ -138,8 +135,8 @@ $assert(
     'The Super Administrator page must keep the Database Restore workflow'
 );
 $assert(
-    str_contains($superAdministratorPage, 'restore_password') && str_contains($superAdministratorPage, 'type="password"') && str_contains($superAdministratorPage, 'replaces the entire database'),
-    'Destructive restore requires the current password and replacement warning'
+    str_contains($superAdministratorPage, 'restore_password') && str_contains($superAdministratorPage, 'backup_passphrase') && str_contains($superAdministratorPage, '->preflight(') && !str_contains($superAdministratorPage, '->restore('),
+    'Read-only preflight requires distinct credentials and cannot replace records'
 );
 
 // --- active-user notice, and the paused save behaviour ----------------------

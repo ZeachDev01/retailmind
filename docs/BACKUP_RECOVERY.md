@@ -1,6 +1,12 @@
 # Database Backup and recovery
 
-Current policy: ADR-0004 (supersedes ADR-0003).
+Current ordinary capture/preflight: [Encrypted Store package contract](STORE_PACKAGE_FORMAT.md), #282/#283. Both administrator roles now create encrypted database-and-upload `.rmpkg` packages with a separate passphrase. Super Administrator browser validation is read-only; new replacement is not yet enabled. The SQL-only instructions below describe retained **legacy offline recovery**, not the ordinary browser workflow. Keep old recovery files private until replacement encrypted recovery has been fully tested.
+
+## Current capture
+
+Enter a separate backup passphrase (16–1024 bytes), create, then download. Keep the package and an off-server passphrase recovery copy separately. Creation history confirms capture, not that your browser saved it. Missing every passphrase copy makes the package unusable. See the linked contract for runtime limits, complete upload capture, CLI input and security inventory.
+
+## Legacy offline recovery reference
 
 ## Create and download
 

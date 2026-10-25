@@ -18,6 +18,7 @@ function app_url(string $path): string
 {
     return '/retailmind/' . ltrim($path, '/');
 }
+function theme_url(string $path): string { return app_url($path); }
 // This extracted unavailable-hosting branch has no session/theme integration.
 function retailmind_theme_head(): void {}
 
