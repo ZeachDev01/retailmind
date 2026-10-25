@@ -37,6 +37,11 @@ final class RemoteIngress
         return false;
     }
 
+    public static function isRemoteMonitoringRequest(): bool
+    {
+        return self::isRemote();
+    }
+
     public static function isOwnerEmailAllowed(): bool
     {
         $requiredEmail = strtolower(trim((string)Environment::get('RETAILMIND_REMOTE_OWNER_EMAIL', '')));
@@ -48,6 +53,26 @@ final class RemoteIngress
         return $provided !== '' && hash_equals($requiredEmail, $provided);
     }
 
+    public static function isExportRequest(): bool
+    {
+        $action = strtolower(trim((string)($_POST['action'] ?? $_GET['action'] ?? '')));
+        if (in_array($action, ['export', 'export_csv', 'download', 'backup'], true)) {
+            return true;
+        }
+
+        $export = strtolower(trim((string)($_POST['export'] ?? $_GET['export'] ?? '')));
+        if ($export !== '') {
+            return true;
+        }
+
+        $format = strtolower(trim((string)($_POST['format'] ?? $_GET['format'] ?? '')));
+        if (in_array($format, ['csv', 'sql', 'dump', 'zip'], true)) {
+            return true;
+        }
+
+        return false;
+    }
+
     public static function isApprovedRoute(?string $path = null): bool
     {
         $normalized = self::normalizePath($path);
@@ -57,6 +82,21 @@ final class RemoteIngress
         }
 
         if ($normalized === 'components/administrator/dashboard.php') {
+            return true;
+        }
+
+        if (in_array($normalized, [
+            'components/report/report_generation.php',
+            'components/administrator/shift_report.php',
+            'components/report/receiving_history.php',
+            'components/report/forecast_analytics.php',
+            'components/report/forecast_exceptions.php',
+            'components/report/data_readiness.php',
+            'components/report/predictions.php',
+            'components/invoice/sales.php',
+            'reports.php',
+            'analytics.php',
+        ], true)) {
             return true;
         }
 
@@ -96,6 +136,10 @@ final class RemoteIngress
 
         if (!self::isApprovedRoute()) {
             self::deny('Access denied: unapproved route on remote ingress.');
+        }
+
+        if (self::isExportRequest()) {
+            self::deny('Access denied: bulk export or download is unavailable on remote ingress.');
         }
     }
 
