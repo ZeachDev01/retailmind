@@ -36,17 +36,19 @@ This is the required replacement boundary, not a heuristic based on table names/
 
 | Destination-authoritative state | Required dependent closure |
 | --- | --- |
-| `users` with primary/secondary `super_admin`, Recovery Account flag or `recovery_accounts` membership | Complete auth fields/status/locks/session versions/profile identity; all `user_roles` memberships and applicable `user_privileges`; users needed to attribute preserved evidence, kept distinct without revived login authority |
+| `users` with primary/secondary `super_admin`, Recovery Account flag or `recovery_accounts` membership | Complete auth fields/status/locks/session versions/profile identity; all `user_roles` memberships; users needed to attribute preserved evidence, kept distinct without revived login authority |
 | `recovery_accounts` | Sealed activation/rotation/use hashes and dates, identity and role memberships |
-| `roles`, `privileges`, `role_privileges` | Fixed destination policy; map operational memberships by supported role name; no source privileged grants |
+| `roles`, `user_roles`, code-owned `RoleCapabilityPolicy` | Fixed destination policy; map operational memberships by supported role name; no source privileged grants |
 | `platform_settings`; `attention_settings` platform-scope rows | Updating actors and platform dependencies |
-| `activity_log` security/recovery/platform-setting/recovery-account evidence; `restore_preserved_activity`; `login_attempts` | Distinct origin/original log IDs, source and destination actors/targets; failed-sign-in review watermark attempt IDs and payloads; no evidence overwritten by numeric collisions |
-| `emergency_access_sessions`, protected-user `password_reset_tokens` | Destination session actors/revokers and expiration/revocation; never import source tokens/emergency authority |
+| `activity_log` security/recovery/platform-setting/recovery-account evidence; `login_attempts`; external recovery evidence | Distinct origin/original log IDs, source and destination actors/targets; failed-sign-in review watermark attempt IDs and payloads; no evidence overwritten by numeric collisions |
+| Protected-user `password_reset_tokens` | Preserve valid destination reset state; never import source tokens or sessions |
 | `notification_preferences`, `notifications`, `attention_states` protected-user/platform rows | Workspace/platform keys, notification ID allocation and actor closure |
 | `email_delivery_log`, `backup_history` | Destination evidence and `performed_by`, collision-free evidence provenance |
 | External restore log, recovery state, session epoch, application logs, environment/configuration/session storage | Retained outside the imported database; never included as source recovery authority |
 
-Operational replacement covers Store sales, stock, Products, operational users/memberships, business settings, and source historical records. Source privileged actors remain attributable but cannot import privileged access; secondary memberships and sealed Recovery Accounts count. Every retained/imported historical actor must resolve correctly. Declared user FKs plus non-FK `branches.created_by`, `sales.discount_authorized_by`, `restore_preserved_activity.user_id` require validation. Polymorphic audit record IDs and embedded snapshots retain origin evidence; never blanket-rewrite arbitrary numeric JSON. Protected destination profile files and historical actor dependencies survive operational upload replacement. Provenance must distinguish both installations, including colliding log/user IDs. No source identity is silently combined with destination identity.
+The complete migrated schema includes `202610250001_retire_unused_storage`: `privileges`, `role_privileges`, `user_privileges`, `restore_preserved_activity` and `emergency_access_sessions` are retired. Do not recreate them for preservation; capabilities are code-owned and external restore evidence stays in RecoveryStore. Exact-schema checks require both installations to have compatible migrations.
+
+Operational replacement covers Store sales, stock, Products, operational users/memberships, business settings, and source historical records. Source privileged actors remain attributable but cannot import privileged access; secondary memberships and sealed Recovery Accounts count. Every retained/imported historical actor must resolve correctly. Declared user FKs plus non-FK `branches.created_by` and `sales.discount_authorized_by` require validation. Polymorphic audit record IDs and embedded snapshots retain origin evidence; never blanket-rewrite arbitrary numeric JSON. Protected destination profile files and historical actor dependencies survive operational upload replacement. Provenance must distinguish both installations, including colliding log/user IDs. No source identity is silently combined with destination identity.
 
 ## Verification
 
