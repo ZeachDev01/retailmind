@@ -59,7 +59,24 @@ check(RemoteIngress::isRemote(), 'Matching remote host marks request as remote i
 // Loopback address with remote host must still be recognized as remote
 $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
 check(RemoteIngress::isRemote(), 'Proxy loopback address with remote host stays remote');
-unset($_ENV['RETAILMIND_REMOTE_HOST'], $_SERVER['HTTP_HOST'], $_SERVER['REMOTE_ADDR']);
+
+// Anti-spoofing: spoofed forwarding headers do not turn remote ingress into local trust
+$_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1';
+$_SERVER['HTTP_X_FORWARDED_HOST'] = 'localhost';
+$_SERVER['HTTP_X_REAL_IP'] = '127.0.0.1';
+$_SERVER['HTTP_X_FORWARDED_PROTO'] = 'http';
+check(RemoteIngress::isRemote(), 'Spoofed forwarding headers cannot turn remote into local');
+check(Session::shouldUseSecureCookie(), 'Secure cookie enforced despite spoofed http proto');
+
+unset(
+    $_ENV['RETAILMIND_REMOTE_HOST'],
+    $_SERVER['HTTP_HOST'],
+    $_SERVER['REMOTE_ADDR'],
+    $_SERVER['HTTP_X_FORWARDED_FOR'],
+    $_SERVER['HTTP_X_FORWARDED_HOST'],
+    $_SERVER['HTTP_X_REAL_IP'],
+    $_SERVER['HTTP_X_FORWARDED_PROTO']
+);
 
 // Cloudflare Access owner email check
 $_SERVER['RETAILMIND_REMOTE_INGRESS'] = '1';
@@ -96,9 +113,7 @@ foreach ([
     '/analytics.php',
     '/components/auth/logout.php',
     '/components/auth/session_activity.php',
-    '/components/auth/change_password.php',
     '/components/auth/workspace.php',
-    '/components/theme.php',
     '/assets/css/style.css',
     '/assets/img/logo.png',
     '/sw.js',
@@ -110,11 +125,21 @@ foreach ([
 foreach ([
     '/components/cashier/pos.php',
     '/components/cashier/refunds.php',
+    '/components/auth/change_password.php',
+    '/components/auth/theme.php',
     '/components/inventory_management/stock_issues.php',
+    '/components/inventory_management/stock_receiving.php',
+    '/components/inventory_management/add_product.php',
+    '/components/inventory_management/replenishment_queue.php',
     '/components/system_administrator/backup_restore.php',
     '/components/administrator/database_backup.php',
     '/components/backup/backup_download.php',
+    '/components/backup/backup_status.php',
+    '/components/backup/recovery.php',
     '/components/system_administrator/system_settings.php',
+    '/components/system_administrator/database_updates.php',
+    '/components/system_administrator/fiscal_periods.php',
+    '/components/system_administrator/recovery_account.php',
     '/components/user_manager/user_manager.php',
     '/components/administrator/reset_data.php',
     '/components/administrator/registers.php',
@@ -128,7 +153,7 @@ foreach ([
     check(!RemoteIngress::isApprovedRoute($unapproved), "Route {$unapproved} must be denied on remote ingress");
 }
 
-// 3. Export request detection
+// 3. Export request and side-effecting GET action detection
 check(!RemoteIngress::isExportRequest(), 'Normal request is not export');
 $_POST['action'] = 'export_csv';
 check(RemoteIngress::isExportRequest(), 'POST action=export_csv is export request');
@@ -141,6 +166,17 @@ unset($_GET['export']);
 $_GET['format'] = 'csv';
 check(RemoteIngress::isExportRequest(), 'GET format=csv is export request');
 unset($_GET['format']);
+
+// Side-effecting actions masquerading as GET
+$_GET['action'] = 'delete';
+check(RemoteIngress::isSideEffectingAction(), 'GET action=delete is side-effecting');
+$_GET['action'] = 'refund';
+check(RemoteIngress::isSideEffectingAction(), 'GET action=refund is side-effecting');
+$_GET['action'] = 'reset';
+check(RemoteIngress::isSideEffectingAction(), 'GET action=reset is side-effecting');
+$_GET['action'] = 'update';
+check(RemoteIngress::isSideEffectingAction(), 'GET action=update is side-effecting');
+unset($_GET['action']);
 
 // 4. Database configuration uses Store PC database on public hostname with trusted config
 $_ENV['DATABASE_ENV'] = 'local';
