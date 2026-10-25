@@ -2,6 +2,8 @@
 
 namespace App\Receipts;
 
+require_once __DIR__ . '/../Backup/RecordProvenance.php';
+
 use PDO;
 use RuntimeException;
 
@@ -65,6 +67,10 @@ final class GCashReceiptService
             WHERE transaction_id = ? AND verification_status = 'Completed'" . ($actorRole === 'cashier' ? ' AND cashier_id = ?' : ''));
         $statement->execute($actorRole === 'cashier' ? [$transactionId, $actorId] : [$transactionId]);
         $json = $statement->fetchColumn();
-        return $json ? json_decode($json, true, 512, JSON_THROW_ON_ERROR) : null;
+        if (!$json) return null;
+        $details = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        $identity = (new \App\Backup\RecordProvenance($this->pdo))->actor('gcash_transactions', ['transaction_id' => $transactionId], (int)$details['cashier_id']);
+        if ($identity !== null) $details['cashier_provenance'] = $identity;
+        return $details;
     }
 }

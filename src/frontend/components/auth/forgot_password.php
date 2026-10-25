@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $identity = trim((string)($_POST['identity'] ?? ''));
     try {
         if ($identity !== '') {
-            $stmt = $pdo->prepare("SELECT user_id, full_name, email FROM users WHERE (username = ? OR email = ?) AND status = 'active' AND is_recovery_account = 0 LIMIT 1");
+            $stmt = $pdo->prepare("SELECT user_id, full_name, email FROM users WHERE (username = ? OR email = ?) AND status = 'active' AND role_id IS NOT NULL AND is_recovery_account = 0 LIMIT 1");
             $stmt->execute([$identity, $identity]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($user && filter_var($user['email'], FILTER_VALIDATE_EMAIL)) {

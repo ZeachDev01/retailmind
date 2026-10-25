@@ -36,7 +36,7 @@ final class DatabaseRestoreService
     }
 
     /** Read-only: successful validation never grants replacement authority. */
-    public function preflight(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
+    public function readPackage(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
         #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
     {
         $this->authorize($actorRole);
@@ -55,6 +55,14 @@ final class DatabaseRestoreService
             throw new DomainException($exception->getMessage(), 0, $exception);
         }
         $this->validateReferences($package['rows']);
+        return $package;
+    }
+
+    public function preflight(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
+        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
+    {
+        $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $backupPassphrase);
+        $schema = SqlBackupFormat::schema($this->pdo);
         $conflicts = [];
         foreach (['user_id' => 'id', 'username' => 'username', 'email' => 'email'] as $column => $kind) {
             if (!in_array($column, $schema['users']['columns'] ?? [], true)) continue;
@@ -75,7 +83,7 @@ final class DatabaseRestoreService
     }
 
     /** Validate actual declared keys; no source SQL is executed against the destination. */
-    private function validateReferences(array $rows): void
+    public function validateReferences(array $rows): void
     {
         $oldMode = (string)$this->pdo->query('SELECT @@SESSION.sql_mode')->fetchColumn();
         $this->pdo->exec('SET SESSION sql_mode=' . $this->pdo->quote($oldMode . ',STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'));

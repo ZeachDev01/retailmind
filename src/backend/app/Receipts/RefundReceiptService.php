@@ -60,6 +60,10 @@ final class RefundReceiptService
         $statement = $this->pdo->prepare('SELECT details_json FROM refund_receipt_details WHERE refund_id = ?');
         $statement->execute([$refundId]);
         $json = $statement->fetchColumn();
-        return $json === false ? null : json_decode((string)$json, true, 512, JSON_THROW_ON_ERROR);
+        if ($json === false) return null;
+        $details = json_decode((string)$json, true, 512, JSON_THROW_ON_ERROR);
+        $identity = (new \App\Backup\RecordProvenance($this->pdo))->actor('cash_refunds', ['refund_id' => $refundId], null, $cashierId);
+        if ($identity !== null) $details['cashier_provenance'] = $identity;
+        return $details;
     }
 }

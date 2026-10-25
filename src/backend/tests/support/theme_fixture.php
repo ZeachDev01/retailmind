@@ -8,6 +8,15 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if (in_array($argv[1], ['identity_historical', 'identity_reset_count'], true)) {
+    $pdo->exec("USE `{$database}`");
+    if ($argv[1] === 'identity_historical') {
+        $pdo->exec("UPDATE users SET role_id=NULL,status='disabled',email='historical@example.test',password_hash='!',is_recovery_account=0 WHERE user_id=3");
+        $pdo->exec('DELETE FROM user_roles WHERE user_id=3');
+        $pdo->exec('DELETE FROM password_reset_tokens WHERE user_id=3');
+    } else echo (int)$pdo->query('SELECT COUNT(*) FROM password_reset_tokens WHERE user_id=3')->fetchColumn();
+    exit;
+}
 if ($argv[1] === 'backup_package_contents') {
     require_once __DIR__ . '/../../includes/backup.php';
     $pdo->exec("USE `{$database}`");
