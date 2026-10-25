@@ -1,6 +1,6 @@
 # Batch expiration and supplier replacement context
 
-Captured 2026-10-18. This document records the confirmed direction, verified code behavior, and agreed missing-expiration filter. It is an implementation brief, not a claim that the designed features exist. See [ADR-0013](adr/0013-batch-expiration-and-supplier-replacements.md).
+Captured 2026-10-18. This document records the confirmed direction, verified code behavior, and agreed missing-expiration filter. It is an implementation brief, not a claim that the designed features exist. See [ADR-0013](../adr/0013-batch-expiration-and-supplier-replacements.md).
 
 ## Understanding reached
 
@@ -95,8 +95,8 @@ Confirmed in discussion; application behavior has not been changed:
 - An unset product override retains existing channel defaults under the already agreed warning policy.
 - After expiration, change the reminder to **Expired bread—waiting for supplier collection**. Keep it visible until all remaining bread in that batch is recorded as removed. Expiration itself does not deduct stock.
 
-All discussion questions above are settled. The user confirmed testing through existing reminder and stock-removal workflows. The [reminder specification](specs/bread-pullout-reminders.md) is published as [GitHub issue #233](https://github.com/ZeachDev01/retailmind/issues/233), labelled `ready-for-agent`. This records the agreed design only; application implementation was not requested in this discussion.
+All discussion questions above are settled. The user confirmed testing through existing reminder and stock-removal workflows. The [reminder specification](bread-pullout-reminders.md) is published as [GitHub issue #233](https://github.com/ZeachDev01/retailmind/issues/233), labelled `ready-for-agent`. This records the agreed design only; application implementation was not requested in this discussion.
 
 ## Implementation specification
 
-The complete agreed behavior, balance mitigation, and user-confirmed testing approach are captured in the [specification](specs/batch-expiration-and-stock-balance.md), published as [GitHub issue #216](https://github.com/ZeachDev01/retailmind/issues/216) with `ready-for-agent`.
+The complete agreed behavior, balance mitigation, and user-confirmed testing approach are captured in the [specification](batch-expiration-and-stock-balance.md), published as [GitHub issue #216](https://github.com/ZeachDev01/retailmind/issues/216) with `ready-for-agent`.

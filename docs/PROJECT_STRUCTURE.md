@@ -18,10 +18,18 @@ src/frontend/components/barcodeScanner/ Barcode scanner web app assets
 
 ```text
 src/backend/app/Core/                Shared infrastructure classes
+src/backend/app/Attention/           Attention rules, notifications, and review workflows
+src/backend/app/Audit/               Protected Audit Record handling
+src/backend/app/Authorization/       Role capabilities, workspace routing, and dormancy policy
 src/backend/app/Backup/              Database backup, restore, and recovery coordination
 src/backend/app/Database/            Migration and schema helpers
+src/backend/app/Dashboard/           Dashboard workspaces and platform health sources
+src/backend/app/Forecasting/         Demand history, evaluation, activation, and replenishment
 src/backend/app/Receipts/            Sale/refund receipt details, rendering, and paper layout
 src/backend/app/Services/            Inventory, sales, staff, and dashboard workflows
+src/backend/app/Support/             Shared error presentation and operator alerts
+src/backend/app/Store/               Store scope, calendar, and write gates
+src/backend/app/Views/               Shared receipt, drawer, and pagination templates
 src/backend/bootstrap/               Composer and environment bootstrapping
 src/backend/config/                  Configuration loaded from environment values
 src/backend/includes/                Shared legacy helpers used by existing pages
@@ -38,7 +46,9 @@ src/backend/scripts/                 Maintenance, backup, migration, and release
 src/backend/storage/                 Runtime output only; keep generated files out of Git
 src/backend/tests/                   Smoke, database, and release package checks
 scripts/                            Release packaging
+scripts/archive/                    Retained one-off development scripts; run from repository root only after review
 tests/                              Playwright specs configured at the repository root
+retailmind-products-import-sample.csv Product import example used by the CSV import test
 ```
 
 ## Documentation
@@ -46,6 +56,8 @@ tests/                              Playwright specs configured at the repositor
 ```text
 README.md                        Setup, upgrade, and operating guide
 docs/README.md                   Documentation index
+GLOSSARY.md                      Store operations vocabulary; read alongside docs/CONTEXT.md
+docs/CONTEXT.md                   Core Store, role, account, inventory, and forecasting vocabulary
 docs/DEPLOYMENT_CHECKLIST.md     Deployment checklist
 docs/guides/                    Interface and browser behavior guides
 docs/adr/                       Architecture decisions
@@ -55,8 +67,34 @@ docs/verification/              Recorded checks and manual verification
 docs/release-notes/              Feature notes and release documentation
 docs/release-notes/archive/      Legacy release documentation
 docs/agents/                    Repository workflow instructions
-src/backend/legacy/                  Retained old route files, blocked from direct web access
+docs/teaching/                  Lessons, printable reference, teaching CSS, mission, notes, and resources
 ```
+
+## Development Artifacts and Local State
+
+```text
+work/README.md                  Index of datasets, prototypes, and preserved archives
+work/forecasting-dataset/        Forecasting train/test CSVs and product data
+work/hostinger-demo/             Demo snapshot, manifest, and replay instructions
+work/visualizations/             Development prototypes
+work/archive/root-scratch/      Retained root scratch notes, commit list, and diff
+work/archives/                  Retained source ZIP archive
+output/                         Screenshots, verification output, and worktree archives
+.impeccable/                    Design review evidence and surface notes
+.scratch/, tmp/                 Existing local scratch and temporary files
+backend/storage/                Existing storage tree; not a second application backend
+src/backend/storage/            Application runtime storage
+retailmind-private-*/           Recovery storage naming; inspect configuration before any relocation
+.release/                       Generated release package
+.worktrees/                     Separate Git working trees
+vendor/, node_modules/          Installed dependencies
+```
+
+The organization pass preserved all files. Runtime code, configuration, recovery
+storage, dependencies, and generated directories retain their existing paths.
+Loose guides, audits, and design notes use the existing documentation categories;
+their filenames and historical contents are retained. Root teaching materials
+now live together under `docs/teaching/`.
 
 ## Naming Notes
 

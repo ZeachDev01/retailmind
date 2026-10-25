@@ -8,6 +8,12 @@ How engineering skills should consume this repo's domain documentation when expl
 - **`CONTEXT-MAP.md`** at the repo root if it exists: it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
 - **`docs/adr/`**: read ADRs that touch the area being worked on. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
 
+Also read **`GLOSSARY.md`** at the repository root for Store operations,
+migration, GCash, packaging, and replenishment terms. These two vocabulary
+files are retained at their existing paths with their definitions intact.
+Consult both for overlapping concepts; surface conflicting definitions rather
+than silently choosing one. Continue editing a term in the file that defines it.
+
 If any of these files do not exist, proceed silently. Do not flag their absence or suggest creating them upfront. The `/domain-modeling` skill creates them lazily when terms or decisions are resolved.
 
 ## File structure
@@ -17,6 +23,7 @@ This is a single-context repo:
 ```text
 /
 ├── docs/CONTEXT.md
+├── GLOSSARY.md
 ├── docs/adr/
 │   ├── 0001-event-sourced-orders.md
 │   └── 0002-postgres-for-write-model.md

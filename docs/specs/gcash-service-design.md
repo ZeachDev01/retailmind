@@ -21,7 +21,7 @@ Complete brief confirmed by the user on 2026-10-23:
 
 Shared understanding is confirmed. No application changes are authorized by this discovery record alone; implementation requires a subsequent instruction.
 
-The confirmed overview design and test approach are captured in the [Administrator overview specification](specs/administrator-gcash-overview.md), published as [GitHub issue #276](https://github.com/ZeachDev01/retailmind/issues/276) with `ready-for-agent`.
+The confirmed overview design and test approach are captured in the [Administrator overview specification](administrator-gcash-overview.md), published as [GitHub issue #276](https://github.com/ZeachDev01/retailmind/issues/276) with `ready-for-agent`.
 
 ## Cashier balance visibility (confirmed 2026-10-21)
 
@@ -30,7 +30,7 @@ The confirmed overview design and test approach are captured in the [Administrat
 - Exchange summary shows only relevant actions: **Collect cash** and **Send GCash** for Cash-In; **Receive GCash** and **Give cash** for Cash-Out, plus **Collect cash fee** when the fee is paid in cash. Hide irrelevant zero-value movement rows. Show the service fee with its collection method so staff know whether it is included in the cash or GCash received.
 - Reuse recorded expected balances and existing exchange calculations. These are not live provider balances or physical counts; show the opening actual-check time and ask staff to check actual funds before exchanging money.
 
-Design discussion in progress. This document records intended behavior, not implemented functionality. Current behavior remains documented in [gcash.md](gcash.md).
+Design discussion in progress. This document records intended behavior, not implemented functionality. Current behavior remains documented in [gcash.md](../guides/gcash.md).
 
 The consolidated specification is [gcash-service-spec.md](gcash-service-spec.md), published as [issue #236](https://github.com/ZeachDev01/retailmind/issues/236). It includes later agreements on overviews and recording, and incorporates operational policies settled in [issue #237](https://github.com/ZeachDev01/retailmind/issues/237).
 

@@ -71,7 +71,7 @@ Acceptance: no future-label/feature leakage, reproducible results, all three hor
 
 ### 4. Integrate and verify the existing screens in demo
 
-Use the real worker through existing `MlJobService` and persisted result readers. Repair the overview, product investigation, analytics, readiness, exceptions, replenishment queue, and replenishment requests identified in [the implementation review](../forecasting-implementation-review.md).
+Use the real worker through existing `MlJobService` and persisted result readers. Repair the overview, product investigation, analytics, readiness, exceptions, replenishment queue, and replenishment requests identified in [the implementation review](../research/forecasting-implementation-review.md).
 
 All views must agree on run, model, source cutoff, and 7/14/28-day windows. Show product names/SKUs, last success, model version, readiness limitations, stale/failed runs, stock exposure, and reviewed recommendations. Missing forecasts are Unknown, never Covered. Product drivers must reflect what was known at the displayed run's cutoff. Demo pages and metrics must be visibly labeled Demo.
 

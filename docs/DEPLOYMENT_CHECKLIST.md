@@ -9,7 +9,7 @@
 - Run `python src/backend/legacy/demandForcasting/train_model.py` and start `python src/backend/legacy/demandForcasting/predict_api.py` using a service manager.
 - Test SMTP from System Settings.
 - Schedule `src/backend/scripts/run_maintenance.bat` or `src/backend/scripts/run_maintenance.sh` daily.
-- For hosted releases, configure the independent [daily notification job](DAILY_NOTIFICATIONS.md); scheduling `run_scheduler.php` alone does not evaluate expiry reminders. Verify the installed job and its successful completion log.
+- For hosted releases, configure the independent [daily notification job](guides/DAILY_NOTIFICATIONS.md); scheduling `run_scheduler.php` alone does not evaluate expiry reminders. Verify the installed job and its successful completion log.
 - Schedule `src/backend/scripts/backup_database.php` weekly and copy backups to protected external storage.
 - Confirm Apache denies direct access to `.env`, `backend`, old root-level backend paths, logs, SQL files, and model artifacts.
 - Change the initial super administrator password.

@@ -24,7 +24,7 @@ _Avoid_: Cash Refund, stock count, refreshed batch
 New goods supplied in relation to a Supplier Pullout, with their own quantity and expiration. The replacement quantity and arrival time may differ from the pullout.
 _Avoid_: Expiration extension, overwritten stock
 
-Design status, workflow, and unresolved policy choices: [batch expiration context](batch-expiration-context.md), [ADR-0013](adr/0013-batch-expiration-and-supplier-replacements.md).
+Design status, workflow, and unresolved policy choices: [batch expiration context](specs/batch-expiration-context.md), [ADR-0013](adr/0013-batch-expiration-and-supplier-replacements.md).
 
 **Notification**:
 A user-addressed update about Store activity or a condition requiring attention. Reading it does not resolve the underlying condition.

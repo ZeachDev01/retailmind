@@ -19,4 +19,4 @@ Confirmed 2026-10-24. This updates the manual-only printing requirement in
   to the default printer without confirmation. Otherwise the browser dialog opens.
   The website does not select or discover a printer or confirm physical output.
 
-Setup and rollback: [Xprinter printing](../xprinter-xp-58iid-setup.md).
+Setup and rollback: [Xprinter printing](../guides/xprinter-xp-58iid-setup.md).

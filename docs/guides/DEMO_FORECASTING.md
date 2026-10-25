@@ -1,8 +1,8 @@
 # Reproducible Demo forecasting (#173)
 
 For the capstone's **real public sales experiment**, use
-[the UCI browser walkthrough](guides/public-forecasting-demo.md) and
-[source/evaluation details](research/public-sales-capstone.md). This document describes
+[the UCI browser walkthrough](public-forecasting-demo.md) and
+[source/evaluation details](../research/public-sales-capstone.md). This document describes
 the separate synthetic-data application demo. The publisher's API now confirms
 synthetic generation and a CC0 label; older unverified-status statements below
 record the earlier assessment, not current publisher metadata.
@@ -20,7 +20,7 @@ Node (`npm ci`, `npx playwright install chromium`), and Python worker packages:
    unusable history, prediction exceptions, missing approval, and isolation.
    Their values and scores never enter runtime training evidence.
 2. Imported Demo observations: supplied CSV, S001, P0001–P0020, 731 dates each,
-   14,620 observations. See [dataset assessment](research/kaggle_capstone_dataset.md)
+   14,620 observations. See [dataset assessment](../research/kaggle_capstone_dataset.md)
    for hash, fields, coverage, exclusions, unknown license, and limitations.
    Real/synthetic methodology remains unverified. These are Demo sales counts,
    never observed Store demand. Establish license before redistributing the CSV.

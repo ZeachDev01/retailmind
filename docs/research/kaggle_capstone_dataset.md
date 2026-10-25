@@ -8,7 +8,7 @@ Use it for software tests; the capstone's real-sales experiment uses
 [UCI Online Retail](public-sales-capstone.md). The dated checks below are historical.
 
 Setup, explicit approval, browser review, and Store transition:
-[Demo workflow](../DEMO_FORECASTING.md).
+[Demo workflow](../guides/DEMO_FORECASTING.md).
 
 The user supplied `src/backend/dataset/retail_store_inventory.csv`, associated
 with [Anirudh Chauhan's Retail Store Inventory Forecasting Dataset](https://www.kaggle.com/datasets/anirudhchauhan/retail-store-inventory-forecasting-dataset).

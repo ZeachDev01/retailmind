@@ -4,7 +4,7 @@ Previous #160 report's hand-written scores and mock SQLite end-to-end claims
 are withdrawn. Its synthetic service contract remains useful, but did not run
 actual importer, worker, explicit promotion gate, or authenticated request submission.
 
-See [reproducible workflow](../DEMO_FORECASTING.md) and
+See [reproducible workflow](../guides/DEMO_FORECASTING.md) and
 [dataset assessment](../research/kaggle_capstone_dataset.md). Supplied CSV has
 73,100 rows; selected S001/P0001–P0020 has **14,620**, not 14,600, observations
 from 2022-01-01 through 2024-01-01. License and real/synthetic methodology remain

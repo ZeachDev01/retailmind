@@ -24,7 +24,7 @@ Existing Product warning, Supplier Pullout, Replacement Stock, attention, fresh-
 
 On the development Windows PC, `Get-ScheduledTask` exposed 197 tasks with 199 actions. Every action's task name, executable, arguments and working directory was inspected against `retailmind|php|laragon|run_notifications|run_scheduler|run_maintenance`; no match was found. The Task Scheduler Operational event log was disabled, so no run history was available. PHP CLI 8.5.1 with PDO MySQL was available and Laragon MySQL was running.
 
-The existing daily maintenance wrappers call both forecasting and notifications. The forecasting guide's standalone `run_scheduler.php` action calls forecasting only. The hosted release previously omitted the notification CLI script entirely; it now includes the daily entrypoint. See [daily invocation instructions](../DAILY_NOTIFICATIONS.md).
+The existing daily maintenance wrappers call both forecasting and notifications. The forecasting guide's standalone `run_scheduler.php` action calls forecasting only. The hosted release previously omitted the notification CLI script entirely; it now includes the daily entrypoint. See [daily invocation instructions](../guides/DAILY_NOTIFICATIONS.md).
 
 The current deployment workflow is named Hostinger and uses secret-configured FTP host and application URL. README references to the former InfinityFree deployment do not establish the current server configuration. This session had no hosting control-panel, SSH/cron account, installed hosted job or remote execution-log access. No scheduler was registered or changed. Local task inspection does not establish the deployed scheduler's state.
 

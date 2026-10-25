@@ -1,7 +1,13 @@
-Hi hello
+# RetailMind
+
+Single-Store inventory, receiving, sales, and forecasting application.
+
+Start with the [project map](docs/PROJECT_STRUCTURE.md) to locate code,
+the [documentation index](docs/README.md) for operating guides, or
+the [development work index](work/README.md) for datasets and retained artifacts.
 
 Demo forecasting before Store history is available:
-[setup, approval, browser review, and verification](docs/DEMO_FORECASTING.md).
+[setup, approval, browser review, and verification](docs/guides/DEMO_FORECASTING.md).
 
 See the [documentation index](docs/README.md) for deployment, recovery,
 interface guides, architecture decisions, and release history.

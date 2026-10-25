@@ -105,9 +105,9 @@ The current design uses chronological evaluation and sales-quantity metrics. Tho
 
 ## Related records
 
-- [Glossary](../GLOSSARY.md): Replenishment Receipt and Category Replenishment Forecast.
-- [ADR 0016: distinguish replenishment patterns from customer demand](adr/0016-distinguish-replenishment-patterns-from-customer-demand.md).
-- [Proposed data fields and evaluation plan](specs/replenishment-receipt-forecasting.md).
-- [Existing forecasting architecture](adr/0005-single-random-forest-forecasting-pipeline.md).
+- [Glossary](../../GLOSSARY.md): Replenishment Receipt and Category Replenishment Forecast.
+- [ADR 0016: distinguish replenishment patterns from customer demand](../adr/0016-distinguish-replenishment-patterns-from-customer-demand.md).
+- [Proposed data fields and evaluation plan](../specs/replenishment-receipt-forecasting.md).
+- [Existing forecasting architecture](../adr/0005-single-random-forest-forecasting-pipeline.md).
 
 Communication preference from this discussion: simple English.

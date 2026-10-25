@@ -85,5 +85,5 @@ Show a saved GCash Service Receipt after each completed exchange, using the exis
 
 - The user confirmed centered reference barcode/digits and the existing POS receipt modal appearance using a screenshot.
 - The user confirmed all reprint, preservation, and later-completion decisions, and explicitly waived legacy handling because the project is in development.
-- Related specifications: [GCash service](../gcash-service-spec.md), [thermal customer receipts](thermal-customer-receipts.md), and [opt-in receipt printing](opt-in-receipt-printing.md).
+- Related specifications: [GCash service](gcash-service-spec.md), [thermal customer receipts](thermal-customer-receipts.md), and [opt-in receipt printing](opt-in-receipt-printing.md).
 - Specification only. No application implementation or runtime tests are part of this task.

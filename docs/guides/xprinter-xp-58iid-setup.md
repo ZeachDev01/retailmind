@@ -10,7 +10,7 @@
   or recording a refund. Both checkboxes start unchecked for every transaction.
 
 This uses the existing receipt flow and Register paper-width setting, with no direct
-device integration. See [opt-in receipt printing](specs/opt-in-receipt-printing.md).
+device integration. See [opt-in receipt printing](../specs/opt-in-receipt-printing.md).
 
 ## Seamless printing on this cashier PC
 
