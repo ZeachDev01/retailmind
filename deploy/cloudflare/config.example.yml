@@ -1,0 +1,29 @@
+# Cloudflare Tunnel configuration for RetailMind Owner Remote Monitoring
+# Production path on Store PC: C:\ProgramData\cloudflared\config.yml
+#
+# Security properties:
+# 1. Outbound-only tunnel connection (QUIC/HTTPS to Cloudflare edge) - NO router port forwarding.
+# 2. Reaches ONLY the local monitoring ingress listener (127.0.0.1:8081).
+# 3. Local MySQL (3306), local checkout (80), and other local ports are NOT exposed.
+# 4. Validates Cloudflare Access token at the tunnel boundary before proxying to Apache.
+# 5. Catch-all rule returns HTTP 404 for any other hostname or unmapped traffic.
+
+tunnel: <TUNNEL_UUID>
+credentials-file: C:\ProgramData\cloudflared\<TUNNEL_UUID>.json
+
+ingress:
+  # Gate 1: Remote monitoring route protected by Cloudflare Access
+  - hostname: monitor.your-store-domain.com
+    service: http://127.0.0.1:8081
+    originRequest:
+      # Optional: preserve hostname in Host header for Apache VirtualHost
+      httpHostHeader: monitor.your-store-domain.com
+      # Tunnel-level Cloudflare Access JWT validation
+      access:
+        required: true
+        teamName: <YOUR_ZEROTRUST_TEAM_NAME>
+        aud:
+          - <YOUR_ACCESS_APPLICATION_AUD_TAG>
+
+  # Default catch-all rule: drop all unmatched traffic
+  - service: http_status:404

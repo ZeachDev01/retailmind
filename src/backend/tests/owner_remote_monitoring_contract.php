@@ -102,51 +102,60 @@ foreach ([
     '/components/system_administrator/audit_logs.php',
     '/retailmind/components/system_administrator/audit_logs.php',
     '/components/modals/audit_log.php',
+    '/retailmind/components/modals/audit_log.php',
     '/components/report/report_generation.php',
+    '/retailmind/components/report/report_generation.php',
     '/components/report/receiving_history.php',
+    '/retailmind/components/report/receiving_history.php',
     '/components/report/forecast_analytics.php',
+    '/retailmind/components/report/forecast_analytics.php',
     '/components/report/forecast_exceptions.php',
+    '/retailmind/components/report/forecast_exceptions.php',
     '/components/report/data_readiness.php',
+    '/retailmind/components/report/data_readiness.php',
     '/components/report/predictions.php',
+    '/retailmind/components/report/predictions.php',
     '/components/invoice/sales.php',
+    '/retailmind/components/invoice/sales.php',
     '/reports.php',
+    '/retailmind/reports.php',
     '/analytics.php',
+    '/retailmind/analytics.php',
     '/components/auth/logout.php',
+    '/retailmind/components/auth/logout.php',
     '/components/auth/session_activity.php',
+    '/retailmind/components/auth/session_activity.php',
     '/components/auth/workspace.php',
+    '/retailmind/components/auth/workspace.php',
     '/assets/css/style.css',
-    '/assets/img/logo.png',
-    '/sw.js',
+    '/retailmind/assets/css/style.css',
+    '/assets/js/app.js',
+    '/favicon.ico',
     '/manifest.webmanifest',
+    '/sw.js',
 ] as $approved) {
     check(RemoteIngress::isApprovedRoute($approved), "Route {$approved} must be approved on remote ingress");
 }
 
 foreach ([
     '/components/cashier/pos.php',
-    '/components/cashier/refunds.php',
-    '/components/auth/change_password.php',
-    '/components/auth/theme.php',
-    '/components/inventory_management/stock_issues.php',
-    '/components/inventory_management/stock_receiving.php',
-    '/components/inventory_management/add_product.php',
-    '/components/inventory_management/replenishment_queue.php',
-    '/components/system_administrator/backup_restore.php',
-    '/components/administrator/database_backup.php',
-    '/components/backup/backup_download.php',
-    '/components/backup/backup_status.php',
+    '/retailmind/components/cashier/pos.php',
+    '/components/cashier/refund.php',
+    '/retailmind/components/cashier/refund.php',
+    '/components/inventory_management/products.php',
+    '/retailmind/components/inventory_management/products.php',
+    '/components/inventory_management/suppliers.php',
+    '/components/inventory_management/categories.php',
+    '/components/inventory_management/stock_adjustments.php',
+    '/components/inventory_management/purchase_orders.php',
+    '/components/administrator/users.php',
+    '/retailmind/components/administrator/users.php',
+    '/components/system_administrator/settings.php',
+    '/components/backup/backup.php',
+    '/retailmind/components/backup/backup.php',
     '/components/backup/recovery.php',
-    '/components/system_administrator/system_settings.php',
-    '/components/system_administrator/database_updates.php',
-    '/components/system_administrator/fiscal_periods.php',
-    '/components/system_administrator/recovery_account.php',
-    '/components/user_manager/user_manager.php',
-    '/components/administrator/reset_data.php',
-    '/components/administrator/registers.php',
-    '/backend/scripts/restore_database.php',
-    '/export_shifts.php',
-    '/record_shift.php',
-    '/cash_in.php',
+    '/api/backup.php',
+    '/api/database_dump.php',
     '/export_reports.php',
     '/sales_export.php',
 ] as $unapproved) {
@@ -199,5 +208,134 @@ $_SERVER['RETAILMIND_REMOTE_INGRESS'] = '1';
 $_SERVER['HTTPS'] = 'off';
 check(Session::shouldUseSecureCookie(), 'Remote ingress must enforce secure session cookie even over HTTP tunnel hop');
 unset($_SERVER['RETAILMIND_REMOTE_INGRESS'], $_SERVER['HTTPS']);
+
+// 6. Cloudflare Access token validation
+function makeTestJwt(array $payload, ?string $privateKey = null, array $header = ['alg' => 'RS256', 'typ' => 'JWT']): string {
+    $h = RemoteIngress::base64UrlEncode(json_encode($header));
+    $p = RemoteIngress::base64UrlEncode(json_encode($payload));
+    $sig = 'mock-sig';
+    if ($privateKey !== null) {
+        openssl_sign($h . '.' . $p, $rawSig, $privateKey, OPENSSL_ALGO_SHA256);
+        $sig = RemoteIngress::base64UrlEncode($rawSig);
+    }
+    return $h . '.' . $p . '.' . $sig;
+}
+
+// Requirement flag
+check(!RemoteIngress::isAccessTokenRequired(), 'Access token not required by default');
+$_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN'] = '1';
+check(RemoteIngress::isAccessTokenRequired(), 'RETAILMIND_REQUIRE_ACCESS_TOKEN=1 requires token');
+unset($_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN']);
+
+$_ENV['RETAILMIND_CF_ACCESS_AUD'] = 'aud-tag-12345';
+check(RemoteIngress::isAccessTokenRequired(), 'Configured AUD requires token');
+unset($_ENV['RETAILMIND_CF_ACCESS_AUD']);
+
+// Parse JWT validation
+check(RemoteIngress::parseJwt('') === null, 'Empty JWT parses to null');
+check(RemoteIngress::parseJwt('invalid.token') === null, 'Invalid token segment count parses to null');
+check(RemoteIngress::parseJwt('bad.base64.signature') === null, 'Bad base64 parses to null');
+
+$validToken = makeTestJwt([
+    'aud' => ['aud-tag-12345'],
+    'email' => 'owner@retailmind.store',
+    'exp' => time() + 3600,
+    'nbf' => time() - 60,
+    'iss' => 'https://retailmind-team.cloudflareaccess.com',
+]);
+$parsed = RemoteIngress::parseJwt($validToken);
+check($parsed !== null && isset($parsed['payload']['email']), 'Valid JWT parses correctly');
+
+// Absent token when required
+$_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN'] = '1';
+$_SERVER['HTTP_CF_ACCESS_JWT_ASSERTION'] = '';
+check(!RemoteIngress::isAccessTokenValid(), 'Absent token rejected when required');
+
+// Expired token rejected
+$expiredToken = makeTestJwt([
+    'aud' => ['aud-tag-12345'],
+    'email' => 'owner@retailmind.store',
+    'exp' => time() - 100,
+    'nbf' => time() - 3600,
+]);
+check(!RemoteIngress::isAccessTokenValid($expiredToken), 'Expired token rejected');
+
+// Future nbf token rejected
+$futureToken = makeTestJwt([
+    'aud' => ['aud-tag-12345'],
+    'email' => 'owner@retailmind.store',
+    'exp' => time() + 3600,
+    'nbf' => time() + 300,
+]);
+check(!RemoteIngress::isAccessTokenValid($futureToken), 'Future nbf token rejected');
+
+// AUD mismatch rejected
+$_ENV['RETAILMIND_CF_ACCESS_AUD'] = 'expected-aud-12345';
+$wrongAudToken = makeTestJwt([
+    'aud' => ['wrong-aud'],
+    'email' => 'owner@retailmind.store',
+    'exp' => time() + 3600,
+]);
+check(!RemoteIngress::isAccessTokenValid($wrongAudToken), 'Mismatched AUD rejected');
+
+$rightAudToken = makeTestJwt([
+    'aud' => ['expected-aud-12345'],
+    'email' => 'owner@retailmind.store',
+    'exp' => time() + 3600,
+]);
+check(RemoteIngress::isAccessTokenValid($rightAudToken), 'Matching AUD accepted');
+unset($_ENV['RETAILMIND_CF_ACCESS_AUD']);
+
+// Team / issuer mismatch rejected
+$_ENV['RETAILMIND_CF_ACCESS_TEAM'] = 'correct-team';
+$wrongIssToken = makeTestJwt([
+    'iss' => 'https://evil-team.cloudflareaccess.com',
+    'email' => 'owner@retailmind.store',
+    'exp' => time() + 3600,
+]);
+check(!RemoteIngress::isAccessTokenValid($wrongIssToken), 'Mismatched issuer/team rejected');
+
+$rightIssToken = makeTestJwt([
+    'iss' => 'https://correct-team.cloudflareaccess.com',
+    'email' => 'owner@retailmind.store',
+    'exp' => time() + 3600,
+]);
+check(RemoteIngress::isAccessTokenValid($rightIssToken), 'Matching issuer/team accepted');
+unset($_ENV['RETAILMIND_CF_ACCESS_TEAM']);
+
+// Email claim mismatch with owner email rejected
+$_ENV['RETAILMIND_REMOTE_OWNER_EMAIL'] = 'owner@retailmind.store';
+$wrongEmailToken = makeTestJwt([
+    'email' => 'attacker@retailmind.store',
+    'exp' => time() + 3600,
+]);
+check(!RemoteIngress::isAccessTokenValid($wrongEmailToken), 'Mismatched token email rejected');
+
+// Header email vs token email mismatch rejected
+$_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'] = 'attacker@retailmind.store';
+$matchingEmailToken = makeTestJwt([
+    'email' => 'owner@retailmind.store',
+    'exp' => time() + 3600,
+]);
+check(!RemoteIngress::isAccessTokenValid($matchingEmailToken), 'Mismatch between header email and token email rejected');
+
+$_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'] = 'owner@retailmind.store';
+check(RemoteIngress::isAccessTokenValid($matchingEmailToken), 'Matching header and token email accepted');
+unset($_ENV['RETAILMIND_REMOTE_OWNER_EMAIL'], $_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'], $_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN']);
+
+// Cryptographic signature verification with OpenSSL
+$privKey = "-----BEGIN PRIVATE KEY-----\nMIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAMbLpJZ9kNFx6+pL\nYnDY4WVb9jPiUFzYze2FpPgirAxNUyqSC27U1coTupDy9Y7jVbLGwNVX0/TFTJlD\npHjKHeMlz3blFs+RC25Y2lZoK8gnHvTdUVaKDo4DiSaoLKu5yYw1IJMNZi+I8WkT\ne05RzH9B/eH9l3EJGLx7FhGTglqjAgMBAAECgYAG+T/V06PP5RoshuZ2JPWLM7Wo\nTkkZaLWYnnaSCc1VRSUkuijSg37Ybua9jPhWQd1Qvy4mjcUusfkk6z2KyzRPIrse\nIOM90uSoWtC9OjbtEiJPzXvJ7Prp2xOEPpg/5mCCWoRfaPNgyywPKWREAnQn+xqr\nq3O3tEiIlseMS/omAQJBAO6ynHij1tmIy99ZTjsczosGD88clkXPAv2aNVyrI7tJ\nwp2rIYeTgkIHD9pPAzuVL/JmjYb00gWZ1+wKgC28z6MCQQDVNJZGb8ZCUEaOUQi8\n6L/PnGjPANCpQ1jqY0U+FrBYbTi4ARaC843s9XJWvsny5hXS6jOZx5KnRORpnYr9\n8PkBAkAiDBANlTEcLksGPLLP87fyVJcEr8svgeunSMu7wB2EpWzBGJvbvsqhqGg2\nd3a6lPkV1lLxoRIkAmGuJYFLBNeJAkEAuCuo9Edxl68Ig790MNtNdeXCk648kTpg\nAHioQ64NvxT6PdiSvaPuIZcUoeJFSNGAYKV21YwUHvHf7WvtuNcEAQJAfmSeQjDh\nxleE62K0ILZzOYzTj9jk0zu3LsqDsPJIwJBFofFvtHWW77V6wKWDVZhuJcjygjKm\nRnnlGTR86eIx/g==\n-----END PRIVATE KEY-----\n";
+$pubKey = "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDGy6SWfZDRcevqS2Jw2OFlW/Yz\n4lBc2M3thaT4IqwMTVMqkgtu1NXKE7qQ8vWO41WyxsDVV9P0xUyZQ6R4yh3jJc92\n5RbPkQtuWNpWaCvIJx703VFWig6OA4kmqCyrucmMNSCTDWYviPFpE3tOUcx/Qf3h\n/ZdxCRi8exYRk4JaowIDAQAB\n-----END PUBLIC KEY-----\n";
+
+$_ENV['RETAILMIND_CF_ACCESS_PUBKEY'] = $pubKey;
+$signedToken = makeTestJwt([
+    'email' => 'owner@retailmind.store',
+    'exp' => time() + 3600,
+], $privKey);
+check(RemoteIngress::isAccessTokenValid($signedToken), 'Valid RS256 signature accepted');
+
+$tamperedToken = substr($signedToken, 0, -5) . 'aaaaa';
+check(!RemoteIngress::isAccessTokenValid($tamperedToken), 'Tampered RS256 signature rejected');
+unset($_ENV['RETAILMIND_CF_ACCESS_PUBKEY']);
 
 echo "Owner remote monitoring contract: passed\n";
