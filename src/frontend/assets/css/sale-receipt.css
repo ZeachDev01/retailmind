@@ -67,6 +67,7 @@
 .sale-receipt-dialog .checkout-complete-banner { flex-wrap: wrap; }
 .sale-receipt-dialog :focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
 .receipt-dialog-status { padding: 1rem; }
+.sale-receipt-dialog[open] { top: var(--cashier-visible-top, 0px); bottom: auto; margin: 12px auto; max-height: calc(var(--cashier-visible-height, 100dvh) - 24px); }
 @media print {
     @page { size: auto; margin: 0; }
     /* A direct body child avoids modal height/overflow and shell positioning. */
