@@ -27,6 +27,11 @@ const {chromium} = require('playwright');
         }
         browser = await chromium.launch({headless: true});
         const page = await browser.newPage();
+        await page.addInitScript(() => {
+            const decode = window.createImageBitmap;
+            window.profileDecodeCalls = 0;
+            window.createImageBitmap = (...args) => { window.profileDecodeCalls++; return decode(...args); };
+        });
         await page.goto(origin);
         const png = Buffer.from(await page.evaluate(() => {
             const canvas = document.createElement('canvas'); canvas.width = 400; canvas.height = 200;
@@ -109,6 +114,49 @@ const {chromium} = require('playwright');
             context.fillStyle = '#0000ff'; context.fillRect(200, 0, 200, 200);
             return ['image/jpeg', 'image/png', 'image/webp'].map(type => [type, canvas.toDataURL(type).split(',')[1]]);
         });
+        // Oversized headers must be rejected without allocating a decoded raster.
+        for (const [mimeType, encoded] of formats) {
+            const buffer = Buffer.from(encoded, 'base64');
+            if (mimeType === 'image/png') {
+                buffer.writeUInt32BE(8001, 16);
+            } else if (mimeType === 'image/jpeg') {
+                let offset = 2;
+                while (buffer[offset + 1] !== 0xc0 && buffer[offset + 1] !== 0xc2) offset += 2 + buffer.readUInt16BE(offset + 2);
+                buffer.writeUInt16BE(8001, offset + 7);
+            } else {
+                const type = buffer.toString('ascii', 12, 16);
+                if (type === 'VP8X') buffer.writeUIntLE(8000, 24, 3);
+                else if (type === 'VP8 ') buffer.writeUInt16LE(8001, 26);
+                else buffer.writeUInt32LE(8000, 21);
+            }
+            await page.goto(origin + '/profile?role=admin');
+            await page.locator('#profile_image').setInputFiles({name: 'oversized-header', mimeType, buffer});
+            await page.waitForFunction(() => document.getElementById('profile-crop-error').textContent !== '');
+            assert.equal(await page.evaluate(() => window.profileDecodeCalls), 0, mimeType + ': reject dimensions before decode');
+            assert(await page.getByRole('button', {name: 'Save picture'}).isDisabled());
+        }
+        for (const [type, data] of [
+            ['VP8X', Buffer.from([0, 0, 0, 0, 0x40, 0x1f, 0, 0, 0, 0])],
+            ['VP8 ', Buffer.from([0, 0, 0, 0x9d, 1, 0x2a, 0x41, 0x1f, 1, 0])],
+            ['VP8L', Buffer.from([0x2f, 0x40, 0x1f, 0, 0])]
+        ]) {
+            const header = Buffer.alloc(20);
+            header.write('RIFF'); header.writeUInt32LE(12 + data.length, 4); header.write('WEBP', 8);
+            header.write(type, 12); header.writeUInt32LE(data.length, 16);
+            const buffer = Buffer.concat([header, data, data.length % 2 ? Buffer.alloc(1) : Buffer.alloc(0)]);
+            await page.goto(origin + '/profile?role=admin');
+            await page.locator('#profile_image').setInputFiles({name: 'oversized.webp', mimeType: 'image/webp', buffer});
+            await page.waitForFunction(() => document.getElementById('profile-crop-error').textContent !== '');
+            assert.equal(await page.evaluate(() => window.profileDecodeCalls), 0, type + ': reject dimensions before decode');
+        }
+        const excessivePixels = Buffer.from(png);
+        excessivePixels.writeUInt32BE(7000, 16); excessivePixels.writeUInt32BE(6000, 20);
+        for (const buffer of [excessivePixels, png.subarray(0, 12)]) {
+            await page.goto(origin + '/profile?role=admin');
+            await page.locator('#profile_image').setInputFiles({name: 'invalid.png', mimeType: 'image/png', buffer});
+            await page.waitForFunction(() => document.getElementById('profile-crop-error').textContent !== '');
+            assert.equal(await page.evaluate(() => window.profileDecodeCalls), 0, 'Excessive pixels and truncated headers reject before decode');
+        }
         const tiff = Buffer.from('4d4d002a00000008000101120003000000010006000000000000', 'hex');
         const crc32 = bytes => {
             let crc = 0xffffffff;
@@ -166,9 +214,35 @@ const {chromium} = require('playwright');
         assert.equal(await page.locator('#profile-crop-y').inputValue(), '200', 'Keyboard vertical reposition reaches bottom');
         await Promise.all([page.waitForNavigation({waitUntil: 'load'}), page.getByRole('button', {name: 'Save picture'}).click()]);
         assert.equal((await state('admin')).center, 0x0000ff, 'Vertical crop persists bottom pixels');
-        await page.setViewportSize({width: 375, height: 812});
-        await page.goto(origin + '/profile?role=cashier'); await upload();
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Mobile crop fits viewport');
+        for (const width of [375, 768, 1440]) {
+            await page.setViewportSize({width, height: 900});
+            await page.goto(origin + '/profile?role=cashier'); await upload();
+            const avatar = await page.locator('.profile-picture-avatar').boundingBox();
+            assert.equal(avatar.width, 160, width + ': profile picture stays prominent');
+            assert.equal(avatar.height, 160, width + ': profile picture stays square');
+            await page.addStyleTag({url: origin + '/src/frontend/assets/css/theme.css'});
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+                const colors = await page.locator('#full_name').evaluate(input => {
+                    const styles = getComputedStyle(input);
+                    return [styles.borderTopColor, styles.backgroundColor];
+                });
+                const luminance = color => {
+                    const values = color.match(/\d+/g).slice(0, 3).map(value => {
+                        const channel = Number(value) / 255;
+                        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+                    });
+                    return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
+                };
+                const levels = colors.map(luminance).sort((a, b) => b - a);
+                assert((levels[0] + 0.05) / (levels[1] + 0.05) >= 3, theme + ': field boundary contrast');
+                for (const scale of ['100%', '200%']) {
+                    await page.evaluate(value => { document.documentElement.style.fontSize = value; }, scale);
+                    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, width + ': ' + theme + ' crop fits at ' + scale + ' text size');
+                }
+                await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+            }
+        }
         console.log('Profile picture crop browser: passed (persisted pixels, four roles, keyboard zoom/reposition, Save/Cancel, replacements, invalid requests, rollback failures, mobile)');
     } catch (error) { console.error(errors.slice(-2000)); throw error; } finally {
         if (browser) await browser.close();

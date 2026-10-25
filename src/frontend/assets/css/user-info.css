@@ -33,7 +33,7 @@
 
 .user-info-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+    grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr);
     gap: 1.5rem;
     align-items: start;
 }
@@ -53,17 +53,21 @@
     font-size: 1.05rem;
 }
 
-.profile-picture-settings {
-    display: block;
+.user-info-page .profile-picture-settings {
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 1.5rem;
     margin-bottom: 1.5rem;
     padding-bottom: 1.5rem;
     border-bottom: 1px solid var(--border);
 }
 
-.profile-picture-controls {
+.user-info-page .profile-picture-controls {
     display: grid;
     min-width: 0;
     gap: 1rem;
+    align-items: start;
+    justify-items: start;
 }
 
 .profile-picture-copy {
@@ -77,27 +81,27 @@
 }
 
 .user-info-page .profile-picture-avatar {
-    flex: 0 0 64px;
-    width: 64px;
-    height: 64px;
+    width: 160px;
+    height: 160px;
     border-radius: 14px;
     background: var(--theme-info-surface, #dbeafe);
     color: var(--theme-info-text, #1d4ed8);
-    font-size: 1.25rem;
+    font-size: 3rem;
 }
 
-.profile-picture-copy h3 {
+.profile-picture-copy h2 {
     margin: 0 0 0.2rem;
     color: var(--text);
-    font-size: 0.96rem;
+    font-size: 1.05rem;
 }
 
 .profile-picture-copy p {
+    margin: 0.5rem 0 0;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 0.95rem;
 }
 
-.profile-picture-form {
+.user-info-page .profile-picture-form {
     display: grid;
     min-width: 0;
     gap: 0.75rem;
@@ -106,6 +110,7 @@
 
 .profile-picture-picker {
     display: flex;
+    flex-wrap: wrap;
     min-width: 0;
     width: 100%;
     align-items: center;
@@ -144,16 +149,17 @@
 
 .profile-picture-filename {
     min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 0.95rem;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .profile-picture-form .field-help {
     margin: 0;
-    font-size: 0.8125rem;
+    font-size: 0.95rem;
 }
 
 #profile-crop-error:empty {
@@ -209,7 +215,7 @@
     gap: 1rem;
     padding-block: 0.75rem;
     border-bottom: 1px solid var(--border);
-    font-size: 0.875rem;
+    font-size: 0.95rem;
 }
 
 .account-detail-list > div:first-child {
@@ -255,7 +261,7 @@
 
 .account-security > p {
     margin-bottom: 1rem;
-    font-size: 0.875rem;
+    font-size: 0.95rem;
 }
 
 .account-security .btn {
@@ -283,7 +289,7 @@
 
 #profile-crop-editor legend {
     padding-inline: 0.25rem;
-    font-size: 0.875rem;
+    font-size: 0.95rem;
     font-weight: 600;
 }
 
@@ -304,6 +310,11 @@
 }
 
 @media (max-width: 720px) {
+    .user-info-page .profile-picture-settings {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
     .user-info-page .dashboard-section {
         padding: 1rem;
     }

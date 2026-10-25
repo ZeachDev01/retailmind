@@ -8,6 +8,14 @@ Core domain model and language for RetailMind single-store retail operations and
 The transfer of the Store's recorded state and uploaded files to another RetailMind installation, which becomes its sole active installation after verification. It supports movement between a local host and web hosting.
 _Avoid_: Synchronization, merging Stores
 
+**Identity Reconciliation**:
+The Super Administrator's explicit determination of whether accounts from the source and destination represent the same person before Database Restore. Different people remain separately attributable, and the destination's protected access remains authoritative.
+_Avoid_: Automatic account matching, general account merging
+
+**Historical Actor**:
+A person whose identity is retained to attribute past Store activity, without a usable login or current role through that identity. A Historical Actor cannot be enabled as an ordinary staff account.
+_Avoid_: Disabled Account, deleted user, active staff
+
 **Gross Sales**:
 The Store's completed Product sales before discounts and Cash Refunds. Gross Sales does not deduct product costs or operating expenses.
 _Avoid_: Net Sales, Gross Profit, earnings

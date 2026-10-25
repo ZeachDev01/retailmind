@@ -15,6 +15,8 @@ if ((bool)($_SESSION['is_recovery_account'] ?? false)) {
 
 $message = '';
 $messageClass = '';
+$profileValues = null;
+$fieldErrors = [];
 
 function account_format_datetime(?string $value): string
 {
@@ -112,12 +114,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $fullName = trim((string)($_POST['full_name'] ?? ''));
         $email = trim((string)($_POST['email'] ?? ''));
         $emailValue = $email === '' ? null : $email;
+        $profileValues = ['full_name' => $fullName, 'email' => $email];
 
         if ($fullName === '') {
-            $message = 'Full name is required.';
-            $messageClass = 'tag-warning';
+            $fieldErrors['full_name'] = 'Full name is required.';
+        } elseif (mb_strlen($fullName, 'UTF-8') > 100) {
+            $fieldErrors['full_name'] = 'Use 100 characters or fewer for your full name.';
+        }
+        if (mb_strlen($email, 'UTF-8') > 100) {
+            $fieldErrors['email'] = 'Use 100 characters or fewer for your email.';
         } elseif ($emailValue !== null && !filter_var($emailValue, FILTER_VALIDATE_EMAIL)) {
-            $message = 'Enter a valid email address.';
+            $fieldErrors['email'] = 'Enter a valid email address.';
+        }
+        if ($fieldErrors) {
+            $message = 'Check the highlighted fields and save again.';
             $messageClass = 'tag-warning';
         } else {
             try {
@@ -169,7 +179,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My profile · RetailMind</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/user-info.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/user-info.css?v=20261025-profile')) ?>">
 </head>
 
 <body class="user-info-page">
@@ -189,18 +199,13 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
 
             <div class="user-info-layout">
                 <section class="dashboard-section profile-card">
-                    <div class="section-header">
-                        <div>
-                            <h2>Personal information</h2>
-                        </div>
-                    </div>
                     <?php if (can_manage_own_profile_image()): ?>
                         <div class="profile-picture-settings">
+                            <?= profile_avatar_html((int)$account['user_id'], (string)$account['full_name'], $account['profile_image'] ?? null, 'profile-picture-avatar') ?>
                             <div class="profile-picture-controls">
                                 <div class="profile-picture-copy">
-                                    <?= profile_avatar_html((int)$account['user_id'], (string)$account['full_name'], $account['profile_image'] ?? null, 'profile-picture-avatar') ?>
                                     <div>
-                                        <h3>Profile picture</h3>
+                                        <h2>Profile picture</h2>
                                         <p>Optional. Your initials appear when no picture is set.</p>
                                     </div>
                                 </div>
@@ -244,16 +249,21 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                             </div>
                         </div>
                     <?php endif; ?>
+                    <div class="section-header">
+                        <h2>Personal information</h2>
+                    </div>
                     <form method="POST" class="form-grid profile-details-form" autocomplete="off">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="update_profile">
-                        <div class="form-group full">
+                        <div class="form-group full<?= isset($fieldErrors['full_name']) ? ' invalid' : '' ?>">
                             <label for="full_name">Full name (required)</label>
-                            <input id="full_name" name="full_name" autocomplete="name" value="<?= htmlspecialchars($account['full_name']) ?>" required>
+                            <input id="full_name" name="full_name" autocomplete="name" maxlength="100" value="<?= htmlspecialchars($profileValues['full_name'] ?? $account['full_name']) ?>" required<?= isset($fieldErrors['full_name']) ? ' aria-invalid="true" aria-describedby="full-name-error"' : '' ?>>
+                            <?php if (isset($fieldErrors['full_name'])): ?><small class="field-error" id="full-name-error"><?= htmlspecialchars($fieldErrors['full_name']) ?></small><?php endif; ?>
                         </div>
-                        <div class="form-group full">
+                        <div class="form-group full<?= isset($fieldErrors['email']) ? ' invalid' : '' ?>">
                             <label for="email">Email (optional)</label>
-                            <input type="email" id="email" name="email" autocomplete="email" value="<?= htmlspecialchars((string)($account['email'] ?? '')) ?>" placeholder="name@example.com">
+                            <input type="email" id="email" name="email" autocomplete="email" maxlength="100" value="<?= htmlspecialchars((string)($profileValues['email'] ?? $account['email'] ?? '')) ?>" placeholder="name@example.com"<?= isset($fieldErrors['email']) ? ' aria-invalid="true" aria-describedby="email-error"' : '' ?>>
+                            <?php if (isset($fieldErrors['email'])): ?><small class="field-error" id="email-error"><?= htmlspecialchars($fieldErrors['email']) ?></small><?php endif; ?>
                         </div>
                         <div class="full profile-save-row">
                             <button class="btn" type="submit">Save details</button>

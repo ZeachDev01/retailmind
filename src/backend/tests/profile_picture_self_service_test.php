@@ -58,12 +58,23 @@ if (($argv[1] ?? '') === 'request') {
     if ($scenario === 'persistence') {
         $pdo->exec("CREATE TRIGGER reject_picture BEFORE UPDATE OF profile_image ON users BEGIN SELECT RAISE(ABORT, 'Persistence failed'); END");
     }
+    if ($scenario === 'details-persistence') {
+        $pdo->exec("CREATE TRIGGER reject_details BEFORE UPDATE OF full_name ON users BEGIN SELECT RAISE(ABORT, 'Persistence failed'); END");
+    }
     $_SESSION = ['user_id' => 1, 'role' => $role, 'session_version' => 1, 'csrf_token' => 'valid-token'];
     if ($scenario === 'anonymous') unset($_SESSION['user_id']);
     $_SERVER['SCRIPT_NAME'] = '/components/auth/user_info.php';
     $_SERVER['REQUEST_METHOD'] = in_array($scenario, ['optional', 'missing'], true) ? 'GET' : 'POST';
     $_POST = ['action' => in_array($scenario, ['remove', 'remove-delete-error', 'remove-commit-error'], true) ? 'remove_profile_image' : 'replace_profile_image', 'csrf_token' => 'valid-token', 'crop' => ['x' => 0, 'y' => 0, 'size' => 1]];
     $_GET = [];
+    if (str_starts_with($scenario, 'details-')) {
+        $_POST = ['action' => 'update_profile', 'csrf_token' => 'valid-token', 'full_name' => 'Updated <Person>', 'email' => 'updated@example.com'];
+        if ($scenario === 'details-invalid') $_POST['email'] = 'invalid-email';
+        if ($scenario === 'details-empty') $_POST['full_name'] = '';
+        if ($scenario === 'details-long') $_POST['full_name'] = str_repeat('界', 101);
+        if ($scenario === 'details-long-email') $_POST['email'] = str_repeat('a', 90) . '@example.com';
+        if ($scenario === 'details-unicode') $_POST['full_name'] = str_repeat('界', 100);
+    }
     if ($scenario === 'target') $_POST['user_id'] = 2;
     if ($scenario === 'query-target') $_GET['user_id'] = 2;
     if ($scenario === 'csrf') unset($_POST['csrf_token']);
@@ -121,6 +132,21 @@ $request = static function (string $role, string $scenario): array {
     return $result;
 };
 foreach (['cashier', 'inventory_manager', 'admin', 'super_admin'] as $role) {
+    foreach (['invalid', 'empty', 'long', 'long-email', 'persistence'] as $failure) {
+        $result = $request($role, 'details-' . $failure);
+        $assert($result['name'] === 'Test Person' && str_contains($result['html'], 'tag-warning'), "{$role}: {$failure} must preserve saved details and show an error.");
+        $assert(str_contains($result['html'], 'maxlength="100"'), "{$role}: details must expose length constraints.");
+        if ($failure !== 'empty') {
+            $value = $failure === 'long' ? str_repeat('界', 101) : 'Updated &lt;Person&gt;';
+            $assert(str_contains($result['html'], 'value="' . $value . '"'), "{$role}: {$failure} must preserve and escape submitted name.");
+        }
+        if ($failure !== 'persistence') {
+            $field = in_array($failure, ['invalid', 'long-email'], true) ? 'email-error' : 'full-name-error';
+            $assert(str_contains($result['html'], 'aria-invalid="true" aria-describedby="' . $field . '"') && str_contains($result['html'], 'id="' . $field . '"'), "{$role}: {$failure} must associate the invalid field with its error.");
+        }
+    }
+    $result = $request($role, 'details-unicode');
+    $assert($result['name'] === str_repeat('界', 100) && str_contains($result['html'], 'tag-success'), "{$role}: 100 Unicode characters must remain valid.");
     foreach (['optional', 'missing'] as $scenario) {
         $result = $request($role, $scenario);
         $assert(str_contains($result['html'], 'Save picture'), "{$role}: picture action must be available.");
