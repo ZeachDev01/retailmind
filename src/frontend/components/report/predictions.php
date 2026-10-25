@@ -142,7 +142,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <p class="muted">Historical external data. The origin below stays on the dataset's final date; these results do not measure this Store's accuracy.</p>
         <?php endif; ?>
         <p><a class="btn btn-secondary" href="forecast_analytics.php">Forecast Analytics</a>
-            <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a></p>
+            <?php if (!(class_exists('\App\Core\RemoteIngress', false) && \App\Core\RemoteIngress::isRemoteMonitoringRequest())): ?><a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a><?php endif; ?></p>
 
         <?php if ($message): ?>
             <div class="alert <?= htmlspecialchars($messageClass) ?>">
@@ -219,7 +219,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                     </span>
                                 </td>
                                 <td>
-                                    <a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
+                                    <?php if (!(class_exists('\App\Core\RemoteIngress', false) && \App\Core\RemoteIngress::isRemoteMonitoringRequest())): ?><a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>"><?php else: ?><span class="muted"><?php endif; ?>
                                         Investigate
                                     </a>
                                 </td>

@@ -266,6 +266,35 @@ $roleSections = [
 ];
 
 $sections = $roleSections[$role] ?? [];
+if ((class_exists('\App\Core\RemoteIngress', false) && \App\Core\RemoteIngress::isRemoteMonitoringRequest())) {
+    $filterNav = static function (array $items) use (&$filterNav): array {
+        $allowed = [];
+        foreach ($items as $item) {
+            if (isset($item['items'])) {
+                $sub = $filterNav($item['items']);
+                if ($sub) {
+                    $item['items'] = $sub;
+                    $allowed[] = $item;
+                }
+            } elseif (isset($item['path'])) {
+                if (\App\Core\RemoteIngress::isApprovedRoute($item['path'])) {
+                    $allowed[] = $item;
+                }
+            } else {
+                $allowed[] = $item;
+            }
+        }
+        return $allowed;
+    };
+    $clean = [];
+    foreach ($sections as $section) {
+        $section['items'] = $filterNav($section['items'] ?? []);
+        if (!empty($section['items'])) {
+            $clean[] = $section;
+        }
+    }
+    $sections = $clean;
+}
 $GLOBALS['rm_navigation_flash'] = $flashMessages;
 $GLOBALS['rm_navigation_shell'] = [
     'name' => $sidebarUserName,

@@ -657,6 +657,12 @@ if ($validationError === null) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
+    if (\App\Core\RemoteIngress::isRemoteMonitoringRequest()) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Access denied: bulk export is unavailable on remote ingress.';
+        exit;
+    }
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $exportReport = request_value('report', 'sales_period');
     if ($exportReport === 'gross_profit') {
@@ -948,6 +954,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                     </div>
 
                     <div class="report-actions no-print">
+                        <?php if ((!class_exists('\App\Core\RemoteIngress', false) || !\App\Core\RemoteIngress::isRemoteMonitoringRequest())): ?>
                         <form method="POST">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="export_csv">
@@ -959,6 +966,9 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                             <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
                             <button type="submit" class="btn" id="export-csv-btn">Export CSV</button>
                         </form>
+                        <?php else: ?>
+                            <button type="button" class="btn" id="export-csv-btn" disabled title="Export CSV is unavailable on remote monitoring">Export CSV (Disabled)</button>
+                        <?php endif; ?>
                         <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
                         <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
                     </div>
@@ -1018,6 +1028,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                     </div>
 
                     <div class="report-actions no-print">
+                        <?php if ((!class_exists('\App\Core\RemoteIngress', false) || !\App\Core\RemoteIngress::isRemoteMonitoringRequest())): ?>
                         <form method="POST">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="export_csv">
@@ -1029,6 +1040,9 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                             <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
                             <button type="submit" class="btn">Export CSV</button>
                         </form>
+                        <?php else: ?>
+                            <button type="button" class="btn" disabled title="Export CSV is unavailable on remote monitoring">Export CSV (Disabled)</button>
+                        <?php endif; ?>
                         <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
                         <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
                     </div>
