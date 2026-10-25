@@ -39,6 +39,7 @@ if (!empty($_SERVER["HTTP_X_REQUIRE_ACCESS_TOKEN"])) {
 if (!empty($_SERVER["HTTP_X_CF_ACCESS_AUD"])) {
     $_ENV["RETAILMIND_CF_ACCESS_AUD"] = (string)$_SERVER["HTTP_X_CF_ACCESS_AUD"];
 }
+if (!empty($_SERVER["HTTP_X_CLEAR_OWNER_EMAIL"])) { unset($_ENV["RETAILMIND_REMOTE_OWNER_EMAIL"]); }
 
 require ' . $bootstrapPath . ';
 
@@ -88,6 +89,7 @@ if ($fixtureUser === "owner" && $adminUser) {
     $_SESSION["_restore_epoch"] = App\Backup\RecoveryStore::epoch();
 }
 
+if (!empty($_SERVER["HTTP_X_FIXTURE_SESSION_EXPIRED"])) { $_SESSION["_last_activity"] = time() - 7200; $_SESSION["_authenticated_at"] = time() - 7200; }
 $path = parse_url($_SERVER["REQUEST_URI"] ?? "/", PHP_URL_PATH);
 $file = realpath(' . $frontendDir . ' . ($path === "/" ? "/index.php" : $path));
 $root = realpath(' . $frontendDir . ');
@@ -180,7 +182,7 @@ require $file;
     [$code, $body] = $request('/components/system_administrator/backup_restore.php', $remoteHeaders);
     $assert($code === 403, 'Remote ingress to backup_restore.php must be denied with 403, got ' . $code);
 
-    foreach (['/export_shifts.php', '/record_shift.php', '/cash_in.php', '/export_reports.php', '/sales_export.php'] as $deniedEndpoint) {
+    foreach (['/export_shifts.php', '/record_shift.php', '/cash_in.php', '/export_reports.php', '/sales_export.php', '/components/invoice/sales.php', '/manifest.webmanifest', '/sw.js'] as $deniedEndpoint) {
         [$code, $body] = $request($deniedEndpoint, $remoteHeaders);
         $assert($code === 403, "Direct request to {$deniedEndpoint} must be denied with 403, got {$code}");
     }
@@ -205,6 +207,25 @@ require $file;
     ]);
     $assert($code === 403, 'Missing Access token when required must be denied with 403, got ' . $code);
     $assert(str_contains($body, 'missing or invalid Cloudflare Access token'), 'Denial message explains missing token');
+    [$code, $body] = $request('/components/administrator/dashboard.php', [
+        'Host' => 'monitor.retailmind.store',
+        'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
+        'X-Fixture-User' => 'owner',
+        'X-Require-Access-Token' => '1',
+        'X-Clear-Owner-Email' => '1',
+    ]);
+    $assert($code === 403, 'Missing owner email when token required must fail closed with 403, got ' . $code);
+
+    // Session idle timeout / expiry on remote origin
+    [$code, $body, $headersList] = $request('/components/administrator/dashboard.php', array_merge($remoteHeaders, [
+        'X-Fixture-Session-Expired' => '1',
+    ]));
+    $assert($code === 302, 'Expired session on remote monitoring must redirect (302) to login, got ' . $code);
+    $location = '';
+    foreach ($headersList as $h) {
+        if (stripos($h, 'Location:') === 0) { $location = trim(substr($h, 9)); break; }
+    }
+    $assert(str_contains($location, 'login=1') || str_contains($location, '?login=1'), 'Expired remote session redirects to login');
 
     // Reject malformed or expired JWT assertion
     $b64u = static fn(string $v): string => rtrim(strtr(base64_encode($v), '+/', '-_'), '=');
@@ -406,6 +427,11 @@ require $file;
     // Multi-role owner switches workspace to cashier remotely
     [$code, $body, $wsHeaders] = $request('/components/auth/workspace.php', $multiHeaders, 'POST', 'workspace=cashier&csrf_token=fixture-csrf');
     $assert($code === 302, 'Workspace switch responds with redirect (302), got ' . $code);
+    $wsLocation = '';
+    foreach ($wsHeaders as $h) {
+        if (stripos($h, 'Location:') === 0) { $wsLocation = trim(substr($h, 9)); break; }
+    }
+    $assert(str_contains($wsLocation, 'components/cashier/shifts.php'), 'Remote workspace switch redirects to shifts.php, got ' . $wsLocation);
 
     // After switching workspace, cashier role attempts cashier POS: denied with 403
     [$code, $body] = $request('/components/cashier/pos.php', [

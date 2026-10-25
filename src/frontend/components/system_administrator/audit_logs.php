@@ -17,12 +17,6 @@ $tableRequest = $isTableRequest ? $_GET : [];
 $isExport = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
     && ($_POST['action'] ?? '') === 'export_csv';
 
-if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST" && \App\Core\RemoteIngress::isRemoteMonitoringRequest()) {
-    http_response_code(403);
-    echo "Access denied: write actions and exports are disabled on remote ingress.";
-    exit;
-}
-
 if ($isExport) {
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $userFilter = trim((string)($_POST['user_id'] ?? ''));
@@ -179,12 +173,6 @@ if ($isTableRequest) {
 }
 
 $logs = $isExport ? $protectedAuditRecords->exportRows($actorRole, $auditFilters) : [];
-
-if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST" && \App\Core\RemoteIngress::isRemoteMonitoringRequest()) {
-    http_response_code(403);
-    echo "Access denied: write actions and exports are disabled on remote ingress.";
-    exit;
-}
 
 if ($isExport) {
     $rows = array_map(static function (array $log): array {

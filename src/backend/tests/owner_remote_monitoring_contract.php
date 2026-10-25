@@ -115,8 +115,6 @@ foreach ([
     '/retailmind/components/report/data_readiness.php',
     '/components/report/predictions.php',
     '/retailmind/components/report/predictions.php',
-    '/components/invoice/sales.php',
-    '/retailmind/components/invoice/sales.php',
     '/reports.php',
     '/retailmind/reports.php',
     '/analytics.php',
@@ -131,8 +129,6 @@ foreach ([
     '/retailmind/assets/css/style.css',
     '/assets/js/app.js',
     '/favicon.ico',
-    '/manifest.webmanifest',
-    '/sw.js',
 ] as $approved) {
     check(RemoteIngress::isApprovedRoute($approved), "Route {$approved} must be approved on remote ingress");
 }
@@ -158,6 +154,10 @@ foreach ([
     '/api/database_dump.php',
     '/export_reports.php',
     '/sales_export.php',
+    '/components/invoice/sales.php',
+    '/retailmind/components/invoice/sales.php',
+    '/manifest.webmanifest',
+    '/sw.js',
 ] as $unapproved) {
     check(!RemoteIngress::isApprovedRoute($unapproved), "Route {$unapproved} must be denied on remote ingress");
 }
@@ -211,12 +211,13 @@ unset($_SERVER['RETAILMIND_REMOTE_INGRESS'], $_SERVER['HTTPS']);
 
 // 6. Cloudflare Access token validation
 function makeTestJwt(array $payload, ?string $privateKey = null, array $header = ['alg' => 'RS256', 'typ' => 'JWT']): string {
-    $h = RemoteIngress::base64UrlEncode(json_encode($header));
-    $p = RemoteIngress::base64UrlEncode(json_encode($payload));
+    $b64u = static fn(string $v): string => rtrim(strtr(base64_encode($v), '+/', '-_'), '=');
+    $h = $b64u(json_encode($header));
+    $p = $b64u(json_encode($payload));
     $sig = 'mock-sig';
     if ($privateKey !== null) {
         openssl_sign($h . '.' . $p, $rawSig, $privateKey, OPENSSL_ALGO_SHA256);
-        $sig = RemoteIngress::base64UrlEncode($rawSig);
+        $sig = $b64u($rawSig);
     }
     return $h . '.' . $p . '.' . $sig;
 }
@@ -225,7 +226,7 @@ function makeTestJwt(array $payload, ?string $privateKey = null, array $header =
 check(!RemoteIngress::isAccessTokenRequired(), 'Access token not required by default');
 $_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN'] = '1';
 check(RemoteIngress::isAccessTokenRequired(), 'RETAILMIND_REQUIRE_ACCESS_TOKEN=1 requires token');
-unset($_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN']);
+unset($_SERVER['RETAILMIND_REMOTE_INGRESS'], $_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN']);
 
 $_ENV['RETAILMIND_CF_ACCESS_AUD'] = 'aud-tag-12345';
 check(RemoteIngress::isAccessTokenRequired(), 'Configured AUD requires token');
@@ -337,5 +338,25 @@ check(RemoteIngress::isAccessTokenValid($signedToken), 'Valid RS256 signature ac
 $tamperedToken = substr($signedToken, 0, -5) . 'aaaaa';
 check(!RemoteIngress::isAccessTokenValid($tamperedToken), 'Tampered RS256 signature rejected');
 unset($_ENV['RETAILMIND_CF_ACCESS_PUBKEY']);
+
+// 7. Fail closed on remote ingress when Access token is required but owner email is unconfigured
+$_SERVER['RETAILMIND_REMOTE_INGRESS'] = '1';
+$_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN'] = '1';
+unset($_ENV['RETAILMIND_REMOTE_OWNER_EMAIL'], $_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL']);
+check(!RemoteIngress::isOwnerEmailAllowed(), 'Missing owner email must fail closed when Access token required');
+check(!RemoteIngress::isAccessTokenValid($validToken), 'Valid token without configured owner email must fail closed');
+unset($_ENV['RETAILMIND_REQUIRE_ACCESS_TOKEN']);
+
+// 8. Session idle timeout / expiry under remote origin
+$_SERVER['RETAILMIND_REMOTE_INGRESS'] = '1';
+Session::start();
+$_SESSION['user_id'] = 99;
+$_SESSION['_authenticated_at'] = time() - 7200;
+$_SESSION['_last_activity'] = time() - 7200;
+Session::start();
+check(!isset($_SESSION['user_id']), 'Expired remote session clears user_id on timeout');
+check(isset($_SESSION['_flash_error']), 'Expired remote session sets flash error');
+Session::destroy();
+unset($_SERVER['RETAILMIND_REMOTE_INGRESS']);
 
 echo "Owner remote monitoring contract: passed\n";

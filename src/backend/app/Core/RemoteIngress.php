@@ -46,6 +46,9 @@ final class RemoteIngress
     {
         $requiredEmail = strtolower(trim((string)Environment::get('RETAILMIND_REMOTE_OWNER_EMAIL', '')));
         if ($requiredEmail === '') {
+            if (self::isRemote() && self::isAccessTokenRequired()) {
+                return false;
+            }
             return true;
         }
 
@@ -76,11 +79,6 @@ final class RemoteIngress
             $input .= str_repeat('=', $padlen);
         }
         return base64_decode(strtr($input, '-_', '+/'), true);
-    }
-
-    public static function base64UrlEncode(string $input): string
-    {
-        return rtrim(strtr(base64_encode($input), '+/', '-_'), '=');
     }
 
     public static function parseJwt(?string $jwt): ?array
@@ -137,7 +135,7 @@ final class RemoteIngress
             if ((int)$payload['exp'] < ($now - 30)) {
                 return false;
             }
-        } elseif ($required) {
+        } elseif (self::isRemote() && $required) {
             return false;
         }
 
@@ -189,6 +187,8 @@ final class RemoteIngress
             if ($headerEmail !== '' && !hash_equals($headerEmail, $tokenEmail)) {
                 return false;
             }
+        } elseif (self::isRemote() && $required) {
+            return false;
         }
 
         $publicKey = Environment::get('RETAILMIND_CF_ACCESS_PUBKEY');
@@ -283,7 +283,6 @@ final class RemoteIngress
             'components/report/forecast_exceptions.php',
             'components/report/data_readiness.php',
             'components/report/predictions.php',
-            'components/invoice/sales.php',
             'reports.php',
             'analytics.php',
         ], true)) {
@@ -295,8 +294,6 @@ final class RemoteIngress
             'components/auth/session_activity.php',
             'components/auth/workspace.php',
             'favicon.ico',
-            'manifest.webmanifest',
-            'sw.js',
         ], true)) {
             return true;
         }

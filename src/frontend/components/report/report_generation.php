@@ -657,12 +657,6 @@ if ($validationError === null) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
-    if (\App\Core\RemoteIngress::isRemoteMonitoringRequest()) {
-        http_response_code(403);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Access denied: bulk export is unavailable on remote ingress.';
-        exit;
-    }
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $exportReport = request_value('report', 'sales_period');
     if ($exportReport === 'gross_profit') {

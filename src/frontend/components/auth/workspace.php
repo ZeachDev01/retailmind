@@ -33,7 +33,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             null,
             ['workspace' => $requestedWorkspace]
         );
-        header('Location: ' . app_url(RoleWorkspaceRouter::pathFor($requestedWorkspace)));
+        $target = RoleWorkspaceRouter::pathFor($requestedWorkspace);
+        if (\App\Core\RemoteIngress::isRemoteMonitoringRequest()) {
+            $target = $requestedWorkspace === 'cashier'
+                ? 'components/cashier/shifts.php'
+                : 'components/administrator/dashboard.php';
+        }
+        header('Location: ' . app_url($target));
         exit;
     }
 }

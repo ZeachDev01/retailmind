@@ -219,9 +219,11 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                     </span>
                                 </td>
                                 <td>
-                                    <?php if (!(class_exists('\App\Core\RemoteIngress', false) && \App\Core\RemoteIngress::isRemoteMonitoringRequest())): ?><a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>"><?php else: ?><span class="muted"><?php endif; ?>
-                                        Investigate
-                                    </a>
+                                    <?php if (!(class_exists('\App\Core\RemoteIngress', false) && \App\Core\RemoteIngress::isRemoteMonitoringRequest())): ?>
+                                        <a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">Investigate</a>
+                                    <?php else: ?>
+                                        <span class="muted">Investigate</span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
