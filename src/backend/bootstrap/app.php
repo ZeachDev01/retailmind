@@ -135,15 +135,29 @@ set_exception_handler(static function (Throwable $exception): void {
 
 // The filesystem lease survives MySQL DDL commits and database replacement.
 // Only the explicit offline recovery command can enter an incomplete restore.
+$scriptFile = realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
+$scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? ''));
+$requestUri = str_replace('\\', '/', (string)($_SERVER['REQUEST_URI'] ?? ''));
+
 $offlineRecovery = PHP_SAPI === 'cli'
-    && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === realpath($backendPath . '/scripts/restore_database.php');
-if (!$offlineRecovery && !App\Backup\RecoveryStore::admitRequest()) {
+    && $scriptFile === realpath($backendPath . '/scripts/restore_database.php');
+
+$isRecoveryRoute = PHP_SAPI !== 'cli' && (
+    str_ends_with($scriptName, '/components/backup/recovery.php')
+    || str_contains($requestUri, '/components/backup/recovery.php')
+    || str_ends_with($scriptName, '/components/backup/backup_status.php')
+    || str_contains($requestUri, '/components/backup/backup_status.php')
+    || $requestUri === '/recovery'
+    || str_starts_with($requestUri, '/recovery?')
+);
+
+if (!$offlineRecovery && !$isRecoveryRoute && !App\Backup\RecoveryStore::admitRequest()) {
     if (PHP_SAPI !== 'cli') {
         http_response_code(503);
         header('Retry-After: 30');
         header('Content-Type: text/plain; charset=utf-8');
     }
-    echo 'Database recovery is in progress. Store access is paused. The Super Administrator can finish recovery using the offline restore command.';
+    echo 'Database recovery is in progress. Store access is paused. Authorized administrators can check recovery status at /components/backup/recovery.php or finish recovery using the offline restore command.';
     exit(1);
 }
 
