@@ -124,7 +124,7 @@ final class DatabaseRestoreService
         }
         // These historical actor columns deliberately have no database foreign key.
         $users = array_fill_keys(array_map(static fn(array $user): string => (string)$user['user_id'], $rows['users'] ?? []), true);
-        foreach (['branches' => ['created_by'], 'sales' => ['discount_authorized_by'], 'restore_preserved_activity' => ['user_id']] as $table => $columns) {
+        foreach (['branches' => ['created_by'], 'sales' => ['discount_authorized_by']] as $table => $columns) {
             foreach ($rows[$table] ?? [] as $row) foreach ($columns as $column) {
                 if (isset($row[$column]) && !isset($users[(string)$row[$column]])) {
                     throw new DomainException('The package contains an unresolved historical actor in ' . $table . '.' . $column . '.');

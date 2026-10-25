@@ -28,6 +28,8 @@ php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/identity_reconciliation_mysql_test.php
 node src/backend/tests/backup_package_browser_test.js
+php -d memory_limit=512M src/backend/tests/safety_copy_workflow_integration.php
+node src/backend/tests/safety_copy_browser_test.js
 php src/backend/tests/backup_unavailable_navigation_test.php
 php src/backend/tests/sql_backup_format_test.php
 php -d memory_limit=512M src/backend/tests/store_package_format_test.php

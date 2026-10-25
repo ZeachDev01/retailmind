@@ -86,6 +86,8 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 </section>
             <?php endif; ?>
 
+            <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
+
             <div class="card-grid">
                 <section class="dashboard-section">
                     <h2>Create backup</h2>
