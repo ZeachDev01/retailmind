@@ -59,7 +59,7 @@ if (ReceivingService::$saves !== 0 || !str_contains($error, 'Nothing was saved')
 $complete = $post;
 $complete['lines'] = [$post['lines'][0]];
 [$error, $message] = submitReceiving($complete);
-if (ReceivingService::$saves !== 1 || $error !== '' || !str_contains($message, 'Shopping entry saved.')
+if (ReceivingService::$saves !== 1 || $error !== '' || !str_contains($message, 'Receiving entry saved.')
     || isset($_SESSION['receiving_nonces']['test-nonce'])) {
     throw new RuntimeException('A complete submission must save once and consume its nonce');
 }

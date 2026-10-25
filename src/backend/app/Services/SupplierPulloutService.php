@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/InventorySubmission.php";
 // app/Services/SupplierPulloutService.php
 
 require_once __DIR__ . '/NotificationService.php';
@@ -108,6 +109,8 @@ class SupplierPulloutService
     public function recordPullout(array $data, int $userId): array
     {
         $this->assertManagerRole($userId);
+        $submission = new InventorySubmission($this->pdo, $userId, 'pullout', $data);
+        if (($completed = $submission->completed()) !== null) return $completed;
 
         $productId = (int)($data['product_id'] ?? 0);
         if ($productId <= 0) {
@@ -281,15 +284,7 @@ class SupplierPulloutService
             $movementStmt->execute([$productId, -$quantity, $userId, $pulloutId, $pulledAt]);
             $movementId = (int)$this->pdo->lastInsertId();
 
-            $this->pdo->commit();
-
-            try {
-                $this->notificationService->checkAndNotifyLowStock();
-            } catch (Throwable) {
-                // Non-critical background alert
-            }
-
-            return [
+            $result = [
                 'pullout_id' => $pulloutId,
                 'movement_id' => $movementId,
                 'product_id' => $productId,
@@ -308,6 +303,16 @@ class SupplierPulloutService
                 'pulled_at' => $pulledAt,
                 'notes' => $notes,
             ];
+            $submission->remember($result);
+            $this->pdo->commit();
+
+            try {
+                $this->notificationService->checkAndNotifyLowStock();
+            } catch (Throwable) {
+                // Non-critical background alert
+            }
+
+            return $result;
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/InventorySubmission.php";
 // app/Services/InventoryCountService.php
 
 require_once __DIR__ . '/NotificationService.php';
@@ -121,6 +122,9 @@ class InventoryCountService
 
     public function recordCount(array $data, int $userId): int
     {
+        $this->assertRole($userId, 'inventory_manager');
+        $submission = new InventorySubmission($this->pdo, $userId, 'count', $data);
+        if (($completed = $submission->completed()) !== null) return $completed;
         $productId = (int)($data['product_id'] ?? 0);
         $reason = trim((string)($data['discrepancy_reason'] ?? ''));
         $relatedAdjustmentId = (int)($data['related_adjustment_id'] ?? 0);
@@ -452,6 +456,7 @@ class InventoryCountService
                 }
             }
 
+            $submission->remember($countId);
             $this->pdo->commit();
             return $countId;
         } catch (Throwable $e) {
@@ -462,8 +467,11 @@ class InventoryCountService
         }
     }
 
-    public function approveCount(int $countId, int $userId): void
+    public function approveCount(int $countId, int $userId, string $operationToken = ''): void
     {
+        $this->assertRole($userId, 'inventory_manager');
+        $submission = new InventorySubmission($this->pdo, $userId, 'approveCount', ['operation_token' => $operationToken, 'count_id' => $countId]);
+        if ($submission->completed() !== null) return;
         if ($countId <= 0) {
             throw new RuntimeException('Invalid count selected.');
         }
@@ -772,6 +780,7 @@ class InventoryCountService
                 ]
             );
 
+            $submission->remember(true);
             $this->pdo->commit();
             $this->notificationService->checkAndNotifyLowStock();
             $this->notificationService->checkAndNotifyExpiringStock();
@@ -784,12 +793,17 @@ class InventoryCountService
     }
 
 
-    public function rejectCount(int $countId, int $userId): void
+    public function rejectCount(int $countId, int $userId, string $operationToken = ''): void
     {
+        $this->assertRole($userId, 'inventory_manager');
+        $submission = new InventorySubmission($this->pdo, $userId, 'rejectCount', ['operation_token' => $operationToken, 'count_id' => $countId]);
+        if ($submission->completed() !== null) return;
         if ($countId <= 0) {
             throw new RuntimeException('Invalid count selected.');
         }
 
+        StoreWriteGate::begin($this->pdo);
+        try {
         [$scopeSql, $scopeParams] = $this->productScope();
         $stmt = $this->pdo->prepare(
             "UPDATE inventory_counts ic
@@ -801,6 +815,12 @@ class InventoryCountService
 
         if ($stmt->rowCount() === 0) {
             throw new RuntimeException('Only pending counts can be rejected.');
+        }
+        $submission->remember(true);
+        $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
         }
     }
 

@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
+header('Cache-Control: no-store');
 require_role(['admin', 'super_admin', 'inventory_manager']);
 
 $canManageInventory = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
@@ -17,6 +18,7 @@ function product_ids_from_request($value): array
 
 function redirect_products(string $type, string $message): void
 {
+    if (in_array($type, ['success', 'warning'], true)) $_SESSION['inventory_confirmed_draft'] = $_POST['inventory_draft_id'] ?? null;
     header('Location: products.php?' . $type . '=' . urlencode($message));
     exit;
 }
@@ -210,6 +212,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $productId = $productService->createProduct([
+                'product_image_fingerprint' => !empty($_FILES['product_image']['tmp_name']) ? hash_file('sha256', $_FILES['product_image']['tmp_name']) : '',
+                'operation_token' => $_POST['operation_token'] ?? '',
                 'barcode' => $_POST['barcode'] ?? '',
                 'product_name' => $_POST['product_name'] ?? '',
                 'brand' => $_POST['brand'] ?? '',
@@ -249,6 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newProduct = $newProductStmt->fetch() ?: [];
             log_activity($pdo, (int)$_SESSION['user_id'], 'Product creation', 'Products', $productId, null, $newProduct);
 
+            $_SESSION['inventory_confirmed_draft'] = $_POST['inventory_draft_id'] ?? null;
             $labelQuantity = max(1, min(200, (int)($_POST['label_quantity'] ?? 1)));
             if (!empty($_POST['print_after_create'])) {
                 header('Location: print_barcodes.php?product_id=' . $productId . '&quantity=' . $labelQuantity . '&autoprint=1');
@@ -285,6 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         csrf_verify();
         try {
             $productService->adjustStock([
+                'operation_token' => $_POST['operation_token'] ?? '',
                 'qty_change' => (int)($_POST['qty_change'] ?? 0),
                 'product_id' => (int)($_POST['product_id'] ?? 0),
                 'adjustment_reason' => trim((string)($_POST['adjustment_reason'] ?? '')),
@@ -303,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $loosePieces = (int)($_POST['loose_pieces'] ?? 0);
             $reason = trim((string)($_POST['reconciliation_reason'] ?? ''));
 
-            $result = $productService->reconcilePhysicalStock($productId, $sealedPacks, $loosePieces, $reason, (int)$_SESSION['user_id']);
+            $result = $productService->reconcilePhysicalStock($productId, $sealedPacks, $loosePieces, $reason, (int)$_SESSION['user_id'], (string)($_POST['operation_token'] ?? ''));
 
             $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
                 || (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'));
@@ -1130,6 +1136,7 @@ foreach ($products as $product) {
             .product-table-shell td.mobile-hide { display: table-cell; padding: .8rem 1rem; }
         }
     </style>
+<?php require __DIR__ . '/../../../backend/includes/inventory_drafts.php'; ?>
 </head>
 
 <body class="products-page">
@@ -2343,6 +2350,7 @@ foreach ($products as $product) {
                 });
                 const result = await response.json();
                 if (result.success && result.product) {
+                    await window.RetailMindInventoryDrafts?.discard(document.getElementById("product-edit-form"));
                     Object.assign(product, result.product);
                     updateProductTableRow(product);
                     isDrawerDirty = false;
@@ -2489,6 +2497,7 @@ foreach ($products as $product) {
                     });
                     const result = await response.json();
                     if (result.success && result.product) {
+                        await RetailMindInventoryDrafts.discard(reconcileForm);
                         const prod = productsById[result.product.product_id] || {};
                         Object.assign(prod, result.product);
                         productsById[result.product.product_id] = prod;
@@ -2722,6 +2731,7 @@ foreach ($products as $product) {
         });
 
         function setWizardStep(step) {
+            queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
             wizardStep = Math.max(1, Math.min(5, step));
             document.querySelectorAll('.wizard-panel').forEach(panel => panel.classList.toggle('active', Number(panel.dataset.panel) === wizardStep));
             document.querySelectorAll('.wizard-step-indicator').forEach((indicator, index) => {
@@ -2932,134 +2942,41 @@ foreach ($products as $product) {
             document.getElementById('product-review').innerHTML = items.map(([label, value]) => `<div class="detail-item"><span>${label}</span><strong>${String(value).replace(/[<>]/g,'')}</strong></div>`).join('');
         }
 
-        // Form state preservation for Add Product modal
-        const FORM_STATE_KEY = 'retail_mind_add_product_state';
-        const FORM_STEP_KEY = 'retail_mind_add_product_step';
         const productModalOverlay = document.getElementById('add-product-modal');
-
-        function saveFormState() {
-            const formData = new FormData(addProductForm);
-            const state = {};
-            formData.forEach((value, key) => {
-                const field = addProductForm.elements[key];
-                if (field && field.type !== 'hidden' && field.type !== 'file') {
-                    state[key] = value;
-                }
-            });
-            localStorage.setItem(FORM_STATE_KEY, JSON.stringify(state));
-            localStorage.setItem(FORM_STEP_KEY, String(wizardStep));
-        }
-
-        function restoreFormState() {
-            const savedState = localStorage.getItem(FORM_STATE_KEY);
-            const savedStep = localStorage.getItem(FORM_STEP_KEY);
-            let hasSavedPackCounts = !stockSalesPacksWrapper.hidden;
-
-            if (savedState) {
-                try {
-                    const state = JSON.parse(savedState);
-                    hasSavedPackCounts = Object.hasOwn(state, 'starting_packs') &&
-                        (!state.starting_stock_mode || state.starting_stock_mode === 'packs');
-                    Object.entries(state).forEach(([name, value]) => {
-                        const field = addProductForm.elements[name];
-                        if (field && field.type !== 'hidden') {
-                            if (field.type === 'checkbox') {
-                                field.checked = value === '1' || value === true;
-                            } else if (field.type === 'file') {
-                                // File inputs cannot be set programmatically for security reasons
-                                // Skip file input restoration
-                            } else {
-                                field.value = value;
-                            }
-                        }
-                    });
-
-                    // Restore the image preview if it was previously selected
-                    const imageInput = document.getElementById('product-image-input');
-                    if (imageInput && imageInput.value) {
-                        const event = new Event('change', {
-                            bubbles: true
-                        });
-                        imageInput.dispatchEvent(event);
-                    }
-                } catch (e) {
-                    console.error('Failed to restore form state:', e);
-                }
-            }
-
-            syncUnitSelects();
-            // Restore explicit physical counts without converting the saved total into packs.
-            stockSalesPacksWrapper.hidden = !(Number(packSizeInput.value) > 1 && hasSavedPackCounts);
-            syncStartingStockFields();
-
-            if (savedStep) {
-                const step = Math.max(1, Math.min(5, Number(savedStep)));
-                setWizardStep(step);
-            } else {
-                setWizardStep(1);
-            }
-        }
-
-        function clearFormState() {
-            addProductForm.reset();
-            syncUnitSelects();
-            localStorage.removeItem(FORM_STATE_KEY);
-            localStorage.removeItem(FORM_STEP_KEY);
-            syncStartingStockFields();
-            wizardStep = 1;
-            setWizardStep(1);
-            saveButton.disabled = false;
-            saveButton.innerHTML = '<i class="bi bi-check2"></i> Save Product';
-
-            // Clear image preview
-            const imageInput = document.getElementById('product-image-input');
-            const imagePreviewContainer = document.getElementById('image-preview-container');
-            if (imageInput) imageInput.value = '';
-            if (imagePreviewContainer) imagePreviewContainer.hidden = true;
-        }
-
-        productModalOverlay.addEventListener('retailmind:overlayopen', restoreFormState);
-
-        // Save form state when modal is about to close
-        productModalOverlay.addEventListener('click', event => {
-            if (event.target === productModalOverlay) {
-                saveFormState();
-            }
-        });
-
-        // Save state when close button is clicked
-        document.querySelectorAll('#add-product-modal .rm-close').forEach(button => {
-            button.addEventListener('click', saveFormState);
-        });
-
-        // Save state when Cancel button is clicked
-        document.querySelectorAll('#add-product-modal [data-close-modal]').forEach(button => {
-            button.addEventListener('click', saveFormState);
-        });
-
-        // Clear state on successful form submission
-        const originalFormAction = addProductForm.action;
-        addProductForm.addEventListener('submit', event => {
-            // Only clear state if form will actually submit (no validation errors)
-            if (!event.defaultPrevented) {
-                setTimeout(() => {
-                    clearFormState();
-                }, 100);
-            }
-        });
-
-        // Reset button functionality
         document.getElementById('wizard-reset').addEventListener('click', async event => {
             event.preventDefault();
-            const confirmed = await RetailMindUI.confirm({
-                title: 'Clear entered data',
-                message: 'Are you sure you want to clear all entered data? This action cannot be undone.',
-                confirmText: 'Clear data',
-                danger: true
-            });
-            if (confirmed) {
-                clearFormState();
-                RetailMindUI.toast('Form reset. All data has been cleared.', 'info', 'Form cleared');
+            if (await RetailMindUI.confirm({title: 'Clear entered data', message: 'Discard this Product draft?', confirmText: 'Discard', danger: true})) {
+                RetailMindInventoryDrafts.discard(addProductForm);
+                addProductForm.reset();
+                syncUnitSelects();
+                syncStartingStockFields();
+                setWizardStep(1);
+            }
+        });
+
+        document.addEventListener('inventorydraft:capture', event => {
+            if (event.detail.form === addProductForm) event.detail.draft.context.step = wizardStep;
+            if (['product-edit-form', 'pack-reconcile-form'].includes(event.detail.form.id)) event.detail.draft.context.productId = currentDrawerProductId;
+        });
+        document.addEventListener('inventorydraft:prepare', event => {
+            const draft = event.detail.draft;
+            if (draft.formId === 'add-product-form') {
+                RetailMindUI.openOverlay(productModalOverlay);
+                setWizardStep(draft.context.step || 1);
+            } else if (draft.formId === 'product-edit-form') {
+                event.detail.waitUntil(Promise.resolve(openProductDrawer(draft.context.productId)).then(() => enterProductEditMode()));
+            } else {
+                if (draft.context.productId) openProductDrawer(draft.context.productId);
+                const target = Array.from(document.forms).find(form => RetailMindInventoryDrafts.identity(form) === draft.id);
+                const overlay = target?.closest('.rm-modal-overlay');
+                if (overlay) RetailMindUI.openOverlay(overlay);
+            }
+        });
+        document.addEventListener('inventorydraft:restored', event => {
+            if (event.detail.form === addProductForm) {
+                syncUnitSelects();
+                syncStartingStockFields();
+                setWizardStep(event.detail.draft.context.step || 1);
             }
         });
 
@@ -3093,12 +3010,38 @@ foreach ($products as $product) {
                 RetailMindUI.toast(error.message || 'Product lookup failed. Please try again.', 'error');
             }
         }
+        // shortcut: Enter-terminated bursts under 80ms are scanner input; verify thresholds on physical hardware.
+        let protectedScan = null;
         document.addEventListener('keydown', event => {
-            const addingBarcode = productModalOverlay.classList.contains('open') && wizardStep === 2;
+            const field = event.target;
+            const productForm = field.closest('#add-product-form, #product-edit-form');
+            if (!productForm || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+            const barcodeField = ['barcode', 'case_barcode', 'pack_barcode'].includes(field.name);
+            const now = performance.now();
+            if (event.key === 'Enter') {
+                if (barcodeField || (protectedScan?.field === field && protectedScan.count >= 3 && now - protectedScan.at < 80)) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    if (!barcodeField) {
+                        field.value = protectedScan.value;
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                        RetailMindUI.toast('Select a barcode field before scanning. Other entered values were kept.', 'info');
+                    }
+                }
+                protectedScan = null;
+            } else if (event.key.length === 1 && !barcodeField && field.matches('input, textarea, select')) {
+                if (!protectedScan || protectedScan.field !== field || now - protectedScan.at > 80) {
+                    protectedScan = { field, value: field.value, count: 0 };
+                }
+                protectedScan.at = now;
+                protectedScan.count++;
+            } else protectedScan = null;
+        }, true);
+        document.addEventListener('keydown', event => {
             const editing = event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]');
             if (event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey || document.hidden
                 || editing || document.querySelector('dialog[open], .swal2-container, .command-overlay.open')
-                || (document.querySelector('.rm-modal-overlay.open') && !addingBarcode)) {
+                || document.querySelector('.rm-modal-overlay.open')) {
                 resetProductKeyboardScan();
                 return;
             }
@@ -3111,16 +3054,7 @@ foreach ($products as $product) {
                 if (code.length < 3) return;
                 event.preventDefault();
                 event.stopImmediatePropagation();
-                if (addingBarcode) {
-                    if (code.length > barcodeInput.maxLength) {
-                        RetailMindUI.toast('Barcode is too long. Use up to ' + barcodeInput.maxLength + ' characters.', 'error');
-                        return;
-                    }
-                    barcodeInput.value = code;
-                    barcodeInput.dispatchEvent(new Event('input', { bubbles: true }));
-                } else {
-                    productScanQueue = productScanQueue.then(() => findScannedProduct(code));
-                }
+                productScanQueue = productScanQueue.then(() => findScannedProduct(code));
             } else if (event.key.length === 1 && /^[\x21-\x7E]$/.test(event.key)) {
                 productKeyboardCode += event.key;
                 productKeyboardAt = now;

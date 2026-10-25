@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/StockIssueService.php';
+header('Cache-Control: no-store');
 require_role(['inventory_manager']);
 
 $stockIssueService = new StockIssueService($pdo, null, (string)current_role());
@@ -29,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if ($action === 'approve') {
             $batchAllocations = isset($_POST['batches']) && is_array($_POST['batches']) ? $_POST['batches'] : null;
-            $stockIssueService->approveReport($adjustmentId, (int)$_SESSION['user_id'], trim((string)($_POST['review_notes'] ?? '')), $batchAllocations);
+            $stockIssueService->approveReport($adjustmentId, (int)$_SESSION['user_id'], trim((string)($_POST['review_notes'] ?? '')), $batchAllocations, (string)($_POST['operation_token'] ?? ''));
             $message = "Report #{$adjustmentId} approved. Inventory deducted and a linked stock movement recorded.";
             log_activity(
                 $pdo,
@@ -41,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ['status' => 'approved']
             );
         } elseif ($action === 'reject') {
-            $stockIssueService->rejectReport($adjustmentId, (int)$_SESSION['user_id'], trim((string)($_POST['review_notes'] ?? '')));
+            $stockIssueService->rejectReport($adjustmentId, (int)$_SESSION['user_id'], trim((string)($_POST['review_notes'] ?? '')), (string)($_POST['operation_token'] ?? ''));
             $message = "Report #{$adjustmentId} rejected. Inventory unchanged.";
             log_activity(
                 $pdo,
@@ -58,7 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $adjustmentId,
                 (int)$_SESSION['user_id'],
                 trim((string)($_POST['review_notes'] ?? '')),
-                $newCategory !== '' ? $newCategory : null
+                $newCategory !== '' ? $newCategory : null,
+                (string)($_POST['operation_token'] ?? '')
             );
             $message = "Report #{$adjustmentId} returned to the cashier for correction. The cashier was notified.";
             log_activity(
@@ -105,6 +107,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/stock-issues.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/stock-issues.css')) ?>">
+<?php require __DIR__ . '/../../../backend/includes/inventory_drafts.php'; ?>
 </head>
 
 <body class="stock-issues-page">

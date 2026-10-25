@@ -350,9 +350,9 @@ function fixture(action) {
         await page.getByRole('button', {name: 'Edit line 1'}).click();
         assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '2', 'edit line jumps back to step 2');
         await page.locator('#receiving_next').click();
-        await page.locator('[name="receiving_nonce"]').evaluate(input => { input.value = 'expired-ui-test'; });
+        await page.locator('[name="operation_token"]').evaluate(input => { input.value = 'invalid-ui-test'; });
         await Promise.all([page.waitForNavigation(), page.locator('.btn-submit').click()]);
-        assert.match(await page.locator('.message.error').innerText(), /already been saved or expired/);
+        assert.match(await page.locator('.message.error').innerText(), /cannot be identified/);
         assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '2', 'server rejection restores to Step 2');
         assert.equal(await page.locator('#received_packages').inputValue(), '2', 'server rejection retains entered package quantity');
         assert.equal(await page.locator('#damaged_qty').inputValue(), '1', 'server rejection retains damaged quantity');
@@ -373,7 +373,7 @@ function fixture(action) {
         const state = JSON.parse(fixture('inventory_state'));
         assert.equal(Number(state.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 57, 'package submission updates persisted stock once');
         const replay = await page.context().request.post(url, {form:Object.fromEntries(new URLSearchParams(savedRequest.postData()))});
-        assert.match(await replay.text(), /already been saved or expired/);
+        assert.match(await replay.text(), /cannot be identified/);
         const replayState = JSON.parse(fixture('inventory_state'));
         assert.equal(Number(replayState.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 57, 'replayed receipt never updates stock twice');
         await page.goto(url);
