@@ -172,6 +172,8 @@ try {
                 </section>
             </div>
 
+            <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
+
             <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="history-title">
                 <div class="recovery-panel-heading"><h2 id="history-title">Backup history</h2><span class="history-total"><?= count($history) ?> <?= count($history) === 1 ? 'record' : 'records' ?></span></div>
                 <?php if ($history): ?>

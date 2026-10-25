@@ -11,13 +11,16 @@ require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_any_capability([\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP]);
 
 $token = (string)($_GET['token'] ?? '');
+$isSafety = isset($_GET['safety']);
 $service = new App\Backup\DatabaseBackupService($pdo, role_capability_policy());
 validate_current_session($pdo);
 
 try {
     // Binding the reference to the requester happens inside the shared
     // workflow, which compares the artifact's requested_by with this session.
-    $download = $service->resolveDownload($token, (int)$_SESSION['user_id'], (string)current_role());
+    $download = $isSafety
+        ? (new App\Backup\SafetyCopyService($pdo, role_capability_policy()))->resolveDownload((string)$_GET['safety'], (int)$_SESSION['user_id'], (string)current_role())
+        : $service->resolveDownload($token, (int)$_SESSION['user_id'], (string)current_role());
 } catch (DomainException $exception) {
     http_response_code(404);
     header('Content-Type: text/plain; charset=utf-8');
@@ -59,7 +62,7 @@ try {
     if (function_exists('fastcgi_finish_request')) {
         fastcgi_finish_request();
     }
-    $service->discardAfterDelivery($path);
+    if (!$isSafety) $service->discardAfterDelivery($path);
     // Bounded cleanup for anything an interrupted request left behind.
     $service->cleanupStrandedArtifacts();
 }
