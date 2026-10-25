@@ -96,6 +96,47 @@ const fixture = action => {
         const checked = await submit(data.password, backupPassphrase);
         assert.equal(checked.status(), 200);
         assert.match(await checked.text(), /No Store records or files were replaced/);
+        const identityUrl = origin + '/components/system_administrator/identity_reconciliation.php';
+        assert.equal((await administrator.page.goto(identityUrl)).status(), 403, 'Administrator cannot reconcile privileged identities');
+        assert.equal((await manager.page.goto(identityUrl)).status(), 403);
+        assert.equal((await superAdministrator.context.request.post(identityUrl, { form: { action: 'review' } })).status(), 403, 'Identity choices need CSRF');
+        await superAdministrator.page.goto(identityUrl);
+        const fillIdentityCredentials = async () => {
+            await superAdministrator.page.getByLabel('Encrypted Store package', { exact: true }).setInputFiles({ name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: packageBytes });
+            await superAdministrator.page.getByLabel('Current destination login password').fill(data.password);
+            await superAdministrator.page.getByLabel("This package's original backup passphrase").fill(backupPassphrase);
+        };
+        await fillIdentityCredentials();
+        await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.getByRole('button', { name: 'Inspect people and conflicts' }).click()]);
+        assert.equal(await superAdministrator.page.getByRole('heading', { name: 'Destination people', exact: true }).count(), 1, await superAdministrator.page.locator('body').innerText());
+        assert.match(await superAdministrator.page.locator('body').innerText(), /share numeric ID/);
+        for (const id of [1, 2, 3, 4]) {
+            assert.equal(await superAdministrator.page.locator('#resolution-' + id).inputValue(), '', 'Matching ID never preselects a link');
+            await superAdministrator.page.locator('#resolution-' + id).selectOption('link');
+            await superAdministrator.page.locator('#destination-' + id).selectOption(String(id));
+        }
+        await fillIdentityCredentials();
+        await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.getByRole('button', { name: 'Review resolutions' }).click()]);
+        assert.match(await superAdministrator.page.getByRole('status').innerText(), /ready for destination security approval/);
+        assert(!await superAdministrator.page.locator('body').innerHTML().then(html => html.includes('$2y$') || html.includes('$argon2')), 'Review never emits password verifiers');
+        for (const width of [390, 1440]) {
+            await superAdministrator.page.setViewportSize({ width, height: 960 });
+            assert(await superAdministrator.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), 'Identity review fits viewport');
+        }
+        fixture('identity_historical');
+        await manager.page.goto(identityUrl);
+        assert(!manager.page.url().endsWith('/identity_reconciliation.php'), 'Roleless Historical Actor loses an existing session');
+        const historicalContext = await browser.newContext();
+        const historicalPage = await historicalContext.newPage();
+        await historicalPage.goto(origin + '/?login=1');
+        await historicalPage.locator('#landing-login-username').fill('theme_inventory_manager');
+        await historicalPage.locator('#landing-login-password').fill(data.password);
+        await Promise.all([historicalPage.waitForNavigation(), historicalPage.getByRole('button', { name: 'Log in', exact: true }).click()]);
+        assert(!historicalPage.url().includes('/components/'), 'Historical Actor cannot authenticate with the former password');
+        const historicalCsrf = await historicalPage.locator('input[name="csrf_token"]').first().inputValue();
+        await historicalContext.request.post(origin + '/components/auth/forgot_password.php', { form: { csrf_token: historicalCsrf, identity: 'historical@example.test' } });
+        assert.equal(fixture('identity_reset_count').trim(), '0', 'Historical Actor cannot request a reset token');
+        await historicalContext.close();
         await superAdministrator.page.goto(superUrl);
         await superAdministrator.page.locator('#backup-passphrase').fill(backupPassphrase);
         await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.locator('[data-backup-create]').click()]);

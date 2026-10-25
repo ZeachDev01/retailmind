@@ -6,6 +6,13 @@ Current ordinary capture/preflight: [Encrypted Store package contract](STORE_PAC
 
 Enter a separate backup passphrase (16–1024 bytes), create, then download. Keep the package and an off-server passphrase recovery copy separately. Creation history confirms capture, not that your browser saved it. Missing every passphrase copy makes the package unusable. See the linked contract for runtime limits, complete upload capture, CLI input and security inventory.
 
+## Identity Reconciliation preview
+
+The Super Administrator can open **Review Identity Reconciliation** from Backup & Restore. Upload a compatible encrypted package and enter the current destination login password plus that package's separate passphrase. Source installation access is not required. The preview lists source/destination people and matching numeric IDs, usernames and emails; no match automatically links people.
+
+Choose an explicit same-person destination account or unused login details for each distinct ordinary person. Leaving the optional email blank explicitly clears it. Links retain the entire destination account, including password, status, roles, security state and profile. Source privileged-only and Recovery identities become roleless Historical Actors: disabled, unusable passwords, no memberships/reset/recovery authority, and permanently excluded from account activation or role assignment. Ordinary source memberships are restricted to the destination's fixed role templates. A reviewed result requires an active ordinary Administrator; designation is explicit.
+
+Reselect the same package and supply both secrets again to review resolutions. This read-only preview stores neither decrypted package contents nor credentials and never authorizes replacement. Protected preparation and security approval are a separate delivery step. Existing historical JSON stays unchanged; installation-aware record provenance resolves embedded source identities and survives repeated transfers. Required imported images receive collision-free paths without replacing destination profiles. Both installations must apply `202610250002_identity_provenance`; exact-schema package checks remain enforced. Actual hosted recovery/migration proof remains #288.
 ## Verified encrypted destination safety copies
 
 Both administrator backup screens provide **Destination safety copy**. Enter your current destination login password and a separately supplied safety-copy passphrase (16–1024 bytes). This captures the current complete database and referenced Product/profile images using the existing coordinated encrypted capture. Full decryption, schema/type/uniqueness/foreign-key and upload-integrity checks complete before safety readiness is published. Ordinary encrypted replacement remains disabled.

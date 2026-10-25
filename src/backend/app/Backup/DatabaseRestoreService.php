@@ -36,7 +36,7 @@ final class DatabaseRestoreService
     }
 
     /** Read-only: successful validation never grants replacement authority. */
-    public function preflight(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
+    public function readPackage(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
         #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
     {
         $this->authorize($actorRole);
@@ -55,6 +55,14 @@ final class DatabaseRestoreService
             throw new DomainException($exception->getMessage(), 0, $exception);
         }
         $this->validateReferences($package['rows']);
+        return $package;
+    }
+
+    public function preflight(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
+        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
+    {
+        $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $backupPassphrase);
+        $schema = SqlBackupFormat::schema($this->pdo);
         $conflicts = [];
         foreach (['user_id' => 'id', 'username' => 'username', 'email' => 'email'] as $column => $kind) {
             if (!in_array($column, $schema['users']['columns'] ?? [], true)) continue;

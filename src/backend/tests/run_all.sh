@@ -26,6 +26,7 @@ php src/backend/tests/procurement_schema_integration.php
 php -d max_input_vars=1000 src/backend/tests/receiving_submission_contract.php
 php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
+php src/backend/tests/identity_reconciliation_mysql_test.php
 node src/backend/tests/backup_package_browser_test.js
 php -d memory_limit=512M src/backend/tests/safety_copy_workflow_integration.php
 node src/backend/tests/safety_copy_browser_test.js

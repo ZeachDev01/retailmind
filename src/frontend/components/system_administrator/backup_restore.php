@@ -172,6 +172,7 @@ try {
                 </section>
             </div>
 
+            <p><a href="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php')) ?>">Review Identity Reconciliation</a></p>
             <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
 
             <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="history-title">

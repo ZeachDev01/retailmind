@@ -62,6 +62,14 @@ _Avoid_: System administrator, global administrator, inventory manager
 An encrypted, consistent package of the Store database and required uploaded Product/profile images, which either administrator role may create and download using a separate backup passphrase. A decrypted complete package includes restricted captured records. See STORE_PACKAGE_FORMAT.md for the current capture/preflight boundary.
 _Avoid_: Parallel backup, report export
 
+**Identity Reconciliation**:
+The destination Super Administrator's explicit read-only review of source people, destination accounts, conflicts and resulting access. Matching identifiers never establish identity. Links retain destination account authority; distinct ordinary people use deliberately selected unused login details. Source privileged-only and Recovery people remain Historical Actors with no usable access. The preview and origin-aware projection are implemented; protected approval, recovery and ordinary replacement are separate delivery gates.
+_Avoid_: Automatic account matching, general account merging
+
+**Historical Actor**:
+An identity retained only for attribution, represented as a disabled roleless user with an unusable password and no memberships, reset authority or recovery state. It cannot be enabled or assigned a role. Installation-aware provenance preserves original names, login details, roles and embedded historical IDs without changing frozen receipt or audit JSON.
+_Avoid_: Disabled Account, deleted user, active staff
+
 **Database Restore**:
 The replacement of the entire active Store database, including accounts, settings, and audit history, with the state captured in a Database Backup. Only the Super Administrator may perform it; newer database records are not retained, while the restoration itself is recorded separately.
 _Avoid_: Import report, undo backup

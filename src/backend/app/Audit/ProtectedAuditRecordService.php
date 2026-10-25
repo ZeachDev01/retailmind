@@ -2,6 +2,8 @@
 
 namespace App\Audit;
 
+require_once __DIR__ . '/../Backup/RecordProvenance.php';
+
 use App\Authorization\RoleCapabilityPolicy;
 use DomainException;
 use PDO;
@@ -40,7 +42,17 @@ final class ProtectedAuditRecordService
         }
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
-        return $statement->fetchAll(PDO::FETCH_ASSOC);
+        $records = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $provenance = new \App\Backup\RecordProvenance($this->pdo);
+        foreach ($records as &$record) {
+            $identity = $provenance->actor('activity_log', ['log_id' => $record['log_id']], null, (int)$record['user_id']);
+            if ($identity === null) continue;
+            $record['actor_provenance'] = $identity;
+            $record['full_name'] = $identity['original']['full_name'] ?? $record['full_name'];
+            $record['username'] = $identity['original']['username'] ?? $record['username'];
+        }
+        unset($record);
+        return $records;
     }
 
     public function count(string $actorRole, array $filters = []): int
