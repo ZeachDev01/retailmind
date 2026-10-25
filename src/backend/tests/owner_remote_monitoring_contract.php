@@ -17,6 +17,7 @@ RemoteIngress::reset();
 $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
 $_SERVER['HTTP_HOST'] = 'localhost';
 check(!RemoteIngress::isRemote(), 'Localhost with loopback address must be local');
+check(!RemoteIngress::isRemoteMonitoringRequest(), 'isRemoteMonitoringRequest matches isRemote when local');
 
 // Arbitrary forwarding headers must not trigger remote or disguise local
 $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.195';
@@ -29,7 +30,7 @@ unset($_SERVER['HTTP_X_FORWARDED_FOR'], $_SERVER['HTTP_X_FORWARDED_HOST'], $_SER
 // Environment flag
 $_SERVER['RETAILMIND_REMOTE_INGRESS'] = '1';
 check(RemoteIngress::isRemote(), 'Server environment flag marks request as remote ingress');
-check(RemoteIngress::isRemoteMonitoringRequest(), 'isRemoteMonitoringRequest alias matches isRemote');
+check(RemoteIngress::isRemoteMonitoringRequest(), 'isRemoteMonitoringRequest matches isRemote when remote');
 unset($_SERVER['RETAILMIND_REMOTE_INGRESS']);
 
 // Dedicated listener port
@@ -84,6 +85,15 @@ foreach ([
     '/components/system_administrator/audit_logs.php',
     '/retailmind/components/system_administrator/audit_logs.php',
     '/components/modals/audit_log.php',
+    '/components/report/report_generation.php',
+    '/components/report/receiving_history.php',
+    '/components/report/forecast_analytics.php',
+    '/components/report/forecast_exceptions.php',
+    '/components/report/data_readiness.php',
+    '/components/report/predictions.php',
+    '/components/invoice/sales.php',
+    '/reports.php',
+    '/analytics.php',
     '/components/auth/logout.php',
     '/components/auth/session_activity.php',
     '/components/auth/change_password.php',
@@ -102,6 +112,8 @@ foreach ([
     '/components/cashier/refunds.php',
     '/components/inventory_management/stock_issues.php',
     '/components/system_administrator/backup_restore.php',
+    '/components/administrator/database_backup.php',
+    '/components/backup/backup_download.php',
     '/components/system_administrator/system_settings.php',
     '/components/user_manager/user_manager.php',
     '/components/administrator/reset_data.php',
@@ -110,11 +122,27 @@ foreach ([
     '/export_shifts.php',
     '/record_shift.php',
     '/cash_in.php',
+    '/export_reports.php',
+    '/sales_export.php',
 ] as $unapproved) {
     check(!RemoteIngress::isApprovedRoute($unapproved), "Route {$unapproved} must be denied on remote ingress");
 }
 
-// 3. Database configuration uses Store PC database on public hostname with trusted config
+// 3. Export request detection
+check(!RemoteIngress::isExportRequest(), 'Normal request is not export');
+$_POST['action'] = 'export_csv';
+check(RemoteIngress::isExportRequest(), 'POST action=export_csv is export request');
+unset($_POST['action']);
+
+$_GET['export'] = 'csv';
+check(RemoteIngress::isExportRequest(), 'GET export=csv is export request');
+unset($_GET['export']);
+
+$_GET['format'] = 'csv';
+check(RemoteIngress::isExportRequest(), 'GET format=csv is export request');
+unset($_GET['format']);
+
+// 4. Database configuration uses Store PC database on public hostname with trusted config
 $_ENV['DATABASE_ENV'] = 'local';
 $_SERVER['HTTP_HOST'] = 'monitor.retailmind.store';
 $dbConfig = require __DIR__ . '/../config/database.php';
@@ -130,7 +158,7 @@ $dbConfig = require __DIR__ . '/../config/database.php';
 check($dbConfig['database'] === 'cloud_db', 'Hosted database must be selected when DATABASE_ENV=hosted');
 unset($_ENV['DATABASE_ENV'], $_ENV['DB_HOST'], $_ENV['DB_NAME'], $_ENV['DB_USER'], $_ENV['DB_PASSWORD'], $_SERVER['HTTP_HOST']);
 
-// 4. Session cookie secure flag under remote ingress
+// 5. Session cookie secure flag under remote ingress
 $_SERVER['RETAILMIND_REMOTE_INGRESS'] = '1';
 $_SERVER['HTTPS'] = 'off';
 check(Session::shouldUseSecureCookie(), 'Remote ingress must enforce secure session cookie even over HTTP tunnel hop');

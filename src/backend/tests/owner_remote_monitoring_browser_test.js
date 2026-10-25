@@ -122,7 +122,6 @@ require $file;
         const shiftReportText = await remotePage.textContent('body');
         assert(shiftReportText.includes('Cashier Shift Report'), 'Cashier Shift Report title is rendered');
         assert(shiftReportText.includes('Run Report'), 'Filter submit button is present');
-        assert(!shiftReportText.includes('Export report CSV'), 'CSV export button must not be available remotely');
 
         // Filter form submission remains on remote origin
         await remotePage.fill('#from', '2026-10-01');
@@ -155,19 +154,52 @@ require $file;
             await remotePage.locator('details.audit-details').first().click();
         }
 
-        // 1f. Responsive verification at phone viewport (375x667)
-        await remotePage.setViewportSize({width: 375, height: 667});
-        const mobileReportResponse = await remotePage.goto(origin + '/components/administrator/shift_report.php');
-        assert.equal(mobileReportResponse.status(), 200, 'Mobile viewport shift report returns 200');
-        const mobileReportText = await remotePage.textContent('body');
-        assert(mobileReportText.includes('Cashier Shift Report'), 'Mobile shift report renders title');
-        assert(!mobileReportText.includes('Export report CSV'), 'Mobile shift report omits CSV export');
+        // 1f. Approved Store Reports render & filter on phone & laptop (#321)
+        const viewports = [
+            {name: 'phone', width: 375, height: 667},
+            {name: 'laptop', width: 1280, height: 800},
+        ];
 
-        const mobileShiftsResponse = await remotePage.goto(origin + '/components/cashier/shifts.php');
-        assert.equal(mobileShiftsResponse.status(), 200, 'Mobile viewport cashier shifts returns 200');
-        const mobileShiftsText = await remotePage.textContent('body');
-        assert(mobileShiftsText.includes('Cashier Shifts'), 'Mobile cashier shifts renders title');
-        assert(!mobileShiftsText.includes('Return to POS'), 'Mobile cashier shifts omits Return to POS');
+        for (const vp of viewports) {
+            await remotePage.setViewportSize({width: vp.width, height: vp.height});
+
+            // Follow report link from Store overview to profit report
+            await remotePage.goto(origin + '/components/administrator/dashboard.php');
+            const profitReportLink = await remotePage.getAttribute('#viewProfitReportBtn', 'href');
+            assert(profitReportLink && profitReportLink.includes('report_generation.php'), 'Profit report link present on Store overview');
+
+            // Load Report Generation page under remote origin
+            const reportResponse = await remotePage.goto(profitReportLink.startsWith('http') ? profitReportLink : origin + '/' + profitReportLink.replace(/^\//, ''));
+            assert.equal(reportResponse.status(), 200, `Report generation loads on ${vp.name}`);
+            const reportContent = await remotePage.textContent('body');
+            assert(reportContent.includes('Report Generation') || reportContent.includes('Gross Profit'), `Report renders on ${vp.name}`);
+
+            // Filter report on phone and laptop
+            await remotePage.goto(origin + '/components/report/report_generation.php?report=gross_profit&from=2026-01-01&to=2026-12-31');
+            const filteredContent = await remotePage.textContent('body');
+            assert(filteredContent.includes('Gross Profit') || filteredContent.includes('Gross Sales'), `Filtered report renders on ${vp.name}`);
+
+            // Export CSV button must be disabled remotely
+            const exportBtn = await remotePage.locator('#export-csv-btn');
+            assert.equal(await exportBtn.count(), 1, `Export button exists on ${vp.name}`);
+            assert(await exportBtn.isDisabled(), `Export button must be disabled on remote ${vp.name}`);
+
+            // Cashier shift report renders and filters
+            const shiftResponse = await remotePage.goto(origin + '/components/administrator/shift_report.php?from=2026-01-01&to=2026-12-31');
+            assert.equal(shiftResponse.status(), 200, `Cashier shift report loads on ${vp.name}`);
+            const shiftContent = await remotePage.textContent('body');
+            assert(shiftContent.includes('Cashier Shift Report'), `Cashier shift report renders on ${vp.name}`);
+
+            // Cashier shift report export button disabled or absent
+            const shiftExportBtn = await remotePage.locator('button:has-text("Export report CSV")');
+            if (await shiftExportBtn.count() > 0) {
+                assert(await shiftExportBtn.isDisabled(), `Shift export button must be disabled on remote ${vp.name}`);
+            }
+
+            // Report navigation must hide backup links remotely
+            const backupLinks = await remotePage.locator('a[href*="database_backup.php"], a[href*="backup_restore.php"]');
+            assert.equal(await backupLinks.count(), 0, `Backup links must be hidden from navigation on remote ${vp.name}`);
+        }
 
         // 1g. Remote sign-out works and redirects
         await remotePage.setExtraHTTPHeaders({

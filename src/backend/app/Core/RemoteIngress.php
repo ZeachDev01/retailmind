@@ -53,6 +53,26 @@ final class RemoteIngress
         return $provided !== '' && hash_equals($requiredEmail, $provided);
     }
 
+    public static function isExportRequest(): bool
+    {
+        $action = strtolower(trim((string)($_POST['action'] ?? $_GET['action'] ?? '')));
+        if (in_array($action, ['export', 'export_csv', 'download', 'backup'], true)) {
+            return true;
+        }
+
+        $export = strtolower(trim((string)($_POST['export'] ?? $_GET['export'] ?? '')));
+        if ($export !== '') {
+            return true;
+        }
+
+        $format = strtolower(trim((string)($_POST['format'] ?? $_GET['format'] ?? '')));
+        if (in_array($format, ['csv', 'sql', 'dump', 'zip'], true)) {
+            return true;
+        }
+
+        return false;
+    }
+
     public static function isApprovedRoute(?string $path = null): bool
     {
         $normalized = self::normalizePath($path);
@@ -67,6 +87,15 @@ final class RemoteIngress
             'components/cashier/shifts.php',
             'components/system_administrator/audit_logs.php',
             'components/modals/audit_log.php',
+            'components/report/report_generation.php',
+            'components/report/receiving_history.php',
+            'components/report/forecast_analytics.php',
+            'components/report/forecast_exceptions.php',
+            'components/report/data_readiness.php',
+            'components/report/predictions.php',
+            'components/invoice/sales.php',
+            'reports.php',
+            'analytics.php',
         ], true)) {
             return true;
         }
@@ -109,6 +138,10 @@ final class RemoteIngress
             self::deny('Access denied: unapproved route on remote ingress.');
         }
 
+        if (self::isExportRequest()) {
+            self::deny('Access denied: bulk export or download is unavailable on remote ingress.');
+        }
+
         $normalized = self::normalizePath();
         $readOnlyMonitoringRoutes = [
             'components/administrator/dashboard.php',
@@ -116,6 +149,13 @@ final class RemoteIngress
             'components/cashier/shifts.php',
             'components/system_administrator/audit_logs.php',
             'components/modals/audit_log.php',
+            'components/report/report_generation.php',
+            'components/report/receiving_history.php',
+            'components/report/forecast_analytics.php',
+            'components/report/forecast_exceptions.php',
+            'components/report/data_readiness.php',
+            'components/report/predictions.php',
+            'components/invoice/sales.php',
         ];
         if (in_array($normalized, $readOnlyMonitoringRoutes, true)) {
             $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));

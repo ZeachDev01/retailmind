@@ -33,6 +33,7 @@ try {
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (RemoteIngress::isRemoteMonitoringRequest()) {
         http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
         echo 'Access denied: write actions and exports are disabled on remote ingress.';
         exit;
     }
@@ -76,7 +77,7 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
             <?php foreach ($registers as $register): ?><option value="<?= (int)$register['register_id'] ?>" <?= $filters['register_id'] === (string)$register['register_id'] ? 'selected' : '' ?>><?= shift_report_e($register['name']) ?> (#<?= (int)$register['register_id'] ?>)</option><?php endforeach; ?>
             </select></div>
             <div class="form-group"><label for="shift_id">Cashier Shift</label><select id="shift_id" name="shift_id"><option value="">All shifts</option><option value="legacy" <?= $filters['shift_id'] === 'legacy' ? 'selected' : '' ?>>Legacy / Unassigned</option>
-            <?php foreach ($shifts as $shift): ?><option value="<?= (int)$shift['shift_id'] ?>" <?= $filters['shift_id'] === (string)$shift['shift_id'] ? 'selected' : '' ?>>#<?= (int)$shift['shift_id'] ?> · <?= shift_report_e($shift['opened_at']) ?></option><?php endforeach; ?>
+            <?php foreach ($shifts as $shift): ?><option value="<?= (int)$shift['shift_id'] ?>" <?= $filters['shift_id'] === (string)$shift['shift_id'] ? 'selected' : '' ?>><#<?= (int)$shift['shift_id'] ?> · <?= shift_report_e($shift['opened_at']) ?></option><?php endforeach; ?>
             </select></div><button type="submit" class="btn">Run Report</button>
         </form>
     </section>
@@ -91,6 +92,8 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
             <?php foreach ($filters as $name => $value): ?><input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>"><?php endforeach; ?>
             <button class="btn" type="submit" <?= $error !== '' ? 'disabled' : '' ?>>Export report CSV</button>
         </form>
+        <?php else: ?>
+        <div class="report-actions"><button class="btn" type="button" disabled title="Export unavailable on remote monitoring">Export report CSV (Disabled)</button></div>
         <?php endif; ?>
     </section>
 </main></div></body></html>

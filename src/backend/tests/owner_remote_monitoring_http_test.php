@@ -115,36 +115,36 @@ require $file;
     }
     $assert($ready, 'HTTP fixture ready');
 
-    $request = static function (string $uri, array $headers = [], string $method = 'GET', ?string $postBody = null): array {
+    $request = static function (string $uri, array $headers = [], string $method = 'GET', ?string $body = null): array {
         global $address;
         $headerLines = [];
         foreach ($headers as $k => $v) {
             $headerLines[] = "{$k}: {$v}";
         }
-        if ($postBody !== null && !isset($headers['Content-Type'])) {
-            $headerLines[] = 'Content-Type: application/x-www-form-urlencoded';
+        if ($body !== null && !isset($headers['Content-Type'])) {
+            $headerLines[] = "Content-Type: application/x-www-form-urlencoded";
+            $headerLines[] = "Content-Length: " . strlen($body);
         }
         $headerStr = implode("\r\n", $headerLines) . "\r\n";
 
-        $httpOptions = [
-            'method' => $method,
-            'header' => $headerStr,
-            'ignore_errors' => true,
-            'follow_location' => 0,
-            'timeout' => 5,
-        ];
-        if ($postBody !== null) {
-            $httpOptions['content'] = $postBody;
-        }
+        $ctx = stream_context_create([
+            'http' => [
+                'method' => $method,
+                'header' => $headerStr,
+                'content' => $body,
+                'ignore_errors' => true,
+                'follow_location' => 0,
+                'timeout' => 5,
+            ],
+        ]);
 
-        $ctx = stream_context_create(['http' => $httpOptions]);
-        $body = @file_get_contents('http://' . $address . $uri, false, $ctx);
+        $resBody = @file_get_contents('http://' . $address . $uri, false, $ctx);
         $headersList = $http_response_header ?? [];
         $statusLine = $headersList[0] ?? '';
         preg_match('#HTTP/\S+\s+(\d+)#', $statusLine, $m);
         $code = isset($m[1]) ? (int)$m[1] : 0;
 
-        return [$code, (string)$body, $headersList];
+        return [$code, (string)$resBody, $headersList];
     };
 
     $remoteHeaders = [
@@ -187,7 +187,7 @@ require $file;
     $assert(!str_contains($body, 'unapproved route on remote ingress'), 'Local request must not be blocked by remote ingress boundary');
 
     // 4. Remote approved route: Store overview loads for authenticated owner
-    [$code, $body, $headers] = $request('/components/administrator/dashboard.php', $remoteHeaders);
+    [$code, $body, $remoteHeadersList] = $request('/components/administrator/dashboard.php', $remoteHeaders);
     $assert($code === 200, 'Authenticated owner can load Store overview remotely, got ' . $code);
     $assert(str_contains($body, 'Store status') || str_contains($body, 'Gross Sales'), 'Store overview content is present');
 
@@ -196,7 +196,7 @@ require $file;
     $assert($code === 200, 'Authenticated owner can load shift report remotely, got ' . $code);
     $assert(str_contains($body, 'Cashier Shift Report'), 'Shift report title present');
     $assert(str_contains($body, 'report-filter-grid'), 'Filters grid present');
-    $assert(!str_contains($body, 'Export report CSV'), 'Shift report CSV export button must not be available remotely');
+    $assert(!str_contains($body, '<button class="btn" type="submit" >Export report CSV</button>'), 'Shift report CSV export submit must not be enabled remotely');
 
     // Shift report filtering via GET
     [$code, $body] = $request('/components/administrator/shift_report.php?from=2026-10-01&to=2026-10-25', $remoteHeaders);
@@ -205,7 +205,7 @@ require $file;
     // Shift report POST (e.g. export_csv) is denied with 403
     [$code, $body] = $request('/components/administrator/shift_report.php', $remoteHeaders, 'POST', 'action=export_csv&csrf_token=fixture-csrf');
     $assert($code === 403, 'Remote shift report POST must be denied with 403, got ' . $code);
-    $assert(str_contains($body, 'write actions and exports are disabled on remote ingress'), 'Denial message explains write/export disabled');
+    $assert(str_contains($body, 'disabled on remote ingress') || str_contains($body, 'unavailable on remote ingress'), 'Denial message explains write/export disabled');
 
     // 6. Remote Cashier Shifts screen (components/cashier/shifts.php)
     [$code, $body] = $request('/components/cashier/shifts.php', $remoteHeaders);
@@ -235,8 +235,43 @@ require $file;
     [$code, $body] = $request('/components/system_administrator/audit_logs.php', $remoteHeaders, 'POST', 'action=export_csv&csrf_token=fixture-csrf');
     $assert($code === 403, 'Remote audit POST must be denied with 403, got ' . $code);
 
-    // 8. Session cookie secure flag under remote ingress
-    $cookieHeaders = array_filter($headers, static fn($h) => stripos($h, 'Set-Cookie:') === 0);
+    // 8. Remote Report Generation and Store Reports (#321)
+    [$code, $body] = $request('/components/report/report_generation.php', $remoteHeaders);
+    $assert($code === 200, 'Owner can open Report Generation remotely, got ' . $code);
+    $assert(str_contains($body, 'Report Generation'), 'Report Generation header present');
+
+    [$code, $body] = $request('/components/report/report_generation.php', $remoteHeaders, 'POST', 'action=export_csv&csrf_token=fixture-csrf&report=sales_period');
+    $assert($code === 403, 'Remote POST action=export_csv to report_generation.php must return 403, got ' . $code);
+
+    // 9. Local authorized CSV export remains intact
+    [$code, $body, $headers] = $request('/components/report/report_generation.php', [
+        'Host' => 'localhost',
+        'X-Fixture-User' => 'owner',
+    ], 'POST', 'action=export_csv&csrf_token=fixture-csrf&report=sales_period');
+    $isCsv = false;
+    foreach ($headers as $h) {
+        if (stripos($h, 'Content-Type: text/csv') !== false) {
+            $isCsv = true;
+            break;
+        }
+    }
+    $assert($code === 200 && $isCsv, 'Authorized local CSV export from report_generation.php must succeed with text/csv, got code ' . $code);
+
+    [$code, $body, $headers] = $request('/components/administrator/shift_report.php', [
+        'Host' => 'localhost',
+        'X-Fixture-User' => 'owner',
+    ], 'POST', 'action=export_csv&csrf_token=fixture-csrf');
+    $isCsv = false;
+    foreach ($headers as $h) {
+        if (stripos($h, 'Content-Type: text/csv') !== false) {
+            $isCsv = true;
+            break;
+        }
+    }
+    $assert($code === 200 && $isCsv, 'Authorized local CSV export from shift_report.php must succeed with text/csv, got code ' . $code);
+
+    // 10. Session cookie secure flag under remote ingress
+    $cookieHeaders = array_filter($remoteHeadersList, static fn($h) => stripos($h, 'Set-Cookie:') === 0);
     $hasSecureCookie = false;
     foreach ($cookieHeaders as $ch) {
         if (stripos($ch, 'Secure') !== false) {
@@ -246,7 +281,7 @@ require $file;
     }
     $assert($hasSecureCookie, 'Remote session cookie must contain Secure flag');
 
-    // 9. Existing Workspace permissions still apply remotely: cashier role cannot access admin shift report
+    // 11. Existing Workspace permissions still apply remotely
     [$code, $body] = $request('/components/administrator/shift_report.php', [
         'Host' => 'monitor.retailmind.store',
         'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
@@ -255,7 +290,7 @@ require $file;
     ]);
     $assert($code === 403, 'Cashier accessing administrator shift report must be denied with 403 by role policy, got ' . $code);
 
-    // 10. Sign-out remotely: logout.php is approved and redirects to login
+    // 12. Sign-out remotely: logout.php is approved and redirects to login
     [$code, $body, $headers] = $request('/components/auth/logout.php', [
         'Host' => 'monitor.retailmind.store',
         'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
