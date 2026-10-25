@@ -103,6 +103,10 @@ php src/backend/tests/operator_alert_ui_contract.php
 node src/backend/tests/operator_alert_wrapper_behavior_test.js
 node src/backend/tests/backup_status_alert_behavior_test.js
 node src/backend/tests/inventory_counts_scan_browser_test.js
+node src/backend/tests/inventory_private_recovery_browser_test.js
+node src/backend/tests/products_keyboard_scan_browser_test.js
+node src/backend/tests/stock_receiving_keyboard_scan_browser_test.js
+node src/backend/tests/stock_issues_keyboard_scan_browser_test.js
 node src/backend/tests/stock_receiving_scan_browser_test.js
 node src/backend/tests/forecast_decision_browser_test.js
 php src/backend/tests/replenishment_queue_contract.php

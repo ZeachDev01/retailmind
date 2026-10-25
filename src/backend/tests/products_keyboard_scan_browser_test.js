@@ -14,7 +14,7 @@ const script = source.slice(start, source.indexOf('        let productScanner', 
     const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
     try {
         const page = await browser.newPage();
-        await page.setContent('<button id="idle">Products</button><input id="search"><input id="barcode" maxlength="50"><div id="add" class="rm-modal-overlay"></div>');
+        await page.setContent('<button id="idle">Products</button><input id="search"><div id="add" class="rm-modal-overlay"><form id="add-product-form"><input id="barcode" name="barcode" maxlength="50"><input id="name" name="product_name" value="Kept name"><input id="case" name="case_barcode"><button type="submit">Save</button></form></div>');
         await page.addScriptTag({ content: `
             const barcodeInput = document.getElementById('barcode'), productModalOverlay = document.getElementById('add');
             const productData = [{ product_id: 1 }];
@@ -51,8 +51,19 @@ const script = source.slice(start, source.indexOf('        let productScanner', 
         await page.focus('#idle');
         await page.evaluate(() => productModalOverlay.classList.add('open'));
         await scan();
-        assert.equal(await page.inputValue('#barcode'), '123456', 'barcode step receives scan without focus');
+        assert.equal(await page.inputValue('#barcode'), '', 'barcode step requires explicit field focus');
+        await page.focus('#barcode');
+        await scan();
+        assert.equal(await page.inputValue('#barcode'), '123456', 'selected barcode receives scan');
+        await page.focus('#name');
+        await scan('654321');
+        assert.equal(await page.inputValue('#name'), 'Kept name', 'scanner leaves unrelated Product fields untouched');
+        await page.focus('#case');
+        await scan('987654');
+        assert.equal(await page.inputValue('#case'), '987654', 'explicit receiving barcode accepts scanner');
+        assert.equal(await page.evaluate(() => wizardStep), 2, 'scanner Enter never advances Product wizard');
         await page.evaluate(() => { wizardStep = 3; barcodeInput.value = ''; });
+        await page.focus('#idle');
         await scan();
         assert.equal(await page.inputValue('#barcode'), '', 'other wizard steps are protected');
         assert.equal(await page.evaluate(() => requests.length), 3);

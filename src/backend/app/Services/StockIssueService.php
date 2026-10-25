@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/InventorySubmission.php";
 // app/Services/StockIssueService.php
 //
 // Cashier-to-Inventory-Manager stock-issue workflow (tickets #29 + #30).
@@ -349,12 +350,14 @@ class StockIssueService
      * reason. May recategorize an Other report to a concrete category; the
      * reported quantity and explanation are never rewritten here.
      */
-    public function returnReport(int $adjustmentId, int $managerId, string $reason, ?string $newCategory = null): void
+    public function returnReport(int $adjustmentId, int $managerId, string $reason, ?string $newCategory = null, string $operationToken = ''): void
     {
         if ($adjustmentId <= 0) {
             throw new RuntimeException('Invalid report selected.');
         }
         $this->assertRole($managerId, 'inventory_manager');
+        $submission = new InventorySubmission($this->pdo, $managerId, 'returnReport', ['operation_token' => $operationToken, 'id' => $adjustmentId, 'reason' => $reason, 'category' => $newCategory]);
+        if ($submission->completed() !== null) return;
         $reason = trim($reason);
         if ($reason === '') {
             throw new RuntimeException('A return reason is required.');
@@ -431,6 +434,7 @@ class StockIssueService
                 $newValues
             );
 
+            $submission->remember(true);
             $this->pdo->commit();
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
@@ -530,12 +534,14 @@ class StockIssueService
      * when insufficient (never negative, never partial), deduct the full
      * reported quantity, and record a linked stock movement.
      */
-    public function approveReport(int $adjustmentId, int $approverId, string $reviewNotes = '', ?array $batchAllocations = null): void
+    public function approveReport(int $adjustmentId, int $approverId, string $reviewNotes = '', ?array $batchAllocations = null, string $operationToken = ''): void
     {
         if ($adjustmentId <= 0) {
             throw new RuntimeException('Invalid report selected.');
         }
         $this->assertRole($approverId, 'inventory_manager');
+        $submission = new InventorySubmission($this->pdo, $approverId, 'approveReport', ['operation_token' => $operationToken, 'id' => $adjustmentId, 'notes' => $reviewNotes, 'batches' => $batchAllocations]);
+        if ($submission->completed() !== null) return;
 
         $cashierId = 0;
         $this->ensureRevisionsTable();
@@ -909,6 +915,7 @@ class StockIssueService
                 ]
             );
 
+            $submission->remember(true);
             $this->pdo->commit();
             StoreOperationsDashboardWorkspace::invalidateCache();
             $this->notificationService->checkAndNotifyLowStock();
@@ -933,12 +940,14 @@ class StockIssueService
     /**
      * Reject a pending report. Requires a reason; never changes inventory.
      */
-    public function rejectReport(int $adjustmentId, int $approverId, string $reason): void
+    public function rejectReport(int $adjustmentId, int $approverId, string $reason, string $operationToken = ''): void
     {
         if ($adjustmentId <= 0) {
             throw new RuntimeException('Invalid report selected.');
         }
         $this->assertRole($approverId, 'inventory_manager');
+        $submission = new InventorySubmission($this->pdo, $approverId, 'rejectReport', ['operation_token' => $operationToken, 'id' => $adjustmentId, 'reason' => $reason]);
+        if ($submission->completed() !== null) return;
         $reason = trim($reason);
         if ($reason === '') {
             throw new RuntimeException('A rejection reason is required.');
@@ -995,6 +1004,7 @@ class StockIssueService
                 ['status' => 'rejected', 'review_notes' => $reason]
             );
 
+            $submission->remember(true);
             $this->pdo->commit();
             StoreOperationsDashboardWorkspace::invalidateCache();
         } catch (Throwable $e) {

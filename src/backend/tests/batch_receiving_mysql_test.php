@@ -30,6 +30,7 @@ try {
     $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$database};charset=utf8mb4",
         $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $_SESSION = ['user_id' => 3, 'role' => 'inventory_manager'];
+    $pdo->exec("INSERT INTO fiscal_periods (period_name, start_date, end_date, status, created_by) VALUES ('Inventory retry test', '2026-01-01', '2099-12-31', 'open', 1)");
     $products = new ProductService($pdo);
     $receiving = new ReceivingService($pdo);
     $id = $products->createProduct(['product_name' => 'Isolated batch loaf', 'initial_stock_quantity' => 20,
@@ -43,19 +44,30 @@ try {
         === ['2099-10-25', '2099-10-27', '2099-10-27'], 'Opening and separate equal-date receipts must retain dates');
     $assert($pdo->query("SELECT expiration_date FROM products WHERE product_id = {$id}")->fetchColumn() === '2099-10-25', 'Legacy Product date must remain unchanged');
 
+    $retryEntry = ['supplier' => 'Lost response test', 'operation_token' => str_repeat('a', 48)];
+    $retryLines = [['product_id' => $id, 'received_qty' => 2]];
+    $first = $receiving->receiveShoppingTrip($retryLines, $retryEntry, 3);
+    $replayed = $receiving->receiveShoppingTrip($retryLines, $retryEntry, 3);
+    $assert($first === $replayed, 'Lost response retry must return the same saved receipt');
+    $assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$id}")->fetchColumn() === 56, 'Retry must add stock only once');
+    $changedRejected = false;
+    try { $receiving->receiveShoppingTrip([['product_id' => $id, 'received_qty' => 3]], $retryEntry, 3); }
+    catch (RuntimeException) { $changedRejected = true; }
+    $assert($changedRejected, 'A committed token must not accept edited quantities');
+
     // Real DATE columns reject empty-string comparisons that SQLite TEXT fixtures accept.
     $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
     $receiving->receiveStock(['product_id' => $id, 'received_qty' => 2], 3);
     $inventory = new InventoryService($pdo);
     $summaries = array_column($inventory->getProductsWithBatchSummaries('2099-10-20'), null, 'product_id');
-    $assert($summaries[$id]['quantity_on_hand'] === 56, 'Inventory landing page must load batch summaries on MySQL');
-    $assert($summaries[$id]['undated_quantity'] === 2 && $summaries[$id]['next_expiration'] === '2099-10-25',
+    $assert($summaries[$id]['quantity_on_hand'] === 58, 'Inventory landing page must load batch summaries on MySQL');
+    $assert($summaries[$id]['undated_quantity'] === 4 && $summaries[$id]['next_expiration'] === '2099-10-25',
         'MySQL summaries must distinguish dated and undated stock');
     $batches = $inventory->getProductBatches($id, '2099-10-20');
-    $assert(count($batches) === 4 && array_column($batches, 'expiration_date') === ['2099-10-25', '2099-10-27', '2099-10-27', null],
+    $assert(count($batches) === 5 && array_column($batches, 'expiration_date') === ['2099-10-25', '2099-10-27', '2099-10-27', null, null],
         'View Batches must load on MySQL with dated stock before undated stock');
     $eligible = (new SupplierPulloutService($pdo))->getEligibleBatches($id);
-    $assert(count($eligible) === 4 && array_column($eligible, 'expiration_date') === array_column($batches, 'expiration_date'),
+    $assert(count($eligible) === 5 && array_column($eligible, 'expiration_date') === array_column($batches, 'expiration_date'),
         'Supplier pullout batch picker must load on MySQL with dated stock before undated stock');
 
     $before = [];

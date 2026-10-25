@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/ReceivingService.php';
 require_once __DIR__ . '/../../../backend/app/Services/SupplierPulloutService.php';
+header('Cache-Control: no-store');
 require_role(['admin', 'super_admin', 'inventory_manager']);
 
 $receivingService = new ReceivingService($pdo);
@@ -44,10 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $nonce = $_POST['receiving_nonce'] ?? '';
-        if (!is_string($nonce) || !isset($_SESSION['receiving_nonces'][$nonce])) {
+        if (empty($_POST['operation_token']) && (!is_string($nonce) || !isset($_SESSION['receiving_nonces'][$nonce]))) {
             throw new RuntimeException('This receiving form has already been saved or expired. Review a new entry before saving.');
         }
         $entry = [
+            'operation_token' => $_POST['operation_token'] ?? '',
             'supplier' => $_POST['supplier'] ?? '',
             'invoice_number' => $_POST['invoice_number'] ?? '',
         ];
@@ -85,8 +87,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]];
         }
         $results = $receivingService->receiveShoppingTrip($lines, $entry, (int)$_SESSION['user_id']);
-        unset($_SESSION['receiving_nonces'][$nonce]);
 
+
+        unset($_SESSION['receiving_nonces'][$nonce]);
         $summaries = [];
         foreach ($results as $result) {
             $summary = "{$result['product_name']}: {$result['accepted_qty']} accepted units";
@@ -156,6 +159,7 @@ $categoryIcon = static function (string $categoryName): string {
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/stock-receiving.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/stock-receiving.css')) ?>">
+<?php require __DIR__ . '/../../../backend/includes/inventory_drafts.php'; ?>
 </head>
 <body class="stock-receiving-page">
 <a class="receiving-skip-link" href="#receiving_main">Skip to Stock Receiving</a>
@@ -1149,6 +1153,7 @@ function addReceivingLine(values = {}) {
 }
 
 function showStep(next, focus = true) {
+    queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(form));
     step = next;
     document.querySelector('.receiving-form').dataset.step = String(step);
     const titles = ['1. Select products', '2. Enter quantities', '3. Review'];
@@ -1414,30 +1419,21 @@ productSearchScan.addEventListener('input', () => {
 renderCatalog();
 renumberLines();
 
-const receivingDraftKey = 'receiving-draft:' + <?= json_encode((string)$_SESSION['user_id']) ?>;
+const receivingDraftObserver = new MutationObserver(() => RetailMindInventoryDrafts?.keep(form));
+receivingDraftObserver.observe(lineContainer, {childList: true});
+window.addEventListener('pagehide', () => receivingDraftObserver.disconnect(), {once: true});
+document.addEventListener('inventorydraft:capture', event => {
+    if (event.detail.form !== form) return;
+    event.detail.draft.context = {step, lines: Array.from(lineContainer.children, row => Object.fromEntries(
+        Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])))};
+});
+document.addEventListener('inventorydraft:prepare', event => {
+    if (event.detail.draft.formId !== 'receiving_form') return;
+    lineContainer.replaceChildren();
+    for (const line of event.detail.draft.context.lines || []) addReceivingLine(line);
+    showStep(event.detail.draft.context.step || 1);
+});
 let retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-try {
-    if (<?= json_encode($message !== '') ?>) {
-        sessionStorage.removeItem(receivingDraftKey);
-        sessionStorage.removeItem('retailmind_replenishment_snapshot');
-    }
-    else if (canReceive && <?= json_encode($_SERVER['REQUEST_METHOD'] === 'GET') ?>) {
-        const draft = JSON.parse(sessionStorage.getItem(receivingDraftKey));
-        const lineFields = new Set(Array.from(lineTemplate.content.querySelectorAll('input[data-field], select[data-field], textarea[data-field]'), field => field.dataset.field));
-        if (draft && Array.isArray(draft.lines) && draft.lines.every(line => line && typeof line === 'object'
-            && Object.entries(line).every(([name, value]) => lineFields.has(name) && typeof value === 'string'))) {
-            const requestedLines = retainedValues.lines || [];
-            retainedValues = draft;
-            for (const line of requestedLines) {
-                const existing = draft.lines.find(saved => String(saved.product_id) === String(line.product_id));
-                if (!existing) draft.lines.push(line);
-                else if (line.pullout_id) existing.pullout_id = line.pullout_id;
-            }
-        }
-    }
-} catch (error) {
-    // Browser storage may be unavailable or contain an invalid draft.
-}
 for (const name of ['supplier', 'invoice_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);
 const linesToRestore = Array.isArray(retainedValues.lines)
     ? retainedValues.lines
@@ -1475,28 +1471,6 @@ const hasQuantities = linesToRestore.some(line =>
 );
 showStep(hasQuantities ? 2 : 1);
 
-function saveReceivingDraft() {
-    if (!canReceive) return;
-    const draft = {
-        supplier: form.elements.supplier.value,
-        invoice_number: form.elements.invoice_number.value,
-        lines: Array.from(lineContainer.children, row => Object.fromEntries(
-            Array.from(row.querySelectorAll('input[data-field], select[data-field], textarea[data-field]'),
-                field => [field.dataset.field, field.value])
-        ))
-    };
-    try {
-        if (draft.lines.length || draft.supplier || draft.invoice_number) {
-            sessionStorage.setItem(receivingDraftKey, JSON.stringify(draft));
-        } else sessionStorage.removeItem(receivingDraftKey);
-    } catch (error) {
-        document.getElementById('entry_status').textContent = 'Draft could not be kept in this browser. Keep this page open until the delivery is saved.';
-    }
-}
-form.addEventListener('input', saveReceivingDraft);
-form.addEventListener('change', saveReceivingDraft);
-new MutationObserver(saveReceivingDraft).observe(lineContainer, {childList: true});
-saveReceivingDraft();
 </script>
 <?php if ($message): ?><script>RetailMindUI.toast(<?= json_encode($message, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'success');</script><?php endif; ?>
 <?php if ($error): ?><script>RetailMindUI.toast(<?= json_encode($error, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'error');</script><?php endif; ?>
