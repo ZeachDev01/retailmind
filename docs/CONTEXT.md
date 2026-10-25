@@ -82,6 +82,18 @@ _Avoid_: Disabled Account, deleted user, active staff
 The replacement of the entire active Store database, including accounts, settings, and audit history, with the state captured in a Database Backup. Only the Super Administrator may perform it; newer database records are not retained, while the restoration itself is recorded separately.
 _Avoid_: Import report, undo backup
 
+**Recovery Console**:
+The browser interface that renders and authenticates against retained state in RecoveryStore without querying database tables during restore or incomplete maintenance. It provides role-restricted evidence and operation-bound operator authentication.
+_Avoid_: Admin login, emergency backdoor
+
+**Durable Recovery Stage**:
+The persisted progress milestone (safety_verified, destructive_start, database_replacement, uploads, automated_verification, operator_review_pending, recovery_required, reopened_completed) tracked in RecoveryStore and restore-log.jsonl outside replaceable tables. Destructive start is persisted before any destructive writes.
+_Avoid_: Transient progress, uncoordinated restore
+
+**Pre-restore Operator Authentication**:
+The independent verification of initiating Administrator and active destination Super Administrator credentials against pre-restore password hashes retained in RecoveryStore. Sealed Recovery Accounts retain separate rules; imported users, unrelated Administrators and ordinary sessions cannot authorize recovery.
+_Avoid_: Decrypted password cache, generic session bypass
+
 **Disabled Account**:
 A retained user identity that cannot authenticate and whose active sessions have been revoked. Its historical sales, approvals, and Protected Audit Records remain attributed to it.
 _Avoid_: Deleted user, removed history, inactive account

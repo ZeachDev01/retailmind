@@ -29,6 +29,49 @@ Capture requires functioning PHP 8.2+, OpenSSL/fileinfo, 512 MiB PHP memory, pri
 
 Disposable checks: `RUN_DB_TESTS=1 php -d memory_limit=512M src/backend/tests/safety_copy_workflow_integration.php` and `RUN_DB_TESTS=1 node src/backend/tests/safety_copy_browser_test.js`. The complete-schema test covers Product/profile bytes, exact stock, immutable retries, both roles, private repeatable download, wrong secrets, missing users and independent encryption/write/readback/checkpoint/capacity failures. Browser checks exercise both screens, password/CSRF errors, requester denial and mobile/desktop fit. Matching-runtime hosted capacity, persistence, isolation and recovery drills remain unexecuted under #288; these local checks do not certify migration readiness.
 
+## Durable maintenance and browser recovery authentication
+
+Before destructive operations begin, approved package and plan identifiers, destination-security checkpoints, verified safety metadata, operation stages, session invalidations, and append-only outcomes are durably preserved outside replaceable database tables and uploads in `RecoveryStore` under `BACKUP_STORAGE_PATH`.
+
+### Pre-restore operator credentials and authorization
+
+Only protected pre-restore password verifiers (hashes) and operation-bound authorization are retained for the initiating administrator and active destination Super Administrators authorized before replacement. Each authenticates independently with their own pre-restore credentials. Sealed Recovery Accounts retain separate offline unsealing rules and cannot authenticate via this path; imported identities, unrelated Administrators, and ordinary user sessions cannot authorize recovery. Plaintext passwords, passphrases, and decrypted records are never retained.
+
+### Durable stage lifecycle
+
+Progress persists through explicit durable stages in `restore-state.json` and append-only `restore-log.jsonl`:
+1. `safety_verified`: Approved reconciliation and destination safety capture verified.
+2. `destructive_start`: Persisted strictly BEFORE the first destructive DDL or file write. Session epoch is regenerated, invalidating all pre-existing sessions.
+3. `database_replacement`: DDL and table replacement underway.
+4. `uploads`: Uploaded asset replacement.
+5. `automated_verification`: Post-replacement integrity assertions.
+6. `operator_review_pending`: Destination administrator review.
+7. `recovery_required`: Triggered on failure or interruption, holding the Store paused.
+8. `reopened_completed`: Explicit destination Super Administrator reopening.
+
+Uncertain, corrupt, or missing coordination state fails closed and never authorizes reopening.
+
+### Maintenance fencing and request admission
+
+When recovery state is active (`RecoveryStore::isPaused()`), ordinary web requests return `503 Service Unavailable`, background writers are blocked by `StoreWriteGate` with `StoreWritePausedException`, and CLI workers (forecasting scheduler, daily notifications, manual backups) terminate. Only authorized recovery access (`/components/backup/recovery.php` and `backup_status.php`) and explicit CLI recovery (`restore_database.php`) are admitted. Fencing persists across worker crashes, request timeouts, and database table loss.
+
+### Browser recovery console
+
+The browser recovery console (`/components/backup/recovery.php`) renders and authenticates without querying application tables. It enforces:
+- Fresh authentication against retained operator hashes.
+- Operation binding: sessions are strictly tied to the active `operation_id`.
+- CSRF protection: independent recovery CSRF tokens.
+- Externally maintained throttling: 5 failed attempts locks out the client for 15 minutes via `recovery-throttle.json`.
+- Session expiry: 15-minute inactivity limit.
+- Role-restricted evidence: Initiating Administrators view operational progress and safety confirmations; Super Administrators access destination watermarks, safety checkpoints, append-only logs, and the explicit reopening action.
+
+### Operational requirements and verification
+
+Recovery operations require PHP 8.2+, HTTPS, MySQL 8.0+, 512 MiB PHP memory limit, persistent worker-accessible private storage outside the document root, and reliable file locking (`flock`).
+
+Disposable checks: `RUN_DB_TESTS=1 php -d memory_limit=512M src/backend/tests/recovery_auth_workflow_integration.php` and `RUN_DB_TESTS=1 node src/backend/tests/recovery_auth_browser_test.js`.
+Tests prove independent operator authentication with dropped application tables, rejection of forged/expired/unauthorized requests, throttling, worker death fencing, and responsive layout across 390px and 1440px viewports. Hosted multi-node locking, persistence, and disaster cutover drills remain deferred under #288; ordinary replacement remains disabled until downstream delivery is complete.
+
 ## Legacy offline recovery reference
 
 ## Create and download
