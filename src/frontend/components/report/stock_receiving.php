@@ -1424,14 +1424,23 @@ receivingDraftObserver.observe(lineContainer, {childList: true});
 window.addEventListener('pagehide', () => receivingDraftObserver.disconnect(), {once: true});
 document.addEventListener('inventorydraft:capture', event => {
     if (event.detail.form !== form) return;
-    event.detail.draft.context = {step, lines: Array.from(lineContainer.children, row => Object.fromEntries(
+    event.detail.draft.context = {...event.detail.draft.context, step, lines: Array.from(lineContainer.children, row => Object.fromEntries(
         Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])))};
 });
 document.addEventListener('inventorydraft:prepare', event => {
     if (event.detail.draft.formId !== 'receiving_form') return;
-    lineContainer.replaceChildren();
-    for (const line of event.detail.draft.context.lines || []) addReceivingLine(line);
-    showStep(event.detail.draft.context.step || 1);
+    event.detail.waitUntil((async () => {
+        const lines = event.detail.draft.context.lines || [];
+        if (lines.some(line => !productMap.has(String(line.product_id)))) {
+            throw new Error('A selected Product is no longer available. Your draft is still kept; review the current catalog before resuming.');
+        }
+        lineContainer.replaceChildren();
+        for (const line of lines) addReceivingLine(line);
+        showStep(event.detail.draft.context.step || 1);
+    })());
+});
+document.addEventListener('inventorydraft:restored', event => {
+    if (event.detail.form === form && step === 3) renderReview();
 });
 let retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 for (const name of ['supplier', 'invoice_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);

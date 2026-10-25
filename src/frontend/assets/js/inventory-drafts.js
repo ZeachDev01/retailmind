@@ -1,4 +1,5 @@
 /* Private device-local recovery; never posts an inventory operation on resume. */
+window.RetailMindInventoryDrafts?.destroy?.();
 window.RetailMindInventoryDrafts = (() => {
     let config, key, prefix, busy = 0, restoring = false, active = false;
     const lifetime = new AbortController();
@@ -6,8 +7,7 @@ window.RetailMindInventoryDrafts = (() => {
     const encoder = new TextEncoder(), decoder = new TextDecoder(), snapshots = new Map();
     const encode = bytes => btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''));
     const decode = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
-    const resubmitting = new WeakSet();
-    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const resubmitting = new WeakSet(), submitted = new WeakMap();
     function notice(message, error = false) {
         let status = document.getElementById('inventory-draft-status');
         if (!status) {
@@ -34,7 +34,7 @@ window.RetailMindInventoryDrafts = (() => {
     }
     function prepare(form) {
         hidden(form, 'inventory_draft_id', identity(form));
-        hidden(form, 'operation_token', token());
+        hidden(form, 'operation_token', config.retainedForm === identity(form) && /^[a-f0-9]{48}$/.test(config.retainedToken || '') ? config.retainedToken : token());
     }
     async function capture(form) {
         prepare(form);
@@ -49,11 +49,28 @@ window.RetailMindInventoryDrafts = (() => {
             }
             values.push(item);
         }
-        const draft = {id: identity(form), formId: form.id, values, context: {}};
+        const draft = {id: identity(form), formId: form.id, values, context: {operationKind: form.dataset.inventorySubmissionKind || '', submittedFingerprint: submitted.get(form)?.original || null, latestSubmittedFingerprint: submitted.get(form)?.latest || null}};
         document.dispatchEvent(new CustomEvent('inventorydraft:capture', {detail: {draft, form}}));
         return draft;
     }
-    async function keep(form) {
+    async function fingerprint(values) {
+        return encode(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(JSON.stringify(values)))));
+    }
+    async function persist(draft) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ciphertext = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, encoder.encode(JSON.stringify(draft)));
+        localStorage.setItem(prefix + draft.id, JSON.stringify({iv: encode(iv), ciphertext: encode(new Uint8Array(ciphertext))}));
+    }
+    function submissionKind(form, submitter) {
+        const action = submitter?.name === 'action' ? submitter.value : form.querySelector('[name="action"]')?.value;
+        if (form.id === 'receiving_form') return 'receiving';
+        if (location.pathname.endsWith('/inventory_counts.php')) return ({record:'count', approve:'approveCount', reject:'rejectCount'})[action] || '';
+        if (location.pathname.endsWith('/stock_issues.php')) return ({approve:'approveReport', reject:'rejectReport', return:'returnReport'})[action] || '';
+        if (location.pathname.endsWith('/products.php')) return ({create:'createProduct', adjust:'adjustStock', reconcile_sales_pack_stock:'reconcileStock'})[action] || '';
+        if (form.id === 'pullout-form') return 'pullout';
+        return '';
+    }
+    async function keep(form, submitting = false) {
         if (!active || restoring || !eligible(form)) return;
         prepare(form);
         const id = identity(form);
@@ -63,9 +80,15 @@ window.RetailMindInventoryDrafts = (() => {
             const prior = snapshots.get(id) || Promise.resolve();
             const next = prior.catch(() => {}).then(async () => {
                 const draft = await capture(form);
-                const iv = crypto.getRandomValues(new Uint8Array(12));
-                const ciphertext = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, encoder.encode(JSON.stringify(draft)));
-                localStorage.setItem(prefix + id, JSON.stringify({iv: encode(iv), ciphertext: encode(new Uint8Array(ciphertext))}));
+                if (submitting) {
+                    const operationToken = draft.values.find(item => item.name === 'operation_token')?.value;
+                    const currentFingerprint = await fingerprint(draft.values);
+                    if (submitted.get(form)?.token !== operationToken) submitted.set(form, {token:operationToken, original:currentFingerprint});
+                    submitted.get(form).latest = currentFingerprint;
+                    draft.context.submittedFingerprint = submitted.get(form).original;
+                    draft.context.latestSubmittedFingerprint = currentFingerprint;
+                }
+                await persist(draft);
             });
             snapshots.set(id, next);
             await next;
@@ -84,12 +107,44 @@ window.RetailMindInventoryDrafts = (() => {
         if (restoring) return false;
         restoring = true;
         try {
+            const operationToken = draft.values.find(item => item.name === 'operation_token')?.value;
+            if (draft.context.operationKind && operationToken) {
+                let response;
+                try { response = await fetch(config.statusUrl + '?kind=' + encodeURIComponent(draft.context.operationKind) + '&token=' + encodeURIComponent(operationToken), {cache:'no-store', credentials:'same-origin', headers:{Accept:'application/json'}}); }
+                catch (_) { /* Offline recovery still restores unsent values; final saving requires the server. */ }
+                if (response) {
+                    if (response.redirected || !response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('Session or connection unavailable');
+                    const status = await response.json();
+                    if (!status.success) throw new Error('The saved operation could not be checked. Check your connection and active workspace, then try Resume again.');
+                    if (status.completed && draft.context.submittedFingerprint !== await fingerprint(draft.values)) {
+                        const panel = Array.from(document.querySelectorAll('[data-recovery-id]')).find(item => item.dataset.recoveryId === draft.id);
+                        if (panel && !panel.querySelector('details')) {
+                            const details = document.createElement('details'), summary = document.createElement('summary');
+                            summary.textContent = 'Review newer unsaved values'; details.append(summary);
+                            for (const item of draft.values.filter(item => !['operation_token','inventory_draft_id','action'].includes(item.name))) {
+                                const value = item.files?.map(file => file.name).join(', ') || item.selected?.join(', ') || item.value;
+                                const row = document.createElement('p'); row.textContent = item.name.replace(/[\[\]_]/g, ' ').trim() + ': ' + String(value ?? ''); details.append(row);
+                            }
+                            panel.append(details); details.open = true;
+                        }
+                        notice('The earlier operation was already saved. Newer unsaved values are still kept for review below. Check the saved record before explicitly discarding this draft.', true);
+                        return false;
+                    }
+                    if (status.completed) {
+                        await discard(draft.id);
+                        notice('This inventory operation was already saved. No stock change was repeated. Review its saved record.');
+                        return true;
+                    }
+                }
+            }
             const promises = [];
             document.dispatchEvent(new CustomEvent('inventorydraft:prepare', {detail: {draft, waitUntil: promise => promises.push(promise)}}));
             await Promise.all(promises);
             const form = Array.from(document.forms).find(item => identity(item) === draft.id || (draft.formId && item.id === draft.formId));
             if (!form) throw new Error('The form is no longer available with your current access.');
             prepare(form);
+            if (draft.context.submittedFingerprint) submitted.set(form, {token:operationToken, original:draft.context.submittedFingerprint, latest:draft.context.latestSubmittedFingerprint});
+            if (draft.context.operationKind) form.dataset.inventorySubmissionKind = draft.context.operationKind;
             // Product selection loads current batches; adapters await that request before restoring quantities.
             const ordinals = new Map();
             for (const item of draft.values) {
@@ -107,12 +162,13 @@ window.RetailMindInventoryDrafts = (() => {
                 } else if (['checkbox','radio'].includes(field.type)) field.checked = !!item.checked;
                 else field.value = item.value;
                 field.dispatchEvent(new Event('input', {bubbles: true}));
+                field.dispatchEvent(new Event('retailmind:fieldrestore'));
             }
             document.dispatchEvent(new CustomEvent('inventorydraft:restored', {detail: {draft, form}}));
             form.scrollIntoView({block: 'nearest'});
             notice('Draft resumed. Review current Products and quantities before saving. Nothing has been posted.');
             return true;
-        } catch (error) { notice('Draft could not be resumed. ' + error.message, true); return false; }
+        } catch (_) { notice('Draft could not be resumed. Sign in again if your session expired, check your connection and current Products, then try Resume again. Your draft is still kept.', true); return false; }
         finally { restoring = false; }
     }
     async function offer(storageKey) {
@@ -120,7 +176,12 @@ window.RetailMindInventoryDrafts = (() => {
             const stored = JSON.parse(localStorage.getItem(storageKey));
             const plain = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(stored.iv)}, key, decode(stored.ciphertext));
             const draft = JSON.parse(decoder.decode(plain));
-            if (config.confirmed && config.confirmedForm === draft.id) { await discard(draft.id); return; }
+            if (config.confirmed && config.confirmedForm === draft.id && draft.context.latestSubmittedFingerprint === await fingerprint(draft.values)) { await discard(draft.id); return; }
+            const retained = Array.from(document.forms).find(form => identity(form) === draft.id && form.elements.operation_token?.value === draft.values.find(item => item.name === 'operation_token')?.value);
+            if (retained && draft.context.submittedFingerprint) {
+                submitted.set(retained, {token:retained.elements.operation_token.value, original:draft.context.submittedFingerprint, latest:draft.context.latestSubmittedFingerprint});
+                retained.dataset.inventorySubmissionKind = draft.context.operationKind || '';
+            }
             const panel = document.createElement('div'); panel.className = 'alert alert-info'; panel.dataset.recoveryId = draft.id;
             const text = document.createElement('span'); text.textContent = 'Unfinished inventory work (' + draft.id + '). ';
             const restore = document.createElement('button'); restore.type = 'button'; restore.className = 'btn btn-small'; restore.textContent = 'Resume';
@@ -129,6 +190,28 @@ window.RetailMindInventoryDrafts = (() => {
             remove.addEventListener('click', () => discard(draft.id));
             panel.append(text, restore, remove); (document.querySelector('main') || document.body).prepend(panel);
         } catch (_) { notice('A draft could not be unlocked. Sign in with its original account; do not clear browser data.', true); }
+    }
+    async function legacyDrafts() {
+        if (localStorage.getItem('retail_mind_add_product_state') || localStorage.getItem('retail_mind_add_product_step')) {
+            const panel = document.createElement('div'); panel.className = 'alert alert-warning'; panel.dataset.legacyProductDraft = '1';
+            const text = document.createElement('p'); text.textContent = 'An older Product draft has no account owner and predates private storage. It cannot be restored safely on this shared device. It remains here until you explicitly discard it.';
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-small btn-secondary'; button.textContent = 'Discard older Product draft';
+            button.addEventListener('click', () => { try { localStorage.removeItem('retail_mind_add_product_state'); localStorage.removeItem('retail_mind_add_product_step'); panel.remove(); } catch (_) { notice('The older draft could not be discarded. Browser storage is unavailable.', true); } });
+            panel.append(text, button); (document.querySelector('main') || document.body).prepend(panel);
+        }
+        if (!location.pathname.endsWith('/stock_receiving.php')) return;
+        const legacyKey = 'receiving-draft:' + config.user;
+        const raw = sessionStorage.getItem(legacyKey);
+        if (!raw) return;
+        if (localStorage.getItem(prefix + 'receiving_form')) {
+            notice('An older receiving draft is still kept in this browser session. Finish or discard the current draft before recovering the older one.');
+            return;
+        }
+        const old = JSON.parse(raw);
+        if (!old || !Array.isArray(old.lines)) throw new Error('Older receiving draft cannot be read.');
+        await persist({id:'receiving_form', formId:'receiving_form', values:[{name:'supplier', value:String(old.supplier || '')}, {name:'invoice_number', value:String(old.invoice_number || '')}], context:{lines:old.lines, step:2}});
+        sessionStorage.removeItem(legacyKey);
+        notice('Your older receiving draft was moved into private recovery. Review receipt history before retrying an older entry.');
     }
     async function initialize() {
         prefix = 'retailmind:inventory:v1:' + config.user + ':' + location.pathname + ':';
@@ -140,9 +223,7 @@ window.RetailMindInventoryDrafts = (() => {
             if (lifetime.signal.aborted) return;
             active = true;
             const probe = prefix + 'probe'; localStorage.setItem(probe, '1'); localStorage.removeItem(probe);
-            // Old unowned Product data must never be offered to a different operator.
-            localStorage.removeItem('retail_mind_add_product_state'); localStorage.removeItem('retail_mind_add_product_step');
-            for (const legacy of Object.keys(sessionStorage)) if (legacy.startsWith('receiving-draft:')) sessionStorage.removeItem(legacy);
+            await legacyDrafts();
             for (const form of document.forms) if (eligible(form)) prepare(form);
             for (const storageKey of Object.keys(localStorage)) if (storageKey.startsWith(prefix)) await offer(storageKey);
             observer = new MutationObserver(() => { for (const form of document.forms) if (eligible(form)) prepare(form); });
@@ -154,7 +235,8 @@ window.RetailMindInventoryDrafts = (() => {
                 if (resubmitting.has(event.target)) { resubmitting.delete(event.target); return; }
                 event.preventDefault(); event.stopImmediatePropagation();
                 const form = event.target, submitter = event.submitter;
-                keep(form).then(() => setTimeout(() => { resubmitting.add(form); form.requestSubmit(submitter); }, 0));
+                form.dataset.inventorySubmissionKind = submissionKind(form, submitter);
+                keep(form, true).then(() => setTimeout(() => { resubmitting.add(form); form.requestSubmit(submitter); }, 0));
             }, {capture: true, signal: lifetime.signal});
             window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } }, {signal: lifetime.signal});
         } catch (_) {
@@ -162,10 +244,21 @@ window.RetailMindInventoryDrafts = (() => {
             notice('Draft recovery is unavailable. Use HTTPS and allow browser storage. Keep this page open until the server confirms saving.', true);
         }
     }
+    function destroy() { active = false; lifetime.abort(); observer?.disconnect(); key = null; }
     return {
-        start(options) { config = options; window.addEventListener('pagehide', () => { active = false; lifetime.abort(); observer?.disconnect(); key = null; }, {once: true}); document.addEventListener('DOMContentLoaded', initialize, {once: true}); },
-        discard, keep, identity,
-        async waitFor(test) { for (let attempt = 0; attempt < 100; attempt++) { if (test()) return; await sleep(50); } throw new Error('Current Product details could not be loaded. Try Resume again.'); }
+        start(options) {
+            config = options;
+            window.addEventListener('pagehide', destroy, {once:true, signal:lifetime.signal});
+            window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); }, {signal:lifetime.signal});
+            document.addEventListener('DOMContentLoaded', initialize, {once:true, signal:lifetime.signal});
+        },
+        discard, keep, identity, destroy,
+        async flush() {
+            for (;;) {
+                const pending = Array.from(snapshots.values());
+                await Promise.allSettled(pending);
+                if (pending.length === snapshots.size && pending.every(promise => Array.from(snapshots.values()).includes(promise))) return;
+            }
+        }
     };
 })();
-window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });

@@ -425,8 +425,13 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('inventorydraft:prepare', event => {
         if (event.detail.draft.formId !== 'pullout-form') return;
         const value = name => event.detail.draft.values.find(item => item.name === name)?.value;
-        productSelect.value = value('product_id') || '';
-        event.detail.waitUntil(loadBatchesForProduct(productSelect.value, value('batch_id')));
+        event.detail.waitUntil((async () => {
+            const productId = value('product_id') || '';
+            if (!Array.from(productSelect.options).some(option => option.value === productId)) throw new Error('The selected Product is no longer available. Your draft is still kept.');
+            productSelect.value = productId;
+            await loadBatchesForProduct(productId, value('batch_id'));
+            if (!Array.from(batchSelect.options).some(option => option.value === value('batch_id'))) throw new Error('The selected batch is no longer available. Your draft is still kept.');
+        })());
     });
     productSelect.addEventListener('change', function () {
         loadBatchesForProduct(this.value, null);

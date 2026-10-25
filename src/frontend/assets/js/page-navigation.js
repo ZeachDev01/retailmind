@@ -61,6 +61,7 @@
     }
 
     function cleanup(retainedAssets) {
+        window.RetailMindInventoryDrafts?.destroy?.();
         clearPrefetch();
         window.Swal?.close();
         for (const item of page.listeners.filter(item => item.type === 'pagehide')) item.wrapped.call(item.target, new Event('pagehide'));
@@ -302,6 +303,7 @@
                     });
                 } else document.head.append(node);
             })).catch(error => { nextAssets.filter(node => !pageAssets.includes(node)).forEach(node => node.remove()); throw error; });
+            await window.RetailMindInventoryDrafts?.flush?.();
             if (request !== sequence) { nextAssets.filter(node => !pageAssets.includes(node)).forEach(node => node.remove()); return; }
             cleanup(nextAssets);
             pageAssets.push(...nextAssets);

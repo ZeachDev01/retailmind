@@ -15,7 +15,12 @@ Combined #315 + #317 integration checks: role-capability and Cashier Workspace a
 
 The broad Cashier browser comparison reports 159/329 failures on the unchanged baseline and 160/329 on #315. The single additional failure is a Product Lookup timeout in unchanged code; these results are not a clean broad-suite pass. Receipt-printing checks and limitations are recorded in [Store PC receipt printing](../guides/store-pc-receipt-printing.md).
 
-#316 scanner, draft recovery, and idempotent retry results remain pending integration. Record them after that ticket is merged.
+#316 inventory checks use Chromium and disposable MySQL, not physical tablets:
+
+- `RUN_DB_TESTS=1 node src/backend/tests/inventory_private_recovery_browser_test.js`: authenticated recovery across reload and Chromium process restart; same-user unlock and another manager's isolation; encrypted storage; explicit Resume/Discard and confirmed clearing; legacy migration without silently deleting another operator's work; default Product barcode-label return; pre-send network failure and lost post-commit responses; one recorded receiving/stock effect; Count and Stock Issue approvals whose pending forms disappear; retention of newer unsent values after a rejected retry; session-redirect and storage-denial feedback. Dynamic Count rows, current Pullout batches, Stock Issue notes, Product fields/photos, and explicit Product editor context are exercised.
+- `RUN_DB_TESTS=1 php src/backend/tests/batch_receiving_mysql_test.php`: repeated operation identity returns the saved result, changed committed payload is refused, stock changes once, and failed writes roll back.
+- `node src/backend/tests/products_keyboard_scan_browser_test.js`: explicit barcode focus, unrelated-field preservation, no scanner-triggered Product advancement, existing/unknown Product lookup, and consecutive scans. Existing Stock Receiving and Stock Issue keyboard scan browser checks also pass.
+- PHP lint for affected pages/services, JavaScript syntax checks, and whitespace checks pass. These are automated implementation checks; hardware rows below remain pending.
 
 ## Physical acceptance matrix
 
@@ -51,3 +56,6 @@ Every row is **pending: hardware unavailable to this implementation session**. R
   - missing `required to reject`;
   - forbidden `register-actions`;
   - missing Cashier Shift ownership wording.
+
+- `inventory_count_reconciliation_test.php`: existing SQLite fixture lacks `attention_states` during approval notification checks. The new authenticated MySQL recovery test covers the Count approval response-loss path.
+- `stock_issue_contract.php`: existing fixture lacks an open Fiscal Period for the current test date.
