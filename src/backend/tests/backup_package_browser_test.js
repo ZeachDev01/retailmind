@@ -76,8 +76,8 @@ const fixture = action => {
         assert(!packageBytes.includes(Buffer.from('theme_admin')), 'Stolen package must not expose usernames');
         assert.equal((await administrator.context.request.get(new URL(href, origin).href)).status(), 404, 'Delivered temporary package is removed');
         await superAdministrator.page.goto(superUrl);
-        assert.equal(await superAdministrator.page.getByLabel('Current destination login password').count(), 1);
-        assert.equal(await superAdministrator.page.getByLabel("This package's original backup passphrase").count(), 1);
+        assert.equal(await superAdministrator.page.getByLabel('Current destination login password', { exact: true }).count(), 1);
+        assert.equal(await superAdministrator.page.getByLabel("This package's original backup passphrase", { exact: true }).count(), 1);
         assert.equal(await superAdministrator.page.locator('#backup-file').getAttribute('accept'), '.rmpkg');
         for (const width of [390, 1440]) {
             await superAdministrator.page.setViewportSize({ width, height: 960 });

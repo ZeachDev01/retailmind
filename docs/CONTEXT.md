@@ -63,8 +63,16 @@ An encrypted, consistent package of the Store database and required uploaded Pro
 _Avoid_: Parallel backup, report export
 
 **Identity Reconciliation**:
-The destination Super Administrator's explicit read-only review of source people, destination accounts, conflicts and resulting access. Matching identifiers never establish identity. Links retain destination account authority; distinct ordinary people use deliberately selected unused login details. Source privileged-only and Recovery people remain Historical Actors with no usable access. The preview and origin-aware projection are implemented; protected approval, recovery and ordinary replacement are separate delivery gates.
+The destination Super Administrator's explicit read-only review of source people, destination accounts, conflicts, preservation closure, and resulting access. Matching identifiers never establish identity. Links retain destination account authority; distinct ordinary people use deliberately selected unused login details. Source privileged-only and Recovery people remain Historical Actors with no usable access.
 _Avoid_: Automatic account matching, general account merging
+
+**Preservation Closure**:
+The complete destination security and state boundary preserved intact during reconciliation: protected accounts, credentials, profiles, sealed recovery state, fixed capability policy, platform settings, platform-scoped attention settings, technical forecasting configuration, classified audit evidence, login tracking, review watermarks, protected reset state, preferences, notifications, backup and email-delivery history, and dependent logical actors preserved as evidence-only accounts without usable access.
+_Avoid_: Partial import, blind overwrite, security reset
+
+**Reconciliation Approval**:
+The Super Administrator's cryptographic verification and policy endorsement of explicit reconciliation resolutions, recorded in destination-owned preparation evidence under RecoveryStore with exact package integrity, identity/file maps, administrator designations, and a destination watermark. Ordinary Administrators cannot approve or alter reconciliation; immediately before destructive use, strict rechecks invalidate approval if package, state, or authority changed.
+_Avoid_: Unattended restore, silent promotion, unapproved migration
 
 **Historical Actor**:
 An identity retained only for attribution, represented as a disabled roleless user with an unusable password and no memberships, reset authority or recovery state. It cannot be enabled or assigned a role. Installation-aware provenance preserves original names, login details, roles and embedded historical IDs without changing frozen receipt or audit JSON.
