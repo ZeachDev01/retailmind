@@ -23,10 +23,7 @@ final class SafetyCopyService
     {
         $directory = self::directory($operationId);
         $backups = new DatabaseBackupService($this->pdo, $this->policy, $directory, $this->coordination, $this->uploadDirectory);
-        $actor = $backups->authorizeActor($actorId, $role);
-        if ($loginPassword === '' || !password_verify($loginPassword, (string)$actor['password_hash'])) {
-            throw new DomainException('Your current destination login password is incorrect.');
-        }
+        $backups->authorizeActor($actorId, $role);
         StorePackageFormat::assertPassphrase($safetyPassphrase);
         $lease = $requestLease ?? RecoveryStore::exclusive();
         $created = null;
@@ -35,6 +32,10 @@ final class SafetyCopyService
                 || realpath((string)(stream_get_meta_data($requestLease)['uri'] ?? '')) !== realpath(RecoveryStore::path('requests.lock'))
                 || !flock($requestLease, LOCK_EX | LOCK_NB))) {
                 throw new DomainException('The existing Store write pause is invalid.');
+            }
+            $actor = $backups->authorizeActor($actorId, $role);
+            if ($loginPassword === '' || !password_verify($loginPassword, (string)$actor['password_hash'])) {
+                throw new DomainException('Your current destination login password is incorrect.');
             }
             if (is_file($directory . '/metadata.json')) {
                 $verified = $this->verify($operationId, $safetyPassphrase);

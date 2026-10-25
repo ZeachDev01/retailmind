@@ -57,6 +57,13 @@ const fixture = action => {
             const url = origin + urls[index];
             await actor.page.goto(url);
             assert.equal(await actor.page.getByLabel('Separate destination safety passphrase').count(), 1, 'Both administrator screens expose complete safety capture');
+            for (const width of [390, 1440]) {
+                await actor.page.setViewportSize({ width, height: 960 });
+                const button = await actor.page.locator('[data-backup-create]').boundingBox();
+                const panel = await actor.page.locator('[data-backup-create]').locator('xpath=ancestor::section').boundingBox();
+                assert(button.x >= panel.x && button.x + button.width <= panel.x + panel.width, 'Backup action remains inside its panel');
+                await actor.page.screenshot({ path: path.join(proofDirectory, `safety-form-${index}-${width}.png`), fullPage: true });
+            }
             const operation = await actor.page.locator('input[name="safety_operation"]').inputValue();
             assert.equal((await actor.context.request.post(url, { form: { action: 'safety', safety_operation: operation, safety_password: data.password, safety_passphrase: secret } })).status(), 403, 'Safety capture requires CSRF');
             const submit = async password => {
