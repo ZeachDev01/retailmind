@@ -32,13 +32,13 @@ $sidebarBrandIconUrl = $sidebarBrandBaseUrl . 'icons/light/icon-64.png';
 $commandProductTarget = match ($role) {
     'super_admin' => app_url('components/inventory_management/inventory_overview.php'),
     'admin', 'inventory_manager' => app_url('components/inventory_management/products.php'),
-    default => app_url('components/cashier/pos.php'),
+    default => \App\Core\RemoteIngress::isRemote() ? app_url('components/cashier/shifts.php') : app_url('components/cashier/pos.php'),
 };
 $mobileHomeTarget = match ($role) {
     'super_admin' => 'components/super_administrator/dashboard.php',
     'admin' => 'components/administrator/dashboard.php',
     'inventory_manager' => 'components/inventory_management/inventory_overview.php',
-    default => 'components/cashier/pos.php',
+    default => \App\Core\RemoteIngress::isRemote() ? 'components/cashier/shifts.php' : 'components/cashier/pos.php',
 };
 $flashMessages = [];
 $loginSuccess = (string)($_SESSION['_flash_login_success'] ?? '');
@@ -108,8 +108,17 @@ function sidebar_item_paths(array $items): array
     return $paths;
 }
 
+function sidebar_is_route_available(string $path): bool
+{
+    if (!class_exists(\App\Core\RemoteIngress::class) || !\App\Core\RemoteIngress::isRemote()) {
+        return true;
+    }
+    return \App\Core\RemoteIngress::isApprovedRoute($path);
+}
+
 function sidebar_render_link(array $item, string $extraClass = ''): void
 {
+    if (!sidebar_is_route_available($item['path'] ?? '')) return;
 ?>
     <a href="<?= sidebar_e(app_url($item['path'])) ?>" <?= sidebar_active_attr($item['path'], $extraClass) ?> title="<?= sidebar_e($item['label']) ?>"><?php if (!empty($item['image'])): ?><img class="sidebar-nav-icon" src="<?= sidebar_e(app_url($item['image'])) ?>" alt="" width="22" height="22" loading="lazy"><?php else: ?><?= sidebar_icon($item['icon']) ?><?php endif; ?><span><?= sidebar_e($item['label']) ?></span><?php if (!empty($item['badge'])): ?><span class="sidebar-badge"><?= sidebar_e((string)$item['badge']) ?></span><?php endif; ?></a>
 <?php
@@ -117,6 +126,8 @@ function sidebar_render_link(array $item, string $extraClass = ''): void
 
 function sidebar_render_dropdown(array $item): void
 {
+    $item['items'] = array_values(array_filter($item['items'], static fn(array $c): bool => sidebar_is_route_available($c['path'] ?? '')));
+    if (empty($item['items'])) return;
     $paths = sidebar_item_paths($item['items']);
     $openClass = sidebar_dropdown_class($paths);
 ?>
@@ -143,6 +154,11 @@ function sidebar_render_item(array $item): void
 
 function sidebar_render_section(array $section): void
 {
+    $section['items'] = array_values(array_filter($section['items'], static function(array $i): bool {
+        if (isset($i['items'])) return !empty(array_filter($i['items'], static fn(array $c): bool => sidebar_is_route_available($c['path'] ?? '')));
+        return sidebar_is_route_available($i['path'] ?? '');
+    }));
+    if (empty($section['items'])) return;
 ?>
     <div class="sidebar-section">
         <?php if (!empty($section['title'])): ?>

@@ -17,6 +17,12 @@ $tableRequest = $isTableRequest ? $_GET : [];
 $isExport = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
     && ($_POST['action'] ?? '') === 'export_csv';
 
+if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST" && \App\Core\RemoteIngress::isRemoteMonitoringRequest()) {
+    http_response_code(403);
+    echo "Access denied: write actions and exports are disabled on remote ingress.";
+    exit;
+}
+
 if ($isExport) {
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $userFilter = trim((string)($_POST['user_id'] ?? ''));
@@ -174,6 +180,12 @@ if ($isTableRequest) {
 
 $logs = $isExport ? $protectedAuditRecords->exportRows($actorRole, $auditFilters) : [];
 
+if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST" && \App\Core\RemoteIngress::isRemoteMonitoringRequest()) {
+    http_response_code(403);
+    echo "Access denied: write actions and exports are disabled on remote ingress.";
+    exit;
+}
+
 if ($isExport) {
     $rows = array_map(static function (array $log): array {
         return [
@@ -247,6 +259,7 @@ $emptyTableCopy = $canViewPlatformAudit
                 <div>
                     <h1><?= htmlspecialchars($pageTitle) ?></h1>
                 </div>
+                <?php if (!\App\Core\RemoteIngress::isRemoteMonitoringRequest()): ?>
                 <form method="POST" class="audit-log-export-form" id="auditLogExportForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="export_csv">
@@ -258,6 +271,7 @@ $emptyTableCopy = $canViewPlatformAudit
                     <input type="hidden" name="table_request" id="exportTableRequest" value="{}">
                     <button type="submit" class="btn btn-quiet"><i class="bi bi-download" aria-hidden="true"></i> Export CSV</button>
                 </form>
+                <?php endif; ?>
             </div>
 
             <div class="audit-log-stats">
@@ -392,15 +406,15 @@ $emptyTableCopy = $canViewPlatformAudit
             var exportForm = document.getElementById('auditLogExportForm');
             var exportRequest = document.getElementById('exportTableRequest');
             var tableError = document.getElementById('audit-table-error');
-            var exportButton = exportForm.querySelector('button');
+            var exportButton = exportForm ? exportForm.querySelector('button') : null;
             var lastRequest = {};
             var tableReady = false;
-            exportButton.disabled = true;
+            if (exportButton) exportButton.disabled = true;
 
             function showAuditLoadError() {
                 table.processing(false);
                 tableReady = false;
-                exportButton.disabled = true;
+                if (exportButton) exportButton.disabled = true;
                 matchingRecords.textContent = '-';
                 tableError.textContent = 'Records could not be loaded. Reload the page and try again.';
                 tableError.hidden = false;
@@ -486,11 +500,11 @@ $emptyTableCopy = $canViewPlatformAudit
 
             document.querySelector('#auditLogsTable_wrapper .dt-search input').addEventListener('input', function() {
                 tableReady = false;
-                exportButton.disabled = true;
+                if (exportButton) exportButton.disabled = true;
             });
             table.on('preXhr', function() {
                 tableReady = false;
-                exportButton.disabled = true;
+                if (exportButton) exportButton.disabled = true;
                 tableError.hidden = true;
             });
             table.on('draw', function() {
@@ -498,11 +512,11 @@ $emptyTableCopy = $canViewPlatformAudit
                 if (!result || result.error) return;
                 matchingRecords.textContent = result.recordsFiltered;
                 lastRequest = table.ajax.params();
-                exportRequest.value = JSON.stringify(lastRequest);
+                if (exportRequest) exportRequest.value = JSON.stringify(lastRequest);
                 tableReady = true;
-                exportButton.disabled = false;
+                if (exportButton) exportButton.disabled = false;
             });
-            exportForm.addEventListener('submit', function(event) {
+            if (exportForm) exportForm.addEventListener('submit', function(event) {
                 if (!tableReady || table.search() !== lastRequest.search.value) {
                     event.preventDefault();
                     tableError.textContent = 'Wait for the search results before exporting.';

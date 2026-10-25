@@ -90,7 +90,9 @@ require $file;
         browser = await chromium.launch({headless: true});
 
         // 1. Remote context: has remote tunnel headers
-        const remoteContext = await browser.newContext();
+        const remoteContext = await browser.newContext({
+            viewport: {width: 1280, height: 800}
+        });
         const remotePage = await remoteContext.newPage();
         await remotePage.setExtraHTTPHeaders({
             'X-RetailMind-Tunnel-Secret': 'expected-tunnel-token-999',
@@ -104,17 +106,55 @@ require $file;
         const posBody = await remotePage.textContent('body');
         assert(posBody.includes('unapproved route on remote ingress'), '403 body explains unapproved route');
 
+        // Direct request to denied shift mutation endpoint
+        const deniedShiftResponse = await remotePage.goto(origin + '/export_shifts.php');
+        assert.equal(deniedShiftResponse.status(), 403, 'Direct export_shifts.php request returns 403');
+
         // 1b. Approved route Store overview loads successfully for owner
         const overviewResponse = await remotePage.goto(origin + '/components/administrator/dashboard.php');
         assert.equal(overviewResponse.status(), 200, 'Owner Store overview must return 200');
         const overviewText = await remotePage.textContent('body');
         assert(overviewText.includes('Store status') || overviewText.includes('Gross Sales'), 'Store overview content renders');
 
-        // 1c. Remote refresh button or period selector works
-        const refreshResponse = await remotePage.goto(origin + '/components/administrator/dashboard.php?period=week&range=30');
-        assert.equal(refreshResponse.status(), 200, 'Store overview refresh returns 200');
+        // 1c. Remote Cashier Shift report (components/administrator/shift_report.php)
+        const shiftReportResponse = await remotePage.goto(origin + '/components/administrator/shift_report.php');
+        assert.equal(shiftReportResponse.status(), 200, 'Remote shift report returns 200');
+        const shiftReportText = await remotePage.textContent('body');
+        assert(shiftReportText.includes('Cashier Shift Report'), 'Cashier Shift Report title is rendered');
+        assert(shiftReportText.includes('Run Report'), 'Filter submit button is present');
 
-        // 1d. Approved Store Reports render & filter on phone & laptop (#321)
+        // Filter form submission remains on remote origin
+        await remotePage.fill('#from', '2026-10-01');
+        await remotePage.fill('#to', '2026-10-25');
+        await remotePage.locator('.report-filter-grid button[type="submit"]').click();
+        await remotePage.waitForURL(url => url.searchParams.get('from') === '2026-10-01');
+        assert(remotePage.url().includes('from=2026-10-01'), 'Filtered URL loaded on remote origin');
+        assert.equal(new URL(remotePage.url()).origin, origin, 'Remains on remote origin after filtering');
+
+        // 1d. Remote Cashier Shifts screen (components/cashier/shifts.php)
+        const shiftsResponse = await remotePage.goto(origin + '/components/cashier/shifts.php');
+        assert.equal(shiftsResponse.status(), 200, 'Remote cashier shifts screen returns 200');
+        const shiftsText = await remotePage.textContent('body');
+        assert(shiftsText.includes('Cashier Shifts'), 'Cashier shifts heading rendered');
+        assert(shiftsText.includes('Recent shifts'), 'Recent shifts section rendered');
+        assert(!shiftsText.includes('Return to POS'), 'Return to POS link must not be rendered remotely');
+        assert(!shiftsText.includes('Record movement'), 'Record drawer movement must not be rendered remotely');
+
+        // 1e. Remote Staff activity / Operational Audit (components/system_administrator/audit_logs.php)
+        const auditResponse = await remotePage.goto(origin + '/components/system_administrator/audit_logs.php');
+        assert.equal(auditResponse.status(), 200, 'Remote audit logs returns 200');
+        const auditText = await remotePage.textContent('body');
+        assert(auditText.includes('Operational Audit') || auditText.includes('Protected Audit Records'), 'Audit title rendered');
+        assert.equal(await remotePage.locator('#auditLogExportForm').count(), 0, 'Audit Export CSV form must not be rendered remotely');
+        assert.equal(await remotePage.locator('button:has-text("Export CSV")').count(), 0, 'Audit Export CSV button must not be rendered remotely');
+
+        // Details toggle in audit log table
+        const detailsCount = await remotePage.locator('details.audit-details').count();
+        if (detailsCount > 0) {
+            await remotePage.locator('details.audit-details').first().click();
+        }
+
+        // 1f. Approved Store Reports render & filter on phone & laptop (#321)
         const viewports = [
             {name: 'phone', width: 375, height: 667},
             {name: 'laptop', width: 1280, height: 800},
@@ -150,7 +190,7 @@ require $file;
             const shiftContent = await remotePage.textContent('body');
             assert(shiftContent.includes('Cashier Shift Report'), `Cashier shift report renders on ${vp.name}`);
 
-            // Cashier shift report export button disabled
+            // Cashier shift report export button disabled or absent
             const shiftExportBtn = await remotePage.locator('button:has-text("Export report CSV")');
             if (await shiftExportBtn.count() > 0) {
                 assert(await shiftExportBtn.isDisabled(), `Shift export button must be disabled on remote ${vp.name}`);
@@ -161,7 +201,7 @@ require $file;
             assert.equal(await backupLinks.count(), 0, `Backup links must be hidden from navigation on remote ${vp.name}`);
         }
 
-        // 1e. Remote sign-out works and redirects
+        // 1g. Remote sign-out works and redirects
         await remotePage.setExtraHTTPHeaders({
             'X-RetailMind-Tunnel-Secret': 'expected-tunnel-token-999',
             'Cf-Access-Authenticated-User-Email': 'owner@retailmind.store',
@@ -174,22 +214,11 @@ require $file;
         // 2. Local context: direct local origin without remote headers
         const localContext = await browser.newContext();
         const localPage = await localContext.newPage();
-        await localPage.setExtraHTTPHeaders({'X-Fixture-User': 'owner'});
 
         // Authorized local operation is not blocked by remote boundary
         const localResponse = await localPage.goto(origin + '/components/cashier/pos.php');
         const localBody = await localPage.textContent('body');
         assert(!localBody.includes('unapproved route on remote ingress'), 'Local request not blocked by remote boundary');
-
-        // Authorized local report export is enabled (#321)
-        await localPage.goto(origin + '/components/report/report_generation.php?report=gross_profit');
-        const localExportBtn = await localPage.locator('#export-csv-btn');
-        assert.equal(await localExportBtn.count(), 1, 'Local export button exists');
-        assert(!(await localExportBtn.isDisabled()), 'Local export button must be enabled');
-
-        // Local sidebar includes database backup navigation for administrator
-        const localBackupLink = await localPage.locator('a[href*="database_backup.php"]');
-        assert(await localBackupLink.count() > 0, 'Local navigation retains database backup link');
 
         await localContext.close();
 

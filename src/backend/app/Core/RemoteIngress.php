@@ -81,13 +81,13 @@ final class RemoteIngress
             return true;
         }
 
-        if ($normalized === 'components/administrator/dashboard.php') {
-            return true;
-        }
-
         if (in_array($normalized, [
-            'components/report/report_generation.php',
+            'components/administrator/dashboard.php',
             'components/administrator/shift_report.php',
+            'components/cashier/shifts.php',
+            'components/system_administrator/audit_logs.php',
+            'components/modals/audit_log.php',
+            'components/report/report_generation.php',
             'components/report/receiving_history.php',
             'components/report/forecast_analytics.php',
             'components/report/forecast_exceptions.php',
@@ -140,6 +140,28 @@ final class RemoteIngress
 
         if (self::isExportRequest()) {
             self::deny('Access denied: bulk export or download is unavailable on remote ingress.');
+        }
+
+        $normalized = self::normalizePath();
+        $readOnlyMonitoringRoutes = [
+            'components/administrator/dashboard.php',
+            'components/administrator/shift_report.php',
+            'components/cashier/shifts.php',
+            'components/system_administrator/audit_logs.php',
+            'components/modals/audit_log.php',
+            'components/report/report_generation.php',
+            'components/report/receiving_history.php',
+            'components/report/forecast_analytics.php',
+            'components/report/forecast_exceptions.php',
+            'components/report/data_readiness.php',
+            'components/report/predictions.php',
+            'components/invoice/sales.php',
+        ];
+        if (in_array($normalized, $readOnlyMonitoringRoutes, true)) {
+            $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+            if (!in_array($method, ['GET', 'HEAD'], true)) {
+                self::deny('Access denied: write actions and exports are disabled on remote ingress.');
+            }
         }
     }
 
