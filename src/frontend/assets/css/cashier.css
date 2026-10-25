@@ -1014,6 +1014,8 @@
 .checkout-modal {
     position: fixed;
     inset: 0;
+    top: var(--cashier-visible-top, 0px);
+    height: var(--cashier-visible-height, 100dvh);
     width: 100vw;
     z-index: 2000;
     display: flex;
@@ -1036,7 +1038,7 @@
 .checkout-dialog {
     width: min(480px, 100%);
     max-height: calc(100vh - 2rem);
-    max-height: calc(100dvh - 2rem);
+    max-height: calc(var(--cashier-visible-height, 100dvh) - 2rem);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -2897,13 +2899,13 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 /* Keep the desktop checkout workspace on tablets, in either orientation. */
 @media (min-width: 768px) {
     body.cashier-pos-page {
-        height: 100dvh;
+        height: var(--cashier-visible-height, 100dvh);
         overflow: hidden;
     }
 
     .cashier-pos-page .app-shell,
     .cashier-pos-page .main-content {
-        height: 100dvh;
+        height: var(--cashier-visible-height, 100dvh);
         min-height: 0;
     }
 
