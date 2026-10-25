@@ -234,6 +234,30 @@ final class RecoveryStore
         return (bool)($state['replacement_started'] ?? false);
     }
 
+    public static function recordReviewChecks(array $checks): void
+    {
+        if (!self::isPaused()) {
+            throw new DomainException('No active recovery operation.');
+        }
+        $state = self::state();
+        $state['review_checks'] = array_replace_recursive($state['review_checks'] ?? [], $checks);
+        $state['updated_at'] = gmdate('c');
+        self::write('restore-state.json', json_encode($state, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+    }
+
+    public static function reopenedRecord(): ?array
+    {
+        if (!self::isAvailable()) {
+            return null;
+        }
+        $path = self::path('recovery-reopened.json');
+        if (!is_file($path)) {
+            return null;
+        }
+        $data = json_decode((string)file_get_contents($path), true);
+        return is_array($data) ? $data : null;
+    }
+
     public static function checkThrottle(string $key): array
     {
         $path = self::path('recovery-throttle.json');

@@ -275,6 +275,7 @@ final class RecoveryAuthService
             'stages' => $state['stages'] ?? [],
             'safety_operation_id' => (string)($state['safety_operation_id'] ?? ''),
             'replacement_started' => (bool)($state['replacement_started'] ?? false),
+            'review_checks' => $state['review_checks'] ?? [],
             'message' => 'Database recovery in progress. Stage: ' . ($state['stage'] ?? ''),
         ];
 
