@@ -17,12 +17,13 @@ const php = process.env.PHP_BINARY || 'php';
 const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-restart-browser-'));
 const recoveryStoragePath = path.join(testDirectory, 'recovery');
 fs.mkdirSync(recoveryStoragePath, { recursive: true });
+const worktreeDir = path.resolve(__dirname, '../../..');
 const env = { ...process.env, BACKUP_STORAGE_PATH: recoveryStoragePath };
 const proofDirectory = path.join(os.tmpdir(), 'retailmind-284-312');
 fs.mkdirSync(proofDirectory, { recursive: true });
 
 const fixture = action => {
-    const result = spawnSync(php, ['src/backend/tests/support/theme_fixture.php', action, database], { encoding: 'utf8', env });
+    const result = spawnSync(php, [path.resolve(__dirname, 'support/theme_fixture.php'), action, database], { cwd: worktreeDir, encoding: 'utf8', env });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return result.stdout;
 };
@@ -34,7 +35,7 @@ const fixture = action => {
         const password = fixtureData.password || 'ThemeTest@2026';
 
         // Prepare pre-restore maintenance state with real safety copy via helper script
-        const prepResult = spawnSync(php, ['-d', 'memory_limit=512M', 'src/backend/tests/support/recovery_restart_prep.php', database, password], { encoding: 'utf8', env });
+        const prepResult = spawnSync(php, ['-d', 'memory_limit=512M', path.resolve(__dirname, 'support/recovery_restart_prep.php'), database, password], { cwd: worktreeDir, encoding: 'utf8', env });
         assert.equal(prepResult.status, 0, prepResult.stderr || prepResult.stdout);
         const recoveryInfo = JSON.parse(prepResult.stdout);
 
@@ -47,8 +48,8 @@ const fixture = action => {
 
         const serverLog = fs.openSync(path.join(testDirectory, 'server.log'), 'w');
         const phpErrorLog = path.join(testDirectory, 'php_errors.log');
-        server = spawn(php, ['-d', 'memory_limit=512M', '-d', 'display_errors=1', '-d', 'error_log=' + phpErrorLog, '-S', '127.0.0.1:' + port, '-t', 'src/frontend', 'src/backend/tests/support/theme_router.php'],
-            { env: { ...env, RM_THEME_TEST_DATABASE: database }, stdio: ['ignore', serverLog, serverLog] });
+        server = spawn(php, ['-d', 'memory_limit=512M', '-d', 'display_errors=1', '-d', 'error_log=' + phpErrorLog, '-S', '127.0.0.1:' + port, '-t', path.resolve(worktreeDir, 'src/frontend'), path.resolve(__dirname, 'support/theme_router.php')],
+            { cwd: worktreeDir, env: { ...env, RM_THEME_TEST_DATABASE: database }, stdio: ['ignore', serverLog, serverLog] });
 
         for (let attempt = 0; attempt < 100; attempt++) {
             try {
@@ -113,10 +114,17 @@ const fixture = action => {
             await page.screenshot({ path: path.join(proofDirectory, `recovery-review-pending-${width}.png`), fullPage: true });
         }
 
-        // 6. Explicitly reopen store as super admin
+        // 6. Confirm checklist items and explicitly reopen store as super admin
+        for (const chk of ['stock', 'receipt', 'upload', 'attribution']) {
+            await page.locator(`[data-recovery-confirm="${chk}"]`).check();
+        }
+        await page.locator('[data-recovery-submit="checklist"]').click();
+
         page.on('dialog', async dialog => {
             await dialog.accept();
         });
+        await page.locator('#reopen-operator-password').fill(password);
+        await page.locator('#confirm-one-active').check();
         await page.locator('[data-recovery-submit="reopen"]').click();
 
         // Assert store reopened

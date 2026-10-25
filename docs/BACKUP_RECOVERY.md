@@ -99,7 +99,47 @@ Before transitioning to operator review, both recovery paths execute strict post
 - Uploaded asset hashes: asserts all referenced files exist in storage with matching SHA-256 hashes.
 - Background jobs: marks queued/running ML jobs failed and sets unready forecasting model flags.
 
-Upon successful automated verification, the operation stage transitions to `STAGE_OPERATOR_REVIEW_PENDING`. Reopening is NEVER automatic: only an authenticated destination Super Administrator can review operational evidence and explicitly click "Reopen Store Access" (`reopen`) to transition to `STAGE_REOPENED_COMPLETED` and resume ordinary Store traffic. Any verification or runtime failure transitions to `STAGE_RECOVERY_REQUIRED` and fails closed.
+Upon successful automated verification, the operation stage transitions to `STAGE_OPERATOR_REVIEW_PENDING`. Reopening is NEVER automatic: Store writes and background jobs remain fenced while operator verification is pending (#313).
+
+### Controlled verification checks and operator review (#313)
+
+While ordinary traffic remains blocked by `StoreWriteGate` and `RecoveryStore`, authorized operators can run controlled read-only verification checks in the recovery console (`/components/backup/recovery.php`):
+- **Sign-in preview**: read-only preview of active destination administrators and users.
+- **Stock & batch check**: verifies inventory counts, batch allocations, and zero negative quantities on hand.
+- **Receipt & subtotal verification**: checks sales and cash refunds against item subtotal sums.
+- **Upload asset preview**: verifies that referenced product images and profile images exist on disk and match integrity checksums.
+- **Summary report check**: computes aggregate revenue, transaction counts, and inventory volume.
+
+### Human review checklist and evidence persistence
+
+Durable evidence (`review_checks`) records both automated check results and human checklist confirmations:
+1. `stock`: verified inventory counts, product batches, and zero negative stock.
+2. `receipt`: verified sales receipts and financial subtotal integrity.
+3. `upload`: previewed product and profile images on filesystem.
+4. `attribution`: confirmed operator identities and actor associations resolve cleanly.
+
+Missing or stale checks (> 15 minutes old) strictly prevent reopening with accessible, actionable guidance.
+
+### Explicit reopening and authorization
+
+Reopening requires:
+1. **Durable stage**: must be `STAGE_OPERATOR_REVIEW_PENDING`.
+2. **Authorization**: only the initiating administrator or a pre-authorized destination Super Administrator (from `authorized_operators`) can reopen. Imported identities, ordinary sessions, or unrelated admins are strictly rejected.
+3. **Fresh authentication**: requires re-entering the operator's destination password, verified via `RecoveryAuthService`.
+4. **Operation binding**: bound to the active recovery `operation_id` with a valid recovery CSRF token.
+5. **Completed checklist**: all 4 automated checks passed and not stale; all 4 human checklist items confirmed.
+6. **One-active-Store constraint**: explicit confirmation that this Store is the single active Store. Dual active stores are prohibited.
+
+### Reopening effect and persistence
+
+Executing reopening:
+- Transitions durable stage to `STAGE_REOPENED_COMPLETED`.
+- Writes `recovery-reopened.json` with operator metadata, timestamp, path completed (`safety_recovery` or `restart_incoming`), verified checks, and session epoch.
+- Appends outcome to `restore-log.jsonl`.
+- Retains original verified safety copy and checkpoint intact on disk for audit.
+- Unpauses `store_write_gate` and clears `isPaused()`, admitting ordinary HTTP read/write requests.
+- Invalidates all existing web sessions via a random `session-epoch` bump, preventing old sessions from reviving.
+- Leaves stale ML/forecast jobs failed/cancelled; forecasting remains unavailable if unsupported.
 
 ## Legacy offline recovery reference
 

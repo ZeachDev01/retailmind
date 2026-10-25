@@ -1,11 +1,14 @@
 <?php
-// Browser recovery console and status (#311).
+// Browser recovery console and status (#311, #312, #313).
 // Renders and authenticates independently of database tables.
 require_once dirname(__DIR__, 3) . '/backend/bootstrap/app.php';
 require_once dirname(__DIR__, 3) . '/backend/includes/backup.php';
 
 use App\Backup\RecoveryStore;
 use App\Backup\RecoveryAuthService;
+use App\Backup\DatabaseRestoreService;
+use App\Backup\DatabaseBackupService;
+use App\Authorization\RoleCapabilityPolicy;
 use DomainException;
 use RuntimeException;
 
@@ -46,6 +49,16 @@ if (!isset($_SESSION['_recovery_login_csrf'])) {
 
 $session = RecoveryAuthService::currentRecoverySession();
 $action = (string)($_POST['action'] ?? '');
+
+$getPdo = static function(): PDO {
+    $dbConfig = require dirname(__DIR__, 3) . '/backend/config/database.php';
+    return new PDO(
+        "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['database']};charset=utf8mb4",
+        $dbConfig['username'],
+        $dbConfig['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false]
+    );
+};
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -92,17 +105,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new DomainException('No safety operation bound to active recovery.');
             }
 
-            $dbConfig = require dirname(__DIR__, 3) . '/backend/config/database.php';
-            $pdo = new PDO(
-                "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['database']};charset=utf8mb4",
-                $dbConfig['username'],
-                $dbConfig['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false]
-            );
-
-            $policy = new App\Authorization\RoleCapabilityPolicy();
-            $backups = new App\Backup\DatabaseBackupService($pdo, $policy);
-            $restore = new App\Backup\DatabaseRestoreService($pdo, $policy, $backups);
+            $pdo = $getPdo();
+            $policy = new RoleCapabilityPolicy();
+            $backups = new DatabaseBackupService($pdo, $policy);
+            $restore = new DatabaseRestoreService($pdo, $policy, $backups);
             $result = $restore->recoverSafety((int)$session['user_id'], (string)$session['role'], $safetyOpId, $safetyPassphrase);
             $notice = 'Complete safety recovery finished successfully. Database and uploads rolled back to verified original. Store is pending operator review.';
         } elseif ($action === 'restart_incoming') {
@@ -134,30 +140,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new DomainException('Upload the approved encrypted Store package (.rmpkg).');
             }
 
-            $dbConfig = require dirname(__DIR__, 3) . '/backend/config/database.php';
-            $pdo = new PDO(
-                "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['database']};charset=utf8mb4",
-                $dbConfig['username'],
-                $dbConfig['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false]
-            );
-
-            $policy = new App\Authorization\RoleCapabilityPolicy();
-            $backups = new App\Backup\DatabaseBackupService($pdo, $policy);
-            $restore = new App\Backup\DatabaseRestoreService($pdo, $policy, $backups);
+            $pdo = $getPdo();
+            $policy = new RoleCapabilityPolicy();
+            $backups = new DatabaseBackupService($pdo, $policy);
+            $restore = new DatabaseRestoreService($pdo, $policy, $backups);
             $result = $restore->restartIncoming((int)$session['user_id'], (string)$session['role'], $packagePath, $incomingPassphrase, $safetyPassphrase);
             $notice = 'Approved incoming replacement restarted from the beginning. Verification passed. Store is pending operator review.';
-        } elseif ($action === 'reopen') {
-            if (!$session || ($session['role'] ?? '') !== 'super_admin') {
-                throw new DomainException('Only a destination Super Administrator can explicitly reopen the Store.');
+        } elseif ($action === 'run_verification') {
+            if (!$session) {
+                throw new DomainException('Operator authentication required.');
             }
             if (!RecoveryAuthService::verifyCsrf((string)($_POST['recovery_csrf'] ?? ''))) {
                 throw new DomainException('Invalid recovery session token.');
             }
-            RecoveryStore::transitionStage(RecoveryStore::STAGE_REOPENED_COMPLETED);
-            RecoveryAuthService::clearRecoverySession();
-            $session = null;
-            $notice = 'Recovery completed. Store access has been resumed.';
+            $pdo = $getPdo();
+            $policy = new RoleCapabilityPolicy();
+            $backups = new DatabaseBackupService($pdo, $policy);
+            $restore = new DatabaseRestoreService($pdo, $policy, $backups);
+            $vResult = $restore->runVerificationChecks();
+            $restore->recordReviewChecks($vResult['checks']);
+            $notice = 'Verification checks updated successfully. All automated integrity checks completed.';
+        } elseif ($action === 'confirm_checklist') {
+            if (!$session) {
+                throw new DomainException('Operator authentication required.');
+            }
+            if (!RecoveryAuthService::verifyCsrf((string)($_POST['recovery_csrf'] ?? ''))) {
+                throw new DomainException('Invalid recovery session token.');
+            }
+            $pdo = $getPdo();
+            $policy = new RoleCapabilityPolicy();
+            $backups = new DatabaseBackupService($pdo, $policy);
+            $restore = new DatabaseRestoreService($pdo, $policy, $backups);
+            foreach (['stock', 'receipt', 'upload', 'attribution'] as $key) {
+                if (!empty($_POST['confirm_' . $key])) {
+                    $restore->confirmChecklistItem((int)$session['user_id'], (string)$session['role'], $key, true);
+                }
+            }
+            $notice = 'Human review checklist confirmations saved.';
+        } elseif ($action === 'reopen') {
+            if (!$session) {
+                throw new DomainException('Operator authentication required.');
+            }
+            if (!RecoveryAuthService::verifyCsrf((string)($_POST['recovery_csrf'] ?? ''))) {
+                throw new DomainException('Invalid recovery session token.');
+            }
+
+            $currentStage = RecoveryStore::currentStage();
+            if ($currentStage === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING) {
+                $operatorPassword = (string)($_POST['operator_password'] ?? '');
+                if ($operatorPassword === '') {
+                    throw new DomainException('Fresh operator password verification is required to reopen the Store.');
+                }
+                $opId = (string)($_POST['operation_id'] ?? '');
+                if (empty($_POST['confirm_one_active'])) {
+                    throw new DomainException('You must confirm that recovery completion reopens a single active Store.');
+                }
+                $pdo = $getPdo();
+                $policy = new RoleCapabilityPolicy();
+                $backups = new DatabaseBackupService($pdo, $policy);
+                $restore = new DatabaseRestoreService($pdo, $policy, $backups);
+                $result = $restore->reopenStore((int)$session['user_id'], (string)$session['role'], $operatorPassword, $opId);
+                RecoveryAuthService::clearRecoverySession();
+                $session = null;
+                $notice = 'Recovery completed successfully. Store access has been resumed for all operators.';
+            } else {
+                if (($session['role'] ?? '') !== 'super_admin') {
+                    throw new DomainException('Only a destination Super Administrator can explicitly reopen the Store.');
+                }
+                RecoveryStore::transitionStage(RecoveryStore::STAGE_REOPENED_COMPLETED);
+                RecoveryAuthService::clearRecoverySession();
+                $session = null;
+                $notice = 'Recovery completed. Store access has been resumed.';
+            }
         }
     } catch (DomainException | RuntimeException $e) {
         $error = $e->getMessage();
@@ -169,6 +223,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $isPaused = RecoveryStore::isPaused();
 $viewData = RecoveryAuthService::recoveryViewData($session);
+$reopenedRecord = RecoveryStore::reopenedRecord();
+
+$readiness = ['ready' => false, 'missing' => [], 'guidance' => ''];
+$reviewChecks = $viewData['review_checks'] ?? [];
+$automatedChecks = $reviewChecks['automated'] ?? [];
+$humanChecks = $reviewChecks['human_confirmations'] ?? [];
+
+if ($isPaused && $session) {
+    try {
+        $pdo = $getPdo();
+        $policy = new RoleCapabilityPolicy();
+        $backups = new DatabaseBackupService($pdo, $policy);
+        $restore = new DatabaseRestoreService($pdo, $policy, $backups);
+        $readiness = $restore->validateReopeningReadiness();
+    } catch (Throwable $e) {}
+}
+
+$canReopen = !empty($session['is_initiator']) || (($session['role'] ?? '') === 'super_admin');
 ?>
 <!doctype html>
 <html lang="en">
@@ -185,7 +257,7 @@ $viewData = RecoveryAuthService::recoveryViewData($session);
     <header class="mb-6 border-b border-slate-200 pb-4 flex items-center justify-between">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">Database Recovery Console</h1>
-            <p class="text-sm text-slate-500">Operation-bound recovery and maintenance fencing (#311)</p>
+            <p class="text-sm text-slate-500">Operation-bound recovery, verification, and explicit reopening (#311, #312, #313)</p>
         </div>
         <div>
             <?php if ($isPaused): ?>
@@ -214,9 +286,21 @@ $viewData = RecoveryAuthService::recoveryViewData($session);
         <?php endif; ?>
 
         <?php if (!$isPaused): ?>
-            <section class="bg-white p-6 rounded-lg shadow-sm border border-slate-200" data-recovery-card="idle">
-                <h2 class="text-lg font-semibold text-slate-900 mb-2">No Active Recovery Operation</h2>
-                <p class="text-slate-600 mb-4">The Store database is running normally and write coordination is open. No recovery intervention is required.</p>
+            <section class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 space-y-4" data-recovery-card="idle">
+                <h2 class="text-lg font-semibold text-slate-900">Store Online</h2>
+                <p class="text-slate-600 text-sm">The Store database is running normally and write coordination is open. Ordinary requests are admitted.</p>
+
+                <?php if ($reopenedRecord): ?>
+                    <div class="p-4 bg-slate-50 rounded border border-slate-200 text-xs space-y-1 font-mono text-slate-700" data-recovery-reopened-evidence>
+                        <div class="font-bold text-slate-900 mb-1">Most Recent Reopening Evidence:</div>
+                        <div><strong>Reopened At:</strong> <?= $escape($reopenedRecord['reopened_at'] ?? 'unknown') ?></div>
+                        <div><strong>Reopened By:</strong> <?= $escape($reopenedRecord['reopened_by']['username'] ?? 'unknown') ?> (<?= $escape($reopenedRecord['reopened_by']['role'] ?? '') ?><?= !empty($reopenedRecord['reopened_by']['is_initiator']) ? ', Initiator' : '' ?>)</div>
+                        <div><strong>Path Completed:</strong> <?= $escape($reopenedRecord['path_completed'] ?? 'unknown') ?></div>
+                        <div><strong>One Active Store:</strong> Verified (Dual active stores prohibited)</div>
+                        <div><strong>Session Epoch:</strong> <?= $escape(substr((string)($reopenedRecord['session_epoch'] ?? ''), 0, 16)) ?>...</div>
+                    </div>
+                <?php endif; ?>
+
                 <a href="<?= $escape(app_url('components/system_administrator/backup_restore.php')) ?>" class="inline-flex items-center px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50">
                     Return to Backup &amp; Restore
                 </a>
@@ -299,11 +383,205 @@ $viewData = RecoveryAuthService::recoveryViewData($session);
                     </ol>
                 </div>
 
+                <!-- Ticket #313: Controlled Verification Checks & Previews -->
+                <?php if ($viewData['stage'] === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING): ?>
+                    <div class="border-t border-slate-200 pt-6 space-y-6" data-recovery-card="review">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900">Operator Verification &amp; Review</h3>
+                                <p class="text-xs text-slate-600 mt-1">
+                                    Store writes and background workers remain fenced. Review controlled read-only sign-in preview, stock, receipts, images, and reports below.
+                                </p>
+                            </div>
+                            <form method="post">
+                                <input type="hidden" name="action" value="run_verification">
+                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+                                <button type="submit" data-recovery-submit="rerun-checks" class="px-3 py-1.5 border border-slate-300 rounded text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 shadow-sm">
+                                    Re-run Verification Checks
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Controlled Read-Only Previews Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- 1. Stock Check -->
+                            <div class="p-3 bg-slate-50 rounded border border-slate-200 text-xs space-y-1.5" data-recovery-check="stock">
+                                <div class="flex items-center justify-between font-semibold text-slate-800">
+                                    <span>Stock &amp; Batch Integrity</span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= ($automatedChecks['stock']['status'] ?? '') === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' ?>">
+                                        <?= strtoupper($escape($automatedChecks['stock']['status'] ?? 'pending')) ?>
+                                    </span>
+                                </div>
+                                <p class="text-slate-600"><?= $escape($automatedChecks['stock']['details'] ?? 'Pending check execution.') ?></p>
+                            </div>
+
+                            <!-- 2. Receipt Lookup -->
+                            <div class="p-3 bg-slate-50 rounded border border-slate-200 text-xs space-y-1.5" data-recovery-check="receipt">
+                                <div class="flex items-center justify-between font-semibold text-slate-800">
+                                    <span>Receipt &amp; Subtotal Verification</span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= ($automatedChecks['receipt']['status'] ?? '') === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' ?>">
+                                        <?= strtoupper($escape($automatedChecks['receipt']['status'] ?? 'pending')) ?>
+                                    </span>
+                                </div>
+                                <p class="text-slate-600"><?= $escape($automatedChecks['receipt']['details'] ?? 'Pending check execution.') ?></p>
+                            </div>
+
+                            <!-- 3. Upload Assets Preview -->
+                            <div class="p-3 bg-slate-50 rounded border border-slate-200 text-xs space-y-1.5" data-recovery-check="upload">
+                                <div class="flex items-center justify-between font-semibold text-slate-800">
+                                    <span>Upload &amp; Image Assets</span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= ($automatedChecks['upload']['status'] ?? '') === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' ?>">
+                                        <?= strtoupper($escape($automatedChecks['upload']['status'] ?? 'pending')) ?>
+                                    </span>
+                                </div>
+                                <p class="text-slate-600"><?= $escape($automatedChecks['upload']['details'] ?? 'Pending check execution.') ?></p>
+                            </div>
+
+                            <!-- 4. Attribution Check -->
+                            <div class="p-3 bg-slate-50 rounded border border-slate-200 text-xs space-y-1.5" data-recovery-check="attribution">
+                                <div class="flex items-center justify-between font-semibold text-slate-800">
+                                    <span>Identity &amp; Attribution</span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= ($automatedChecks['attribution']['status'] ?? '') === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' ?>">
+                                        <?= strtoupper($escape($automatedChecks['attribution']['status'] ?? 'pending')) ?>
+                                    </span>
+                                </div>
+                                <p class="text-slate-600"><?= $escape($automatedChecks['attribution']['details'] ?? 'Pending check execution.') ?></p>
+                            </div>
+                        </div>
+
+                        <!-- Previews: Sign-in & Summary Report -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Sign-in Preview -->
+                            <div class="p-3 bg-white rounded border border-slate-200 text-xs space-y-2" data-recovery-preview="signin">
+                                <div class="font-semibold text-slate-800">Sign-in Preview (Active Accounts)</div>
+                                <div class="text-slate-600"><?= $escape($automatedChecks['signin_preview']['details'] ?? 'No active accounts previewed.') ?></div>
+                                <?php if (!empty($automatedChecks['signin_preview']['accounts'])): ?>
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        <?php foreach ($automatedChecks['signin_preview']['accounts'] as $acc): ?>
+                                            <span class="px-2 py-0.5 bg-slate-100 rounded text-[11px] font-mono text-slate-700">
+                                                <?= $escape($acc['username']) ?> (<?= $escape($acc['role_name']) ?>)
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- Report Summary -->
+                            <div class="p-3 bg-white rounded border border-slate-200 text-xs space-y-2" data-recovery-preview="report">
+                                <div class="font-semibold text-slate-800">Summary Report Check</div>
+                                <div class="text-slate-600"><?= $escape($automatedChecks['report']['details'] ?? 'No summary computed.') ?></div>
+                                <?php if (!empty($automatedChecks['report']['metrics'])): ?>
+                                    <div class="grid grid-cols-2 gap-2 mt-1 text-[11px]">
+                                        <div class="bg-slate-50 p-1.5 rounded">Sales Count: <strong><?= (int)($automatedChecks['report']['metrics']['sales_count'] ?? 0) ?></strong></div>
+                                        <div class="bg-slate-50 p-1.5 rounded">Sales Total: <strong><?= number_format((float)($automatedChecks['report']['metrics']['total_revenue'] ?? 0), 2) ?></strong></div>
+                                        <div class="bg-slate-50 p-1.5 rounded col-span-2">Products: <strong><?= (int)($automatedChecks['report']['metrics']['products_count'] ?? 0) ?></strong></div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- Human Checklist Confirmation Form -->
+                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3" data-recovery-card="checklist">
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-900">Human Checklist Confirmations</h4>
+                                <p class="text-xs text-slate-600 mt-0.5">
+                                    Each item must be confirmed by an authorized operator before Store reopening can proceed.
+                                </p>
+                            </div>
+                            <form method="post" class="space-y-3" data-recovery-form="checklist">
+                                <input type="hidden" name="action" value="confirm_checklist">
+                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+
+                                <div class="space-y-2 text-xs">
+                                    <label class="flex items-start space-x-2.5">
+                                        <input type="checkbox" name="confirm_stock" value="1" data-recovery-confirm="stock" <?= !empty($humanChecks['stock']['confirmed']) ? 'checked' : '' ?> class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                        <span class="text-slate-700"><strong>Stock Integrity:</strong> I have reviewed inventory counts, product batches, and verified zero negative stock.</span>
+                                    </label>
+
+                                    <label class="flex items-start space-x-2.5">
+                                        <input type="checkbox" name="confirm_receipt" value="1" data-recovery-confirm="receipt" <?= !empty($humanChecks['receipt']['confirmed']) ? 'checked' : '' ?> class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                        <span class="text-slate-700"><strong>Receipt Integrity:</strong> I have checked sales receipts and confirmed item subtotals match recorded revenue.</span>
+                                    </label>
+
+                                    <label class="flex items-start space-x-2.5">
+                                        <input type="checkbox" name="confirm_upload" value="1" data-recovery-confirm="upload" <?= !empty($humanChecks['upload']['confirmed']) ? 'checked' : '' ?> class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                        <span class="text-slate-700"><strong>Upload Assets:</strong> I have previewed product and profile images and confirm filesystem assets are intact.</span>
+                                    </label>
+
+                                    <label class="flex items-start space-x-2.5">
+                                        <input type="checkbox" name="confirm_attribution" value="1" data-recovery-confirm="attribution" <?= !empty($humanChecks['attribution']['confirmed']) ? 'checked' : '' ?> class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
+                                        <span class="text-slate-700"><strong>Operator Attribution:</strong> I have reviewed active accounts and confirmed all actor associations resolve cleanly.</span>
+                                    </label>
+                                </div>
+
+                                <button type="submit" data-recovery-submit="checklist" class="px-4 py-2 bg-indigo-600 text-white font-medium text-xs rounded hover:bg-indigo-700">
+                                    Save Checklist Confirmations
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Ticket #313: Explicit Reopening Section -->
+                        <div class="p-5 border-2 border-amber-300 bg-amber-50 rounded-lg space-y-4" data-recovery-card="reopen">
+                            <div>
+                                <h4 class="text-sm font-bold text-amber-950 uppercase tracking-wide">Explicit Store Reopening</h4>
+                                <p class="text-xs text-amber-900 mt-1">
+                                    Reopening resumes ordinary read/write traffic, unpauses write gates, invalidates old sessions, and logs completion.
+                                    <strong>One-Active-Store Constraint:</strong> Completing recovery reopens this Store as the sole operational Store. Dual active stores are strictly unauthorized.
+                                </p>
+                            </div>
+
+                            <?php if (!$readiness['ready']): ?>
+                                <div class="p-3 bg-white border border-amber-200 rounded text-xs text-amber-900 space-y-1" role="alert" data-recovery-alert="guidance">
+                                    <div class="font-bold flex items-center text-amber-800">
+                                        <span>Reopening is Blocked Until All Checks Complete:</span>
+                                    </div>
+                                    <ul class="list-disc list-inside space-y-0.5 text-slate-700">
+                                        <?php foreach ($readiness['missing'] as $miss): ?>
+                                            <li><?= $escape($miss) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if ($canReopen): ?>
+                                <form method="post" class="space-y-4" data-recovery-form="reopen" onsubmit="return confirm('Explicitly complete recovery and reopen Store access to all users?');">
+                                    <input type="hidden" name="action" value="reopen">
+                                    <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+                                    <input type="hidden" name="operation_id" value="<?= $escape($viewData['operation_id']) ?>">
+
+                                    <div>
+                                        <label for="reopen-operator-password" class="block text-xs font-semibold text-slate-800 mb-1">
+                                            Re-enter Your Destination Operator Password (Fresh Authentication Required)
+                                        </label>
+                                        <input id="reopen-operator-password" name="operator_password" type="password" required autocomplete="current-password" class="w-full sm:w-80 px-3 py-1.5 border border-slate-300 rounded text-xs focus:ring-amber-500 focus:border-amber-500">
+                                    </div>
+
+                                    <div>
+                                        <label class="flex items-start space-x-2 text-xs text-amber-950 font-medium">
+                                            <input id="confirm-one-active" type="checkbox" name="confirm_one_active" value="1" required class="mt-0.5 rounded text-amber-600 focus:ring-amber-500">
+                                            <span>I confirm that recovery is complete and this Store is the single active Store. Dual active stores are unauthorized.</span>
+                                        </label>
+                                    </div>
+
+                                    <button type="submit" data-recovery-submit="reopen" class="px-5 py-2.5 bg-amber-700 text-white font-semibold text-xs rounded shadow hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-600">
+                                        Reopen Store Access
+                                    </button>
+                                </form>
+                            <?php else: ?>
+                                <p class="text-xs text-amber-800">
+                                    Only the initiating administrator or a pre-authorized destination Super Administrator can reopen the Store.
+                                </p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Recovery Actions (Rollback Safety / Restart Incoming) -->
                 <div class="border-t border-slate-100 pt-4 space-y-4" data-recovery-actions>
                     <div>
-                        <h3 class="text-sm font-semibold text-slate-900">Recovery Actions</h3>
+                        <h3 class="text-sm font-semibold text-slate-900">Alternative Recovery Actions</h3>
                         <p class="text-xs text-slate-600 mt-1">
-                            Choose an action to recover or restart. Both actions require appropriate passphrases and revalidate integrity independently of partial live tables.
+                            Choose an action to recover safety state or restart approved incoming replacement. Both actions require appropriate passphrases and revalidate integrity independently of partial live tables.
                         </p>
                     </div>
 
@@ -382,20 +660,22 @@ $viewData = RecoveryAuthService::recoveryViewData($session);
                             </details>
                         <?php endif; ?>
 
-                        <div class="bg-amber-50 border border-amber-200 p-4 rounded-md text-amber-900 text-xs space-y-3">
-                            <p><strong>Offline Recovery &amp; Reopening:</strong> Ordinary replacement remains disabled. If an incomplete restore requires rollback, run <code>php src/backend/scripts/restore_database.php</code> with the initiating administrator credentials.</p>
-                            <form method="post" onsubmit="return confirm('Explicitly complete recovery and reopen Store access to all users?');" data-recovery-form="reopen">
-                                <input type="hidden" name="action" value="reopen">
-                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
-                                <button type="submit" data-recovery-submit="reopen" class="px-4 py-2 bg-amber-700 text-white font-medium text-xs rounded hover:bg-amber-800">
-                                    Reopen Store Access
-                                </button>
-                            </form>
-                        </div>
+                        <?php if ($viewData['stage'] !== RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING): ?>
+                            <div class="bg-amber-50 border border-amber-200 p-4 rounded-md text-amber-900 text-xs space-y-3">
+                                <p><strong>Offline Recovery &amp; Reopening:</strong> Ordinary replacement remains disabled. If an incomplete restore requires rollback, run <code>php src/backend/scripts/restore_database.php</code> with the initiating administrator credentials.</p>
+                                <form method="post" onsubmit="return confirm('Explicitly complete recovery and reopen Store access to all users?');" data-recovery-form="reopen">
+                                    <input type="hidden" name="action" value="reopen">
+                                    <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+                                    <button type="submit" data-recovery-submit="reopen" class="px-4 py-2 bg-amber-700 text-white font-medium text-xs rounded hover:bg-amber-800">
+                                        Reopen Store Access
+                                    </button>
+                                </form>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php else: ?>
                     <div class="border-t border-slate-100 pt-4 text-xs text-slate-500" data-recovery-admin-notice>
-                        <p>Initiating Administrator view: Store access remains fenced across worker execution and crashes. Platform governance actions (reopening or offline rollback) require a destination Super Administrator.</p>
+                        <p>Initiating Administrator view: Store access remains fenced across worker execution and crashes.</p>
                     </div>
                 <?php endif; ?>
             </section>

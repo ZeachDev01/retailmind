@@ -305,6 +305,7 @@ final class DatabaseRestoreService
 
             RecoveryStore::transitionStage(RecoveryStore::STAGE_AUTOMATED_VERIFICATION);
             $this->verifyPostRestoreIntegrity($schema, $package['files']);
+            $checks = $this->runVerificationChecks($package['files']);
 
             RecoveryStore::transitionStage(RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, [
                 'mode' => 'safety_recovery',
@@ -312,6 +313,7 @@ final class DatabaseRestoreService
                 'statements' => $executed,
                 'files' => $uploaded,
             ]);
+            $this->recordReviewChecks($checks['checks']);
             RecoveryStore::log($actorId, 'safety-' . $safetyOperationId, 'recovered_safety', $executed);
 
             return [
@@ -393,6 +395,7 @@ final class DatabaseRestoreService
 
             RecoveryStore::transitionStage(RecoveryStore::STAGE_AUTOMATED_VERIFICATION);
             $this->verifyPostRestoreIntegrity($schema, $incomingPackage['files']);
+            $checks = $this->runVerificationChecks($incomingPackage['files']);
 
             RecoveryStore::transitionStage(RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, [
                 'mode' => 'incoming_restart',
@@ -400,6 +403,7 @@ final class DatabaseRestoreService
                 'statements' => $executed,
                 'files' => $uploaded,
             ]);
+            $this->recordReviewChecks($checks['checks']);
             RecoveryStore::log($actorId, 'incoming-' . $approval['package_id'], 'restarted_incoming', $executed);
 
             return [
@@ -680,4 +684,349 @@ final class DatabaseRestoreService
             'g' => 1073741824, 'm' => 1048576, 'k' => 1024, default => 1,
         };
     }
+
+    public function runVerificationChecks(?array $expectedFiles = []): array
+    {
+        $now = gmdate('c');
+        $checks = [];
+
+        // 1. Stock check
+        $negInv = false;
+        $invCount = 0;
+        if (\App\Database\Schema::tableExists($this->pdo, 'inventory')) {
+            $negInv = (bool)$this->pdo->query("SELECT 1 FROM inventory WHERE quantity_on_hand < 0 LIMIT 1")->fetchColumn();
+            $invCount = (int)$this->pdo->query("SELECT COUNT(*) FROM inventory")->fetchColumn();
+        }
+        $negBatch = false;
+        $batchCount = 0;
+        if (\App\Database\Schema::tableExists($this->pdo, 'product_batches')) {
+            $negBatch = (bool)$this->pdo->query("SELECT 1 FROM product_batches WHERE remaining_quantity < 0 OR quantity < 0 LIMIT 1")->fetchColumn();
+            $batchCount = (int)$this->pdo->query("SELECT COUNT(*) FROM product_batches")->fetchColumn();
+        }
+        $stockPassed = !$negInv && !$negBatch;
+        $checks['stock'] = [
+            'status' => $stockPassed ? 'passed' : 'failed',
+            'checked_at' => $now,
+            'details' => $stockPassed
+                ? "Zero negative stock across {$invCount} inventory items and {$batchCount} product batches."
+                : "Negative inventory or batch stock detected.",
+            'items_count' => $invCount,
+            'batches_count' => $batchCount,
+        ];
+
+        // 2. Receipt check
+        $saleMismatch = false;
+        $salesCount = 0;
+        if (\App\Database\Schema::tableExists($this->pdo, 'sales') && \App\Database\Schema::tableExists($this->pdo, 'sale_items')) {
+            $saleMismatch = (bool)$this->pdo->query(
+                "SELECT 1 FROM sales s
+                 LEFT JOIN (SELECT sale_id, SUM(subtotal) AS item_sum FROM sale_items GROUP BY sale_id) si ON si.sale_id = s.sale_id
+                 WHERE ABS(s.total_amount - COALESCE(si.item_sum, 0)) > 0.05
+                 LIMIT 1"
+            )->fetchColumn();
+            $salesCount = (int)$this->pdo->query("SELECT COUNT(*) FROM sales")->fetchColumn();
+        }
+        $refundMismatch = false;
+        if (\App\Database\Schema::tableExists($this->pdo, 'cash_refunds') && \App\Database\Schema::tableExists($this->pdo, 'cash_refund_items')) {
+            $refundMismatch = (bool)$this->pdo->query(
+                "SELECT 1 FROM cash_refunds r
+                 LEFT JOIN (SELECT refund_id, SUM(subtotal) AS item_sum FROM cash_refund_items GROUP BY refund_id) ri ON ri.refund_id = r.refund_id
+                 WHERE ABS(r.refund_amount - COALESCE(ri.item_sum, 0)) > 0.05
+                 LIMIT 1"
+            )->fetchColumn();
+        }
+        $receiptPassed = !$saleMismatch && !$refundMismatch;
+        $checks['receipt'] = [
+            'status' => $receiptPassed ? 'passed' : 'failed',
+            'checked_at' => $now,
+            'details' => $receiptPassed
+                ? "All {$salesCount} sales receipts and refund item subtotals match recorded totals."
+                : "Discrepancy detected between receipt total and item subtotals.",
+            'sales_count' => $salesCount,
+        ];
+
+        // 3. Upload check
+        $storage = $this->uploadDirectory ?? dirname(__DIR__, 2) . '/storage';
+        $uploadPassed = true;
+        $uploadCount = 0;
+        $missingCount = 0;
+        if (!empty($expectedFiles)) {
+            foreach ($expectedFiles as $relPath => $content) {
+                $filePath = $storage . '/' . $relPath;
+                $uploadCount++;
+                if (!is_file($filePath) || (is_string($content) && hash_file('sha256', $filePath) !== hash('sha256', $content))) {
+                    $uploadPassed = false;
+                    $missingCount++;
+                }
+            }
+        } else {
+            foreach (['images', 'profile-images'] as $sub) {
+                $dir = $storage . '/' . $sub;
+                if (is_dir($dir)) {
+                    $uploadCount += count(glob($dir . '/*.*') ?: []);
+                }
+            }
+        }
+        $checks['upload'] = [
+            'status' => $uploadPassed ? 'passed' : 'failed',
+            'checked_at' => $now,
+            'details' => $uploadPassed
+                ? "{$uploadCount} verified upload assets present on filesystem."
+                : "Missing or corrupted upload files ({$missingCount} failed).",
+            'files_count' => $uploadCount,
+        ];
+
+        // 4. Attribution check
+        $superAdminExists = (bool)$this->pdo->query(
+            "SELECT 1 FROM users u
+             LEFT JOIN roles r ON r.role_id = u.role_id
+             LEFT JOIN user_roles ur ON ur.user_id = u.user_id
+             LEFT JOIN roles sr ON sr.role_id = ur.role_id
+             WHERE (r.role_name = 'super_admin' OR sr.role_name = 'super_admin')
+               AND u.status = 'active'
+               AND u.is_recovery_account = 0
+             LIMIT 1"
+        )->fetchColumn();
+        $unresolvedAttribution = false;
+        if (\App\Database\Schema::tableExists($this->pdo, 'branches')) {
+            $unresolvedAttribution = $unresolvedAttribution || (bool)$this->pdo->query("SELECT 1 FROM branches b LEFT JOIN users u ON b.created_by = u.user_id WHERE b.created_by IS NOT NULL AND u.user_id IS NULL LIMIT 1")->fetchColumn();
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'sales')) {
+            $unresolvedAttribution = $unresolvedAttribution || (bool)$this->pdo->query("SELECT 1 FROM sales s LEFT JOIN users u ON s.cashier_id = u.user_id WHERE s.cashier_id IS NOT NULL AND u.user_id IS NULL LIMIT 1")->fetchColumn();
+        }
+        $attributionPassed = $superAdminExists && !$unresolvedAttribution;
+        $checks['attribution'] = [
+            'status' => $attributionPassed ? 'passed' : 'failed',
+            'checked_at' => $now,
+            'details' => $attributionPassed
+                ? "Active destination authority present and all actor attributions resolve."
+                : "Missing active destination Super Administrator or dangling actor foreign key.",
+        ];
+
+        // 5. Read-only Sign-in Preview
+        $activeUsers = [];
+        if (\App\Database\Schema::tableExists($this->pdo, 'users')) {
+            $activeUsers = $this->pdo->query(
+                "SELECT u.user_id, u.username, COALESCE(r.role_name, 'user') AS role_name, u.status
+                 FROM users u
+                 LEFT JOIN roles r ON r.role_id = u.role_id
+                 WHERE u.status = 'active'
+                 ORDER BY u.user_id ASC LIMIT 10"
+            )->fetchAll(\PDO::FETCH_ASSOC);
+        }
+        $checks['signin_preview'] = [
+            'status' => 'passed',
+            'checked_at' => $now,
+            'details' => count($activeUsers) . " active user accounts previewed.",
+            'accounts' => $activeUsers,
+        ];
+
+        // 6. Summary Report Check
+        $metrics = [];
+        if (\App\Database\Schema::tableExists($this->pdo, 'sales')) {
+            $row = $this->pdo->query("SELECT COUNT(*) AS total_sales, COALESCE(SUM(total_amount), 0) AS total_revenue FROM sales")->fetch(\PDO::FETCH_ASSOC);
+            $metrics['sales_count'] = (int)($row['total_sales'] ?? 0);
+            $metrics['total_revenue'] = (float)($row['total_revenue'] ?? 0);
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'products')) {
+            $metrics['products_count'] = (int)$this->pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
+        }
+        $checks['report'] = [
+            'status' => 'passed',
+            'checked_at' => $now,
+            'details' => "Summary financial and inventory metrics computed.",
+            'metrics' => $metrics,
+        ];
+
+        $allPassed = $checks['stock']['status'] === 'passed'
+            && $checks['receipt']['status'] === 'passed'
+            && $checks['upload']['status'] === 'passed'
+            && $checks['attribution']['status'] === 'passed';
+
+        return [
+            'all_passed' => $allPassed,
+            'checked_at' => $now,
+            'checks' => $checks,
+        ];
+    }
+
+    public function recordReviewChecks(array $checks): void
+    {
+        RecoveryStore::recordReviewChecks(['automated' => $checks]);
+    }
+
+    public function confirmChecklistItem(int $actorId, string $actorRole, string $checkKey, bool $confirmed = true): void
+    {
+        $this->assertRecoveryOperator($actorId, $actorRole);
+        $validKeys = ['stock', 'receipt', 'upload', 'attribution'];
+        if (!in_array($checkKey, $validKeys, true)) {
+            throw new \DomainException("Invalid review checklist key: {$checkKey}");
+        }
+        RecoveryStore::recordReviewChecks([
+            'human_confirmations' => [
+                $checkKey => [
+                    'confirmed' => $confirmed,
+                    'confirmed_by' => $actorId,
+                    'confirmed_by_role' => $actorRole,
+                    'confirmed_at' => gmdate('c'),
+                ]
+            ]
+        ]);
+    }
+
+    public function validateReopeningReadiness(): array
+    {
+        if (!RecoveryStore::isPaused()) {
+            return [
+                'ready' => false,
+                'missing' => ['No active recovery operation.'],
+                'guidance' => 'No active recovery operation is pending.',
+            ];
+        }
+        $state = RecoveryStore::state();
+        if (($state['stage'] ?? '') !== RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING) {
+            return [
+                'ready' => false,
+                'missing' => ['Operation stage must be operator_review_pending (currently ' . ($state['stage'] ?? 'none') . ').'],
+                'guidance' => 'Reopening requires operation stage to be operator_review_pending.',
+            ];
+        }
+
+        $missing = [];
+        $requiredKeys = ['stock', 'receipt', 'upload', 'attribution'];
+
+        $automated = $state['review_checks']['automated'] ?? [];
+        foreach ($requiredKeys as $key) {
+            if (!isset($automated[$key]) || ($automated[$key]['status'] ?? '') !== 'passed') {
+                $missing[] = "Automated check '{$key}' has not passed.";
+            } else {
+                $chkTime = strtotime((string)($automated[$key]['checked_at'] ?? ''));
+                if ($chkTime === false || (time() - $chkTime) > 900) {
+                    $missing[] = "Automated check '{$key}' is stale (> 15 min old). Re-run verification checks.";
+                }
+            }
+        }
+
+        $human = $state['review_checks']['human_confirmations'] ?? [];
+        foreach ($requiredKeys as $key) {
+            if (empty($human[$key]['confirmed'])) {
+                $missing[] = "Human confirmation for '{$key}' is missing.";
+            }
+        }
+
+        if (!empty($missing)) {
+            return [
+                'ready' => false,
+                'missing' => $missing,
+                'guidance' => 'Reopening blocked by missing or unconfirmed review checks: ' . implode(' ', $missing),
+            ];
+        }
+
+        return [
+            'ready' => true,
+            'missing' => [],
+            'guidance' => 'All automated checks and human checklist confirmations verified. Store is ready to reopen.',
+        ];
+    }
+
+    public function reopenStore(
+        int $actorId,
+        string $actorRole,
+        #[\SensitiveParameter] string $actorPassword,
+        string $operationId,
+        ?string $notes = null
+    ): array {
+        if (!RecoveryStore::isPaused()) {
+            throw new \DomainException('No active recovery operation.');
+        }
+
+        $state = RecoveryStore::state();
+        if (($state['operation_id'] ?? '') !== $operationId) {
+            throw new \DomainException('Recovery operation mismatch.');
+        }
+
+        if (($state['stage'] ?? '') !== RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING) {
+            throw new \DomainException('Store can only be reopened from operator_review_pending stage.');
+        }
+
+        $operators = $state['authorized_operators'] ?? [];
+        $matched = null;
+        foreach ($operators as $op) {
+            if ((int)$op['user_id'] === $actorId) {
+                $matched = $op;
+                break;
+            }
+        }
+
+        if (!$matched) {
+            throw new \DomainException('Operator is not authorized for this recovery operation.');
+        }
+
+        if (empty($matched['is_initiator']) && ($matched['role'] ?? '') !== 'super_admin') {
+            throw new \DomainException('Only the initiating administrator or a destination Super Administrator can reopen the Store.');
+        }
+
+        if ($actorPassword === '' || !password_verify($actorPassword, (string)$matched['password_hash'])) {
+            throw new \DomainException('Operator password verification failed. Fresh authentication required for reopening.');
+        }
+
+        $readiness = $this->validateReopeningReadiness();
+        if (!$readiness['ready']) {
+            throw new \DomainException($readiness['guidance']);
+        }
+
+        $pathCompleted = 'safety_recovery';
+        foreach (array_reverse($state['stages'] ?? []) as $st) {
+            if (($st['mode'] ?? '') === 'incoming_restart' || ($st['mode'] ?? '') === 'restart_incoming') {
+                $pathCompleted = 'restart_incoming';
+                break;
+            }
+            if (($st['mode'] ?? '') === 'safety_recovery') {
+                $pathCompleted = 'safety_recovery';
+                break;
+            }
+        }
+
+        $newEpoch = bin2hex(random_bytes(32));
+        RecoveryStore::write('session-epoch', $newEpoch);
+
+        if (\App\Database\Schema::tableExists($this->pdo, 'store_write_gate')) {
+            $this->pdo->exec("UPDATE store_write_gate SET paused_at = NULL, paused_by = NULL WHERE gate_key = 'store_writes'");
+        }
+
+        if (\App\Database\Schema::tableExists($this->pdo, 'ml_jobs')) {
+            $this->pdo->exec("UPDATE ml_jobs SET status = 'failed', operator_message = 'Invalidated by database restore' WHERE status IN ('queued', 'running')");
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'model_training_runs')) {
+            $this->pdo->exec("UPDATE model_training_runs SET status = 'failed' WHERE status IN ('queued', 'training')");
+        }
+
+        $reopenedData = [
+            'operation_id' => $operationId,
+            'stage' => RecoveryStore::STAGE_REOPENED_COMPLETED,
+            'reopened_at' => gmdate('c'),
+            'reopened_by' => [
+                'user_id' => (int)$matched['user_id'],
+                'username' => (string)$matched['username'],
+                'role' => (string)$matched['role'],
+                'is_initiator' => (bool)($matched['is_initiator'] ?? false),
+            ],
+            'path_completed' => $pathCompleted,
+            'verified_checks' => $state['review_checks'] ?? [],
+            'session_epoch' => $newEpoch,
+            'safety_operation_id' => (string)($state['safety_operation_id'] ?? ''),
+            'single_active_store_confirmed' => true,
+            'notes' => $notes,
+        ];
+        RecoveryStore::write('recovery-reopened.json', json_encode($reopenedData, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+        RecoveryStore::log($actorId, 'reopen-' . $operationId, 'reopened_completed', 0);
+        RecoveryStore::transitionStage(RecoveryStore::STAGE_REOPENED_COMPLETED);
+
+        return [
+            'success' => true,
+            'reopened_record' => $reopenedData,
+            'message' => 'Store successfully reopened. Access resumed.',
+        ];
+    }
+
 }

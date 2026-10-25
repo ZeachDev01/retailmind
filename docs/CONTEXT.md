@@ -102,6 +102,22 @@ _Avoid_: Partial rollback, unverified destination recovery
 The deterministic, from-the-beginning re-execution of an approved incoming replacement. Requires both the incoming and safety passphrases, revalidates package and plan integrity against the destination checkpoint independently of live tables, and enforces security preservation closure.
 _Avoid_: In-place resume, statement offset continuation, guessed mapping
 
+**Controlled Verification Check**:
+The narrowly scoped read-only preview (sign-in preview, stock check, receipt lookup, image preview, report check) permitted in the Recovery Console while Store writes and background jobs remain fenced.
+_Avoid_: Unfenced preview, test write, unverified read
+
+**Review Checklist Evidence**:
+The durable record (`review_checks`) of successful automated verification and operator human confirmations (stock, receipt, upload, attribution) in RecoveryStore. Missing or stale checks prevent reopening.
+_Avoid_: Oral sign-off, transient review, unrecorded check
+
+**Explicit Store Reopening**:
+The intentional operator action requiring fresh destination password verification, operation binding, CSRF token, and checklist confirmations. Reopening invalidates existing sessions via session-epoch bump, unpauses write coordination, records reopening evidence, and admits ordinary traffic.
+_Avoid_: Automatic reopening, implicit unpause, passwordless resume
+
+**One-Active-Store Constraint**:
+The operational rule that completing recovery reopens this Store as the sole operating RetailMind instance. Recovery completion does not authorize dual active stores running parallel operations alongside the origin store.
+_Avoid_: Dual active stores, split-brain operation, multi-master sync
+
 **Disabled Account**:
 A retained user identity that cannot authenticate and whose active sessions have been revoked. Its historical sales, approvals, and Protected Audit Records remain attributed to it.
 _Avoid_: Deleted user, removed history, inactive account
