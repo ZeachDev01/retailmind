@@ -94,6 +94,14 @@ _Avoid_: Transient progress, uncoordinated restore
 The independent verification of initiating Administrator and active destination Super Administrator credentials against pre-restore password hashes retained in RecoveryStore. Sealed Recovery Accounts retain separate rules; imported users, unrelated Administrators and ordinary sessions cannot authorize recovery.
 _Avoid_: Decrypted password cache, generic session bypass
 
+**Complete Safety Recovery**:
+The restoration of the destination database, uploads, and security state directly from the original verified safety copy checkpoint. Requires the destination safety passphrase and operates completely without incoming package material.
+_Avoid_: Partial rollback, unverified destination recovery
+
+**Approved Incoming Restart**:
+The deterministic, from-the-beginning re-execution of an approved incoming replacement. Requires both the incoming and safety passphrases, revalidates package and plan integrity against the destination checkpoint independently of live tables, and enforces security preservation closure.
+_Avoid_: In-place resume, statement offset continuation, guessed mapping
+
 **Disabled Account**:
 A retained user identity that cannot authenticate and whose active sessions have been revoked. Its historical sales, approvals, and Protected Audit Records remain attributed to it.
 _Avoid_: Deleted user, removed history, inactive account

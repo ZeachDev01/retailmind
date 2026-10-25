@@ -107,9 +107,69 @@ final class IdentityReconciliationService
         $destinationRoles = $checkpoint['rows']['roles'];
         usort($destinationRoles, static fn(array $left, array $right): int => (int)$left['role_id'] <=> (int)$right['role_id']);
         $result = array_replace($approved, ['identity_map' => [], 'file_map' => [], 'provenance' => [], 'errors' => [], 'ready' => false, 'active_administrators' => 0]);
-        $context = $approved['context'];
+        $context = $approved['context'] ?? [];
         if (!isset($context['destination_rows'])) {
             $context['destination_rows'] = array_intersect_key($checkpoint['rows'], array_flip(self::PRESERVED_TABLES));
+        }
+        if (!isset($context['memberships'])) {
+            $context['memberships'] = $checkpoint['rows']['user_roles'] ?? [];
+        }
+        if (!isset($context['membership_columns'])) {
+            $context['membership_columns'] = ['user_id', 'role_id', 'is_primary', 'assigned_at'];
+        }
+        if (!isset($context['recovery_user_ids'])) {
+            $context['recovery_user_ids'] = array_column($checkpoint['rows']['recovery_accounts'] ?? [], 'user_id');
+        }
+        if (!isset($context['actor_columns'])) {
+            $context['actor_columns'] = [];
+        }
+        if (!isset($context['reserved_files'])) {
+            $context['reserved_files'] = StorePackageFormat::references([
+                'users' => $checkpoint['rows']['users'] ?? [],
+                'products' => $checkpoint['rows']['products'] ?? [],
+            ]);
+        }
+        if (!isset($result['protected_user_ids'])) {
+            $superRoleIds = [];
+            foreach ($destinationRoles as $r) {
+                if (($r['role_name'] ?? '') === 'super_admin') $superRoleIds[(int)$r['role_id']] = true;
+            }
+            $protected = [];
+            foreach ($checkpoint['rows']['users'] ?? [] as $u) {
+                $uid = (int)$u['user_id'];
+                if (isset($superRoleIds[(int)($u['role_id'] ?? 0)]) || !empty($u['is_recovery_account'])) {
+                    $protected[] = $uid;
+                }
+            }
+            foreach ($context['memberships'] as $m) {
+                if (isset($superRoleIds[(int)($m['role_id'] ?? 0)])) {
+                    $protected[] = (int)$m['user_id'];
+                }
+            }
+            foreach ($context['recovery_user_ids'] as $ruid) {
+                $protected[] = (int)$ruid;
+            }
+            $result['protected_user_ids'] = array_values(array_unique($protected));
+        }
+        if (!isset($result['source_users'])) {
+            $source = $package['rows'];
+            $sourceRoles = array_column($source['roles'] ?? [], 'role_name', 'role_id');
+            $sourceRecovery = array_fill_keys(array_column($source['recovery_accounts'] ?? [], 'user_id'), true);
+            $result['source_users'] = [];
+            foreach ($source['users'] ?? [] as $user) {
+                $id = (int)$user['user_id'];
+                $names = isset($sourceRoles[$user['role_id'] ?? '']) ? [$sourceRoles[$user['role_id']]] : [];
+                $assignedNames = [];
+                foreach ($source['user_roles'] ?? [] as $membership) {
+                    if ((int)$membership['user_id'] === $id && isset($sourceRoles[$membership['role_id']])) $assignedNames[] = $sourceRoles[$membership['role_id']];
+                }
+                $effectiveNames = $assignedNames ?: $names;
+                $names = array_merge($names, $assignedNames);
+                $names = array_values(array_unique($names));
+                $ordinary = array_values(array_intersect(array_values(array_unique($effectiveNames)), ['admin', 'inventory_manager', 'cashier']));
+                $historical = $ordinary === [] || !empty($user['is_recovery_account']) || isset($sourceRecovery[$id]) || $user['role_id'] === null;
+                $result['source_users'][] = $this->displayUser($user, $names) + ['historical' => $historical, 'ordinary_roles' => $ordinary];
+            }
         }
         $result = $this->project($package, $approved['decisions'], $result,
             array_column($checkpoint['rows']['users'], null, 'user_id'), array_column($destinationRoles, 'role_id', 'role_name'), $destinationRoles, $context);
@@ -159,6 +219,9 @@ final class IdentityReconciliationService
             'resulting_access' => $review['resulting_access'],
             'preservation_closure' => $review['preservation_closure'],
             'destination_watermark' => $this->destinationWatermark(),
+            'protected_user_ids' => $review['protected_user_ids'] ?? [],
+            'source_users' => $review['source_users'] ?? [],
+            'context' => $review['context'] ?? [],
             'stage' => 'reconciliation_approved',
         ];
         RecoveryStore::write('reconciliation-approval.json', json_encode($evidence, JSON_THROW_ON_ERROR));
