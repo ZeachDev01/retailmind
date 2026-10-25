@@ -108,3 +108,5 @@ html[data-theme="dark"] .notifications-page .notification-views a[aria-current="
     .notification-filter label { flex-basis: 100%; }
     .notification-filter select { flex: 1; min-width: 0; }
 }
+
+.notification-details a { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); text-underline-offset: .2em; }

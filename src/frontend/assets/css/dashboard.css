@@ -578,3 +578,6 @@ body.super-administrator-workspace {
 @media (prefers-reduced-motion: reduce) {
     .triage-item { transition: none; }
 }
+
+body.admin-dashboard-page.administrator-workspace .store-status-links { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin-top: .5rem; }
+body.admin-dashboard-page.administrator-workspace .store-status-links a { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); text-underline-offset: .2em; }
