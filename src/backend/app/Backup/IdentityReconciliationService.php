@@ -7,9 +7,16 @@ use App\Services\UserLifecycleService;
 use DomainException;
 use PDO;
 
-/** Read-only destination review. A projection is never replacement authority. */
+/** Read-only destination review, preservation closure, and security approval. */
 final class IdentityReconciliationService
 {
+    private const PRESERVED_TABLES = [
+        'recovery_accounts', 'platform_settings', 'attention_settings', 'ml_settings',
+        'password_reset_tokens', 'notification_preferences', 'notifications',
+        'attention_states', 'login_attempts', 'backup_history', 'email_delivery_log',
+        'activity_log', 'store_record_origins'
+    ];
+
     public function __construct(private PDO $pdo, private RoleCapabilityPolicy $policy) {}
 
     public function protectedUserIds(): array
@@ -80,6 +87,12 @@ final class IdentityReconciliationService
             'primary_keys' => $this->pdo->query("SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND CONSTRAINT_NAME='PRIMARY' ORDER BY TABLE_NAME,ORDINAL_POSITION")->fetchAll(PDO::FETCH_ASSOC),
             'reserved_files' => StorePackageFormat::references(['users' => $destination, 'products' => $this->pdo->query('SELECT product_image FROM products')->fetchAll(PDO::FETCH_ASSOC)]),
         ];
+        $destRows = [];
+        foreach (self::PRESERVED_TABLES as $table) {
+            try { $destRows[$table] = $this->pdo->query('SELECT * FROM ' . DatabaseSnapshotWriter::identifier($table))->fetchAll(PDO::FETCH_ASSOC); }
+            catch (\PDOException) { $destRows[$table] = []; }
+        }
+        $context['destination_rows'] = $destRows;
         $result['context'] = $context;
         $result['decisions'] = $decisions;
         $projected = $this->project($package, $decisions, $result, $destById, $roles, $destinationRoles, $context);
@@ -94,12 +107,149 @@ final class IdentityReconciliationService
         $destinationRoles = $checkpoint['rows']['roles'];
         usort($destinationRoles, static fn(array $left, array $right): int => (int)$left['role_id'] <=> (int)$right['role_id']);
         $result = array_replace($approved, ['identity_map' => [], 'file_map' => [], 'provenance' => [], 'errors' => [], 'ready' => false, 'active_administrators' => 0]);
+        $context = $approved['context'];
+        if (!isset($context['destination_rows'])) {
+            $context['destination_rows'] = array_intersect_key($checkpoint['rows'], array_flip(self::PRESERVED_TABLES));
+        }
         $result = $this->project($package, $approved['decisions'], $result,
-            array_column($checkpoint['rows']['users'], null, 'user_id'), array_column($destinationRoles, 'role_id', 'role_name'), $destinationRoles, $approved['context']);
+            array_column($checkpoint['rows']['users'], null, 'user_id'), array_column($destinationRoles, 'role_id', 'role_name'), $destinationRoles, $context);
         if ($result['identity_map'] !== $approved['identity_map'] || $result['file_map'] !== $approved['file_map']) {
             throw new DomainException('The approved identity or file mapping no longer matches the retained destination checkpoint.');
         }
         return $result;
+    }
+
+    public function destinationWatermark(): string
+    {
+        $users = $this->pdo->query('SELECT user_id, username, email, role_id, status, is_recovery_account FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
+        $userRoles = $this->pdo->query('SELECT user_id, role_id, is_primary FROM user_roles ORDER BY user_id, role_id')->fetchAll(PDO::FETCH_ASSOC);
+        $roles = $this->pdo->query('SELECT role_id, role_name FROM roles ORDER BY role_id')->fetchAll(PDO::FETCH_ASSOC);
+        $recovery = $this->pdo->query('SELECT account_key, user_id FROM recovery_accounts ORDER BY account_key')->fetchAll(PDO::FETCH_ASSOC);
+        return hash('sha256', json_encode([$users, $userRoles, $roles, $recovery], JSON_THROW_ON_ERROR));
+    }
+
+    public function approve(int $actorId, string $actorRole, #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] array $package, array $decisions): array
+    {
+        $actor = $this->destinationActor($actorId);
+        if ($actorRole !== 'super_admin' || $actor['status'] !== 'active' || !empty($actor['is_recovery_account']) || !$this->hasSuperAdminCapability($actorId)) {
+            throw new DomainException('An active destination Super Administrator must approve identity reconciliation.');
+        }
+        if ($loginPassword === '' || !password_verify($loginPassword, (string)$actor['password_hash'])) {
+            throw new DomainException('Your current destination login password is incorrect.');
+        }
+        $review = $this->review($actorId, $actorRole, $package, $decisions);
+        if (!$review['ready']) {
+            throw new DomainException(implode(' ', $review['errors']));
+        }
+        $approvalId = bin2hex(random_bytes(16));
+        $evidence = [
+            'approval_id' => $approvalId,
+            'approved_by' => $actorId,
+            'approved_by_role' => $actorRole,
+            'approved_at' => gmdate('Y-m-d H:i:s') . ' UTC',
+            'package_id' => $package['manifest']['package_id'],
+            'origin_id' => $package['manifest']['origin_id'],
+            'schema_hash' => $package['manifest']['schema'],
+            'sql_sha256' => isset($package['sql']) ? hash('sha256', (string)$package['sql']) : null,
+            'decisions' => $decisions,
+            'identity_map' => $review['identity_map'],
+            'file_map' => $review['file_map'],
+            'active_administrators' => $review['active_administrators'],
+            'administrator_designations' => array_values(array_map('intval', array_keys(array_filter($decisions, static fn(array $d): bool => !empty($d['administrator']))))),
+            'resulting_access' => $review['resulting_access'],
+            'preservation_closure' => $review['preservation_closure'],
+            'destination_watermark' => $this->destinationWatermark(),
+            'stage' => 'reconciliation_approved',
+        ];
+        RecoveryStore::write('reconciliation-approval.json', json_encode($evidence, JSON_THROW_ON_ERROR));
+        try {
+            $stmt = $this->pdo->prepare("INSERT INTO activity_log (user_id, action, category, module, metadata) VALUES (?, 'Reconciliation approved', 'security', 'Platform Governance', ?)");
+            $stmt->execute([$actorId, json_encode([
+                'approval_id' => $approvalId,
+                'package_id' => $package['manifest']['package_id'],
+                'origin_id' => $package['manifest']['origin_id'],
+                'active_administrators' => $review['active_administrators'],
+            ], JSON_THROW_ON_ERROR)]);
+        } catch (\PDOException) {}
+        return ['approval' => $evidence, 'review' => $review];
+    }
+
+    public function recheck(int $actorId, string $actorRole, #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] array $package, ?array $approval = null): array
+    {
+        $approval ??= $this->latestApproval();
+        if ($approval === null) {
+            throw new DomainException('No approved reconciliation preparation was found. Review and approve reconciliation first.');
+        }
+        $actor = $this->destinationActor($actorId);
+        if ($actor['status'] !== 'active' || !empty($actor['is_recovery_account'])) {
+            throw new DomainException('An active authorized destination account is required.');
+        }
+        if ($loginPassword === '' || !password_verify($loginPassword, (string)$actor['password_hash'])) {
+            throw new DomainException('Your current destination login password is incorrect.');
+        }
+        $approver = $this->destinationActor((int)$approval['approved_by']);
+        if ($approver['status'] !== 'active' || !empty($approver['is_recovery_account']) || !$this->hasSuperAdminCapability((int)$approval['approved_by'])) {
+            $this->invalidateApproval();
+            throw new DomainException('The Super Administrator who approved reconciliation no longer has required destination platform authority. Renewed reconciliation review is required.');
+        }
+        if (($package['manifest']['package_id'] ?? '') !== $approval['package_id']
+            || ($package['manifest']['origin_id'] ?? '') !== $approval['origin_id']
+            || ($package['manifest']['schema'] ?? '') !== $approval['schema_hash']
+            || (isset($approval['sql_sha256']) && hash('sha256', (string)($package['sql'] ?? '')) !== $approval['sql_sha256'])) {
+            $this->invalidateApproval();
+            throw new DomainException('The package has changed since reconciliation was approved. Renewed reconciliation review is required.');
+        }
+        if (!hash_equals($approval['destination_watermark'], $this->destinationWatermark())) {
+            $this->invalidateApproval();
+            throw new DomainException('Destination security state or role configuration has changed since approval. Renewed reconciliation review is required.');
+        }
+        try {
+            $rechecked = $this->review((int)$approval['approved_by'], 'super_admin', $package, $approval['decisions']);
+        } catch (\Throwable) {
+            $this->invalidateApproval();
+            throw new DomainException('Reconciliation mappings are no longer valid against the current destination state. Renewed reconciliation review is required.');
+        }
+        if (!$rechecked['ready'] || $rechecked['identity_map'] !== $approval['identity_map'] || $rechecked['file_map'] !== $approval['file_map']) {
+            $this->invalidateApproval();
+            throw new DomainException('Reconciliation mappings are no longer valid against the current destination state. Renewed reconciliation review is required.');
+        }
+        return $rechecked;
+    }
+
+    public function latestApproval(): ?array
+    {
+        if (!RecoveryStore::isAvailable()) return null;
+        $path = RecoveryStore::path('reconciliation-approval.json');
+        if (!is_file($path)) return null;
+        $data = json_decode((string)file_get_contents($path), true);
+        return is_array($data) && ($data['stage'] ?? '') === 'reconciliation_approved' ? $data : null;
+    }
+
+    public function invalidateApproval(): void
+    {
+        if (RecoveryStore::isAvailable() && is_file(RecoveryStore::path('reconciliation-approval.json'))) {
+            unlink(RecoveryStore::path('reconciliation-approval.json'));
+        }
+    }
+
+    private function destinationActor(int $actorId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT user_id, password_hash, status, is_recovery_account, role_id FROM users WHERE user_id=?');
+        $stmt->execute([$actorId]);
+        $actor = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$actor) throw new DomainException('Destination actor not found.');
+        return $actor;
+    }
+
+    private function hasSuperAdminCapability(int $actorId): bool
+    {
+        $stmt = $this->pdo->prepare("SELECT 1 FROM users u
+            LEFT JOIN roles r ON r.role_id=u.role_id
+            LEFT JOIN user_roles ur ON ur.user_id=u.user_id
+            LEFT JOIN roles sr ON sr.role_id=ur.role_id
+            WHERE u.user_id=? AND (r.role_name='super_admin' OR sr.role_name='super_admin')");
+        $stmt->execute([$actorId]);
+        return (bool)$stmt->fetchColumn();
     }
 
     private function displayUser(array $user, array $roles): array
@@ -181,11 +331,151 @@ final class IdentityReconciliationService
         }
         if ($result['errors']) return $result;
         $result['rows'] = $this->mapActorReferences($package['rows'], $result['identity_map'], $context['actor_columns']);
-        $result['rows']['users'] = array_values($users);
         $result['rows']['roles'] = $destinationRoles;
         $result['rows']['user_roles'] = $memberships;
-        // These source records must never grant reset, review or recovery authority.
-        foreach (['password_reset_tokens', 'recovery_accounts', 'login_attempts', 'attention_states', 'backup_operations', 'store_write_gate'] as $table) $result['rows'][$table] = [];
+
+        $destRows = $context['destination_rows'] ?? [];
+
+        // Destination security & configuration preservation (AC 2)
+        $result['rows']['recovery_accounts'] = $destRows['recovery_accounts'] ?? [];
+        $result['rows']['platform_settings'] = $destRows['platform_settings'] ?? [];
+        $destPlatformAttention = array_values(array_filter($destRows['attention_settings'] ?? [], static fn(array $r): bool => ($r['setting_scope'] ?? '') === 'platform'));
+        $pkgStoreAttention = array_values(array_filter($package['rows']['attention_settings'] ?? [], static fn(array $r): bool => ($r['setting_scope'] ?? '') === 'store'));
+        $result['rows']['attention_settings'] = array_merge($destPlatformAttention, $pkgStoreAttention);
+        $result['rows']['ml_settings'] = $destRows['ml_settings'] ?? [];
+        $result['rows']['password_reset_tokens'] = array_values(array_filter($destRows['password_reset_tokens'] ?? [], static fn(array $r): bool => in_array((int)$r['user_id'], $result['protected_user_ids'], true)));
+
+        $destProtectedPrefs = array_values(array_filter($destRows['notification_preferences'] ?? [], static fn(array $r): bool => in_array((int)$r['user_id'], $result['protected_user_ids'], true)));
+        $destPrefIds = array_fill_keys(array_map('intval', array_column($destProtectedPrefs, 'pref_id')), true);
+        $maxPrefId = max(array_merge([0], array_keys($destPrefIds)));
+        $pkgPrefs = [];
+        foreach ($package['rows']['notification_preferences'] ?? [] as $pref) {
+            $srcUid = (int)$pref['user_id'];
+            if (isset($result['identity_map'][$srcUid]) && !in_array($result['identity_map'][$srcUid], $result['protected_user_ids'], true)) {
+                $pref['user_id'] = $result['identity_map'][$srcUid];
+                $oldId = (int)$pref['pref_id'];
+                if (isset($destPrefIds[$oldId])) $pref['pref_id'] = ++$maxPrefId;
+                else $maxPrefId = max($maxPrefId, $oldId);
+                $destPrefIds[(int)$pref['pref_id']] = true;
+                $pkgPrefs[] = $pref;
+            }
+        }
+        $result['rows']['notification_preferences'] = array_merge($destProtectedPrefs, $pkgPrefs);
+
+        $destProtectedNotifs = array_values(array_filter($destRows['notifications'] ?? [], static fn(array $r): bool => in_array((int)$r['user_id'], $result['protected_user_ids'], true)));
+        $destNotifIds = array_fill_keys(array_map('intval', array_column($destProtectedNotifs, 'notification_id')), true);
+        $maxNotifId = max(array_merge([0], array_keys($destNotifIds)));
+        $pkgNotifs = [];
+        foreach ($package['rows']['notifications'] ?? [] as $notif) {
+            $srcUid = (int)$notif['user_id'];
+            if (isset($result['identity_map'][$srcUid])) {
+                $notif['user_id'] = $result['identity_map'][$srcUid];
+                $oldId = (int)$notif['notification_id'];
+                if (isset($destNotifIds[$oldId])) $notif['notification_id'] = ++$maxNotifId;
+                else $maxNotifId = max($maxNotifId, $oldId);
+                $destNotifIds[(int)$notif['notification_id']] = true;
+                $pkgNotifs[] = $notif;
+            }
+        }
+        $result['rows']['notifications'] = array_merge($destProtectedNotifs, $pkgNotifs);
+
+        $result['rows']['attention_states'] = array_values(array_filter($destRows['attention_states'] ?? [], static fn(array $r): bool => in_array((int)$r['user_id'], $result['protected_user_ids'], true)));
+        $result['rows']['login_attempts'] = $destRows['login_attempts'] ?? [];
+
+        // Backup & Email delivery evidence with collision-free IDs (AC 2, 3)
+        $destBackup = $destRows['backup_history'] ?? [];
+        $destBackupIds = array_fill_keys(array_map('intval', array_column($destBackup, 'backup_id')), true);
+        $maxBackupId = max(array_merge([0], array_keys($destBackupIds)));
+        $pkgBackup = [];
+        foreach ($package['rows']['backup_history'] ?? [] as $hist) {
+            $oldId = (int)$hist['backup_id'];
+            if (isset($destBackupIds[$oldId])) $hist['backup_id'] = ++$maxBackupId;
+            else $maxBackupId = max($maxBackupId, $oldId);
+            if (isset($hist['performed_by'], $result['identity_map'][$hist['performed_by']])) {
+                $hist['performed_by'] = $result['identity_map'][$hist['performed_by']];
+            }
+            $destBackupIds[(int)$hist['backup_id']] = true;
+            $pkgBackup[] = $hist;
+        }
+        $result['rows']['backup_history'] = $pkgBackup;
+
+        $destEmail = $destRows['email_delivery_log'] ?? [];
+        $destEmailIds = array_fill_keys(array_map('intval', array_column($destEmail, 'email_log_id')), true);
+        $maxEmailId = max(array_merge([0], array_keys($destEmailIds)));
+        $pkgEmail = [];
+        foreach ($package['rows']['email_delivery_log'] ?? [] as $log) {
+            $oldId = (int)$log['email_log_id'];
+            if (isset($destEmailIds[$oldId])) $log['email_log_id'] = ++$maxEmailId;
+            else $maxEmailId = max($maxEmailId, $oldId);
+            $destEmailIds[(int)$log['email_log_id']] = true;
+            $pkgEmail[] = $log;
+        }
+        $result['rows']['email_delivery_log'] = $pkgEmail;
+
+        // Classified activity log evidence preservation with collision-free IDs (AC 2, 3)
+        $destActivity = array_values(array_filter($destRows['activity_log'] ?? [], static fn(array $r): bool =>
+            in_array($r['category'] ?? '', ['security', 'recovery', 'platform_setting', 'recovery_account'], true)
+            || in_array($r['module'] ?? '', ['User Access', 'Users', 'Recovery Account', 'Authentication', 'Platform Governance'], true)
+        ));
+        $destLogIds = array_fill_keys(array_map('intval', array_column($destActivity, 'log_id')), true);
+        $maxLogId = max(array_merge([0], array_keys($destLogIds)));
+        $pkgActivity = [];
+        foreach ($result['rows']['activity_log'] ?? [] as $log) {
+            $oldLogId = (int)$log['log_id'];
+            if (isset($destLogIds[$oldLogId])) $log['log_id'] = ++$maxLogId;
+            else $maxLogId = max($maxLogId, $oldLogId);
+            $destLogIds[(int)$log['log_id']] = true;
+            $pkgActivity[] = $log;
+        }
+        $result['rows']['activity_log'] = $pkgActivity;
+
+        // Coordination state never restored
+        $result['rows']['backup_operations'] = [];
+        $result['rows']['store_write_gate'] = [];
+
+        // Dependent actors and evidence closure (AC 2, 3)
+        $referencedDestUsers = [];
+        $scan = static function ($val) use (&$referencedDestUsers): void {
+            if ($val !== null && ctype_digit((string)$val) && (int)$val > 0) $referencedDestUsers[(int)$val] = true;
+        };
+        foreach ($destPlatformAttention as $r) $scan($r['updated_by'] ?? null);
+        foreach ($destRows['ml_settings'] ?? [] as $r) $scan($r['updated_by'] ?? null);
+        foreach ($result['rows']['password_reset_tokens'] as $r) $scan($r['user_id'] ?? null);
+        foreach ($destProtectedPrefs as $r) $scan($r['user_id'] ?? null);
+        foreach ($destProtectedNotifs as $r) $scan($r['user_id'] ?? null);
+        foreach ($result['rows']['attention_states'] as $r) $scan($r['user_id'] ?? null);
+        foreach ($destBackup as $r) $scan($r['performed_by'] ?? null);
+        foreach ($destActivity as $r) {
+            $scan($r['user_id'] ?? null);
+            if (in_array($r['module'] ?? '', ['User Access', 'Users', 'Recovery Account', 'Authentication', 'Platform Governance'], true)) {
+                $scan($r['record_id'] ?? null);
+            }
+        }
+        $evidenceActors = [];
+        foreach (array_keys($referencedDestUsers) as $depId) {
+            if (isset($destById[$depId]) && !isset($users[$depId])) {
+                $dep = $destById[$depId];
+                $dep['role_id'] = null;
+                $dep['password_hash'] = '!';
+                $dep['status'] = 'disabled';
+                $dep['is_recovery_account'] = 0;
+                $dep['session_version'] = 1;
+                $dep['failed_login_attempts'] = 0;
+                $dep['locked_until'] = null;
+                $dep['last_login_at'] = null;
+                $users[$depId] = $dep;
+                $evidenceActors[$depId] = true;
+                $result['provenance'][] = [
+                    'origin_id' => 'destination',
+                    'table_name' => 'users',
+                    'source_key' => (string)$depId,
+                    'local_key' => (string)$depId,
+                    'original_details' => json_encode(['role' => 'evidence_only', 'user_id' => $depId], JSON_THROW_ON_ERROR),
+                ];
+            }
+        }
+        $result['rows']['users'] = array_values($users);
+
         $reservedFiles = array_fill_keys(array_map('strtolower', $context['reserved_files']), true);
         foreach ($package['files'] as $path => $content) {
             $base = dirname($path) . '/rm_' . $origin . '_' . substr(hash('sha256', $path . $content), 0, 24);
@@ -205,9 +495,10 @@ final class IdentityReconciliationService
                 $result['rows']['products'][$index]['product_image'] = 'storage/' . ($result['file_map'][$path] ?? $path);
             }
         }
+        $destOrigins = $destRows['store_record_origins'] ?? [];
         $existingOrigins = $package['rows']['store_record_origins'] ?? [];
         $existingRecords = [];
-        foreach ($existingOrigins as $entry) $existingRecords[$entry['table_name']][$entry['local_key']] = true;
+        foreach (array_merge($destOrigins, $existingOrigins) as $entry) $existingRecords[$entry['table_name']][$entry['local_key']] = true;
         foreach ($result['source_users'] as $person) {
             $id = (int)$person['user_id'];
             $result['provenance'][] = ['origin_id' => $origin, 'table_name' => 'users', 'source_key' => (string)$id,
@@ -218,10 +509,13 @@ final class IdentityReconciliationService
         foreach ($primaryKeys as $key) $keys[$key['TABLE_NAME']][] = $key['COLUMN_NAME'];
         foreach ($package['rows'] as $table => $records) {
             if ($table === 'users' || $table === 'store_record_origins') continue;
-            foreach ($records as $record) {
-                $key = RecordProvenance::key(array_intersect_key($record, array_flip($keys[$table] ?? [])));
-                if (isset($existingRecords[$table][$key])) continue;
-                $result['provenance'][] = ['origin_id' => $origin, 'table_name' => $table, 'source_key' => $key, 'local_key' => $key, 'original_details' => null];
+            $sourceRecords = $result['rows'][$table] ?? $records;
+            foreach ($records as $index => $record) {
+                $sourceKey = RecordProvenance::key(array_intersect_key($record, array_flip($keys[$table] ?? [])));
+                $localRecord = $sourceRecords[$index] ?? $record;
+                $localKey = RecordProvenance::key(array_intersect_key($localRecord, array_flip($keys[$table] ?? [])));
+                if (isset($existingRecords[$table][$localKey])) continue;
+                $result['provenance'][] = ['origin_id' => $origin, 'table_name' => $table, 'source_key' => $sourceKey, 'local_key' => $localKey, 'original_details' => null];
             }
         }
         foreach ($existingOrigins as &$entry) {
@@ -230,7 +524,14 @@ final class IdentityReconciliationService
             $entry['local_key'] = (string)$result['identity_map'][$entry['local_key']];
         }
         unset($entry);
-        $result['rows']['store_record_origins'] = array_merge($existingOrigins, $result['provenance']);
+        $allOrigins = [];
+        foreach (array_merge($destOrigins, $existingOrigins, $result['provenance']) as $entry) {
+            $allOrigins[$entry['origin_id'] . '|' . $entry['table_name'] . '|' . $entry['source_key']] = $entry;
+        }
+        $result['rows']['store_record_origins'] = array_values($allOrigins);
+        $result['rows']['activity_log'] = array_merge($result['rows']['activity_log'], $destActivity);
+        $result['rows']['backup_history'] = array_merge($result['rows']['backup_history'], $destBackup);
+        $result['rows']['email_delivery_log'] = array_merge($result['rows']['email_delivery_log'], $destEmail);
         foreach ($result['rows']['users'] as $user) {
             if ($user['status'] !== 'active' || !empty($user['is_recovery_account']) || $user['role_id'] === null || in_array((int)$user['user_id'], $result['protected_user_ids'], true)) continue;
             $assigned = array_filter($memberships, static fn(array $membership): bool => (int)$membership['user_id'] === (int)$user['user_id']);
@@ -239,6 +540,52 @@ final class IdentityReconciliationService
             } elseif ((int)$user['role_id'] === (int)($roles['admin'] ?? -1)) $result['active_administrators']++;
         }
         if ($result['active_administrators'] === 0) $result['errors'][] = 'The reviewed result needs an explicitly designated active ordinary Administrator. Prepare an eligible account or designate an imported ordinary person.';
+
+        // Resulting access summary and destination preservation closure (AC 1, 2, 3)
+        $rolesById = array_column($destinationRoles, 'role_name', 'role_id');
+        $accessSummary = [];
+        foreach ($result['rows']['users'] as $u) {
+            $uid = (int)$u['user_id'];
+            $hasAccess = $u['status'] === 'active' && $u['role_id'] !== null && $u['password_hash'] !== '!';
+            $assigned = [];
+            if ($hasAccess) {
+                foreach ($memberships as $m) if ((int)$m['user_id'] === $uid && isset($rolesById[$m['role_id']])) $assigned[] = $rolesById[$m['role_id']];
+                if ($assigned === [] && isset($rolesById[$u['role_id']])) $assigned[] = $rolesById[$u['role_id']];
+            }
+            $accessSummary[] = [
+                'user_id' => $uid,
+                'username' => $u['username'],
+                'status' => $u['status'],
+                'usable_access' => $hasAccess,
+                'roles' => array_values(array_unique($assigned)),
+                'classification' => in_array($uid, $result['protected_user_ids'], true)
+                    ? 'protected'
+                    : (isset($evidenceActors[$uid]) ? 'evidence_only' : (isset($destById[$uid]) ? 'destination_linked' : ($u['role_id'] === null ? 'historical' : 'imported_distinct'))),
+            ];
+        }
+        $result['resulting_access'] = $accessSummary;
+        $result['preservation_closure'] = [
+            'protected_users' => array_values(array_filter($accessSummary, static fn($a) => $a['classification'] === 'protected')),
+            'linked_users' => array_values(array_filter($accessSummary, static fn($a) => $a['classification'] === 'destination_linked')),
+            'evidence_actors' => array_values(array_filter($accessSummary, static fn($a) => $a['classification'] === 'evidence_only')),
+            'historical_actors' => array_values(array_filter($accessSummary, static fn($a) => $a['classification'] === 'historical')),
+            'imported_users' => array_values(array_filter($accessSummary, static fn($a) => $a['classification'] === 'imported_distinct')),
+            'counts' => [
+                'recovery_accounts' => count($result['rows']['recovery_accounts']),
+                'platform_settings' => count($result['rows']['platform_settings']),
+                'platform_attention_settings' => count($destPlatformAttention),
+                'ml_settings' => count($result['rows']['ml_settings']),
+                'activity_log_evidence' => count($destActivity),
+                'login_attempts' => count($result['rows']['login_attempts']),
+                'password_reset_tokens' => count($result['rows']['password_reset_tokens']),
+                'notification_preferences' => count($destProtectedPrefs),
+                'notifications' => count($destProtectedNotifs),
+                'attention_states' => count($result['rows']['attention_states']),
+                'backup_history' => count($destBackup),
+                'email_delivery_log' => count($destEmail),
+            ],
+        ];
+
         $result['ready'] = $result['errors'] === [];
         return $result;
     }
