@@ -11,7 +11,11 @@ The #317 monitoring checks use Chromium with synthesized touch input and respons
 - `RUN_DB_TESTS=1 node src/backend/tests/gcash_admin_overview_browser_test.js`: existing GCash monitoring browser coverage.
 - `node src/backend/tests/notification_responsive_browser_test.js`: notification layouts and actions from 320 through 1440px.
 
-#315 and #316 add their focused receipt delivery, scanner, draft recovery, and operation retry tests. Their results must be recorded with the integration verification report; this document makes no independent claim that those tests passed.
+Combined #315 + #317 integration checks: role-capability and Cashier Workspace authorization contracts pass, as do `php src/backend/scripts/build_styles.php --check` and `git diff --check`.
+
+The broad Cashier browser comparison reports 159/329 failures on the unchanged baseline and 160/329 on #315. The single additional failure is a Product Lookup timeout in unchanged code; these results are not a clean broad-suite pass. Receipt-printing checks and limitations are recorded in [Store PC receipt printing](../guides/store-pc-receipt-printing.md).
+
+#316 scanner, draft recovery, and idempotent retry results remain pending integration. Record them after that ticket is merged.
 
 ## Physical acceptance matrix
 
@@ -40,3 +44,10 @@ Every row is **pending: hardware unavailable to this implementation session**. R
 
 - `stock_issue_oversight_contract.php`: its fixture has no open Fiscal Period covering 2026-10-25.
 - `gross_profit_report_browser_test.js`: existing exclusion-note text assertion fails (`Exclusion note text must explain operating expenses`). Report markup was not changed for #317.
+
+- `smoke_checks.php` fails the same five source-text checks on the unchanged baseline:
+  - missing `authorizeSupervisor`;
+  - missing `Recommended maintenance commands`;
+  - missing `required to reject`;
+  - forbidden `register-actions`;
+  - missing Cashier Shift ownership wording.
