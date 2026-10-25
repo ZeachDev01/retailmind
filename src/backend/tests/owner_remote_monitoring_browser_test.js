@@ -107,6 +107,15 @@ require $file;
         assert(posBody.includes('unapproved route on remote ingress'), '403 body explains unapproved route');
 
         // Direct request to denied shift mutation endpoint
+        const changePassResponse = await remotePage.goto(origin + '/components/auth/change_password.php');
+        assert.equal(changePassResponse.status(), 403, 'Unapproved change_password.php route returns 403');
+
+        const sideEffectResponse = await remotePage.goto(origin + '/components/administrator/dashboard.php?action=delete');
+        assert.equal(sideEffectResponse.status(), 403, 'Side-effecting GET action returns 403');
+
+        const wsResponse = await remotePage.goto(origin + '/components/auth/workspace.php');
+        assert.equal(wsResponse.status(), 200, 'Workspace selector loads remotely with 200');
+
         const deniedShiftResponse = await remotePage.goto(origin + '/export_shifts.php');
         assert.equal(deniedShiftResponse.status(), 403, 'Direct export_shifts.php request returns 403');
 

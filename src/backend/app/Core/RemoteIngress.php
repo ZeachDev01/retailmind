@@ -56,7 +56,7 @@ final class RemoteIngress
     public static function isExportRequest(): bool
     {
         $action = strtolower(trim((string)($_POST['action'] ?? $_GET['action'] ?? '')));
-        if (in_array($action, ['export', 'export_csv', 'download', 'backup'], true)) {
+        if (in_array($action, ['export', 'export_csv', 'export_pdf', 'download', 'backup', 'backup_download', 'dump'], true)) {
             return true;
         }
 
@@ -66,11 +66,44 @@ final class RemoteIngress
         }
 
         $format = strtolower(trim((string)($_POST['format'] ?? $_GET['format'] ?? '')));
-        if (in_array($format, ['csv', 'sql', 'dump', 'zip'], true)) {
+        if (in_array($format, ['csv', 'sql', 'dump', 'zip', 'pdf', 'xlsx', 'excel'], true)) {
             return true;
         }
 
+        foreach (['backup', 'restore', 'download', 'export'] as $key) {
+            if (isset($_GET[$key]) || isset($_POST[$key])) {
+                return true;
+            }
+        }
+
         return false;
+    }
+
+    public static function isSideEffectingAction(): bool
+    {
+        $normalized = self::normalizePath();
+        $action = strtolower(trim((string)($_POST['action'] ?? $_GET['action'] ?? '')));
+        if ($action === '') {
+            return false;
+        }
+
+        if ($normalized === 'components/system_administrator/audit_logs.php'
+            && strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'GET') {
+            return false;
+        }
+
+        $disallowed = [
+            'delete', 'destroy', 'remove', 'drop', 'clear', 'truncate',
+            'update', 'edit', 'save', 'modify', 'set',
+            'create', 'insert', 'add', 'new',
+            'reset', 'restore', 'rollback',
+            'refund', 'void', 'cancel',
+            'open', 'close', 'reopen',
+            'pay', 'checkout', 'complete',
+            'backup', 'export', 'download',
+        ];
+
+        return in_array($action, $disallowed, true);
     }
 
     public static function isApprovedRoute(?string $path = null): bool
@@ -103,9 +136,7 @@ final class RemoteIngress
         if (in_array($normalized, [
             'components/auth/logout.php',
             'components/auth/session_activity.php',
-            'components/auth/change_password.php',
             'components/auth/workspace.php',
-            'components/theme.php',
             'favicon.ico',
             'manifest.webmanifest',
             'sw.js',
@@ -142,26 +173,20 @@ final class RemoteIngress
             self::deny('Access denied: bulk export or download is unavailable on remote ingress.');
         }
 
+        if (self::isSideEffectingAction()) {
+            self::deny('Access denied: write actions and exports are disabled on remote ingress.');
+        }
+
         $normalized = self::normalizePath();
-        $readOnlyMonitoringRoutes = [
-            'components/administrator/dashboard.php',
-            'components/administrator/shift_report.php',
-            'components/cashier/shifts.php',
-            'components/system_administrator/audit_logs.php',
-            'components/modals/audit_log.php',
-            'components/report/report_generation.php',
-            'components/report/receiving_history.php',
-            'components/report/forecast_analytics.php',
-            'components/report/forecast_exceptions.php',
-            'components/report/data_readiness.php',
-            'components/report/predictions.php',
-            'components/invoice/sales.php',
+        $allowedWriteRoutes = [
+            '',
+            'index.php',
+            'components/auth/workspace.php',
+            'components/auth/session_activity.php',
         ];
-        if (in_array($normalized, $readOnlyMonitoringRoutes, true)) {
-            $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-            if (!in_array($method, ['GET', 'HEAD'], true)) {
-                self::deny('Access denied: write actions and exports are disabled on remote ingress.');
-            }
+        $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if (!in_array($method, ['GET', 'HEAD'], true) && !in_array($normalized, $allowedWriteRoutes, true)) {
+            self::deny('Access denied: write actions and exports are disabled on remote ingress.');
         }
     }
 
