@@ -291,23 +291,6 @@ final class RecoveryAuthService
     /** @return list<array> */
     public static function appendLog(): array
     {
-        $path = RecoveryStore::path('restore-log.jsonl');
-        if (!is_file($path)) {
-            return [];
-        }
-
-        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if (!$lines) {
-            return [];
-        }
-
-        $entries = [];
-        foreach ($lines as $line) {
-            $data = json_decode($line, true);
-            if (is_array($data)) {
-                $entries[] = $data;
-            }
-        }
-        return $entries;
+        return RecoveryStore::readLog();
     }
 }

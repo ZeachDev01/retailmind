@@ -660,10 +660,13 @@ final class IdentityReconciliationService
         $table = DatabaseSnapshotWriter::identifier('rm_identity_' . bin2hex(random_bytes(8)));
         try {
             $this->pdo->exec("CREATE TEMPORARY TABLE {$table} LIKE users");
-            foreach ($users as $user) {
-                $columns = implode(',', array_map([DatabaseSnapshotWriter::class, 'identifier'], array_keys($user)));
-                $statement = $this->pdo->prepare("INSERT INTO {$table} ({$columns}) VALUES (" . implode(',', array_fill(0, count($user), '?')) . ')');
-                $statement->execute(array_values($user));
+            if (!empty($users)) {
+                $first = reset($users);
+                $columns = implode(',', array_map([DatabaseSnapshotWriter::class, 'identifier'], array_keys($first)));
+                $statement = $this->pdo->prepare("INSERT INTO {$table} ({$columns}) VALUES (" . implode(',', array_fill(0, count($first), '?')) . ')');
+                foreach ($users as $user) {
+                    $statement->execute(array_values($user));
+                }
             }
         } catch (\PDOException $e) {
             throw new DomainException('Choose unused usernames and emails within the destination field limits. Matching values use the destination database collation.', 0, $e);

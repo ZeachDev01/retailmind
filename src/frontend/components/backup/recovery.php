@@ -50,15 +50,7 @@ if (!isset($_SESSION['_recovery_login_csrf'])) {
 $session = RecoveryAuthService::currentRecoverySession();
 $action = (string)($_POST['action'] ?? '');
 
-$getPdo = static function(): PDO {
-    $dbConfig = require dirname(__DIR__, 3) . '/backend/config/database.php';
-    return new PDO(
-        "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['database']};charset=utf8mb4",
-        $dbConfig['username'],
-        $dbConfig['password'],
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false]
-    );
-};
+$getPdo = static fn(): PDO => \App\Core\Database::connection();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -186,32 +178,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $currentStage = RecoveryStore::currentStage();
-            if ($currentStage === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING) {
-                $operatorPassword = (string)($_POST['operator_password'] ?? '');
-                if ($operatorPassword === '') {
-                    throw new DomainException('Fresh operator password verification is required to reopen the Store.');
-                }
-                $opId = (string)($_POST['operation_id'] ?? '');
-                if (empty($_POST['confirm_one_active'])) {
-                    throw new DomainException('You must confirm that recovery completion reopens a single active Store.');
-                }
-                $pdo = $getPdo();
-                $policy = new RoleCapabilityPolicy();
-                $backups = new DatabaseBackupService($pdo, $policy);
-                $restore = new DatabaseRestoreService($pdo, $policy, $backups);
-                $result = $restore->reopenStore((int)$session['user_id'], (string)$session['role'], $operatorPassword, $opId);
-                RecoveryAuthService::clearRecoverySession();
-                $session = null;
-                $notice = 'Recovery completed successfully. Store access has been resumed for all operators.';
-            } else {
-                if (($session['role'] ?? '') !== 'super_admin') {
-                    throw new DomainException('Only a destination Super Administrator can explicitly reopen the Store.');
-                }
-                RecoveryStore::transitionStage(RecoveryStore::STAGE_REOPENED_COMPLETED);
-                RecoveryAuthService::clearRecoverySession();
-                $session = null;
-                $notice = 'Recovery completed. Store access has been resumed.';
+            if ($currentStage !== RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING) {
+                throw new DomainException('Store can only be reopened from operator review pending stage.');
             }
+            $operatorPassword = (string)($_POST['operator_password'] ?? '');
+            if ($operatorPassword === '') {
+                throw new DomainException('Fresh operator password verification is required to reopen the Store.');
+            }
+            $opId = (string)($_POST['operation_id'] ?? '');
+            if (empty($_POST['confirm_one_active'])) {
+                throw new DomainException('You must confirm that recovery completion reopens a single active Store.');
+            }
+            $pdo = $getPdo();
+            $policy = new RoleCapabilityPolicy();
+            $backups = new DatabaseBackupService($pdo, $policy);
+            $restore = new DatabaseRestoreService($pdo, $policy, $backups);
+            $result = $restore->reopenStore((int)$session['user_id'], (string)$session['role'], $operatorPassword, $opId);
+            RecoveryAuthService::clearRecoverySession();
+            $session = null;
+            $notice = 'Recovery completed successfully. Store access has been resumed for all operators.';
         }
     } catch (DomainException | RuntimeException $e) {
         $error = $e->getMessage();

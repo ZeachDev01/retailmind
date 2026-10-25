@@ -568,68 +568,15 @@ final class DatabaseRestoreService
             }
         }
 
-        $superAdminExists = (bool)$this->pdo->query(
-            "SELECT 1 FROM users u
-             LEFT JOIN roles r ON r.role_id = u.role_id
-             LEFT JOIN user_roles ur ON ur.user_id = u.user_id
-             LEFT JOIN roles sr ON sr.role_id = ur.role_id
-             WHERE (r.role_name = 'super_admin' OR sr.role_name = 'super_admin')
-               AND u.status = 'active'
-               AND u.is_recovery_account = 0
-             LIMIT 1"
-        )->fetchColumn();
-        if (!$superAdminExists) {
-            throw new DomainException('Destination authority missing: no active Super Administrator account.');
-        }
-
-        if (\App\Database\Schema::tableExists($this->pdo, 'branches')) {
-            $unresolvedBranch = $this->pdo->query("SELECT 1 FROM branches b LEFT JOIN users u ON b.created_by = u.user_id WHERE b.created_by IS NOT NULL AND u.user_id IS NULL LIMIT 1")->fetchColumn();
-            if ($unresolvedBranch) throw new DomainException('Unresolved actor attribution in branches.created_by.');
-        }
-        if (\App\Database\Schema::tableExists($this->pdo, 'sales')) {
-            $unresolvedSales = $this->pdo->query("SELECT 1 FROM sales s LEFT JOIN users u ON s.cashier_id = u.user_id WHERE s.cashier_id IS NOT NULL AND u.user_id IS NULL LIMIT 1")->fetchColumn();
-            if ($unresolvedSales) throw new DomainException('Unresolved actor attribution in sales.cashier_id.');
-        }
-
-        if (\App\Database\Schema::tableExists($this->pdo, 'inventory')) {
-            $negativeInv = $this->pdo->query("SELECT 1 FROM inventory WHERE quantity_on_hand < 0 LIMIT 1")->fetchColumn();
-            if ($negativeInv) throw new DomainException('Negative stock detected in inventory.');
-        }
-        if (\App\Database\Schema::tableExists($this->pdo, 'product_batches')) {
-            $negativeBatch = $this->pdo->query("SELECT 1 FROM product_batches WHERE remaining_quantity < 0 OR quantity < 0 LIMIT 1")->fetchColumn();
-            if ($negativeBatch) throw new DomainException('Negative batch quantity detected.');
-        }
-
-        if (\App\Database\Schema::tableExists($this->pdo, 'sales') && \App\Database\Schema::tableExists($this->pdo, 'sale_items')) {
-            $saleTotalMismatch = $this->pdo->query(
-                "SELECT 1 FROM sales s
-                 LEFT JOIN (SELECT sale_id, SUM(subtotal) AS item_sum FROM sale_items GROUP BY sale_id) si ON si.sale_id = s.sale_id
-                 WHERE ABS(s.total_amount - COALESCE(si.item_sum, 0)) > 0.05
-                 LIMIT 1"
-            )->fetchColumn();
-            if ($saleTotalMismatch) throw new DomainException('Receipt item subtotal mismatch detected in sales.');
-        }
-        if (\App\Database\Schema::tableExists($this->pdo, 'cash_refunds') && \App\Database\Schema::tableExists($this->pdo, 'cash_refund_items')) {
-            $refundTotalMismatch = $this->pdo->query(
-                "SELECT 1 FROM cash_refunds r
-                 LEFT JOIN (SELECT refund_id, SUM(subtotal) AS item_sum FROM cash_refund_items GROUP BY refund_id) ri ON ri.refund_id = r.refund_id
-                 WHERE ABS(r.refund_amount - COALESCE(ri.item_sum, 0)) > 0.05
-                 LIMIT 1"
-            )->fetchColumn();
-            if ($refundTotalMismatch) throw new DomainException('Refund receipt item subtotal mismatch detected.');
-        }
-
-        $storage = $this->uploadDirectory ?? dirname(__DIR__, 2) . '/storage';
-        if (!empty($expectedFiles)) {
-            foreach ($expectedFiles as $relPath => $content) {
-                $filePath = $storage . '/' . $relPath;
-                if (!is_file($filePath)) {
-                    throw new DomainException('Verified upload file missing from storage: ' . $relPath);
-                }
-                if (hash_file('sha256', $filePath) !== hash('sha256', $content)) {
-                    throw new DomainException('Verified upload file hash mismatch: ' . $relPath);
+        $verification = $this->runVerificationChecks($expectedFiles);
+        if (!$verification['all_passed']) {
+            foreach (['attribution', 'stock', 'receipt', 'upload'] as $key) {
+                $check = $verification['checks'][$key] ?? null;
+                if ($check && ($check['status'] ?? '') !== 'passed') {
+                    throw new DomainException($check['details'] ?? 'Integrity verification failed.');
                 }
             }
+            throw new DomainException('Integrity verification failed.');
         }
 
         return ['valid' => true];

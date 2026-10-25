@@ -333,6 +333,29 @@ final class RecoveryStore
         self::persist(self::path('restore-log.jsonl'), $line, true);
     }
 
+    /** @return list<array> */
+    public static function readLog(): array
+    {
+        $path = self::path('restore-log.jsonl');
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!$lines) {
+            return [];
+        }
+
+        $entries = [];
+        foreach ($lines as $line) {
+            $data = json_decode($line, true);
+            if (is_array($data)) {
+                $entries[] = $data;
+            }
+        }
+        return $entries;
+    }
+
     private static function persist(string $path, string $contents, bool $append): void
     {
         $handle = fopen($path, $append ? 'ab' : 'wb');
