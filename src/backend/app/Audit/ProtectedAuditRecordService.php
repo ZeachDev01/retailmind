@@ -2,6 +2,8 @@
 
 namespace App\Audit;
 
+require_once __DIR__ . '/../Backup/RecordProvenance.php';
+
 use App\Authorization\RoleCapabilityPolicy;
 use DomainException;
 use PDO;
@@ -40,7 +42,51 @@ final class ProtectedAuditRecordService
         }
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
-        return $statement->fetchAll(PDO::FETCH_ASSOC);
+        $records = $statement->fetchAll(PDO::FETCH_ASSOC);
+        if ($records !== []) {
+            $isAvailable = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql'
+                && \App\Database\Schema::tableExists($this->pdo, 'store_record_origins');
+            if ($isAvailable) {
+                $keys = [];
+                foreach ($records as $record) {
+                    $keys[] = \App\Backup\RecordProvenance::key(['log_id' => $record['log_id']]);
+                }
+                $keys = array_values(array_unique($keys));
+                if (!empty($keys)) {
+                    $placeholders = implode(',', array_fill(0, count($keys), '?'));
+                    $originsStmt = $this->pdo->prepare("SELECT record_origin.local_key AS record_key,
+                               person.origin_id, person.source_key, person.local_key, person.original_details
+                        FROM store_record_origins record_origin
+                        JOIN store_record_origins person
+                            ON person.origin_id = record_origin.origin_id AND person.table_name = 'users'
+                        WHERE record_origin.table_name = 'activity_log'
+                          AND record_origin.local_key IN ($placeholders)");
+                    $originsStmt->execute($keys);
+                    $byKey = [];
+                    while ($row = $originsStmt->fetch(PDO::FETCH_ASSOC)) {
+                        $byKey[$row['record_key']][] = $row;
+                    }
+                    foreach ($records as &$record) {
+                        $k = \App\Backup\RecordProvenance::key(['log_id' => $record['log_id']]);
+                        $candidates = $byKey[$k] ?? [];
+                        $matched = array_values(array_filter($candidates, static fn($r) => (string)$r['local_key'] === (string)$record['user_id']));
+                        if (count($matched) !== 1) continue;
+                        $m = $matched[0];
+                        $identity = [
+                            'origin_id' => $m['origin_id'],
+                            'source_id' => (int)$m['source_key'],
+                            'local_id' => (int)$m['local_key'],
+                            'original' => $m['original_details'] === null ? null : json_decode($m['original_details'], true, 512, JSON_THROW_ON_ERROR),
+                        ];
+                        $record['actor_provenance'] = $identity;
+                        $record['full_name'] = $identity['original']['full_name'] ?? $record['full_name'];
+                        $record['username'] = $identity['original']['username'] ?? $record['username'];
+                    }
+                    unset($record);
+                }
+            }
+        }
+        return $records;
     }
 
     public function count(string $actorRole, array $filters = []): int

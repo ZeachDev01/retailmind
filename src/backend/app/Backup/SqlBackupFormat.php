@@ -38,6 +38,23 @@ final class SqlBackupFormat
         return (string)preg_replace('/ AUTO_INCREMENT=\d+/', '', trim($ddl));
     }
 
+    /** Decode the validated data dialect without executing any source SQL. */
+    public static function rows(string $sql, array $schema): array
+    {
+        self::statements($sql, $schema);
+        $rows = array_fill_keys(array_keys($schema), []);
+        $count = 0;
+        foreach (\split_sql_statements($sql) as $statement) {
+            if (!preg_match('/^INSERT INTO `([^`]+)` .* VALUES \((.*)\)$/sD', $statement, $match)) continue;
+            if (++$count > 100000) throw new RuntimeException('The package exceeds the 100,000 record validation limit.');
+            preg_match_all("/NULL|X'([a-f0-9]*)'/", $match[2], $values, PREG_SET_ORDER);
+            $rows[$match[1]][] = array_combine($schema[$match[1]]['columns'], array_map(
+                static fn(array $value): ?string => $value[0] === 'NULL' ? null : hex2bin($value[1]), $values
+            ));
+        }
+        return $rows;
+    }
+
     /** Validate the complete file before allowing any destructive statement. */
     public static function statements(string $sql, array $schema): array
     {

@@ -2026,7 +2026,6 @@ CREATE TABLE ml_jobs (
     FOREIGN KEY (requester_id) REFERENCES users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-
 -- Inventory draft encryption keys are delivered only to their authenticated Inventory Manager.
 CREATE TABLE IF NOT EXISTS inventory_draft_keys (
     user_id INTEGER PRIMARY KEY,
@@ -2058,3 +2057,18 @@ CREATE TABLE `store_print_jobs` (
   UNIQUE KEY `one_receipt_delivery` (`deployment`,`cashier_id`,`receipt_type`,`receipt_id`,`reprint_of`),
   KEY `pending_delivery` (`deployment`,`status`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 202610250002_identity_provenance: Historical Actors cannot have ordinary roles.
+ALTER TABLE users MODIFY role_id INT NULL;
+CREATE TABLE `store_record_origins` (
+    origin_id CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    table_name VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    source_key VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    local_key VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    original_details LONGTEXT NULL,
+    PRIMARY KEY (origin_id, table_name, source_key),
+    KEY idx_store_record_local (table_name, local_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO schema_migrations (migration_key,description)
+VALUES ('202610250002_identity_provenance','Retain roleless Historical Actors and installation-aware record provenance')
+ON DUPLICATE KEY UPDATE description=VALUES(description);

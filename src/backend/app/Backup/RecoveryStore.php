@@ -3,11 +3,35 @@
 namespace App\Backup;
 
 use App\Core\Environment;
+use DomainException;
 use RuntimeException;
 
 /** Private filesystem state survives replacement (or loss) of database tables. */
 final class RecoveryStore
 {
+    public const STAGE_SAFETY_VERIFIED = 'safety_verified';
+    public const STAGE_DESTRUCTIVE_START = 'destructive_start';
+    public const STAGE_DATABASE_REPLACEMENT = 'database_replacement';
+    public const STAGE_UPLOADS = 'uploads';
+    public const STAGE_AUTOMATED_VERIFICATION = 'automated_verification';
+    public const STAGE_OPERATOR_REVIEW_PENDING = 'operator_review_pending';
+    public const STAGE_RECOVERY_REQUIRED = 'recovery_required';
+    public const STAGE_REOPENED_COMPLETED = 'reopened_completed';
+
+    public const VALID_STAGES = [
+        self::STAGE_SAFETY_VERIFIED,
+        self::STAGE_DESTRUCTIVE_START,
+        self::STAGE_DATABASE_REPLACEMENT,
+        self::STAGE_UPLOADS,
+        self::STAGE_AUTOMATED_VERIFICATION,
+        self::STAGE_OPERATOR_REVIEW_PENDING,
+        self::STAGE_RECOVERY_REQUIRED,
+        self::STAGE_REOPENED_COMPLETED,
+    ];
+
+    public const THROTTLE_MAX_ATTEMPTS = 5;
+    public const THROTTLE_WINDOW_SECONDS = 900;
+
     private static $requestLock = null;
     private static ?string $availableKey = null;
     private static ?bool $availableCache = null;
@@ -91,6 +115,13 @@ final class RecoveryStore
         if (!self::isAvailable()) {
             return true;
         }
+        if (self::isPaused()) {
+            if (is_resource(self::$requestLock)) {
+                fclose(self::$requestLock);
+                self::$requestLock = null;
+            }
+            return false;
+        }
         if (is_resource(self::$requestLock)) {
             return true;
         }
@@ -99,10 +130,6 @@ final class RecoveryStore
             throw new RuntimeException('Recovery coordination is unavailable.');
         }
         if (!flock($handle, LOCK_SH | LOCK_NB)) {
-            fclose($handle);
-            return false;
-        }
-        if (self::isPaused()) {
             fclose($handle);
             return false;
         }
@@ -123,7 +150,7 @@ final class RecoveryStore
             if (is_resource($handle)) {
                 fclose($handle);
             }
-            throw new \DomainException('The Store is busy. Wait for current requests to finish, then try again.');
+            throw new DomainException('The Store is busy. Wait for current requests to finish, then try again.');
         }
         return $handle;
     }
@@ -149,6 +176,138 @@ final class RecoveryStore
         return $state;
     }
 
+    public static function recordOperation(array $state): void
+    {
+        if (!in_array($state['stage'] ?? '', self::VALID_STAGES, true)) {
+            throw new DomainException('Invalid durable stage for recovery operation: ' . ($state['stage'] ?? ''));
+        }
+        if (empty($state['session_epoch'])) {
+            $state['session_epoch'] = bin2hex(random_bytes(32));
+        }
+        self::write('session-epoch', $state['session_epoch']);
+        self::write('restore-state.json', json_encode($state, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+        self::log((int)($state['actor_id'] ?? 0), 'operation-' . ($state['operation_id'] ?? 'init'), (string)$state['stage']);
+    }
+
+    public static function transitionStage(string $stage, array $extra = []): array
+    {
+        if (!self::isPaused()) {
+            throw new DomainException('No active recovery operation to transition.');
+        }
+        if (!in_array($stage, self::VALID_STAGES, true)) {
+            throw new DomainException('Invalid durable stage: ' . $stage);
+        }
+        $state = self::state();
+        if ($stage === self::STAGE_DESTRUCTIVE_START) {
+            $state['replacement_started'] = true;
+        }
+        $state['stage'] = $stage;
+        $state['stages'][] = array_merge(['stage' => $stage, 'time' => gmdate('c')], $extra);
+        $state['updated_at'] = gmdate('c');
+
+        if ($stage === self::STAGE_REOPENED_COMPLETED) {
+            self::log((int)($state['actor_id'] ?? 0), 'operation-' . ($state['operation_id'] ?? 'done'), 'completed');
+            self::resume();
+            return $state;
+        }
+
+        self::write('restore-state.json', json_encode($state, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+        self::log((int)($state['actor_id'] ?? 0), 'operation-' . ($state['operation_id'] ?? 'state'), $stage);
+        return $state;
+    }
+
+    public static function currentStage(): ?string
+    {
+        if (!self::isPaused()) {
+            return null;
+        }
+        $state = self::state();
+        return isset($state['stage']) ? (string)$state['stage'] : null;
+    }
+
+    public static function isReplacementStarted(): bool
+    {
+        if (!self::isPaused()) {
+            return false;
+        }
+        $state = self::state();
+        return (bool)($state['replacement_started'] ?? false);
+    }
+
+    public static function recordReviewChecks(array $checks): void
+    {
+        if (!self::isPaused()) {
+            throw new DomainException('No active recovery operation.');
+        }
+        $state = self::state();
+        $state['review_checks'] = array_replace_recursive($state['review_checks'] ?? [], $checks);
+        $state['updated_at'] = gmdate('c');
+        self::write('restore-state.json', json_encode($state, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+    }
+
+    public static function reopenedRecord(): ?array
+    {
+        if (!self::isAvailable()) {
+            return null;
+        }
+        $path = self::path('recovery-reopened.json');
+        if (!is_file($path)) {
+            return null;
+        }
+        $data = json_decode((string)file_get_contents($path), true);
+        return is_array($data) ? $data : null;
+    }
+
+    public static function checkThrottle(string $key): array
+    {
+        $path = self::path('recovery-throttle.json');
+        if (!is_file($path)) {
+            return ['throttled' => false, 'attempts' => 0];
+        }
+        $data = json_decode((string)file_get_contents($path), true);
+        if (!is_array($data) || !isset($data[$key]) || !is_array($data[$key])) {
+            return ['throttled' => false, 'attempts' => 0];
+        }
+        $now = time();
+        $valid = array_values(array_filter($data[$key], static fn(int $time): bool => ($now - $time) < self::THROTTLE_WINDOW_SECONDS));
+        if (count($valid) >= self::THROTTLE_MAX_ATTEMPTS) {
+            $oldest = min($valid);
+            $retryAfter = max(1, self::THROTTLE_WINDOW_SECONDS - ($now - $oldest));
+            return ['throttled' => true, 'retry_after' => $retryAfter, 'attempts' => count($valid)];
+        }
+        return ['throttled' => false, 'attempts' => count($valid)];
+    }
+
+    public static function recordThrottleFailure(string $key): int
+    {
+        $path = self::path('recovery-throttle.json');
+        $data = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
+        if (!is_array($data)) {
+            $data = [];
+        }
+        $now = time();
+        $history = isset($data[$key]) && is_array($data[$key])
+            ? array_values(array_filter($data[$key], static fn(int $time): bool => ($now - $time) < self::THROTTLE_WINDOW_SECONDS))
+            : [];
+        $history[] = $now;
+        $data[$key] = $history;
+        self::write('recovery-throttle.json', json_encode($data, JSON_THROW_ON_ERROR));
+        return count($history);
+    }
+
+    public static function clearThrottle(string $key): void
+    {
+        $path = self::path('recovery-throttle.json');
+        if (!is_file($path)) {
+            return;
+        }
+        $data = json_decode((string)file_get_contents($path), true);
+        if (is_array($data) && isset($data[$key])) {
+            unset($data[$key]);
+            self::write('recovery-throttle.json', json_encode($data, JSON_THROW_ON_ERROR));
+        }
+    }
+
     public static function write(string $name, string $contents): void
     {
         $path = self::path($name);
@@ -172,6 +331,29 @@ final class RecoveryStore
             'filename' => basename($filename), 'outcome' => $outcome, 'statements' => $statements,
         ], JSON_THROW_ON_ERROR) . "\n";
         self::persist(self::path('restore-log.jsonl'), $line, true);
+    }
+
+    /** @return list<array> */
+    public static function readLog(): array
+    {
+        $path = self::path('restore-log.jsonl');
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!$lines) {
+            return [];
+        }
+
+        $entries = [];
+        foreach ($lines as $line) {
+            $data = json_decode($line, true);
+            if (is_array($data)) {
+                $entries[] = $data;
+            }
+        }
+        return $entries;
     }
 
     private static function persist(string $path, string $contents, bool $append): void

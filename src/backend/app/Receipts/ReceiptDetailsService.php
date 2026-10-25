@@ -4,6 +4,7 @@ namespace App\Receipts;
 
 require_once __DIR__ . '/../Services/PhilippineTime.php';
 require_once __DIR__ . '/../Services/SalesWorkflowService.php';
+require_once __DIR__ . '/../Backup/RecordProvenance.php';
 
 use App\Services\PhilippineTime;
 use PDO;
@@ -61,6 +62,8 @@ final class ReceiptDetailsService
         } else {
             $sale['receipt_historical_notice'] = true;
         }
+        $identity = (new \App\Backup\RecordProvenance($this->pdo))->actor('sales', ['sale_id' => $saleId], null, (int)$sale['cashier_id']);
+        if ($identity !== null) $sale['cashier_provenance'] = $identity;
         return $sale;
     }
 

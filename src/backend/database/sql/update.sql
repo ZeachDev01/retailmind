@@ -1607,3 +1607,18 @@ DELETE FROM platform_settings WHERE setting_key = 'emergency_access_duration_min
 INSERT INTO schema_migrations (migration_key,description)
 VALUES ('202610250001_retire_unused_storage','Remove retired tables, unused columns, and Emergency Access setting')
 ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202610250002_identity_provenance: Historical Actors cannot have ordinary roles.
+ALTER TABLE users MODIFY role_id INT NULL;
+CREATE TABLE IF NOT EXISTS `store_record_origins` (
+    origin_id CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    table_name VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    source_key VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    local_key VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    original_details LONGTEXT NULL,
+    PRIMARY KEY (origin_id, table_name, source_key),
+    KEY idx_store_record_local (table_name, local_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO schema_migrations (migration_key,description)
+VALUES ('202610250002_identity_provenance','Retain roleless Historical Actors and installation-aware record provenance')
+ON DUPLICATE KEY UPDATE description=VALUES(description);

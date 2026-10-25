@@ -59,12 +59,64 @@ The operational owner responsible for Store performance, staff, approvals, compl
 _Avoid_: System administrator, global administrator, inventory manager
 
 **Database Backup**:
-A complete, readable copy of the Store's database representing a consistent point in time, which either the Administrator or Super Administrator may create and download. Possession exposes all captured records, including credentials and restricted audit history.
+An encrypted, consistent package of the Store database and required uploaded Product/profile images, which either administrator role may create and download using a separate backup passphrase. A decrypted complete package includes restricted captured records. See STORE_PACKAGE_FORMAT.md for the current capture/preflight boundary.
 _Avoid_: Parallel backup, report export
+
+**Identity Reconciliation**:
+The destination Super Administrator's explicit read-only review of source people, destination accounts, conflicts, preservation closure, and resulting access. Matching identifiers never establish identity. Links retain destination account authority; distinct ordinary people use deliberately selected unused login details. Source privileged-only and Recovery people remain Historical Actors with no usable access.
+_Avoid_: Automatic account matching, general account merging
+
+**Preservation Closure**:
+The complete destination security and state boundary preserved intact during reconciliation: protected accounts, credentials, profiles, sealed recovery state, fixed capability policy, platform settings, platform-scoped attention settings, technical forecasting configuration, classified audit evidence, login tracking, review watermarks, protected reset state, preferences, notifications, backup and email-delivery history, and dependent logical actors preserved as evidence-only accounts without usable access.
+_Avoid_: Partial import, blind overwrite, security reset
+
+**Reconciliation Approval**:
+The Super Administrator's cryptographic verification and policy endorsement of explicit reconciliation resolutions, recorded in destination-owned preparation evidence under RecoveryStore with exact package integrity, identity/file maps, administrator designations, and a destination watermark. Ordinary Administrators cannot approve or alter reconciliation; immediately before destructive use, strict rechecks invalidate approval if package, state, or authority changed.
+_Avoid_: Unattended restore, silent promotion, unapproved migration
+
+**Historical Actor**:
+An identity retained only for attribution, represented as a disabled roleless user with an unusable password and no memberships, reset authority or recovery state. It cannot be enabled or assigned a role. Installation-aware provenance preserves original names, login details, roles and embedded historical IDs without changing frozen receipt or audit JSON.
+_Avoid_: Disabled Account, deleted user, active staff
 
 **Database Restore**:
 The replacement of the entire active Store database, including accounts, settings, and audit history, with the state captured in a Database Backup. Only the Super Administrator may perform it; newer database records are not retained, while the restoration itself is recorded separately.
 _Avoid_: Import report, undo backup
+
+**Recovery Console**:
+The browser interface that renders and authenticates against retained state in RecoveryStore without querying database tables during restore or incomplete maintenance. It provides role-restricted evidence and operation-bound operator authentication.
+_Avoid_: Admin login, emergency backdoor
+
+**Durable Recovery Stage**:
+The persisted progress milestone (safety_verified, destructive_start, database_replacement, uploads, automated_verification, operator_review_pending, recovery_required, reopened_completed) tracked in RecoveryStore and restore-log.jsonl outside replaceable tables. Destructive start is persisted before any destructive writes.
+_Avoid_: Transient progress, uncoordinated restore
+
+**Pre-restore Operator Authentication**:
+The independent verification of initiating Administrator and active destination Super Administrator credentials against pre-restore password hashes retained in RecoveryStore. Sealed Recovery Accounts retain separate rules; imported users, unrelated Administrators and ordinary sessions cannot authorize recovery.
+_Avoid_: Decrypted password cache, generic session bypass
+
+**Complete Safety Recovery**:
+The restoration of the destination database, uploads, and security state directly from the original verified safety copy checkpoint. Requires the destination safety passphrase and operates completely without incoming package material.
+_Avoid_: Partial rollback, unverified destination recovery
+
+**Approved Incoming Restart**:
+The deterministic, from-the-beginning re-execution of an approved incoming replacement. Requires both the incoming and safety passphrases, revalidates package and plan integrity against the destination checkpoint independently of live tables, and enforces security preservation closure.
+_Avoid_: In-place resume, statement offset continuation, guessed mapping
+
+**Controlled Verification Check**:
+The narrowly scoped read-only preview (sign-in preview, stock check, receipt lookup, image preview, report check) permitted in the Recovery Console while Store writes and background jobs remain fenced.
+_Avoid_: Unfenced preview, test write, unverified read
+
+**Review Checklist Evidence**:
+The durable record (`review_checks`) of successful automated verification and operator human confirmations (stock, receipt, upload, attribution) in RecoveryStore. Missing or stale checks prevent reopening.
+_Avoid_: Oral sign-off, transient review, unrecorded check
+
+**Explicit Store Reopening**:
+The intentional operator action requiring fresh destination password verification, operation binding, CSRF token, and checklist confirmations. Reopening invalidates existing sessions via session-epoch bump, unpauses write coordination, records reopening evidence, and admits ordinary traffic.
+_Avoid_: Automatic reopening, implicit unpause, passwordless resume
+
+**One-Active-Store Constraint**:
+The operational rule that completing recovery reopens this Store as the sole operating RetailMind instance. Recovery completion does not authorize dual active stores running parallel operations alongside the origin store.
+_Avoid_: Dual active stores, split-brain operation, multi-master sync
 
 **Disabled Account**:
 A retained user identity that cannot authenticate and whose active sessions have been revoked. Its historical sales, approvals, and Protected Audit Records remain attributed to it.

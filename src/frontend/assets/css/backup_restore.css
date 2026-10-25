@@ -40,7 +40,7 @@
 .database-restore-page .restore-file-field input:focus { box-shadow: none; }
 .database-restore-page input[type="file"]::file-selector-button { min-height: 44px; margin-right: .75rem; padding: .5rem .85rem; border: 1px solid var(--recovery-line); border-radius: 8px; background: var(--card-bg, #ffffff); color: var(--recovery-ink); cursor: pointer; font: inherit; transition: background-color .15s ease; }
 .database-restore-page input[type="file"]::file-selector-button:hover { background: color-mix(in srgb, #2563eb 8%, #ffffff); }
-.database-restore-page #restore-password { width: 100%; min-height: 44px; padding: .75rem .9rem; border: 1px solid var(--recovery-line); border-radius: 10px; background: var(--card-bg, #ffffff); color: var(--recovery-ink); caret-color: var(--primary, #2563eb); }
+.database-restore-page .form-group input[type="password"] { width: 100%; min-height: 44px; padding: .75rem .9rem; border: 1px solid var(--recovery-line); border-radius: 10px; background: var(--card-bg, #ffffff); color: var(--recovery-ink); caret-color: var(--primary, #2563eb); }
 .database-restore-page .main-content .backup-hint { font-size: .8125rem; color: var(--recovery-muted); margin-top: .4rem; }
 .database-restore-page .main-content .btn-danger { background: #dc2626; border: 1px solid #dc2626; color: #ffffff; }
 .database-restore-page .main-content .btn-danger:hover { background: color-mix(in srgb, #dc2626 84%, #111827); border-color: color-mix(in srgb, #dc2626 84%, #111827); }

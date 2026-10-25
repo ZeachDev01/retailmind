@@ -13,6 +13,7 @@ if (process.env.RUN_DB_TESTS !== '1') {
 }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';
+const backupPassphrase = 'Reset package passphrase 2026';
 const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-operational-reset-'));
 const models = path.join(testDirectory, 'models');
 fs.mkdirSync(models);
@@ -33,7 +34,7 @@ const fixture = action => {
         const port = listener.address().port;
         await new Promise(resolve => listener.close(resolve));
         const origin = 'http://127.0.0.1:' + port;
-        server = spawn(php, ['-S', '127.0.0.1:' + port, '-t', 'src/frontend', 'src/backend/tests/support/theme_router.php'],
+        server = spawn(php, ['-d', 'memory_limit=512M', '-S', '127.0.0.1:' + port, '-t', 'src/frontend', 'src/backend/tests/support/theme_router.php'],
             { env: { ...env, RM_THEME_TEST_DATABASE: database }, stdio: 'ignore' });
         for (let attempt = 0; attempt < 100; attempt++) {
             try { if ((await fetch(origin)).ok) break; } catch {}
@@ -46,7 +47,7 @@ const fixture = action => {
             await page.goto(origin + '/?login=1');
             await page.locator('#landing-login-username').fill('theme_' + role);
             await page.locator('#landing-login-password').fill(data.password);
-            await Promise.all([page.waitForNavigation(), page.getByRole('button', { name: 'Log in', exact: true }).click()]);
+            await Promise.all([page.waitForURL(/\/components\//), page.getByRole('button', { name: 'Log in', exact: true }).click()]);
             return { context, page };
         };
         const administrator = await login('admin');
@@ -74,7 +75,7 @@ const fixture = action => {
         for (const width of [320, 390, 768, 1024, 1440]) {
             await page.setViewportSize({ width, height: 960 });
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), `Reset page must fit ${width}px`);
-            for (const selector of ['#delete-product', '#delete-password', '#delete-confirmation', '#reset-password', '#reset-confirmation']) {
+            for (const selector of ['#delete-product-search', '#delete-password', '#delete-confirmation', '#reset-password', '#reset-confirmation']) {
                 const bounds = await page.locator(selector).boundingBox();
                 assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.height >= 44, `${selector} must fit and remain usable at ${width}px`);
             }
@@ -132,7 +133,7 @@ const fixture = action => {
             await page.goto(resetUrl);
             const token = await page.locator('input[name="csrf_token"]').first().inputValue();
             const nonce = await page.locator('form:has(#reset-password) input[name="reset_nonce"]').inputValue();
-            return context.request.post(resetUrl, { form: { csrf_token: token, reset_nonce: nonce, confirmation, current_password: password } });
+            return context.request.post(resetUrl, { form: { csrf_token: token, reset_nonce: nonce, confirmation, current_password: password, backup_passphrase: backupPassphrase } });
         };
         let response = await submit('wrong password');
         assert.match(await response.text(), /current password is incorrect/);
@@ -160,7 +161,7 @@ const fixture = action => {
         }
         fixture('reset_failure');
         response = await submit(data.password);
-        assert.match(await response.text(), /Database changes were rolled back/);
+        assert.match((await response.text()).match(/<p class="alert[^>]*>(.*?)<\/p>/s)?.[1] || '', /Database changes were rolled back/);
         assert.deepEqual(JSON.parse(fixture('reset_state')), before, 'A foreign-key failure must roll back all deletions');
         assert(fs.existsSync(path.join(models, 'demand_model.joblib')), 'Failure must preserve the model');
         fixture('reset_allow');
@@ -169,6 +170,7 @@ const fixture = action => {
         const csrf = await page.locator('input[name="csrf_token"]').first().inputValue();
         await page.locator('#store-reset > summary').click();
         await page.locator('#reset-password').fill(data.password);
+        await page.locator('#reset-backup-passphrase').fill(backupPassphrase);
         await page.locator('#reset-confirmation').fill('RESET ALL DATA');
         await Promise.all([page.waitForNavigation(), page.locator('form:has(#reset-password) button[type="submit"]').click()]);
         assert.match(await page.locator('p[role="status"]').innerText(), /Products, sales, inventory, and forecasting data were deleted/);
@@ -188,11 +190,16 @@ const fixture = action => {
         const downloadEvent = page.waitForEvent('download');
         await page.getByRole('link', { name: 'Download pre-reset backup' }).click();
         const download = await downloadEvent;
-        const backup = fs.readFileSync(await download.path(), 'utf8');
-        assert(backup.includes('INSERT INTO `products`'), 'The downloadable backup must preserve products');
-        assert(backup.includes('INSERT INTO `sales`'), 'The downloadable backup must preserve sales');
-        assert(backup.includes('INSERT INTO `stock_predictions`'), 'The downloadable backup must preserve forecasts');
-        assert(backup.includes('-- SHA256:'), 'The backup must have its integrity checksum');
+        const backup = fs.readFileSync(await download.path());
+        assert.match(download.suggestedFilename(), /\.rmpkg$/);
+        assert.equal(backup.subarray(0, 8).toString(), 'RMSTORE1', 'Reset must produce the shared encrypted format');
+        assert(!backup.includes(Buffer.from('INSERT INTO `products`')), 'The downloaded package must hide SQL records');
+        const inspected = spawnSync(php, ['-d', 'memory_limit=512M', 'src/backend/tests/support/theme_fixture.php',
+            'backup_package_contents', database, await download.path()], { encoding: 'utf8', env, input: backupPassphrase + '\n' });
+        assert.equal(inspected.status, 0, inspected.stderr);
+        const captured = JSON.parse(inspected.stdout);
+        for (const table of ['products', 'sales', 'stock_predictions']) assert(captured[table] > 0, 'Pre-reset package preserves ' + table);
+
         await manager.page.goto(origin + '/components/report/forecast_import.php');
         assert(!manager.page.url().endsWith('/components/report/forecast_import.php'), 'Other sessions must be invalidated');
         assert.equal(await page.locator('.reset-delete').isDisabled(), true, 'Empty catalog disables product removal');

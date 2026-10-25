@@ -1,5 +1,5 @@
 // Read-only filtering of the history already authorized and rendered by PHP,
-// plus submit-pending protection for the destructive database restore form.
+// plus submit-pending protection for the read-only package validation form.
 (function () {
     "use strict";
 

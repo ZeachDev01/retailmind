@@ -243,7 +243,7 @@ final class BackupCoordinator
             $name = basename($file);
             return is_file($file)
                 && $name !== '.gitkeep'
-                && preg_match('/^[a-f0-9]{48}\.sql$/', $name) === 1;
+                && preg_match('/^[a-f0-9]{48}\.(?:rmpkg|capture)$/', $name) === 1;
         }));
     }
 
