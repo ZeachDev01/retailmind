@@ -1,9 +1,9 @@
 Options -Indexes
 
 <IfModule mod_php.c>
-    php_value upload_max_filesize 5M
-    php_value post_max_size 8M
-    php_value memory_limit 256M
+    php_value upload_max_filesize 12M
+    php_value post_max_size 16M
+    php_value memory_limit 512M
 </IfModule>
 
 <FilesMatch "^(\.env|\.user\.ini|\.ftp-deploy-sync-state\.json|composer\.(json|lock)|.*\.(joblib|pyc|log|sql))$">
