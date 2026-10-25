@@ -5,7 +5,11 @@ const {execFileSync} = require('node:child_process');
 const {chromium} = require('playwright');
 const root = path.resolve(__dirname, '../../..');
 const payload = {
-    state: 'ready', headline: {}, exceptions: [], comparison: {
+    state: 'ready', headline: {
+        sales_cash_exceptions: {value: 2, status: 'warning'},
+        inventory_risks: {value: 1, status: 'warning'},
+        fiscal_period: {value: 'Current Store accounting period', status: 'healthy'},
+    }, exceptions: [], comparison: {
         transactions: {current: 3, previous: 2, change_percent: 50},
         unusual_discounts: {current: 1, previous: 0, change_percent: null},
         reversals: {current: 1, previous: 0, change_percent: null},
@@ -44,6 +48,10 @@ function render(period, data = payload) {
         });
         await page.goto('http://dashboard.test/');
         assert.equal(await page.locator('#gross-sales-card-value').innerText(), '₱100.00');
+        assert.match(await page.getByRole('link', {name: 'View Stock Issues', exact: true}).getAttribute('href'), /administrator\/stock_issues\.php$/);
+        assert.match(await page.getByRole('link', {name: 'View sales exceptions', exact: true}).getAttribute('href'), /sales\.php\?tab=reversals$/);
+        assert.match(await page.getByRole('link', {name: 'View cash variances', exact: true}).getAttribute('href'), /administrator\/shift_report\.php$/);
+        assert.match(await page.getByRole('link', {name: 'View Fiscal Periods', exact: true}).getAttribute('href'), /fiscal_periods\.php$/);
         assert.equal(await page.locator('#financial-breakdown').getAttribute('open'), null);
         assert.deepEqual(await page.evaluate(() => window.testCharts['net-sales-hourly-chart'].data.labels), ['10:00']);
         const history = await page.locator('#financial-history').innerText();
