@@ -75,7 +75,7 @@ final class DatabaseRestoreService
     }
 
     /** Validate actual declared keys; no source SQL is executed against the destination. */
-    private function validateReferences(array $rows): void
+    public function validateReferences(array $rows): void
     {
         $oldMode = (string)$this->pdo->query('SELECT @@SESSION.sql_mode')->fetchColumn();
         $this->pdo->exec('SET SESSION sql_mode=' . $this->pdo->quote($oldMode . ',STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'));

@@ -47,3 +47,7 @@
 .database-backup-page [data-backup-create] {
     min-width: 12rem;
 }
+
+.database-backup-page .card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)) !important;
+}
