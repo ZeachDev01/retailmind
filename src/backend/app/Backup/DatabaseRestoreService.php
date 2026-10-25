@@ -13,7 +13,8 @@ final class DatabaseRestoreService
     public function __construct(
         private PDO $pdo,
         private RoleCapabilityPolicy $policy,
-        private DatabaseBackupService $backups
+        private DatabaseBackupService $backups,
+        private ?string $uploadDirectory = null
     ) {
     }
 
@@ -276,6 +277,396 @@ final class DatabaseRestoreService
             if (is_file($temporary)) {
                 unlink($temporary);
             }
+        }
+    }
+
+    public function recoverSafety(
+        int $actorId,
+        string $actorRole,
+        string $safetyOperationId,
+        #[\SensitiveParameter] string $safetyPassphrase
+    ): array {
+        $this->assertRecoveryOperator($actorId, $actorRole);
+        $lock = RecoveryStore::exclusive();
+        try {
+            $safetyService = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
+            $verified = $safetyService->verify($safetyOperationId, $safetyPassphrase);
+            $metadata = $verified['metadata'];
+            $package = $verified['package'];
+            $schema = $metadata['schema'];
+
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_DESTRUCTIVE_START);
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_DATABASE_REPLACEMENT);
+
+            $executed = $this->replaceTablesFromSql($package['sql'], $schema);
+
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_UPLOADS);
+            $uploaded = $this->restoreUploads($package['files']);
+
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_AUTOMATED_VERIFICATION);
+            $this->verifyPostRestoreIntegrity($schema, $package['files']);
+
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, [
+                'mode' => 'safety_recovery',
+                'safety_operation_id' => $safetyOperationId,
+                'statements' => $executed,
+                'files' => $uploaded,
+            ]);
+            RecoveryStore::log($actorId, 'safety-' . $safetyOperationId, 'recovered_safety', $executed);
+
+            return [
+                'success' => true,
+                'mode' => 'safety_recovery',
+                'statements' => $executed,
+                'files' => $uploaded,
+                'stage' => RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING,
+                'message' => 'Safety recovery completed. Automated verification passed. Pending operator review.',
+            ];
+        } catch (Throwable $e) {
+            try {
+                RecoveryStore::transitionStage(RecoveryStore::STAGE_RECOVERY_REQUIRED, ['error' => $e->getMessage()]);
+                RecoveryStore::log($actorId, 'safety-' . $safetyOperationId, 'safety_recovery_failed: ' . $e->getMessage());
+            } catch (Throwable) {}
+            throw $e;
+        } finally {
+            if (is_resource($lock)) {
+                fclose($lock);
+            }
+        }
+    }
+
+    public function restartIncoming(
+        int $actorId,
+        string $actorRole,
+        string $packagePath,
+        #[\SensitiveParameter] string $incomingPassphrase,
+        #[\SensitiveParameter] string $safetyPassphrase
+    ): array {
+        $this->assertRecoveryOperator($actorId, $actorRole);
+        $lock = RecoveryStore::exclusive();
+        try {
+            if (!is_file($packagePath)) {
+                throw new DomainException('Select a valid encrypted Store package (.rmpkg).');
+            }
+            $state = RecoveryStore::state();
+            $safetyOpId = (string)($state['safety_operation_id'] ?? '');
+            if ($safetyOpId === '') {
+                throw new DomainException('No safety operation bound to active recovery.');
+            }
+
+            $reconciliation = new IdentityReconciliationService($this->pdo, $this->policy);
+            $approval = $reconciliation->latestApproval();
+            if ($approval === null) {
+                throw new DomainException('No approved reconciliation preparation was found. Reconciliation approval is required.');
+            }
+
+            $safetyService = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
+            $verifiedSafety = $safetyService->verify($safetyOpId, $safetyPassphrase);
+            $safetyCheckpoint = $verifiedSafety['package'];
+            $schema = $verifiedSafety['metadata']['schema'];
+
+            $pkgBytes = file_get_contents($packagePath);
+            if ($pkgBytes === false) {
+                throw new DomainException('The incoming package could not be read.');
+            }
+            $incomingPackage = StorePackageFormat::decode($pkgBytes, $incomingPassphrase, $schema);
+
+            if (($incomingPackage['manifest']['package_id'] ?? '') !== $approval['package_id']
+                || ($incomingPackage['manifest']['origin_id'] ?? '') !== $approval['origin_id']
+                || ($incomingPackage['manifest']['schema'] ?? '') !== $approval['schema_hash']
+                || (isset($approval['sql_sha256']) && hash('sha256', (string)$incomingPackage['sql']) !== $approval['sql_sha256'])) {
+                throw new DomainException('The incoming package does not match the approved reconciliation plan.');
+            }
+
+            $projected = $reconciliation->replay($incomingPackage, $safetyCheckpoint, $approval);
+            if (!$projected['ready'] || !empty($projected['errors'])) {
+                throw new DomainException('Reconciliation replay failed against destination checkpoint: ' . implode(' ', $projected['errors']));
+            }
+
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_DESTRUCTIVE_START);
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_DATABASE_REPLACEMENT);
+
+            $executed = $this->replaceTablesFromRows($projected['rows'], $schema, $projected['provenance'] ?? []);
+
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_UPLOADS);
+            $uploaded = $this->restoreUploads($incomingPackage['files'], $projected['file_map'] ?? []);
+
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_AUTOMATED_VERIFICATION);
+            $this->verifyPostRestoreIntegrity($schema, $incomingPackage['files']);
+
+            RecoveryStore::transitionStage(RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, [
+                'mode' => 'incoming_restart',
+                'package_id' => $approval['package_id'],
+                'statements' => $executed,
+                'files' => $uploaded,
+            ]);
+            RecoveryStore::log($actorId, 'incoming-' . $approval['package_id'], 'restarted_incoming', $executed);
+
+            return [
+                'success' => true,
+                'mode' => 'incoming_restart',
+                'statements' => $executed,
+                'files' => $uploaded,
+                'stage' => RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING,
+                'message' => 'Incoming replacement restarted successfully. Automated verification passed. Pending operator review.',
+            ];
+        } catch (Throwable $e) {
+            try {
+                RecoveryStore::transitionStage(RecoveryStore::STAGE_RECOVERY_REQUIRED, ['error' => $e->getMessage()]);
+                RecoveryStore::log($actorId, 'incoming-restart', 'incoming_restart_failed: ' . $e->getMessage());
+            } catch (Throwable) {}
+            throw $e;
+        } finally {
+            if (is_resource($lock)) {
+                fclose($lock);
+            }
+        }
+    }
+
+    private function replaceTablesFromSql(string $sql, array $schema): int
+    {
+        $statements = SqlBackupFormat::statements($sql, $schema);
+        $oldSqlMode = (string)$this->pdo->query('SELECT @@SESSION.sql_mode')->fetchColumn();
+        $this->pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+        $this->pdo->exec("SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO'");
+        $executed = 0;
+        try {
+            foreach ($statements as $statement) {
+                $this->pdo->exec($statement);
+                $executed++;
+            }
+            $this->resetTransientState();
+        } finally {
+            $this->pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+            if ($oldSqlMode !== '') {
+                $this->pdo->exec('SET SESSION sql_mode=' . $this->pdo->quote($oldSqlMode));
+            }
+        }
+        return $executed;
+    }
+
+    private function replaceTablesFromRows(array $tableRows, array $schema, array $provenance = []): int
+    {
+        $oldSqlMode = (string)$this->pdo->query('SELECT @@SESSION.sql_mode')->fetchColumn();
+        $this->pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+        $this->pdo->exec("SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO'");
+        $executed = 0;
+        try {
+            foreach ($schema as $table => $definition) {
+                $quoted = DatabaseSnapshotWriter::identifier($table);
+                $this->pdo->exec("DROP TABLE IF EXISTS {$quoted}");
+                $this->pdo->exec($definition['ddl']);
+                $executed += 2;
+
+                $records = $tableRows[$table] ?? [];
+                if ($records === []) {
+                    continue;
+                }
+                $columns = $definition['columns'];
+                $colSql = implode(', ', array_map([DatabaseSnapshotWriter::class, 'identifier'], $columns));
+                $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+                $insert = $this->pdo->prepare("INSERT INTO {$quoted} ({$colSql}) VALUES ({$placeholders})");
+
+                foreach ($records as $record) {
+                    $params = [];
+                    foreach ($columns as $col) {
+                        $params[] = $record[$col] ?? null;
+                    }
+                    $insert->execute($params);
+                    $executed++;
+                }
+            }
+
+            if (!empty($provenance) && \App\Database\Schema::tableExists($this->pdo, 'store_record_origins')) {
+                $provInsert = $this->pdo->prepare(
+                    "INSERT IGNORE INTO store_record_origins (origin_id, table_name, source_key, local_key, original_details) VALUES (?, ?, ?, ?, ?)"
+                );
+                foreach ($provenance as $prov) {
+                    $provInsert->execute([
+                        $prov['origin_id'],
+                        $prov['table_name'],
+                        $prov['source_key'],
+                        $prov['local_key'],
+                        $prov['original_details'],
+                    ]);
+                    $executed++;
+                }
+            }
+
+            $this->resetTransientState();
+        } finally {
+            $this->pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+            if ($oldSqlMode !== '') {
+                $this->pdo->exec('SET SESSION sql_mode=' . $this->pdo->quote($oldSqlMode));
+            }
+        }
+        return $executed;
+    }
+
+    private function restoreUploads(array $files, array $fileMap = []): int
+    {
+        $storage = $this->uploadDirectory ?? dirname(__DIR__, 2) . '/storage';
+        if (is_link($storage)) {
+            throw new DomainException('Upload storage uses linked path.');
+        }
+        $count = 0;
+        foreach ($files as $sourcePath => $content) {
+            $targetSubPath = $fileMap[$sourcePath] ?? $sourcePath;
+            if (!preg_match('~^(?:images|profile-images)/[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|gif|webp)$~D', $targetSubPath)) {
+                throw new DomainException('Unsafe uploaded file target: ' . $targetSubPath);
+            }
+            $fullPath = $storage . '/' . $targetSubPath;
+            $dir = dirname($fullPath);
+            if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+                throw new DomainException('Failed to create upload destination directory: ' . $dir);
+            }
+            if (file_put_contents($fullPath, $content) === false) {
+                throw new DomainException('Failed to restore uploaded file: ' . $targetSubPath);
+            }
+            $count++;
+        }
+        return $count;
+    }
+
+    public function verifyPostRestoreIntegrity(array $schema, array $expectedFiles = []): array
+    {
+        $keys = $this->pdo->query("SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+            FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL
+            ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION")->fetchAll(PDO::FETCH_ASSOC);
+
+        $constraints = [];
+        foreach ($keys as $key) {
+            $constraints[$key['TABLE_NAME'] . '.' . $key['CONSTRAINT_NAME']][] = $key;
+        }
+
+        foreach ($constraints as $name => $parts) {
+            $childTable = DatabaseSnapshotWriter::identifier($parts[0]['TABLE_NAME']);
+            $parentTable = DatabaseSnapshotWriter::identifier($parts[0]['REFERENCED_TABLE_NAME']);
+            $joinClauses = [];
+            $whereNulls = [];
+            $childNotNulls = [];
+
+            foreach ($parts as $p) {
+                $childCol = DatabaseSnapshotWriter::identifier($p['COLUMN_NAME']);
+                $parentCol = DatabaseSnapshotWriter::identifier($p['REFERENCED_COLUMN_NAME']);
+                $joinClauses[] = "c.{$childCol} = p.{$parentCol}";
+                $whereNulls[] = "p.{$parentCol} IS NULL";
+                $childNotNulls[] = "c.{$childCol} IS NOT NULL";
+            }
+
+            $joinSql = implode(' AND ', $joinClauses);
+            $nullSql = implode(' AND ', $whereNulls);
+            $notNullSql = implode(' AND ', $childNotNulls);
+
+            $orphanQuery = "SELECT 1 FROM {$childTable} c LEFT JOIN {$parentTable} p ON {$joinSql} WHERE {$notNullSql} AND ({$nullSql}) LIMIT 1";
+            if ($this->pdo->query($orphanQuery)->fetchColumn()) {
+                throw new DomainException('Foreign key integrity violation in constraint: ' . $name);
+            }
+        }
+
+        $superAdminExists = (bool)$this->pdo->query(
+            "SELECT 1 FROM users u
+             LEFT JOIN roles r ON r.role_id = u.role_id
+             LEFT JOIN user_roles ur ON ur.user_id = u.user_id
+             LEFT JOIN roles sr ON sr.role_id = ur.role_id
+             WHERE (r.role_name = 'super_admin' OR sr.role_name = 'super_admin')
+               AND u.status = 'active'
+               AND u.is_recovery_account = 0
+             LIMIT 1"
+        )->fetchColumn();
+        if (!$superAdminExists) {
+            throw new DomainException('Destination authority missing: no active Super Administrator account.');
+        }
+
+        if (\App\Database\Schema::tableExists($this->pdo, 'branches')) {
+            $unresolvedBranch = $this->pdo->query("SELECT 1 FROM branches b LEFT JOIN users u ON b.created_by = u.user_id WHERE b.created_by IS NOT NULL AND u.user_id IS NULL LIMIT 1")->fetchColumn();
+            if ($unresolvedBranch) throw new DomainException('Unresolved actor attribution in branches.created_by.');
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'sales')) {
+            $unresolvedSales = $this->pdo->query("SELECT 1 FROM sales s LEFT JOIN users u ON s.cashier_id = u.user_id WHERE s.cashier_id IS NOT NULL AND u.user_id IS NULL LIMIT 1")->fetchColumn();
+            if ($unresolvedSales) throw new DomainException('Unresolved actor attribution in sales.cashier_id.');
+        }
+
+        if (\App\Database\Schema::tableExists($this->pdo, 'inventory')) {
+            $negativeInv = $this->pdo->query("SELECT 1 FROM inventory WHERE quantity_on_hand < 0 LIMIT 1")->fetchColumn();
+            if ($negativeInv) throw new DomainException('Negative stock detected in inventory.');
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'product_batches')) {
+            $negativeBatch = $this->pdo->query("SELECT 1 FROM product_batches WHERE remaining_quantity < 0 OR quantity < 0 LIMIT 1")->fetchColumn();
+            if ($negativeBatch) throw new DomainException('Negative batch quantity detected.');
+        }
+
+        if (\App\Database\Schema::tableExists($this->pdo, 'sales') && \App\Database\Schema::tableExists($this->pdo, 'sale_items')) {
+            $saleTotalMismatch = $this->pdo->query(
+                "SELECT 1 FROM sales s
+                 LEFT JOIN (SELECT sale_id, SUM(subtotal) AS item_sum FROM sale_items GROUP BY sale_id) si ON si.sale_id = s.sale_id
+                 WHERE ABS(s.total_amount - COALESCE(si.item_sum, 0)) > 0.05
+                 LIMIT 1"
+            )->fetchColumn();
+            if ($saleTotalMismatch) throw new DomainException('Receipt item subtotal mismatch detected in sales.');
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'cash_refunds') && \App\Database\Schema::tableExists($this->pdo, 'cash_refund_items')) {
+            $refundTotalMismatch = $this->pdo->query(
+                "SELECT 1 FROM cash_refunds r
+                 LEFT JOIN (SELECT refund_id, SUM(subtotal) AS item_sum FROM cash_refund_items GROUP BY refund_id) ri ON ri.refund_id = r.refund_id
+                 WHERE ABS(r.refund_amount - COALESCE(ri.item_sum, 0)) > 0.05
+                 LIMIT 1"
+            )->fetchColumn();
+            if ($refundTotalMismatch) throw new DomainException('Refund receipt item subtotal mismatch detected.');
+        }
+
+        $storage = $this->uploadDirectory ?? dirname(__DIR__, 2) . '/storage';
+        if (!empty($expectedFiles)) {
+            foreach ($expectedFiles as $relPath => $content) {
+                $filePath = $storage . '/' . $relPath;
+                if (!is_file($filePath)) {
+                    throw new DomainException('Verified upload file missing from storage: ' . $relPath);
+                }
+                if (hash_file('sha256', $filePath) !== hash('sha256', $content)) {
+                    throw new DomainException('Verified upload file hash mismatch: ' . $relPath);
+                }
+            }
+        }
+
+        return ['valid' => true];
+    }
+
+    private function resetTransientState(): void
+    {
+        if (\App\Database\Schema::tableExists($this->pdo, 'backup_operations')) {
+            $this->pdo->exec('DELETE FROM backup_operations');
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'store_write_gate')) {
+            $this->pdo->exec("INSERT IGNORE INTO store_write_gate (gate_key) VALUES ('store_writes')");
+            $this->pdo->exec("UPDATE store_write_gate SET paused_at = NULL, paused_by = NULL WHERE gate_key = 'store_writes'");
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'ml_jobs')) {
+            $this->pdo->exec("UPDATE ml_jobs SET status = 'failed', operator_message = 'Invalidated by database restore' WHERE status IN ('queued', 'running')");
+        }
+        if (\App\Database\Schema::tableExists($this->pdo, 'model_training_runs')) {
+            $this->pdo->exec("UPDATE model_training_runs SET status = 'failed' WHERE status IN ('queued', 'training')");
+        }
+    }
+
+    private function assertRecoveryOperator(int $actorId, string $actorRole): void
+    {
+        if (!in_array($actorRole, ['admin', 'super_admin'], true)) {
+            throw new DomainException('Operator is not authorized for this recovery operation.');
+        }
+        if (!RecoveryStore::isPaused()) {
+            throw new DomainException('No active recovery operation.');
+        }
+        $state = RecoveryStore::state();
+        $operators = $state['authorized_operators'] ?? [];
+        $found = false;
+        foreach ($operators as $op) {
+            if ((int)$op['user_id'] === $actorId && ($op['role'] ?? '') === $actorRole) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            throw new DomainException('Operator is not authorized for this recovery operation.');
         }
     }
 

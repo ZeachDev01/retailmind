@@ -4,7 +4,7 @@ Current ordinary capture/preflight: [Encrypted Store package contract](STORE_PAC
 
 ## Current capture
 
-Enter a separate backup passphrase (16–1024 bytes), create, then download. Keep the package and an off-server passphrase recovery copy separately. Creation history confirms capture, not that your browser saved it. Missing every passphrase copy makes the package unusable. See the linked contract for runtime limits, complete upload capture, CLI input and security inventory.
+Enter a separate backup passphrase (16â€“1024 bytes), create, then download. Keep the package and an off-server passphrase recovery copy separately. Creation history confirms capture, not that your browser saved it. Missing every passphrase copy makes the package unusable. See the linked contract for runtime limits, complete upload capture, CLI input and security inventory.
 
 ## Identity Reconciliation preview
 
@@ -19,7 +19,7 @@ The approving Super Administrator confirms reconciliation with their current des
 Immediately before destructive use, the package integrity, required credentials, current authority, effective roles, relevant destination state (watermark), and mappings are strictly rechecked. Any discrepancy invalidates approval and demands renewed review. Clear, actionable errors are returned without exposing restricted evidence or secrets. Ordinary replacement remains disabled; this delivers preparation, review, and approval evidence. Existing historical JSON stays unchanged; installation-aware record provenance resolves embedded source identities and survives repeated transfers. Required imported images receive collision-free paths without replacing destination profiles. Both installations must apply `202610250002_identity_provenance`; exact-schema package checks remain enforced.
 ## Verified encrypted destination safety copies
 
-Both administrator backup screens provide **Destination safety copy**. Enter your current destination login password and a separately supplied safety-copy passphrase (16–1024 bytes). This captures the current complete database and referenced Product/profile images using the existing coordinated encrypted capture. Full decryption, schema/type/uniqueness/foreign-key and upload-integrity checks complete before safety readiness is published. Ordinary encrypted replacement remains disabled.
+Both administrator backup screens provide **Destination safety copy**. Enter your current destination login password and a separately supplied safety-copy passphrase (16â€“1024 bytes). This captures the current complete database and referenced Product/profile images using the existing coordinated encrypted capture. Full decryption, schema/type/uniqueness/foreign-key and upload-integrity checks complete before safety readiness is published. Ordinary encrypted replacement remains disabled.
 
 Download the encrypted safety artifact and retain it outside both servers. Keep a separate owner-controlled recovery copy of its passphrase; neither the login password nor an incoming package secret is assumed to unlock it. Losing every copy makes this fallback unusable. Downloading does not consume or delete the original server artifact.
 
@@ -69,8 +69,37 @@ The browser recovery console (`/components/backup/recovery.php`) renders and aut
 
 Recovery operations require PHP 8.2+, HTTPS, MySQL 8.0+, 512 MiB PHP memory limit, persistent worker-accessible private storage outside the document root, and reliable file locking (`flock`).
 
-Disposable checks: `RUN_DB_TESTS=1 php -d memory_limit=512M src/backend/tests/recovery_auth_workflow_integration.php` and `RUN_DB_TESTS=1 node src/backend/tests/recovery_auth_browser_test.js`.
+Disposable checks: `RUN_DB_TESTS=1 php -d memory_limit=512M src/backend/tests/recovery_restart_workflow_integration.php`, `RUN_DB_TESTS=1 php -d memory_limit=512M src/backend/tests/recovery_auth_workflow_integration.php`, and `RUN_DB_TESTS=1 node src/backend/tests/recovery_restart_browser_test.js`.
 Tests prove independent operator authentication with dropped application tables, rejection of forged/expired/unauthorized requests, throttling, worker death fencing, and responsive layout across 390px and 1440px viewports. Hosted multi-node locking, persistence, and disaster cutover drills remain deferred under #288; ordinary replacement remains disabled until downstream delivery is complete.
+
+## Safety copy recovery and approved incoming restart (#312)
+
+The browser recovery console (`/components/backup/recovery.php`) provides two clearly distinguished, authenticated operator actions while the Store is fenced:
+
+1. **Complete Safety Recovery (`recover_safety`)**:
+   - Restores destination database tables and referenced image uploads directly from the verified destination safety copy (`safety-<operation_id>/safety.rmpkg`).
+   - Requires only the destination safety-copy passphrase.
+   - Operates completely without incoming package material or incoming passphrases.
+   - Retains original verified safety artifact and checkpoint immutably on disk.
+
+2. **Restart Approved Incoming Replacement (`restart_incoming`)**:
+   - Restarts replacement deterministically from the beginning using the approved encrypted Store package (`.rmpkg`).
+   - Requires both the incoming package passphrase AND the destination safety-copy passphrase.
+   - Revalidates package identity, destination watermark, and reconciliation plan against the original safety checkpoint independently of partial live tables.
+   - Re-applies approved identity and file mappings, preserves destination security closure, maps Historical Actors, and writes actor provenance to `store_record_origins`.
+
+### Automated post-replacement verification
+
+Before transitioning to operator review, both recovery paths execute strict post-replacement integrity assertions:
+- Database relationships: validates that all declared foreign key constraints are satisfied with zero orphan rows.
+- Retained authority: confirms at least one active destination Super Administrator exists with valid platform governance capabilities.
+- Actor attribution: asserts that unconstrained audit/historical columns (branches, sales) reference existing users.
+- Stock and batches: asserts non-negative quantities on hand and valid batch allocations.
+- Receipts and totals: confirms sales and refund receipt line items sum to header transaction amounts.
+- Uploaded asset hashes: asserts all referenced files exist in storage with matching SHA-256 hashes.
+- Background jobs: marks queued/running ML jobs failed and sets unready forecasting model flags.
+
+Upon successful automated verification, the operation stage transitions to `STAGE_OPERATOR_REVIEW_PENDING`. Reopening is NEVER automatic: only an authenticated destination Super Administrator can review operational evidence and explicitly click "Reopen Store Access" (`reopen`) to transition to `STAGE_REOPENED_COMPLETED` and resume ordinary Store traffic. Any verification or runtime failure transitions to `STAGE_RECOVERY_REQUIRED` and fails closed.
 
 ## Legacy offline recovery reference
 

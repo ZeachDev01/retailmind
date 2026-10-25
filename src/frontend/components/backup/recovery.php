@@ -2,9 +2,12 @@
 // Browser recovery console and status (#311).
 // Renders and authenticates independently of database tables.
 require_once dirname(__DIR__, 3) . '/backend/bootstrap/app.php';
+require_once dirname(__DIR__, 3) . '/backend/includes/backup.php';
 
 use App\Backup\RecoveryStore;
 use App\Backup\RecoveryAuthService;
+use DomainException;
+use RuntimeException;
 
 App\Core\Session::start();
 require_once dirname(__DIR__, 3) . '/backend/includes/csrf.php';
@@ -65,6 +68,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             RecoveryAuthService::clearRecoverySession();
             $session = null;
             $notice = 'Recovery session ended.';
+        } elseif ($action === 'recover_safety') {
+            if (!$session) {
+                $username = (string)($_POST['username'] ?? '');
+                $password = (string)($_POST['password'] ?? '');
+                $token = (string)($_POST['csrf_token'] ?? '');
+                if (!hash_equals((string)($_SESSION['_recovery_login_csrf'] ?? ''), $token)) {
+                    throw new DomainException('Invalid recovery request token.');
+                }
+                $authData = RecoveryAuthService::authenticate($username, $password, $clientIp);
+                RecoveryAuthService::startRecoverySession($authData);
+                $session = RecoveryAuthService::currentRecoverySession();
+            } else {
+                if (!RecoveryAuthService::verifyCsrf((string)($_POST['recovery_csrf'] ?? ''))) {
+                    throw new DomainException('Invalid recovery session token.');
+                }
+            }
+
+            $safetyPassphrase = (string)($_POST['safety_passphrase'] ?? '');
+            $state = RecoveryStore::state();
+            $safetyOpId = (string)($state['safety_operation_id'] ?? '');
+            if ($safetyOpId === '') {
+                throw new DomainException('No safety operation bound to active recovery.');
+            }
+
+            $dbConfig = require dirname(__DIR__, 3) . '/backend/config/database.php';
+            $pdo = new PDO(
+                "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['database']};charset=utf8mb4",
+                $dbConfig['username'],
+                $dbConfig['password'],
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false]
+            );
+
+            $policy = new App\Authorization\RoleCapabilityPolicy();
+            $backups = new App\Backup\DatabaseBackupService($pdo, $policy);
+            $restore = new App\Backup\DatabaseRestoreService($pdo, $policy, $backups);
+            $result = $restore->recoverSafety((int)$session['user_id'], (string)$session['role'], $safetyOpId, $safetyPassphrase);
+            $notice = 'Complete safety recovery finished successfully. Database and uploads rolled back to verified original. Store is pending operator review.';
+        } elseif ($action === 'restart_incoming') {
+            if (!$session) {
+                $username = (string)($_POST['username'] ?? '');
+                $password = (string)($_POST['password'] ?? '');
+                $token = (string)($_POST['csrf_token'] ?? '');
+                if (!hash_equals((string)($_SESSION['_recovery_login_csrf'] ?? ''), $token)) {
+                    throw new DomainException('Invalid recovery request token.');
+                }
+                $authData = RecoveryAuthService::authenticate($username, $password, $clientIp);
+                RecoveryAuthService::startRecoverySession($authData);
+                $session = RecoveryAuthService::currentRecoverySession();
+            } else {
+                if (!RecoveryAuthService::verifyCsrf((string)($_POST['recovery_csrf'] ?? ''))) {
+                    throw new DomainException('Invalid recovery session token.');
+                }
+            }
+
+            $incomingPassphrase = (string)($_POST['incoming_passphrase'] ?? '');
+            $safetyPassphrase = (string)($_POST['safety_passphrase'] ?? '');
+
+            $packagePath = null;
+            if (isset($_FILES['package_file']) && is_uploaded_file($_FILES['package_file']['tmp_name'])) {
+                $packagePath = $_FILES['package_file']['tmp_name'];
+            } elseif (!empty($_POST['staged_package_path']) && is_file($_POST['staged_package_path'])) {
+                $packagePath = (string)$_POST['staged_package_path'];
+            } else {
+                throw new DomainException('Upload the approved encrypted Store package (.rmpkg).');
+            }
+
+            $dbConfig = require dirname(__DIR__, 3) . '/backend/config/database.php';
+            $pdo = new PDO(
+                "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['database']};charset=utf8mb4",
+                $dbConfig['username'],
+                $dbConfig['password'],
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false]
+            );
+
+            $policy = new App\Authorization\RoleCapabilityPolicy();
+            $backups = new App\Backup\DatabaseBackupService($pdo, $policy);
+            $restore = new App\Backup\DatabaseRestoreService($pdo, $policy, $backups);
+            $result = $restore->restartIncoming((int)$session['user_id'], (string)$session['role'], $packagePath, $incomingPassphrase, $safetyPassphrase);
+            $notice = 'Approved incoming replacement restarted from the beginning. Verification passed. Store is pending operator review.';
         } elseif ($action === 'reopen') {
             if (!$session || ($session['role'] ?? '') !== 'super_admin') {
                 throw new DomainException('Only a destination Super Administrator can explicitly reopen the Store.');
@@ -77,10 +159,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $session = null;
             $notice = 'Recovery completed. Store access has been resumed.';
         }
-    } catch (DomainException $e) {
+    } catch (DomainException | RuntimeException $e) {
         $error = $e->getMessage();
     } catch (Throwable $e) {
-        $error = 'A recovery error occurred. Coordination state remains fenced.';
+        error_log('Recovery exception: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+        $error = 'A recovery error occurred: ' . $e->getMessage();
     }
 }
 
@@ -214,6 +297,73 @@ $viewData = RecoveryAuthService::recoveryViewData($session);
                             </li>
                         <?php endforeach; ?>
                     </ol>
+                </div>
+
+                <div class="border-t border-slate-100 pt-4 space-y-4" data-recovery-actions>
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-900">Recovery Actions</h3>
+                        <p class="text-xs text-slate-600 mt-1">
+                            Choose an action to recover or restart. Both actions require appropriate passphrases and revalidate integrity independently of partial live tables.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Action 1: Complete Safety Recovery -->
+                        <div class="p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-3" data-recovery-card="safety">
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-900">Complete Safety Recovery</h4>
+                                <p class="text-xs text-slate-600 mt-1">
+                                    Restores the original verified destination safety copy. Works completely without incoming package material.
+                                </p>
+                            </div>
+                            <form method="post" class="space-y-3" data-recovery-form="safety">
+                                <input type="hidden" name="action" value="recover_safety">
+                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+
+                                <div>
+                                    <label for="safety-passphrase" class="block text-xs font-medium text-slate-700 mb-1">Safety-Copy Passphrase</label>
+                                    <input id="safety-passphrase" name="safety_passphrase" type="password" required autocomplete="current-password" class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
+                                </div>
+
+                                <button type="submit" data-recovery-submit="safety" class="w-full px-3 py-2 bg-slate-800 text-white font-medium text-xs rounded hover:bg-slate-900">
+                                    Recover Destination Safety Copy
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Action 2: Restart Approved Incoming Replacement -->
+                        <div class="p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-3" data-recovery-card="incoming">
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-900">Restart Approved Incoming Replacement</h4>
+                                <p class="text-xs text-slate-600 mt-1">
+                                    Restarts incoming replacement deterministically from the beginning with approved identity and file mappings.
+                                </p>
+                            </div>
+                            <form method="post" enctype="multipart/form-data" class="space-y-3" data-recovery-form="incoming">
+                                <input type="hidden" name="action" value="restart_incoming">
+                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+
+                                <div>
+                                    <label for="incoming-file" class="block text-xs font-medium text-slate-700 mb-1">Approved Package (.rmpkg)</label>
+                                    <input id="incoming-file" name="package_file" type="file" accept=".rmpkg" required class="w-full text-xs">
+                                </div>
+
+                                <div>
+                                    <label for="incoming-passphrase" class="block text-xs font-medium text-slate-700 mb-1">Incoming Package Passphrase</label>
+                                    <input id="incoming-passphrase" name="incoming_passphrase" type="password" required class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
+                                </div>
+
+                                <div>
+                                    <label for="safety-passphrase-restart" class="block text-xs font-medium text-slate-700 mb-1">Destination Safety Passphrase</label>
+                                    <input id="safety-passphrase-restart" name="safety_passphrase" type="password" required class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
+                                </div>
+
+                                <button type="submit" data-recovery-submit="incoming" class="w-full px-3 py-2 bg-indigo-600 text-white font-medium text-xs rounded hover:bg-indigo-700">
+                                    Restart Incoming Replacement
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
 
                 <?php if ($session['role'] === 'super_admin'): ?>
