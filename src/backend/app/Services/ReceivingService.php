@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/InventorySubmission.php";
 // app/Services/ReceivingService.php
 
 require_once __DIR__ . '/NotificationService.php';
@@ -50,6 +51,8 @@ class ReceivingService
         if (function_exists('require_capability')) {
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
+        $submission = new InventorySubmission($this->pdo, $userId, 'receiving', $entry + ['lines' => $lines]);
+        if (($completed = $submission->completed()) !== null) return $completed;
         if ($lines === [] || !array_is_list($lines)) {
             throw new RuntimeException('Add at least one product line before saving the shopping entry.');
         }
@@ -77,6 +80,10 @@ class ReceivingService
         }
         try {
             StoreWriteGate::begin($this->pdo);
+            if (($completed = $submission->completed()) !== null) {
+                $this->pdo->rollBack();
+                return $completed;
+            }
             $groupStmt = $this->pdo->prepare("INSERT INTO stock_receiving_groups (received_by, supplier, invoice_number, notes) VALUES (?, ?, ?, ?)");
             $groupStmt->execute([
                 $userId,
@@ -98,6 +105,7 @@ class ReceivingService
                     throw new RuntimeException('Line ' . ($index + 1) . ': ' . $e->getMessage(), 0, $e);
                 }
             }
+            $submission->remember($results);
             $this->pdo->commit();
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) $this->pdo->rollBack();

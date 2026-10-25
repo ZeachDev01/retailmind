@@ -1183,6 +1183,7 @@
       });
       if (isSelect) {
         field.addEventListener('change', sync);
+        field.addEventListener('retailmind:fieldrestore', sync);
         new MutationObserver(sync).observe(field, {childList: true, subtree: true, attributes: true});
       }
       field.form?.addEventListener('reset', () => setTimeout(sync, 0));

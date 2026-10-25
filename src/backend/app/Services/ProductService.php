@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/InventorySubmission.php";
 // app/Services/ProductService.php
 
 require_once __DIR__ . '/NotificationService.php';
@@ -63,6 +64,8 @@ class ProductService
         if (function_exists('require_capability')) {
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
+        $submission = new InventorySubmission($this->pdo, $userId, 'createProduct', $data);
+        if (($completed = $submission->completed()) !== null) return $completed;
         $barcode = trim((string)($data['barcode'] ?? ''));
         $productName = trim((string)($data['product_name'] ?? ''));
         $brand = trim((string)($data['brand'] ?? ''));
@@ -280,6 +283,7 @@ class ProductService
                 )->execute([$productId, $initialStock, $userId]);
             }
 
+            $submission->remember($productId);
             if ($ownsTransaction) {
                 $this->pdo->commit();
                 $this->notificationService->checkAndNotifyLowStock();
@@ -503,6 +507,8 @@ class ProductService
         if (function_exists('require_capability')) {
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
+        $submission = new InventorySubmission($this->pdo, $userId, 'adjustStock', $data);
+        if (($completed = $submission->completed()) !== null) return;
         $qtyChange = (int)($data['qty_change'] ?? 0);
         $productId = (int)($data['product_id'] ?? 0);
         $adjustmentReason = trim((string)($data['adjustment_reason'] ?? 'adjustment'));
@@ -660,6 +666,7 @@ class ProductService
                 $after
             );
 
+            $submission->remember(true);
             $this->pdo->commit();
             $this->notificationService->checkAndNotifyLowStock();
             $this->notificationService->checkAndNotifyExpiringStock();
@@ -1298,7 +1305,7 @@ class ProductService
         ]);
     }
 
-    public function reconcilePhysicalStock(int $productId, int $sealedPacks, int $loosePieces, string $reason, int $userId): array
+    public function reconcilePhysicalStock(int $productId, int $sealedPacks, int $loosePieces, string $reason, int $userId, string $operationToken = ''): array
     {
         if (function_exists('require_capability')) {
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
@@ -1307,6 +1314,8 @@ class ProductService
         if ($role !== 'inventory_manager') {
             throw new RuntimeException('Only the active Inventory Manager workspace can reconcile stock.');
         }
+        $submission = new InventorySubmission($this->pdo, $userId, 'reconcileStock', ['operation_token' => $operationToken, 'product_id' => $productId, 'sealed' => $sealedPacks, 'loose' => $loosePieces, 'reason' => $reason]);
+        if (($completed = $submission->completed()) !== null) return $completed;
         if ($productId <= 0) {
             throw new RuntimeException('Invalid product selected.');
         }
@@ -1498,10 +1507,6 @@ class ProductService
                 ]
             );
 
-            $this->pdo->commit();
-            $this->notificationService->checkAndNotifyLowStock();
-            $this->notificationService->checkAndNotifyExpiringStock();
-
             $todayManila = \App\Services\PhilippineTime::today();
             $fetchStmt = $this->pdo->prepare(
                 "SELECT p.*, i.quantity_on_hand, c.category_name,
@@ -1550,12 +1555,19 @@ class ProductService
                 $reconciledProduct['expired_quantity'] = (int)($reconciledProduct['expired_quantity'] ?? 0);
             }
 
-            return $reconciledProduct ?: [
+            $result = $reconciledProduct ?: [
                 'product_id' => $productId,
                 'quantity_on_hand' => $newTotal,
                 'physical_sealed_packs' => $sealedPacks,
                 'physical_loose_pieces' => $loosePieces,
             ];
+            $submission->remember($result);
+            $this->pdo->commit();
+            try {
+                $this->notificationService->checkAndNotifyLowStock();
+                $this->notificationService->checkAndNotifyExpiringStock();
+            } catch (Throwable $e) { error_log('Reconciliation alerts failed: ' . $e->getMessage()); }
+            return $result;
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();

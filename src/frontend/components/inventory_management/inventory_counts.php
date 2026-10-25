@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/InventoryCountService.php';
 require_once __DIR__ . '/../../../backend/app/Services/StockIssueService.php';
+header('Cache-Control: no-store');
 require_role(['admin', 'inventory_manager']);
 
 $countService = new InventoryCountService($pdo, (string)current_role());
@@ -95,11 +96,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
         } elseif ($action === 'approve') {
             $countId = (int)($_POST['count_id'] ?? 0);
-            $countService->approveCount($countId, (int)$_SESSION['user_id']);
+            $countService->approveCount($countId, (int)$_SESSION['user_id'], (string)($_POST['operation_token'] ?? ''));
             $message = "Inventory count #{$countId} approved and stock reconciled.";
         } elseif ($action === 'reject') {
             $countId = (int)($_POST['count_id'] ?? 0);
-            $countService->rejectCount($countId, (int)$_SESSION['user_id']);
+            $countService->rejectCount($countId, (int)$_SESSION['user_id'], (string)($_POST['operation_token'] ?? ''));
             $message = "Inventory count #{$countId} rejected.";
             log_activity(
                 $pdo,
@@ -132,6 +133,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
     <title>Inventory Counts</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
+<?php require __DIR__ . '/../../../backend/includes/inventory_drafts.php'; ?>
 </head>
 
 <body>
@@ -508,13 +510,32 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
         let extraBatchIndex = 0;
         let activeCoverage = null;
 
+        document.addEventListener('inventorydraft:prepare', event => {
+            if (event.detail.draft.id !== 'record:') return;
+            event.detail.waitUntil((async () => {
+                const value = name => event.detail.draft.values.find(item => item.name === name)?.value;
+                const productId = value('product_id') || '';
+                if (!Array.from(productSelect.options).some(option => option.value === productId)) throw new Error('The selected Product is no longer available. Your draft is still kept.');
+                productSelect.value = productId;
+                syncProductSearch();
+                await fetchBatchCoverage(productSelect.value);
+                for (const item of event.detail.draft.values.filter(item => /^batches\[\d+\]\[batch_id\]$/.test(item.name))) {
+                    if (document.getElementsByName(item.name)[0]?.value !== item.value) throw new Error('Batch availability has changed. Your draft is still kept; review current stock before resuming.');
+                }
+                const keys = [...new Set(event.detail.draft.values.map(item => item.name.match(/^batches\[(extra_\d+)\]/)?.[1]).filter(Boolean))];
+                for (const key of keys) {
+                    extraBatchIndex = Number(key.slice(6)) - 1;
+                    addExtraBatchBtn.click();
+                }
+            })());
+        });
         function fetchBatchCoverage(productId) {
             if (!productId || productId <= 0) {
                 if (batchSection) batchSection.hidden = true;
                 activeCoverage = null;
                 return;
             }
-            fetch('inventory_counts.php?action=batch_coverage&product_id=' + encodeURIComponent(productId), {
+            return fetch('inventory_counts.php?action=batch_coverage&product_id=' + encodeURIComponent(productId), {
                 headers: { Accept: 'application/json' }
             })
                 .then(res => res.json())

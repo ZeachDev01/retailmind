@@ -226,9 +226,11 @@ $active_batch_reminders = $inventory_workspace
                                     <div class="notification-description p-5 sm:p-6"><p><?= htmlspecialchars($notif['message']) ?></p><?php
                                         $destination = $notif['attention_destination'];
                                         if ($destination === null && $notif['reference_type'] === 'stock_issue') {
-                                            $destination = current_role() === 'cashier'
-                                                ? 'components/cashier/stock_issues.php'
-                                                : 'components/inventory_management/stock_issues.php';
+                                            $destination = match (current_role()) {
+                                                'admin' => 'components/administrator/stock_issues.php?detail=' . (int)$notif['reference_id'],
+                                                'cashier' => 'components/cashier/stock_issues.php',
+                                                default => 'components/inventory_management/stock_issues.php',
+                                            };
                                         }
                                         ?><?php if (!empty($destination)): ?><a href="<?= htmlspecialchars(app_url((string)$destination)) ?>"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review condition' ?></a><?php endif; ?></div>
                                 </div>

@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/SupplierPulloutService.php';
 
+header('Cache-Control: no-store');
 require_role(['admin', 'super_admin', 'inventory_manager']);
 
 $currentRole = (string)current_role();
@@ -83,6 +84,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/supplier_pullouts.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/supplier_pullouts.css')) ?>">
+<?php require __DIR__ . '/../../../backend/includes/inventory_drafts.php'; ?>
 </head>
 <body>
 <div class="app-shell">
@@ -354,7 +356,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const packSize = getSelectedPackSize();
 
-        fetch('supplier_pullouts.php?action=get_batches&product_id=' + encodeURIComponent(productId))
+        return fetch('supplier_pullouts.php?action=get_batches&product_id=' + encodeURIComponent(productId))
             .then(res => res.json())
             .then(batches => {
                 batchSelect.innerHTML = '<option value=""></option>';
@@ -420,6 +422,17 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    document.addEventListener('inventorydraft:prepare', event => {
+        if (event.detail.draft.formId !== 'pullout-form') return;
+        const value = name => event.detail.draft.values.find(item => item.name === name)?.value;
+        event.detail.waitUntil((async () => {
+            const productId = value('product_id') || '';
+            if (!Array.from(productSelect.options).some(option => option.value === productId)) throw new Error('The selected Product is no longer available. Your draft is still kept.');
+            productSelect.value = productId;
+            await loadBatchesForProduct(productId, value('batch_id'));
+            if (!Array.from(batchSelect.options).some(option => option.value === value('batch_id'))) throw new Error('The selected batch is no longer available. Your draft is still kept.');
+        })());
+    });
     productSelect.addEventListener('change', function () {
         loadBatchesForProduct(this.value, null);
     });

@@ -64,9 +64,9 @@ $formatProfit = static fn(mixed $value, string $status): string => in_array($sta
     ? ucfirst($status) : $formatFinancial($value);
 $history = $dashboard['financial_history'] ?? null;
 $headlineOrder = [
-    'sales_cash_exceptions' => ['Sales & cash exceptions', 'bi-exclamation-diamond'],
-    'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam'],
-    'fiscal_period' => ['Current Fiscal Period', 'bi-calendar-check'],
+    'sales_cash_exceptions' => ['Sales & cash exceptions', 'bi-exclamation-diamond', ['View sales exceptions' => 'components/invoice/sales.php?tab=reversals', 'View cash variances' => 'components/administrator/shift_report.php']],
+    'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam', ['View Stock Issues' => 'components/administrator/stock_issues.php']],
+    'fiscal_period' => ['Current Fiscal Period', 'bi-calendar-check', ['View Fiscal Periods' => 'components/system_administrator/fiscal_periods.php']],
 ];
 $comparisonOrder = [
     'transactions' => ['Transactions', false],
@@ -125,10 +125,11 @@ $rangeUrl = $currentUrl;
                 <section aria-labelledby="store-status-title">
                     <div class="section-header control-center-section-header"><div><h2 id="store-status-title">Store status</h2></div></div>
                     <div class="card-grid store-operations-headlines">
-                        <?php foreach ($headlineOrder as $key => [$label, $icon]): $item = $dashboard['headline'][$key]; ?>
+                        <?php foreach ($headlineOrder as $key => [$label, $icon, $destinations]): $item = $dashboard['headline'][$key]; ?>
                             <article class="stat-card with-icon status-<?= $escape($item['status']) ?>">
                                 <span class="stat-icon"><i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i></span>
                                 <div class="value"><?= $escape($item['value']) ?></div><div class="label"><?= $escape($label) ?></div>
+                                <div class="store-status-links"><?php foreach ($destinations as $linkLabel => $destination): ?><a href="<?= $escape(app_url($destination)) ?>" data-dashboard-action><?= $escape($linkLabel) ?></a><?php endforeach; ?></div>
                             </article>
                         <?php endforeach; ?>
                     </div>
