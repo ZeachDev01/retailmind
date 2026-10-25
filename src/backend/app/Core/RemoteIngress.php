@@ -37,6 +37,11 @@ final class RemoteIngress
         return false;
     }
 
+    public static function isRemoteMonitoringRequest(): bool
+    {
+        return self::isRemote();
+    }
+
     public static function isOwnerEmailAllowed(): bool
     {
         $requiredEmail = strtolower(trim((string)Environment::get('RETAILMIND_REMOTE_OWNER_EMAIL', '')));
@@ -56,7 +61,13 @@ final class RemoteIngress
             return true;
         }
 
-        if ($normalized === 'components/administrator/dashboard.php') {
+        if (in_array($normalized, [
+            'components/administrator/dashboard.php',
+            'components/administrator/shift_report.php',
+            'components/cashier/shifts.php',
+            'components/system_administrator/audit_logs.php',
+            'components/modals/audit_log.php',
+        ], true)) {
             return true;
         }
 
@@ -96,6 +107,21 @@ final class RemoteIngress
 
         if (!self::isApprovedRoute()) {
             self::deny('Access denied: unapproved route on remote ingress.');
+        }
+
+        $normalized = self::normalizePath();
+        $readOnlyMonitoringRoutes = [
+            'components/administrator/dashboard.php',
+            'components/administrator/shift_report.php',
+            'components/cashier/shifts.php',
+            'components/system_administrator/audit_logs.php',
+            'components/modals/audit_log.php',
+        ];
+        if (in_array($normalized, $readOnlyMonitoringRoutes, true)) {
+            $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+            if (!in_array($method, ['GET', 'HEAD'], true)) {
+                self::deny('Access denied: write actions and exports are disabled on remote ingress.');
+            }
         }
     }
 

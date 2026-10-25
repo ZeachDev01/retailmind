@@ -129,7 +129,7 @@ $rangeUrl = $currentUrl;
                             <article class="stat-card with-icon status-<?= $escape($item['status']) ?>">
                                 <span class="stat-icon"><i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i></span>
                                 <div class="value"><?= $escape($item['value']) ?></div><div class="label"><?= $escape($label) ?></div>
-                                <div class="store-status-links"><?php foreach ($destinations as $linkLabel => $destination): ?><a href="<?= $escape(app_url($destination)) ?>" data-dashboard-action><?= $escape($linkLabel) ?></a><?php endforeach; ?></div>
+                                <div class="store-status-links"><?php foreach ($destinations as $linkLabel => $destination): ?><?php if (!\App\Core\RemoteIngress::isRemote() || \App\Core\RemoteIngress::isApprovedRoute($destination)): ?><a href="<?= $escape(app_url($destination)) ?>" data-dashboard-action><?= $escape($linkLabel) ?></a><?php endif; ?><?php endforeach; ?></div>
                             </article>
                         <?php endforeach; ?>
                     </div>

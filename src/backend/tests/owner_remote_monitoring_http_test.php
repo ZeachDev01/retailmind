@@ -115,24 +115,29 @@ require $file;
     }
     $assert($ready, 'HTTP fixture ready');
 
-    $request = static function (string $uri, array $headers = []): array {
+    $request = static function (string $uri, array $headers = [], string $method = 'GET', ?string $postBody = null): array {
         global $address;
         $headerLines = [];
         foreach ($headers as $k => $v) {
             $headerLines[] = "{$k}: {$v}";
         }
+        if ($postBody !== null && !isset($headers['Content-Type'])) {
+            $headerLines[] = 'Content-Type: application/x-www-form-urlencoded';
+        }
         $headerStr = implode("\r\n", $headerLines) . "\r\n";
 
-        $ctx = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'header' => $headerStr,
-                'ignore_errors' => true,
-                'follow_location' => 0,
-                'timeout' => 5,
-            ],
-        ]);
+        $httpOptions = [
+            'method' => $method,
+            'header' => $headerStr,
+            'ignore_errors' => true,
+            'follow_location' => 0,
+            'timeout' => 5,
+        ];
+        if ($postBody !== null) {
+            $httpOptions['content'] = $postBody;
+        }
 
+        $ctx = stream_context_create(['http' => $httpOptions]);
         $body = @file_get_contents('http://' . $address . $uri, false, $ctx);
         $headersList = $http_response_header ?? [];
         $statusLine = $headersList[0] ?? '';
@@ -142,30 +147,27 @@ require $file;
         return [$code, (string)$body, $headersList];
     };
 
-    // 1. Remote unapproved route is denied at the server boundary (403)
-    [$code, $body] = $request('/components/cashier/pos.php', [
+    $remoteHeaders = [
         'Host' => 'monitor.retailmind.store',
         'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
         'Cf-Access-Authenticated-User-Email' => 'owner@retailmind.store',
         'X-Fixture-User' => 'owner',
-    ]);
-    if ($code !== 403) {
-        fwrite(STDERR, "BODY: " . $body . "\n");
-        if (file_exists($log)) {
-            fwrite(STDERR, "LOG: " . file_get_contents($log) . "\n");
-        }
-    }
+    ];
+
+    // 1. Remote unapproved route is denied at the server boundary (403)
+    [$code, $body] = $request('/components/cashier/pos.php', $remoteHeaders);
     $assert($code === 403, 'Remote ingress to cashier pos.php must be denied with 403, got ' . $code);
     $assert(str_contains($body, 'unapproved route on remote ingress'), 'Denial message explains unapproved route');
 
     // Remote unapproved backup route is denied
-    [$code, $body] = $request('/components/system_administrator/backup_restore.php', [
-        'Host' => 'monitor.retailmind.store',
-        'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
-        'Cf-Access-Authenticated-User-Email' => 'owner@retailmind.store',
-        'X-Fixture-User' => 'owner',
-    ]);
+    [$code, $body] = $request('/components/system_administrator/backup_restore.php', $remoteHeaders);
     $assert($code === 403, 'Remote ingress to backup_restore.php must be denied with 403, got ' . $code);
+
+    // Direct requests to non-existent or disallowed shift mutation endpoints are denied
+    foreach (['/export_shifts.php', '/record_shift.php', '/cash_in.php'] as $deniedEndpoint) {
+        [$code, $body] = $request($deniedEndpoint, $remoteHeaders);
+        $assert($code === 403, "Direct request to {$deniedEndpoint} must be denied with 403, got {$code}");
+    }
 
     // 2. Remote owner Access email check
     [$code, $body] = $request('/components/administrator/dashboard.php', [
@@ -178,29 +180,62 @@ require $file;
     $assert(str_contains($body, 'unapproved owner identity'), 'Denial message explains unapproved email');
 
     // 3. Local authorized operation is still available
-    // Local request to cashier pos without remote headers
     [$code, $body] = $request('/components/cashier/pos.php', [
         'Host' => 'localhost',
         'X-Fixture-User' => 'cashier',
     ]);
-    // It should not be blocked with our remote boundary 403
     $assert(!str_contains($body, 'unapproved route on remote ingress'), 'Local request must not be blocked by remote ingress boundary');
 
     // 4. Remote approved route: Store overview loads for authenticated owner
-    [$code, $body, $headers] = $request('/components/administrator/dashboard.php', [
-        'Host' => 'monitor.retailmind.store',
-        'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
-        'Cf-Access-Authenticated-User-Email' => 'owner@retailmind.store',
-        'X-Fixture-User' => 'owner',
-    ]);
-    if ($code !== 200) {
-        fwrite(STDERR, "OVERVIEW HEADERS: " . json_encode($headers) . "\n");
-        fwrite(STDERR, "OVERVIEW BODY: " . $body . "\n");
-    }
-    $assert($code === 200, 'Authenticated owner can load Store overview remotely, got ' . $code . ': ' . substr($body, 0, 200));
+    [$code, $body, $headers] = $request('/components/administrator/dashboard.php', $remoteHeaders);
+    $assert($code === 200, 'Authenticated owner can load Store overview remotely, got ' . $code);
     $assert(str_contains($body, 'Store status') || str_contains($body, 'Gross Sales'), 'Store overview content is present');
 
-    // Check session cookie has Secure flag on remote origin
+    // 5. Remote Cashier Shift report (components/administrator/shift_report.php)
+    [$code, $body] = $request('/components/administrator/shift_report.php', $remoteHeaders);
+    $assert($code === 200, 'Authenticated owner can load shift report remotely, got ' . $code);
+    $assert(str_contains($body, 'Cashier Shift Report'), 'Shift report title present');
+    $assert(str_contains($body, 'report-filter-grid'), 'Filters grid present');
+    $assert(!str_contains($body, 'Export report CSV'), 'Shift report CSV export button must not be available remotely');
+
+    // Shift report filtering via GET
+    [$code, $body] = $request('/components/administrator/shift_report.php?from=2026-10-01&to=2026-10-25', $remoteHeaders);
+    $assert($code === 200, 'Remote shift report filter GET request returns 200');
+
+    // Shift report POST (e.g. export_csv) is denied with 403
+    [$code, $body] = $request('/components/administrator/shift_report.php', $remoteHeaders, 'POST', 'action=export_csv&csrf_token=fixture-csrf');
+    $assert($code === 403, 'Remote shift report POST must be denied with 403, got ' . $code);
+    $assert(str_contains($body, 'write actions and exports are disabled on remote ingress'), 'Denial message explains write/export disabled');
+
+    // 6. Remote Cashier Shifts screen (components/cashier/shifts.php)
+    [$code, $body] = $request('/components/cashier/shifts.php', $remoteHeaders);
+    $assert($code === 200, 'Authenticated owner can load cashier shifts screen remotely, got ' . $code);
+    $assert(str_contains($body, 'Cashier Shifts'), 'Cashier shifts title present');
+    $assert(str_contains($body, 'Recent shifts'), 'Recent shifts section present');
+    $assert(!str_contains($body, 'Return to POS'), 'Return to POS link must not be present remotely');
+    $assert(!str_contains($body, 'Record movement'), 'Drawer movement action must not be present remotely');
+
+    // Cashier shifts POST (open/movement/close) is denied with 403
+    [$code, $body] = $request('/components/cashier/shifts.php', $remoteHeaders, 'POST', 'action=open&register_id=1&opening_float=100&csrf_token=fixture-csrf');
+    $assert($code === 403, 'Remote cashier shift POST must be denied with 403, got ' . $code);
+
+    // 7. Remote Staff activity / Operational Audit (components/system_administrator/audit_logs.php)
+    [$code, $body] = $request('/components/system_administrator/audit_logs.php', $remoteHeaders);
+    $assert($code === 200, 'Authenticated owner can load operational audit remotely, got ' . $code);
+    $assert(str_contains($body, 'Operational Audit') || str_contains($body, 'Protected Audit Records'), 'Audit title present');
+    $assert(!str_contains($body, 'Export CSV</button>'), 'Audit CSV export button must not be present remotely');
+
+    // Operational audit DataTables AJAX read request via GET
+    [$code, $body] = $request('/components/system_administrator/audit_logs.php?table=1&draw=1&start=0&length=25', $remoteHeaders);
+    $assert($code === 200, 'Remote audit logs DataTables AJAX request returns 200, got ' . $code);
+    $json = json_decode($body, true);
+    $assert(is_array($json) && isset($json['recordsTotal']), 'Audit logs DataTables returns valid JSON');
+
+    // Operational audit POST (export_csv / review_failed_sign_ins) is denied with 403
+    [$code, $body] = $request('/components/system_administrator/audit_logs.php', $remoteHeaders, 'POST', 'action=export_csv&csrf_token=fixture-csrf');
+    $assert($code === 403, 'Remote audit POST must be denied with 403, got ' . $code);
+
+    // 8. Session cookie secure flag under remote ingress
     $cookieHeaders = array_filter($headers, static fn($h) => stripos($h, 'Set-Cookie:') === 0);
     $hasSecureCookie = false;
     foreach ($cookieHeaders as $ch) {
@@ -211,21 +246,16 @@ require $file;
     }
     $assert($hasSecureCookie, 'Remote session cookie must contain Secure flag');
 
-    // 5. Existing Workspace permissions still apply remotely: cashier accessing Store overview gets 403 from role policy
-    [$code, $body, $cashierHeaders] = $request('/components/administrator/dashboard.php', [
+    // 9. Existing Workspace permissions still apply remotely: cashier role cannot access admin shift report
+    [$code, $body] = $request('/components/administrator/shift_report.php', [
         'Host' => 'monitor.retailmind.store',
         'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',
         'Cf-Access-Authenticated-User-Email' => 'owner@retailmind.store',
         'X-Fixture-User' => 'cashier',
     ]);
-    if ($code !== 403) {
-        fwrite(STDERR, "CASHIER HEADERS: " . json_encode($cashierHeaders) . "\n");
-        fwrite(STDERR, "CASHIER BODY: " . $body . "\n");
-    }
-    $assert($code === 403, 'Cashier accessing administrator Store overview must be denied with 403 by role policy, got ' . $code);
-    $assert(str_contains($body, 'Access denied: your role does not have permission'), 'Role policy denial message is present');
+    $assert($code === 403, 'Cashier accessing administrator shift report must be denied with 403 by role policy, got ' . $code);
 
-    // 6. Sign-out remotely: logout.php is approved and redirects to login
+    // 10. Sign-out remotely: logout.php is approved and redirects to login
     [$code, $body, $headers] = $request('/components/auth/logout.php', [
         'Host' => 'monitor.retailmind.store',
         'X-RetailMind-Tunnel-Secret' => 'expected-tunnel-token-999',

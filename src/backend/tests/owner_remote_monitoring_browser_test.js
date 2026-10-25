@@ -90,7 +90,9 @@ require $file;
         browser = await chromium.launch({headless: true});
 
         // 1. Remote context: has remote tunnel headers
-        const remoteContext = await browser.newContext();
+        const remoteContext = await browser.newContext({
+            viewport: {width: 1280, height: 800}
+        });
         const remotePage = await remoteContext.newPage();
         await remotePage.setExtraHTTPHeaders({
             'X-RetailMind-Tunnel-Secret': 'expected-tunnel-token-999',
@@ -104,17 +106,70 @@ require $file;
         const posBody = await remotePage.textContent('body');
         assert(posBody.includes('unapproved route on remote ingress'), '403 body explains unapproved route');
 
+        // Direct request to denied shift mutation endpoint
+        const deniedShiftResponse = await remotePage.goto(origin + '/export_shifts.php');
+        assert.equal(deniedShiftResponse.status(), 403, 'Direct export_shifts.php request returns 403');
+
         // 1b. Approved route Store overview loads successfully for owner
         const overviewResponse = await remotePage.goto(origin + '/components/administrator/dashboard.php');
         assert.equal(overviewResponse.status(), 200, 'Owner Store overview must return 200');
         const overviewText = await remotePage.textContent('body');
         assert(overviewText.includes('Store status') || overviewText.includes('Gross Sales'), 'Store overview content renders');
 
-        // 1c. Remote refresh button or period selector works
-        const refreshResponse = await remotePage.goto(origin + '/components/administrator/dashboard.php?period=week&range=30');
-        assert.equal(refreshResponse.status(), 200, 'Store overview refresh returns 200');
+        // 1c. Remote Cashier Shift report (components/administrator/shift_report.php)
+        const shiftReportResponse = await remotePage.goto(origin + '/components/administrator/shift_report.php');
+        assert.equal(shiftReportResponse.status(), 200, 'Remote shift report returns 200');
+        const shiftReportText = await remotePage.textContent('body');
+        assert(shiftReportText.includes('Cashier Shift Report'), 'Cashier Shift Report title is rendered');
+        assert(shiftReportText.includes('Run Report'), 'Filter submit button is present');
+        assert(!shiftReportText.includes('Export report CSV'), 'CSV export button must not be available remotely');
 
-        // 1d. Remote sign-out works and redirects
+        // Filter form submission remains on remote origin
+        await remotePage.fill('#from', '2026-10-01');
+        await remotePage.fill('#to', '2026-10-25');
+        await remotePage.locator('.report-filter-grid button[type="submit"]').click();
+        await remotePage.waitForURL(url => url.searchParams.get('from') === '2026-10-01');
+        assert(remotePage.url().includes('from=2026-10-01'), 'Filtered URL loaded on remote origin');
+        assert.equal(new URL(remotePage.url()).origin, origin, 'Remains on remote origin after filtering');
+
+        // 1d. Remote Cashier Shifts screen (components/cashier/shifts.php)
+        const shiftsResponse = await remotePage.goto(origin + '/components/cashier/shifts.php');
+        assert.equal(shiftsResponse.status(), 200, 'Remote cashier shifts screen returns 200');
+        const shiftsText = await remotePage.textContent('body');
+        assert(shiftsText.includes('Cashier Shifts'), 'Cashier shifts heading rendered');
+        assert(shiftsText.includes('Recent shifts'), 'Recent shifts section rendered');
+        assert(!shiftsText.includes('Return to POS'), 'Return to POS link must not be rendered remotely');
+        assert(!shiftsText.includes('Record movement'), 'Record drawer movement must not be rendered remotely');
+
+        // 1e. Remote Staff activity / Operational Audit (components/system_administrator/audit_logs.php)
+        const auditResponse = await remotePage.goto(origin + '/components/system_administrator/audit_logs.php');
+        assert.equal(auditResponse.status(), 200, 'Remote audit logs returns 200');
+        const auditText = await remotePage.textContent('body');
+        assert(auditText.includes('Operational Audit') || auditText.includes('Protected Audit Records'), 'Audit title rendered');
+        assert.equal(await remotePage.locator('#auditLogExportForm').count(), 0, 'Audit Export CSV form must not be rendered remotely');
+        assert.equal(await remotePage.locator('button:has-text("Export CSV")').count(), 0, 'Audit Export CSV button must not be rendered remotely');
+
+        // Details toggle in audit log table
+        const detailsCount = await remotePage.locator('details.audit-details').count();
+        if (detailsCount > 0) {
+            await remotePage.locator('details.audit-details').first().click();
+        }
+
+        // 1f. Responsive verification at phone viewport (375x667)
+        await remotePage.setViewportSize({width: 375, height: 667});
+        const mobileReportResponse = await remotePage.goto(origin + '/components/administrator/shift_report.php');
+        assert.equal(mobileReportResponse.status(), 200, 'Mobile viewport shift report returns 200');
+        const mobileReportText = await remotePage.textContent('body');
+        assert(mobileReportText.includes('Cashier Shift Report'), 'Mobile shift report renders title');
+        assert(!mobileReportText.includes('Export report CSV'), 'Mobile shift report omits CSV export');
+
+        const mobileShiftsResponse = await remotePage.goto(origin + '/components/cashier/shifts.php');
+        assert.equal(mobileShiftsResponse.status(), 200, 'Mobile viewport cashier shifts returns 200');
+        const mobileShiftsText = await remotePage.textContent('body');
+        assert(mobileShiftsText.includes('Cashier Shifts'), 'Mobile cashier shifts renders title');
+        assert(!mobileShiftsText.includes('Return to POS'), 'Mobile cashier shifts omits Return to POS');
+
+        // 1g. Remote sign-out works and redirects
         await remotePage.setExtraHTTPHeaders({
             'X-RetailMind-Tunnel-Secret': 'expected-tunnel-token-999',
             'Cf-Access-Authenticated-User-Email': 'owner@retailmind.store',

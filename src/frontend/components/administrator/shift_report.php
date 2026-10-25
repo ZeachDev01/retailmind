@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Core\RemoteIngress;
 use App\Services\StoreShiftReportService;
 use App\Support\OperatorAlert;
 
@@ -30,6 +31,11 @@ try {
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    if (RemoteIngress::isRemoteMonitoringRequest()) {
+        http_response_code(403);
+        echo 'Access denied: write actions and exports are disabled on remote ingress.';
+        exit;
+    }
     csrf_verify();
     if (($_POST['action'] ?? '') === 'export_csv' && $error === '') {
         header('Content-Type: text/csv; charset=utf-8');
@@ -80,9 +86,11 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
             <tbody><?php foreach ($report['rows'] as $row): ?><tr><?php foreach ($report['headers'] as $header): ?><td><?= shift_report_e($row[$header] ?? '') ?></td><?php endforeach; ?></tr><?php endforeach; ?>
             <?php if (!$report['rows']): ?><tr><td colspan="<?= count($report['headers']) ?>">No records match these filters.</td></tr><?php endif; ?>
             <?php if ($report['rows']): ?><tr><th>TOTAL</th><?php foreach (array_slice($report['headers'], 1) as $header): ?><td><?= shift_report_e($report['totals'][$header] ?? '') ?></td><?php endforeach; ?></tr><?php endif; ?></tbody></table></div>
+        <?php if (!RemoteIngress::isRemoteMonitoringRequest()): ?>
         <form method="post" class="report-actions"><?= csrf_field() ?><input type="hidden" name="action" value="export_csv">
             <?php foreach ($filters as $name => $value): ?><input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>"><?php endforeach; ?>
             <button class="btn" type="submit" <?= $error !== '' ? 'disabled' : '' ?>>Export report CSV</button>
         </form>
+        <?php endif; ?>
     </section>
 </main></div></body></html>

@@ -29,6 +29,7 @@ unset($_SERVER['HTTP_X_FORWARDED_FOR'], $_SERVER['HTTP_X_FORWARDED_HOST'], $_SER
 // Environment flag
 $_SERVER['RETAILMIND_REMOTE_INGRESS'] = '1';
 check(RemoteIngress::isRemote(), 'Server environment flag marks request as remote ingress');
+check(RemoteIngress::isRemoteMonitoringRequest(), 'isRemoteMonitoringRequest alias matches isRemote');
 unset($_SERVER['RETAILMIND_REMOTE_INGRESS']);
 
 // Dedicated listener port
@@ -76,6 +77,13 @@ foreach ([
     '/retailmind/index.php',
     '/components/administrator/dashboard.php',
     '/retailmind/components/administrator/dashboard.php',
+    '/components/administrator/shift_report.php',
+    '/retailmind/components/administrator/shift_report.php',
+    '/components/cashier/shifts.php',
+    '/retailmind/components/cashier/shifts.php',
+    '/components/system_administrator/audit_logs.php',
+    '/retailmind/components/system_administrator/audit_logs.php',
+    '/components/modals/audit_log.php',
     '/components/auth/logout.php',
     '/components/auth/session_activity.php',
     '/components/auth/change_password.php',
@@ -92,7 +100,6 @@ foreach ([
 foreach ([
     '/components/cashier/pos.php',
     '/components/cashier/refunds.php',
-    '/components/cashier/shifts.php',
     '/components/inventory_management/stock_issues.php',
     '/components/system_administrator/backup_restore.php',
     '/components/system_administrator/system_settings.php',
@@ -100,6 +107,9 @@ foreach ([
     '/components/administrator/reset_data.php',
     '/components/administrator/registers.php',
     '/backend/scripts/restore_database.php',
+    '/export_shifts.php',
+    '/record_shift.php',
+    '/cash_in.php',
 ] as $unapproved) {
     check(!RemoteIngress::isApprovedRoute($unapproved), "Route {$unapproved} must be denied on remote ingress");
 }

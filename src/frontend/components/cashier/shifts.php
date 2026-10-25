@@ -9,6 +9,7 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierShiftService.php';
 
+use App\Core\RemoteIngress;
 use App\Services\CashierShiftService;
 use App\Services\CashDenominationCounter;
 
@@ -17,6 +18,7 @@ require_role(['admin', 'super_admin', 'cashier']);
 $service = new CashierShiftService($pdo);
 $actorId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
+$isRemoteMonitoring = class_exists(\App\Core\RemoteIngress::class) && \App\Core\RemoteIngress::isRemoteMonitoringRequest();
 // Issue #86/#88: the active workspace decides who may open a shift. An
 // Administrator who also holds the Cashier role must switch workspaces first.
 $isCashier = $actorRole === 'cashier';
@@ -38,6 +40,11 @@ $closedSummary = null;
 $ownRegisterLocked = $isCashier && $service->isRegisterLocked($actorId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($isRemoteMonitoring) {
+        http_response_code(403);
+        echo 'Access denied: shift changes are disabled on remote ingress.';
+        exit;
+    }
     csrf_verify();
     $action = $_POST['action'] ?? '';
     try {
@@ -142,6 +149,7 @@ $recent = $service->recentShifts($isCashier ? $targetCashierId : null);
 $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters() : [];
 ?>
 <!DOCTYPE html>
+<?php $isRemoteMonitoring = $isRemoteMonitoring ?? (class_exists(\App\Core\RemoteIngress::class) && \App\Core\RemoteIngress::isRemoteMonitoringRequest()); ?>
 <html lang="en">
 
 <head><?php retailmind_theme_head(); ?>
@@ -158,12 +166,12 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <div class="topbar shift-topbar">
                 <div>
                     <h1>Cashier Shifts</h1>
-                </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
+                </div><?php if (!$isRemoteMonitoring): ?><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a><?php endif; ?>
             </div>
             <?php foreach ([[$message, 'success'], [$error, 'error']] as [$notice, $noticeType]): ?>
                 <?php if ($notice !== ''): ?><script>RetailMindUI.toast(<?= json_encode($notice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, <?= json_encode($noticeType) ?>, undefined, 4300);</script><?php endif; ?>
             <?php endforeach; ?>
-            <?php if ($ownRegisterLocked): ?><div class="message error" role="note" data-rm-alert-processed="1"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?> <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock it at the point of sale</a> to carry on with this same shift.</div><?php endif; ?>
+            <?php if ($ownRegisterLocked): ?><div class="message error" role="note" data-rm-alert-processed="1"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?> <?php if (!$isRemoteMonitoring): ?><a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock it at the point of sale</a> to carry on with this same shift.<?php else: ?>Unlock it at the local point of sale to carry on with this same shift.<?php endif; ?></div><?php endif; ?>
             <?php if (!$isCashier): ?><section class="dashboard-section shift-selector">
                     <form method="get"><label for="shift-cashier">View open shift</label><select id="shift-cashier" name="cashier_id" onchange="this.form.submit()" <?= !$cashiers ? 'disabled' : '' ?>><?php if (!$cashiers): ?><option>No open shifts</option><?php endif; ?><?php foreach ($cashiers as $c): ?><option value="<?= (int)$c['user_id'] ?>" <?= $targetCashierId === (int)$c['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['full_name']) ?></option><?php endforeach; ?></select><noscript><button class="btn" type="submit">View shift</button></noscript></form>
                 </section><?php endif; ?>
@@ -171,7 +179,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 <section class="dashboard-section shift-overview">
                     <div class="shift-section-heading"><h2><?= $openShift ? 'Current shift' : ($isCashier ? 'Open a shift' : 'No open shift') ?></h2><?php if ($openShift): ?><span class="shift-status shift-status--open">Open</span><?php endif; ?></div>
                     <?php if (!$isCashier && !$openShift): ?><p class="shift-help">Only Cashiers can open their own shifts.</p><?php endif; ?>
-                    <?php if (!$openShift && $isCashier && !$availableRegisters): ?><p>No Register is available. Ask your Administrator for help.</p><?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
+                    <?php if ($isRemoteMonitoring && !$openShift): ?><p class="shift-help">Cashier Shifts can only be opened at the Store register.</p><?php elseif (!$openShift && $isCashier && !$availableRegisters): ?><p>No Register is available. Ask your Administrator for help.</p><?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
                             <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($availableRegisters as $register): ?><option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option><?php endforeach; ?></select></div>
                             <div><label for="opening-float">Starting cash (₱)</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required></div>
                         </div><button class="btn" type="submit">Open shift</button></form><?php elseif ($openShift): ?>
@@ -200,7 +208,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                             </div>
                         </div></div><?php endif; ?>
                 </section>
-                <?php if ($openShift && $isCashier && !$ownRegisterLocked && !$countPreview): ?><section class="dashboard-section shift-movement">
+                <?php if (!$isRemoteMonitoring && $openShift && $isCashier && !$ownRegisterLocked && !$countPreview): ?><section class="dashboard-section shift-movement">
                         <h2>Record drawer cash</h2>
                         <p class="shift-help">Check physical cash before payouts; add and record float first if needed. Record refunds only in <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a>.</p>
                         <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="movement">
@@ -232,7 +240,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                             </dialog>
                         </form>
                     </section><?php endif; ?>
-                <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation">
+                <?php if (!$isRemoteMonitoring && $openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation">
                         <h2><?= $countPreview ? 'Review count and close shift' : 'Count cash to close shift' ?></h2>
                         <?php if (!$isCashier): ?><p class="shift-help">Closing for <?= htmlspecialchars($openShift['full_name']) ?>.</p><?php endif; ?>
                         <?php if ($unresolvedHeldSales): ?><div class="message error" role="note" data-rm-alert-processed="1">
@@ -272,6 +280,9 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                             <p class="shift-help" id="count-help">Enter the quantity of each bill and coin.</p>
                             <?php require __DIR__ . '/../../../backend/app/Views/cash_drawer_counter.php'; ?>
                         <?php endif; ?>
+                    </section><?php elseif ($isRemoteMonitoring && $openShift): ?><section class="dashboard-section shift-reconciliation">
+                        <h2>Drawer reconciliation</h2>
+                        <p class="shift-help">Drawer count and reconciliation are performed locally at the register.</p>
                     </section><?php endif; ?>
             </div>
             <?php if ($closedSummary): ?><section class="dashboard-section" role="status">
