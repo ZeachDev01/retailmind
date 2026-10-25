@@ -222,6 +222,13 @@ try {
     $fullBackup = $fullBackups->create($fullActor, 'super_admin', $passphrase);
     $full->prepare('UPDATE users SET full_name=? WHERE user_id=?')->execute(['Changed since snapshot', $fullActor]);
     $fullRestorer = new DatabaseRestoreService($full, $policy, $fullBackups);
+    $fullSchema = SqlBackupFormat::schema($full);
+    foreach (['privileges', 'role_privileges', 'user_privileges', 'restore_preserved_activity', 'emergency_access_sessions'] as $retiredTable) {
+        $assert(!isset($fullSchema[$retiredTable]), 'Encrypted baseline must not recreate retired storage: ' . $retiredTable);
+    }
+    $fullPreflight = $fullRestorer->preflight($fullActor, 'super_admin', $fullBackup['path'], $fullBackup['filename'], 'Full-schema-password', $passphrase);
+    $assert($fullPreflight['replacement_authorized'] === false, 'Complete migrated schema preflight never authorizes replacement');
+    $assert($full->query('SELECT full_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Changed since snapshot', 'Complete migrated schema preflight leaves destination unchanged');
     $fullDecoded = StorePackageFormat::decode((string)file_get_contents($fullBackup['path']), $passphrase, SqlBackupFormat::schema($full));
     file_put_contents($legacySql, $fullDecoded['sql']);
     $fullRestorer->restore($fullActor, 'super_admin', $legacySql, 'legacy-private.sql', 'Full-schema-password');
@@ -230,6 +237,7 @@ try {
     $full->exec('CREATE VIEW unsupported_fixture_view AS SELECT user_id FROM users');
     $reject(fn() => $fullBackups->create($fullActor, 'super_admin', $passphrase), 'Unsupported custom objects must fail rather than produce an incomplete backup');
     $assert(!$fullBackups->status()['paused'], 'Failed unsupported capture releases the write gate');
+    echo 'Integrated schema: ' . count($fullSchema) . ' tables, SHA-256 ' . hash('sha256', json_encode($fullSchema, JSON_THROW_ON_ERROR)) . "\n";
     echo "Database Backup workflow integration: passed (including full migrated schema)\n";
 } catch (Throwable $exception) {
     fwrite(STDERR, $exception->getMessage() . "\n" . $exception->getTraceAsString() . "\n");
