@@ -161,4 +161,6 @@ if (!$offlineRecovery && !$isRecoveryRoute && !App\Backup\RecoveryStore::admitRe
     exit(1);
 }
 
+App\Core\RemoteIngress::enforceBoundary();
+
 return $GLOBALS['app'];

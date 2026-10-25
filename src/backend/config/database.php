@@ -35,8 +35,8 @@ $isLocalHost = $host === ''
     || $endsWith($host, '.localhost')
     || $endsWith($host, '.test');
 
-$useHostedDatabase = strtolower((string)env('DATABASE_ENV', '')) === 'hosted';
-$isHosted = !$isLocalHost || $useHostedDatabase;
+$databaseEnv = strtolower(trim((string)env('DATABASE_ENV', '')));
+$isHosted = $databaseEnv !== '' ? $databaseEnv === 'hosted' : !$isLocalHost;
 
 if ($isHosted) {
     $config = [
