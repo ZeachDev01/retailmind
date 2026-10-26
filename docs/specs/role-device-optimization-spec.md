@@ -1,5 +1,7 @@
 # Optimize role workspaces for tablets and mobile monitoring
 
+The Store PC print delivery requirement below was superseded: saved Sale and Refund Receipts now offer browser printing only.
+
 ## Problem Statement
 
 Cashiers need reliable PC and tablet checkout with attached scanners and access to the Store's PC-connected thermal printer. Inventory Managers need to work throughout the Store on portable tablets without losing entered values or returning to a PC to complete shelf work. The Administrator needs convenient phone monitoring. Existing responsive layouts and emulated checks do not establish physical iPad, Android, scanner, or printer compatibility. The owner likes the existing tablet POS layout and wants it preserved.

@@ -74,6 +74,8 @@ const { chromium } = require('playwright');
             await page.locator('.rm-modal-overlay[data-rm-confirm] .rm-accept').click();
             await page.waitForURL('**/refunds.php?refund_id=*');
             await page.locator('#receiptModal[open]').waitFor();
+            assert.equal(await receipt.getByRole('button', { name: 'Print to Store Printer', exact: true }).count(), 0,
+                'refund receipt offers browser printing only');
             assert.equal(await page.locator('#receiptModal[open]').count(), 1,
                 'successful refund opens the same receipt modal as POS checkout');
             assert.equal(await page.locator('#receiptModal').evaluate(el => el.matches(':modal')), true);

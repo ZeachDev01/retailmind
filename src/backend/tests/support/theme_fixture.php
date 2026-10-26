@@ -8,6 +8,11 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'receiving_empty_catalog') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("UPDATE products SET status='inactive'");
+    exit;
+}
 if (in_array($argv[1], ['identity_historical', 'identity_reset_count'], true)) {
     $pdo->exec("USE `{$database}`");
     if ($argv[1] === 'identity_historical') {

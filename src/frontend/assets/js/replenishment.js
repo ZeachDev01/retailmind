@@ -53,18 +53,6 @@
         };
     }
 
-    function readSnapshot() {
-        if (!storage) return null;
-        try {
-            const raw = storage.getItem(SNAPSHOT_KEY);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? { timestamp: Date.now(), items: parsed } : parsed;
-        } catch (_) {
-            return null;
-        }
-    }
-
     function renderRow(item) {
         if (item.html) return item.html;
         const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -118,19 +106,12 @@
         } catch (_) {}
     }
 
-    let initialSnapshot = (!isRecalculate && readSnapshot()) || null;
-    if (!initialSnapshot && rows.length > 0 && storage) {
+    if (storage) {
         try {
             const snap = createSnapshot(rows);
             lastSnapRaw = JSON.stringify(snap);
             storage.setItem(SNAPSHOT_KEY, lastSnapRaw);
         } catch (_) {}
-    } else if (initialSnapshot && Array.isArray(initialSnapshot.items) && initialSnapshot.items.length > 0 && table.tBodies?.[0] && typeof table.tBodies[0].innerHTML === 'string') {
-        table.tBodies[0].innerHTML = initialSnapshot.items.map(renderRow).join('');
-        rows = Array.from(table.querySelectorAll('.queue-item'));
-        originalOrder.clear();
-        rows.forEach((r, idx) => originalOrder.set(r, idx));
-        updateSummaryCounts(rows);
     }
 
     function button(label, page, ariaLabel, disabled, current = false) {

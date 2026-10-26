@@ -75,7 +75,7 @@ window.RetailMindInventoryDrafts = (() => {
         prepare(form);
         const id = identity(form);
         busy++;
-        notice('Keeping unsaved values…');
+        notice('Keeping unsaved values...');
         try {
             const prior = snapshots.get(id) || Promise.resolve();
             const next = prior.catch(() => {}).then(async () => {
@@ -241,7 +241,9 @@ window.RetailMindInventoryDrafts = (() => {
             window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } }, {signal: lifetime.signal});
         } catch (_) {
             config.key = null;
-            notice('Draft recovery is unavailable. Use HTTPS and allow browser storage. Keep this page open until the server confirms saving.', true);
+            if (!location.pathname.endsWith('/products.php')) {
+                notice('Draft recovery is unavailable. Use HTTPS and allow browser storage. Keep this page open until the server confirms saving.', true);
+            }
         }
     }
     function destroy() { active = false; lifetime.abort(); observer?.disconnect(); key = null; }

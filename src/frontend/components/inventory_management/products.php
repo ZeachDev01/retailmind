@@ -862,6 +862,31 @@ foreach ($products as $product) {
             width: 100%;
         }
 
+        .catalog-empty {
+            padding: clamp(2rem, 6vw, 4rem) 1.5rem;
+            text-align: center;
+        }
+
+        .catalog-empty > div {
+            max-width: 32rem;
+            margin: auto;
+        }
+
+        .catalog-empty > div > i {
+            display: inline-grid;
+            width: 3.5rem;
+            height: 3.5rem;
+            place-items: center;
+            border-radius: 14px;
+            background: var(--theme-info-surface, #eff6ff);
+            color: var(--theme-info-text, #2563eb);
+            font-size: 1.05rem;
+        }
+
+        .catalog-empty h2 { margin: 1.25rem 0 .5rem; }
+        .catalog-empty p { margin: 0 auto 1.5rem; color: var(--muted); line-height: 1.5; }
+        .catalog-empty .btn { gap: .5rem; }
+
         .product-table-shell .data-table-scroll {
             -webkit-overflow-scrolling: touch;
         }
@@ -1195,7 +1220,26 @@ foreach ($products as $product) {
                     <button class="btn btn-small btn-quiet" type="button" id="clear-selection">Clear</button>
                 </div>
 
-                <div class="data-table-shell product-table-shell">
+                <section class="data-table-shell catalog-empty" id="catalog-empty" <?= $totalProducts ? 'hidden' : '' ?> aria-live="polite">
+                    <div id="catalog-first-use" <?= $totalProducts ? 'hidden' : '' ?>>
+                        <i class="bi bi-box-seam" aria-hidden="true"></i>
+                        <h2>No products in the catalog yet</h2>
+                        <p>Products appear here with their prices, barcodes, and stock.</p>
+                        <?php if ($canManageInventory): ?>
+                            <button type="button" class="btn" id="empty-add-product"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add Product</button>
+                        <?php else: ?>
+                            <p>Ask your Inventory Manager to add the first product.</p>
+                        <?php endif; ?>
+                    </div>
+                    <div id="catalog-no-results" hidden>
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                        <h2>No matching products</h2>
+                        <p>Try another search or clear the filters to see the catalog.</p>
+                        <button type="button" class="btn btn-quiet" id="empty-clear-filters">Clear filters</button>
+                    </div>
+                </section>
+
+                <div class="data-table-shell product-table-shell" id="catalog-results" <?= $totalProducts ? '' : 'hidden' ?>>
                     <div class="data-table-scroll">
                         <table class="data-table" id="products-table">
                             <thead>
@@ -1683,6 +1727,7 @@ foreach ($products as $product) {
             setAddMenuOpen(false);
             openModal('add-product-modal');
         });
+        document.getElementById('empty-add-product')?.addEventListener('click', () => openModal('add-product-modal'));
         const addCategoryButton = document.getElementById('add-category-btn');
         if (addCategoryButton) addCategoryButton.addEventListener('click', () => {
             setAddMenuOpen(false);
@@ -1742,6 +1787,11 @@ foreach ($products as $product) {
         }
 
         function renderPage() {
+            const hasResults = filteredRows.length > 0;
+            document.getElementById('catalog-results').hidden = !hasResults;
+            document.getElementById('catalog-empty').hidden = hasResults;
+            document.getElementById('catalog-first-use').hidden = hasResults || productRows.length > 0;
+            document.getElementById('catalog-no-results').hidden = hasResults || productRows.length === 0;
             const size = Number(pageSizeInput.value || 10);
             const pages = Math.max(1, Math.ceil(filteredRows.length / size));
             currentPage = Math.min(currentPage, pages);
@@ -1790,6 +1840,7 @@ foreach ($products as $product) {
         });
         pageSizeInput.addEventListener('change', () => applyFilters());
         document.getElementById('clear-filters').addEventListener('click', clearFilters);
+        document.getElementById('empty-clear-filters').addEventListener('click', clearFilters);
 
         function clearFilters() {
             searchInput.value = '';

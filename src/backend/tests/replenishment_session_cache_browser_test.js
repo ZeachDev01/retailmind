@@ -199,6 +199,9 @@ const getReplenishmentHtml = (tag = '') => execFileSync('php', ['-r', `
         await page.goto(`${baseUrl}/components/inventory_management/replenishment_queue.php`);
         const snapshotAfterReturn = await page.evaluate(() => sessionStorage.getItem('retailmind_replenishment_snapshot'));
         assert.ok(snapshotAfterReturn, 'Snapshot must remain in sessionStorage when returning to replenishment queue');
+        assert.equal(await page.locator('.queue-item[data-sku="OFFLINE-99"]').count(), 0,
+            'Returning to the queue must not restore a product absent from the server');
+        assert.ok(!snapshotAfterReturn.includes('OFFLINE-99'), 'Returning to the queue must refresh the saved snapshot');
 
         // =========================================================================
         // 4. Cache eviction upon Stock Receiving submission

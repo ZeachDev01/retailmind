@@ -100,7 +100,7 @@ const fixture = action => {
         await page.reload();
         await page.locator('#receiptModal[open]').waitFor();
         assert.equal(await page.evaluate(() => window.printCalls), 0, 'refresh does not print again');
-        assert.equal(await page.getByRole('button', {name: 'Print to Store Printer', exact: true}).isVisible(), true, 'Saved receipt offers Store PC delivery');
+        assert.equal(await page.getByRole('button', {name: 'Print to Store Printer', exact: true}).count(), 0, 'Saved receipt offers browser printing only');
         await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
         assert.equal(await page.evaluate(() => window.printCalls), 1, 'manual retry remains available');
         console.log('Cashier payment → saved receipt on POS → close/reload: passed');

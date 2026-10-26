@@ -174,7 +174,6 @@ if ($receiptId > 0 && $receipt === null) {
                         </div>
                         <div class="receipt-actions no-print">
                             <button class="btn btn-secondary" type="button" onclick="printReceiptSection(this)"><i class="bi bi-printer" aria-hidden="true"></i> Print Refund Receipt</button>
-                            <?php $printReceiptType = 'refund'; $printReceiptId = (int)$receipt['refund']['refund_id']; require __DIR__ . '/../../../backend/app/Views/store_print_action.php'; ?>
                         </div>
                         <?php \App\Receipts\RefundReceiptPresentation::render($receipt, $paperWidthMm); ?>
                     </section>

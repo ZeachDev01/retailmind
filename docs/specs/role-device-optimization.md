@@ -1,5 +1,7 @@
 # Role and device optimization
 
+The Store PC print delivery proposal below was superseded: saved Sale and Refund Receipts now offer browser printing only.
+
 Design discussion updated 2026-10-25. The owner confirmed shared understanding and requested specification publication. See the [implementation specification](role-device-optimization-spec.md). The listed hardware and implementation prerequisites remain pending; this document does not claim implemented or device-tested support.
 
 Published as [issue #314](https://github.com/ZeachDev01/retailmind/issues/314) with `ready-for-agent`.

@@ -103,7 +103,6 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale, b
                 <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg"></i> New Sale</a>
             <?php endif; ?>
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer" aria-hidden="true"></i> Print Receipt</button>
-            <?php if (function_exists('current_role') && current_role() === 'cashier') { $printReceiptType = 'sale'; $printReceiptId = (int)$sale['sale_id']; require __DIR__ . '/store_print_action.php'; } ?>
         </div>
         <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $paperWidthMm); ?>
     </div>
