@@ -1566,14 +1566,21 @@ final class GCashTransactionService
         }
         $locking = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
         $stmt = $this->pdo()->prepare(
-            "SELECT u.user_id, u.password_hash, r.role_name
+            "SELECT u.user_id, u.password_hash, u.status, u.must_change_password, r.role_name,
+                    EXISTS (SELECT 1 FROM user_roles ur JOIN roles ar ON ar.role_id = ur.role_id
+                            WHERE ur.user_id = u.user_id AND ar.role_name = 'admin') AS has_admin
              FROM users u
              JOIN roles r ON r.role_id = u.role_id
-             WHERE u.username = ? AND u.status = 'active' AND u.must_change_password = 0 AND r.role_name IN ('admin', 'super_admin')" . $locking
+             WHERE LOWER(TRIM(u.username)) = LOWER(?)
+                OR (u.is_recovery_account = 0 AND LOWER(TRIM(u.email)) = LOWER(?))
+             ORDER BY CASE WHEN LOWER(TRIM(u.username)) = LOWER(?) THEN 0 ELSE 1 END
+             LIMIT 1" . $locking
         );
-        $stmt->execute([$username]);
+        $stmt->execute([$username, $username, $username]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$user || !password_verify($password, (string)$user['password_hash'])) {
+        if (!$user || $user['status'] !== 'active' || (int)$user['must_change_password'] !== 0
+            || (!in_array($user['role_name'], ['admin', 'super_admin'], true) && !(bool)$user['has_admin'])
+            || !password_verify($password, (string)$user['password_hash'])) {
             throw new DomainException('Administrator authorization failed: invalid credentials.', 403);
         }
         return (int)$user['user_id'];

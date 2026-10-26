@@ -435,7 +435,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <input class="pos-input" id="gcash-funding-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="Reason for fund movement">
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-funding-approver">Authorizing Administrator username</label>
+                    <label class="pos-field-label" for="gcash-funding-approver">Administrator username or email</label>
                     <input class="pos-input" id="gcash-funding-approver" name="approver_username" type="text" required autocomplete="off">
                 </div>
                 <div class="gcash-field">
@@ -472,7 +472,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         <strong>Administrator authorization required:</strong> Prior money movement will be offset by a linked adjustment.
                     </p>
                     <div class="gcash-field">
-                        <label class="pos-field-label" for="gcash-resolve-approver">Authorizing Administrator username</label>
+                        <label class="pos-field-label" for="gcash-resolve-approver">Administrator username or email</label>
                         <input class="pos-input" id="gcash-resolve-approver" name="approver_username" type="text" autocomplete="off">
                     </div>
                     <div class="gcash-field">
@@ -487,31 +487,28 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
             </form>
         </dialog>
-        <dialog id="gcash-correction-dialog" aria-labelledby="gcash-correction-title" aria-describedby="gcash-correction-help">
+        <dialog id="gcash-correction-dialog" aria-labelledby="gcash-correction-title" aria-describedby="gcash-correction-summary">
             <form id="gcash-correction-form">
                 <h2 id="gcash-correction-title">Record correction</h2>
-                <p id="gcash-correction-help" class="gcash-help">Record an audited adjustment linked to this transaction. The original stays unchanged.</p>
                 <p id="gcash-correction-summary"></p>
                 <div class="gcash-correction-amounts">
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-cash-delta">Service cash adjustment (PHP)</label>
-                    <input class="pos-input" id="gcash-correction-cash-delta" name="service_cash_delta" type="number" step="0.01" value="0.00" aria-describedby="gcash-correction-amounts-help">
+                    <label class="pos-field-label" for="gcash-correction-cash-delta">Service cash change (+/− ₱)</label>
+                    <input class="pos-input" id="gcash-correction-cash-delta" name="service_cash_delta" type="number" step="0.01" value="0.00">
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-wallet-delta">Wallet adjustment (PHP)</label>
-                    <input class="pos-input" id="gcash-correction-wallet-delta" name="wallet_delta" type="number" step="0.01" value="0.00" aria-describedby="gcash-correction-amounts-help">
+                    <label class="pos-field-label" for="gcash-correction-wallet-delta">Wallet change (+/− ₱)</label>
+                    <input class="pos-input" id="gcash-correction-wallet-delta" name="wallet_delta" type="number" step="0.01" value="0.00">
                 </div>
                 </div>
-                <p id="gcash-correction-amounts-help" class="gcash-help">10.00 adds ₱10; -10.00 subtracts ₱10. Use 0 for no change. Change at least one amount.</p>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-reason">Reason for correction (required)</label>
-                    <input class="pos-input" id="gcash-correction-reason" name="reason" type="text" minlength="5" maxlength="255" required aria-describedby="gcash-correction-reason-help" placeholder="e.g. Service fee overcharged">
-                    <small id="gcash-correction-reason-help">At least 5 characters.</small>
+                    <label class="pos-field-label" for="gcash-correction-reason">Reason (at least 5 characters)</label>
+                    <input class="pos-input" id="gcash-correction-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="e.g. Service fee overcharged">
                 </div>
                 <fieldset class="gcash-correction-approval">
-                    <legend>Administrator approval (required)</legend>
+                    <legend>Administrator approval</legend>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-correction-approver">Username</label>
+                    <label class="pos-field-label" for="gcash-correction-approver">Username or email</label>
                     <input class="pos-input" id="gcash-correction-approver" name="approver_username" type="text" required autocomplete="off">
                 </div>
                 <div class="gcash-field">
@@ -525,17 +522,16 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
             </form>
         </dialog>
-        <dialog id="gcash-waiver-dialog" aria-labelledby="gcash-waiver-title">
+        <dialog id="gcash-waiver-dialog" aria-labelledby="gcash-waiver-title" aria-describedby="gcash-waiver-summary">
             <form id="gcash-waiver-form">
-                <h2 id="gcash-waiver-title">Waive Closing Discrepancy</h2>
-                <p>Approve or waive closing variance notes. The counted variance remains permanently on record.</p>
+                <h2 id="gcash-waiver-title">Waive closing variance</h2>
                 <p id="gcash-waiver-summary" style="font-weight: 600;"></p>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-waiver-notes">Waiver Notes (min 5 characters)</label>
-                    <textarea class="pos-input" id="gcash-waiver-notes" name="waiver_notes" minlength="5" maxlength="500" required rows="3" placeholder="Reason for approving/waiving the discrepancy."></textarea>
+                    <label class="pos-field-label" for="gcash-waiver-notes">Reason (at least 5 characters)</label>
+                    <textarea class="pos-input" id="gcash-waiver-notes" name="waiver_notes" minlength="5" maxlength="500" required rows="3"></textarea>
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-waiver-approver">Authorizing Administrator username</label>
+                    <label class="pos-field-label" for="gcash-waiver-approver">Administrator username or email</label>
                     <input class="pos-input" id="gcash-waiver-approver" name="approver_username" type="text" required autocomplete="off">
                 </div>
                 <div class="gcash-field">
@@ -543,7 +539,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <input class="pos-input" id="gcash-waiver-password" name="approver_password" type="password" required autocomplete="new-password">
                 </div>
                 <div class="gcash-actions">
-                    <button class="btn" type="submit" id="gcash-waiver-submit">Approve Waiver</button>
+                    <button class="btn" type="submit" id="gcash-waiver-submit">Waive variance</button>
                     <button class="btn btn-secondary" type="button" id="gcash-waiver-cancel">Cancel</button>
                 </div>
             </form>

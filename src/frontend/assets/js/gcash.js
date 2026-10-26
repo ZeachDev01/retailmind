@@ -1272,7 +1272,7 @@
             };
             await request(null, body);
             el('waiver-dialog').close();
-            notify('Discrepancy for session #' + waiverSession.session_id + ' approved/waived.', 'success');
+            notify('Closing variance waived for session #' + waiverSession.session_id + '.', 'success');
             await loadSessionStatus();
         } catch (err) {
             notify(err.message, 'error');
