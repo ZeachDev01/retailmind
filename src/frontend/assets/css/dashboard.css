@@ -407,8 +407,14 @@ body.admin-dashboard-page.administrator-workspace .financial-breakdown > summary
 body.admin-dashboard-page.administrator-workspace .financial-breakdown { margin-top: .75rem; }
 body.admin-dashboard-page.administrator-workspace .net-sales-table caption { text-align: left; color: var(--muted); padding-bottom: .75rem; }
 body.admin-dashboard-page.administrator-workspace .period-comparison > h3 { margin-top: 1.5rem; }
+body.admin-dashboard-page.administrator-workspace .period-comparison > .comparison-grid:last-child { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body.admin-dashboard-page.administrator-workspace .net-sales-section.is-empty > :is(h3, .net-sales-chart-wrapper, .chart-unavailable) { display: none; }
+@media (max-width: 1180px) {
+    body.admin-dashboard-page.administrator-workspace .period-comparison > .comparison-grid:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 640px) {
     body.admin-dashboard-page.administrator-workspace .financial-history-totals { grid-template-columns: 1fr; }
+    body.admin-dashboard-page.administrator-workspace .period-comparison > .comparison-grid:last-child { grid-template-columns: 1fr; }
 }
 
 body.super-administrator-workspace {

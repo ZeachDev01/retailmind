@@ -92,6 +92,7 @@ $rangeUrl = $currentUrl;
             <header class="page-heading control-center-heading">
                 <div>
                     <h1>Store Operations</h1>
+                    <?php if (!empty($dashboard['freshness']['generated_at'])): ?><p class="dashboard-freshness">Updated <?= $escape($formatDate($dashboard['freshness']['generated_at'])) ?> Philippine time</p><?php endif; ?>
                 </div>
                 <div class="page-heading-actions">
                     <a class="btn btn-quiet btn-icon" id="dashboardRefreshBtn" title="Last updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?>" href="<?= $escape($rangeUrl) ?>" data-manual-refresh data-dashboard-action><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</a>
@@ -136,7 +137,7 @@ $rangeUrl = $currentUrl;
                 </section>
             <?php endif; ?>
 
-            <section class="dashboard-section net-sales-section" aria-labelledby="financial-title">
+            <section class="dashboard-section net-sales-section <?= !$hasNetSales || !($activePeriodData['has_activity'] ?? false) ? 'is-empty' : '' ?>" aria-labelledby="financial-title">
                 <div class="section-header">
                     <div><h2 id="financial-title">Sales and profit</h2></div>
                     <form method="get" action="<?= $escape(app_url('components/administrator/dashboard.php')) ?>" class="period-controls" aria-label="Sales and profit period">
